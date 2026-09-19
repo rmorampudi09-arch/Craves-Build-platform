@@ -18,6 +18,21 @@ export type ChefBusinessDocumentType =
   | 'TAX_ID_CARD'
   | 'AADHAAR_CARD'
   | 'PAN_CARD';
+
+export const CHEF_REQUIRED_APPLICATION_DOCUMENT_TYPES = [
+  'APPLICANT_PHOTO',
+  'GOVERNMENT_ID_FRONT',
+  'GOVERNMENT_ID_BACK',
+  'TAX_ID_CARD',
+] as const satisfies readonly ChefBusinessDocumentType[];
+
+export type ChefRequiredApplicationDocumentType =
+  (typeof CHEF_REQUIRED_APPLICATION_DOCUMENT_TYPES)[number];
+
+export const CHEF_PROOF_FILES_ROUTE =
+  '/api/v1/chef/application/proof-files' as const;
+export const CHEF_APPLICATION_EVIDENCE_ROUTE =
+  '/api/v1/chef/application?evidence=true' as const;
 export type ChefBusinessDocumentStatus =
   | 'UPLOADED'
   | 'APPROVED'
@@ -355,6 +370,36 @@ export function parseChefBusinessVerificationRecord(
   };
 }
 
+export function parseChefBusinessEvidence(
+  value: unknown,
+): ChefBusinessProofDocument[] | null {
+  if (!Array.isArray(value) || value.length > CHEF_REQUIRED_APPLICATION_DOCUMENT_TYPES.length) {
+    return null;
+  }
+
+  const parsed = value.map(parseChefBusinessProofDocument);
+  if (parsed.some(document => document === null)) return null;
+
+  const documents = parsed as ChefBusinessProofDocument[];
+  const allowed = new Set<string>(CHEF_REQUIRED_APPLICATION_DOCUMENT_TYPES);
+  if (
+    documents.some(document => !allowed.has(document.documentType)) ||
+    new Set(documents.map(document => document.documentType)).size !==
+      documents.length
+  ) {
+    return null;
+  }
+  return documents;
+}
+
+function requireEvidence(value: unknown): ChefBusinessProofDocument[] {
+  const parsed = parseChefBusinessEvidence(value);
+  if (!parsed) {
+    throw new Error('Chef KYC evidence returned an unsupported response.');
+  }
+  return parsed;
+}
+
 function parseVerificationResponse(value: unknown): ChefBusinessVerificationRecord {
   const parsed = parseChefBusinessVerificationRecord(value);
   if (!parsed) {
@@ -364,6 +409,37 @@ function parseVerificationResponse(value: unknown): ChefBusinessVerificationReco
 }
 
 export const chefBusinessInformationApi = {
+  async listApplicationEvidence(
+    signal?: AbortSignal,
+  ): Promise<ChefBusinessProofDocument[]> {
+    const response = await httpClient.get<unknown>(CHEF_APPLICATION_EVIDENCE_ROUTE, {
+      signal,
+      dedupeKey: 'chef-application:evidence',
+    });
+    return requireEvidence(response);
+  },
+
+  async uploadProofFile(
+    documentType: ChefRequiredApplicationDocumentType,
+    formData: FormData,
+    signal?: AbortSignal,
+  ): Promise<ChefBusinessProofDocument> {
+    const allowed = new Set<string>(CHEF_REQUIRED_APPLICATION_DOCUMENT_TYPES);
+    if (!allowed.has(documentType)) {
+      throw new Error('Unsupported Chef application document type.');
+    }
+    const response = await httpClient.post<unknown>(
+      `${CHEF_PROOF_FILES_ROUTE}?documentType=${encodeURIComponent(documentType)}`,
+      formData,
+      {signal},
+    );
+    const parsed = parseChefBusinessProofDocument(response);
+    if (!parsed || parsed.documentType !== documentType) {
+      throw new Error('Chef KYC upload returned an unsupported response.');
+    }
+    return parsed;
+  },
+
   async getVerificationRecord(
     signal?: AbortSignal,
   ): Promise<ChefBusinessVerificationRecord> {

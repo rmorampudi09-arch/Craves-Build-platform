@@ -26,8 +26,8 @@ interface BrowseHeaderProps {
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
   onSearchFocus: () => void;
-  foodPreference: HomeFoodPreference;
-  onFoodPreferenceChange: (preference: HomeFoodPreference) => void;
+  foodPreference?: HomeFoodPreference;
+  onFoodPreferenceChange?: (preference: HomeFoodPreference) => void;
   returnPath?: string;
   onBack?: () => void;
   backLabel?: string;
@@ -149,11 +149,13 @@ export function BrowseHeader({
             />
           </label>
 
-          <FoodPreferenceQuickToggles
-            value={foodPreference}
-            onChange={onFoodPreferenceChange}
-            className="hidden xl:flex"
-          />
+          {foodPreference && onFoodPreferenceChange ? (
+            <FoodPreferenceQuickToggles
+              value={foodPreference}
+              onChange={onFoodPreferenceChange}
+              className="hidden xl:flex"
+            />
+          ) : null}
 
           <div className="ml-auto flex items-center gap-2 lg:ml-0">
             <Link
@@ -205,11 +207,13 @@ export function BrowseHeader({
           </label>
         </div>
 
-        <FoodPreferenceQuickToggles
-          value={foodPreference}
-          onChange={onFoodPreferenceChange}
-          className="mb-2 flex w-fit max-w-full xl:hidden"
-        />
+        {foodPreference && onFoodPreferenceChange ? (
+          <FoodPreferenceQuickToggles
+            value={foodPreference}
+            onChange={onFoodPreferenceChange}
+            className="mb-2 flex w-fit max-w-full xl:hidden"
+          />
+        ) : null}
 
         <div className="flex min-w-0 items-center justify-between gap-3 pb-2 md:hidden">
           <button

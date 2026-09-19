@@ -54,10 +54,12 @@ export function CustomerHomeSearchScreen() {
   const dishesQuery = useHomeNearbyDishesQuery({
     radiusMeters: SEARCH_RADIUS_METERS,
     size: SEARCH_PAGE_SIZE,
+    filters: {query: normalizedQuery || null},
   });
   const kitchensQuery = useNearbyChefDiscoveryQuery({
     radiusMeters: SEARCH_RADIUS_METERS,
     size: SEARCH_PAGE_SIZE,
+    query: normalizedQuery || null,
   });
 
   const dishes = useMemo(

@@ -2,6 +2,7 @@ import {
   CHEF_EARNINGS_MAX_LIMIT,
   CHEF_EARNINGS_ROUTE,
   CHEF_FINANCE_BALANCE_ROUTE,
+  CHEF_WITHDRAWALS_ROUTE,
 } from '../api/chefPayoutApi';
 
 export type ChefPayoutCapabilityKey =
@@ -107,11 +108,15 @@ export const CHEF_PAYOUT_CONTRACT_MODEL: ChefPayoutContractModel = {
     bankDestination: unavailable(
       'No Chef-role payout bank-destination contract exists. Full bank identifiers must never be inferred or exposed; any future contract must provide an approved masked representation.',
     ),
-    withdrawEligibility: unavailable(
-      'The balance response exposes hold, daily-request and execution flags, but this mobile read-only step does not enable withdrawal decisions.',
+    withdrawEligibility: available(
+      'GET',
+      CHEF_FINANCE_BALANCE_ROUTE,
+      'Server-authoritative available amount, hold state, execution state and one-per-India-day request state.',
     ),
-    withdrawInitiation: unavailable(
-      'Main publishes POST /api/v1/chef/finance/withdrawals, but this read-only mobile step intentionally does not invoke a money-moving endpoint.',
+    withdrawInitiation: available(
+      'POST',
+      CHEF_WITHDRAWALS_ROUTE,
+      'Requests the exact currently available amount using a stable UUID request key. Ambiguous outcomes must replay the same key.',
     ),
     transactionDetail: unavailable(
       'No Chef-role payout transaction-detail endpoint exists.',
@@ -127,31 +132,45 @@ export function hasCompleteChefPayoutContract(
   );
 }
 
-export type ChefWithdrawEligibilityBoundary = Readonly<{
-  availability: 'unavailable';
-  code: 'BACKEND_CONTRACT_UNAVAILABLE';
-  canWithdraw: false;
-  reason: string;
-}>;
+export type ChefWithdrawEligibilityBoundary =
+  | Readonly<{
+      availability: 'available';
+      canWithdraw: true;
+      reason: string;
+    }>
+  | Readonly<{
+      availability: 'unavailable';
+      code: 'BACKEND_CONTRACT_UNAVAILABLE';
+      canWithdraw: false;
+      reason: string;
+    }>;
 
 export function getChefWithdrawEligibilityBoundary(
   model: ChefPayoutContractModel = CHEF_PAYOUT_CONTRACT_MODEL,
 ): ChefWithdrawEligibilityBoundary {
-  const capability = model.capabilities.withdrawEligibility;
-  if (capability.availability === 'unavailable') {
+  const eligibility = model.capabilities.withdrawEligibility;
+  const initiation = model.capabilities.withdrawInitiation;
+  if (
+    eligibility.availability === 'available' &&
+    initiation.availability === 'available'
+  ) {
     return {
-      availability: 'unavailable',
-      code: capability.code,
-      canWithdraw: false,
-      reason: capability.reason,
+      availability: 'available',
+      canWithdraw: true,
+      reason:
+        'Eligibility is decided by the latest server balance response; mobile must honor hold, execution, daily-request and available-amount fields.',
     };
   }
 
+  const unavailable =
+    eligibility.availability === 'unavailable' ? eligibility : initiation;
   return {
     availability: 'unavailable',
     code: 'BACKEND_CONTRACT_UNAVAILABLE',
     canWithdraw: false,
     reason:
-      'Withdrawal remains disabled until eligibility and initiation are both represented by exact Chef-role backend contracts.',
+      unavailable.availability === 'unavailable'
+        ? unavailable.reason
+        : 'Withdrawal contract is incomplete.',
   };
 }

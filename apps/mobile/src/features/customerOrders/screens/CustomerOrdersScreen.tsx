@@ -411,7 +411,13 @@ export function CustomerOrdersScreen() {
       {capabilityMessage ? (
         <RecoverableErrorBanner
           message={capabilityMessage}
-          onRetry={uncertainReorder ? () => void checkCart() : undefined}
+          onRetry={
+            uncertainReorder
+              ? () => {
+                  checkCart().catch(() => undefined);
+                }
+              : undefined
+          }
           retryLabel={checkingCart ? 'Checking cart…' : 'Check cart'}
           style={styles.banner}
         />

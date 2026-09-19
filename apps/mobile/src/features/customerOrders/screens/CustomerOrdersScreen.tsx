@@ -91,25 +91,21 @@ export function CustomerOrdersScreen() {
   const dispatch = useAppDispatch();
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
   const focused = useIsFocused();
-  const epoch = sessionManager.currentSessionEpoch();
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   const active = focused && appActive && Boolean(identityId);
   const mounted = useRef(true);
   const activity = useRef({
     active,
     identityId,
-    epoch,
     generation: 0,
   });
   if (
     activity.current.active !== active ||
-    activity.current.identityId !== identityId ||
-    activity.current.epoch !== epoch
+    activity.current.identityId !== identityId
   ) {
     activity.current = {
       active,
       identityId,
-      epoch,
       generation: activity.current.generation + 1,
     };
   }
@@ -147,6 +143,17 @@ export function CustomerOrdersScreen() {
   }, []);
 
   useEffect(() => {
+    return sessionManager.subscribeInvalidation(() => {
+      confirmation.current?.(false);
+      activity.current = {
+        ...activity.current,
+        active: false,
+        generation: activity.current.generation + 1,
+      };
+    });
+  }, []);
+
+  useEffect(() => {
     const subscription = AppState.addEventListener('change', state => {
       if (state !== 'active') {
         confirmation.current?.(false);
@@ -161,7 +168,7 @@ export function CustomerOrdersScreen() {
     uncertainRef.current = false;
     setUncertainReorder(false);
     setCapabilityMessage(null);
-  }, [identityId, epoch]);
+  }, [identityId]);
 
   const restoreSelectedOffset = useCallback(() => {
     requestAnimationFrame(() => {
@@ -207,14 +214,11 @@ export function CustomerOrdersScreen() {
 
       const generation = activity.current.generation;
       const requestIdentity = identityId;
-      const requestEpoch = epoch;
       const isCurrent = () =>
         mounted.current &&
         activity.current.active &&
         activity.current.generation === generation &&
-        activity.current.identityId === requestIdentity &&
-        activity.current.epoch === requestEpoch &&
-        sessionManager.currentSessionEpoch() === requestEpoch;
+        activity.current.identityId === requestIdentity;
 
       reorderBusy.current = true;
       setCapabilityMessage(null);
@@ -329,7 +333,7 @@ export function CustomerOrdersScreen() {
         if (mounted.current) setReorderingOrderId(null);
       }
     },
-    [dispatch, epoch, identityId, navigation],
+    [dispatch, identityId, navigation],
   );
 
   const checkCart = useCallback(async () => {
@@ -344,8 +348,7 @@ export function CustomerOrdersScreen() {
       if (
         !mounted.current ||
         !activity.current.active ||
-        activity.current.generation !== generation ||
-        sessionManager.currentSessionEpoch() !== activity.current.epoch
+        activity.current.generation !== generation
       ) {
         return;
       }

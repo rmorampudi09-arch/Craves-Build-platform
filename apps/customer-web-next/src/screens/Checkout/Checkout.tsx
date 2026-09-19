@@ -2,18 +2,24 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, LoaderCircle, RefreshCw } from "lucide-react";
 import {
-  FaArrowRight,
-  FaLocationDot,
-  FaPlus,
-  FaShieldHalved,
-} from "react-icons/fa6";
+  AlertTriangle,
+  Clock3,
+  MapPin,
+  Plus,
+  ReceiptText,
+  RefreshCw,
+  ShieldCheck,
+} from "lucide-react";
 import {
+  isDeliveryReadyAddress,
   parseCustomerAddresses,
   type CustomerAddress,
 } from "@/lib/address-contract";
-import { parseCheckout } from "@/lib/checkout-contract";
+import {
+  parseCheckout,
+  type CustomerCheckout,
+} from "@/lib/checkout-contract";
 import { loadSession } from "@/services/auth/cravesAuth";
 import {
   cartCurrency,
@@ -23,18 +29,26 @@ import {
   validateCart,
   type CartItem,
 } from "@/services/api/cravesCart";
+import { loadDish } from "@/services/api/dishes";
 import { CheckoutHeader } from "@/components/checkout/CheckoutHeader";
-import { CheckoutAddressDialog } from "@/components/checkout/CheckoutAddressDialog";
+import {
+  CheckoutPaymentButton,
+  type CheckoutPaymentFailure,
+} from "@/components/checkout/CheckoutPaymentButton";
+import { AddressEditorFlow } from "@/components/profile/AddressEditorFlow";
+
+const ADDRESS_KEY = "craves.checkout.addressId";
+const INSTRUCTIONS_KEY = "craves.checkout.instructions";
 
 function money(amount: number, currency = "INR") {
   try {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency,
-      maximumFractionDigits: 2,
+      maximumFractionDigits: 0,
     }).format(amount);
   } catch {
-    return `${currency} ${amount.toFixed(2)}`;
+    return `₹${Math.round(amount)}`;
   }
 }
 
@@ -58,15 +72,44 @@ function fullAddress(address: CustomerAddress): string {
     .join(", ");
 }
 
+async function fetchAddresses(): Promise<CustomerAddress[]> {
+  const response = await fetch("/api/customer/addresses", {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  const raw = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      raw &&
+      typeof raw === "object" &&
+      "message" in raw &&
+      typeof raw.message === "string"
+        ? raw.message
+        : "Saved addresses could not be loaded.";
+    throw new Error(message);
+  }
+  const parsed = parseCustomerAddresses(raw);
+  if (!parsed) throw new Error("Craves returned an invalid address response.");
+  return parsed;
+}
+
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<CartItem[]>([]);
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [selectedId, setSelectedId] = useState("");
-  const [addressDialogOpen, setAddressDialogOpen] = useState(false);
-  const [note, setNote] = useState("");
+  const [showAllAddresses, setShowAllAddresses] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [profileDefaults, setProfileDefaults] = useState({
+    recipientName: "",
+    contactPhoneNumber: "",
+  });
+  const [leadMinutes, setLeadMinutes] = useState<number | null>(null);
+  const [instructions, setInstructions] = useState("");
+  const [checkout, setCheckout] = useState<CustomerCheckout | null>(null);
+  const [paymentFailure, setPaymentFailure] =
+    useState<CheckoutPaymentFailure>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const prepareCheckout = useCallback(async () => {
@@ -79,6 +122,15 @@ export default function CheckoutPage() {
         return;
       }
 
+      setProfileDefaults({
+        recipientName:
+          [session.firstName, session.lastName].filter(Boolean).join(" ").trim() ||
+          session.username ||
+          "",
+        contactPhoneNumber: session.phoneNumber || session.phone || "",
+      });
+      setInstructions(window.sessionStorage.getItem(INSTRUCTIONS_KEY) ?? "");
+
       await loadCart();
       const nextItems = getCart();
       if (!nextItems.length) {
@@ -87,34 +139,34 @@ export default function CheckoutPage() {
       }
       await validateCart();
 
-      const response = await fetch("/api/customer/addresses", {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const raw = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message =
-          raw &&
-          typeof raw === "object" &&
-          "message" in raw &&
-          typeof raw.message === "string"
-            ? raw.message
-            : "Saved addresses could not be loaded.";
-        throw new Error(message);
-      }
-      const parsed = parseCustomerAddresses(raw);
-      if (!parsed) throw new Error("Craves returned an invalid address response.");
-      const activeAddresses = parsed.filter((address) => address.active);
+      const parsedAddresses = await fetchAddresses();
+      const activeAddresses = parsedAddresses.filter(isDeliveryReadyAddress);
+      const lastUsedId = window.sessionStorage.getItem(ADDRESS_KEY);
       const preferred =
-        activeAddresses.find((address) => address.isDefault) ?? activeAddresses[0];
+        activeAddresses.find((address) => address.id === lastUsedId) ??
+        activeAddresses.find((address) => address.isDefault) ??
+        activeAddresses[0];
+
+      const dishResults = await Promise.allSettled(
+        nextItems.map((item) => loadDish(item.menuItemId)),
+      );
+      const minutes = dishResults
+        .flatMap((result) => {
+          if (result.status !== "fulfilled") return [];
+          const match = /^(\d+)\s*min$/i.exec(result.value.time);
+          return match ? [Number(match[1])] : [];
+        })
+        .filter((value) => Number.isFinite(value) && value > 0);
 
       setItems(nextItems);
       setAddresses(activeAddresses);
       setSelectedId(preferred?.id ?? "");
+      setLeadMinutes(minutes.length ? Math.max(...minutes) : null);
     } catch (caught) {
       setItems([]);
       setAddresses([]);
       setSelectedId("");
+      setLeadMinutes(null);
       setError(checkoutMessage(caught));
     } finally {
       setLoading(false);
@@ -125,265 +177,295 @@ export default function CheckoutPage() {
     void prepareCheckout();
   }, [prepareCheckout]);
 
-  async function createCheckout() {
-    if (!selectedId || busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          deliveryAddressId: selectedId,
-          note: note.trim() || null,
-        }),
-      });
-      const raw = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message =
-          raw &&
-          typeof raw === "object" &&
-          "message" in raw &&
-          typeof raw.message === "string"
-            ? raw.message
-            : "Checkout could not be created.";
-        throw new Error(message);
-      }
-      const checkout = parseCheckout(raw);
-      if (!checkout) throw new Error("Craves returned an invalid checkout response.");
-      navigate({
-        to: "/checkout/$checkoutId/payment",
-        params: { checkoutId: checkout.id },
-      });
-    } catch (caught) {
-      setError(checkoutMessage(caught));
-      setBusy(false);
+  function selectAddress(id: string) {
+    setSelectedId(id);
+    window.sessionStorage.setItem(ADDRESS_KEY, id);
+    setCheckout(null);
+    setPaymentFailure(null);
+  }
+
+  async function ensureCheckout(): Promise<CustomerCheckout> {
+    if (checkout) return checkout;
+    if (!selectedId) throw new Error("Choose a delivery address before paying.");
+
+    await validateCart();
+    const response = await fetch("/api/checkout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deliveryAddressId: selectedId,
+        note: instructions.trim() || null,
+      }),
+    });
+    const raw = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message =
+        raw &&
+        typeof raw === "object" &&
+        "message" in raw &&
+        typeof raw.message === "string"
+          ? raw.message
+          : "Checkout could not be created.";
+      throw new Error(message);
+    }
+
+    const parsed = parseCheckout(raw);
+    if (!parsed) throw new Error("Craves returned an invalid checkout response.");
+    setCheckout(parsed);
+    return parsed;
+  }
+
+  async function handleAddressSaved(saved: CustomerAddress | null) {
+    const next = (await fetchAddresses()).filter(isDeliveryReadyAddress);
+    setAddresses(next);
+    setEditorOpen(false);
+
+    const selected =
+      saved && isDeliveryReadyAddress(saved)
+        ? next.find((address) => address.id === saved.id)
+        : null;
+    if (selected) {
+      selectAddress(selected.id);
+    } else if (!selectedId && next[0]) {
+      selectAddress(next[0].id);
     }
   }
 
   const subtotal = cartTotal();
   const currency = cartCurrency();
-  const itemCount = items.reduce((total, item) => total + item.qty, 0);
   const selectedAddress = addresses.find((address) => address.id === selectedId);
+  const visibleAddresses = showAllAddresses ? addresses : addresses.slice(0, 3);
 
   return (
-    <div className="min-h-screen bg-white pb-32 text-[#1A1A1A]">
+    <div className="min-h-screen bg-white pb-36 text-[#1A1A1A]">
       <CheckoutHeader
         onBack={() => navigate({ to: "/cart" })}
-        title="Delivery and checkout"
-        subtitle="Final charges come from the Order Service"
+        title="Checkout"
+        subtitle="Delivery as soon as possible"
       />
 
-      <main className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-8">
+      <main className="mx-auto max-w-2xl px-4 py-5 md:px-6 md:py-7">
         {loading ? (
-          <div className="space-y-5" aria-hidden="true">
-            <div className="h-80 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-            <div className="h-64 animate-pulse rounded-2xl bg-[#F1F3F5]" />
+          <div className="space-y-4" aria-hidden="true">
+            <div className="h-64 animate-pulse rounded-[14px] bg-[#F1F3F5]" />
+            <div className="h-28 animate-pulse rounded-[14px] bg-[#F1F3F5]" />
+            <div className="h-52 animate-pulse rounded-[14px] bg-[#F1F3F5]" />
           </div>
         ) : error && items.length === 0 ? (
-          <section className="rounded-2xl border border-[#F62E18]/20 bg-white p-8 text-center shadow-[0_3px_12px_rgba(0,0,0,0.06)] md:p-12">
-            <AlertTriangle className="mx-auto h-10 w-10 text-[#F62E18]" aria-hidden="true" />
-            <h1 className="mt-4 font-display text-2xl font-bold text-[#1A1A1A]">
-              Checkout could not be prepared
-            </h1>
-            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
-              {error}
-            </p>
+          <section className="rounded-[14px] border border-[#F62E18]/20 bg-white p-8 text-center shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
+            <AlertTriangle className="mx-auto h-9 w-9 text-[#F62E18]" aria-hidden="true" />
+            <h1 className="mt-4 text-xl font-semibold">Checkout could not be prepared</h1>
+            <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{error}</p>
             <button
               type="button"
               onClick={() => void prepareCheckout()}
-              className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#F62E18] px-5 text-sm font-bold text-white transition-colors hover:bg-[#DF2815]"
+              className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-[11px] bg-[#F62E18] px-5 text-sm font-semibold text-white"
             >
-              <RefreshCw className="h-4 w-4" aria-hidden="true" /> Retry
+              <RefreshCw className="h-4 w-4" aria-hidden="true" /> Try again
             </button>
           </section>
         ) : (
-          <div className="space-y-5">
-            <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_3px_12px_rgba(0,0,0,0.06)] md:p-6">
-              <div className="max-w-2xl">
-                <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[#6B6B6B]">
-                  Step 1
+          <div className="space-y-4">
+            {paymentFailure ? (
+              <section
+                role="alert"
+                className="rounded-[14px] border border-[#C92716]/20 bg-[#FFF2F0] p-4"
+              >
+                <h2 className="text-sm font-semibold text-[#9F2114]">
+                  Payment didn&apos;t go through
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-[#7A2C22]">
+                  {paymentFailure.message}
                 </p>
-                <h1 className="mt-1 font-display text-2xl font-bold tracking-[-0.035em] text-[#1A1A1A] md:text-3xl">
-                  Delivery address
-                </h1>
-                <p className="mt-2 text-sm leading-6 text-[#4D4D4D]">
-                  <span className="block">
-                    Only the address selected for this checkout is shown here.
-                  </span>
-                  <span className="block">
-                    Manage addresses to choose another saved address or add a new one.
-                  </span>
-                </p>
+              </section>
+            ) : null}
+
+            <section className="overflow-hidden rounded-[14px] border border-[#E5E7EB] bg-white shadow-[0_4px_18px_rgba(26,26,26,0.05)]">
+              <div className="flex items-center justify-between gap-3 border-b border-[#F1F3F5] px-4 py-4">
+                <div className="flex items-center gap-2.5">
+                  <MapPin className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
+                  <h1 className="text-base font-semibold">Deliver to</h1>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditorOpen(true)}
+                  className="rounded-lg px-2 py-1 text-xs font-semibold text-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+                >
+                  Add new
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setAddressDialogOpen(true)}
-                className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]"
-              >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
-                  <FaPlus className="text-sm" aria-hidden="true" />
-                </span>
-                Manage address
-              </button>
+              {visibleAddresses.length ? (
+                <div>
+                  {visibleAddresses.map((address) => {
+                    const checked = address.id === selectedId;
+                    return (
+                      <label
+                        key={address.id}
+                        className="flex cursor-pointer items-start gap-3 border-b border-[#F1F3F5] px-4 py-3.5 last:border-b-0 focus-within:bg-[#F62E18]/[0.025]"
+                      >
+                        <input
+                          type="radio"
+                          name="delivery-address"
+                          value={address.id}
+                          checked={checked}
+                          onChange={() => selectAddress(address.id)}
+                          className="mt-1 h-4 w-4 accent-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold capitalize">
+                              {address.addressLabel.toLowerCase()}
+                            </span>
+                            {address.isDefault ? (
+                              <span className="rounded-full bg-[#F62E18]/10 px-2 py-0.5 text-[10px] font-semibold text-[#F62E18]">
+                                Default
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="mt-1 block text-xs leading-5 text-[#6B6B6B]">
+                            {fullAddress(address)}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
 
-              {!selectedAddress ? (
-                <div className="mt-4 rounded-2xl border border-dashed border-[#D8DADD] bg-white p-6 text-center">
-                  <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-                    <FaLocationDot className="text-[22px]" aria-hidden="true" />
-                  </span>
-                  <h2 className="mt-3 font-display text-lg font-bold text-[#1A1A1A]">
-                    No current delivery address
-                  </h2>
-                  <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">
-                    Add or select a mapped address before Craves can calculate serviceability and delivery charges.
+                  {addresses.length > 3 ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllAddresses((current) => !current)}
+                      className="min-h-11 w-full border-t border-[#F1F3F5] px-4 text-left text-xs font-semibold text-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#F62E18]/25"
+                    >
+                      {showAllAddresses
+                        ? "Show fewer"
+                        : `Show all (${addresses.length - 3} more)`}
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="px-4 py-6 text-center">
+                  <p className="text-sm font-semibold">No delivery address yet</p>
+                  <p className="mt-1 text-xs leading-5 text-[#6B6B6B]">
+                    Add a mapped address so Craves can check delivery serviceability.
                   </p>
                   <button
                     type="button"
-                    onClick={() => setAddressDialogOpen(true)}
-                    className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#F62E18] px-5 text-sm font-bold text-white transition-colors hover:bg-[#DF2815]"
+                    onClick={() => setEditorOpen(true)}
+                    className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-[11px] bg-[#F62E18] px-4 text-sm font-semibold text-white"
                   >
-                    <FaPlus className="text-sm" aria-hidden="true" /> Add or select address
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    Add a new address
                   </button>
                 </div>
-              ) : (
-                <article className="mt-4 rounded-2xl border border-[#F62E18] bg-white p-4 md:p-5">
-                  <div className="flex items-start gap-3.5">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-                      <FaLocationDot className="text-[22px]" aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="font-display text-lg font-bold text-[#1A1A1A]">
-                          {selectedAddress.addressLabel}
-                        </h2>
-                        {selectedAddress.isDefault && (
-                          <span className="rounded-full bg-[#F1F3F5] px-2.5 py-1 text-[0.62rem] font-bold uppercase tracking-[0.06em] text-[#1A1A1A]">
-                            Default
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-2 text-sm font-semibold text-[#1A1A1A]">
-                        {selectedAddress.recipientName} · {selectedAddress.contactPhoneNumber}
-                      </p>
-                      <p className="mt-1 text-sm leading-6 text-[#4D4D4D]">
-                        {fullAddress(selectedAddress)}
-                      </p>
-                    </div>
-                  </div>
-                </article>
               )}
-
-              <details className="group mt-4 border-t border-[#E5E7EB] pt-4">
-                <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-[#4D4D4D] [&::-webkit-details-marker]:hidden">
-                  <span>Add a note for the kitchen</span>
-                  <span className="rounded-full bg-[#F1F3F5] px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.05em] text-[#6B6B6B]">
-                    Optional
-                  </span>
-                </summary>
-                <label htmlFor="checkout-note" className="mt-3 block">
-                  <span className="sr-only">Note for the kitchen</span>
-                  <textarea
-                    id="checkout-note"
-                    maxLength={500}
-                    value={note}
-                    onChange={(event) => setNote(event.target.value)}
-                    className="min-h-24 w-full resize-y rounded-xl border border-[#D8DADD] bg-white p-3 text-sm text-[#1A1A1A] outline-none placeholder:text-[#9A9A9A] focus:border-[#F62E18]"
-                    placeholder="For example: please pack the gravy separately"
-                  />
-                </label>
-                <p className="mt-1 text-right text-xs text-[#6B6B6B]">
-                  {note.length}/500
-                </p>
-              </details>
             </section>
 
-            <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_3px_12px_rgba(0,0,0,0.06)] md:p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[#6B6B6B]">
-                Order summary
-              </p>
-              <h2 className="mt-1 font-display text-xl font-bold text-[#1A1A1A] md:text-2xl">
-                {itemCount} item{itemCount === 1 ? "" : "s"}
-              </h2>
-
-              <ul className="mt-4 divide-y divide-[#E5E7EB]">
-                {items.map((item) => (
-                  <li key={item.id} className="flex gap-4 py-3 text-sm">
-                    <span className="min-w-0 flex-1 text-[#1A1A1A]">
-                      <span className="block truncate font-semibold">{item.name}</span>
-                      <span className="mt-1 block text-xs text-[#6B6B6B]">
-                        Quantity {item.qty}
-                      </span>
-                    </span>
-                    <span className="shrink-0 font-semibold text-[#1A1A1A]">
-                      {money(item.lineTotal, item.currency)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-
-              <div className="mt-3 flex items-center justify-between border-t border-[#E5E7EB] pt-4">
-                <span className="text-sm text-[#4D4D4D]">Food subtotal</span>
-                <strong className="font-display text-xl font-bold text-[#1A1A1A] md:text-2xl">
-                  {money(subtotal, currency)}
-                </strong>
+            <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-4 shadow-[0_4px_18px_rgba(26,26,26,0.05)]">
+              <div className="flex items-center gap-2.5">
+                <Clock3 className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
+                <h2 className="text-base font-semibold">Delivery</h2>
               </div>
-
-              <div className="mt-4 flex items-start gap-3 border-t border-[#E5E7EB] pt-4">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
-                  <FaShieldHalved className="text-base" aria-hidden="true" />
-                </span>
-                <p className="pt-0.5 text-xs leading-5 text-[#4D4D4D] md:text-sm md:leading-6">
-                  Platform fee, tax, delivery fee and grand total are returned by the Order Service after checkout creation.
+              <div className="mt-3 rounded-[11px] border border-[#F6B545]/35 bg-[#FFF8EC] p-4">
+                <p className="text-xs text-[#6B6B6B]">Earliest delivery</p>
+                <p className="mt-0.5 text-base font-semibold">As soon as possible</p>
+                <p className="mt-1 text-xs leading-5 text-[#6B6B6B]">
+                  {leadMinutes
+                    ? `Your chef usually needs about ${leadMinutes} min to prepare this order. Craves arranges delivery at the earliest available time.`
+                    : "This kitchen cooks to order. Craves arranges delivery at the earliest available time."}
                 </p>
               </div>
             </section>
+
+            <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-4 shadow-[0_4px_18px_rgba(26,26,26,0.05)]">
+              <div className="flex items-center gap-2.5">
+                <ReceiptText className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
+                <h2 className="text-base font-semibold">Bill details</h2>
+              </div>
+
+              <dl className="mt-4 space-y-2.5 text-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-[#6B6B6B]">Item total</dt>
+                  <dd className="font-medium tabular-nums">{money(subtotal, currency)}</dd>
+                </div>
+
+                {checkout ? (
+                  <>
+                    <div className="flex items-center justify-between gap-4">
+                      <dt className="text-[#6B6B6B]">Platform fee</dt>
+                      <dd className="font-medium tabular-nums">
+                        {money(checkout.platformFee, checkout.currency)}
+                      </dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <dt className="text-[#6B6B6B]">Delivery fee</dt>
+                      <dd className="font-medium tabular-nums">
+                        {money(checkout.deliveryFee, checkout.currency)}
+                      </dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <dt className="text-[#6B6B6B]">GST / tax</dt>
+                      <dd className="font-medium tabular-nums">
+                        {money(checkout.taxAmount, checkout.currency)}
+                      </dd>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-4 border-t border-[#E5E7EB] pt-3 text-[15px] font-bold">
+                      <dt>To pay</dt>
+                      <dd className="tabular-nums">
+                        {money(checkout.grandTotal, checkout.currency)}
+                      </dd>
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-3 flex items-start gap-2 border-t border-[#E5E7EB] pt-3">
+                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />
+                    <p className="text-xs leading-5 text-[#6B6B6B]">
+                      Delivery fee, platform fee, tax and the final amount are calculated by the Craves backend when you pay.
+                    </p>
+                  </div>
+                )}
+              </dl>
+            </section>
+
+            {instructions.trim() ? (
+              <section className="rounded-[14px] border border-[#E5E7EB] bg-[#F1F3F5] p-4">
+                <p className="text-xs font-semibold text-[#6B6B6B]">Cooking instructions</p>
+                <p className="mt-1 text-sm leading-5">{instructions.trim()}</p>
+              </section>
+            ) : null}
           </div>
         )}
 
-        {error && items.length > 0 && (
+        {error && items.length > 0 ? (
           <p
             role="alert"
-            className="mt-5 rounded-xl border border-[#F62E18]/20 bg-white p-3 text-sm font-medium text-[#C92716]"
+            className="mt-4 rounded-[11px] border border-[#F62E18]/20 bg-[#F62E18]/5 p-3 text-sm font-medium text-[#C92716]"
           >
             {error}
           </p>
-        )}
+        ) : null}
       </main>
 
-      {!loading && items.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white shadow-[0_-8px_28px_rgba(17,24,39,0.06)]">
-          <div className="mx-auto flex max-w-4xl items-center gap-4 px-4 py-3 md:px-6">
-            <div className="min-w-0">
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-[#6B6B6B]">
-                Food subtotal
-              </p>
-              <p className="font-display text-xl font-bold text-[#1A1A1A]">
-                {money(subtotal, currency)}
-              </p>
-            </div>
-            <button
-              type="button"
-              disabled={busy || !selectedId}
-              onClick={() => void createCheckout()}
-              className="ml-auto inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[#F62E18] px-6 text-sm font-bold text-white transition-colors hover:bg-[#DF2815] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F62E18] sm:flex-none sm:px-8 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {busy && <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              <span>{busy ? "Creating checkout…" : "Continue to secure payment"}</span>
-              {!busy && <FaArrowRight className="text-sm" aria-hidden="true" />}
-            </button>
-          </div>
-        </div>
-      )}
+      {!loading && items.length > 0 ? (
+        <CheckoutPaymentButton
+          checkout={checkout}
+          previewAmount={subtotal}
+          currency={currency}
+          disabled={!selectedAddress}
+          failure={paymentFailure}
+          ensureCheckout={ensureCheckout}
+          onFailure={setPaymentFailure}
+        />
+      ) : null}
 
-      <CheckoutAddressDialog
-        open={addressDialogOpen}
-        selectedId={selectedId}
-        onClose={() => setAddressDialogOpen(false)}
-        onSelect={setSelectedId}
-        onAddressesChange={setAddresses}
+      <AddressEditorFlow
+        open={editorOpen}
+        initialAddress={null}
+        addresses={addresses}
+        profileDefaults={profileDefaults}
+        onClose={() => setEditorOpen(false)}
+        onSaved={handleAddressSaved}
       />
     </div>
   );

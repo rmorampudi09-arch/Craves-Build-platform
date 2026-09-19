@@ -1,5 +1,6 @@
 "use client";
 
+import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -359,27 +360,29 @@ export function AddressEditorFlow({
     setMessage("Detecting your current delivery location…");
     try {
       const point = await getBrowserLocation();
-      const query = new URLSearchParams({
-        latitude: String(point.latitude),
-        longitude: String(point.longitude),
-        matchRadiusMeters: "100",
-      });
-      const recommendationResponse = await fetch(
-        `/api/customer/addresses/recommendation?${query}`,
-        { cache: "no-store", credentials: "same-origin" },
-      );
-      const recommendation = recommendationResponse.ok
-        ? parseLocationRecommendation(
-            await recommendationResponse.json().catch(() => null),
-          )
-        : null;
-
-      if (recommendation?.selectedSavedAddress) {
-        selectSavedAddress(recommendation.selectedSavedAddress);
-        setMessage(
-          `You're near your saved ${recommendation.selectedSavedAddress.addressLabel.toLowerCase()} address. Confirm the saved pin or adjust it before continuing.`,
+      if (step === "choose") {
+        const query = new URLSearchParams({
+          latitude: String(point.latitude),
+          longitude: String(point.longitude),
+          matchRadiusMeters: "100",
+        });
+        const recommendationResponse = await fetch(
+          `/api/customer/addresses/recommendation?${query}`,
+          { cache: "no-store", credentials: "same-origin" },
         );
-        return;
+        const recommendation = recommendationResponse.ok
+          ? parseLocationRecommendation(
+              await recommendationResponse.json().catch(() => null),
+            )
+          : null;
+
+        if (recommendation?.selectedSavedAddress) {
+          selectSavedAddress(recommendation.selectedSavedAddress);
+          setMessage(
+            `You're near your saved ${recommendation.selectedSavedAddress.addressLabel.toLowerCase()} address. Confirm the saved pin or adjust it before continuing.`,
+          );
+          return;
+        }
       }
 
       await resolvePoint(point.latitude, point.longitude);
@@ -494,18 +497,18 @@ export function AddressEditorFlow({
     "mt-1.5 w-full rounded-xl border border-[#E5E7EB] bg-white px-3.5 py-3 text-sm text-[#1A1A1A] outline-none transition-colors placeholder:text-[#9A9A9A] focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10";
 
   return (
-    <div
-      className="fixed inset-0 z-[90] flex items-end justify-center bg-black/35 backdrop-blur-[2px] md:items-center md:p-6"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !busy) onClose();
+    <Dialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !busy) onClose();
       }}
     >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="address-flow-title"
-        className="flex max-h-[96svh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-[0_30px_90px_rgba(26,26,26,0.25)] md:max-h-[92vh] md:rounded-[2rem] md:border md:border-[#E5E7EB]"
-      >
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[90] bg-black/35 backdrop-blur-[2px]" />
+        <Dialog.Content
+          aria-labelledby="address-flow-title"
+          className="fixed bottom-0 left-1/2 z-[91] flex max-h-[96svh] w-full max-w-2xl -translate-x-1/2 flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-[0_30px_90px_rgba(26,26,26,0.25)] outline-none md:bottom-auto md:top-1/2 md:max-h-[92vh] md:-translate-y-1/2 md:rounded-[2rem] md:border md:border-[#E5E7EB]"
+        >
         <div className="flex items-start gap-3 border-b border-[#F1F3F5] px-5 py-5 md:px-7 md:py-6">
           {step !== "choose" ? (
             <button
@@ -523,12 +526,12 @@ export function AddressEditorFlow({
             <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[#F62E18]">
               Delivery address
             </p>
-            <h2
+            <Dialog.Title
               id="address-flow-title"
               className="mt-1 font-display text-2xl font-black tracking-[-0.03em] text-[#1A1A1A]"
             >
               {title}
-            </h2>
+            </Dialog.Title>
             <p className="mt-1 text-xs font-medium leading-5 text-[#6B6B6B] md:text-sm">
               {step === "choose"
                 ? "Choose a delivery point first. Craves keeps the exact coordinates in the background."
@@ -872,7 +875,8 @@ export function AddressEditorFlow({
             </button>
           </div>
         ) : null}
-      </section>
-    </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

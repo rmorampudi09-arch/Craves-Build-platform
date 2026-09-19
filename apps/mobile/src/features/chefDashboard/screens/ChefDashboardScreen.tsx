@@ -430,8 +430,8 @@ export function ChefDashboardScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitleCompact}>Recent reviews</Text>
             {reviews.available &&
-            reviews.summary?.overallAverage !== null &&
-            reviews.summary !== null ? (
+            reviews.summary !== null &&
+            reviews.summary.overallAverage !== null ? (
               <View style={styles.reviewSummary}>
                 <Text style={styles.reviewSummaryScore}>
                   {reviews.summary.overallAverage.toFixed(1)} ★

@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {httpClient} from '../../../core/http/httpClient';
 
 export const PUBLIC_KITCHEN_PROFILE_PATH = '/api/v1/catalog/kitchens';
+export const PUBLIC_KITCHEN_AVAILABILITY_AVAILABLE = false;
 
 const kitchenIdSchema = z.string().uuid();
 const kitchenStatusSchema = z.enum(['DRAFT', 'ACTIVE', 'INACTIVE', 'SUSPENDED']);
@@ -46,6 +47,20 @@ const publicMenuItemSchema = z.object({
   images: z.array(publicMenuItemImageSchema),
 });
 
+const kitchenAvailabilitySchema = z.object({
+  kitchenId: z.string().uuid(),
+  evaluatedAt: z.string().refine(value => !Number.isNaN(Date.parse(value))),
+  timezoneId: z.string().min(1).max(80),
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  localTime: z.string().min(5).max(32),
+  kitchenActive: z.boolean(),
+  scheduleConfigured: z.boolean(),
+  acceptingOrders: z.boolean(),
+  paused: z.boolean(),
+  openBySchedule: z.boolean(),
+  availableNow: z.boolean(),
+}).strict();
+
 const publicMenuItemsSchema = z.array(publicMenuItemSchema);
 
 type PublicKitchenProfile = z.infer<typeof publicKitchenProfileSchema>;
@@ -53,6 +68,10 @@ type PublicMenuItem = z.infer<typeof publicMenuItemSchema>;
 
 export type CustomerKitchenFoodType = z.infer<typeof foodTypeSchema>;
 export type CustomerKitchenSpiceLevel = z.infer<typeof spiceLevelSchema>;
+export type CustomerKitchenAvailability = z.infer<
+  typeof kitchenAvailabilitySchema
+>;
+
 
 export interface CustomerKitchenMenuImage {
   id: string;
@@ -264,6 +283,27 @@ export function mapCustomerKitchenProfile(
 }
 
 export const kitchenProfileApi = {
+  async getCustomerKitchenAvailability(
+    kitchenId: string,
+    signal?: AbortSignal,
+  ): Promise<CustomerKitchenAvailability> {
+    const normalizedId = normalizeKitchenId(kitchenId);
+    const response = await httpClient.get<unknown>(
+      `${PUBLIC_KITCHEN_PROFILE_PATH}/${encodeURIComponent(
+        normalizedId,
+      )}/availability`,
+      {
+        signal,
+        dedupeKey: `customer-kitchen-availability:${normalizedId}`,
+      },
+    );
+    const parsed = kitchenAvailabilitySchema.parse(response);
+    if (parsed.kitchenId !== normalizedId) {
+      throw new Error('Catalog kitchen availability identity does not match the request.');
+    }
+    return parsed;
+  },
+
   async getCustomerKitchenProfile(
     kitchenId: string,
     signal?: AbortSignal,

@@ -30,6 +30,7 @@ interface Props {
   order: CustomerOrder;
   onReorder: (order: CustomerOrder) => void;
   reorderPending?: boolean;
+  reorderDisabled?: boolean;
 }
 
 type ActionVariant = 'outline' | 'primary' | 'neutral';
@@ -39,6 +40,7 @@ interface CardActionProps {
   variant?: ActionVariant;
   icon?: IconName;
   onPress: () => void;
+  disabled?: boolean;
 }
 
 function CardAction({
@@ -46,6 +48,7 @@ function CardAction({
   variant = 'outline',
   icon,
   onPress,
+  disabled = false,
 }: CardActionProps) {
   const primary = variant === 'primary';
   const neutral = variant === 'neutral';
@@ -54,12 +57,15 @@ function CardAction({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{disabled}}
+      disabled={disabled}
       onPress={onPress}
       style={({pressed}) => [
         styles.action,
         primary && styles.actionPrimary,
         neutral && styles.actionNeutral,
-        pressed && styles.actionPressed,
+        pressed && !disabled && styles.actionPressed,
+        disabled && styles.actionDisabled,
       ]}>
       {icon ? (
         <Icon
@@ -100,6 +106,7 @@ export function CustomerOrderCard({
   order,
   onReorder,
   reorderPending = false,
+  reorderDisabled = false,
 }: Props) {
   const navigation = useNavigation<NavigationProp<CustomerOrdersStackParamList>>();
   const kitchen = useCustomerOrderKitchenPresentationQuery(order.kitchenId);
@@ -181,8 +188,9 @@ export function CustomerOrderCard({
             <CardAction
               label={reorderPending ? 'Preparing…' : 'Reorder'}
               variant="neutral"
+              disabled={reorderDisabled}
               onPress={() => {
-                if (!reorderPending) onReorder(order);
+                if (!reorderPending && !reorderDisabled) onReorder(order);
               }}
             />
           ) : null}
@@ -326,6 +334,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   actionPressed: {opacity: 0.82},
+  actionDisabled: {opacity: 0.48},
   actionText: {
     color: colors.flameRed,
     fontSize: typography.tiny,

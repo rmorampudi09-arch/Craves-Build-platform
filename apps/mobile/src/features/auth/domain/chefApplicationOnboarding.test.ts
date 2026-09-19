@@ -68,6 +68,20 @@ describe('P23 Chef application onboarding domain', () => {
     });
   });
 
+  it('maps the Auth verification requirement to the Chef email field', () => {
+    const failure = mapChefApplicationSubmissionFailure(
+      new AppApiError(
+        'EMAIL_VERIFICATION_REQUIRED',
+        'Verify this email before continuing',
+        409,
+      ),
+    );
+
+    expect(failure.fieldErrors).toEqual({
+      email: 'Verify this email before submitting your Chef application.',
+    });
+  });
+
   it('maps only known backend validation fields to safe field errors', () => {
     const failure = mapChefApplicationSubmissionFailure(
       new AppApiError(

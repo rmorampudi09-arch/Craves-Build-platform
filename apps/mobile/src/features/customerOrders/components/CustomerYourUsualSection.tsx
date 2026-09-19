@@ -39,6 +39,7 @@ import {
   repeatOrderBasketSummary,
 } from '../presentation/repeatOrderPresentation';
 import {useRepeatOrderCandidatesQuery} from '../query/repeatOrderQueries';
+import {useRepeatOrderCatalogPrecheck} from '../query/useRepeatOrderCatalogPrecheck';
 
 function Icon({
   name,
@@ -142,6 +143,8 @@ export function CustomerYourUsualSection() {
     }),
     [favoriteHome.data, favoriteKitchenIds, repeatOrders.items],
   );
+  const visibleCandidates = React.useMemo(() => ranked.slice(0, 6), [ranked]);
+  const catalogPrecheck = useRepeatOrderCatalogPrecheck(visibleCandidates);
 
   const runReorder = React.useCallback(
     async (candidate: RepeatOrderCandidate) => {
@@ -393,8 +396,21 @@ export function CustomerYourUsualSection() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.cards}
         accessibilityLabel="Order Like Last Time suggestions">
-        {ranked.slice(0, 6).map(candidate => {
+        {visibleCandidates.map(candidate => {
           const pending = pendingOrderId === candidate.orderId;
+          const catalogStatus = catalogPrecheck.statusFor(candidate);
+          const catalogChecking =
+            catalogPrecheck.available && catalogPrecheck.isPending;
+          const catalogReviewRequired =
+            catalogStatus === 'REVIEW_REQUIRED';
+          const truthCopy =
+            catalogChecking
+              ? "Checking today's menu availability…"
+              : catalogStatus === 'CURRENTLY_AVAILABLE'
+                ? 'Current Catalog pre-check passed. Final cart validation still applies.'
+                : catalogReviewRequired
+                  ? "One or more previous dishes are not currently available. Review today's kitchen menu."
+                  : candidate.currentValidationNotice;
           const favorite = favoriteKitchenIds.includes(candidate.kitchenId);
           const home = (favoriteHome.data ?? []).find(item => item.kitchenId === candidate.kitchenId);
           const cookingCopy = home?.cookingState === 'COOKING_NOW'
@@ -414,27 +430,50 @@ export function CustomerYourUsualSection() {
               <Text numberOfLines={2} style={styles.basket}>{repeatOrderBasketSummary(candidate)}</Text>
               <Text style={styles.familiarity}>{familiarityLabel(candidate)}</Text>
               <Text style={styles.previousTotal}>{previousOrderTotalLabel(candidate)}</Text>
-              <Text numberOfLines={2} style={styles.truthCopy}>{candidate.currentValidationNotice}</Text>
+              <Text numberOfLines={2} style={styles.truthCopy}>{truthCopy}</Text>
               {!candidate.preferenceRecallSupported ? (
                 <Text style={styles.preferenceCopy}>Previous customizations are not silently assumed.</Text>
               ) : null}
               <Pressable
                 accessibilityRole="button"
                 accessibilityState={{
-                  busy: pending,
-                  disabled: Boolean(pendingOrderId) || uncertainReorder || !active,
+                  busy: pending || catalogChecking,
+                  disabled:
+                    Boolean(pendingOrderId) ||
+                    uncertainReorder ||
+                    !active ||
+                    catalogChecking,
                 }}
-                disabled={Boolean(pendingOrderId) || uncertainReorder || !active}
+                disabled={
+                  Boolean(pendingOrderId) ||
+                  uncertainReorder ||
+                  !active ||
+                  catalogChecking
+                }
                 onPress={() => {
+                  if (catalogReviewRequired) {
+                    navigation.navigate('CustomerKitchenDishes', {
+                      kitchenId: candidate.kitchenId,
+                    });
+                    return;
+                  }
                   runReorder(candidate).catch(() => undefined);
                 }}
                 style={({pressed}) => [styles.orderButton, pressed && styles.pressed]}>
-                {pending ? (
+                {pending || catalogChecking ? (
                   <ActivityIndicator size="small" color={colors.white} />
                 ) : (
-                  <Icon name="restore" size={18} color={colors.white} />
+                  <Icon
+                    name={catalogReviewRequired ? 'silverware-fork-knife' : 'restore'}
+                    size={18}
+                    color={colors.white}
+                  />
                 )}
-                <Text style={styles.orderButtonText}>Order like last time</Text>
+                <Text style={styles.orderButtonText}>
+                  {catalogReviewRequired
+                    ? "View today's menu"
+                    : 'Order like last time'}
+                </Text>
               </Pressable>
             </View>
           );

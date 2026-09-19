@@ -17,6 +17,7 @@ import {
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {ChefHeader} from '../../chefShell/components/ChefHeader';
+import {ChefEarningsLedgerList} from '../components/ChefEarningsLedgerList';
 import {
   CHEF_PAYOUT_HISTORY_MESSAGES,
   createChefPayoutHistoryBoundaryState,
@@ -122,7 +123,7 @@ export function ChefPayoutHistoryScreen() {
             Earnings & payouts
           </Text>
           <Text style={styles.subtitle}>
-            Financial values stay empty until Craves has exact approved payout contracts for this Chef account.
+            Your server-recorded earning ledger is available here. Withdrawable balance, payout destination and withdrawal actions remain hidden until Craves exposes exact Chef-role contracts for them.
           </Text>
         </View>
 
@@ -223,27 +224,14 @@ export function ChefPayoutHistoryScreen() {
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeadingRow}>
               <View style={styles.sectionHeadingCopy}>
-                <Text style={styles.sectionTitle}>Transactions</Text>
-                <Text style={styles.sectionCaption}>Settlement and payout status history</Text>
+                <Text style={styles.sectionTitle}>Earnings ledger</Text>
+                <Text style={styles.sectionCaption}>Server-authoritative earning entries</Text>
               </View>
-              <BoundaryAction
-                label="Date range"
-                message={CHEF_PAYOUT_HISTORY_MESSAGES.dateFilter}
-                onExplain={explain}
-              />
             </View>
-            <View accessibilityRole="alert" style={styles.transactionUnavailable}>
-              <View style={styles.transactionIcon}>
-                <Icon name="orders" size={iconSize.lg} color={colors.flameRed} />
-              </View>
-              <Text style={styles.chartTitle}>Transaction history unavailable</Text>
-              <Text style={styles.chartMessage}>
-                {CHEF_PAYOUT_HISTORY_MESSAGES.payoutTransactions}
-              </Text>
-              <Text style={styles.detailBoundaryText}>
-                {CHEF_PAYOUT_HISTORY_MESSAGES.transactionDetail}
-              </Text>
-            </View>
+            <ChefEarningsLedgerList />
+            <Text style={styles.detailBoundaryText}>
+              Settlement batches and provider payout transactions are not exposed to the Chef role yet, so this screen does not infer them from earning rows.
+            </Text>
           </View>
         )}
 

@@ -149,6 +149,29 @@ function requireCartSnapshot(value: unknown): CartSnapshot {
   return snapshot;
 }
 
+export interface CartSnapshotRequestPayload {
+  cartId: string;
+  items: Array<{id: string; quantity: number; updatedAt: string}>;
+}
+
+export function buildCartSnapshotRequest(snapshot: CartSnapshot): CartSnapshotRequestPayload {
+  requireUuid(snapshot.cartId, 'CART_INVALID_ID', 'This cart could not be verified.');
+  if (snapshot.lines.length > 200) {
+    throw new AppApiError('CART_TOO_LARGE', 'This cart is too large to verify safely.');
+  }
+  return {
+    cartId: snapshot.cartId,
+    items: snapshot.lines.map(line => {
+      requireUuid(line.lineId, 'CART_INVALID_LINE_ID', 'A cart item could not be verified.');
+      requireQuantity(line.quantity);
+      if (!parseTimestamp(line.updatedAt)) {
+        throw new AppApiError('CART_INVALID_TIMESTAMP', 'A cart item could not be verified. Refresh the cart and try again.');
+      }
+      return {id: line.lineId, quantity: line.quantity, updatedAt: line.updatedAt};
+    }),
+  };
+}
+
 export const cartApi = {
   async getSnapshot(): Promise<CartSnapshot> {
     const response = await httpClient.get<unknown>('/api/v1/cart', {dedupeKey: 'customer-cart:snapshot'});
@@ -167,6 +190,46 @@ export const cartApi = {
   async removeItem(cartItemId: string): Promise<CartSnapshot> {
     requireUuid(cartItemId, 'CART_INVALID_LINE_ID', 'This cart item could not be removed.');
     return requireCartSnapshot(await httpClient.delete<unknown>(`/api/v1/cart/items/${cartItemId}`));
+  },
+  async validate(): Promise<CartSnapshot> {
+    return requireCartSnapshot(await httpClient.post<unknown>('/api/v1/cart/validate'));
+  },
+  async clearIfUnchanged(expectedCart: CartSnapshot): Promise<CartSnapshot> {
+    return requireCartSnapshot(
+      await httpClient.post<unknown>('/api/v1/cart/clear-if-unchanged', buildCartSnapshotRequest(expectedCart)),
+    );
+  },
+  async switchKitchen(
+    expectedCart: CartSnapshot,
+    menuItemId: string,
+    quantity: number,
+    expectedKitchenId: string,
+  ): Promise<CartSnapshot> {
+    requireUuid(menuItemId, 'CART_INVALID_MENU_ITEM_ID', 'This dish could not be added to the cart.');
+    requireUuid(expectedKitchenId, 'CART_INVALID_KITCHEN_ID', 'This kitchen could not be verified.');
+    requireQuantity(quantity);
+    return requireCartSnapshot(
+      await httpClient.post<unknown>('/api/v1/cart/switch-kitchen', {
+        expectedCart: buildCartSnapshotRequest(expectedCart),
+        menuItemId,
+        expectedKitchenId,
+        quantity,
+      }),
+    );
+  },
+  async reorderIfUnchanged(
+    orderId: string,
+    expectedCart: CartSnapshot,
+    expectedKitchenId: string,
+  ): Promise<CartSnapshot> {
+    requireUuid(orderId, 'CART_INVALID_ORDER_ID', 'This order could not be reordered.');
+    requireUuid(expectedKitchenId, 'CART_INVALID_KITCHEN_ID', 'This kitchen could not be verified.');
+    return requireCartSnapshot(
+      await httpClient.post<unknown>(`/api/v1/cart/reorder-if-unchanged/${encodeURIComponent(orderId)}`, {
+        expectedCart: buildCartSnapshotRequest(expectedCart),
+        expectedKitchenId,
+      }),
+    );
   },
   async reorder(orderId: string): Promise<CartSnapshot> {
     requireUuid(orderId, 'CART_INVALID_ORDER_ID', 'This order could not be reordered.');

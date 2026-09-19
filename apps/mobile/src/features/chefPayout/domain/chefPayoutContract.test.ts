@@ -13,7 +13,7 @@ describe('chef payout contract boundary', () => {
       path: CHEF_EARNINGS_ROUTE,
       response: 'ChefEarningLedgerEntry[]',
       query: {
-        limit: {default: 100, minimum: 1, maximum: 500},
+        limit: {default: 100, minimum: 1, maximum: 200},
       },
     });
   });

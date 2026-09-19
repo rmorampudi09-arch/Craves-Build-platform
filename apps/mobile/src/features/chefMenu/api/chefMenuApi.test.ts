@@ -1,5 +1,6 @@
 import {httpClient} from '../../../core/http/httpClient';
 import {
+  CHEF_MENU_BULK_AVAILABILITY_PATH,
   CHEF_MENU_CONTRACT_GAPS,
   CHEF_MENU_FOOD_TYPES,
   CHEF_MENU_IMAGE_CONTENT_TYPES,
@@ -8,6 +9,7 @@ import {
   CHEF_MENU_SERVER_DEFAULTS,
   CHEF_MENU_SPICE_LEVELS,
   chefMenuApi,
+  parseChefMenuBulkAvailabilityResponse,
   parseChefMenuItem,
   parseChefMenuItems,
   validateChefMenuItemRequest,
@@ -210,6 +212,123 @@ describe('chefMenuApi contract model', () => {
       availability,
       {signal: undefined},
     );
+  });
+
+  it('uses one atomic bulk availability PATCH with exact request JSON', async () => {
+    const patch = jest.spyOn(httpClient, 'patch').mockResolvedValue({
+      requestedCount: 2,
+      changedCount: 1,
+      items: [
+        {menuItemId: MENU_ITEM_ID, available: false, changed: true},
+        {menuItemId: OTHER_MENU_ITEM_ID, available: false, changed: false},
+      ],
+    });
+
+    await expect(
+      chefMenuApi.updateAvailabilityBulk([
+        {menuItemId: MENU_ITEM_ID, available: false, reason: ' Sold out '},
+        {menuItemId: OTHER_MENU_ITEM_ID, available: false},
+      ]),
+    ).resolves.toMatchObject({requestedCount: 2, changedCount: 1});
+
+    expect(patch).toHaveBeenCalledWith(
+      CHEF_MENU_BULK_AVAILABILITY_PATH,
+      {
+        changes: [
+          {menuItemId: MENU_ITEM_ID, available: false, reason: 'Sold out'},
+          {menuItemId: OTHER_MENU_ITEM_ID, available: false, reason: null},
+        ],
+      },
+      {signal: undefined},
+    );
+  });
+
+  it('rejects duplicate or oversized bulk availability requests before transport', async () => {
+    const patch = jest.spyOn(httpClient, 'patch');
+
+    await expect(
+      chefMenuApi.updateAvailabilityBulk([
+        {menuItemId: MENU_ITEM_ID, available: true},
+        {menuItemId: MENU_ITEM_ID, available: false},
+      ]),
+    ).rejects.toThrow('duplicate');
+
+    await expect(
+      chefMenuApi.updateAvailabilityBulk(
+        Array.from({length: 101}, (_, index) => ({
+          menuItemId: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+          available: false,
+        })),
+      ),
+    ).rejects.toThrow('between 1 and 100');
+
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it('locks bulk response counts, IDs, values and privacy boundary', () => {
+    const requested = [
+      {menuItemId: MENU_ITEM_ID, available: true},
+      {menuItemId: OTHER_MENU_ITEM_ID, available: false},
+    ];
+
+    expect(
+      parseChefMenuBulkAvailabilityResponse(
+        {
+          requestedCount: 2,
+          changedCount: 2,
+          items: [
+            {menuItemId: MENU_ITEM_ID, available: true, changed: true},
+            {
+              menuItemId: OTHER_MENU_ITEM_ID,
+              available: false,
+              changed: true,
+            },
+          ],
+        },
+        requested,
+      ),
+    ).not.toBeNull();
+
+    expect(
+      parseChefMenuBulkAvailabilityResponse(
+        {
+          requestedCount: 2,
+          changedCount: 2,
+          items: [
+            {
+              menuItemId: MENU_ITEM_ID,
+              available: true,
+              changed: true,
+              chefIdentityId: 'private',
+            },
+            {
+              menuItemId: OTHER_MENU_ITEM_ID,
+              available: false,
+              changed: true,
+            },
+          ],
+        },
+        requested,
+      ),
+    ).toBeNull();
+
+    expect(
+      parseChefMenuBulkAvailabilityResponse(
+        {
+          requestedCount: 2,
+          changedCount: 1,
+          items: [
+            {menuItemId: MENU_ITEM_ID, available: false, changed: true},
+            {
+              menuItemId: OTHER_MENU_ITEM_ID,
+              available: false,
+              changed: false,
+            },
+          ],
+        },
+        requested,
+      ),
+    ).toBeNull();
   });
 
   it('uses multipart file body plus the exact primary request parameter for media upload', async () => {

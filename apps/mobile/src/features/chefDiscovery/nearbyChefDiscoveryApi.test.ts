@@ -61,9 +61,20 @@ describe('P34 nearby chef discovery API', () => {
     const result = await nearbyChefDiscoveryApi.listNearbyKitchens(request);
 
     expect(getMock).toHaveBeenCalledWith(NEARBY_CHEF_DISCOVERY_PATH, {
-      params: request,
+      params: {
+        ...request,
+        query: null,
+        category: null,
+        foodType: null,
+        minPrice: null,
+        maxPrice: null,
+        maxPreparationTimeMinutes: null,
+        spiceLevel: null,
+        sort: 'DISTANCE_ASC',
+      },
       signal: undefined,
-      dedupeKey: 'nearby-chef-discovery:17.4483:78.3915:10000:0:20',
+      dedupeKey:
+        'nearby-chef-discovery:17.4483:78.3915:10000:0:20::::::::DISTANCE_ASC',
     });
     expect(result.kitchens[0].latitude).toBeNull();
     expect(result.kitchens[0].longitude).toBeNull();

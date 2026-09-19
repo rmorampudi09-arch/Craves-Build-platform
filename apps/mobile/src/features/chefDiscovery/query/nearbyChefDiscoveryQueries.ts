@@ -26,6 +26,14 @@ export const nearbyChefDiscoveryQueryPrefix = [
 export interface NearbyChefDiscoveryQueryOptions {
   radiusMeters: number;
   size: number;
+  query?: string | null;
+  category?: string | null;
+  foodType?: 'VEG' | 'NON_VEG' | 'EGG' | null;
+  minPrice?: number | null;
+  maxPrice?: number | null;
+  maxPreparationTimeMinutes?: number | null;
+  spiceLevel?: 'MILD' | 'MEDIUM' | 'SPICY' | null;
+  sort?: 'DISTANCE_ASC' | 'NAME_ASC' | null;
 }
 
 export function createNearbyChefDiscoveryQueryKey(
@@ -40,6 +48,14 @@ export function createNearbyChefDiscoveryQueryKey(
     filters: {
       latitude: location.latitude,
       longitude: location.longitude,
+      query: options.query?.trim() || null,
+      category: options.category?.trim() || null,
+      foodType: options.foodType ?? null,
+      minPrice: options.minPrice ?? null,
+      maxPrice: options.maxPrice ?? null,
+      maxPreparationTimeMinutes: options.maxPreparationTimeMinutes ?? null,
+      spiceLevel: options.spiceLevel ?? null,
+      sort: options.sort ?? 'DISTANCE_ASC',
     },
     paging: {
       radiusMeters: options.radiusMeters,
@@ -87,6 +103,14 @@ export function useNearbyChefDiscoveryQuery(
           radiusMeters: options.radiusMeters,
           page: pageParam,
           size: options.size,
+          query: options.query,
+          category: options.category,
+          foodType: options.foodType,
+          minPrice: options.minPrice,
+          maxPrice: options.maxPrice,
+          maxPreparationTimeMinutes: options.maxPreparationTimeMinutes,
+          spiceLevel: options.spiceLevel,
+          sort: options.sort,
         },
         signal,
       );

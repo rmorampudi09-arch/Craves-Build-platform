@@ -15,7 +15,7 @@ type Props = {
 function createRequestId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, token => {
     const value = Math.floor(Math.random() * 16);
-    const nibble = token === 'x' ? value : (value & 0x3) | 0x8;
+    const nibble = token === 'x' ? value : 8 + (value % 4);
     return nibble.toString(16);
   });
 }

@@ -5,6 +5,7 @@ interface BackendErrorPayload {
   code?: unknown;
   error?: unknown;
   message?: unknown;
+  detail?: unknown;
   details?: unknown;
 }
 
@@ -151,7 +152,9 @@ export function toAppApiError(error: unknown): AppApiError {
     }
 
     const code = normalizedBackendCode(error.response?.data, status);
-    const backendMessage = safeBackendMessage(error.response?.data?.message);
+    const backendMessage =
+      safeBackendMessage(error.response?.data?.message) ??
+      safeBackendMessage(error.response?.data?.detail);
     const details = safeBackendDetails(error.response?.data?.details);
     const message = status
       ? publicHttpMessage(status, backendMessage)

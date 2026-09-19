@@ -15,7 +15,7 @@ export const CUSTOMER_SETTINGS_CAPABILITY_STATUS: Readonly<
   appLanguage: 'contract-unavailable',
   appearance: 'contract-unavailable',
   deviceSessions: 'contract-unavailable',
-  referral: 'contract-unavailable',
+  referral: 'available',
   subscription: 'contract-unavailable',
   legalContent: 'contract-unavailable',
   support: 'contract-unavailable',

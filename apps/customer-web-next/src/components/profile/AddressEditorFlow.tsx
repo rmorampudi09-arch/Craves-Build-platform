@@ -355,7 +355,7 @@ export function AddressEditorFlow({
     }
   };
 
-  const useCurrentLocation = async () => {
+  const handleUseCurrentLocation = async () => {
     if (locating || busy) return;
     setLocating(true);
     setMessage("Detecting your current delivery location…");
@@ -601,7 +601,7 @@ export function AddressEditorFlow({
 
               <button
                 type="button"
-                onClick={() => void useCurrentLocation()}
+                onClick={() => void handleUseCurrentLocation()}
                 disabled={locating || busy}
                 className="mt-4 flex w-full items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 text-left text-[#1A1A1A] transition hover:border-[#F62E18]/35 hover:bg-[#F1F3F5] disabled:opacity-50"
               >
@@ -667,7 +667,7 @@ export function AddressEditorFlow({
                 locating={locating}
                 disabled={busy || mapResolving}
                 onCenterChange={handleMapCenterChange}
-                onUseCurrentLocation={() => void useCurrentLocation()}
+                onUseCurrentLocation={() => void handleUseCurrentLocation()}
               />
 
               <div className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white p-4">

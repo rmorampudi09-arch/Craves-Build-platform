@@ -2,9 +2,11 @@ import {httpClient} from '../../../core/http/httpClient';
 import {
   CHEF_EARNINGS_MAX_LIMIT,
   CHEF_EARNINGS_ROUTE,
+  CHEF_FINANCE_BALANCE_ROUTE,
   chefPayoutApi,
   normalizeChefEarningsLimit,
   parseChefEarningLedger,
+  parseChefFinanceBalance,
   parseChefEarningLedgerEntry,
 } from './chefPayoutApi';
 
@@ -32,6 +34,42 @@ const validEntry = {
   reversedAt: null,
   createdAt: '2026-08-09T11:00:00Z',
   updatedAt: '2026-08-09T12:00:00Z',
+};
+
+const balanceResponse = {
+  available: '578.88',
+  outstanding: '578.88',
+  reservedOrPaid: '338.52',
+  onHold: false,
+  manualRequestUsedToday: true,
+  nextManualRequestAt: '2026-09-20T18:30:00Z',
+  recentPayouts: [
+    {
+      id: '44444444-4444-4444-8444-444444444444',
+      amount: '338.52',
+      mode: 'MANUAL',
+      status: 'PAID',
+      providerStatus: null,
+      transferReference: 'TEST-UTR-001',
+      createdAt: '2026-09-19T10:00:00Z',
+      payoutChannel: 'CRAVES_MANUAL',
+    },
+  ],
+  executionEnabled: true,
+  payoutMode: 'CRAVES_MANUAL',
+  accounting: {
+    recordedOrders: 1,
+    grossFood: '1000.00',
+    totalServiceFee: '82.60',
+    feeBeforeGst: '70.00',
+    feeGst: '12.60',
+    withholding: '0.00',
+    originalNetEarnings: '917.40',
+    recordedPayments: '338.52',
+    outstanding: '578.88',
+    otherLedgerMovements: '0.00',
+    legacyRecords: 0,
+  },
 };
 
 describe('chefPayoutApi financial parsing', () => {
@@ -89,6 +127,38 @@ describe('chefPayoutApi financial parsing', () => {
     expect(() => normalizeChefEarningsLimit(0)).toThrow();
     expect(() => normalizeChefEarningsLimit(201)).toThrow();
     expect(() => normalizeChefEarningsLimit(2.5)).toThrow();
+  });
+
+  it('parses the exact Chef balance and payout-history JSON from main', () => {
+    expect(parseChefFinanceBalance(balanceResponse)).toEqual(balanceResponse);
+  });
+
+  it('rejects unreconciled accounting or unsupported finance fields', () => {
+    expect(
+      parseChefFinanceBalance({
+        ...balanceResponse,
+        accounting: {
+          ...balanceResponse.accounting,
+          outstanding: '578.87',
+        },
+      }),
+    ).toBeNull();
+    expect(
+      parseChefFinanceBalance({
+        ...balanceResponse,
+        bankAccountNumber: 'must-not-be-exposed',
+      }),
+    ).toBeNull();
+  });
+
+  it('reads balance without sending request JSON', async () => {
+    (httpClient.get as jest.Mock).mockResolvedValue(balanceResponse);
+
+    await expect(chefPayoutApi.getBalance()).resolves.toEqual(balanceResponse);
+    expect(httpClient.get).toHaveBeenCalledWith(CHEF_FINANCE_BALANCE_ROUTE, {
+      signal: undefined,
+      dedupeKey: 'chef-finance-balance',
+    });
   });
 
   it('sends only the documented limit query and validates the response', async () => {

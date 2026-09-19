@@ -339,7 +339,7 @@ export function CheckoutPaymentButton({
   const buttonLabel = failure?.retryAllowed
     ? "Try payment again"
     : failure
-      ? "Check payment status"
+      ? "Payment pending"
       : authoritativeAmount !== null
         ? `Pay ${money(authoritativeAmount, checkout?.currency ?? currency)}`
         : "Pay securely";

@@ -188,6 +188,11 @@ export function ChefSubscriptionPlanScreen() {
   const [totalCapacity, setTotalCapacity] = React.useState('20');
   const [subscriptionCapacity, setSubscriptionCapacity] = React.useState('10');
   const [capacitySalesEnabled, setCapacitySalesEnabled] = React.useState(true);
+  const [menuCapacityItemId, setMenuCapacityItemId] = React.useState<string | null>(null);
+  const [menuCapacityDay, setMenuCapacityDay] = React.useState('1');
+  const [menuCapacitySlot, setMenuCapacitySlot] = React.useState<MealSlot>('LUNCH');
+  const [menuCapacityUnits, setMenuCapacityUnits] = React.useState('10');
+  const [menuCapacitySalesEnabled, setMenuCapacitySalesEnabled] = React.useState(true);
 
   const selected = React.useMemo(
     () => plans.find(plan => plan.id === selectedId) ?? null,
@@ -198,6 +203,14 @@ export function ChefSubscriptionPlanScreen() {
     () => menu.filter(item => item.status === 'ACTIVE' && item.available),
     [menu],
   );
+
+  React.useEffect(() => {
+    setMenuCapacityItemId(current =>
+      current && availableMenu.some(item => item.id === current)
+        ? current
+        : availableMenu[0]?.id ?? null,
+    );
+  }, [availableMenu]);
 
   const load = React.useCallback(async (background = false) => {
     background ? setRefreshing(true) : setLoading(true);
@@ -416,6 +429,55 @@ export function ChefSubscriptionPlanScreen() {
     }
   }, [busy, capacityDay, capacitySalesEnabled, capacitySlot, subscriptionCapacity, totalCapacity]);
 
+  const saveMenuItemCapacity = React.useCallback(async () => {
+    if (busy || !menuCapacityItemId) return;
+    const day = Number(menuCapacityDay);
+    const maxUnits = Number(menuCapacityUnits);
+    if (
+      !Number.isInteger(day) ||
+      day < 1 ||
+      day > 7 ||
+      !Number.isInteger(maxUnits) ||
+      maxUnits < 0 ||
+      maxUnits > 100000
+    ) {
+      setMessage(
+        'Dish subscription capacity requires a weekday 1–7 and whole units between 0 and 100000.',
+      );
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await chefSubscriptionApi.putMenuItemRule({
+        menuItemId: menuCapacityItemId,
+        isoDayOfWeek: day,
+        mealSlotCode: menuCapacitySlot,
+        maxSubscriptionUnits: maxUnits,
+        salesEnabled: menuCapacitySalesEnabled,
+        reason: 'Updated by Chef in Craves mobile',
+      });
+      const refreshed = await chefSubscriptionApi.getCapacity();
+      setCapacity(refreshed);
+      setMessage(
+        'Dish subscription limit updated. Normal menu availability was not changed.',
+      );
+    } catch {
+      setMessage(
+        'Dish subscription limit could not be updated. Confirm the dish is still active and owned by this kitchen.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [
+    busy,
+    menuCapacityDay,
+    menuCapacityItemId,
+    menuCapacitySalesEnabled,
+    menuCapacitySlot,
+    menuCapacityUnits,
+  ]);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <ChefHeader title="Meal Plans" />
@@ -563,6 +625,113 @@ export function ChefSubscriptionPlanScreen() {
           </View>
           <View style={styles.switchRow}><View style={styles.switchCopy}><Text style={styles.fieldLabel}>Subscription sales enabled</Text><Text style={styles.sectionCaption}>Turn off to stop new recurring reservations for this slot.</Text></View><Switch value={capacitySalesEnabled} onValueChange={setCapacitySalesEnabled} thumbColor={colors.white} trackColor={{false: colors.borderStrong, true: colors.flameRed}} /></View>
           <Pressable disabled={busy || capacity?.adminSalesFrozen} onPress={saveCapacity} style={[styles.secondaryWide, (busy || capacity?.adminSalesFrozen) && styles.disabled]}><FilledIcon name="gauge" color={colors.flameRed} /><Text style={styles.secondaryWideText}>Save slot capacity</Text></Pressable>
+
+          <View style={styles.capacityDivider} />
+
+          <View style={styles.cardHeader}>
+            <View style={styles.cardHeaderIcon}><FilledIcon name="food-variant" color={colors.flameRed} /></View>
+            <View style={styles.cardHeaderCopy}>
+              <Text style={styles.cardTitle}>Dish subscription limits</Text>
+              <Text style={styles.sectionCaption}>Cap recurring subscription demand for a specific dish without changing its normal menu availability.</Text>
+            </View>
+          </View>
+
+          {capacity?.menuItemRules.slice(0, 8).map(rule => {
+            const dish = menu.find(item => item.id === rule.menuItemId);
+            return (
+              <View key={rule.id} style={styles.capacityRuleRow}>
+                <View style={styles.capacityRuleIcon}><FilledIcon name="food" size={18} color={colors.flameRed} /></View>
+                <View style={styles.capacityRuleCopy}>
+                  <Text numberOfLines={1} style={styles.capacityRuleTitle}>
+                    {dish?.itemName ?? `Dish ${rule.menuItemId.slice(0, 8)}`} · {WEEKDAYS[rule.isoDayOfWeek - 1]} · {rule.mealSlotCode}
+                  </Text>
+                  <Text style={styles.capacityRuleText}>
+                    {rule.recurringReservedUnits}/{rule.maxSubscriptionUnits} reserved/max · {rule.recurringAvailableUnits} available
+                    {rule.recurringDeficitUnits > 0 ? ` · ${rule.recurringDeficitUnits} deficit` : ''}
+                  </Text>
+                </View>
+                <Text style={[styles.capacityState, !rule.salesEnabled && styles.capacityStateOff]}>{rule.salesEnabled ? 'On' : 'Off'}</Text>
+              </View>
+            );
+          })}
+
+          <Text style={styles.fieldLabel}>Dish</Text>
+          {availableMenu.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dishRail}>
+              {availableMenu.map(item => (
+                <Pressable
+                  key={item.id}
+                  accessibilityRole="radio"
+                  accessibilityState={{checked: menuCapacityItemId === item.id}}
+                  onPress={() => setMenuCapacityItemId(item.id)}
+                  style={[
+                    styles.dishChip,
+                    menuCapacityItemId === item.id && styles.dishChipSelected,
+                  ]}>
+                  <View style={styles.dishIcon}><FilledIcon name="food" size={18} color={colors.flameRed} /></View>
+                  <Text numberOfLines={2} style={styles.dishChipText}>{item.itemName}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : (
+            <Text style={styles.helper}>Activate an available menu item before setting a dish subscription limit.</Text>
+          )}
+
+          <Text style={styles.fieldLabel}>Weekday</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.choiceRow}>
+            {WEEKDAYS.map((dayLabel, index) => (
+              <Pressable
+                key={dayLabel}
+                onPress={() => setMenuCapacityDay(String(index + 1))}
+                style={[styles.dayChip, menuCapacityDay === String(index + 1) && styles.dayChipSelected]}>
+                <Text style={[styles.dayChipText, menuCapacityDay === String(index + 1) && styles.dayChipTextSelected]}>{dayLabel}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          <Text style={styles.fieldLabel}>Meal slot</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.choiceRow}>
+            {MEAL_SLOTS.map(slot => (
+              <Pressable
+                key={slot}
+                onPress={() => setMenuCapacitySlot(slot)}
+                style={[styles.choiceChip, menuCapacitySlot === slot && styles.choiceChipSelected]}>
+                <Text style={[styles.choiceChipText, menuCapacitySlot === slot && styles.choiceChipTextSelected]}>{slot.charAt(0) + slot.slice(1).toLowerCase()}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          <Field
+            label="Maximum subscription units"
+            value={menuCapacityUnits}
+            onChangeText={setMenuCapacityUnits}
+            placeholder="10"
+            keyboardType="number-pad"
+          />
+
+          <View style={styles.switchRow}>
+            <View style={styles.switchCopy}>
+              <Text style={styles.fieldLabel}>Subscription sales for this dish</Text>
+              <Text style={styles.sectionCaption}>Turning this off blocks new recurring reservations for this dish/slot. Existing commitments stay protected.</Text>
+            </View>
+            <Switch
+              value={menuCapacitySalesEnabled}
+              onValueChange={setMenuCapacitySalesEnabled}
+              thumbColor={colors.white}
+              trackColor={{false: colors.borderStrong, true: colors.flameRed}}
+            />
+          </View>
+
+          <Pressable
+            disabled={busy || capacity?.adminSalesFrozen || !menuCapacityItemId}
+            onPress={saveMenuItemCapacity}
+            style={[
+              styles.secondaryWide,
+              (busy || capacity?.adminSalesFrozen || !menuCapacityItemId) && styles.disabled,
+            ]}>
+            <FilledIcon name="food-check" color={colors.flameRed} />
+            <Text style={styles.secondaryWideText}>Save dish subscription limit</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -645,6 +814,11 @@ const styles = StyleSheet.create({
   addMealText: {color: colors.flameRedAccessible, fontSize: typography.small, fontWeight: fontWeight.bold},
   errorCard: {flexDirection: 'row', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.errorSoft},
   errorText: {minWidth: 0, flex: 1, color: colors.error, fontSize: typography.small, lineHeight: 19},
+  capacityDivider: {
+    height: borderWidth.standard,
+    backgroundColor: colors.border,
+    marginVertical: spacing.sm,
+  },
   capacitySummary: {flexDirection: 'row', gap: spacing.xs},
   metric: {minWidth: 0, flex: 1, padding: spacing.sm, borderRadius: radius.md, backgroundColor: ICON_SURFACE},
   metricValue: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},

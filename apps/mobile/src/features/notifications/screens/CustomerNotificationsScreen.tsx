@@ -32,7 +32,7 @@ import {TerminalState} from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
-import {unreadNoticeCount, type CustomerNotice} from '../../customerShell/api/customerShellApi';
+import type {CustomerNotice} from '../../customerShell/api/customerShellApi';
 import {
   CUSTOMER_NOTIFICATION_CATEGORIES,
   buildCustomerNotificationCategoryCounts,
@@ -46,6 +46,7 @@ import {
 import {
   CUSTOMER_NOTIFICATION_LIMIT,
   useCustomerNotificationsListQuery,
+  useMarkAllCustomerNotificationsRead,
   useMarkCustomerNotificationRead,
 } from '../query/customerNotificationQueries';
 
@@ -125,6 +126,7 @@ export function CustomerNotificationsScreen() {
   const bottomNavScroll = useCustomerBottomNavScroll();
   const notificationsQuery = useCustomerNotificationsListQuery();
   const markRead = useMarkCustomerNotificationRead();
+  const markAllRead = useMarkAllCustomerNotificationsRead();
   const pendingOpenIds = useRef(new Set<string>());
   const [selectedCategory, setSelectedCategory] = useState<CustomerNotificationCategory>('ALL');
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
@@ -143,11 +145,34 @@ export function CustomerNotificationsScreen() {
     () => groups.map(group => ({title: group.title, data: group.notices})),
     [groups],
   );
-  const unreadCount = unreadNoticeCount(notices);
+  const unreadCount = notificationsQuery.unreadCount;
 
   const refresh = useCallback(() => {
     notificationsQuery.refetch().catch(() => undefined);
   }, [notificationsQuery]);
+
+  const markAll = useCallback(async () => {
+    if (
+      !notificationsQuery.v2Available ||
+      unreadCount === 0 ||
+      markAllRead.isPending
+    ) {
+      return;
+    }
+
+    try {
+      await markAllRead.mutateAsync();
+    } catch {
+      Alert.alert(
+        'Notifications could not be marked read',
+        'Please try again.',
+      );
+    }
+  }, [
+    markAllRead,
+    notificationsQuery.v2Available,
+    unreadCount,
+  ]);
 
   const openNotice = useCallback(
     async (notice: CustomerNotice) => {
@@ -304,17 +329,45 @@ export function CustomerNotificationsScreen() {
             </Text>
           </View>
           <Pressable
-            accessibilityHint="Temporarily unavailable because the server does not expose an aggregate mark-all-read operation"
+            accessibilityHint={
+              notificationsQuery.v2Available
+                ? 'Marks every notification in your inbox as read'
+                : 'Available after Notification Inbox v2 is published through the production gateway'
+            }
             accessibilityLabel="Mark all as read"
             accessibilityRole="button"
-            accessibilityState={{disabled: true}}
-            disabled
-            style={styles.markAllDisabled}>
-            <Text style={styles.markAllDisabledText}>Mark all as read</Text>
+            accessibilityState={{
+              disabled:
+                !notificationsQuery.v2Available ||
+                unreadCount === 0 ||
+                markAllRead.isPending,
+            }}
+            disabled={
+              !notificationsQuery.v2Available ||
+              unreadCount === 0 ||
+              markAllRead.isPending
+            }
+            onPress={() => void markAll()}
+            style={({pressed}) => [
+              notificationsQuery.v2Available && unreadCount > 0
+                ? styles.markAllButton
+                : styles.markAllDisabled,
+              pressed && styles.noticeRowPressed,
+            ]}>
+            <Text
+              style={
+                notificationsQuery.v2Available && unreadCount > 0
+                  ? styles.markAllButtonText
+                  : styles.markAllDisabledText
+              }>
+              {markAllRead.isPending ? 'Marking…' : 'Mark all as read'}
+            </Text>
           </Pressable>
         </View>
-        {unreadCount > 0 ? (
-          <Text style={styles.markAllReason}>Mark all is temporarily unavailable.</Text>
+        {!notificationsQuery.v2Available && unreadCount > 0 ? (
+          <Text style={styles.markAllReason}>
+            Mark all will enable when Notification Inbox v2 is published through APIM.
+          </Text>
         ) : null}
         <SectionList
           contentContainerStyle={styles.listContent}
@@ -322,8 +375,32 @@ export function CustomerNotificationsScreen() {
           keyExtractor={notice => notice.id}
           ListEmptyComponent={listEmpty}
           ListFooterComponent={
-            showLoadedNotifications && notices.length === CUSTOMER_NOTIFICATION_LIMIT ? (
-              <Text style={styles.boundaryCopy}>Older notifications may not be shown yet.</Text>
+            showLoadedNotifications ? (
+              notificationsQuery.v2Available && notificationsQuery.hasNextPage ? (
+                <Pressable
+                  accessibilityLabel="Load older notifications"
+                  accessibilityRole="button"
+                  disabled={notificationsQuery.isFetchingNextPage}
+                  onPress={() =>
+                    notificationsQuery.fetchNextPage().catch(() => undefined)
+                  }
+                  style={({pressed}) => [
+                    styles.loadOlderButton,
+                    (pressed || notificationsQuery.isFetchingNextPage) &&
+                      styles.noticeRowPressed,
+                  ]}>
+                  <Text style={styles.loadOlderButtonText}>
+                    {notificationsQuery.isFetchingNextPage
+                      ? 'Loading…'
+                      : 'Load older notifications'}
+                  </Text>
+                </Pressable>
+              ) : !notificationsQuery.v2Available &&
+                notices.length === CUSTOMER_NOTIFICATION_LIMIT ? (
+                <Text style={styles.boundaryCopy}>
+                  Older notifications may not be shown yet. Cursor paging will enable after Notification Inbox v2 is published.
+                </Text>
+              ) : null
             ) : null
           }
           ListHeaderComponent={showLoadedNotifications ? categoryChips : null}
@@ -385,6 +462,20 @@ const styles = StyleSheet.create({
   },
   title: {color: colors.espressoBrown, fontSize: typography.hero, fontWeight: fontWeight.bold},
   subtitle: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
+  markAllButton: {
+    minHeight: touchTarget.minimum,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.flameRed,
+    backgroundColor: colors.white,
+  },
+  markAllButtonText: {
+    color: colors.flameRed,
+    fontSize: typography.small,
+    fontWeight: fontWeight.semibold,
+  },
   markAllDisabled: {
     minHeight: touchTarget.minimum,
     justifyContent: 'center',
@@ -422,6 +513,22 @@ const styles = StyleSheet.create({
   emptyCategoryCard: {minHeight: 180, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white},
   emptyCategoryTitle: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
   emptyCategoryCopy: {marginTop: spacing.xs, color: colors.textSecondary, fontSize: typography.small},
+  loadOlderButton: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    borderColor: colors.flameRed,
+    borderRadius: radius.pill,
+    borderWidth: borderWidth.standard,
+    justifyContent: 'center',
+    marginVertical: spacing.md,
+    minHeight: touchTarget.minimum,
+    paddingHorizontal: spacing.lg,
+  },
+  loadOlderButtonText: {
+    color: colors.flameRed,
+    fontSize: typography.small,
+    fontWeight: fontWeight.semibold,
+  },
   boundaryCopy: {marginTop: spacing.sm, textAlign: 'center', color: colors.textSecondary, fontSize: typography.tiny},
   skeletonWrap: {gap: spacing.sm},
   skeletonHeader: {height: 52, borderRadius: radius.pill, backgroundColor: colors.surfaceMuted},

@@ -82,7 +82,7 @@ export function ChefEarningsLedgerList() {
     return (
       <View accessibilityRole="alert" style={styles.state}>
         <Text style={styles.error}>{error}</Text>
-        <Pressable accessibilityRole="button" onPress={() => void load()} style={styles.retry}>
+        <Pressable accessibilityRole="button" onPress={() => { load().catch(() => undefined); }} style={styles.retry}>
           <Text style={styles.retryText}>Try again</Text>
         </Pressable>
       </View>

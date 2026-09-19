@@ -34,6 +34,9 @@ interface BrowseHeaderProps {
   backLabel?: string;
 }
 
+const headerIconActionClass =
+  "flex h-10 w-10 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#F62E18] transition-[background-color,color,box-shadow,transform] duration-200 ease-out hover:!-translate-y-0.5 hover:!bg-white hover:!text-[#F62E18] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:!translate-y-0 motion-reduce:transform-none";
+
 function FoodPreferenceQuickToggles({
   value,
   onChange,
@@ -156,7 +159,7 @@ export function BrowseHeader({
           <div className="ml-auto flex items-center gap-2 lg:ml-0">
             <Link
               to="/profile"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-shadow duration-200 hover:shadow-[0_7px_18px_rgba(26,26,26,0.08)]"
+              className={headerIconActionClass}
               aria-label="Open profile"
             >
               <FaUser className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
@@ -164,7 +167,7 @@ export function BrowseHeader({
             <button
               type="button"
               onClick={onOpenCart}
-              className="relative flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-shadow duration-200 hover:shadow-[0_7px_18px_rgba(26,26,26,0.08)]"
+              className={`relative ${headerIconActionClass}`}
               aria-label={`Open cart${cartCount ? ` with ${cartCount} items` : ""}`}
             >
               <CravesCartIcon className="h-[1.18rem] w-[1.18rem]" />
@@ -177,7 +180,7 @@ export function BrowseHeader({
             <button
               type="button"
               onClick={onLogout}
-              className="hidden h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-shadow duration-200 hover:shadow-[0_7px_18px_rgba(26,26,26,0.08)] xl:flex"
+              className={`hidden xl:flex ${headerIconActionClass}`}
               aria-label="Sign out"
             >
               <FaSignOutAlt className="h-[1.05rem] w-[1.05rem]" strokeWidth={2.2} aria-hidden="true" />

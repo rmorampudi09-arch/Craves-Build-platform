@@ -1,3 +1,4 @@
+import {chefPayoutApi} from '../../chefPayout/api/chefPayoutApi';
 import {
   chefMenuApi,
   parseChefMenuItem,
@@ -48,21 +49,13 @@ export type ChefDashboardMenuImage = ChefMenuItemImage;
 export type ChefDashboardMenuItem = ChefMenuItem;
 
 export const CHEF_DASHBOARD_EARNINGS_CONTRACT_GAP = {
-  availability: 'unavailable',
-  code: 'BACKEND_CONTRACT_UNAVAILABLE',
+  availability: 'available',
+  code: 'CONTRACT_AVAILABLE',
   route: '/api/v1/chef/earnings',
   reason:
-    'Chef earnings has a backend route but no approved APIM mobile operation on this branch. P119 blocks the network call until an APIM contract is published.',
+    'Current main publishes the read-only Chef earnings ledger through the approved gateway. Balance, settlement and withdrawal semantics remain separate.',
 } as const;
 
-export class ChefDashboardContractUnavailableError extends Error {
-  readonly code = CHEF_DASHBOARD_EARNINGS_CONTRACT_GAP.code;
-
-  constructor() {
-    super(CHEF_DASHBOARD_EARNINGS_CONTRACT_GAP.reason);
-    this.name = 'ChefDashboardContractUnavailableError';
-  }
-}
 
 const EARNING_STATUSES = new Set<ChefEarningStatus>([
   'DRAFT',
@@ -202,8 +195,16 @@ export const parseChefDashboardMenuItem = parseChefMenuItem;
 export const parseChefDashboardMenuItems = parseChefMenuItems;
 
 export const chefDashboardApi = {
-  async listEarnings(_signal?: AbortSignal): Promise<ChefDashboardEarning[]> {
-    throw new ChefDashboardContractUnavailableError();
+  async listEarnings(signal?: AbortSignal): Promise<ChefDashboardEarning[]> {
+    const entries = await chefPayoutApi.listEarnings(100, signal);
+    return entries.map(entry => ({
+      ...entry,
+      grossAmount: Number(entry.grossAmount),
+      commissionAmount: Number(entry.commissionAmount),
+      taxWithheldAmount: Number(entry.taxWithheldAmount),
+      adjustmentAmount: Number(entry.adjustmentAmount),
+      netPayable: Number(entry.netPayable),
+    }));
   },
 
   listMenuItems(signal?: AbortSignal): Promise<ChefDashboardMenuItem[]> {

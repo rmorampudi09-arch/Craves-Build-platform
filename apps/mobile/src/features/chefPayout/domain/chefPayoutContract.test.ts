@@ -1,6 +1,7 @@
 import {
   CHEF_EARNINGS_ROUTE,
   CHEF_FINANCE_BALANCE_ROUTE,
+  CHEF_WITHDRAWALS_ROUTE,
 } from '../api/chefPayoutApi';
 import {
   CHEF_PAYOUT_CONTRACT_MODEL,
@@ -47,15 +48,21 @@ describe('chef payout contract boundary', () => {
     expect(hasCompleteChefPayoutContract()).toBe(false);
   });
 
-  it('does not turn the new read into a withdrawal action', () => {
+  it('uses the published balance state and withdrawal route', () => {
     expect(getChefWithdrawEligibilityBoundary()).toMatchObject({
-      availability: 'unavailable',
-      code: 'BACKEND_CONTRACT_UNAVAILABLE',
-      canWithdraw: false,
+      availability: 'available',
+      canWithdraw: true,
     });
-    expect(
-      CHEF_PAYOUT_CONTRACT_MODEL.capabilities.withdrawInitiation.availability,
-    ).toBe('unavailable');
+    expect(CHEF_PAYOUT_CONTRACT_MODEL.capabilities.withdrawEligibility).toMatchObject({
+      availability: 'available',
+      method: 'GET',
+      path: CHEF_FINANCE_BALANCE_ROUTE,
+    });
+    expect(CHEF_PAYOUT_CONTRACT_MODEL.capabilities.withdrawInitiation).toMatchObject({
+      availability: 'available',
+      method: 'POST',
+      path: CHEF_WITHDRAWALS_ROUTE,
+    });
   });
 
   it('does not fabricate alternate payout, bank, or settlement endpoints', () => {

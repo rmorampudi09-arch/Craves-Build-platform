@@ -471,7 +471,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     borderWidth: borderWidth.standard,
     borderColor: colors.borderStrong,
-    borderRadius: radius.xs,
+    borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.white,

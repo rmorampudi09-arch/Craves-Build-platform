@@ -311,6 +311,10 @@ export function CustomerOrderDetailScreen() {
     }
   };
 
+  const openReview = () => {
+    navigation.navigate('CustomerOrderReview', {orderId: order.id});
+  };
+
   return (
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-order-detail">
       <View style={styles.screen}>
@@ -500,6 +504,25 @@ export function CustomerOrderDetailScreen() {
             <View style={styles.noteCard}>
               <Text style={styles.sectionTitle}>Chef Note</Text>
               <Text style={styles.noteText}>{order.chefResponseNote}</Text>
+            </View>
+          ) : null}
+
+          {order.status === 'DELIVERED' ? (
+            <View style={styles.reviewCard}>
+              <Text style={styles.sectionTitle}>How was your order?</Text>
+              <Text style={styles.reviewBody}>
+                Share a rating and optional feedback about this delivered order.
+              </Text>
+              <Pressable
+                accessibilityLabel="Rate this order"
+                accessibilityRole="button"
+                onPress={openReview}
+                style={({pressed}) => [
+                  styles.reviewAction,
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={styles.reviewActionText}>Rate this order</Text>
+              </Pressable>
             </View>
           ) : null}
 
@@ -825,6 +848,32 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.small,
     lineHeight: 20,
+  },
+  reviewCard: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  reviewBody: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
+    lineHeight: 20,
+  },
+  reviewAction: {
+    minHeight: 48,
+    marginTop: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    backgroundColor: colors.flameRed,
+  },
+  reviewActionText: {
+    color: colors.white,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
   },
   bottomActions: {
     flexDirection: 'row',

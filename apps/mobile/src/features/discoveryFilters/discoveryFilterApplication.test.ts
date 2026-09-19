@@ -52,6 +52,10 @@ describe('P38 discovery filters', () => {
           sort: 'PRICE_LOW_TO_HIGH',
           cuisineIds: [],
           diets: ['VEG'],
+          minPrice: 100,
+          maxPrice: 300,
+          maxPreparationTimeMinutes: 30,
+          spiceLevel: 'MEDIUM',
         },
       }),
     );
@@ -62,6 +66,10 @@ describe('P38 discovery filters', () => {
       sort: 'PRICE_LOW_TO_HIGH',
       cuisineIds: [],
       diets: ['VEG'],
+      minPrice: 100,
+      maxPrice: 300,
+      maxPreparationTimeMinutes: 30,
+      spiceLevel: 'MEDIUM',
     });
     expect(
       resolveDiscoveryFilterSession(state.sessions.HOME, 'user:address-b').applied,
@@ -75,11 +83,19 @@ describe('P38 discovery filters', () => {
           sort: 'RECOMMENDED',
           cuisineIds: ['b', 'a', 'a'],
           diets: ['EGG', 'VEG'],
+          minPrice: 100,
+          maxPrice: 300,
+          maxPreparationTimeMinutes: 45,
+          spiceLevel: 'SPICY',
         },
         {
           sort: 'RECOMMENDED',
           cuisineIds: ['a', 'b'],
           diets: ['VEG', 'EGG'],
+          minPrice: 100,
+          maxPrice: 300,
+          maxPreparationTimeMinutes: 45,
+          spiceLevel: 'SPICY',
         },
       ),
     ).toBe(true);
@@ -96,10 +112,67 @@ describe('P38 discovery filters', () => {
       sort: 'PRICE_LOW_TO_HIGH',
       cuisineIds: [],
       diets: ['VEG'],
+      minPrice: null,
+      maxPrice: null,
+      maxPreparationTimeMinutes: null,
+      spiceLevel: null,
     });
 
     expect(result.map(item => item.id)).toEqual(['veg-low', 'veg-high']);
     expect(source.map(item => item.id)).toEqual(['veg-high', 'non-veg', 'veg-low']);
+  });
+
+  it('applies Catalog v2 price, prep-time and spice filters to loaded rows', () => {
+    const quick = {
+      ...dish('quick', 180, 'VEG'),
+      preparationTimeMinutes: 20,
+      spiceLevel: 'MILD' as const,
+    };
+    const slow = {
+      ...dish('slow', 220, 'VEG'),
+      preparationTimeMinutes: 50,
+      spiceLevel: 'MILD' as const,
+    };
+    const spicy = {
+      ...dish('spicy', 200, 'VEG'),
+      preparationTimeMinutes: 20,
+      spiceLevel: 'SPICY' as const,
+    };
+
+    const result = applyHomeDiscoveryFilters([quick, slow, spicy], {
+      sort: 'PREPARATION_TIME_ASC',
+      cuisineIds: [],
+      diets: ['VEG'],
+      minPrice: 150,
+      maxPrice: 250,
+      maxPreparationTimeMinutes: 30,
+      spiceLevel: 'MILD',
+    });
+
+    expect(result.map(item => item.id)).toEqual(['quick']);
+  });
+
+  it('fails closed to no price range when persisted bounds are inverted', () => {
+    let state = discoveryFilterReducer(undefined, {type: 'init'});
+    state = discoveryFilterReducer(
+      state,
+      discoveryFilterActions.filtersApplied({
+        surface: 'HOME',
+        scopeKey: 'user:address-a',
+        filters: {
+          sort: 'RECOMMENDED',
+          cuisineIds: [],
+          diets: [],
+          minPrice: 500,
+          maxPrice: 100,
+          maxPreparationTimeMinutes: null,
+          spiceLevel: null,
+        },
+      }),
+    );
+
+    expect(state.sessions.HOME.applied.minPrice).toBeNull();
+    expect(state.sessions.HOME.applied.maxPrice).toBeNull();
   });
 
   it('clears only the targeted scoped applied filters', () => {
@@ -111,6 +184,10 @@ describe('P38 discovery filters', () => {
             sort: 'PRICE_HIGH_TO_LOW',
             cuisineIds: [],
             diets: ['EGG'],
+            minPrice: null,
+            maxPrice: null,
+            maxPreparationTimeMinutes: null,
+            spiceLevel: null,
           },
         },
         CHEFS: {

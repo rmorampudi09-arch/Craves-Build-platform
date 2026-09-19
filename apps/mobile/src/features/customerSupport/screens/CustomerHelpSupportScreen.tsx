@@ -20,6 +20,10 @@ import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
+import {
+  CUSTOMER_SUPPORT_CASES_AVAILABLE,
+} from '../api/customerSupportCasesApi';
+import {CustomerSupportCasesSection} from '../components/CustomerSupportCasesSection';
 import {customerSupportIntegrationBoundary} from '../domain/customerSupportCapabilityModel';
 
 type SupportNavigation = NativeStackNavigationProp<
@@ -93,6 +97,7 @@ export function CustomerHelpSupportScreen() {
   const bottomNavScroll = useCustomerBottomNavScroll();
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [supportMessage, setSupportMessage] = useState<string | null>(null);
+  const [supportCaseCreateRequest, setSupportCaseCreateRequest] = useState(0);
   const emailSupport = async () => {
     setSupportMessage(null);
     try {
@@ -204,19 +209,36 @@ export function CustomerHelpSupportScreen() {
                 testID={`support-blocker-${chat.blocker}`}
               />
               <View style={styles.divider} />
-              <DisabledSupportAction
-                icon="orders"
-                title="Create Support Ticket"
-                detail="Support tickets are temporarily unavailable."
-                testID={`support-blocker-${ticket.blocker}`}
-              />
+              {CUSTOMER_SUPPORT_CASES_AVAILABLE ? (
+                <EnabledSupportAction
+                  icon="orders"
+                  title="Create Support Case"
+                  detail="Open a case and continue the conversation with Craves Support."
+                  testID="support-create-case"
+                  onPress={() =>
+                    setSupportCaseCreateRequest(current => current + 1)
+                  }
+                />
+              ) : (
+                <DisabledSupportAction
+                  icon="orders"
+                  title="Create Support Case"
+                  detail="Support cases are ready in the app but not published through the production gateway yet."
+                  testID={`support-blocker-${ticket.blocker}`}
+                />
+              )}
             </View>
 
             {supportMessage ? <Text accessibilityLiveRegion="assertive" style={styles.supportMessage}>{supportMessage}</Text> : null}
+
+            <CustomerSupportCasesSection
+              createRequestToken={supportCaseCreateRequest}
+            />
+
             <View style={styles.reassuranceBanner}>
               <Icon name="shield" size={iconSize.sm} color={colors.espressoBrown} />
               <Text style={styles.reassuranceText}>
-                Email support is available. Phone, chat and ticket actions remain disabled until Craves publishes their production configuration.
+                Email support is available. Phone and chat remain disabled until Craves publishes their production configuration. Support cases are implemented in-app and will enable when their gateway routes are published.
               </Text>
             </View>
           </View>

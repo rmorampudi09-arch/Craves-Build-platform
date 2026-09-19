@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
-  Image,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -14,6 +14,7 @@ import {useNavigation} from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
+import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import type {
   CustomerProfileStackParamList,
   CustomerTabParamList,
@@ -32,7 +33,16 @@ import {TerminalState} from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
+import {
+  addCartItem,
+  removeCartItem,
+  setCartItemQuantity,
+  switchCartKitchen,
+  type CartMutationOutcome,
+} from '../../cart/state/cartMutations';
+import {refreshCartSnapshot} from '../../cart/state/cartRefresh';
 import type {FavoriteHomeCard} from '../api/favoriteHomeFeedApi';
+import {CustomerFavoriteDishCard} from '../components/CustomerFavoriteDishCard';
 import type {SavedCatalogItem} from '../api/savedCatalogApi';
 import {
   favoriteHomeDisplayName,
@@ -41,9 +51,7 @@ import {
   type FavoriteHomeTone,
 } from '../presentation/favoriteHomePresentation';
 import {
-  availabilityCopyForItem,
-  canOpenSavedDish,
-  savedDishDisplayName,
+  canAddSavedDish,
   savedKitchenDisplayName,
   type SavedAvailabilityTone,
 } from '../presentation/savedCatalogPresentation';
@@ -88,19 +96,6 @@ function formatPrice(amount: number | null, currency: string | null): string | n
   if (amount === null || !currency) return null;
   const value = Number.isInteger(amount) ? amount.toFixed(0) : amount.toFixed(2);
   return currency === 'INR' ? `₹${value}` : `${currency} ${value}`;
-}
-
-function foodTypeCopy(foodType: string | null): string | null {
-  switch (foodType) {
-    case 'NON_VEG':
-      return 'Non-veg';
-    case 'EGG':
-      return 'Egg';
-    case 'VEG':
-      return 'Veg';
-    default:
-      return null;
-  }
 }
 
 function toneStyles(tone: Tone) {
@@ -157,6 +152,9 @@ function SavedTabs({active, onChange}: {active: SavedTab; onChange: (tab: SavedT
 
 export function CustomerFavoritesScreen() {
   const navigation = useNavigation<FavoritesNavigation>();
+  const dispatch = useAppDispatch();
+  const cartSnapshot = useAppSelector(state => state.cart.snapshot);
+  const cartMutations = useAppSelector(state => state.cart.mutations);
   const bottomNavScroll = useCustomerBottomNavScroll();
   const favorites = useCustomerFavoritesQuery();
   const queueState = useCustomerFavoritesQueueState();
@@ -176,6 +174,7 @@ export function CustomerFavoritesScreen() {
   );
   const [activeTab, setActiveTab] = React.useState<SavedTab>('DISHES');
   const [locationSelectorVisible, setLocationSelectorVisible] = React.useState(false);
+  const [cartErrors, setCartErrors] = React.useState<Record<string, string>>({});
 
   const browseMeals = React.useCallback(() => {
     const tabs = navigation.getParent<CustomerTabsNavigation>();
@@ -246,95 +245,230 @@ export function CustomerFavoritesScreen() {
     [kitchenWatches.data],
   );
 
+  const setCartError = React.useCallback(
+    (menuItemId: string, message: string | null) => {
+      setCartErrors(current => {
+        const next = {...current};
+        if (message) next[menuItemId] = message;
+        else delete next[menuItemId];
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleCartOutcome = React.useCallback(
+    (menuItemId: string, outcome: CartMutationOutcome) => {
+      if (outcome.status === 'FAILED') {
+        setCartError(menuItemId, outcome.error.message);
+      } else if (outcome.status === 'APPLIED') {
+        setCartError(menuItemId, null);
+      }
+    },
+    [setCartError],
+  );
+
+  const checkCart = React.useCallback(
+    async (menuItemId: string) => {
+      const result = await dispatch(refreshCartSnapshot());
+      if (result.status === 'FAILED') {
+        setCartError(
+          menuItemId,
+          'Your cart could not be checked. Reconnect and try again before changing this dish.',
+        );
+        return;
+      }
+      if (result.status === 'APPLIED') {
+        setCartError(menuItemId, null);
+      }
+    },
+    [dispatch, setCartError],
+  );
+
+  const increaseFavoriteDish = React.useCallback(
+    async (dish: SavedCatalogItem) => {
+      if (!canAddSavedDish(dish) || !dish.kitchenId) return;
+      setCartError(dish.menuItemId, null);
+
+      let snapshot = cartSnapshot;
+      if (!snapshot) {
+        const refresh = await dispatch(refreshCartSnapshot());
+        if (refresh.status !== 'APPLIED') {
+          setCartError(
+            dish.menuItemId,
+            'Your cart could not be checked. Refresh it before adding this dish.',
+          );
+          return;
+        }
+        snapshot = refresh.snapshot;
+      }
+
+      const existing = snapshot.lines.find(
+        line => line.menuItemId === dish.menuItemId,
+      );
+      if (existing) {
+        if (existing.quantity >= 100) return;
+        handleCartOutcome(
+          dish.menuItemId,
+          await dispatch(
+            setCartItemQuantity({
+              lineId: existing.lineId,
+              quantity: existing.quantity + 1,
+            }),
+          ),
+        );
+        return;
+      }
+
+      const otherKitchen = snapshot.lines.find(
+        line => line.kitchenId !== dish.kitchenId,
+      );
+      if (otherKitchen) {
+        const expectedSnapshot = snapshot;
+        Alert.alert(
+          'Replace current cart?',
+          `Your cart has food from ${otherKitchen.kitchenName}. To add ${savedKitchenDisplayName(
+            dish,
+          )}, Craves must replace the cart you are reviewing now.`,
+          [
+            {text: 'Keep cart', style: 'cancel'},
+            {
+              text: 'Replace & add',
+              style: 'destructive',
+              onPress: () => {
+                dispatch(
+                  switchCartKitchen({
+                    expectedSnapshot,
+                    menuItemId: dish.menuItemId,
+                    quantity: 1,
+                    expectedKitchenId: dish.kitchenId!,
+                  }),
+                )
+                  .then(outcome => handleCartOutcome(dish.menuItemId, outcome))
+                  .catch(() =>
+                    setCartError(
+                      dish.menuItemId,
+                      'We couldn’t confirm the cart change. Check your cart before trying again.',
+                    ),
+                  );
+              },
+            },
+          ],
+        );
+        return;
+      }
+
+      handleCartOutcome(
+        dish.menuItemId,
+        await dispatch(addCartItem({menuItemId: dish.menuItemId, quantity: 1})),
+      );
+    },
+    [cartSnapshot, dispatch, handleCartOutcome, setCartError],
+  );
+
+  const decreaseFavoriteDish = React.useCallback(
+    async (dish: SavedCatalogItem) => {
+      const line = cartSnapshot?.lines.find(
+        item => item.menuItemId === dish.menuItemId,
+      );
+      if (!line) return;
+      setCartError(dish.menuItemId, null);
+
+      const outcome =
+        line.quantity <= 1
+          ? await dispatch(removeCartItem({lineId: line.lineId}))
+          : await dispatch(
+              setCartItemQuantity({
+                lineId: line.lineId,
+                quantity: line.quantity - 1,
+              }),
+            );
+      handleCartOutcome(dish.menuItemId, outcome);
+    },
+    [cartSnapshot, dispatch, handleCartOutcome, setCartError],
+  );
+
+  const cartMutationPending = Object.values(cartMutations).some(
+    entry => entry.status === 'PENDING',
+  );
+
   const renderDishCard = React.useCallback(
     (dish: SavedCatalogItem) => {
       const queued = queueState.pendingMenuItemIds.includes(dish.menuItemId);
-      const displayName = savedDishDisplayName(dish);
-      const kitchenName = savedKitchenDisplayName(dish);
-      const availability = availabilityCopyForItem(dish);
-      const availabilityStyle = toneStyles(availability.tone);
-      const price = formatPrice(dish.price, dish.currency);
-      const foodType = foodTypeCopy(dish.foodType);
-      const meta = [dish.category, foodType].filter(Boolean).join(' · ');
-      const canOpen = canOpenSavedDish(dish);
-      const kitchenSaved = dish.kitchenId ? favoriteKitchenIds.has(dish.kitchenId) : false;
+      const kitchenSaved = dish.kitchenId
+        ? favoriteKitchenIds.has(dish.kitchenId)
+        : false;
+      const line = cartSnapshot?.lines.find(
+        item => item.menuItemId === dish.menuItemId,
+      );
+      const linePending = line
+        ? cartMutations[`line:${line.lineId}`]?.status === 'PENDING'
+        : cartMutations[`menu:${dish.menuItemId}`]?.status === 'PENDING';
+      const replacementPending =
+        cartMutations['cart:switch-kitchen']?.status === 'PENDING';
 
       return (
-        <Pressable
-          accessibilityHint={canOpen ? 'Opens current dish details.' : 'This saved item cannot be opened right now.'}
-          accessibilityRole={canOpen ? 'button' : undefined}
-          disabled={!canOpen}
+        <CustomerFavoriteDishCard
           key={dish.menuItemId}
-          onPress={
-            canOpen
-              ? () => navigation.navigate('CustomerDishDetail', {menuItemId: dish.menuItemId})
-              : undefined
+          dish={dish}
+          favoritePending={toggleFavorite.isPending}
+          favoriteQueued={queued}
+          kitchenSaved={kitchenSaved}
+          kitchenPending={toggleKitchen.isPending}
+          cartPending={Boolean(linePending || replacementPending)}
+          cartDisabled={cartMutationPending}
+          cartError={cartErrors[dish.menuItemId] ?? null}
+          quantity={line?.quantity ?? 0}
+          onOpenDish={menuItemId =>
+            navigation.navigate('CustomerDishDetail', {menuItemId})
           }
-          style={({pressed}) => [
-            styles.dishCard,
-            !canOpen && styles.dishCardUnavailable,
-            pressed && styles.pressed,
-          ]}>
-          {dish.primaryImageUrl ? (
-            <Image
-              accessibilityIgnoresInvertColors
-              source={{uri: dish.primaryImageUrl}}
-              resizeMode="cover"
-              style={styles.dishImage}
-            />
-          ) : (
-            <View style={styles.dishImageFallback}>
-              <FilledIcon name={dish.found ? 'food' : 'bookmark-outline'} size={30} color={colors.flameRed} />
-            </View>
-          )}
-          <View style={styles.dishCopy}>
-            <Text numberOfLines={2} style={styles.dishName}>{displayName}</Text>
-            <Text numberOfLines={1} style={styles.kitchenName}>{kitchenName}</Text>
-            {meta ? <Text style={styles.metaText}>{meta}</Text> : null}
-            {price ? <Text style={styles.priceText}>{price}</Text> : null}
-            <View
-              accessibilityLabel={`${availability.title}. ${availability.detail ?? ''}`.trim()}
-              style={[styles.availabilityBadge, availabilityStyle.container]}>
-              <Text style={[styles.availabilityTitle, availabilityStyle.text]}>{availability.title}</Text>
-            </View>
-            {availability.detail ? <Text style={styles.availabilityDetail}>{availability.detail}</Text> : null}
-            {queued ? <Text style={styles.queuedText}>Waiting to sync</Text> : null}
-            {dish.kitchenId ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{selected: kitchenSaved, busy: toggleKitchen.isPending}}
-                disabled={toggleKitchen.isPending}
-                onPress={event => {
-                  event.stopPropagation();
-                  toggleKitchen.mutate({kitchenId: dish.kitchenId!, favorite: kitchenSaved});
-                }}
-                style={({pressed}) => [styles.inlineAction, pressed && styles.pressed]}>
-                <FilledIcon
-                  name={kitchenSaved ? 'home-heart' : 'home-heart-outline'}
-                  size={18}
-                  color={colors.flameRedAccessible}
-                />
-                <Text style={styles.inlineActionText}>{kitchenSaved ? 'Kitchen saved' : 'Save kitchen'}</Text>
-              </Pressable>
-            ) : null}
-          </View>
-          <Pressable
-            accessibilityLabel={`Remove ${displayName} from favorites`}
-            accessibilityRole="button"
-            accessibilityState={{busy: toggleFavorite.isPending || queued}}
-            disabled={toggleFavorite.isPending}
-            hitSlop={spacing.xs}
-            onPress={event => {
-              event.stopPropagation();
-              toggleFavorite.mutate({menuItemId: dish.menuItemId, favorite: true});
-            }}
-            style={({pressed}) => [styles.heartButton, pressed && styles.pressed]}>
-            <FilledIcon name="heart" size={24} color={colors.flameRed} />
-          </Pressable>
-        </Pressable>
+          onToggleKitchen={item => {
+            if (!item.kitchenId) return;
+            toggleKitchen.mutate({
+              kitchenId: item.kitchenId,
+              favorite: favoriteKitchenIds.has(item.kitchenId),
+            });
+          }}
+          onRemoveFavorite={menuItemId =>
+            toggleFavorite.mutate({menuItemId, favorite: true})
+          }
+          onIncrease={item => {
+            increaseFavoriteDish(item).catch(() =>
+              setCartError(
+                item.menuItemId,
+                'We couldn’t confirm the cart change. Check your cart before trying again.',
+              ),
+            );
+          }}
+          onDecrease={item => {
+            decreaseFavoriteDish(item).catch(() =>
+              setCartError(
+                item.menuItemId,
+                'We couldn’t confirm the cart change. Check your cart before trying again.',
+              ),
+            );
+          }}
+          onCheckCart={() => {
+            checkCart(dish.menuItemId).catch(() => undefined);
+          }}
+        />
       );
     },
-    [favoriteKitchenIds, navigation, queueState.pendingMenuItemIds, toggleFavorite, toggleKitchen],
+    [
+      cartErrors,
+      cartMutationPending,
+      cartMutations,
+      cartSnapshot,
+      checkCart,
+      decreaseFavoriteDish,
+      favoriteKitchenIds,
+      increaseFavoriteDish,
+      navigation,
+      queueState.pendingMenuItemIds,
+      setCartError,
+      toggleFavorite,
+      toggleKitchen,
+    ],
   );
 
   const renderHomeCard = React.useCallback(
@@ -804,28 +938,6 @@ const styles = StyleSheet.create({
   sectionHeader: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
   sectionTitle: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
   countText: {color: colors.flameRedAccessible, fontSize: typography.small, fontWeight: fontWeight.bold},
-  dishCard: {minHeight: 124, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white, ...elevation.card},
-  dishCardUnavailable: {elevation: 0, shadowOpacity: 0},
-  dishImage: {width: 104, height: 104, borderRadius: radius.md, backgroundColor: colors.surfaceMuted},
-  dishImageFallback: {width: 104, height: 104, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.iconSurface},
-  dishCopy: {minWidth: 0, flex: 1},
-  dishName: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold},
-  kitchenName: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
-  metaText: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny},
-  priceText: {marginTop: spacing.xs, color: colors.flameRedAccessible, fontSize: typography.body, fontWeight: fontWeight.bold},
-  availabilityBadge: {alignSelf: 'flex-start', marginTop: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs, borderRadius: radius.pill},
-  availabilityPositive: {backgroundColor: colors.successSoft},
-  availabilityPositiveText: {color: colors.successText},
-  availabilityAttention: {backgroundColor: colors.warningSoft},
-  availabilityAttentionText: {color: colors.warningText},
-  availabilityMuted: {backgroundColor: colors.surfaceMuted},
-  availabilityMutedText: {color: colors.textSecondary},
-  availabilityTitle: {fontSize: typography.tiny, fontWeight: fontWeight.bold},
-  availabilityDetail: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny},
-  queuedText: {marginTop: spacing.xxs, color: colors.flameRedAccessible, fontSize: typography.tiny, fontWeight: fontWeight.bold},
-  heartButton: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.iconSurface},
-  inlineAction: {alignSelf: 'flex-start', minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: spacing.xxs, marginTop: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.iconSurface},
-  inlineActionText: {color: colors.flameRedAccessible, fontSize: typography.tiny, fontWeight: fontWeight.bold},
   homeCard: {gap: spacing.xs, padding: spacing.md, borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white, ...elevation.card},
   homeCardHeader: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   homeIconBadge: {width: touchTarget.minimum, height: touchTarget.minimum, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.iconSurface},

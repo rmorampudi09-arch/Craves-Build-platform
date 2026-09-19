@@ -246,6 +246,9 @@ export function CustomerYourUsualSection() {
           setUncertainReorder(false);
           setFailedCandidate(candidate);
           setFailureMessage(rejectionMessage);
+        } else if (result === 'STALE') {
+          uncertainRef.current = false;
+          setUncertainReorder(false);
         } else if (result === 'CART_CHANGED') {
           uncertainRef.current = false;
           setUncertainReorder(false);

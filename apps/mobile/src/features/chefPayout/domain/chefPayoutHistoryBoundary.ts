@@ -18,7 +18,7 @@ export interface ChefPayoutHistoryBoundaryState {
 }
 
 const sourceOnlyMessage =
-  'The published Chef earnings API provides your read-only earning ledger, including legacy allocations and finalized source-ledger earnings. It does not define withdrawable balance, bank destination, payout initiation, or settlement controls.';
+  'Published Chef finance reads provide your earning ledger, server-recorded balance/accounting data and recent payout request statuses. Bank destination and money-moving actions remain separate.';
 
 export const CHEF_PAYOUT_HISTORY_MESSAGES = {
   source: sourceOnlyMessage,

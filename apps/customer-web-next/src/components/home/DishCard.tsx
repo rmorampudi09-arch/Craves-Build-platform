@@ -213,7 +213,7 @@ export function DishCard({
             loading={priorityImage ? "eager" : "lazy"}
             fetchPriority={priorityImage ? "high" : "auto"}
             fallbackLabel="Dish photo unavailable"
-            className="object-cover"
+            className="object-cover transition-transform duration-300 ease-out group-hover:scale-110"
           />
         </Link>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#1A1A1A]/60 via-[#1A1A1A]/15 to-transparent" />

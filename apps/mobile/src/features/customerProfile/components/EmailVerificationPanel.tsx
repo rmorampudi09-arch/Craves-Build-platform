@@ -62,7 +62,7 @@ export function EmailVerificationPanel({email, disabled = false, onVerified}: Pr
   }, [busy, code, disabled, email, onVerified, state?.pending]);
 
   useEffect(() => {
-    void run('read');
+    run('read').catch(() => undefined);
     // Initial server read only; user actions refresh explicitly after this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -112,13 +112,13 @@ export function EmailVerificationPanel({email, disabled = false, onVerified}: Pr
             label={busy ? 'Verifying…' : 'Verify email'}
             loading={busy}
             disabled={disabled || expired || !/^\d{6}$/.test(code)}
-            onPress={() => void run('verify')}
+            onPress={() => { run('verify').catch(() => undefined); }}
           />
           <Button
             variant="ghost"
             label={resendWait > 0 ? `Resend available in ${resendWait}s` : 'Resend code'}
             disabled={busy || disabled || resendWait > 0}
-            onPress={() => void run('resend')}
+            onPress={() => { run('resend').catch(() => undefined); }}
           />
         </>
       ) : null}
@@ -129,7 +129,7 @@ export function EmailVerificationPanel({email, disabled = false, onVerified}: Pr
           label={busy && !state?.pending ? 'Please wait…' : 'Send verification code'}
           loading={busy && !state?.pending}
           disabled={disabled || busy || !normalizedEmail.includes('@')}
-          onPress={() => void run('issue')}
+          onPress={() => { run('issue').catch(() => undefined); }}
         />
       ) : null}
 
@@ -138,7 +138,7 @@ export function EmailVerificationPanel({email, disabled = false, onVerified}: Pr
         label={busy ? 'Checking…' : 'Check email status'}
         loading={busy}
         disabled={disabled || busy}
-        onPress={() => void run('read')}
+        onPress={() => { run('read').catch(() => undefined); }}
       />
 
       <Text style={styles.copy}>

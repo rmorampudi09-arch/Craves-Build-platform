@@ -161,6 +161,7 @@ export type ChefProfileStackParamList = {
   ChefSupport: undefined;
   ChefReferralEarnings: undefined;
   ChefKitchenSchedule: undefined;
+  ChefScheduledOrders: undefined;
   ChefEditProfile: undefined;
 };
 

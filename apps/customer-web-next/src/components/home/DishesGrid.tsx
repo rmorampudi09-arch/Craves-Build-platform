@@ -17,7 +17,6 @@ import type {
   HomeFoodPreference,
 } from "@/lib/home-return-state";
 import type { Dish } from "@/services/api/dishes";
-import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
@@ -79,12 +78,12 @@ function DishSkeleton() {
 function SelectionCircle({ selected }: { selected: boolean }) {
   return (
     <span
-      className={`${styles.filterSelectionCircle} ${
-        selected ? styles.filterSelectionCircleSelected : ""
-      } flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2`}
+      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-[border-color,box-shadow] duration-200 group-hover:border-[#F62E18] group-hover:shadow-[0_0_0_3px_rgba(246,46,24,0.10)] ${
+        selected ? "border-[#F62E18]" : "border-[#6B6B6B]"
+      }`}
       aria-hidden="true"
     >
-      {selected ? <span className={`${styles.filterSelectionDot} h-2.5 w-2.5 rounded-full bg-[#F62E18]`} /> : null}
+      {selected ? <span className="h-2.5 w-2.5 rounded-full bg-[#F62E18]" /> : null}
     </span>
   );
 }
@@ -192,7 +191,7 @@ export function DishesGrid({
             <Popover.Trigger asChild>
               <button
                 type="button"
-                className={`${styles.filterTriggerButton} inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-black`}
+                className="inline-flex min-h-11 items-center gap-2 rounded-full !border !border-transparent !bg-[#F1F3F5] px-4 text-sm font-black !text-[#1A1A1A] !shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-shadow hover:!shadow-[0_8px_20px_rgba(26,26,26,0.09)]"
                 aria-label="Open dish filters"
               >
                 <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
@@ -210,7 +209,7 @@ export function DishesGrid({
               <Popover.Content
                 sideOffset={10}
                 align="start"
-                className={`${styles.filterPopover} z-[80] w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[1.55rem] border border-[#F1F3F5] bg-white shadow-[0_24px_60px_rgba(26,26,26,0.16)] outline-none`}
+                className="z-[80] w-[22rem] max-w-[calc(100vw-2rem)] origin-top-left overflow-hidden rounded-[1.55rem] border border-[#F1F3F5] bg-white shadow-[0_24px_60px_rgba(26,26,26,0.16)] outline-none"
                 aria-label="Dish filter options"
               >
                 <div className="px-5 pb-4 pt-5">
@@ -227,7 +226,7 @@ export function DishesGrid({
                           role="radio"
                           aria-checked={selected}
                           onClick={() => setDraftFoodPreference(option.value)}
-                          className={`${styles.filterOptionButton} flex w-full items-center justify-between gap-4 rounded-xl px-1 py-2.5 text-left text-sm font-bold`}
+                          className="group flex w-full items-center justify-between gap-4 rounded-xl !border-0 !bg-white px-1 py-2.5 text-left text-sm font-bold !text-[#1A1A1A] !shadow-none transition-colors hover:!bg-[#F1F3F5]/70 active:!transform-none"
                         >
                           <span className="inline-flex items-center gap-2.5">
                             <span
@@ -257,7 +256,7 @@ export function DishesGrid({
                           role="radio"
                           aria-checked={selected}
                           onClick={() => setDraftSort(option.value)}
-                          className={`${styles.filterOptionButton} flex w-full items-center justify-between gap-4 rounded-xl px-1 py-2.5 text-left text-sm font-bold`}
+                          className="group flex w-full items-center justify-between gap-4 rounded-xl !border-0 !bg-white px-1 py-2.5 text-left text-sm font-bold !text-[#1A1A1A] !shadow-none transition-colors hover:!bg-[#F1F3F5]/70 active:!transform-none"
                         >
                           <span>{option.label}</span>
                           <SelectionCircle selected={selected} />
@@ -271,7 +270,7 @@ export function DishesGrid({
                   <button
                     type="button"
                     onClick={removeFilters}
-                    className={`${styles.filterFooterButton} inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-xs font-black`}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl !border !border-transparent !bg-[#F1F3F5] px-3 text-xs font-black !text-[#1A1A1A] !shadow-none transition-shadow hover:!shadow-[0_6px_16px_rgba(26,26,26,0.08)]"
                   >
                     <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
                     Remove Filters
@@ -279,7 +278,7 @@ export function DishesGrid({
                   <button
                     type="button"
                     onClick={applyFilters}
-                    className={`${styles.filterFooterButton} min-h-11 rounded-xl px-4 text-sm font-black`}
+                    className="min-h-11 rounded-xl !border !border-transparent !bg-[#F1F3F5] px-4 text-sm font-black !text-[#1A1A1A] !shadow-none transition-shadow hover:!shadow-[0_6px_16px_rgba(26,26,26,0.08)]"
                   >
                     Apply
                   </button>
@@ -292,7 +291,7 @@ export function DishesGrid({
             <button
               type="button"
               onClick={removeFilters}
-              className={`${styles.filterFooterButton} inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-black`}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full !border !border-transparent !bg-[#F1F3F5] px-4 text-sm font-black !text-[#1A1A1A] !shadow-none transition-shadow hover:!shadow-[0_6px_16px_rgba(26,26,26,0.08)]"
             >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
               Remove Filters
@@ -306,7 +305,7 @@ export function DishesGrid({
           <p className="sr-only" role="status">
             Loading nearby dishes
           </p>
-          <div className={styles.dishGrid}>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 8 }, (_, index) => (
               <DishSkeleton key={index} />
             ))}
@@ -384,7 +383,7 @@ export function DishesGrid({
       ) : null}
 
       {state === "ready" && dishes.length > 0 ? (
-        <div className={styles.dishGrid}>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {dishes.map((dish) => (
             <DishCard key={dish.id} dish={dish} />
           ))}

@@ -278,7 +278,11 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
       if (!window.Razorpay) {
         throw new Error("Razorpay checkout is unavailable.");
       }
-      if (!nextPayment.checkoutKeyId || !nextPayment.providerOrderId) {
+      if (
+        !nextPayment.checkoutKeyId ||
+        !nextPayment.providerOrderId ||
+        nextPayment.amountPaise === null
+      ) {
         throw new Error("Razorpay checkout configuration is incomplete.");
       }
       setMessage(
@@ -287,7 +291,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
       const result = await new Promise<RazorpaySuccess>((resolve, reject) => {
         const instance = new window.Razorpay!({
           key: nextPayment.checkoutKeyId!,
-          amount: Math.round(nextPayment.amount * 100),
+          amount: nextPayment.amountPaise,
           currency: nextPayment.currency,
           order_id: nextPayment.providerOrderId!,
           name: "Craves",

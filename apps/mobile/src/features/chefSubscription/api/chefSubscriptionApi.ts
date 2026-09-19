@@ -205,22 +205,23 @@ const slotCodeSchema = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/)
   .transform(value => value.toUpperCase());
 
-const putChefDateCapacityOverrideRequestSchema = z.object({
-  serviceDate: localDate,
-  mealSlotCode: slotCodeSchema,
-  totalCapacityUnits: z.number().int().min(0).max(100000),
-  subscriptionCapacityUnits: z.number().int().min(0).max(100000),
-  closed: z.boolean(),
-  reason: z.string().trim().min(1).max(1000),
-}).strict().superRefine((value, ctx) => {
-  if (value.subscriptionCapacityUnits > value.totalCapacityUnits) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+const putChefDateCapacityOverrideRequestSchema = z
+  .object({
+    serviceDate: localDate,
+    mealSlotCode: slotCodeSchema,
+    totalCapacityUnits: z.number().int().min(0).max(100000),
+    subscriptionCapacityUnits: z.number().int().min(0).max(100000),
+    closed: z.boolean(),
+    reason: z.string().trim().min(1).max(1000),
+  })
+  .strict()
+  .refine(
+    value => value.subscriptionCapacityUnits <= value.totalCapacityUnits,
+    {
       path: ['subscriptionCapacityUnits'],
       message: 'Subscription capacity cannot exceed total capacity.',
-    });
-  }
-});
+    },
+  );
 
 const putChefMenuItemDateCapacityOverrideRequestSchema = z.object({
   menuItemId: uuid,

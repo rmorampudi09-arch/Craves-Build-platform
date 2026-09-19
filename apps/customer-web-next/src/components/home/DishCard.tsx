@@ -28,7 +28,6 @@ import {
 import { ProgressiveImage } from "@/components/media/ProgressiveImage";
 import { AnimateCount } from "@/components/ui/AnimateCount";
 import type { Dish } from "@/services/api/dishes";
-import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
 function distanceLabel(distanceMeters?: number): string | null {
   if (typeof distanceMeters !== "number") return null;
@@ -191,7 +190,7 @@ export function DishCard({
 
   return (
     <article
-      className={`${message && state === "idle" ? styles.dishCardAdded : ""} group flex h-full flex-col overflow-hidden border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(26,26,26,0.06)] transition-[border-color,box-shadow] duration-200 hover:border-[#F62E18]/35 hover:shadow-[0_16px_36px_rgba(26,26,26,0.09)] ${
+      className={`${message && state === "idle" ? "ring-2 ring-[#2E7D32]/15" : ""} group flex h-full flex-col overflow-hidden border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(26,26,26,0.06)] transition-[border-color,box-shadow,ring-color] duration-200 hover:border-[#F62E18]/35 hover:shadow-[0_16px_36px_rgba(26,26,26,0.09)] ${
         featured ? "rounded-[2rem]" : "rounded-[1.65rem]"
       }`}
     >
@@ -315,7 +314,7 @@ export function DishCard({
                 type="button"
                 onClick={() => void handleQuantityChange(-1)}
                 disabled={state === "busy"}
-                className={`${styles.dishQuantityButton} flex h-10 w-10 items-center justify-center disabled:cursor-wait disabled:opacity-50`}
+                className="flex h-10 w-10 items-center justify-center !border-0 !bg-[#F1F3F5] !text-[#1A1A1A] !shadow-none transition-colors hover:!bg-white active:!transform-none disabled:cursor-wait disabled:opacity-50"
                 aria-label={`Decrease ${dish.name} quantity`}
               >
                 <Minus className="h-3.5 w-3.5" aria-hidden="true" />
@@ -330,7 +329,7 @@ export function DishCard({
                 type="button"
                 onClick={() => void handleQuantityChange(1)}
                 disabled={state === "busy" || quantity >= 50}
-                className={`${styles.dishQuantityButton} flex h-10 w-10 items-center justify-center disabled:cursor-wait disabled:opacity-50`}
+                className="flex h-10 w-10 items-center justify-center !border-0 !bg-[#F1F3F5] !text-[#1A1A1A] !shadow-none transition-colors hover:!bg-white active:!transform-none disabled:cursor-wait disabled:opacity-50"
                 aria-label={`Increase ${dish.name} quantity`}
               >
                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
@@ -341,7 +340,7 @@ export function DishCard({
               type="button"
               onClick={() => void handleAdd()}
               disabled={state === "busy"}
-              className={`${styles.dishAddButton} inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full px-4 text-xs font-black disabled:cursor-wait disabled:opacity-60`}
+              className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full !border !border-transparent !bg-[#F1F3F5] px-4 text-xs font-black !text-[#1A1A1A] !shadow-[0_5px_14px_rgba(26,26,26,0.06)] transition-[background-color,box-shadow] hover:!bg-white hover:!shadow-[0_8px_18px_rgba(26,26,26,0.10)] disabled:cursor-wait disabled:opacity-60"
               aria-label={`Add ${dish.name} to cart`}
             >
               {state === "busy" ? (

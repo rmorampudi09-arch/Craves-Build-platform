@@ -315,7 +315,7 @@ export function ChefFinanceBalancePanel() {
 
       {withdrawalMessage ? (
         <View style={styles.withdrawalNotice}>
-          <Text accessibilityRole="status" style={styles.withdrawalNoticeText}>
+          <Text accessibilityLiveRegion="polite" style={styles.withdrawalNoticeText}>
             {withdrawalMessage}
           </Text>
           {uncertainWithdrawal ? (

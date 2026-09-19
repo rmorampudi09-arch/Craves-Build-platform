@@ -325,7 +325,11 @@ export function CustomerNotificationsScreen() {
           <View>
             <Text accessibilityRole="header" style={styles.title}>Notifications</Text>
             <Text accessibilityLiveRegion="polite" style={styles.subtitle}>
-              {unreadCount > 0 ? `${unreadCount} unread in the latest list` : 'You are caught up'}
+              {unreadCount > 0
+                ? notificationsQuery.v2Available
+                  ? `${unreadCount} unread`
+                  : `${unreadCount} unread in the latest list`
+                : 'You are caught up'}
             </Text>
           </View>
           <Pressable

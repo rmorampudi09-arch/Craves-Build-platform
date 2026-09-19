@@ -165,15 +165,15 @@ export function getChefWithdrawEligibilityBoundary(
     };
   }
 
-  const unavailable =
+  const unavailableCapability =
     eligibility.availability === 'unavailable' ? eligibility : initiation;
   return {
     availability: 'unavailable',
     code: 'BACKEND_CONTRACT_UNAVAILABLE',
     canWithdraw: false,
     reason:
-      unavailable.availability === 'unavailable'
-        ? unavailable.reason
+      unavailableCapability.availability === 'unavailable'
+        ? unavailableCapability.reason
         : 'Withdrawal contract is incomplete.',
   };
 }

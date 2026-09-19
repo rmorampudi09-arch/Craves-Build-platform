@@ -27,7 +27,7 @@ export type ChefPayoutContractAvailability =
     };
 
 export interface ChefPayoutSourceContract {
-  availability: 'source-only';
+  availability: 'available';
   method: 'GET';
   path: typeof CHEF_EARNINGS_ROUTE;
   query: Readonly<{
@@ -65,7 +65,7 @@ function unavailable(reason: string): ChefPayoutContractAvailability {
 export const CHEF_PAYOUT_CONTRACT_MODEL: ChefPayoutContractModel = {
   status: 'blocked',
   source: {
-    availability: 'source-only',
+    availability: 'available',
     method: 'GET',
     path: CHEF_EARNINGS_ROUTE,
     query: {
@@ -77,7 +77,7 @@ export const CHEF_PAYOUT_CONTRACT_MODEL: ChefPayoutContractModel = {
     },
     response: 'ChefEarningLedgerEntry[]',
     notes:
-      'Chef-owned financial allocation ledger. It can support truthful ledger-row presentation/reconciliation only; it is not a payout summary, balance, transaction-history, bank, or withdrawal contract.',
+      'Published read-only Chef-owned earning ledger. It supports truthful ledger-row presentation only; it is not an available-balance, settlement batch, bank-destination, or withdrawal contract.',
   },
   capabilities: {
     earningsSummary: unavailable(

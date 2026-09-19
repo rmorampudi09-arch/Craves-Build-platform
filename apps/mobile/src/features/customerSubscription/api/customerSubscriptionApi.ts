@@ -42,6 +42,23 @@ export const publicPlanScheduleSchema = z.object({
 });
 
 export type PublicPlanSchedule = z.infer<typeof publicPlanScheduleSchema>;
+export const publicSubscriptionPolicySchema = z.object({
+  customerPauseEnabled: z.boolean(),
+  customerResumeEnabled: z.boolean(),
+  customerCancelEnabled: z.boolean(),
+  customerSkipEnabled: z.boolean(),
+  pauseCutoffMinutes: z.number().int().nonnegative().nullable(),
+  resumeLeadMinutes: z.number().int().nonnegative().nullable(),
+  cancelCutoffMinutes: z.number().int().nonnegative().nullable(),
+  skipCutoffMinutes: z.number().int().nonnegative().nullable(),
+  holidayPolicyReference: z.string().max(200).nullable(),
+  unusedMealPolicyReference: z.string().max(200).nullable(),
+  refundPolicyReference: z.string().max(200).nullable(),
+}).strict();
+
+export type PublicSubscriptionPolicy = z.infer<
+  typeof publicSubscriptionPolicySchema
+>;
 
 export const customerSubscriptionSchema = z.object({
   id: uuid,
@@ -140,6 +157,25 @@ export const customerSubscriptionApi = {
       {signal, dedupeKey: `customer-subscription:schedule:${planId}`},
     );
     return parseOne(publicPlanScheduleSchema, response, 'Meal-plan schedule');
+  },
+
+  async getPlanPolicy(
+    planId: string,
+    signal?: AbortSignal,
+  ): Promise<PublicSubscriptionPolicy> {
+    requireUuid(planId, 'Meal plan');
+    const response = await httpClient.get<unknown>(
+      `/api/v1/subscriptions/plans/${encodeURIComponent(planId)}/policy`,
+      {
+        signal,
+        dedupeKey: `customer-subscription:policy:${planId}`,
+      },
+    );
+    return parseOne(
+      publicSubscriptionPolicySchema,
+      response,
+      'Meal-plan policy',
+    );
   },
 
   async listMine(signal?: AbortSignal): Promise<CustomerSubscription[]> {

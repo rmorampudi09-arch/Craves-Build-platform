@@ -27,6 +27,7 @@ export function EmailVerificationPanel({email, disabled = false, onVerified}: Pr
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [serverClockOffsetMs, setServerClockOffsetMs] = useState(0);
 
   useEffect(() => () => {
     mounted.current = false;
@@ -50,8 +51,10 @@ export function EmailVerificationPanel({email, disabled = false, onVerified}: Pr
         next = await emailVerificationApi.read();
       }
       if (!mounted.current) return;
+      const receivedAt = Date.now();
       setState(next);
-      setNow(Date.now());
+      setServerClockOffsetMs(Date.parse(next.serverTime) - receivedAt);
+      setNow(receivedAt);
       if (action !== 'read') setCode('');
       if (next.emailVerified && next.email) onVerified?.(next.email);
     } catch (caught) {
@@ -73,12 +76,20 @@ export function EmailVerificationPanel({email, disabled = false, onVerified}: Pr
     return () => clearInterval(timer);
   }, [state?.pending]);
 
+  const serverNow = now + serverClockOffsetMs;
   const resendWait = useMemo(() => {
     if (!state?.pending) return 0;
-    return Math.max(0, Math.ceil((Date.parse(state.pending.resendAvailableAt) - now) / 1000));
-  }, [now, state?.pending]);
+    return Math.max(
+      0,
+      Math.ceil(
+        (Date.parse(state.pending.resendAvailableAt) - serverNow) / 1000,
+      ),
+    );
+  }, [serverNow, state?.pending]);
 
-  const expired = Boolean(state?.pending && Date.parse(state.pending.expiresAt) <= now);
+  const expired = Boolean(
+    state?.pending && Date.parse(state.pending.expiresAt) <= serverNow,
+  );
   const normalizedEmail = email.trim().toLowerCase();
   const matches = Boolean(
     state?.emailVerified && state.email?.trim().toLowerCase() === normalizedEmail,

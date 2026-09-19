@@ -99,6 +99,20 @@ export function canOpenSavedDish(item: SavedCatalogItem): boolean {
   );
 }
 
+export function canAddSavedDish(item: SavedCatalogItem): boolean {
+  return Boolean(
+    item.found &&
+      item.availabilityState === 'AVAILABLE_NOW' &&
+      item.itemStatus === 'ACTIVE' &&
+      item.itemAvailable &&
+      item.kitchenId &&
+      item.kitchenStatus === 'ACTIVE' &&
+      item.acceptingOrders &&
+      !item.paused &&
+      item.availableNow,
+  );
+}
+
 export function savedDishDisplayName(item: SavedCatalogItem): string {
   return item.itemName?.trim() || 'Saved dish';
 }

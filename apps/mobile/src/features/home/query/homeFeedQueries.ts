@@ -23,8 +23,15 @@ export const customerHomeFeedQueryPrefix = [
 ] as const;
 
 export interface HomeFeedFilters {
+  query?: string | null;
   category?: string | null;
   cuisine?: string | null;
+  foodType?: 'VEG' | 'NON_VEG' | 'EGG' | null;
+  minPrice?: number | null;
+  maxPrice?: number | null;
+  maxPreparationTimeMinutes?: number | null;
+  spiceLevel?: 'MILD' | 'MEDIUM' | 'SPICY' | null;
+  sort?: 'DISTANCE_ASC' | 'PRICE_ASC' | 'PRICE_DESC' | 'PREPARATION_TIME_ASC' | 'NAME_ASC' | null;
 }
 
 export interface HomeNearbyDishQueryOptions {
@@ -47,14 +54,8 @@ export function getHomeFeedContractBlocker(
   const category = normalizeOptionalFilter(filters.category);
   const cuisine = normalizeOptionalFilter(filters.cuisine);
 
-  if (category && cuisine) {
-    return 'The current discovery contract does not define category or cuisine query parameters.';
-  }
-  if (category) {
-    return 'The current discovery contract does not define a category query parameter.';
-  }
   if (cuisine) {
-    return 'The current discovery contract does not define a cuisine query parameter.';
+    return 'Cuisine IDs are not part of the current Discovery v2 contract. Use the server category filter instead.';
   }
   return null;
 }
@@ -70,8 +71,15 @@ export function createHomeNearbyDishesQueryKey(
     role: CUSTOMER_ROLE,
     locationKey: location.addressId,
     filters: {
+      query: normalizeOptionalFilter(filters.query),
       category: normalizeOptionalFilter(filters.category),
       cuisine: normalizeOptionalFilter(filters.cuisine),
+      foodType: filters.foodType ?? null,
+      minPrice: filters.minPrice ?? null,
+      maxPrice: filters.maxPrice ?? null,
+      maxPreparationTimeMinutes: filters.maxPreparationTimeMinutes ?? null,
+      spiceLevel: filters.spiceLevel ?? null,
+      sort: filters.sort ?? 'DISTANCE_ASC',
     },
     paging: {
       radiusMeters: options.radiusMeters,
@@ -120,6 +128,14 @@ export function useHomeNearbyDishesQuery(
           radiusMeters: options.radiusMeters,
           page: pageParam,
           size: options.size,
+          query: options.filters?.query,
+          category: options.filters?.category,
+          foodType: options.filters?.foodType,
+          minPrice: options.filters?.minPrice,
+          maxPrice: options.filters?.maxPrice,
+          maxPreparationTimeMinutes: options.filters?.maxPreparationTimeMinutes,
+          spiceLevel: options.filters?.spiceLevel,
+          sort: options.filters?.sort,
         },
         signal,
       );

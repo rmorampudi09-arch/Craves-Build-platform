@@ -109,6 +109,10 @@ export function mapChefApplicationSubmissionFailure(
   const error = toAppApiError(cause);
   const fieldErrors: ChefApplicationFieldErrors = {};
 
+  if (error.code === 'EMAIL_VERIFICATION_REQUIRED') {
+    fieldErrors.email = 'Verify this email before submitting your Chef application.';
+  }
+
   if (error.code === 'VALIDATION_FAILED') {
     for (const detail of error.details) {
       const field = fieldFromValidationDetail(detail);

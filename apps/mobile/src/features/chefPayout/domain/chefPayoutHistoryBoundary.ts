@@ -18,7 +18,7 @@ export interface ChefPayoutHistoryBoundaryState {
 }
 
 const sourceOnlyMessage =
-  'The exact Chef earnings ledger exists in backend source, but this branch has no approved mobile APIM operation for it. Craves will not bypass APIM or substitute local financial data.';
+  'The published Chef earnings API provides your read-only earning ledger, including legacy allocations and finalized source-ledger earnings. It does not define withdrawable balance, bank destination, payout initiation, or settlement controls.';
 
 export const CHEF_PAYOUT_HISTORY_MESSAGES = {
   source: sourceOnlyMessage,

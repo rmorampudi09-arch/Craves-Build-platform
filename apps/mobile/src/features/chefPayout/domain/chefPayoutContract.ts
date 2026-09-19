@@ -1,6 +1,7 @@
 import {
   CHEF_EARNINGS_MAX_LIMIT,
   CHEF_EARNINGS_ROUTE,
+  CHEF_FINANCE_BALANCE_ROUTE,
 } from '../api/chefPayoutApi';
 
 export type ChefPayoutCapabilityKey =
@@ -42,7 +43,7 @@ export interface ChefPayoutSourceContract {
 }
 
 export interface ChefPayoutContractModel {
-  status: 'blocked';
+  status: 'partial';
   source: ChefPayoutSourceContract;
   capabilities: Readonly<Record<ChefPayoutCapabilityKey, ChefPayoutContractAvailability>>;
 }
@@ -55,15 +56,22 @@ function unavailable(reason: string): ChefPayoutContractAvailability {
   };
 }
 
+function available(
+  method: 'GET' | 'POST',
+  path: string,
+  notes: string,
+): ChefPayoutContractAvailability {
+  return {availability: 'available', method, path, notes};
+}
+
 /**
  * Guide Reference 50 requires a complete payout product contract. The current
- * backend exposes only a Chef-owned earning-ledger read. It intentionally does
- * not send money and exposes settlement operations only to finance/admin roles.
- * Keep all unsupported payout capabilities fail-closed until exact Chef-role
- * contracts exist.
+ * backend exposes a Chef-owned earnings read plus a Chef-owned finance balance
+ * read containing current balance/accounting fields and recent payout requests.
+ * Unsupported product surfaces remain fail-closed.
  */
 export const CHEF_PAYOUT_CONTRACT_MODEL: ChefPayoutContractModel = {
-  status: 'blocked',
+  status: 'partial',
   source: {
     availability: 'available',
     method: 'GET',
@@ -83,23 +91,27 @@ export const CHEF_PAYOUT_CONTRACT_MODEL: ChefPayoutContractModel = {
     earningsSummary: unavailable(
       'No Chef-role aggregate earnings-summary contract defines totals, periods, or aggregation semantics.',
     ),
-    availableBalance: unavailable(
-      'No Chef-role available/withdrawable balance contract exists. Mobile must not derive a wallet balance by summing ledger rows.',
+    availableBalance: available(
+      'GET',
+      CHEF_FINANCE_BALANCE_ROUTE,
+      'Server-authoritative available, outstanding and reserved/paid amounts. Mobile does not derive these values from earning rows.',
     ),
     payoutSeries: unavailable(
       'No Chef-role payout time-series/date-bucket contract exists.',
     ),
-    payoutTransactions: unavailable(
-      'The Chef earnings ledger does not expose settlement batch/payment-provider transaction history or payout statuses as a Chef transaction contract.',
+    payoutTransactions: available(
+      'GET',
+      CHEF_FINANCE_BALANCE_ROUTE,
+      'The balance response includes up to 100 Chef-owned recent payout instructions with server-recorded status, channel and transfer reference.',
     ),
     bankDestination: unavailable(
       'No Chef-role payout bank-destination contract exists. Full bank identifiers must never be inferred or exposed; any future contract must provide an approved masked representation.',
     ),
     withdrawEligibility: unavailable(
-      'No Chef-role withdrawal-eligibility contract or authoritative minimum/verification rule exists.',
+      'The balance response exposes hold, daily-request and execution flags, but this mobile read-only step does not enable withdrawal decisions.',
     ),
     withdrawInitiation: unavailable(
-      'No Chef-role withdrawal initiation endpoint exists. Current settlement operations are ADMIN-only and the financial-ledger module explicitly does not send money.',
+      'Main publishes POST /api/v1/chef/finance/withdrawals, but this read-only mobile step intentionally does not invoke a money-moving endpoint.',
     ),
     transactionDetail: unavailable(
       'No Chef-role payout transaction-detail endpoint exists.',

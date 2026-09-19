@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {httpClient} from '../../../core/http/httpClient';
 
 const uuid = z.string().uuid();
+const localDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const decimal = z.union([z.string(), z.number()]).transform(value => String(value));
 const instant = z.string().nullable().optional().transform(value => value ?? null);
 
@@ -84,6 +85,38 @@ export const menuItemRuleSchema = z.object({
 }).strict();
 
 export type ChefMenuItemCapacityRule = z.infer<typeof menuItemRuleSchema>;
+export const dateOverrideSchema = z.object({
+  id: uuid,
+  chefIdentityId: uuid,
+  serviceDate: localDate,
+  mealSlotCode: z.string().min(1).max(40),
+  totalCapacityUnits: z.number().int().min(0).max(100000),
+  subscriptionCapacityUnits: z.number().int().min(0).max(100000),
+  closed: z.boolean(),
+  reason: z.string().min(1).max(1000),
+  heldUnits: z.number().int().nonnegative(),
+  committedUnits: z.number().int().nonnegative(),
+  deficitUnits: z.number().int().nonnegative(),
+  updatedAt: z.string().refine(value => !Number.isNaN(Date.parse(value))),
+}).strict();
+
+export const menuItemDateOverrideSchema = z.object({
+  id: uuid,
+  chefIdentityId: uuid,
+  menuItemId: uuid,
+  serviceDate: localDate,
+  mealSlotCode: z.string().min(1).max(40),
+  maxSubscriptionUnits: z.number().int().min(0).max(100000),
+  closed: z.boolean(),
+  reason: z.string().min(1).max(1000),
+  heldUnits: z.number().int().nonnegative(),
+  committedUnits: z.number().int().nonnegative(),
+  deficitUnits: z.number().int().nonnegative(),
+  updatedAt: z.string().refine(value => !Number.isNaN(Date.parse(value))),
+}).strict();
+
+export type ChefCapacityDateOverride = z.infer<typeof dateOverrideSchema>;
+export type ChefMenuItemDateOverride = z.infer<typeof menuItemDateOverrideSchema>;
 
 export const chefCapacitySummarySchema = z.object({
   chefIdentityId: uuid,
@@ -91,8 +124,8 @@ export const chefCapacitySummarySchema = z.object({
   freezeReason: z.string().nullable().optional().transform(value => value ?? null),
   slotRules: z.array(slotRuleSchema).max(1000),
   menuItemRules: z.array(menuItemRuleSchema).max(1000),
-  dateOverrides: z.array(z.unknown()).max(1000),
-  menuItemDateOverrides: z.array(z.unknown()).max(1000),
+  dateOverrides: z.array(dateOverrideSchema).max(1000),
+  menuItemDateOverrides: z.array(menuItemDateOverrideSchema).max(1000),
   openIncidentCount: z.number().int().nonnegative(),
 });
 export type ChefCapacitySummary = z.infer<typeof chefCapacitySummarySchema>;
@@ -143,6 +176,58 @@ const putChefMenuItemCapacityRuleRequestSchema = z.object({
     .transform(value => value.toUpperCase()),
   maxSubscriptionUnits: z.number().int().min(0).max(100000),
   salesEnabled: z.boolean(),
+  reason: z.string().trim().min(1).max(1000),
+}).strict();
+
+export interface PutChefDateCapacityOverrideRequest {
+  serviceDate: string;
+  mealSlotCode: string;
+  totalCapacityUnits: number;
+  subscriptionCapacityUnits: number;
+  closed: boolean;
+  reason: string;
+}
+
+export interface PutChefMenuItemDateCapacityOverrideRequest {
+  menuItemId: string;
+  serviceDate: string;
+  mealSlotCode: string;
+  maxSubscriptionUnits: number;
+  closed: boolean;
+  reason: string;
+}
+
+const slotCodeSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(40)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/)
+  .transform(value => value.toUpperCase());
+
+const putChefDateCapacityOverrideRequestSchema = z.object({
+  serviceDate: localDate,
+  mealSlotCode: slotCodeSchema,
+  totalCapacityUnits: z.number().int().min(0).max(100000),
+  subscriptionCapacityUnits: z.number().int().min(0).max(100000),
+  closed: z.boolean(),
+  reason: z.string().trim().min(1).max(1000),
+}).strict().superRefine((value, ctx) => {
+  if (value.subscriptionCapacityUnits > value.totalCapacityUnits) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['subscriptionCapacityUnits'],
+      message: 'Subscription capacity cannot exceed total capacity.',
+    });
+  }
+});
+
+const putChefMenuItemDateCapacityOverrideRequestSchema = z.object({
+  menuItemId: uuid,
+  serviceDate: localDate,
+  mealSlotCode: slotCodeSchema,
+  maxSubscriptionUnits: z.number().int().min(0).max(100000),
+  closed: z.boolean(),
   reason: z.string().trim().min(1).max(1000),
 }).strict();
 
@@ -226,6 +311,35 @@ export const chefSubscriptionApi = {
         body,
       ),
       'Chef menu-item capacity rule could not be verified.',
+    );
+  },
+
+  async putDateOverride(
+    request: PutChefDateCapacityOverrideRequest,
+  ): Promise<ChefCapacityDateOverride> {
+    const body = putChefDateCapacityOverrideRequestSchema.parse(request);
+    return parseOne(
+      dateOverrideSchema,
+      await httpClient.put<unknown>(
+        '/api/v1/chef/subscription-capacity/overrides/slots',
+        body,
+      ),
+      'Chef date capacity override could not be verified.',
+    );
+  },
+
+  async putMenuItemDateOverride(
+    request: PutChefMenuItemDateCapacityOverrideRequest,
+  ): Promise<ChefMenuItemDateOverride> {
+    const body =
+      putChefMenuItemDateCapacityOverrideRequestSchema.parse(request);
+    return parseOne(
+      menuItemDateOverrideSchema,
+      await httpClient.put<unknown>(
+        '/api/v1/chef/subscription-capacity/overrides/menu-items',
+        body,
+      ),
+      'Chef menu-item date capacity override could not be verified.',
     );
   },
 };

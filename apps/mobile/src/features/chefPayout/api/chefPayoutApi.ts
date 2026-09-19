@@ -3,7 +3,7 @@ import {httpClient} from '../../../core/http/httpClient';
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
-const MONEY_PATTERN = /^-?\d{1,10}(?:\.\d{1,2})?$/;
+const MONEY_PATTERN = /^-?\d{1,14}(?:\.\d{1,2})?$/;
 
 /** Exact Integration Service/APIM read route on current main. Mobile treats
  * every money field as server-authoritative and never recomputes settlement. */

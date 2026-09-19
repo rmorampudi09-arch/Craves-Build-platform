@@ -1,186 +1,151 @@
+import {httpClient} from '../../../core/http/httpClient';
 import {
-  parseChefBusinessProofDocument,
-  parseChefBusinessVerificationRecord,
+  CHEF_APPLICATION_EVIDENCE_ROUTE,
+  CHEF_PROOF_FILES_ROUTE,
+  chefBusinessInformationApi,
+  parseChefBusinessEvidence,
 } from './chefBusinessInformationApi';
 
-const APPLICATION_ID = '11111111-1111-4111-8111-111111111111';
-const IDENTITY_ID = '22222222-2222-4222-8222-222222222222';
-const REVIEWER_ID = '33333333-3333-4333-8333-333333333333';
-const DOCUMENT_ID = '44444444-4444-4444-8444-444444444444';
+jest.mock('../../../core/http/httpClient', () => ({
+  httpClient: {
+    get: jest.fn(),
+    post: jest.fn(),
+  },
+}));
 
-function proofDocument(overrides: Record<string, unknown> = {}) {
-  return {
-    id: DOCUMENT_ID,
-    documentType: 'AADHAAR_CARD',
-    originalFileName: 'aadhaar.pdf',
-    blobContainer: 'documents',
-    blobName: 'kyc/private/storage-key',
-    contentType: 'application/pdf',
-    fileSizeBytes: 2048,
-    status: 'UPLOADED',
-    reviewReason: null,
-    reviewedAt: null,
-    createdAt: '2026-08-01T07:00:00Z',
-    updatedAt: '2026-08-09T08:00:00Z',
-    ...overrides,
-  };
-}
+const uploaded = {
+  id: '11111111-1111-4111-8111-111111111111',
+  documentType: 'GOVERNMENT_ID_FRONT',
+  originalFileName: 'identity-front.jpg',
+  blobContainer: 'chef-documents',
+  blobName:
+    'kyc/22222222-2222-4222-8222-222222222222/government_id_front/file.jpg',
+  contentType: 'image/jpeg',
+  fileSizeBytes: 12345,
+  status: 'UPLOADED',
+  reviewReason: null,
+  reviewedAt: null,
+  createdAt: '2026-09-19T12:00:00Z',
+  updatedAt: '2026-09-19T12:00:00Z',
+};
 
-function application(overrides: Record<string, unknown> = {}) {
-  return {
-    id: APPLICATION_ID,
-    identityId: IDENTITY_ID,
-    phoneNumber: '+919876543210',
-    email: 'chef@example.test',
-    firstName: 'Anita',
-    lastName: 'Rao',
-    addressLine1: '12 Market Road',
-    addressLine2: null,
-    landmark: 'Near Metro',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    postalCode: '560038',
-    latitude: 12.9716,
-    longitude: 77.5946,
-    status: 'APPROVED',
-    rejectionReason: null,
-    submittedAt: '2026-08-01T07:00:00Z',
-    reviewedAt: '2026-08-02T07:00:00Z',
-    reviewedByIdentityId: REVIEWER_ID,
-    documents: [proofDocument()],
-    ...overrides,
-  };
-}
+describe('chefBusinessInformationApi KYC evidence', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
-describe('Chef Business Information verification parsing', () => {
-  it('parses the exact approved application source while excluding storage and reviewer identifiers', () => {
-    const parsed = parseChefBusinessVerificationRecord(application());
+  it('accepts only the four current application evidence types', () => {
+    expect(
+      parseChefBusinessEvidence([
+        uploaded,
+        {
+          ...uploaded,
+          id: '33333333-3333-4333-8333-333333333333',
+          documentType: 'APPLICANT_PHOTO',
+          originalFileName: 'photo.png',
+          blobName:
+            'kyc/22222222-2222-4222-8222-222222222222/applicant_photo/photo.png',
+          contentType: 'image/png',
+        },
+      ]),
+    ).toHaveLength(2);
 
-    expect(parsed).toEqual(
+    expect(
+      parseChefBusinessEvidence([
+        {
+          ...uploaded,
+          documentType: 'PAN_CARD',
+        },
+      ]),
+    ).toBeNull();
+  });
+
+  it('reads the dedicated current evidence endpoint', async () => {
+    (httpClient.get as jest.Mock).mockResolvedValue([uploaded]);
+
+    await expect(
+      chefBusinessInformationApi.listApplicationEvidence(),
+    ).resolves.toEqual([
       expect.objectContaining({
-        id: APPLICATION_ID,
-        status: 'APPROVED',
-        firstName: 'Anita',
-        documents: [
-          expect.objectContaining({
-            id: DOCUMENT_ID,
-            documentType: 'AADHAAR_CARD',
-            status: 'UPLOADED',
-            reviewReason: null,
-            reviewedAt: null,
-          }),
-        ],
+        id: uploaded.id,
+        documentType: 'GOVERNMENT_ID_FRONT',
+        originalFileName: 'identity-front.jpg',
       }),
+    ]);
+
+    expect(httpClient.get).toHaveBeenCalledWith(
+      CHEF_APPLICATION_EVIDENCE_ROUTE,
+      {
+        signal: undefined,
+        dedupeKey: 'chef-application:evidence',
+      },
     );
-    expect(parsed).not.toHaveProperty('identityId');
-    expect(parsed).not.toHaveProperty('reviewedByIdentityId');
-    expect(parsed?.documents[0]).not.toHaveProperty('blobContainer');
-    expect(parsed?.documents[0]).not.toHaveProperty('blobName');
   });
 
-  it('accepts approved and rejected document review states from the current backend contract', () => {
-    const approved = parseChefBusinessProofDocument(
-      proofDocument({
-        status: 'APPROVED',
-        reviewedAt: '2026-08-10T09:30:00Z',
-      }),
-    );
-    const rejected = parseChefBusinessProofDocument(
-      proofDocument({
-        status: 'REJECTED',
-        reviewReason: 'Document image is unreadable.',
-        reviewedAt: '2026-08-10T09:35:00Z',
-      }),
-    );
+  it('posts exact multipart documentType and file fields', async () => {
+    (httpClient.post as jest.Mock).mockResolvedValue(uploaded);
 
-    expect(approved).toEqual(
+    await expect(
+      chefBusinessInformationApi.uploadProofFile('GOVERNMENT_ID_FRONT', {
+        uri: 'file:///identity-front.jpg',
+        name: 'identity-front.jpg',
+        type: 'image/jpeg',
+      }),
+    ).resolves.toEqual(
       expect.objectContaining({
-        status: 'APPROVED',
-        reviewReason: null,
-        reviewedAt: '2026-08-10T09:30:00Z',
+        documentType: 'GOVERNMENT_ID_FRONT',
+        originalFileName: 'identity-front.jpg',
       }),
     );
-    expect(rejected).toEqual(
-      expect.objectContaining({
-        status: 'REJECTED',
-        reviewReason: 'Document image is unreadable.',
-        reviewedAt: '2026-08-10T09:35:00Z',
-      }),
+
+    expect(httpClient.post).toHaveBeenCalledTimes(1);
+    const [, formData, options] = (httpClient.post as jest.Mock).mock.calls[0];
+    expect((httpClient.post as jest.Mock).mock.calls[0][0]).toBe(
+      CHEF_PROOF_FILES_ROUTE,
     );
-  });
+    expect(options).toEqual({signal: undefined});
 
-  it('accepts the service NOT_SUBMITTED response only with a null application id', () => {
-    expect(
-      parseChefBusinessVerificationRecord(
-        application({
-          id: null,
-          status: 'NOT_SUBMITTED',
-          email: null,
-          firstName: null,
-          lastName: null,
-          addressLine1: null,
-          landmark: null,
-          city: null,
-          state: null,
-          postalCode: null,
-          latitude: null,
-          longitude: null,
-          submittedAt: null,
-          reviewedAt: null,
-          reviewedByIdentityId: null,
-          documents: [],
+    const parts = (
+      formData as {
+        getParts: () => Array<{
+          fieldName: string;
+          string?: string;
+          uri?: string;
+          name?: string;
+          type?: string;
+        }>;
+      }
+    ).getParts();
+
+    expect(parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldName: 'documentType',
+          string: 'GOVERNMENT_ID_FRONT',
         }),
-      ),
-    ).toEqual(
-      expect.objectContaining({id: null, status: 'NOT_SUBMITTED', documents: []}),
+        expect.objectContaining({
+          fieldName: 'file',
+          uri: 'file:///identity-front.jpg',
+          name: 'identity-front.jpg',
+          type: 'image/jpeg',
+        }),
+      ]),
     );
-    expect(
-      parseChefBusinessVerificationRecord(
-        application({id: APPLICATION_ID, status: 'NOT_SUBMITTED'}),
-      ),
-    ).toBeNull();
+    expect(parts).toHaveLength(2);
   });
 
-  it('fails closed on inconsistent or unsupported document review states', () => {
-    expect(parseChefBusinessProofDocument(proofDocument({status: 'VERIFIED'}))).toBeNull();
-    expect(
-      parseChefBusinessProofDocument(
-        proofDocument({status: 'APPROVED', reviewedAt: null}),
+  it('does not allow legacy document types through the upload API', async () => {
+    await expect(
+      chefBusinessInformationApi.uploadProofFile(
+        'PAN_CARD' as never,
+        {
+          uri: 'file:///pan.jpg',
+          name: 'pan.jpg',
+          type: 'image/jpeg',
+        },
       ),
-    ).toBeNull();
-    expect(
-      parseChefBusinessProofDocument(
-        proofDocument({
-          status: 'APPROVED',
-          reviewReason: 'Should not exist',
-          reviewedAt: '2026-08-10T09:30:00Z',
-        }),
-      ),
-    ).toBeNull();
-    expect(
-      parseChefBusinessProofDocument(
-        proofDocument({status: 'REJECTED', reviewedAt: '2026-08-10T09:30:00Z'}),
-      ),
-    ).toBeNull();
-    expect(parseChefBusinessProofDocument(proofDocument({documentType: 'FSSAI'}))).toBeNull();
-    expect(parseChefBusinessProofDocument(proofDocument({contentType: 'text/plain'}))).toBeNull();
-  });
+    ).rejects.toThrow('Unsupported Chef application document type.');
 
-  it('fails closed on duplicate proof types because the server contract permits one row per type', () => {
-    expect(
-      parseChefBusinessVerificationRecord(
-        application({
-          documents: [
-            proofDocument(),
-            proofDocument({id: '55555555-5555-4555-8555-555555555555'}),
-          ],
-        }),
-      ),
-    ).toBeNull();
-  });
-
-  it('fails closed on unsupported application status or malformed identity metadata', () => {
-    expect(parseChefBusinessVerificationRecord(application({status: 'SUSPENDED'}))).toBeNull();
-    expect(parseChefBusinessVerificationRecord(application({identityId: 'not-a-uuid'}))).toBeNull();
+    expect(httpClient.post).not.toHaveBeenCalled();
   });
 });

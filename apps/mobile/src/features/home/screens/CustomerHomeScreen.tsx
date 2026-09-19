@@ -311,10 +311,6 @@ export function CustomerHomeScreen() {
   const categoryPinnedRef = useRef(false);
   const listRef = useRef<FlatList<HomeFeedListItem>>(null);
 
-  const feed = useHomeNearbyDishesQuery({
-    radiusMeters: HOME_RADIUS_METERS,
-    size: HOME_PAGE_SIZE,
-  });
   const searchScopeKey =
     identity?.id && selectedLocation
       ? `${identity.id}:${selectedLocation.addressId}`
@@ -324,6 +320,24 @@ export function CustomerHomeScreen() {
     () => resolveDiscoveryFilterSession(storedFilters, searchScopeKey).applied,
     [searchScopeKey, storedFilters],
   );
+  const serverFoodType =
+    appliedFilters.diets.length === 1 ? appliedFilters.diets[0] ?? null : null;
+  const serverSort =
+    appliedFilters.sort === 'PRICE_LOW_TO_HIGH'
+      ? 'PRICE_ASC'
+      : appliedFilters.sort === 'PRICE_HIGH_TO_LOW'
+        ? 'PRICE_DESC'
+        : 'DISTANCE_ASC';
+  const feed = useHomeNearbyDishesQuery({
+    radiusMeters: HOME_RADIUS_METERS,
+    size: HOME_PAGE_SIZE,
+    filters: {
+      query: search.query || null,
+      category: selectedCategory,
+      foodType: serverFoodType,
+      sort: serverSort,
+    },
+  });
   const restorePendingRef = useRef(search.scrollOffset > 0);
 
   const dishes = useMemo(

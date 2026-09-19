@@ -1,6 +1,7 @@
 import type {SavedCatalogItem} from '../api/savedCatalogApi';
 import {
   availabilityCopyForState,
+  canAddSavedDish,
   canOpenSavedDish,
   savedDishDisplayName,
 } from './savedCatalogPresentation';
@@ -66,6 +67,21 @@ describe('savedCatalogPresentation', () => {
     expect(
       canOpenSavedDish(item({availabilityState: 'RETIRED', itemStatus: 'RETIRED'})),
     ).toBe(false);
+  });
+
+  it('allows Add only for a currently sellable Catalog row', () => {
+    expect(canAddSavedDish(item())).toBe(true);
+    expect(
+      canAddSavedDish(
+        item({
+          availabilityState: 'COOKING_LATER_TODAY',
+          availableNow: false,
+        }),
+      ),
+    ).toBe(false);
+    expect(canAddSavedDish(item({acceptingOrders: false}))).toBe(false);
+    expect(canAddSavedDish(item({paused: true}))).toBe(false);
+    expect(canAddSavedDish(item({itemAvailable: false}))).toBe(false);
   });
 
   it('provides a graceful display name for a missing catalog tombstone', () => {

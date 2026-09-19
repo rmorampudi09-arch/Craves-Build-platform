@@ -212,30 +212,28 @@
 }
 
 .floatingCartButton,
-.floatingCartButton:focus,
-.floatingCartButton:focus-visible,
+.floatingCartButton:focus-within,
 .floatingCartButton:active {
-  border: 1px solid rgba(255, 255, 255, 0.94) !important;
-  background: rgba(255, 255, 255, 0.78) !important;
+  border: 1px solid rgba(255, 255, 255, 0.88) !important;
+  background: rgba(255, 255, 255, 0.5) !important;
   color: #1a1a1a !important;
-  -webkit-backdrop-filter: blur(42px) saturate(165%);
-  backdrop-filter: blur(42px) saturate(165%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   box-shadow:
-    0 22px 60px rgba(26, 26, 26, 0.18),
-    0 3px 12px rgba(26, 26, 26, 0.08),
-    0 1px 0 rgba(255, 255, 255, 1) inset,
-    0 -1px 0 rgba(255, 255, 255, 0.5) inset !important;
+    0 22px 60px rgba(26, 26, 26, 0.16),
+    0 3px 12px rgba(26, 26, 26, 0.07),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset !important;
 }
 
 .floatingCartButton:hover {
-  border-color: rgba(246, 46, 24, 0.24) !important;
-  background: rgba(255, 255, 255, 0.86) !important;
+  border-color: rgba(246, 46, 24, 0.2) !important;
+  background: rgba(255, 255, 255, 0.58) !important;
   color: #1a1a1a !important;
   box-shadow:
-    0 24px 60px rgba(26, 26, 26, 0.17),
-    0 10px 30px rgba(246, 46, 24, 0.1),
-    0 0 0 1px rgba(246, 46, 24, 0.08),
-    0 1px 0 rgba(255, 255, 255, 1) inset !important;
+    0 24px 60px rgba(26, 26, 26, 0.16),
+    0 10px 30px rgba(246, 46, 24, 0.09),
+    0 0 0 1px rgba(246, 46, 24, 0.06),
+    0 1px 0 rgba(255, 255, 255, 0.95) inset !important;
 }
 
 .floatingCartGlass {

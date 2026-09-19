@@ -6,9 +6,9 @@ import {
 } from './chefPayoutContract';
 
 describe('chef payout contract boundary', () => {
-  it('keeps the exact Chef earnings read as source-only rather than fabricating payout semantics', () => {
+  it('keeps the published Chef earnings read separate from payout semantics', () => {
     expect(CHEF_PAYOUT_CONTRACT_MODEL.source).toMatchObject({
-      availability: 'source-only',
+      availability: 'available',
       method: 'GET',
       path: CHEF_EARNINGS_ROUTE,
       response: 'ChefEarningLedgerEntry[]',

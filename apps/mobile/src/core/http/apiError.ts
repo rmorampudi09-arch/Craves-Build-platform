@@ -3,6 +3,7 @@ import {isRetriableFailure} from './requestPolicy';
 
 interface BackendErrorPayload {
   code?: unknown;
+  error?: unknown;
   message?: unknown;
   details?: unknown;
 }
@@ -53,9 +54,14 @@ function correlationIdFrom(error: AxiosError<BackendErrorPayload>): string | und
   );
 }
 
-function normalizedBackendCode(value: unknown, status?: number): string {
-  if (typeof value === 'string' && /^[A-Z0-9_.-]{1,64}$/i.test(value.trim())) {
-    return value.trim();
+function normalizedBackendCode(
+  payload: BackendErrorPayload | undefined,
+  status?: number,
+): string {
+  for (const value of [payload?.code, payload?.error]) {
+    if (typeof value === 'string' && /^[A-Z0-9_.-]{1,64}$/i.test(value.trim())) {
+      return value.trim();
+    }
   }
   return status ? `HTTP_${status}` : 'NETWORK_ERROR';
 }
@@ -144,7 +150,7 @@ export function toAppApiError(error: unknown): AppApiError {
       );
     }
 
-    const code = normalizedBackendCode(error.response?.data?.code, status);
+    const code = normalizedBackendCode(error.response?.data, status);
     const backendMessage = safeBackendMessage(error.response?.data?.message);
     const details = safeBackendDetails(error.response?.data?.details);
     const message = status

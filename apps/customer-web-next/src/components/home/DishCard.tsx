@@ -26,6 +26,7 @@ import {
   subscribeCustomerFavorites,
 } from "@/services/api/customerFavorites";
 import { ProgressiveImage } from "@/components/media/ProgressiveImage";
+import { AnimateCount } from "@/components/ui/AnimateCount";
 import type { Dish } from "@/services/api/dishes";
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
@@ -319,9 +320,12 @@ export function DishCard({
               >
                 <Minus className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
-              <span className="min-w-7 text-center text-xs font-black" aria-live="polite">
+              <AnimateCount
+                className="min-w-7 text-center text-xs font-black"
+                aria-live="polite"
+              >
                 {quantity}
-              </span>
+              </AnimateCount>
               <button
                 type="button"
                 onClick={() => void handleQuantityChange(1)}

@@ -7,16 +7,17 @@ export const ANIMATE_COUNT_DURATION_MS = 450;
 
 const EASING = [0.23, 0.88, 0.26, 0.92] as const;
 
-export interface AnimateCountProps {
+export interface AnimateCountProps
+  extends Omit<React.HTMLAttributes<HTMLSpanElement>, "children"> {
   children: number;
   animate?: boolean;
-  className?: string;
 }
 
 export function AnimateCount({
   children: count,
   animate = true,
   className = "",
+  ...props
 }: AnimateCountProps) {
   const [prev, setPrev] = useState<number | null>(null);
   const [displayCount, setDisplayCount] = useState(count);
@@ -31,6 +32,7 @@ export function AnimateCount({
   return (
     <span
       className={`grid place-items-center tabular-nums tracking-tight [&>*]:col-start-1 [&>*]:row-start-1 ${className}`}
+      {...props}
     >
       <AnimatePresence initial={false}>
         {animate && prev !== null && prev !== displayCount ? (

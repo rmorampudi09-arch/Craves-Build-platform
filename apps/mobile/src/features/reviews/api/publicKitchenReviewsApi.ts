@@ -94,6 +94,15 @@ function uuid(value: unknown): string | null {
 
 function rating(value: unknown): number | null {
   return typeof value === 'number' &&
+    Number.isSafeInteger(value) &&
+    value >= 1 &&
+    value <= 5
+    ? value
+    : null;
+}
+
+function average(value: unknown): number | null {
+  return typeof value === 'number' &&
     Number.isFinite(value) &&
     value >= 1 &&
     value <= 5
@@ -104,6 +113,11 @@ function rating(value: unknown): number | null {
 function nullableRating(value: unknown): number | null | undefined {
   if (value == null) return null;
   return rating(value) ?? undefined;
+}
+
+function nullableAverage(value: unknown): number | null | undefined {
+  if (value == null) return null;
+  return average(value) ?? undefined;
 }
 
 function nonNegativeInteger(value: unknown): number | null {
@@ -253,13 +267,13 @@ export function parsePublicKitchenReviewSummary(
 
   const kitchenId = uuid(raw.kitchenId);
   const reviewCount = nonNegativeInteger(raw.reviewCount);
-  const overallAverage = nullableRating(raw.overallAverage);
-  const foodTasteAverage = nullableRating(raw.foodTasteAverage);
-  const portionValueAverage = nullableRating(raw.portionValueAverage);
-  const packagingAverage = nullableRating(raw.packagingAverage);
-  const accuracyAverage = nullableRating(raw.accuracyAverage);
-  const chefPreparationAverage = nullableRating(raw.chefPreparationAverage);
-  const deliveryAverage = nullableRating(raw.deliveryAverage);
+  const overallAverage = nullableAverage(raw.overallAverage);
+  const foodTasteAverage = nullableAverage(raw.foodTasteAverage);
+  const portionValueAverage = nullableAverage(raw.portionValueAverage);
+  const packagingAverage = nullableAverage(raw.packagingAverage);
+  const accuracyAverage = nullableAverage(raw.accuracyAverage);
+  const chefPreparationAverage = nullableAverage(raw.chefPreparationAverage);
+  const deliveryAverage = nullableAverage(raw.deliveryAverage);
 
   if (
     !kitchenId ||

@@ -50,12 +50,12 @@ export const savedCatalogItemSchema = z.object({
   paused: z.boolean(),
   availableNow: z.boolean(),
   nextAvailabilityAt: nullableInstant,
-});
+}).strict();
 
 const resolveResponseSchema = z.object({
   evaluatedAt: z.string().refine(value => !Number.isNaN(Date.parse(value))),
   items: z.array(savedCatalogItemSchema).max(SAVED_CATALOG_BATCH_SIZE),
-});
+}).strict();
 
 export type SavedCatalogAvailabilityState = z.infer<
   typeof availabilityStateSchema

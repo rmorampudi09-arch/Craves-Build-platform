@@ -24,6 +24,13 @@ export interface ReorderCartCommand {
   expectedKitchenId: string;
 }
 
+export interface SwitchCartKitchenCommand {
+  menuItemId: string;
+  quantity: number;
+  expectedKitchenId: string;
+  expectedSnapshot: CartSnapshot;
+}
+
 export type CartMutationOutcome =
   | {status: 'APPLIED'; snapshot: CartSnapshot}
   | {status: 'SKIPPED_DUPLICATE'}
@@ -147,6 +154,43 @@ export function reorderCart(command: ReorderCartCommand): CartMutationThunk {
         return markMutationSucceeded(dispatch, key, requestId, snapshot);
       } catch (error) {
         return markMutationFailed(dispatch, key, requestId, toAppApiError(error));
+      }
+    });
+  };
+}
+
+export function switchCartKitchen(
+  command: SwitchCartKitchenCommand,
+): CartMutationThunk {
+  return async (dispatch, getState) => {
+    if (!Number.isSafeInteger(command.quantity) || command.quantity < 1) {
+      return {status: 'FAILED', error: invalidQuantityError()};
+    }
+
+    const key = 'cart:switch-kitchen';
+    if (isPendingMutation(getState(), key)) {
+      return {status: 'SKIPPED_DUPLICATE'};
+    }
+
+    const requestId = nextRequestId();
+    dispatch(cartActions.mutationStarted({key, requestId, scope: 'CART'}));
+
+    return enqueueMutation(async () => {
+      try {
+        const snapshot = await cartApi.switchKitchen(
+          command.expectedSnapshot,
+          command.menuItemId,
+          command.quantity,
+          command.expectedKitchenId,
+        );
+        return markMutationSucceeded(dispatch, key, requestId, snapshot);
+      } catch (error) {
+        return markMutationFailed(
+          dispatch,
+          key,
+          requestId,
+          toAppApiError(error),
+        );
       }
     });
   };

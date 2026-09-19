@@ -80,6 +80,12 @@ function emptyMeal(): MealRow {
   };
 }
 
+function nextIsoDate(offsetDays = 1): string {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return date.toISOString().slice(0, 10);
+}
+
 function FilledIcon({name, size = 22, color = colors.espressoBrown}: {name: string; size?: number; color?: string}) {
   return <MaterialDesignIcons name={name as never} size={size} color={color} />;
 }
@@ -193,6 +199,16 @@ export function ChefSubscriptionPlanScreen() {
   const [menuCapacitySlot, setMenuCapacitySlot] = React.useState<MealSlot>('LUNCH');
   const [menuCapacityUnits, setMenuCapacityUnits] = React.useState('10');
   const [menuCapacitySalesEnabled, setMenuCapacitySalesEnabled] = React.useState(true);
+  const [dateOverrideDate, setDateOverrideDate] = React.useState(nextIsoDate());
+  const [dateOverrideSlot, setDateOverrideSlot] = React.useState<MealSlot>('LUNCH');
+  const [dateOverrideTotal, setDateOverrideTotal] = React.useState('20');
+  const [dateOverrideSubscription, setDateOverrideSubscription] = React.useState('10');
+  const [dateOverrideClosed, setDateOverrideClosed] = React.useState(false);
+  const [menuDateOverrideItemId, setMenuDateOverrideItemId] = React.useState<string | null>(null);
+  const [menuDateOverrideDate, setMenuDateOverrideDate] = React.useState(nextIsoDate());
+  const [menuDateOverrideSlot, setMenuDateOverrideSlot] = React.useState<MealSlot>('LUNCH');
+  const [menuDateOverrideUnits, setMenuDateOverrideUnits] = React.useState('10');
+  const [menuDateOverrideClosed, setMenuDateOverrideClosed] = React.useState(false);
 
   const selected = React.useMemo(
     () => plans.find(plan => plan.id === selectedId) ?? null,
@@ -206,6 +222,11 @@ export function ChefSubscriptionPlanScreen() {
 
   React.useEffect(() => {
     setMenuCapacityItemId(current =>
+      current && availableMenu.some(item => item.id === current)
+        ? current
+        : availableMenu[0]?.id ?? null,
+    );
+    setMenuDateOverrideItemId(current =>
       current && availableMenu.some(item => item.id === current)
         ? current
         : availableMenu[0]?.id ?? null,
@@ -478,6 +499,95 @@ export function ChefSubscriptionPlanScreen() {
     menuCapacityUnits,
   ]);
 
+  const saveDateOverride = React.useCallback(async () => {
+    if (busy) return;
+    const total = Number(dateOverrideTotal);
+    const subscription = Number(dateOverrideSubscription);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(dateOverrideDate) ||
+      dateOverrideDate < nextIsoDate(0) ||
+      !Number.isInteger(total) ||
+      total < 0 ||
+      !Number.isInteger(subscription) ||
+      subscription < 0 ||
+      subscription > total
+    ) {
+      setMessage(
+        'Date override requires today/future YYYY-MM-DD and valid whole-number capacity where subscription units do not exceed total units.',
+      );
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await chefSubscriptionApi.putDateOverride({
+        serviceDate: dateOverrideDate,
+        mealSlotCode: dateOverrideSlot,
+        totalCapacityUnits: total,
+        subscriptionCapacityUnits: subscription,
+        closed: dateOverrideClosed,
+        reason: 'Date override updated by Chef in Craves mobile',
+      });
+      setCapacity(await chefSubscriptionApi.getCapacity());
+      setMessage('Date-specific slot capacity override saved.');
+    } catch {
+      setMessage('Date-specific slot override could not be saved.');
+    } finally {
+      setBusy(false);
+    }
+  }, [
+    busy,
+    dateOverrideClosed,
+    dateOverrideDate,
+    dateOverrideSlot,
+    dateOverrideSubscription,
+    dateOverrideTotal,
+  ]);
+
+  const saveMenuDateOverride = React.useCallback(async () => {
+    if (busy || !menuDateOverrideItemId) return;
+    const maxUnits = Number(menuDateOverrideUnits);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(menuDateOverrideDate) ||
+      menuDateOverrideDate < nextIsoDate(0) ||
+      !Number.isInteger(maxUnits) ||
+      maxUnits < 0 ||
+      maxUnits > 100000
+    ) {
+      setMessage(
+        'Dish date override requires today/future YYYY-MM-DD and whole units between 0 and 100000.',
+      );
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await chefSubscriptionApi.putMenuItemDateOverride({
+        menuItemId: menuDateOverrideItemId,
+        serviceDate: menuDateOverrideDate,
+        mealSlotCode: menuDateOverrideSlot,
+        maxSubscriptionUnits: maxUnits,
+        closed: menuDateOverrideClosed,
+        reason: 'Dish date override updated by Chef in Craves mobile',
+      });
+      setCapacity(await chefSubscriptionApi.getCapacity());
+      setMessage(
+        'Dish date override saved. Normal menu availability was not changed.',
+      );
+    } catch {
+      setMessage('Dish date override could not be saved.');
+    } finally {
+      setBusy(false);
+    }
+  }, [
+    busy,
+    menuDateOverrideClosed,
+    menuDateOverrideDate,
+    menuDateOverrideItemId,
+    menuDateOverrideSlot,
+    menuDateOverrideUnits,
+  ]);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <ChefHeader title="Meal Plans" />
@@ -731,6 +841,108 @@ export function ChefSubscriptionPlanScreen() {
             ]}>
             <FilledIcon name="food-check" color={colors.flameRed} />
             <Text style={styles.secondaryWideText}>Save dish subscription limit</Text>
+          </Pressable>
+
+          <View style={styles.capacityDivider} />
+
+          <View style={styles.cardHeader}>
+            <View style={styles.cardHeaderIcon}><FilledIcon name="calendar-edit" color={colors.flameRed} /></View>
+            <View style={styles.cardHeaderCopy}>
+              <Text style={styles.cardTitle}>Date-specific slot override</Text>
+              <Text style={styles.sectionCaption}>Override recurring slot capacity for one service date without changing the weekly rule.</Text>
+            </View>
+          </View>
+
+          {capacity?.dateOverrides.slice(0, 6).map(override => (
+            <View key={override.id} style={styles.capacityRuleRow}>
+              <View style={styles.capacityRuleIcon}><FilledIcon name="calendar" size={18} color={colors.flameRed} /></View>
+              <View style={styles.capacityRuleCopy}>
+                <Text style={styles.capacityRuleTitle}>{override.serviceDate} · {override.mealSlotCode}</Text>
+                <Text style={styles.capacityRuleText}>
+                  {override.closed ? 'Closed' : `${override.subscriptionCapacityUnits}/${override.totalCapacityUnits} subscription/total`} · {override.committedUnits} committed
+                  {override.deficitUnits > 0 ? ` · ${override.deficitUnits} deficit` : ''}
+                </Text>
+              </View>
+            </View>
+          ))}
+
+          <Field label="Service date (YYYY-MM-DD)" value={dateOverrideDate} onChangeText={setDateOverrideDate} placeholder="2026-09-25" />
+          <Text style={styles.fieldLabel}>Meal slot</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.choiceRow}>
+            {MEAL_SLOTS.map(slot => (
+              <Pressable key={slot} onPress={() => setDateOverrideSlot(slot)} style={[styles.choiceChip, dateOverrideSlot === slot && styles.choiceChipSelected]}>
+                <Text style={[styles.choiceChipText, dateOverrideSlot === slot && styles.choiceChipTextSelected]}>{slot.charAt(0) + slot.slice(1).toLowerCase()}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          <View style={styles.twoColumns}>
+            <View style={styles.column}><Field label="Total units" value={dateOverrideTotal} onChangeText={setDateOverrideTotal} placeholder="20" keyboardType="number-pad" /></View>
+            <View style={styles.column}><Field label="Subscription units" value={dateOverrideSubscription} onChangeText={setDateOverrideSubscription} placeholder="10" keyboardType="number-pad" /></View>
+          </View>
+          <View style={styles.switchRow}>
+            <View style={styles.switchCopy}><Text style={styles.fieldLabel}>Close subscription slot on this date</Text><Text style={styles.sectionCaption}>Existing commitments remain protected; this blocks new subscription capacity for the date/slot.</Text></View>
+            <Switch value={dateOverrideClosed} onValueChange={setDateOverrideClosed} thumbColor={colors.white} trackColor={{false: colors.borderStrong, true: colors.flameRed}} />
+          </View>
+          <Pressable disabled={busy || capacity?.adminSalesFrozen} onPress={saveDateOverride} style={[styles.secondaryWide, (busy || capacity?.adminSalesFrozen) && styles.disabled]}>
+            <FilledIcon name="calendar-check" color={colors.flameRed} />
+            <Text style={styles.secondaryWideText}>Save date slot override</Text>
+          </Pressable>
+
+          <View style={styles.capacityDivider} />
+
+          <View style={styles.cardHeader}>
+            <View style={styles.cardHeaderIcon}><FilledIcon name="food-off" color={colors.flameRed} /></View>
+            <View style={styles.cardHeaderCopy}>
+              <Text style={styles.cardTitle}>Date-specific dish override</Text>
+              <Text style={styles.sectionCaption}>Limit or close one dish for subscription demand on one date only. Normal menu availability remains separate.</Text>
+            </View>
+          </View>
+
+          {capacity?.menuItemDateOverrides.slice(0, 6).map(override => {
+            const dish = menu.find(item => item.id === override.menuItemId);
+            return (
+              <View key={override.id} style={styles.capacityRuleRow}>
+                <View style={styles.capacityRuleIcon}><FilledIcon name="food" size={18} color={colors.flameRed} /></View>
+                <View style={styles.capacityRuleCopy}>
+                  <Text numberOfLines={1} style={styles.capacityRuleTitle}>{dish?.itemName ?? `Dish ${override.menuItemId.slice(0, 8)}`} · {override.serviceDate} · {override.mealSlotCode}</Text>
+                  <Text style={styles.capacityRuleText}>
+                    {override.closed ? 'Closed' : `${override.maxSubscriptionUnits} max units`} · {override.committedUnits} committed
+                    {override.deficitUnits > 0 ? ` · ${override.deficitUnits} deficit` : ''}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+
+          <Text style={styles.fieldLabel}>Dish</Text>
+          {availableMenu.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dishRail}>
+              {availableMenu.map(item => (
+                <Pressable key={item.id} onPress={() => setMenuDateOverrideItemId(item.id)} style={[styles.dishChip, menuDateOverrideItemId === item.id && styles.dishChipSelected]}>
+                  <View style={styles.dishIcon}><FilledIcon name="food" size={18} color={colors.flameRed} /></View>
+                  <Text numberOfLines={2} style={styles.dishChipText}>{item.itemName}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : <Text style={styles.helper}>Activate an available menu item before setting a dish date override.</Text>}
+
+          <Field label="Service date (YYYY-MM-DD)" value={menuDateOverrideDate} onChangeText={setMenuDateOverrideDate} placeholder="2026-09-25" />
+          <Text style={styles.fieldLabel}>Meal slot</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.choiceRow}>
+            {MEAL_SLOTS.map(slot => (
+              <Pressable key={slot} onPress={() => setMenuDateOverrideSlot(slot)} style={[styles.choiceChip, menuDateOverrideSlot === slot && styles.choiceChipSelected]}>
+                <Text style={[styles.choiceChipText, menuDateOverrideSlot === slot && styles.choiceChipTextSelected]}>{slot.charAt(0) + slot.slice(1).toLowerCase()}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          <Field label="Maximum subscription units" value={menuDateOverrideUnits} onChangeText={setMenuDateOverrideUnits} placeholder="10" keyboardType="number-pad" />
+          <View style={styles.switchRow}>
+            <View style={styles.switchCopy}><Text style={styles.fieldLabel}>Close this dish for subscriptions on this date</Text><Text style={styles.sectionCaption}>This does not hide or deactivate the dish in the normal menu.</Text></View>
+            <Switch value={menuDateOverrideClosed} onValueChange={setMenuDateOverrideClosed} thumbColor={colors.white} trackColor={{false: colors.borderStrong, true: colors.flameRed}} />
+          </View>
+          <Pressable disabled={busy || capacity?.adminSalesFrozen || !menuDateOverrideItemId} onPress={saveMenuDateOverride} style={[styles.secondaryWide, (busy || capacity?.adminSalesFrozen || !menuDateOverrideItemId) && styles.disabled]}>
+            <FilledIcon name="food-check" color={colors.flameRed} />
+            <Text style={styles.secondaryWideText}>Save dish date override</Text>
           </Pressable>
         </View>
       </ScrollView>

@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    width: '100%',
+    maxWidth: '100%',
   },
   label: {
     flexShrink: 1,

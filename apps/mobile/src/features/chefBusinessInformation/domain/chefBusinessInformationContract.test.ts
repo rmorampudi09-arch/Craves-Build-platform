@@ -17,6 +17,9 @@ describe('Chef Business Information contract model', () => {
     expect(CHEF_BUSINESS_INFORMATION_CAPABILITIES.documentMetadata.availability).toBe(
       'supported',
     );
+    expect(CHEF_BUSINESS_INFORMATION_CAPABILITIES.payoutSetupStatus.availability).toBe(
+      'supported',
+    );
     expect(CHEF_BUSINESS_INFORMATION_CONTRACT_MODEL.status).toBe('partial');
   });
 
@@ -26,7 +29,6 @@ describe('Chef Business Information contract model', () => {
       'documentValidityLifecycle',
       'serviceAreas',
       'cuisines',
-      'payoutSetupStatus',
     ]);
     expect(hasCompleteChefBusinessInformationContract()).toBe(false);
     expect(
@@ -46,6 +48,20 @@ describe('Chef Business Information contract model', () => {
     );
     expect(CHEF_BUSINESS_INFORMATION_SOURCES.chefApplicationRead).toEqual(
       expect.objectContaining({method: 'GET', path: '/api/v1/chef/application'}),
+    );
+    expect(CHEF_BUSINESS_INFORMATION_SOURCES.chefBankOnboardingRead).toEqual(
+      expect.objectContaining({
+        method: 'GET',
+        path: '/api/v1/chef-onboarding/bank',
+        response: 'BankStatus',
+      }),
+    );
+    expect(CHEF_BUSINESS_INFORMATION_SOURCES.chefBankOnboardingWrite).toEqual(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/api/v1/chef-onboarding/bank',
+        request: 'BankSubmission',
+      }),
     );
     expect(CHEF_BUSINESS_INFORMATION_SOURCES.chefProofFileUpload).toEqual(
       expect.objectContaining({

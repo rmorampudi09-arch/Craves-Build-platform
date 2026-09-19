@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Modal,
@@ -212,7 +213,14 @@ function MenuItemCard({
 export function ChefMenuScreen() {
   const navigation = useNavigation<ChefMenuNavigation>();
   const menu = useChefMenuModel();
-  const {availabilityStateByItem, refresh, updateAvailability} = menu;
+  const {
+    availabilityStateByItem,
+    bulkAvailabilityAvailable,
+    bulkAvailabilityPending,
+    refresh,
+    updateAvailability,
+    updateAvailabilityBulk,
+  } = menu;
   const [searchQuery, setSearchQuery] = React.useState('');
   const [debouncedQuery, setDebouncedQuery] = React.useState('');
   const [selectedCategory, setSelectedCategory] = React.useState<string | null>(null);
@@ -242,6 +250,43 @@ export function ChefMenuScreen() {
       ),
     [debouncedQuery, menu.items, selectedCategory, statusFilter],
   );
+  const bulkTargetIds = React.useMemo(
+    () => filteredItems.map(item => item.id),
+    [filteredItems],
+  );
+  const bulkTargetCountValid =
+    bulkTargetIds.length > 0 && bulkTargetIds.length <= 100;
+
+  const confirmBulkAvailability = React.useCallback(
+    (available: boolean) => {
+      if (!bulkTargetCountValid || bulkAvailabilityPending) {
+        return;
+      }
+      Alert.alert(
+        available ? 'Make filtered items available?' : 'Make filtered items unavailable?',
+        `This will update all ${bulkTargetIds.length} filtered menu items in one atomic transaction.`,
+        [
+          {text: 'Cancel', style: 'cancel'},
+          {
+            text: available ? 'Make available' : 'Make unavailable',
+            style: available ? 'default' : 'destructive',
+            onPress: () => {
+              updateAvailabilityBulk(bulkTargetIds, available).catch(
+                () => undefined,
+              );
+            },
+          },
+        ],
+      );
+    },
+    [
+      bulkAvailabilityPending,
+      bulkTargetCountValid,
+      bulkTargetIds,
+      updateAvailabilityBulk,
+    ],
+  );
+
 
   const clearFilters = React.useCallback(() => {
     setSearchQuery('');
@@ -394,6 +439,51 @@ export function ChefMenuScreen() {
           {filteredItems.length} of {menu.items.length}
         </Text>
       </View>
+
+      {bulkAvailabilityAvailable && filteredItems.length > 0 ? (
+        <View style={styles.bulkAvailabilityCard}>
+          <View style={styles.bulkAvailabilityCopy}>
+            <Text style={styles.bulkAvailabilityTitle}>Bulk availability</Text>
+            <Text style={styles.bulkAvailabilityHint}>
+              {bulkTargetCountValid
+                ? `Update all ${filteredItems.length} filtered items atomically.`
+                : 'Narrow the filters to 100 items or fewer before using a bulk update.'}
+            </Text>
+          </View>
+          <View style={styles.bulkAvailabilityActions}>
+            <Pressable
+              accessibilityLabel="Make filtered menu items available"
+              accessibilityRole="button"
+              disabled={!bulkTargetCountValid || bulkAvailabilityPending}
+              onPress={() => confirmBulkAvailability(true)}
+              style={({pressed}) => [
+                styles.bulkAvailableButton,
+                (pressed ||
+                  !bulkTargetCountValid ||
+                  bulkAvailabilityPending) &&
+                  styles.bulkButtonDisabled,
+              ]}>
+              <Text style={styles.bulkAvailableButtonText}>Make available</Text>
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Make filtered menu items unavailable"
+              accessibilityRole="button"
+              disabled={!bulkTargetCountValid || bulkAvailabilityPending}
+              onPress={() => confirmBulkAvailability(false)}
+              style={({pressed}) => [
+                styles.bulkUnavailableButton,
+                (pressed ||
+                  !bulkTargetCountValid ||
+                  bulkAvailabilityPending) &&
+                  styles.bulkButtonDisabled,
+              ]}>
+              <Text style={styles.bulkUnavailableButtonText}>
+                Make unavailable
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 
@@ -628,6 +718,60 @@ const styles = StyleSheet.create({
   categoryChipSelected: {backgroundColor: colors.flameRed, borderColor: colors.flameRed},
   categoryChipText: {color: colors.textPrimary, fontSize: typography.small, fontWeight: fontWeight.semibold},
   categoryChipTextSelected: {color: colors.white},
+  bulkAvailabilityCard: {
+    backgroundColor: colors.white,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    padding: spacing.sm,
+  },
+  bulkAvailabilityCopy: {gap: spacing.xxs},
+  bulkAvailabilityTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
+  },
+  bulkAvailabilityHint: {
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+  },
+  bulkAvailabilityActions: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  bulkAvailableButton: {
+    alignItems: 'center',
+    backgroundColor: colors.flameRed,
+    borderRadius: radius.pill,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: touchTarget.minimum,
+    paddingHorizontal: spacing.sm,
+  },
+  bulkAvailableButtonText: {
+    color: colors.white,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
+  },
+  bulkUnavailableButton: {
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderColor: colors.flameRed,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: touchTarget.minimum,
+    paddingHorizontal: spacing.sm,
+  },
+  bulkUnavailableButtonText: {
+    color: colors.flameRedAccessible,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
+  },
+  bulkButtonDisabled: {opacity: 0.45},
   resultsHeader: {
     alignItems: 'center',
     flexDirection: 'row',

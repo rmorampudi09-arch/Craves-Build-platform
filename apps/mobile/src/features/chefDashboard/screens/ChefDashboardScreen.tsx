@@ -467,7 +467,7 @@ export function ChefDashboardScreen() {
               <Pressable
                 accessibilityLabel="Retry recent reviews"
                 accessibilityRole="button"
-                onPress={() => void reviews.refresh()}
+                onPress={() => { reviews.refresh().catch(() => undefined); }}
                 style={({pressed}) => [
                   styles.inlineRetry,
                   pressed && styles.pressed,

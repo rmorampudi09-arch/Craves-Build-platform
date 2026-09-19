@@ -2,6 +2,7 @@ import React from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -212,7 +213,7 @@ export function ReferralRewardsScreen() {
           </View>
         </View>
 
-        <ScreenShell.ScrollView
+        <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}>
           {loading && !overview ? (
@@ -415,7 +416,7 @@ export function ReferralRewardsScreen() {
               />
             </View>
           )}
-        </ScreenShell.ScrollView>
+        </ScrollView>
       </View>
     </ScreenShell>
   );

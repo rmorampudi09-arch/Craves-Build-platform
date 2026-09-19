@@ -18,6 +18,7 @@ import {
 import {Icon} from '../../../shared/components/Icon';
 import {ChefHeader} from '../../chefShell/components/ChefHeader';
 import {ChefEarningsLedgerList} from '../components/ChefEarningsLedgerList';
+import {ChefFinanceBalancePanel} from '../components/ChefFinanceBalancePanel';
 import {
   CHEF_PAYOUT_HISTORY_MESSAGES,
   createChefPayoutHistoryBoundaryState,
@@ -29,18 +30,6 @@ type PayoutNavigation = NativeStackNavigationProp<
   ChefProfileStackParamList,
   'ChefPayoutHistory'
 >;
-
-function MetricCard({label, message}: {label: string; message: string}) {
-  return (
-    <View accessibilityLabel={`${label} unavailable. ${message}`} style={styles.metricCard}>
-      <Text style={styles.metricValue}>—</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text numberOfLines={3} style={styles.metricReason}>
-        Unavailable
-      </Text>
-    </View>
-  );
-}
 
 function TabButton({
   label,
@@ -123,7 +112,7 @@ export function ChefPayoutHistoryScreen() {
             Earnings & payouts
           </Text>
           <Text style={styles.subtitle}>
-            Your server-recorded earning ledger is available here. Withdrawable balance, payout destination and withdrawal actions remain hidden until Craves exposes exact Chef-role contracts for them.
+            Review your server-recorded earnings, current payout balance and recent payout requests. Money-moving actions remain separate from this read-only history step.
           </Text>
         </View>
 
@@ -144,66 +133,15 @@ export function ChefPayoutHistoryScreen() {
 
         {viewState.selectedTab === 'overview' ? (
           <>
-            <View accessibilityRole="summary" style={styles.balanceCard}>
-              <View style={styles.balanceHeader}>
-                <View style={styles.balanceIcon}>
-                  <Icon name="analytics" size={iconSize.lg} color={colors.white} />
-                </View>
-                <Text style={styles.balanceEyebrow}>Available balance</Text>
-              </View>
-              <Text style={styles.balanceValue}>—</Text>
-              <Text style={styles.balanceMessage}>
-                {CHEF_PAYOUT_HISTORY_MESSAGES.availableBalance}
-              </Text>
-              <Pressable
-                accessibilityLabel="Withdraw Now unavailable"
-                accessibilityHint={CHEF_PAYOUT_HISTORY_MESSAGES.withdraw}
-                accessibilityRole="button"
-                accessibilityState={{disabled: true}}
-                disabled
-                style={styles.withdrawButton}>
-                <Text style={styles.withdrawButtonText}>Withdraw Now</Text>
-              </Pressable>
-              <Text style={styles.withdrawReason}>
-                Withdrawal is disabled until authoritative balance, eligibility, confirmation, authentication and initiation contracts exist.
-              </Text>
-            </View>
-
-            <View style={styles.metricRow}>
-              <MetricCard
-                label="Earnings"
-                message={CHEF_PAYOUT_HISTORY_MESSAGES.earningsSummary}
-              />
-              <MetricCard
-                label="Paid out"
-                message={CHEF_PAYOUT_HISTORY_MESSAGES.payoutTransactions}
-              />
-              <MetricCard
-                label="Balance"
-                message={CHEF_PAYOUT_HISTORY_MESSAGES.availableBalance}
-              />
-            </View>
-
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeadingRow}>
-                <View style={styles.sectionHeadingCopy}>
-                  <Text style={styles.sectionTitle}>Recent payout</Text>
-                  <Text style={styles.sectionCaption}>Latest settlement</Text>
-                </View>
-                <View style={styles.unavailablePill}>
-                  <Text style={styles.unavailablePillText}>Unavailable</Text>
-                </View>
-              </View>
-              <Text style={styles.sectionMessage}>
-                {CHEF_PAYOUT_HISTORY_MESSAGES.payoutTransactions}
-              </Text>
-            </View>
+            <ChefFinanceBalancePanel />
 
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeadingRow}>
                 <View style={styles.sectionHeadingCopy}>
                   <Text style={styles.sectionTitle}>Payout trend</Text>
-                  <Text style={styles.sectionCaption}>Authoritative payout series only</Text>
+                  <Text style={styles.sectionCaption}>
+                    Authoritative payout series only
+                  </Text>
                 </View>
                 <BoundaryAction
                   label="Date range"
@@ -212,7 +150,11 @@ export function ChefPayoutHistoryScreen() {
                 />
               </View>
               <View accessibilityRole="alert" style={styles.chartUnavailable}>
-                <Icon name="analytics" size={iconSize.xl} color={colors.placeholder} />
+                <Icon
+                  name="analytics"
+                  size={iconSize.xl}
+                  color={colors.placeholder}
+                />
                 <Text style={styles.chartTitle}>Payout trend unavailable</Text>
                 <Text style={styles.chartMessage}>
                   {CHEF_PAYOUT_HISTORY_MESSAGES.payoutSeries}
@@ -230,7 +172,7 @@ export function ChefPayoutHistoryScreen() {
             </View>
             <ChefEarningsLedgerList />
             <Text style={styles.detailBoundaryText}>
-              Settlement batches and provider payout transactions are not exposed to the Chef role yet, so this screen does not infer them from earning rows.
+              This tab shows earning ledger entries. Recent payout requests and their recorded statuses are shown in Earnings Overview.
             </Text>
           </View>
         )}
@@ -244,11 +186,7 @@ export function ChefPayoutHistoryScreen() {
         </View>
 
         <View style={styles.secondaryActions}>
-          <BoundaryAction
-            label="Refresh payout data"
-            message={CHEF_PAYOUT_HISTORY_MESSAGES.source}
-            onExplain={explain}
-          />
+
           <BoundaryAction
             label="Payout help"
             message={`${CHEF_PAYOUT_HISTORY_MESSAGES.source} ${CHEF_PAYOUT_HISTORY_MESSAGES.withdraw}`}

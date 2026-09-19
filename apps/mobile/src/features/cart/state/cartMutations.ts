@@ -321,3 +321,24 @@ export function removeCartItem(command: RemoveCartItemCommand): CartMutationThun
     });
   };
 }
+
+
+/** Clear only the exact cart snapshot the customer reviewed. */
+export function clearCart(command: {expectedSnapshot: CartSnapshot}): CartMutationThunk {
+  return async (dispatch, getState) => {
+    const key = 'cart:clear';
+    if (isPendingMutation(getState(), key)) {
+      return {status: 'SKIPPED_DUPLICATE'};
+    }
+    const requestId = nextRequestId();
+    dispatch(cartActions.mutationStarted({key, requestId, scope: 'CART'}));
+    return enqueueMutation(async () => {
+      try {
+        const snapshot = await cartApi.clearIfUnchanged(command.expectedSnapshot);
+        return markMutationSucceeded(dispatch, key, requestId, snapshot);
+      } catch (error) {
+        return markMutationFailed(dispatch, key, requestId, toAppApiError(error));
+      }
+    });
+  };
+}

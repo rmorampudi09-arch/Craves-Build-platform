@@ -75,9 +75,18 @@ describe('P31 home feed API', () => {
         radiusMeters: 10000,
         page: 0,
         size: 20,
+        query: null,
+        category: null,
+        foodType: null,
+        minPrice: null,
+        maxPrice: null,
+        maxPreparationTimeMinutes: null,
+        spiceLevel: null,
+        sort: 'DISTANCE_ASC',
       },
       signal: undefined,
-      dedupeKey: 'home-nearby-dishes:17.4483:78.3915:10000:0:20',
+      dedupeKey:
+        'home-nearby-dishes:17.4483:78.3915:10000:0:20::::::::DISTANCE_ASC',
     });
     expect(result.menuItems[0].kitchenLatitude).toBeNull();
     expect(result.menuItems[0].kitchenLongitude).toBeNull();

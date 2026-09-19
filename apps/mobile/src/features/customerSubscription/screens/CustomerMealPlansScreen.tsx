@@ -38,6 +38,7 @@ import {
   type CustomerSubscriptionOccurrence,
   type PublicPlanSchedule,
   type PublicSubscriptionPlan,
+  type PublicSubscriptionPolicy,
 } from '../api/customerSubscriptionApi';
 
 type Navigation = NativeStackNavigationProp<CustomerProfileStackParamList>;
@@ -100,6 +101,43 @@ function addressLabel(address: CustomerAddress): string {
   return [address.addressLine1, address.areaName, address.city].filter(Boolean).join(', ');
 }
 
+function policyTiming(value: number | null, mode: 'cutoff' | 'lead'): string {
+  if (value === null) return 'No published time limit';
+  if (value === 0) return mode === 'cutoff' ? 'Allowed up to service time' : 'No minimum lead time';
+  if (value % 1440 === 0) return `${value / 1440} day${value === 1440 ? '' : 's'} ${mode === 'cutoff' ? 'before service' : 'lead time'}`;
+  if (value % 60 === 0) return `${value / 60} hour${value === 60 ? '' : 's'} ${mode === 'cutoff' ? 'before service' : 'lead time'}`;
+  return `${value} minutes ${mode === 'cutoff' ? 'before service' : 'lead time'}`;
+}
+
+function policyRows(policy: PublicSubscriptionPolicy) {
+  return [
+    {
+      key: 'pause',
+      label: 'Pause',
+      enabled: policy.customerPauseEnabled,
+      timing: policyTiming(policy.pauseCutoffMinutes, 'cutoff'),
+    },
+    {
+      key: 'resume',
+      label: 'Resume',
+      enabled: policy.customerResumeEnabled,
+      timing: policyTiming(policy.resumeLeadMinutes, 'lead'),
+    },
+    {
+      key: 'skip',
+      label: 'Skip meal',
+      enabled: policy.customerSkipEnabled,
+      timing: policyTiming(policy.skipCutoffMinutes, 'cutoff'),
+    },
+    {
+      key: 'cancel',
+      label: 'Cancel',
+      enabled: policy.customerCancelEnabled,
+      timing: policyTiming(policy.cancelCutoffMinutes, 'cutoff'),
+    },
+  ] as const;
+}
+
 function PlanCard({plan, onPress}: {plan: PublicSubscriptionPlan; onPress: () => void}) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={({pressed}) => [styles.planCard, pressed && styles.pressed]}>
@@ -132,6 +170,8 @@ export function CustomerMealPlansScreen() {
   const [selectedCategory, setSelectedCategory] = React.useState<Category>('ALL');
   const [selectedPlan, setSelectedPlan] = React.useState<PublicSubscriptionPlan | null>(null);
   const [schedule, setSchedule] = React.useState<PublicPlanSchedule | null>(null);
+  const [selectedPolicy, setSelectedPolicy] = React.useState<PublicSubscriptionPolicy | null>(null);
+  const [policyLoading, setPolicyLoading] = React.useState(false);
   const [selectedSubscription, setSelectedSubscription] = React.useState<CustomerSubscription | null>(null);
   const [occurrences, setOccurrences] = React.useState<CustomerSubscriptionOccurrence[]>([]);
   const [myPlansVisible, setMyPlansVisible] = React.useState(false);
@@ -177,25 +217,40 @@ export function CustomerMealPlansScreen() {
   React.useEffect(() => {
     if (!selectedPlan) {
       setSchedule(null);
+      setSelectedPolicy(null);
+      setPolicyLoading(false);
       return;
     }
     const controller = new AbortController();
+    setPolicyLoading(true);
     customerSubscriptionApi
       .getPlanSchedule(selectedPlan.id, controller.signal)
       .then(setSchedule)
       .catch(() => setSchedule(null));
+    customerSubscriptionApi
+      .getPlanPolicy(selectedPlan.id, controller.signal)
+      .then(setSelectedPolicy)
+      .catch(() => setSelectedPolicy(null))
+      .finally(() => setPolicyLoading(false));
     return () => controller.abort();
   }, [selectedPlan]);
 
   const openSubscription = React.useCallback(async (subscription: CustomerSubscription) => {
     setSelectedSubscription(subscription);
     setOccurrences([]);
-    try {
-      const next = await customerSubscriptionApi.listOccurrences(subscription.id);
-      setOccurrences(next);
-    } catch {
-      setOccurrences([]);
-    }
+    setSelectedPolicy(null);
+    setPolicyLoading(true);
+    const [occurrencesResult, policyResult] = await Promise.allSettled([
+      customerSubscriptionApi.listOccurrences(subscription.id),
+      customerSubscriptionApi.getPlanPolicy(subscription.planId),
+    ]);
+    setOccurrences(
+      occurrencesResult.status === 'fulfilled' ? occurrencesResult.value : [],
+    );
+    setSelectedPolicy(
+      policyResult.status === 'fulfilled' ? policyResult.value : null,
+    );
+    setPolicyLoading(false);
   }, []);
 
   const filteredPlans = React.useMemo(
@@ -227,6 +282,7 @@ export function CustomerMealPlansScreen() {
       setSubscriptions(current => [created, ...current.filter(item => item.id !== created.id)]);
       setSelectedPlan(null);
       setSchedule(null);
+      setSelectedPolicy(null);
       setNotes('');
       Alert.alert('Meal plan started', `Your subscription is ${statusLabel(created.status)}.`);
     } catch {
@@ -428,6 +484,28 @@ export function CustomerMealPlansScreen() {
                   </View>
                 )) : <Text style={styles.helperText}>Schedule details are not published for this plan yet.</Text>}
 
+                <Text style={styles.sectionTitle}>Plan rules</Text>
+                {policyLoading ? (
+                  <View style={styles.policyCard}><ActivityIndicator color={colors.flameRed} /><Text style={styles.helperText}>Loading plan rules…</Text></View>
+                ) : selectedPolicy ? (
+                  <View style={styles.policyCard}>
+                    {policyRows(selectedPolicy).map(rule => (
+                      <View key={rule.key} style={styles.policyRow}>
+                        <View style={styles.policyCopy}>
+                          <Text style={styles.policyTitle}>{rule.label}</Text>
+                          <Text style={styles.policyText}>{rule.enabled ? rule.timing : 'Not offered by this plan'}</Text>
+                        </View>
+                        <FilledIcon name={rule.enabled ? 'check-circle' : 'minus-circle'} size={20} color={rule.enabled ? colors.success : colors.textSecondary} />
+                      </View>
+                    ))}
+                    {selectedPolicy.holidayPolicyReference ? <Text style={styles.policyReference}>Holiday: {selectedPolicy.holidayPolicyReference}</Text> : null}
+                    {selectedPolicy.unusedMealPolicyReference ? <Text style={styles.policyReference}>Unused meals: {selectedPolicy.unusedMealPolicyReference}</Text> : null}
+                    {selectedPolicy.refundPolicyReference ? <Text style={styles.policyReference}>Refund: {selectedPolicy.refundPolicyReference}</Text> : null}
+                  </View>
+                ) : (
+                  <Text style={styles.helperText}>Plan rules could not be verified right now. Server validation still applies.</Text>
+                )}
+
                 <Text style={styles.sectionTitle}>Start date</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateRow}>
                   {Array.from({length: 7}, (_, index) => isoDate(index + 1)).map(date => (
@@ -497,11 +575,28 @@ export function CustomerMealPlansScreen() {
                   <Text style={styles.detailPrice}>{statusLabel(selectedSubscription.status)}</Text>
                   <Text style={styles.detailDescription}>Start {dateLabel(selectedSubscription.startDate)}{selectedSubscription.nextServiceDate ? ` · Next service ${dateLabel(selectedSubscription.nextServiceDate)}` : ''}</Text>
                 </View>
+                <Text style={styles.sectionTitle}>Your plan rules</Text>
+                {policyLoading ? (
+                  <View style={styles.policyCard}><ActivityIndicator color={colors.flameRed} /><Text style={styles.helperText}>Loading plan rules…</Text></View>
+                ) : selectedPolicy ? (
+                  <View style={styles.policyCard}>
+                    {policyRows(selectedPolicy).map(rule => (
+                      <View key={rule.key} style={styles.policyRow}>
+                        <View style={styles.policyCopy}>
+                          <Text style={styles.policyTitle}>{rule.label}</Text>
+                          <Text style={styles.policyText}>{rule.enabled ? rule.timing : 'Not offered by this plan'}</Text>
+                        </View>
+                        <FilledIcon name={rule.enabled ? 'check-circle' : 'minus-circle'} size={20} color={rule.enabled ? colors.success : colors.textSecondary} />
+                      </View>
+                    ))}
+                  </View>
+                ) : <Text style={styles.helperText}>Plan rules could not be verified right now. Server validation still applies.</Text>}
+
                 <View style={styles.actionRow}>
-                  {selectedSubscription.status === 'ACTIVE' ? <Pressable onPress={() => confirmAction('PAUSE', 'Pause meal plan?')} style={styles.secondaryButton}><FilledIcon name="pause" size={18} /><Text style={styles.secondaryButtonText}>Pause</Text></Pressable> : null}
-                  {selectedSubscription.status === 'PAUSED' ? <Pressable onPress={() => confirmAction('RESUME', 'Resume meal plan?')} style={styles.secondaryButton}><FilledIcon name="play" size={18} /><Text style={styles.secondaryButtonText}>Resume</Text></Pressable> : null}
-                  {selectedSubscription.status === 'ACTIVE' && selectedSubscription.nextServiceDate ? <Pressable onPress={() => confirmAction('SKIP', 'Skip next meal date?')} style={styles.secondaryButton}><FilledIcon name="calendar-remove" size={18} /><Text style={styles.secondaryButtonText}>Skip next</Text></Pressable> : null}
-                  {['ACTIVE', 'PAUSED'].includes(selectedSubscription.status) ? <Pressable onPress={() => confirmAction('CANCEL', 'Cancel meal plan?')} style={[styles.secondaryButton, styles.dangerButton]}><FilledIcon name="close-circle" size={18} color={colors.error} /><Text style={styles.dangerButtonText}>Cancel</Text></Pressable> : null}
+                  {selectedSubscription.status === 'ACTIVE' && selectedPolicy?.customerPauseEnabled !== false ? <Pressable onPress={() => confirmAction('PAUSE', 'Pause meal plan?')} style={styles.secondaryButton}><FilledIcon name="pause" size={18} /><Text style={styles.secondaryButtonText}>Pause</Text></Pressable> : null}
+                  {selectedSubscription.status === 'PAUSED' && selectedPolicy?.customerResumeEnabled !== false ? <Pressable onPress={() => confirmAction('RESUME', 'Resume meal plan?')} style={styles.secondaryButton}><FilledIcon name="play" size={18} /><Text style={styles.secondaryButtonText}>Resume</Text></Pressable> : null}
+                  {selectedSubscription.status === 'ACTIVE' && selectedSubscription.nextServiceDate && selectedPolicy?.customerSkipEnabled !== false ? <Pressable onPress={() => confirmAction('SKIP', 'Skip next meal date?')} style={styles.secondaryButton}><FilledIcon name="calendar-remove" size={18} /><Text style={styles.secondaryButtonText}>Skip next</Text></Pressable> : null}
+                  {['ACTIVE', 'PAUSED'].includes(selectedSubscription.status) && selectedPolicy?.customerCancelEnabled !== false ? <Pressable onPress={() => confirmAction('CANCEL', 'Cancel meal plan?')} style={[styles.secondaryButton, styles.dangerButton]}><FilledIcon name="close-circle" size={18} color={colors.error} /><Text style={styles.dangerButtonText}>Cancel</Text></Pressable> : null}
                 </View>
                 <Text style={styles.sectionTitle}>Upcoming & recent meals</Text>
                 {occurrences.length ? occurrences.map(occurrence => (
@@ -621,4 +716,37 @@ const styles = StyleSheet.create({
   secondaryButtonText: {color: colors.espressoBrown, fontSize: typography.small, fontWeight: fontWeight.bold},
   dangerButton: {borderWidth: borderWidth.standard, borderColor: colors.error},
   dangerButtonText: {color: colors.error, fontSize: typography.small, fontWeight: fontWeight.bold},
+  policyCard: {
+    gap: spacing.xs,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceMuted,
+  },
+  policyRow: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderBottomWidth: borderWidth.standard,
+    borderBottomColor: colors.border,
+  },
+  policyCopy: {minWidth: 0, flex: 1},
+  policyTitle: {
+    color: colors.espressoBrown,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
+  },
+  policyText: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+  },
+  policyReference: {
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+    lineHeight: 18,
+  },
+
 });

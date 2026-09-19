@@ -36,7 +36,11 @@ export function useCustomerHeaderState() {
     unreadCount,
     badgeLabel:
       unreadCount > 99 ? '99+' : unreadCount > 0 ? String(unreadCount) : null,
-    notificationStatus: notificationsQuery.status,
+    notificationStatus: notificationsQuery.isPending
+      ? 'pending'
+      : notificationsQuery.isError
+        ? 'error'
+        : 'success',
     openNotifications,
     // Existing CustomerHeader callers use this callback name. P62 changes the
     // bell action from refresh-only to the real Notifications destination.

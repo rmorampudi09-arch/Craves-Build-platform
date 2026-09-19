@@ -20,6 +20,8 @@ export interface RemoveCartItemCommand {
 
 export interface ReorderCartCommand {
   orderId: string;
+  expectedSnapshot?: CartSnapshot;
+  expectedKitchenId?: string;
 }
 
 export type CartMutationOutcome =
@@ -137,7 +139,13 @@ export function reorderCart(command: ReorderCartCommand): CartMutationThunk {
     dispatch(cartActions.mutationStarted({key, requestId, scope: 'CART'}));
     return enqueueMutation(async () => {
       try {
-        const snapshot = await cartApi.reorder(command.orderId);
+        const snapshot = command.expectedSnapshot && command.expectedKitchenId
+          ? await cartApi.reorderIfUnchanged(
+              command.orderId,
+              command.expectedSnapshot,
+              command.expectedKitchenId,
+            )
+          : await cartApi.reorder(command.orderId);
         return markMutationSucceeded(dispatch, key, requestId, snapshot);
       } catch (error) {
         return markMutationFailed(dispatch, key, requestId, toAppApiError(error));

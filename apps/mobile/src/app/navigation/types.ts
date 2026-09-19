@@ -67,6 +67,7 @@ export type CustomerDishDetailStackParamList = {
 export type CustomerOrderDetailStackParamList = {
   CustomerOrderDetail: CustomerOrderRouteParams;
   CustomerOrderTracking: CustomerOrderRouteParams;
+  CustomerOrderReview: CustomerOrderRouteParams;
 };
 
 export type CustomerCartStackParamList = {CustomerCart: undefined};

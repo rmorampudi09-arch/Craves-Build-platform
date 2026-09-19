@@ -33,7 +33,7 @@ test("checkout uses parsed active saved addresses and backend checkout", () => {
 });
 
 test("Razorpay payment is contract validated and backend verified", () => {
-  const payment = source("../components/checkout/RazorpayPayment.tsx");
+  const payment = source("../components/checkout/CheckoutPaymentButton.tsx");
   assert.match(payment, /https:\/\/checkout\.razorpay\.com\/v1\/checkout\.js/);
   assert.match(payment, /parsePaymentSession\(raw\)/);
   assert.match(payment, /parsePaymentStatus\(raw\)/);
@@ -44,5 +44,7 @@ test("Razorpay payment is contract validated and backend verified", () => {
     payment,
     /<(input|textarea)[^>]*(name|id|autoComplete)=[^>]*(card|cvv|upi[-_ ]?pin)/i,
   );
+  assert.match(payment, /amount:\s*payment\.amountPaise/);
+  assert.match(payment, /router\.replace\(\`\/orders\/\$\{orderId\}\`\)/);
   assert.doesNotMatch(payment, /amount\s*:\s*Math\.round\(/);
 });

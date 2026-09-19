@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 export const ANIMATE_COUNT_DURATION_MS = 450;
 
@@ -19,23 +19,26 @@ export function AnimateCount({
   className = "",
   ...props
 }: AnimateCountProps) {
+  const reduceMotion = useReducedMotion();
+  const shouldAnimate = animate && !reduceMotion;
   const [prev, setPrev] = useState<number | null>(null);
   const [displayCount, setDisplayCount] = useState(count);
 
   useEffect(() => {
-    if (animate) setPrev(displayCount);
+    if (shouldAnimate) setPrev(displayCount);
+    else setPrev(null);
     setDisplayCount(count);
     // displayCount intentionally captures the previous rendered value.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [count, animate]);
+  }, [count, shouldAnimate]);
 
   return (
     <span
-      className={`grid place-items-center tabular-nums tracking-tight [&>*]:col-start-1 [&>*]:row-start-1 ${className}`}
+      className={`grid min-w-[2ch] place-items-center tabular-nums tracking-tight [&>*]:col-start-1 [&>*]:row-start-1 ${className}`}
       {...props}
     >
       <AnimatePresence initial={false}>
-        {animate && prev !== null && prev !== displayCount ? (
+        {shouldAnimate && prev !== null && prev !== displayCount ? (
           <motion.span
             key={`exit-${prev}-${displayCount}`}
             aria-hidden
@@ -54,13 +57,17 @@ export function AnimateCount({
       <motion.span
         key={`enter-${displayCount}`}
         initial={
-          animate ? { opacity: 0, filter: "blur(2px)", y: 8 } : false
+          shouldAnimate ? { opacity: 0, filter: "blur(2px)", y: 8 } : false
         }
         animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
-        transition={{
-          duration: ANIMATE_COUNT_DURATION_MS / 1000,
-          ease: EASING,
-        }}
+        transition={
+          shouldAnimate
+            ? {
+                duration: ANIMATE_COUNT_DURATION_MS / 1000,
+                ease: EASING,
+              }
+            : { duration: 0 }
+        }
       >
         {displayCount}
       </motion.span>

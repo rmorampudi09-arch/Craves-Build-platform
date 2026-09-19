@@ -10,7 +10,9 @@ import {
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { CravesCartIcon } from "@/components/home/CravesCartIcon";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
+import { AppleSwitch } from "@/components/ui/AppleSwitch";
 import { rememberReturnRoute, toCustomerReturnRoute } from "@/lib/return-navigation";
+import type { HomeFoodPreference } from "@/lib/home-return-state";
 import type { CravesUser } from "@/services/auth/cravesAuth";
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
@@ -24,9 +26,46 @@ interface BrowseHeaderProps {
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
   onSearchFocus: () => void;
+  foodPreference: HomeFoodPreference;
+  onFoodPreferenceChange: (preference: HomeFoodPreference) => void;
   returnPath?: string;
   onBack?: () => void;
   backLabel?: string;
+}
+
+function FoodPreferenceQuickToggles({
+  value,
+  onChange,
+  className = "",
+}: {
+  value: HomeFoodPreference;
+  onChange: (preference: HomeFoodPreference) => void;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`items-center gap-3 rounded-[1.15rem] bg-[#F1F3F5] px-3 py-2 ${className}`}
+      aria-label="Quick food type filters"
+    >
+      <AppleSwitch
+        checked={value === "veg"}
+        onCheckedChange={(checked) => onChange(checked ? "veg" : "all")}
+        label="Veg"
+        size="sm"
+        tone="neutral"
+        aria-label="Show only vegetarian dishes"
+      />
+      <span className="h-6 w-px bg-[#D7DADF]" aria-hidden="true" />
+      <AppleSwitch
+        checked={value === "non-veg"}
+        onCheckedChange={(checked) => onChange(checked ? "non-veg" : "all")}
+        label="Non Veg"
+        size="sm"
+        tone="accent"
+        aria-label="Show only non vegetarian dishes"
+      />
+    </div>
+  );
 }
 
 export function BrowseHeader({
@@ -38,6 +77,8 @@ export function BrowseHeader({
   searchTerm,
   onSearchTermChange,
   onSearchFocus,
+  foodPreference,
+  onFoodPreferenceChange,
   returnPath = "/home",
   onBack,
   backLabel = "Back to home",
@@ -105,6 +146,12 @@ export function BrowseHeader({
             />
           </label>
 
+          <FoodPreferenceQuickToggles
+            value={foodPreference}
+            onChange={onFoodPreferenceChange}
+            className="hidden xl:flex"
+          />
+
           <div className="ml-auto flex items-center gap-2 lg:ml-0">
             <Link
               to="/profile"
@@ -154,6 +201,12 @@ export function BrowseHeader({
             />
           </label>
         </div>
+
+        <FoodPreferenceQuickToggles
+          value={foodPreference}
+          onChange={onFoodPreferenceChange}
+          className="mb-2 flex w-fit max-w-full xl:hidden"
+        />
 
         <div className="flex min-w-0 items-center justify-between gap-3 pb-2 md:hidden">
           <button

@@ -515,7 +515,7 @@ export function CustomerKitchenProfileScreen() {
                 {reviewLoadError ? (
                   <RecoverableErrorBanner
                     message={reviewLoadError}
-                    onRetry={() => void loadPublicReviews()}
+                    onRetry={() => { loadPublicReviews().catch(() => undefined); }}
                     style={styles.notice}
                   />
                 ) : reviewSummary.reviewCount === 0 ? (

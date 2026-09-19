@@ -86,9 +86,13 @@ describe('chefBusinessInformationApi KYC evidence', () => {
     (httpClient.post as jest.Mock).mockResolvedValue(uploaded);
     const append = jest.fn();
     const formData = {append};
-    const formDataSpy = jest
-      .spyOn(globalThis, 'FormData')
-      .mockImplementation(() => formData as unknown as FormData);
+    const originalFormData = globalThis.FormData;
+    const FormDataMock = jest.fn().mockImplementation(() => formData);
+    Object.defineProperty(globalThis, 'FormData', {
+      configurable: true,
+      writable: true,
+      value: FormDataMock,
+    });
 
     await expect(
       chefBusinessInformationApi.uploadProofFile('GOVERNMENT_ID_FRONT', {
@@ -103,7 +107,7 @@ describe('chefBusinessInformationApi KYC evidence', () => {
       }),
     );
 
-    expect(formDataSpy).toHaveBeenCalledTimes(1);
+    expect(FormDataMock).toHaveBeenCalledTimes(1);
     expect(append).toHaveBeenNthCalledWith(
       1,
       'documentType',
@@ -120,7 +124,11 @@ describe('chefBusinessInformationApi KYC evidence', () => {
       {signal: undefined},
     );
 
-    formDataSpy.mockRestore();
+    Object.defineProperty(globalThis, 'FormData', {
+      configurable: true,
+      writable: true,
+      value: originalFormData,
+    });
   });
 
   it('does not allow legacy document types through the upload API', async () => {

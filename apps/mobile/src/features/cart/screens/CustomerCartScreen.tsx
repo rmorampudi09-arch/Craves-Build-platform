@@ -53,6 +53,12 @@ import {
 import {paymentRecoveryCoordinator} from '../../payment/domain/paymentRecoveryCoordinator';
 import {razorpayGateway} from '../../payment/gateway/razorpayGateway';
 import {pendingPaymentAttemptStore} from '../../payment/storage/pendingPaymentAttemptStore';
+import {cartApi} from '../api/cartApi';
+import {
+  CART_PREFLIGHT_AVAILABLE,
+  cartPreflightApi,
+  cartPreflightMatchesSnapshot,
+} from '../api/cartPreflightApi';
 import {
   checkCartServiceability,
   type CartDiscoveryDish,
@@ -81,6 +87,7 @@ import {
 import {isDefinitiveCartRejection} from '../domain/cartWriteRejection';
 import {refreshCartSnapshot} from '../state/cartRefresh';
 import {selectCartScreenModel} from '../state/cartSelectors';
+import {cartActions} from '../state/cartSlice';
 import {formatCartMoney} from '../viewCartOverlayModel';
 
 const DELIVERY_RADIUS_KM = 10;
@@ -612,6 +619,40 @@ export function CustomerCartScreen() {
       }
 
       if (!checkout || checkout.status !== 'PAYMENT_PENDING') {
+        if (CART_PREFLIGHT_AVAILABLE) {
+          if (!cartSnapshot) {
+            setInteractionError(
+              'Refresh your cart before starting checkout.',
+            );
+            return;
+          }
+
+          const preflight = await cartPreflightApi.inspect();
+          if (!cartPreflightMatchesSnapshot(preflight, cartSnapshot)) {
+            await refreshCart();
+            setInteractionError(
+              'Your cart changed while you were reviewing it. Check the refreshed cart before checkout.',
+            );
+            return;
+          }
+
+          if (!preflight.readyForCurrentCheckoutValidation) {
+            setInteractionError(
+              'One or more cart items cannot be checked out right now. Review your cart before continuing.',
+            );
+            return;
+          }
+
+          if (preflight.hasReviewChanges) {
+            const reconciled = await cartApi.validate();
+            dispatch(cartActions.snapshotAccepted(reconciled));
+            setInteractionError(
+              'Some cart details changed since you added them. We refreshed the latest item and price details—review them before checkout.',
+            );
+            return;
+          }
+        }
+
         checkout = await checkoutApi.createSession({deliveryAddressId: addressId});
         activeCheckoutRef.current = checkout;
       }
@@ -709,7 +750,9 @@ export function CustomerCartScreen() {
     }
   }, [
     authPhone,
+    cartSnapshot,
     checkoutBusy,
+    dispatch,
     header.selectedLocation,
     model,
     openOrderConfirmation,

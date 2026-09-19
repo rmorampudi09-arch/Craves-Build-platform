@@ -12,6 +12,8 @@ export const CHEF_EARNINGS_DEFAULT_LIMIT = 100;
 export const CHEF_EARNINGS_MAX_LIMIT = 200;
 export const CHEF_FINANCE_BALANCE_ROUTE =
   '/api/v1/chef/finance/balance' as const;
+export const CHEF_WITHDRAWALS_ROUTE =
+  '/api/v1/chef/finance/withdrawals' as const;
 
 export type ChefPayoutMode = 'MANUAL' | 'AUTOMATIC';
 export type ChefPayoutChannel = 'RAZORPAYX' | 'CRAVES_MANUAL';
@@ -49,6 +51,11 @@ export interface ChefAccountingSummary {
   outstanding: ChefMoneyDecimal;
   otherLedgerMovements: ChefMoneyDecimal;
   legacyRecords: number;
+}
+
+export interface ChefWithdrawalRequest {
+  requestKey: string;
+  expectedAvailableAmount: ChefMoneyDecimal;
 }
 
 export interface ChefFinanceBalance {
@@ -251,6 +258,20 @@ function normalizeMoney(
   const [whole, fraction = ''] = unsigned.split('.');
   const normalized = `${whole}.${fraction.padEnd(2, '0')}`;
   return negative ? `-${normalized}` : normalized;
+}
+
+export function buildChefWithdrawalRequest(
+  requestKey: string,
+  expectedAvailableAmount: string,
+): ChefWithdrawalRequest {
+  if (!UUID_PATTERN.test(requestKey)) {
+    throw new Error('CHEF_WITHDRAWAL_INVALID_REQUEST_KEY');
+  }
+  const amount = normalizeMoney(expectedAvailableAmount, false);
+  if (!amount || Number(amount) <= 0) {
+    throw new Error('CHEF_WITHDRAWAL_INVALID_AMOUNT');
+  }
+  return {requestKey, expectedAvailableAmount: amount};
 }
 
 export function parseChefPayoutTransaction(
@@ -537,6 +558,23 @@ export function parseChefEarningLedger(
 
 
 export const chefPayoutApi = {
+  async requestWithdrawal(
+    requestKey: string,
+    expectedAvailableAmount: string,
+    signal?: AbortSignal,
+  ): Promise<ChefPayoutTransaction> {
+    const response = await httpClient.post<unknown>(
+      CHEF_WITHDRAWALS_ROUTE,
+      buildChefWithdrawalRequest(requestKey, expectedAvailableAmount),
+      {signal},
+    );
+    const parsed = parseChefPayoutTransaction(response);
+    if (!parsed) {
+      throw new Error('CHEF_WITHDRAWAL_INVALID_RESPONSE');
+    }
+    return parsed;
+  },
+
   async getBalance(signal?: AbortSignal): Promise<ChefFinanceBalance> {
     const response = await httpClient.get<unknown>(CHEF_FINANCE_BALANCE_ROUTE, {
       signal,

@@ -4,6 +4,7 @@ import {
   CHEF_FINANCE_BALANCE_ROUTE,
   CHEF_WITHDRAWALS_ROUTE,
 } from '../api/chefPayoutApi';
+import {CHEF_BANK_ROUTE} from '../../chefBankOnboarding/api/chefBankOnboardingApi';
 
 export type ChefPayoutCapabilityKey =
   | 'earningsSummary'
@@ -105,8 +106,10 @@ export const CHEF_PAYOUT_CONTRACT_MODEL: ChefPayoutContractModel = {
       CHEF_FINANCE_BALANCE_ROUTE,
       'The balance response includes up to 100 Chef-owned recent payout instructions with server-recorded status, channel and transfer reference.',
     ),
-    bankDestination: unavailable(
-      'No Chef-role payout bank-destination contract exists. Full bank identifiers must never be inferred or exposed; any future contract must provide an approved masked representation.',
+    bankDestination: available(
+      'GET',
+      CHEF_BANK_ROUTE,
+      'Masked Chef-owned bank enrollment status is available here; POST on the same route creates or versions bank details with explicit consent. Full account numbers are never returned.',
     ),
     withdrawEligibility: available(
       'GET',

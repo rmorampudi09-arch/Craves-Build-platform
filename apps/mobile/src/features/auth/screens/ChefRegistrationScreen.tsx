@@ -14,6 +14,7 @@ import {AuthShell} from '../components/AuthShell';
 import {InputField} from '../components/InputField';
 import {PrimaryButton} from '../components/PrimaryButton';
 import {ScreenHeader} from '../components/ScreenHeader';
+import {EmailVerificationPanel} from '../../customerProfile/components/EmailVerificationPanel';
 import {
   chefApplicationToDraft,
   mapChefApplicationSubmissionFailure,
@@ -43,16 +44,25 @@ export function ChefRegistrationScreen({navigation}: Props) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [loadingExisting, setLoadingExisting] = useState(false);
+  const [verifiedEmail, setVerifiedEmail] = useState<string | null>(null);
   const {
     control,
     handleSubmit,
     reset,
     setError,
+    watch,
     formState: {errors, isSubmitting},
   } = useForm<Form>({
     resolver: zodResolver(chefRegistrationSchema),
     defaultValues: emptyDraft,
   });
+
+  const chefEmail = watch('email');
+  const emailVerifiedForSubmission = Boolean(
+    chefEmail.trim() &&
+      verifiedEmail &&
+      verifiedEmail.trim().toLowerCase() === chefEmail.trim().toLowerCase(),
+  );
 
   const isRejectedApplication =
     accountResolution?.flow === 'CHEF_ONBOARDING' &&
@@ -208,6 +218,11 @@ export function ChefRegistrationScreen({navigation}: Props) {
             />
           )}
         />
+        <EmailVerificationPanel
+          email={chefEmail}
+          disabled={isSubmitting || loadingExisting}
+          onVerified={setVerifiedEmail}
+        />
         <Controller
           control={control}
           name="addressLine1"
@@ -296,7 +311,7 @@ export function ChefRegistrationScreen({navigation}: Props) {
         <PrimaryButton
           label={isRejectedApplication ? 'Resubmit for review' : 'Submit for review'}
           loading={isSubmitting}
-          disabled={loadingExisting}
+          disabled={loadingExisting || !emailVerifiedForSubmission}
           onPress={submit}
         />
       </AuthCard>

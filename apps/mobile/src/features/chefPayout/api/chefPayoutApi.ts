@@ -9,7 +9,7 @@ const MONEY_PATTERN = /^-?\d{1,10}(?:\.\d{1,2})?$/;
  * every money field as server-authoritative and never recomputes settlement. */
 export const CHEF_EARNINGS_ROUTE = '/api/v1/chef/earnings' as const;
 export const CHEF_EARNINGS_DEFAULT_LIMIT = 100;
-export const CHEF_EARNINGS_MAX_LIMIT = 500;
+export const CHEF_EARNINGS_MAX_LIMIT = 200;
 
 export type ChefEarningOrderSource = 'ON_DEMAND' | 'SUBSCRIPTION';
 export type ChefEarningStatus =
@@ -28,6 +28,7 @@ export type ChefMoneyDecimal = string;
 export interface ChefEarningLedgerEntry {
   id: string;
   orderId: string;
+  chefIdentityId: string;
   orderSource: ChefEarningOrderSource;
   currency: string;
   grossAmount: ChefMoneyDecimal;
@@ -60,6 +61,34 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+const EARNING_RESPONSE_KEYS = new Set([
+  'id',
+  'orderId',
+  'chefIdentityId',
+  'orderSource',
+  'currency',
+  'grossAmount',
+  'commissionAmount',
+  'taxWithheldAmount',
+  'adjustmentAmount',
+  'netPayable',
+  'allocationReference',
+  'status',
+  'reason',
+  'approvedAt',
+  'reversedAt',
+  'createdAt',
+  'updatedAt',
+]);
+
+function hasOnlyEarningResponseKeys(raw: Record<string, unknown>): boolean {
+  const keys = Object.keys(raw);
+  return (
+    keys.length === EARNING_RESPONSE_KEYS.size &&
+    keys.every(key => EARNING_RESPONSE_KEYS.has(key))
+  );
 }
 
 function requiredString(value: unknown, maxLength: number): string | null {
@@ -125,7 +154,7 @@ export function parseChefEarningLedgerEntry(
   value: unknown,
 ): ChefEarningLedgerEntry | null {
   const raw = asRecord(value);
-  if (!raw) {
+  if (!raw || !hasOnlyEarningResponseKeys(raw)) {
     return null;
   }
 
@@ -181,6 +210,7 @@ export function parseChefEarningLedgerEntry(
   return {
     id,
     orderId,
+    chefIdentityId,
     orderSource,
     currency,
     grossAmount,

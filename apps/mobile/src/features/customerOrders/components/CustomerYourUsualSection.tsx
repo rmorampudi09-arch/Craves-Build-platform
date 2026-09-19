@@ -425,7 +425,9 @@ export function CustomerYourUsualSection() {
                   disabled: Boolean(pendingOrderId) || uncertainReorder || !active,
                 }}
                 disabled={Boolean(pendingOrderId) || uncertainReorder || !active}
-                onPress={() => void runReorder(candidate)}
+                onPress={() => {
+                  runReorder(candidate).catch(() => undefined);
+                }}
                 style={({pressed}) => [styles.orderButton, pressed && styles.pressed]}>
                 {pending ? (
                   <ActivityIndicator size="small" color={colors.white} />

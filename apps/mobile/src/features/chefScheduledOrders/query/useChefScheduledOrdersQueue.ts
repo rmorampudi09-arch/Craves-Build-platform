@@ -20,7 +20,7 @@ export function useChefScheduledOrdersQueue() {
         userId: identityId,
         role: CHEF_ROLE,
         paging: {limit: CHEF_SCHEDULED_ORDERS_PAGE_SIZE},
-        filter: {responseStatus: 'PENDING'},
+        filters: {responseStatus: 'PENDING'},
       })
     : (['craves', 'v1', 'private', DOMAIN, 'signed-out'] as const);
 

@@ -96,6 +96,19 @@ describe('savedCatalogApi', () => {
     expect(resolved.map(item => item.menuItemId)).toEqual(ids);
   });
 
+  it('fails closed if Catalog adds unsupported response fields', async () => {
+    const first = uuid(1);
+    (httpClient.post as jest.Mock).mockResolvedValue({
+      evaluatedAt: '2026-08-21T00:00:00Z',
+      internalTrace: 'must-not-be-accepted',
+      items: [resolvedItem(first)],
+    });
+
+    await expect(resolveSavedCatalogItems([first])).rejects.toThrow(
+      'Saved dish details returned an unsupported response.',
+    );
+  });
+
   it('fails closed if Catalog omits a requested Saved item', async () => {
     const first = uuid(1);
     const second = uuid(2);

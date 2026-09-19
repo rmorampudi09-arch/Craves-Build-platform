@@ -46,7 +46,6 @@ export function useRepeatOrderCatalogPrecheck(
 ) {
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
   const menuItemIds = uniqueVisibleIds(candidates);
-  const keyPart = menuItemIds.join('|');
 
   const query = useQuery({
     queryKey: [
@@ -55,7 +54,7 @@ export function useRepeatOrderCatalogPrecheck(
       'private',
       'repeat-order-catalog-precheck',
       identityId ?? 'signed-out',
-      keyPart,
+      menuItemIds,
     ],
     queryFn: ({signal}) => resolvePublicMenuItems(menuItemIds, signal),
     enabled:

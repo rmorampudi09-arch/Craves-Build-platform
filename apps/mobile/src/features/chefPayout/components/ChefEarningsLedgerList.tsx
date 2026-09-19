@@ -117,7 +117,12 @@ export function ChefEarningsLedgerList() {
           <Text numberOfLines={2} style={styles.reason}>{entry.reason}</Text>
         </View>
       ))}
-      <Pressable accessibilityRole="button" onPress={() => void load()} style={styles.retry}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          load().catch(() => undefined);
+        }}
+        style={styles.retry}>
         <Text style={styles.retryText}>{loading ? 'Refreshing…' : 'Refresh earnings'}</Text>
       </Pressable>
     </View>

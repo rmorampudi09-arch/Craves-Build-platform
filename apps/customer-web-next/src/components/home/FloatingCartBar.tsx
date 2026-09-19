@@ -1,9 +1,9 @@
 import { ArrowRight } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
 
 import { CravesCartIcon } from "@/components/home/CravesCartIcon";
 import { AnimateCount } from "@/components/ui/AnimateCount";
 import { ShinyButton } from "@/registry/magicui/shiny-button";
-import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
 interface FloatingCartBarProps {
   itemCount: number;
@@ -26,14 +26,19 @@ export function FloatingCartBar({
   currency,
   onViewCart,
 }: FloatingCartBarProps) {
+  const reduceMotion = useReducedMotion();
+
   if (itemCount <= 0) return null;
 
   return (
-    <div
-      className={`${styles.cartEnter} pointer-events-none fixed inset-x-0 bottom-3 z-50 px-3 sm:bottom-6 sm:px-4 md:px-6`}
+    <motion.div
+      initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+      className="pointer-events-none fixed inset-x-0 bottom-3 z-50 px-3 sm:bottom-6 sm:px-4 md:px-6"
     >
       <div
-        className={`${styles.floatingCartButton} pointer-events-auto relative isolate mx-auto flex min-h-[4.25rem] w-full max-w-[58rem] items-center gap-2.5 overflow-hidden rounded-[1.4rem] bg-white/50 px-3 text-left backdrop-blur-[10px] sm:min-h-[4.7rem] sm:gap-4 sm:rounded-[1.7rem] sm:px-6`}
+        className="pointer-events-auto relative isolate mx-auto flex min-h-[4.25rem] w-full max-w-[58rem] items-center gap-2.5 overflow-hidden rounded-[1.4rem] border border-white/90 bg-white/50 px-3 text-left shadow-[0_22px_60px_rgba(26,26,26,0.16),0_3px_12px_rgba(26,26,26,0.07),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[10px] transition-[background-color,border-color,box-shadow] duration-200 hover:border-[#F62E18]/20 hover:bg-white/[0.58] hover:shadow-[0_24px_60px_rgba(26,26,26,0.16),0_10px_30px_rgba(246,46,24,0.09),0_0_0_1px_rgba(246,46,24,0.06),inset_0_1px_0_rgba(255,255,255,0.95)] sm:min-h-[4.7rem] sm:gap-4 sm:rounded-[1.7rem] sm:px-6"
       >
         <span
           aria-hidden="true"
@@ -83,7 +88,7 @@ export function FloatingCartBar({
           />
         </ShinyButton>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

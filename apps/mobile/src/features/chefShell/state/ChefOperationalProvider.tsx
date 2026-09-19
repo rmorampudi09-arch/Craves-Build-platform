@@ -1,8 +1,18 @@
 import React from 'react';
 import {AppState, type AppStateStatus} from 'react-native';
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
+import {
+  CHEF_NOTIFICATION_INBOX_V2_AVAILABLE,
+  CHEF_NOTIFICATION_PAGE_SIZE,
+  chefNotificationInboxApi,
+} from '../api/chefNotificationInboxApi';
 import {
   chefOperationalApi,
   type ChefOperationalNotice,
@@ -65,6 +75,12 @@ interface ChefOperationalContextValue {
   notificationsStatus: 'pending' | 'error' | 'success';
   isRefreshing: boolean;
   markingNoticeId: string | null;
+  markingAllNotificationsRead: boolean;
+  notificationV2Available: boolean;
+  notificationsHasNextPage: boolean;
+  isFetchingNextNotificationsPage: boolean;
+  fetchNextNotifications: () => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
   refresh: () => Promise<void>;
   reconcileOrderStatus: (
     orderId: string,
@@ -106,6 +122,39 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
         : (['craves', 'v1', 'private', 'chef-notifications', 'signed-out'] as const),
     [identityId],
   );
+  const notificationsV2QueryKey = React.useMemo(
+    () =>
+      identityId
+        ? createPrivateQueryKey('chef-notifications-v2', {
+            userId: identityId,
+            role: CHEF_ROLE,
+            paging: {limit: CHEF_NOTIFICATION_PAGE_SIZE},
+          })
+        : ([
+            'craves',
+            'v1',
+            'private',
+            'chef-notifications-v2',
+            'signed-out',
+          ] as const),
+    [identityId],
+  );
+  const notificationCountQueryKey = React.useMemo(
+    () =>
+      identityId
+        ? createPrivateQueryKey('chef-notification-unread-count', {
+            userId: identityId,
+            role: CHEF_ROLE,
+          })
+        : ([
+            'craves',
+            'v1',
+            'private',
+            'chef-notification-unread-count',
+            'signed-out',
+          ] as const),
+    [identityId],
+  );
 
   const ordersQuery = useQuery({
     queryKey: ordersQueryKey,
@@ -125,16 +174,57 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
       }),
     refetchIntervalInBackground: false,
   });
-  const notificationsQuery = useQuery({
+  const legacyNotificationsQuery = useQuery({
     queryKey: notificationsQueryKey,
     queryFn: ({signal}) => chefOperationalApi.listNotifications(signal),
-    enabled: identityId !== null,
+    enabled:
+      identityId !== null && !CHEF_NOTIFICATION_INBOX_V2_AVAILABLE,
     staleTime: 30_000,
+  });
+  const v2NotificationsQuery = useInfiniteQuery({
+    queryKey: notificationsV2QueryKey,
+    queryFn: ({pageParam, signal}) =>
+      chefNotificationInboxApi.page({
+        limit: CHEF_NOTIFICATION_PAGE_SIZE,
+        cursor: pageParam,
+        unreadOnly: false,
+        signal,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: lastPage =>
+      lastPage.hasMore ? lastPage.nextCursor ?? undefined : undefined,
+    enabled:
+      identityId !== null && CHEF_NOTIFICATION_INBOX_V2_AVAILABLE,
+    staleTime: 30_000,
+  });
+  const notificationCountQuery = useQuery({
+    queryKey: notificationCountQueryKey,
+    queryFn: ({signal}) => chefNotificationInboxApi.unreadCount(signal),
+    enabled:
+      identityId !== null && CHEF_NOTIFICATION_INBOX_V2_AVAILABLE,
+    staleTime: 15_000,
   });
 
   const markReadMutation = useMutation({
-    mutationFn: (noticeId: string) => chefOperationalApi.markNotificationRead(noticeId),
+    mutationFn: (noticeId: string) =>
+      CHEF_NOTIFICATION_INBOX_V2_AVAILABLE
+        ? chefNotificationInboxApi.markRead(noticeId)
+        : chefOperationalApi.markNotificationRead(noticeId),
     onSuccess: (_data, noticeId) => {
+      if (CHEF_NOTIFICATION_INBOX_V2_AVAILABLE) {
+        void Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: notificationsV2QueryKey,
+            exact: true,
+          }),
+          queryClient.invalidateQueries({
+            queryKey: notificationCountQueryKey,
+            exact: true,
+          }),
+        ]);
+        return;
+      }
+
       queryClient.setQueryData<ChefOperationalNotice[]>(
         notificationsQueryKey,
         current =>
@@ -147,15 +237,45 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
     },
   });
 
+  const markAllReadMutation = useMutation({
+    mutationFn: () => {
+      if (!CHEF_NOTIFICATION_INBOX_V2_AVAILABLE) {
+        throw new Error('CHEF_NOTIFICATION_INBOX_V2_UNAVAILABLE');
+      }
+      return chefNotificationInboxApi.markAllRead();
+    },
+    onSuccess: () => {
+      void Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: notificationsV2QueryKey,
+          exact: true,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: notificationCountQueryKey,
+          exact: true,
+        }),
+      ]);
+    },
+  });
+
   const orders = React.useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
   const notices = React.useMemo(
-    () => notificationsQuery.data ?? [],
-    [notificationsQuery.data],
+    () =>
+      CHEF_NOTIFICATION_INBOX_V2_AVAILABLE
+        ? v2NotificationsQuery.data?.pages.flatMap(page => page.notices) ?? []
+        : legacyNotificationsQuery.data ?? [],
+    [legacyNotificationsQuery.data, v2NotificationsQuery.data],
   );
-  const counters = React.useMemo(
-    () => deriveChefOperationalCounters(orders, notices),
-    [orders, notices],
-  );
+  const counters = React.useMemo(() => {
+    const base = deriveChefOperationalCounters(orders, notices);
+    return CHEF_NOTIFICATION_INBOX_V2_AVAILABLE
+      ? {
+          ...base,
+          unreadNotifications:
+            notificationCountQuery.data?.unreadCount ?? 0,
+        }
+      : base;
+  }, [notificationCountQuery.data?.unreadCount, notices, orders]);
   const tabCounts = React.useMemo(() => deriveChefOrderTabCounts(orders), [orders]);
 
   React.useEffect(() => {
@@ -229,8 +349,16 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
   );
 
   const refresh = React.useCallback(async () => {
-    await Promise.allSettled([ordersQuery.refetch(), notificationsQuery.refetch()]);
-  }, [notificationsQuery, ordersQuery]);
+    const notificationRefreshes = CHEF_NOTIFICATION_INBOX_V2_AVAILABLE
+      ? [v2NotificationsQuery.refetch(), notificationCountQuery.refetch()]
+      : [legacyNotificationsQuery.refetch()];
+    await Promise.allSettled([ordersQuery.refetch(), ...notificationRefreshes]);
+  }, [
+    legacyNotificationsQuery,
+    notificationCountQuery,
+    ordersQuery,
+    v2NotificationsQuery,
+  ]);
 
   const reconcileOrderStatus = React.useCallback(
     (
@@ -299,9 +427,35 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
       notices,
       orderTabs,
       ordersStatus: ordersQuery.status,
-      notificationsStatus: notificationsQuery.status,
-      isRefreshing: ordersQuery.isFetching || notificationsQuery.isFetching,
-      markingNoticeId: markReadMutation.isPending ? markReadMutation.variables ?? null : null,
+      notificationsStatus: CHEF_NOTIFICATION_INBOX_V2_AVAILABLE
+        ? v2NotificationsQuery.isError || notificationCountQuery.isError
+          ? 'error'
+          : v2NotificationsQuery.isPending || notificationCountQuery.isPending
+            ? 'pending'
+            : 'success'
+        : legacyNotificationsQuery.status,
+      isRefreshing:
+        ordersQuery.isFetching ||
+        (CHEF_NOTIFICATION_INBOX_V2_AVAILABLE
+          ? v2NotificationsQuery.isFetching || notificationCountQuery.isFetching
+          : legacyNotificationsQuery.isFetching),
+      markingNoticeId: markReadMutation.isPending
+        ? markReadMutation.variables ?? null
+        : null,
+      markingAllNotificationsRead: markAllReadMutation.isPending,
+      notificationV2Available: CHEF_NOTIFICATION_INBOX_V2_AVAILABLE,
+      notificationsHasNextPage: CHEF_NOTIFICATION_INBOX_V2_AVAILABLE
+        ? Boolean(v2NotificationsQuery.hasNextPage)
+        : false,
+      isFetchingNextNotificationsPage: CHEF_NOTIFICATION_INBOX_V2_AVAILABLE
+        ? v2NotificationsQuery.isFetchingNextPage
+        : false,
+      fetchNextNotifications: () =>
+        CHEF_NOTIFICATION_INBOX_V2_AVAILABLE
+          ? v2NotificationsQuery.fetchNextPage().then(() => undefined)
+          : Promise.resolve(),
+      markAllNotificationsRead: () =>
+        markAllReadMutation.mutateAsync().then(() => undefined),
       refresh,
       reconcileOrderStatus,
       markNotificationRead: noticeId => {
@@ -313,16 +467,25 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
     [
       counters,
       identityId,
+      legacyNotificationsQuery.isFetching,
+      legacyNotificationsQuery.status,
+      markAllReadMutation,
       markReadMutation,
       notices,
-      notificationsQuery.isFetching,
-      notificationsQuery.status,
+      notificationCountQuery.isError,
+      notificationCountQuery.isFetching,
+      notificationCountQuery.isPending,
       orderTabs,
       orders,
       ordersQuery.isFetching,
       ordersQuery.status,
       reconcileOrderStatus,
       refresh,
+      v2NotificationsQuery.hasNextPage,
+      v2NotificationsQuery.isError,
+      v2NotificationsQuery.isFetching,
+      v2NotificationsQuery.isFetchingNextPage,
+      v2NotificationsQuery.isPending,
     ],
   );
 

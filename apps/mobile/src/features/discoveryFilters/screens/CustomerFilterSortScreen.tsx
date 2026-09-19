@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import {
@@ -36,6 +37,7 @@ import {
   type DiscoveryFilterSnapshot,
   type DiscoveryFilterSurface,
   type DiscoverySortOption,
+  type DiscoverySpiceLevel,
 } from '../state/discoveryFilterSlice';
 
 type FilterSortRouteParams = {
@@ -88,8 +90,22 @@ const SORT_ROWS: readonly SortRowDefinition[] = [
   {
     key: 'price-high',
     label: 'Price: High to Low',
-    description: 'Sort the currently loaded nearby meals by price.',
+    description: 'Sort nearby meals by current Catalog price.',
     value: 'PRICE_HIGH_TO_LOW',
+    supportedOnHome: true,
+  },
+  {
+    key: 'prep-time',
+    label: 'Preparation Time',
+    description: 'Show meals with shorter preparation time first.',
+    value: 'PREPARATION_TIME_ASC',
+    supportedOnHome: true,
+  },
+  {
+    key: 'name',
+    label: 'Name A–Z',
+    description: 'Sort nearby meals alphabetically by item name.',
+    value: 'NAME_ASC',
     supportedOnHome: true,
   },
 ];
@@ -100,11 +116,21 @@ const DIET_ROWS: readonly {value: DiscoveryDietOption; label: string}[] = [
   {value: 'EGG', label: 'Egg'},
 ];
 
+const SPICE_ROWS: readonly {value: DiscoverySpiceLevel; label: string}[] = [
+  {value: 'MILD', label: 'Mild'},
+  {value: 'MEDIUM', label: 'Medium'},
+  {value: 'SPICY', label: 'Spicy'},
+];
+
 function cloneFilters(filters: DiscoveryFilterSnapshot): DiscoveryFilterSnapshot {
   return {
     sort: filters.sort,
     cuisineIds: [...filters.cuisineIds],
     diets: [...filters.diets],
+    minPrice: filters.minPrice,
+    maxPrice: filters.maxPrice,
+    maxPreparationTimeMinutes: filters.maxPreparationTimeMinutes,
+    spiceLevel: filters.spiceLevel,
   };
 }
 
@@ -185,7 +211,40 @@ export function CustomerFilterSortScreen() {
     setDraft(createDefaultDiscoveryFilters());
   };
 
+  const updateOptionalNumber = (
+    field: 'minPrice' | 'maxPrice' | 'maxPreparationTimeMinutes',
+    value: string,
+  ) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setDraft(current => ({...current, [field]: null}));
+      return;
+    }
+    const parsed =
+      field === 'maxPreparationTimeMinutes'
+        ? Number.parseInt(trimmed, 10)
+        : Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return;
+    }
+    if (field === 'maxPreparationTimeMinutes' && parsed === 0) {
+      return;
+    }
+    setDraft(current => ({...current, [field]: parsed}));
+  };
+
   const applyFilters = () => {
+    if (
+      draft.minPrice !== null &&
+      draft.maxPrice !== null &&
+      draft.minPrice > draft.maxPrice
+    ) {
+      Alert.alert(
+        'Check price range',
+        'Minimum price cannot be greater than maximum price.',
+      );
+      return;
+    }
     const criteriaChanged = !areDiscoveryFiltersEqual(draft, applied);
     dispatch(
       discoveryFilterActions.filtersApplied({
@@ -287,6 +346,106 @@ export function CustomerFilterSortScreen() {
           </View>
 
           <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Price range</Text>
+            <Text style={styles.sectionHint}>
+              Optional current Catalog price limits.
+            </Text>
+            {capabilities.supportsPriceRange ? (
+              <View style={styles.inputGrid}>
+                <View style={styles.inputField}>
+                  <Text style={styles.inputLabel}>Minimum</Text>
+                  <TextInput
+                    accessibilityLabel="Minimum meal price"
+                    keyboardType="decimal-pad"
+                    onChangeText={value => updateOptionalNumber('minPrice', value)}
+                    placeholder="No minimum"
+                    style={styles.textInput}
+                    value={draft.minPrice === null ? '' : String(draft.minPrice)}
+                  />
+                </View>
+                <View style={styles.inputField}>
+                  <Text style={styles.inputLabel}>Maximum</Text>
+                  <TextInput
+                    accessibilityLabel="Maximum meal price"
+                    keyboardType="decimal-pad"
+                    onChangeText={value => updateOptionalNumber('maxPrice', value)}
+                    placeholder="No maximum"
+                    style={styles.textInput}
+                    value={draft.maxPrice === null ? '' : String(draft.maxPrice)}
+                  />
+                </View>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Preparation time</Text>
+            <Text style={styles.sectionHint}>
+              Optional maximum preparation time in minutes.
+            </Text>
+            {capabilities.supportsPreparationTimeFilter ? (
+              <TextInput
+                accessibilityLabel="Maximum preparation time in minutes"
+                keyboardType="number-pad"
+                onChangeText={value =>
+                  updateOptionalNumber('maxPreparationTimeMinutes', value)
+                }
+                placeholder="No maximum"
+                style={styles.textInput}
+                value={
+                  draft.maxPreparationTimeMinutes === null
+                    ? ''
+                    : String(draft.maxPreparationTimeMinutes)
+                }
+              />
+            ) : null}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Spice level</Text>
+            <Text style={styles.sectionHint}>
+              Match the current Catalog spice level.
+            </Text>
+            {capabilities.supportsSpiceFilter ? (
+              <View style={styles.chipRow}>
+                <Pressable
+                  accessibilityRole="radio"
+                  accessibilityState={{checked: draft.spiceLevel === null}}
+                  onPress={() =>
+                    setDraft(current => ({...current, spiceLevel: null}))
+                  }
+                  style={[
+                    styles.filterChip,
+                    draft.spiceLevel === null && styles.filterChipSelected,
+                  ]}>
+                  <Text style={styles.filterChipText}>Any</Text>
+                </Pressable>
+                {SPICE_ROWS.map(row => {
+                  const selected = draft.spiceLevel === row.value;
+                  return (
+                    <Pressable
+                      accessibilityRole="radio"
+                      accessibilityState={{checked: selected}}
+                      key={row.value}
+                      onPress={() =>
+                        setDraft(current => ({
+                          ...current,
+                          spiceLevel: row.value,
+                        }))
+                      }
+                      style={[
+                        styles.filterChip,
+                        selected && styles.filterChipSelected,
+                      ]}>
+                      <Text style={styles.filterChipText}>{row.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>Cuisine</Text>
             <Text style={styles.sectionHint}>Choose one or more cuisines.</Text>
             <View style={styles.unavailableCard}>
@@ -337,7 +496,7 @@ export function CustomerFilterSortScreen() {
           <View style={styles.contractNote}>
             <Text style={styles.contractNoteTitle}>Current contract boundary</Text>
             <Text style={styles.contractNoteText}>
-              Price sorting and diet filtering are applied only to loaded Home meal results. Popularity, rating, delivery-time, cuisine facets and result-count preview remain disabled until exact server contracts exist.
+              Home now sends Catalog v2 price, preparation-time, spice, diet and supported sort criteria to the server. Popularity, rating, delivery-time, cuisine facets and result-count preview remain disabled until exact server contracts exist.
             </Text>
           </View>
         </ScrollView>
@@ -424,6 +583,53 @@ const styles = StyleSheet.create({
   sectionHint: {
     color: colors.textSecondary,
     fontSize: typography.small,
+  },
+  inputGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  inputField: {
+    flex: 1,
+    gap: spacing.xxs,
+  },
+  inputLabel: {
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.semibold,
+  },
+  textInput: {
+    minHeight: touchTarget.minimum,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
+    backgroundColor: colors.white,
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    paddingHorizontal: spacing.sm,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  filterChip: {
+    minHeight: touchTarget.minimum,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.pill,
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.md,
+  },
+  filterChipSelected: {
+    borderColor: colors.flameRed,
+    backgroundColor: colors.iconSurface,
+  },
+  filterChipText: {
+    color: colors.espressoBrown,
+    fontSize: typography.small,
+    fontWeight: fontWeight.semibold,
   },
   card: {
     borderWidth: 1,

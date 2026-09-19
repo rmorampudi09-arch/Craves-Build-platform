@@ -47,7 +47,10 @@ export function useChefReviewPreview(): ChefReviewPreviewModel {
     staleTime: 30_000,
   });
 
-  const reviews = listQuery.data?.items ?? [];
+  const reviews = React.useMemo(
+    () => listQuery.data?.items ?? [],
+    [listQuery.data?.items],
+  );
   const kitchenId = React.useMemo(() => {
     if (reviews.length === 0) return null;
     const ids = new Set(reviews.map(review => review.kitchenId));

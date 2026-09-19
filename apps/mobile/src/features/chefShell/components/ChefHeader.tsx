@@ -43,6 +43,12 @@ export function ChefHeader({title}: Props) {
     notificationsStatus,
     isRefreshing,
     markingNoticeId,
+    markingAllNotificationsRead,
+    notificationV2Available,
+    notificationsHasNextPage,
+    isFetchingNextNotificationsPage,
+    fetchNextNotifications,
+    markAllNotificationsRead,
     refresh,
     markNotificationRead,
   } = useChefOperationalState();
@@ -167,13 +173,36 @@ export function ChefHeader({title}: Props) {
                   {counters.unreadNotifications} unread
                 </Text>
               </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Close Chef notifications"
-                onPress={() => setNotificationsVisible(false)}
-                style={({pressed}) => [styles.closeButton, pressed && styles.pressed]}>
-                <Text style={styles.closeText}>Close</Text>
-              </Pressable>
+              <View style={styles.panelHeaderActions}>
+                {notificationV2Available && counters.unreadNotifications > 0 ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Mark all Chef notifications as read"
+                    accessibilityState={{
+                      disabled: markingAllNotificationsRead,
+                      busy: markingAllNotificationsRead,
+                    }}
+                    disabled={markingAllNotificationsRead}
+                    onPress={() => {
+                      markAllNotificationsRead().catch(() => undefined);
+                    }}
+                    style={({pressed}) => [
+                      styles.markAllButton,
+                      (pressed || markingAllNotificationsRead) && styles.pressed,
+                    ]}>
+                    <Text style={styles.markAllText}>
+                      {markingAllNotificationsRead ? 'Saving…' : 'Mark all read'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close Chef notifications"
+                  onPress={() => setNotificationsVisible(false)}
+                  style={({pressed}) => [styles.closeButton, pressed && styles.pressed]}>
+                  <Text style={styles.closeText}>Close</Text>
+                </Pressable>
+              </View>
             </View>
 
             {notificationsStatus === 'pending' && notices.length === 0 ? (
@@ -219,6 +248,32 @@ export function ChefHeader({title}: Props) {
                 contentContainerStyle={styles.notificationList}
                 data={notices}
                 keyExtractor={notice => notice.id}
+                ListFooterComponent={
+                  notificationV2Available && notificationsHasNextPage ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Load older Chef notifications"
+                      accessibilityState={{
+                        disabled: isFetchingNextNotificationsPage,
+                        busy: isFetchingNextNotificationsPage,
+                      }}
+                      disabled={isFetchingNextNotificationsPage}
+                      onPress={() => {
+                        fetchNextNotifications().catch(() => undefined);
+                      }}
+                      style={({pressed}) => [
+                        styles.loadOlderButton,
+                        (pressed || isFetchingNextNotificationsPage) &&
+                          styles.pressed,
+                      ]}>
+                      <Text style={styles.loadOlderText}>
+                        {isFetchingNextNotificationsPage
+                          ? 'Loading…'
+                          : 'Load older notifications'}
+                      </Text>
+                    </Pressable>
+                  ) : null
+                }
                 renderItem={({item}) => (
                   <NotificationRow
                     notice={item}
@@ -359,6 +414,9 @@ const styles = StyleSheet.create({
   },
   panelHeaderCopy: {flex: 1},
   panelSubtitle: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
+  panelHeaderActions: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
+  markAllButton: {minHeight: touchTarget.minimum, justifyContent: 'center', paddingHorizontal: spacing.xs},
+  markAllText: {color: colors.flameRedAccessible, fontSize: typography.small, fontWeight: fontWeight.semibold},
   closeButton: {minHeight: touchTarget.minimum, justifyContent: 'center', paddingHorizontal: spacing.sm},
   closeText: {color: colors.flameRedAccessible, fontSize: typography.body, fontWeight: fontWeight.semibold},
   centerState: {minHeight: 220, alignItems: 'center', justifyContent: 'center', padding: spacing.xl},
@@ -367,6 +425,19 @@ const styles = StyleSheet.create({
   retryButton: {minHeight: touchTarget.minimum, marginTop: spacing.md, justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.flameRedAccessible, paddingHorizontal: spacing.lg},
   retryText: {color: colors.white, fontSize: typography.body, fontWeight: fontWeight.semibold},
   notificationList: {padding: spacing.md, gap: spacing.sm},
+  loadOlderButton: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    justifyContent: 'center',
+    minHeight: touchTarget.minimum,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
+  loadOlderText: {
+    color: colors.flameRedAccessible,
+    fontSize: typography.small,
+    fontWeight: fontWeight.semibold,
+  },
   notificationRow: {borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, backgroundColor: colors.white},
   notificationRowUnread: {backgroundColor: colors.white},
   notificationCopy: {minWidth: 0},

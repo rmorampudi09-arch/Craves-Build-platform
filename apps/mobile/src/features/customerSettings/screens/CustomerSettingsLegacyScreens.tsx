@@ -33,6 +33,7 @@ import {Icon} from '../../../shared/components/Icon';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {firebaseAuth} from '../../auth/firebase/firebaseAuth';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
+import {ReferralRewardsScreen} from '../../referralsV2/screens/ReferralRewardsScreen';
 import {
   CUSTOMER_SETTINGS_CAPABILITY_STATUS,
   hasPasswordChangeErrors,
@@ -387,14 +388,7 @@ export function CustomerSettingsShareScreen() {
 }
 
 export function CustomerSettingsReferralScreen() {
-  return (
-    <ChildScaffold title="Referral" subtitle="Invite and reward status">
-      <CapabilityNotice
-        title="Referral contract unavailable"
-        body="No authenticated referral code, eligibility, reward, or redemption API is present in the approved runtime contract. No referral code is fabricated."
-      />
-    </ChildScaffold>
-  );
+  return <ReferralRewardsScreen />;
 }
 
 export function CustomerSettingsSupportScreen() {

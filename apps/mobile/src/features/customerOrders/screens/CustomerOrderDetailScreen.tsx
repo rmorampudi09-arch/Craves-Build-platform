@@ -37,6 +37,7 @@ import {
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {CustomerChefAvatar} from '../../customerShell/components/CustomerChefAvatar';
+import {CUSTOMER_REVIEWS_AVAILABLE} from '../../reviews/api/customerReviewsApi';
 import {CustomerOrderMenuItemImage} from '../components/CustomerOrderMenuItemImage';
 import {getProductionCustomerOrderMutationDecision} from '../domain/customerOrderActionEligibility';
 import type {
@@ -507,7 +508,7 @@ export function CustomerOrderDetailScreen() {
             </View>
           ) : null}
 
-          {order.status === 'DELIVERED' ? (
+          {CUSTOMER_REVIEWS_AVAILABLE && order.status === 'DELIVERED' ? (
             <View style={styles.reviewCard}>
               <Text style={styles.sectionTitle}>How was your order?</Text>
               <Text style={styles.reviewBody}>

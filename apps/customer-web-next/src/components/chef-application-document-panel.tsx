@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ChefApplicationEvidenceUploader,
+  parseChefEvidenceList,
   type ChefEvidenceMetadata,
 } from "@/lib/chef-application-evidence-contract";
+import { ChefApplicationEvidenceUploader } from "@/components/chef-application-evidence-uploader";
 import { parseChefApplication } from "@/lib/chef-application-contract";
 
 type Loaded = { applicationReady: boolean; locked: boolean; documents: ChefEvidenceMetadata[] };

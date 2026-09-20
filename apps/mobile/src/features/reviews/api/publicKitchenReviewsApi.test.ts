@@ -1,4 +1,4 @@
-import {httpClient} from '../../../core/http/httpClient';
+import {publicApiClient} from '../../../core/http/transport';
 import {
   parsePublicKitchenReview,
   parsePublicKitchenReviewPage,
@@ -6,8 +6,8 @@ import {
   publicKitchenReviewsApi,
 } from './publicKitchenReviewsApi';
 
-jest.mock('../../../core/http/httpClient', () => ({
-  httpClient: {
+jest.mock('../../../core/http/transport', () => ({
+  publicApiClient: {
     get: jest.fn(),
   },
 }));
@@ -111,7 +111,7 @@ describe('publicKitchenReviewsApi contract', () => {
   });
 
   it('reads the exact public review list route and validates kitchen ownership', async () => {
-    (httpClient.get as jest.Mock).mockResolvedValue({
+    (publicApiClient.get as jest.Mock).mockResolvedValue({
       items: [review],
       nextCursor: null,
       hasMore: false,
@@ -125,7 +125,7 @@ describe('publicKitchenReviewsApi contract', () => {
       hasMore: false,
     });
 
-    expect(httpClient.get).toHaveBeenCalledWith(
+    expect(publicApiClient.get).toHaveBeenCalledWith(
       `/api/v1/public/kitchens/${kitchenId}/reviews`,
       {
         signal: undefined,
@@ -134,7 +134,7 @@ describe('publicKitchenReviewsApi contract', () => {
       },
     );
 
-    (httpClient.get as jest.Mock).mockResolvedValue({
+    (publicApiClient.get as jest.Mock).mockResolvedValue({
       items: [
         {
           ...review,
@@ -151,13 +151,13 @@ describe('publicKitchenReviewsApi contract', () => {
   });
 
   it('reads the exact public summary route', async () => {
-    (httpClient.get as jest.Mock).mockResolvedValue(summary);
+    (publicApiClient.get as jest.Mock).mockResolvedValue(summary);
 
     await expect(
       publicKitchenReviewsApi.summary(kitchenId),
     ).resolves.toEqual(summary);
 
-    expect(httpClient.get).toHaveBeenCalledWith(
+    expect(publicApiClient.get).toHaveBeenCalledWith(
       `/api/v1/public/kitchens/${kitchenId}/reviews/summary`,
       {
         signal: undefined,
@@ -175,6 +175,6 @@ describe('publicKitchenReviewsApi contract', () => {
       publicKitchenReviewsApi.list(kitchenId, {limit: 51}),
     ).rejects.toThrow('PUBLIC_KITCHEN_REVIEWS_LIMIT_INVALID');
 
-    expect(httpClient.get).not.toHaveBeenCalled();
+    expect(publicApiClient.get).not.toHaveBeenCalled();
   });
 });

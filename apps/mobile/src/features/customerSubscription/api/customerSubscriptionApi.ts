@@ -94,6 +94,22 @@ export type CustomerSubscriptionOccurrence = z.infer<
   typeof customerSubscriptionOccurrenceSchema
 >;
 
+export const customerSubscriptionSkipSchema = z.object({
+  id: uuid,
+  subscriptionId: uuid,
+  serviceDate: localDate,
+  status: z.string().min(1).max(60),
+  reason: z.string().max(1000).nullable().optional().transform(value => value ?? null),
+  occurrenceId: uuid.nullable().optional().transform(value => value ?? null),
+  createdAt: instant,
+  appliedAt: instant.nullable().optional().transform(value => value ?? null),
+  updatedAt: instant,
+}).strict();
+
+export type CustomerSubscriptionSkip = z.infer<
+  typeof customerSubscriptionSkipSchema
+>;
+
 export interface CreateCustomerSubscriptionRequest {
   planId: string;
   startDate: string;
@@ -263,12 +279,21 @@ export const customerSubscriptionApi = {
     subscriptionId: string,
     serviceDate: string,
     reason?: string,
-  ): Promise<void> {
+  ): Promise<CustomerSubscriptionSkip> {
     requireUuid(subscriptionId, 'Subscription');
     requireDate(serviceDate, 'Service date');
-    await httpClient.post<unknown>(
+    const response = await httpClient.post<unknown>(
       `/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/skips`,
       reason?.trim() ? {serviceDate, reason: reason.trim()} : {serviceDate},
     );
+    const parsed = parseOne(
+      customerSubscriptionSkipSchema,
+      response,
+      'Subscription skip',
+    );
+    if (parsed.subscriptionId !== subscriptionId || parsed.serviceDate !== serviceDate) {
+      throw contractError('Subscription skip');
+    }
+    return parsed;
   },
 };

@@ -22,17 +22,26 @@ test("cart validates with the backend before address selection", () => {
   assert.match(page, /cartCurrency\(\)/);
 });
 
-test("checkout uses parsed active saved addresses and backend checkout", () => {
+test("checkout uses the idempotent backend operation with an exact cart snapshot", () => {
   const page = source("../screens/Checkout/Checkout.tsx");
+  const cartPage = source("../screens/Cart/Cart.tsx");
   assert.match(page, /parseCustomerAddresses\(raw\)/);
   assert.match(page, /filter\(isDeliveryReadyAddress\)/);
-  assert.match(page, /sessionFetch\("\/api\/checkout"/);
+  assert.match(page, /\/api\/checkout\/operations\//);
+  assert.match(page, /checkoutCartSnapshot\(validatedCart\)/);
+  assert.match(page, /parseCheckoutOperationResponse\(raw\)/);
+  assert.match(page, /CHECKOUT_OPERATION_ID_KEY/);
+  assert.match(page, /crypto\.randomUUID\(\)/);
+  assert.match(page, /fetchCheckoutOperation\(storedOperationId\)/);
+  assert.match(page, /fetchCheckout\(operation\.checkoutId\)/);
   assert.match(page, /createAuthoritativeCheckout/);
   assert.match(page, /deliveryAddressId,/);
   assert.match(page, /parseCheckout\(raw\)/);
   assert.match(page, /CHECKOUT_ID_KEY/);
   assert.match(page, /fetchCheckout\(storedCheckoutId\)/);
   assert.match(page, /window\.sessionStorage\.setItem\(CHECKOUT_ID_KEY, prepared\.id\)/);
+  assert.doesNotMatch(page, /sessionFetch\("\/api\/checkout",/);
+  assert.match(cartPage, /removeItem\(CHECKOUT_OPERATION_ID_KEY\)/);
   assert.doesNotMatch(
     page,
     /<AddressEditorFlow[\s\S]{0,320}\baddresses=/,

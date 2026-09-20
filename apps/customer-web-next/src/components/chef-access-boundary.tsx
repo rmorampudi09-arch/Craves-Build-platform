@@ -14,7 +14,6 @@ import {
 } from "@/services/auth/cravesAuth";
 
 type AccessState = "synchronizing" | "ready" | "sign-in" | "not-approved";
-type SignInReason = "signed-out" | "refresh-required";
 
 function hasChefRole(user: CravesUser | null): boolean {
   return Boolean(user?.status === "ACTIVE" && user.roles.some((role) => role.toUpperCase() === "CHEF"));

@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  Camera,
-  Check,
-  CheckCircle2,
-  FileText,
-  ImagePlus,
-  LoaderCircle,
-  ShieldCheck,
-} from "lucide-react";
+import { CheckCircle2, CircleAlert, FileUp, ShieldCheck, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -23,7 +15,8 @@ type EvidenceType =
   | "TAX_ID_CARD";
 
 type ProgressState = {
-  phase: "IDLE" | "UPLOADING" | "DONE" | "ERROR";
+  progress: number;
+  phase: "IDLE" | "UPLOADING" | "SECURING" | "DONE" | "ERROR";
   message: string;
 };
 
@@ -31,329 +24,320 @@ const REQUIREMENTS: Array<{
   type: EvidenceType;
   title: string;
   helper: string;
-  reassurance: string;
   accept: string;
 }> = [
   {
     type: "APPLICANT_PHOTO",
-    title: "Your photo",
-    helper: "Take a clear photo of your face, like a passport photo.",
-    reassurance: "This helps customers know who is cooking their food.",
+    title: "Applicant photograph",
+    helper: "Upload a recent passport-size or clear passport-style portrait. JPG or PNG only.",
     accept: "image/jpeg,image/png",
   },
   {
     type: "GOVERNMENT_ID_FRONT",
-    title: "Your ID — front side",
-    helper: "Front of your Aadhaar card, Driving License, or Voter ID.",
-    reassurance: "We keep your ID private.",
+    title: "Government photo ID — front",
+    helper: "Upload the front side of the government photo ID used for the application. A masked copy is preferred when suitable.",
     accept: "application/pdf,image/jpeg,image/png",
   },
   {
     type: "GOVERNMENT_ID_BACK",
-    title: "Your ID — back side",
-    helper: "Back of the same ID you used on the previous step.",
-    reassurance: "Both sides help us check the same ID.",
+    title: "Government photo ID — back",
+    helper: "Upload the reverse side showing the address/details required for the application.",
     accept: "application/pdf,image/jpeg,image/png",
   },
   {
     type: "TAX_ID_CARD",
-    title: "Your PAN card",
-    helper: "A clear photo of your PAN card so Craves can record payment details correctly.",
-    reassurance: "Your PAN card is kept private.",
+    title: "PAN / tax ID card",
+    helper: "Upload the applicant's PAN/tax-ID card as PDF, JPG or PNG.",
     accept: "application/pdf,image/jpeg,image/png",
   },
 ];
 
-const INITIAL_PROGRESS: ProgressState = { phase: "IDLE", message: "" };
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const INITIAL_PROGRESS: ProgressState = { progress: 0, phase: "IDLE", message: "" };
 
-function parseUploadResponse(value: unknown): ChefEvidenceMetadata | null {
-  return parseChefEvidenceMetadata(value);
+function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function firstTaskIndex(documents: ChefEvidenceMetadata[]): number {
-  const byType = new Map(documents.map((document) => [document.documentType, document]));
-  const correction = REQUIREMENTS.findIndex((item) => {
-    const document = byType.get(item.type);
-    return document && /reject|change|retry|replace/i.test(document.status);
-  });
-  if (correction >= 0) return correction;
-  const missing = REQUIREMENTS.findIndex((item) => !byType.has(item.type));
-  return missing >= 0 ? missing : REQUIREMENTS.length;
+function statusLabel(document: ChefEvidenceMetadata | undefined): string {
+  if (!document) return "Required";
+  if (document.status === "APPROVED") return "Approved ✓";
+  if (document.status === "REJECTED") return "Replacement required";
+  return "Under review";
 }
 
-function allowedFile(type: EvidenceType, file: File): string | null {
-  const imageTypes = new Set(["image/jpeg", "image/png"]);
-  const allowed = type === "APPLICANT_PHOTO"
-    ? imageTypes.has(file.type)
-    : imageTypes.has(file.type) || file.type === "application/pdf";
-  if (!allowed) {
-    return type === "APPLICANT_PHOTO"
-      ? "Please choose a JPG or PNG photo."
-      : "Please choose a JPG, PNG, or PDF file.";
-  }
-  if (file.size > MAX_FILE_BYTES) return "This file is too large. Please choose one under 10 MB.";
-  return null;
+function statusClasses(document: ChefEvidenceMetadata | undefined): string {
+  if (!document) return "bg-slate-50 text-slate-700";
+  if (document.status === "APPROVED") return "bg-emerald-50 text-emerald-800";
+  if (document.status === "REJECTED") return "bg-red-50 text-red-800";
+  return "bg-slate-50 text-primary";
 }
 
 export function ChefApplicationEvidenceUploader({
   applicationReady,
   locked,
   initialDocuments,
-  onComplete,
 }: {
   applicationReady: boolean;
   locked: boolean;
   initialDocuments: ChefEvidenceMetadata[];
-  onComplete?: () => void;
 }) {
   const router = useRouter();
   const [documents, setDocuments] = useState<ChefEvidenceMetadata[]>(initialDocuments);
-  const [activeIndex, setActiveIndex] = useState(() => firstTaskIndex(initialDocuments));
-  const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState("");
-  const [progress, setProgress] = useState<ProgressState>(INITIAL_PROGRESS);
-  const requestRef = useRef<XMLHttpRequest | null>(null);
+  const [files, setFiles] = useState<Partial<Record<EvidenceType, File>>>({});
+  const [progress, setProgress] = useState<Partial<Record<EvidenceType, ProgressState>>>({});
+  const requestRefs = useRef<Partial<Record<EvidenceType, XMLHttpRequest>>>({});
 
   useEffect(() => {
+    const requests = requestRefs.current;
     return () => {
-      const xhr = requestRef.current;
-      requestRef.current = null;
-      if (!xhr) return;
-      xhr.onload = xhr.onerror = xhr.onabort = xhr.ontimeout = null;
-      xhr.upload.onprogress = null;
-      xhr.abort();
+      for (const xhr of Object.values(requests)) {
+        if (!xhr) continue;
+        xhr.onload = xhr.onerror = xhr.onabort = xhr.ontimeout = null;
+        xhr.upload.onprogress = null;
+        xhr.abort();
+      }
     };
   }, []);
 
   const uploadedByType = useMemo(
-    () => new Map(documents.map((document) => [document.documentType, document])),
+    () => new Map(documents.map(document => [document.documentType, document])),
     [documents],
   );
+  const uploadedCount = REQUIREMENTS.filter(item => uploadedByType.has(item.type)).length;
+  const approvedCount = REQUIREMENTS.filter(item => uploadedByType.get(item.type)?.status === "APPROVED").length;
+  const rejectedCount = REQUIREMENTS.filter(item => uploadedByType.get(item.type)?.status === "REJECTED").length;
+  const awaitingReviewCount = REQUIREMENTS.filter(item => uploadedByType.get(item.type)?.status === "UPLOADED").length;
+  const approvalProgress = Math.round((approvedCount / REQUIREMENTS.length) * 100);
+  const incompleteApprovedHistory = locked && approvedCount < REQUIREMENTS.length;
 
-  useEffect(() => {
-    if (!file || !file.type.startsWith("image/")) {
-      setPreviewUrl("");
+  function stateFor(type: EvidenceType): ProgressState {
+    return progress[type] ?? INITIAL_PROGRESS;
+  }
+
+  function setTypeProgress(type: EvidenceType, next: ProgressState) {
+    setProgress(current => ({ ...current, [type]: next }));
+  }
+
+  function chooseFile(type: EvidenceType, file: File | null) {
+    setFiles(current => {
+      const next = { ...current };
+      if (file) next[type] = file;
+      else delete next[type];
+      return next;
+    });
+    setTypeProgress(type, INITIAL_PROGRESS);
+  }
+
+  function upload(type: EvidenceType) {
+    const file = files[type];
+    const existing = uploadedByType.get(type);
+    if (!file) {
+      setTypeProgress(type, { progress: 0, phase: "ERROR", message: "Choose a file first." });
       return;
     }
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
-
-  function uploadFile(
-    requirement: (typeof REQUIREMENTS)[number],
-    nextFile: File,
-  ) {
-    if (!applicationReady || locked) return;
-    const validation = allowedFile(requirement.type, nextFile);
-    if (validation) {
-      setProgress({ phase: "ERROR", message: validation });
+    if (!applicationReady || locked || existing?.status === "APPROVED") return;
+    const accepted = REQUIREMENTS.find(item => item.type === type)?.accept.split(",") ?? [];
+    if (file.size <= 0 || file.size > 10_000_000 || !accepted.includes(file.type)) {
+      setTypeProgress(type, { progress: 0, phase: "ERROR", message: "Choose a supported file up to 10 MB. Photos must be JPG or PNG." });
       return;
     }
 
+    requestRefs.current[type]?.abort();
     const data = new FormData();
-    data.set("documentType", requirement.type);
-    data.set("file", nextFile);
+    data.set("documentType", type);
+    data.set("file", file);
 
     const xhr = new XMLHttpRequest();
-    requestRef.current = xhr;
+    requestRefs.current[type] = xhr;
     xhr.open("POST", "/api/chef/application/proof-files", true);
     xhr.responseType = "json";
     xhr.withCredentials = true;
-    setProgress({ phase: "UPLOADING", message: "Saving this photo securely…" });
+    xhr.timeout = 60_000;
+
+    setTypeProgress(type, { progress: 0, phase: "UPLOADING", message: existing?.status === "REJECTED" ? "Uploading replacement…" : "Starting secure upload…" });
+
+    xhr.upload.onprogress = event => {
+      if (!event.lengthComputable) return;
+      const value = Math.min(100, Math.round((event.loaded / event.total) * 100));
+      setTypeProgress(type, {
+        progress: value,
+        phase: value >= 100 ? "SECURING" : "UPLOADING",
+        message: value >= 100 ? "100% transferred · securing document…" : `Uploading · ${value}%`,
+      });
+    };
 
     xhr.onload = () => {
-      if (requestRef.current === xhr) requestRef.current = null;
       if (xhr.status >= 200 && xhr.status < 300) {
-        const uploaded = parseUploadResponse(xhr.response);
+        const uploaded = parseChefEvidenceMetadata(xhr.response);
         if (!uploaded) {
-          setProgress({ phase: "ERROR", message: "The photo was received, but we couldn’t confirm it. Please try again." });
+          setTypeProgress(type, { progress: 100, phase: "ERROR", message: "Upload completed but the response could not be verified." });
           return;
         }
-        setDocuments((current) => [
-          ...current.filter((document) => document.documentType !== requirement.type),
+        setDocuments(current => [
+          ...current.filter(document => document.documentType !== type),
           uploaded,
         ]);
-        setProgress({ phase: "DONE", message: "Saved securely. You can continue or replace this image." });
+        setFiles(current => {
+          const next = { ...current };
+          delete next[type];
+          return next;
+        });
+        setTypeProgress(type, { progress: 100, phase: "DONE", message: existing?.status === "REJECTED" ? "Replacement uploaded. This document is back under review ✓" : "Uploaded securely. Awaiting document review ✓" });
         router.refresh();
         return;
       }
-      const message = xhr.status === 413
-        ? "This file is too large. Please choose one under 10 MB."
-        : xhr.status === 400
-          ? "We couldn’t use this file. Please choose a clear JPG, PNG, or PDF."
-          : "This photo couldn’t be uploaded. Please try again.";
-      setProgress({ phase: "ERROR", message });
+      const body = xhr.response as { message?: unknown; code?: unknown } | null;
+      setTypeProgress(type, {
+        progress: 0,
+        phase: "ERROR",
+        message: body?.code === "CHEF_DOCUMENT_ALREADY_APPROVED"
+          ? "This document has already been approved and cannot be replaced."
+          : typeof body?.message === "string"
+            ? body.message
+            : "Upload failed. Check the file and try again.",
+      });
     };
-    xhr.onerror = () => {
-      if (requestRef.current === xhr) requestRef.current = null;
-      setProgress({ phase: "ERROR", message: "The connection dropped while saving this photo. Please try again." });
-    };
-    xhr.onabort = () => {
-      if (requestRef.current !== xhr) return;
-      requestRef.current = null;
-      setProgress(INITIAL_PROGRESS);
-    };
+
+    xhr.onerror = () => setTypeProgress(type, { progress: 0, phase: "ERROR", message: "Network error during upload. Try again." });
+    xhr.ontimeout = () => setTypeProgress(type, { progress: 0, phase: "ERROR", message: "We couldn’t confirm this upload in time. Refresh your document history before trying again." });
+    xhr.onabort = () => setTypeProgress(type, { progress: 0, phase: "IDLE", message: "Upload cancelled." });
     xhr.send(data);
   }
 
-  function chooseFile(next: File | null) {
-    const previous = requestRef.current;
-    requestRef.current = null;
-    previous?.abort();
-    setFile(next);
-
-    const requirement = REQUIREMENTS[activeIndex];
-    if (!next || !requirement) {
-      setProgress(INITIAL_PROGRESS);
-      return;
-    }
-    const error = allowedFile(requirement.type, next);
-    if (error) {
-      setProgress({ phase: "ERROR", message: error });
-      return;
-    }
-    uploadFile(requirement, next);
-  }
-
-  function continueForward() {
-    if (activeIndex >= REQUIREMENTS.length) {
-      if (onComplete) onComplete();
-      else router.push("/chef");
-      return;
-    }
-    const nextMissing = REQUIREMENTS.findIndex(
-      (item, index) => index > activeIndex && !uploadedByType.has(item.type),
-    );
-    setFile(null);
-    setProgress(INITIAL_PROGRESS);
-    setActiveIndex(nextMissing >= 0 ? nextMissing : REQUIREMENTS.length);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function goBack() {
-    if (activeIndex <= 0) return;
-    const previous = requestRef.current;
-    requestRef.current = null;
-    previous?.abort();
-    setFile(null);
-    setProgress(INITIAL_PROGRESS);
-    setActiveIndex((current) => Math.max(0, current - 1));
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  if (!applicationReady) {
-    return (
-      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center">
-        <LoaderCircle className="mx-auto h-7 w-7 animate-spin text-[#F62E18]" aria-hidden="true" />
-        <h2 className="mt-4 text-xl font-bold text-[#1A1A1A]">Saving your details first</h2>
-        <p className="mt-2 text-sm text-[#6B6B6B]">Your photo step will open as soon as your details are ready.</p>
-      </section>
-    );
-  }
-
-  if (activeIndex >= REQUIREMENTS.length) {
-    return (
-      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center md:p-10">
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]">
-          <CheckCircle2 className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
-        </span>
-        <p className="mt-6 text-sm font-semibold text-[#F62E18]">Part 2 of 3 · A few photos</p>
-        <h1 className="mt-1 text-3xl font-bold text-[#1A1A1A]">All photos received</h1>
-        <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[#6B6B6B]">Your photo, ID, and PAN card are saved. You don’t need to upload them again unless Craves asks for a clearer copy.</p>
-        <div className="mt-6 grid grid-cols-4 gap-2" aria-hidden="true">
-          {REQUIREMENTS.map((item) => <span key={item.type} className="h-1.5 rounded-full bg-[#F62E18]" />)}
-        </div>
-        <button type="button" onClick={continueForward} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white">Continue</button>
-      </section>
-    );
-  }
-
-  const requirement = REQUIREMENTS[activeIndex]!;
-  const uploaded = uploadedByType.get(requirement.type);
-  const busy = progress.phase === "UPLOADING";
-  const saved = Boolean(uploaded) && (!file || progress.phase === "DONE");
-
   return (
-    <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
-      <div className="flex min-h-11 items-center justify-between gap-3">
-        {activeIndex > 0 ? (
-          <button type="button" onClick={goBack} disabled={busy} className="min-h-11 rounded-full px-2 text-sm font-semibold text-[#1A1A1A] hover:bg-[#F1F3F5] disabled:opacity-50">← Back</button>
-        ) : <span />}
-        <p className="text-sm font-semibold text-[#6B6B6B]">Part 2 of 3 · A few photos</p>
-      </div>
-      <div className="mt-2 grid grid-cols-4 gap-2" aria-hidden="true">
-        {REQUIREMENTS.map((item, index) => (
-          <span key={item.type} className={`h-1.5 rounded-full ${index <= activeIndex || uploadedByType.has(item.type) ? "bg-[#F62E18]" : "bg-[#E5E7EB]"}`} />
-        ))}
-      </div>
-
-      <div className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]">
-        {requirement.type === "APPLICANT_PHOTO" ? <Camera className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /> : <ShieldCheck className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />}
-      </div>
-      <p className="mt-5 text-sm font-semibold text-[#F62E18]">Photo {activeIndex + 1} of 4</p>
-      <h1 className="mt-1 text-3xl font-bold text-[#1A1A1A]">{requirement.title}</h1>
-      <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{requirement.helper}</p>
-
-      <div className="mt-6 overflow-hidden rounded-2xl border border-dashed border-[#E5E7EB] bg-[#F1F3F5]">
-        {previewUrl ? (
-          <img src={previewUrl} alt="Selected preview" className="h-56 w-full bg-white object-contain" />
-        ) : saved ? (
-          <div className="flex min-h-52 flex-col items-center justify-center px-6 text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white"><Check className="h-6 w-6 text-[#F62E18]" aria-hidden="true" /></span>
-            <p className="mt-3 font-semibold text-[#1A1A1A]">Saved</p>
-            <p className="mt-1 max-w-sm text-sm text-[#6B6B6B]">{requirement.reassurance}</p>
-          </div>
-        ) : file?.type === "application/pdf" ? (
-          <div className="flex min-h-52 flex-col items-center justify-center px-6 text-center"><FileText className="h-8 w-8 text-[#F62E18]" aria-hidden="true" /><p className="mt-3 font-semibold text-[#1A1A1A]">{file.name}</p></div>
-        ) : (
-          <label className="flex min-h-52 cursor-pointer flex-col items-center justify-center px-6 text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white"><ImagePlus className="h-6 w-6 text-[#F62E18]" aria-hidden="true" /></span>
-            <p className="mt-3 font-semibold text-[#1A1A1A]">Take a photo or choose one</p>
-            <p className="mt-1 text-sm text-[#6B6B6B]">It saves automatically after you choose it.</p>
-            <input
-              type="file"
-              accept={requirement.accept}
-              capture={requirement.type === "APPLICANT_PHOTO" ? "user" : "environment"}
-              disabled={locked || busy}
-              onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
-              className="sr-only"
-            />
-          </label>
-        )}
-      </div>
-
-      {saved && !locked ? (
-        <label className="mt-3 inline-flex min-h-11 cursor-pointer items-center rounded-full bg-[#F1F3F5] px-4 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">
-          Replace this photo
-          <input type="file" accept={requirement.accept} disabled={busy} onChange={(event) => chooseFile(event.target.files?.[0] ?? null)} className="sr-only" />
-        </label>
-      ) : file && progress.phase === "ERROR" && !locked ? (
-        <label className="mt-3 inline-flex min-h-11 cursor-pointer items-center rounded-full bg-[#F1F3F5] px-4 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">
-          Choose a different photo
-          <input type="file" accept={requirement.accept} disabled={busy} onChange={(event) => chooseFile(event.target.files?.[0] ?? null)} className="sr-only" />
-        </label>
-      ) : null}
-
-      {progress.message ? (
-        <p role={progress.phase === "ERROR" ? "alert" : "status"} className={`mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm ${progress.phase === "ERROR" ? "font-semibold text-[#F62E18]" : "text-[#6B6B6B]"}`}>
-          {progress.message}
-        </p>
-      ) : null}
-
-      {locked && !saved ? (
-        <p className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">Your application is already approved, so these photos can’t be changed here.</p>
-      ) : null}
-
-      {busy ? (
-        <div className="mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F1F3F5] px-6 font-semibold text-[#6B6B6B]" role="status">
-          <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
-          Saving…
+    <section className="rounded-[30px] border border-slate-200 bg-white p-6 text-slate-950 sm:p-8">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-3xl">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Chef application documents</p>
+          <h2 className="mt-2 text-2xl font-bold">Document review status</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            {locked ? "Your application is approved. The available document history is shown below." : "Each file is reviewed independently. If a document needs replacing, your other approved documents stay accepted."}
+          </p>
         </div>
-      ) : saved ? (
-        <button type="button" onClick={continueForward} className="mt-6 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white">Continue</button>
-      ) : null}
+        {!incompleteApprovedHistory && <div className="min-w-[210px] rounded-2xl bg-white p-4">
+          <div className="flex items-center justify-between gap-3 text-sm"><strong>{approvedCount}/4 approved</strong><span>{uploadedCount}/4 uploaded</span></div>
+          <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-200" aria-label={`Document approval progress ${approvalProgress}%`}>
+            <div className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none" style={{ width: `${approvalProgress}%` }} />
+          </div>
+          <p className="mt-2 text-xs text-slate-500">Final Chef approval requires 4/4 document approvals.</p>
+        </div>}
+      </div>
+
+      {!applicationReady && (
+        <div className="mt-5 flex gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+          <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" />
+          <div><strong>Submit your Chef details first.</strong><p className="mt-1">After the application record is created, all four document upload controls become available.</p></div>
+        </div>
+      )}
+
+      {locked && (
+        <div className="mt-5 flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
+          <div><strong>Chef application approved.</strong><p className="mt-1">{incompleteApprovedHistory ? "Your approval is recorded, but your current document history is incomplete. Contact Craves support to review this history. You cannot replace documents here while the application is approved." : "Your approved documents are locked. No further upload is needed here."}</p></div>
+        </div>
+      )}
+
+      {rejectedCount > 0 && !locked && (
+        <div className="mt-5 flex gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-950">
+          <XCircle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div><strong>{rejectedCount} document{rejectedCount === 1 ? " needs" : "s need"} replacement.</strong><p className="mt-1">Replace only the red document{rejectedCount === 1 ? "" : "s"}. Your approved documents remain accepted.</p></div>
+        </div>
+      )}
+
+      <div className="mt-6 space-y-4">
+        {REQUIREMENTS.filter(requirement => !locked || uploadedByType.has(requirement.type)).map(requirement => {
+          const uploaded = uploadedByType.get(requirement.type);
+          const selected = files[requirement.type];
+          const uploadState = stateFor(requirement.type);
+          const busy = uploadState.phase === "UPLOADING" || uploadState.phase === "SECURING";
+          const approved = uploaded?.status === "APPROVED";
+          const rejected = uploaded?.status === "REJECTED";
+          const canReplace = Boolean(applicationReady && !locked && !approved);
+          const displayProgress = uploadState.phase === "IDLE" && uploaded ? 100 : uploadState.progress;
+
+          return (
+            <article key={requirement.type} className={`rounded-2xl border bg-white p-4 sm:p-5 ${rejected ? "border-red-200" : approved ? "border-emerald-200" : "border-slate-200"}`}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex min-w-0 gap-3">
+                  <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${approved ? "bg-emerald-50 text-emerald-700" : rejected ? "bg-red-50 text-red-700" : uploaded ? "bg-slate-50 text-primary" : "bg-slate-50 text-slate-700"}`}>
+                    {approved ? <CheckCircle2 className="h-5 w-5" /> : rejected ? <XCircle className="h-5 w-5" /> : uploaded ? <ShieldCheck className="h-5 w-5" /> : <FileUp className="h-5 w-5" />}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold">{requirement.title} <span className="text-red-600">*</span></h3>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">{requirement.helper}</p>
+                    {uploaded && <p className={`mt-2 break-words text-xs font-semibold ${approved ? "text-emerald-700" : rejected ? "text-red-700" : "text-primary"}`}>{uploaded.originalFileName} · {formatBytes(uploaded.fileSizeBytes)}</p>}
+                    {uploaded?.reviewedAt && <p className="mt-1 text-[11px] text-slate-500">Reviewed {new Date(uploaded.reviewedAt).toLocaleString("en-IN")}</p>}
+                  </div>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${statusClasses(uploaded)}`}>{statusLabel(uploaded)}</span>
+              </div>
+
+              {rejected && (
+                <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-950">
+                  <strong>Why this document was rejected</strong>
+                  <p className="mt-1 leading-6">{uploaded.reviewReason || "Craves requested a replacement for this document."}</p>
+                  <p className="mt-2 text-xs font-semibold">Only this document needs a replacement. Other approved documents stay locked and accepted.</p>
+                </div>
+              )}
+
+              {approved ? (
+                <div className="mt-4 flex items-start gap-3 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+                  <div><strong>Accepted by Craves.</strong><p className="mt-1">No action is required for this document, and normal replacement is disabled.</p></div>
+                </div>
+              ) : !locked ? (
+                <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                  <label className="text-sm font-semibold">
+                    {rejected ? "Choose replacement file" : uploaded ? "Replace before review completes (optional)" : "Choose file"}
+                    <input
+                      type="file"
+                      accept={requirement.accept}
+                      disabled={!canReplace || busy}
+                      onChange={event => chooseFile(requirement.type, event.target.files?.[0] ?? null)}
+                      className="mt-2 block w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm disabled:bg-slate-100"
+                    />
+                    {selected && <span className="mt-1 block text-xs font-normal text-slate-500">Selected: {selected.name} · {formatBytes(selected.size)}</span>}
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!canReplace || busy || !selected}
+                    onClick={() => upload(requirement.type)}
+                    className={`min-h-12 rounded-full px-6 font-bold text-white disabled:opacity-40 ${rejected ? "bg-red-700" : "bg-primary"}`}
+                  >
+                    {busy ? "Uploading…" : rejected ? "Replace rejected document" : uploaded ? "Replace" : "Upload"}
+                  </button>
+                </div>
+              ) : null}
+
+              {(busy || uploadState.phase === "DONE" || uploadState.phase === "ERROR") && (
+                <div className="mt-4" aria-live="polite">
+                  <div className="flex items-center justify-between gap-3 text-xs"><span className={uploadState.phase === "ERROR" ? "font-semibold text-red-700" : "text-slate-600"}>{uploadState.message}</span><strong>{displayProgress}%</strong></div>
+                  <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className={`h-full rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none ${uploadState.phase === "ERROR" ? "bg-red-500" : uploadState.phase === "DONE" ? "bg-emerald-600" : "bg-primary"}`}
+                      style={{ width: `${displayProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+
+      <div className={`mt-5 rounded-2xl p-4 text-sm ${approvedCount === 4 ? "bg-emerald-50 text-emerald-900" : rejectedCount > 0 ? "bg-red-50 text-red-950" : "bg-white text-slate-700"}`}>
+        {locked
+          ? incompleteApprovedHistory ? "Your application approval has not changed. Missing history has not been marked as verified." : "Your application and all four documents are approved."
+          : approvedCount === 4
+          ? "All four required documents are individually approved. Your application can now proceed to the final Chef approval decision."
+          : rejectedCount > 0
+            ? `${rejectedCount} document${rejectedCount === 1 ? "" : "s"} need replacement. ${approvedCount} already-approved document${approvedCount === 1 ? " remains" : "s remain"} accepted.`
+            : uploadedCount < 4
+              ? `${4 - uploadedCount} required document${4 - uploadedCount === 1 ? "" : "s"} still need to be uploaded.`
+              : `${awaitingReviewCount} document${awaitingReviewCount === 1 ? " is" : "s are"} awaiting individual review. Approved documents will be locked as each decision is completed.`}
+      </div>
     </section>
   );
 }

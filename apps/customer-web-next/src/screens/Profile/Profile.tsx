@@ -194,11 +194,11 @@ function ProfileContent() {
         setMessage("Your details are synced with Craves.");
       }
       setLoading(false);
-    })().catch((caught) => {
+    })().catch(() => {
       if (!active) return;
       setError(
-        caught instanceof Error
-          ? caught.message
+        getSession()
+          ? "Your account details are temporarily unavailable. Sign-out controls remain available below."
           : "Your profile could not be loaded.",
       );
       setLoading(false);

@@ -50,7 +50,7 @@ export function TrackingOrderSummaryCard({ order }: { order: CustomerOrder }) {
           <span>{money(order.deliveryFee, order.currency)}</span>
         </p>
         <p className="flex justify-between gap-4 border-t border-[#E5E7EB] pt-4 text-base font-semibold text-[#1A1A1A]">
-          <span>Backend total</span>
+          <span>Total</span>
           <span>{money(order.grandTotal, order.currency)}</span>
         </p>
       </div>

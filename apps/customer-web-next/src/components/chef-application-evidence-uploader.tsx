@@ -134,6 +134,18 @@ export function ChefApplicationEvidenceUploader({
   const [progress, setProgress] = useState<ProgressState>(INITIAL_PROGRESS);
   const requestRef = useRef<XMLHttpRequest | null>(null);
 
+  useEffect(() => {
+    const requests = requestRefs.current;
+    return () => {
+      for (const xhr of Object.values(requests)) {
+        if (!xhr) continue;
+        xhr.onload = xhr.onerror = xhr.onabort = xhr.ontimeout = null;
+        xhr.upload.onprogress = null;
+        xhr.abort();
+      }
+    };
+  }, []);
+
   const uploadedByType = useMemo(
     () => new Map(documents.map((document) => [document.documentType, document])),
     [documents],

@@ -3,6 +3,10 @@ import {httpClient} from '../../../core/http/httpClient';
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// Scheduled-order controllers exist in current main source, but their customer
+// APIM operations are not published yet. Standard checkout remains ASAP-only.
+export const SCHEDULED_ORDERS_AVAILABLE = false;
+
 export const SCHEDULE_PAYMENT_GATES = [
   'PAYMENT_BEFORE_CHEF_CONFIRMATION',
   'PAYMENT_AFTER_ALL_CHEFS_CONFIRM',

@@ -373,6 +373,40 @@ steps:
         MAPS_CLIENT_ID=$(jq -r '[.[]? | select(.name=="AZURE_MAPS_CLIENT_ID") | .value][0] // empty' <<<"$PROD_ENV_JSON")
         MAPS_ENDPOINT=$(jq -r '[.[]? | select(.name=="AZURE_MAPS_ENDPOINT") | .value][0] // empty' <<<"$PROD_ENV_JSON")
 
+        if [[ -n "$MAPS_CLIENT_ID" ]]; then
+          MAPS_ID=$(az maps account list \
+            --subscription "$EXPECTED_SUBSCRIPTION" \
+            --resource-group "$RG" \
+            --query "[?properties.uniqueId=='$MAPS_CLIENT_ID'].id | [0]" \
+            -o tsv \
+            --only-show-errors)
+
+          [[ -n "$MAPS_ID" ]] || {
+            echo "ERROR: Azure Maps account for configured client ID was not found in $RG." >&2
+            exit 2
+          }
+
+          MAPS_READER_COUNT=$(az role assignment list \
+            --subscription "$EXPECTED_SUBSCRIPTION" \
+            --assignee-object-id "$PRINCIPAL_ID" \
+            --scope "$MAPS_ID" \
+            --query "[?roleDefinitionName=='Azure Maps Data Reader'] | length(@)" \
+            -o tsv \
+            --only-show-errors || printf '0')
+
+          if [[ "$MAPS_READER_COUNT" == '0' ]]; then
+            echo 'Granting Azure Maps Data Reader to the isolated test Container App identity.'
+            az role assignment create \
+              --subscription "$EXPECTED_SUBSCRIPTION" \
+              --assignee-object-id "$PRINCIPAL_ID" \
+              --assignee-principal-type ServicePrincipal \
+              --role 'Azure Maps Data Reader' \
+              --scope "$MAPS_ID" \
+              -o none \
+              --only-show-errors
+          fi
+        fi
+
         ENV_ARGS=(
           "CRAVES_API_BASE_URL=$API_BASE_URL"
           'NEXT_PUBLIC_RAZORPAY_MODE=sandbox'

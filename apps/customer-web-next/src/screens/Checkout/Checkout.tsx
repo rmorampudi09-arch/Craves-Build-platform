@@ -230,8 +230,8 @@ export default function CheckoutPage() {
 
       const lastUsedId = window.sessionStorage.getItem(ADDRESS_KEY);
       const preferred =
-        activeAddresses.find((address) => address.id === lastUsedId) ??
         activeAddresses.find((address) => address.isDefault) ??
+        activeAddresses.find((address) => address.id === lastUsedId) ??
         activeAddresses[0];
 
       const storedCheckoutId = window.sessionStorage.getItem(CHECKOUT_ID_KEY);

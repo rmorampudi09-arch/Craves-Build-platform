@@ -188,7 +188,7 @@ export function HomeCategoryRail({
                 className="group flex w-[6.6rem] shrink-0 snap-start flex-col items-center gap-3 !border-0 !bg-transparent p-0 text-center text-[#1A1A1A] !shadow-none outline-none hover:!bg-transparent hover:!shadow-none hover:!transform-none active:!transform-none sm:w-[7.25rem]"
               >
                 <span
-                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center overflow-hidden rounded-full bg-white transition-transform duration-[520ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] group-hover:scale-[1.008] group-focus-visible:ring-2 group-focus-visible:ring-[#1A1A1A]/10 motion-reduce:transform-none sm:h-[7.25rem] sm:w-[7.25rem] ${
+                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center overflow-hidden rounded-full bg-white transition-[transform,box-shadow] duration-[480ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] group-hover:-translate-y-1 group-hover:shadow-[0_10px_24px_rgba(26,26,26,0.10)] group-focus-visible:ring-2 group-focus-visible:ring-[#1A1A1A]/10 motion-reduce:transform-none sm:h-[7.25rem] sm:w-[7.25rem] ${
                     active
                       ? "border border-[#E5E7EB]"
                       : "border border-[#F1F3F5]"
@@ -199,7 +199,7 @@ export function HomeCategoryRail({
                       src={image}
                       alt=""
                       loading="lazy"
-                      className="h-full w-full rounded-full object-cover"
+                      className="pointer-events-none h-full w-full select-none rounded-full object-cover"
                     />
                   ) : (
                     <span className="flex h-[72%] w-[72%] items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">

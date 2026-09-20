@@ -77,23 +77,6 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
     return <Fragment key={scope}>{children}</Fragment>;
   }
 
-  const title =
-    state === "synchronizing"
-      ? "Checking your Chef access…"
-      : state === "not-approved"
-        ? "Chef approval is still required"
-        : signInReason === "refresh-required"
-          ? "One quick verification"
-          : "Sign in to continue";
-  const description =
-    state === "synchronizing"
-      ? "We’re confirming your approved chef access. This usually takes a moment."
-      : state === "not-approved"
-        ? "Your Chef application must be approved before kitchen, menu, order, and earnings tools become available."
-        : signInReason === "refresh-required"
-          ? "We found your Chef access, but your secure session needs to be refreshed before you continue."
-          : "Confirm your Craves mobile number to continue to Chef Mode.";
-
   return (
     <section className="rounded-[30px] border border-border bg-white p-7 text-slate-950">
       <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">
@@ -113,7 +96,7 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
             : "Complete mobile OTP sign-in again so Catalog and Order services receive your current roles."}
         </p>
       )}
-      {state === "sign-in" && (
+      {state === "sign-in" ? (
         <Link
           href="/sign-in?returnTo=/chef"
           className="mt-7 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto"

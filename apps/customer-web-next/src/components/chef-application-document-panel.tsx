@@ -1,17 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ChefApplicationEvidenceUploader } from "@/components/chef-application-evidence-uploader";
 import {
   parseChefEvidenceList,
   type ChefEvidenceMetadata,
 } from "@/lib/chef-application-evidence-contract";
-import { ChefApplicationEvidenceUploader } from "@/components/chef-application-evidence-uploader";
 import { parseChefApplication } from "@/lib/chef-application-contract";
 
 type Loaded = { applicationReady: boolean; locked: boolean; documents: ChefEvidenceMetadata[] };
 class DocumentLoadError extends Error {}
 
-export function ChefApplicationDocumentPanel({ onComplete }: { onComplete?: () => void }) {
+export function ChefApplicationDocumentPanel() {
   const [data, setData] = useState<Loaded | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -71,7 +71,7 @@ export function ChefApplicationDocumentPanel({ onComplete }: { onComplete?: () =
 
   return (
     <>
-      <ChefApplicationEvidenceUploader key={version} applicationReady={data.applicationReady} locked={data.locked} initialDocuments={data.documents} onComplete={onComplete} />
+      <ChefApplicationEvidenceUploader key={version} applicationReady={data.applicationReady} locked={data.locked} initialDocuments={data.documents} />
       <button type="button" onClick={() => void load()} className="min-h-12 rounded-full border border-slate-300 px-5 font-semibold">{data.applicationReady ? "Refresh document history" : "I’ve submitted my details — refresh documents"}</button>
     </>
   );

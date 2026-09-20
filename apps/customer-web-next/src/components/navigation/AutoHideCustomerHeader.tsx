@@ -76,8 +76,8 @@ export function AutoHideCustomerHeader({
       data-header-state={hidden ? "hidden" : "visible"}
       onFocusCapture={() => setHidden(false)}
       className={[
-        "sticky top-0 z-40 transform-gpu will-change-transform",
-        "transition-transform duration-[240ms] ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+        "sticky top-0 z-40",
+        "transition-transform duration-180 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
         "motion-reduce:transition-none",
         hidden ? "-translate-y-full pointer-events-none" : "translate-y-0",
         className,

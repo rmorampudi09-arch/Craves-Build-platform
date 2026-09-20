@@ -9,7 +9,7 @@ interface CravesCartIconProps {
 export function CravesCartIcon({ className = "" }: CravesCartIconProps) {
   return (
     <svg
-      viewBox="0 0 40 40"
+      viewBox="7 8 26 26"
       className={className}
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"

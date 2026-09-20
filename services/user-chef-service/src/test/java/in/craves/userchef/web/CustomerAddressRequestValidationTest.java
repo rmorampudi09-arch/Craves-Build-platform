@@ -25,7 +25,7 @@ class CustomerAddressRequestValidationTest {
     }
 
     @Test
-    void temporarilyAcceptsMissingDistrictForRollingDeploymentCompatibility() {
+    void rejectsMissingDistrict() {
         assertThat(validator.validate(request(
             "Customer Name",
             "Madhapur",
@@ -33,7 +33,9 @@ class CustomerAddressRequestValidationTest {
             "500081",
             new BigDecimal("17.4483"),
             new BigDecimal("78.3915")
-        ))).isEmpty();
+        )))
+            .extracting(violation -> violation.getPropertyPath().toString())
+            .contains("districtName");
     }
 
     @Test
@@ -62,6 +64,52 @@ class CustomerAddressRequestValidationTest {
         )))
             .extracting(violation -> violation.getPropertyPath().toString())
             .contains("areaName");
+    }
+
+    @Test
+    void rejectsMissingLandmark() {
+        CustomerAddressRequest request = new CustomerAddressRequest(
+            AddressLabel.HOME,
+            null,
+            "Customer Name",
+            "+919876543210",
+            "Flat 101, Test Residency",
+            "Road No. 1",
+            null,
+            "Madhapur",
+            "Hyderabad",
+            "Hyderabad",
+            "Telangana",
+            "500081",
+            new BigDecimal("17.4483"),
+            new BigDecimal("78.3915"),
+            true
+        );
+        assertThat(validator.validate(request))
+            .extracting(violation -> violation.getPropertyPath().toString())
+            .contains("landmark");
+    }
+
+    @Test
+    void acceptsNamedOtherAddress() {
+        CustomerAddressRequest request = new CustomerAddressRequest(
+            AddressLabel.OTHER,
+            "Mom's home",
+            "Customer Name",
+            "+919876543210",
+            "Flat 101, Test Residency",
+            "Road No. 1",
+            "Near Metro",
+            "Madhapur",
+            "Hyderabad",
+            "Hyderabad",
+            "Telangana",
+            "500081",
+            new BigDecimal("17.4483"),
+            new BigDecimal("78.3915"),
+            true
+        );
+        assertThat(validator.validate(request)).isEmpty();
     }
 
     @Test
@@ -116,6 +164,7 @@ class CustomerAddressRequestValidationTest {
     ) {
         return new CustomerAddressRequest(
             AddressLabel.HOME,
+            null,
             recipientName,
             "+919876543210",
             "Flat 101, Test Residency",

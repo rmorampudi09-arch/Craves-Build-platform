@@ -3,6 +3,7 @@ export type AddressLabel = "HOME" | "WORK" | "OTHER";
 export type CustomerAddress = {
   id: string;
   addressLabel: AddressLabel;
+  addressName?: string | null;
   recipientName: string | null;
   contactPhoneNumber: string;
   addressLine1: string;
@@ -32,6 +33,7 @@ export type DeliveryReadyAddress = CustomerAddress & {
 
 export type CustomerAddressInput = {
   addressLabel: AddressLabel;
+  addressName?: string | null;
   recipientName: string;
   contactPhoneNumber: string;
   addressLine1: string;
@@ -125,6 +127,7 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
   if (!raw) return null;
 
   const addressLabel = text(raw.addressLabel, 10);
+  const addressName = optionalText(raw.addressName, 80);
   const recipientName = text(raw.recipientName, 160);
   const contactPhoneNumber = text(raw.contactPhoneNumber, 16);
   const addressLine1 = text(raw.addressLine1, 250);
@@ -139,6 +142,7 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
   if (
     !addressLabel
     || !LABELS.has(addressLabel)
+    || (addressLabel === "OTHER" && !addressName)
     || !recipientName
     || !contactPhoneNumber
     || !PHONE.test(contactPhoneNumber)
@@ -157,6 +161,7 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
 
   return {
     addressLabel: addressLabel as AddressLabel,
+    ...(addressName ? { addressName } : {}),
     recipientName,
     contactPhoneNumber,
     addressLine1,
@@ -184,6 +189,7 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
 
   const id = text(raw.id, 64);
   const addressLabel = text(raw.addressLabel, 10);
+  const addressName = optionalText(raw.addressName, 80);
   const recipientName = optionalText(raw.recipientName, 160);
   const contactPhoneNumber = text(raw.contactPhoneNumber, 16);
   const addressLine1 = text(raw.addressLine1, 250);
@@ -231,6 +237,7 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
   return {
     id,
     addressLabel: addressLabel as AddressLabel,
+    ...(addressName ? { addressName } : {}),
     recipientName,
     contactPhoneNumber,
     addressLine1,

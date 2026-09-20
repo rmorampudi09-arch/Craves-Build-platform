@@ -2,6 +2,7 @@ package in.craves.integration.web;
 
 import in.craves.integration.finance.FinanceCalculations;
 import in.craves.integration.finance.FinancePolicy;
+import in.craves.integration.finance.DeliveryTariff;
 import in.craves.integration.finance.FinancePolicyService;
 import in.craves.integration.security.CravesPrincipal;
 import java.util.List;
@@ -18,6 +19,12 @@ public class FinancePolicyController {
     @PostMapping("/policies") public FinancePolicyService.Draft draft(@AuthenticationPrincipal CravesPrincipal actor,@RequestBody FinancePolicyService.DraftRequest request) {return policies.draft(actor,request);}
     @PostMapping("/policies/{id}/activate") public FinancePolicyService.View activate(@AuthenticationPrincipal CravesPrincipal actor,@PathVariable UUID id,@RequestBody FinancePolicyService.ActivateRequest request) {return policies.activate(actor,id,request);}
     public record Preview(FinancePolicy settings,List<FinanceCalculations.MealQuote> occurrences) {}
+    public record DeliveryPreview(DeliveryTariff tariff,String distanceKm,String gstRate) {}
+    @PostMapping("/delivery-preview") public DeliveryTariff.Quote deliveryPreview(@AuthenticationPrincipal CravesPrincipal actor,@RequestBody DeliveryPreview request) {
+        FinancePolicyService.operator(actor);
+        if(request==null || request.tariff()==null) throw new IllegalArgumentException("Complete delivery tariff required");
+        return request.tariff().quote(request.distanceKm(),request.gstRate());
+    }
     @PostMapping("/subscription-preview") public FinanceCalculations.SubscriptionQuote preview(@AuthenticationPrincipal CravesPrincipal actor,@RequestBody Preview request) {
         FinancePolicyService.operator(actor);return FinanceCalculations.subscription(request.occurrences(),request.settings());
     }

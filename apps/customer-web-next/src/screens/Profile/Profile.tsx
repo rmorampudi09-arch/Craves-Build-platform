@@ -107,7 +107,7 @@ export default function ProfilePage() {
       {logoutError && <p role="alert" className="mb-4 text-sm text-contrast-red">{logoutError}</p>}
       <button type="button" onClick={() => void signOut()} disabled={logoutBusy}
         className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-contrast-red bg-white px-4 text-sm font-semibold text-contrast-red transition-colors hover:bg-secondary">
-        <LogOut className="h-4 w-4" aria-hidden="true" />
+        <FaRightFromBracket className="text-base" aria-hidden="true" />
         {logoutBusy ? "Signing out…" : logoutError ? "Retry sign out" : "Sign out"}
       </button>
     </section>}

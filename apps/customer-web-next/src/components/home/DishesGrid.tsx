@@ -66,12 +66,12 @@ function DishSkeleton() {
 function SelectionCircle({ selected }: { selected: boolean }) {
   return (
     <span
-      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-[border-color,box-shadow] duration-200 group-hover:border-[#F62E18] group-hover:shadow-[0_0_0_3px_rgba(246,46,24,0.10)] ${
-        selected ? "border-[#F62E18]" : "border-[#6B6B6B]"
+      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-200 group-hover:border-[#6B6B6B] ${
+        selected ? "border-[#1A1A1A]" : "border-[#A6A6A6]"
       }`}
       aria-hidden="true"
     >
-      {selected ? <span className="h-2.5 w-2.5 rounded-full bg-[#F62E18]" /> : null}
+      {selected ? <span className="h-2.5 w-2.5 rounded-full bg-[#1A1A1A]" /> : null}
     </span>
   );
 }
@@ -174,7 +174,7 @@ export function DishesGrid({
             <Popover.Trigger asChild>
               <button
                 type="button"
-                className="inline-flex min-h-11 items-center gap-2 rounded-full !border !border-transparent !bg-[#F1F3F5] px-4 text-sm font-black !text-[#1A1A1A] !shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-shadow hover:!shadow-[0_8px_20px_rgba(26,26,26,0.09)]"
+                className="inline-flex min-h-11 items-center gap-2 rounded-full !border !border-transparent !bg-[#F1F3F5] px-4 text-sm font-black !text-[#1A1A1A] !shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-shadow hover:!shadow-[0_8px_20px_rgba(26,26,26,0.09)] focus-visible:!outline-none focus-visible:!ring-2 focus-visible:!ring-[#1A1A1A]/10"
                 aria-label="Open dish filters"
               >
                 <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />

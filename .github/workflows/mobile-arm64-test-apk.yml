@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: mobile-arm64-test-apk
+  cancel-in-progress: true
+
 jobs:
   build-arm64-apk:
     runs-on: ubuntu-latest

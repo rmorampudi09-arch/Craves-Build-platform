@@ -1,4 +1,4 @@
-name: Temporary Customer Web Test Debug
+name: Temporary Customer Web Full Verify
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  verify:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,4 +35,7 @@ jobs:
           cache: npm
           cache-dependency-path: apps/customer-web-next/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - run: npm run test -- --reporter=verbose
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build

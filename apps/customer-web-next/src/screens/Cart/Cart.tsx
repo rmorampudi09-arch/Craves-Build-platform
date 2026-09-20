@@ -23,6 +23,7 @@ import { CartItemList } from "@/components/cart/CartItemList";
 import { CartCheckoutBar } from "@/components/cart/CartCheckoutBar";
 
 const CHECKOUT_ID_KEY = "craves.checkout.id";
+const CHECKOUT_OPERATION_ID_KEY = "craves.checkout.operationId";
 const INSTRUCTIONS_KEY = "craves.checkout.instructions";
 
 export const routeMeta = {
@@ -197,6 +198,7 @@ function CartPage() {
     try {
       await validateCart();
       window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
+      window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
       navigate({ to: "/checkout" });
     } catch (error) {
       setMessage(

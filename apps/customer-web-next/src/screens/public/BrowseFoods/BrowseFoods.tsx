@@ -294,7 +294,7 @@ function BrowseFoodsPage() {
       dishSort,
       foodPreference,
     });
-  }, [dishSort, foodPreference, homeCategory, searchOpen, searchTerm]);
+  }, [dishSort, foodPreference, homeCategory]);
 
   const scrollToDishes = useCallback(() => {
     const heading = document.getElementById("available-dishes-heading");

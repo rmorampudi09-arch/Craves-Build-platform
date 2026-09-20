@@ -24,6 +24,7 @@ import {
 } from "@/lib/address-contract";
 import type { ReverseGeocodedAddress } from "@/lib/location-contract";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
+import { sessionFetch } from "@/services/auth/sessionFetch";
 
 type Step = "locate" | "details";
 
@@ -401,7 +402,7 @@ export function AddressEditorFlow({
     setMessage(null);
 
     try {
-      const response = await fetch(
+      const response = await sessionFetch(
         targetAddressId
           ? "/api/customer/addresses/" + targetAddressId
           : "/api/customer/addresses",

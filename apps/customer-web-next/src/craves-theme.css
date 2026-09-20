@@ -131,16 +131,12 @@ h6 {
 
 :where(button, [role="tab"], .craves-button-link, .chef-panel-nav-link):not(:disabled):hover {
   border-color: #d7dadf;
-  background: var(--color-grey-50);
-  color: var(--color-black);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transform: translateY(-1px);
 }
 
 :where(button, [role="tab"], .craves-button-link, .chef-panel-nav-link):not(:disabled):focus-visible {
   border-color: var(--color-grey-400);
-  background: var(--color-white);
-  color: var(--color-black);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-flame-red) 12%, transparent);
 }
 

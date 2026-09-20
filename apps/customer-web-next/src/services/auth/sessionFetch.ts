@@ -5,7 +5,7 @@ let refreshInFlight: Promise<boolean> | null = null;
 async function refreshSession(): Promise<boolean> {
   if (refreshInFlight) return refreshInFlight;
 
-  refreshInFlight = fetch("/api/auth/refresh", {
+  const pending = fetch("/api/auth/refresh", {
     method: "POST",
     credentials: "same-origin",
     cache: "no-store",
@@ -16,7 +16,8 @@ async function refreshSession(): Promise<boolean> {
       refreshInFlight = null;
     });
 
-  return refreshInFlight;
+  refreshInFlight = pending;
+  return pending;
 }
 
 /**

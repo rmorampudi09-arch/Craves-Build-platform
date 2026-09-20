@@ -21,6 +21,7 @@ import {
   type CustomerCheckout,
 } from "@/lib/checkout-contract";
 import { loadSession } from "@/services/auth/cravesAuth";
+import { sessionFetch } from "@/services/auth/sessionFetch";
 import {
   cartCurrency,
   cartTotal,
@@ -73,7 +74,7 @@ function fullAddress(address: CustomerAddress): string {
 }
 
 async function fetchAddresses(): Promise<CustomerAddress[]> {
-  const response = await fetch("/api/customer/addresses", {
+  const response = await sessionFetch("/api/customer/addresses", {
     cache: "no-store",
     credentials: "same-origin",
   });
@@ -90,6 +91,37 @@ async function fetchAddresses(): Promise<CustomerAddress[]> {
   }
   const parsed = parseCustomerAddresses(raw);
   if (!parsed) throw new Error("Craves returned an invalid address response.");
+  return parsed;
+}
+
+async function createAuthoritativeCheckout(
+  deliveryAddressId: string,
+  note: string,
+): Promise<CustomerCheckout> {
+  await validateCart();
+  const response = await sessionFetch("/api/checkout", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      deliveryAddressId,
+      note: note.trim() || null,
+    }),
+  });
+  const raw = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      raw &&
+      typeof raw === "object" &&
+      "message" in raw &&
+      typeof raw.message === "string"
+        ? raw.message
+        : "Checkout could not be created.";
+    throw new Error(message);
+  }
+
+  const parsed = parseCheckout(raw);
+  if (!parsed) throw new Error("Craves returned an invalid checkout response.");
   return parsed;
 }
 
@@ -110,6 +142,7 @@ export default function CheckoutPage() {
   const [paymentFailure, setPaymentFailure] =
     useState<CheckoutPaymentFailure>(null);
   const [loading, setLoading] = useState(true);
+  const [pricing, setPricing] = useState(false);
   const [error, setError] = useState("");
 
   const prepareCheckout = useCallback(async () => {
@@ -129,7 +162,9 @@ export default function CheckoutPage() {
           "",
         contactPhoneNumber: session.phoneNumber || session.phone || "",
       });
-      setInstructions(window.sessionStorage.getItem(INSTRUCTIONS_KEY) ?? "");
+      const savedInstructions =
+        window.sessionStorage.getItem(INSTRUCTIONS_KEY) ?? "";
+      setInstructions(savedInstructions);
 
       await loadCart();
       const nextItems = getCart();
@@ -162,6 +197,22 @@ export default function CheckoutPage() {
       setAddresses(activeAddresses);
       setSelectedId(preferred?.id ?? "");
       setLeadMinutes(minutes.length ? Math.max(...minutes) : null);
+      setCheckout(null);
+
+      if (preferred) {
+        setPricing(true);
+        try {
+          const prepared = await createAuthoritativeCheckout(
+            preferred.id,
+            savedInstructions,
+          );
+          setCheckout(prepared);
+        } catch (pricingError) {
+          setError(checkoutMessage(pricingError));
+        } finally {
+          setPricing(false);
+        }
+      }
     } catch (caught) {
       setItems([]);
       setAddresses([]);
@@ -177,43 +228,33 @@ export default function CheckoutPage() {
     void prepareCheckout();
   }, [prepareCheckout]);
 
-  function selectAddress(id: string) {
+  async function selectAddress(id: string) {
     setSelectedId(id);
     window.sessionStorage.setItem(ADDRESS_KEY, id);
     setCheckout(null);
     setPaymentFailure(null);
+    setError("");
+    setPricing(true);
+    try {
+      const prepared = await createAuthoritativeCheckout(id, instructions);
+      setCheckout(prepared);
+    } catch (pricingError) {
+      setError(checkoutMessage(pricingError));
+    } finally {
+      setPricing(false);
+    }
   }
 
   async function ensureCheckout(): Promise<CustomerCheckout> {
     if (checkout) return checkout;
     if (!selectedId) throw new Error("Choose a delivery address before paying.");
 
-    await validateCart();
-    const response = await fetch("/api/checkout", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        deliveryAddressId: selectedId,
-        note: instructions.trim() || null,
-      }),
-    });
-    const raw = await response.json().catch(() => null);
-    if (!response.ok) {
-      const message =
-        raw &&
-        typeof raw === "object" &&
-        "message" in raw &&
-        typeof raw.message === "string"
-          ? raw.message
-          : "Checkout could not be created.";
-      throw new Error(message);
-    }
-
-    const parsed = parseCheckout(raw);
-    if (!parsed) throw new Error("Craves returned an invalid checkout response.");
-    setCheckout(parsed);
-    return parsed;
+    const prepared = await createAuthoritativeCheckout(
+      selectedId,
+      instructions,
+    );
+    setCheckout(prepared);
+    return prepared;
   }
 
   async function handleAddressSaved(saved: CustomerAddress | null) {
@@ -226,9 +267,9 @@ export default function CheckoutPage() {
         ? next.find((address) => address.id === saved.id)
         : null;
     if (selected) {
-      selectAddress(selected.id);
+      await selectAddress(selected.id);
     } else if (!selectedId && next[0]) {
-      selectAddress(next[0].id);
+      await selectAddress(next[0].id);
     }
   }
 
@@ -290,7 +331,7 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => setEditorOpen(true)}
-                  className="rounded-lg px-2 py-1 text-xs font-semibold text-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+                  className="inline-flex min-h-9 items-center rounded-[10px] border border-[#D7DADF] bg-white px-3 text-xs font-semibold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:border-[#C8CDD2] hover:bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/25"
                 >
                   Add new
                 </button>
@@ -310,7 +351,7 @@ export default function CheckoutPage() {
                           name="delivery-address"
                           value={address.id}
                           checked={checked}
-                          onChange={() => selectAddress(address.id)}
+                          onChange={() => void selectAddress(address.id)}
                           className="mt-1 h-4 w-4 accent-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35"
                         />
                         <span className="min-w-0 flex-1">
@@ -336,7 +377,7 @@ export default function CheckoutPage() {
                     <button
                       type="button"
                       onClick={() => setShowAllAddresses((current) => !current)}
-                      className="min-h-11 w-full border-t border-[#F1F3F5] px-4 text-left text-xs font-semibold text-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#F62E18]/25"
+                      className="mx-4 my-3 inline-flex min-h-9 items-center rounded-[10px] border border-[#D7DADF] bg-white px-3 text-left text-xs font-semibold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:border-[#C8CDD2] hover:bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/25"
                     >
                       {showAllAddresses
                         ? "Show fewer"
@@ -420,9 +461,22 @@ export default function CheckoutPage() {
                 ) : (
                   <div className="mt-3 flex items-start gap-2 border-t border-[#E5E7EB] pt-3">
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />
-                    <p className="text-xs leading-5 text-[#6B6B6B]">
-                      Delivery fee, platform fee, tax and the final amount are calculated by the Craves backend when you pay.
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs leading-5 text-[#6B6B6B]">
+                        {pricing
+                          ? "Calculating delivery fee, tax and your final total…"
+                          : "Your final total must be confirmed by Craves before payment."}
+                      </p>
+                      {!pricing && selectedId ? (
+                        <button
+                          type="button"
+                          onClick={() => void selectAddress(selectedId)}
+                          className="mt-3 inline-flex min-h-9 items-center rounded-[10px] border border-[#D7DADF] bg-white px-3 text-xs font-semibold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:border-[#C8CDD2] hover:bg-[#F1F3F5]"
+                        >
+                          Refresh total
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 )}
               </dl>
@@ -452,7 +506,8 @@ export default function CheckoutPage() {
           checkout={checkout}
           previewAmount={subtotal}
           currency={currency}
-          disabled={!selectedAddress}
+          disabled={!selectedAddress || pricing || !checkout}
+          preparingCheckout={pricing}
           failure={paymentFailure}
           ensureCheckout={ensureCheckout}
           onFailure={setPaymentFailure}

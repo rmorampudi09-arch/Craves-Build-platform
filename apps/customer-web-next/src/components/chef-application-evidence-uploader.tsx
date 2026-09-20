@@ -78,10 +78,12 @@ export function ChefApplicationEvidenceUploader({
   applicationReady,
   locked,
   initialDocuments,
+  onComplete,
 }: {
   applicationReady: boolean;
   locked: boolean;
   initialDocuments: ChefEvidenceMetadata[];
+  onComplete?: () => void;
 }) {
   const router = useRouter();
   const [documents, setDocuments] = useState<ChefEvidenceMetadata[]>(initialDocuments);
@@ -111,6 +113,18 @@ export function ChefApplicationEvidenceUploader({
   const awaitingReviewCount = REQUIREMENTS.filter(item => uploadedByType.get(item.type)?.status === "UPLOADED").length;
   const approvalProgress = Math.round((approvedCount / REQUIREMENTS.length) * 100);
   const incompleteApprovedHistory = locked && approvedCount < REQUIREMENTS.length;
+
+  useEffect(() => {
+    if (
+      onComplete &&
+      applicationReady &&
+      !locked &&
+      uploadedCount === REQUIREMENTS.length &&
+      rejectedCount === 0
+    ) {
+      onComplete();
+    }
+  }, [applicationReady, locked, onComplete, rejectedCount, uploadedCount]);
 
   function stateFor(type: EvidenceType): ProgressState {
     return progress[type] ?? INITIAL_PROGRESS;

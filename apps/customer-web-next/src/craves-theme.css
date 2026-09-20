@@ -115,26 +115,48 @@ h6 {
   outline-offset: 2px;
 }
 
-:where(button, [role="tab"], .btn-primary, .craves-button-link, .chef-panel-nav-link) {
-  border: 1px solid transparent !important;
-  background: var(--color-white) !important;
-  color: var(--color-black) !important;
-  box-shadow: none !important;
+:where(button, [role="tab"], .craves-button-link, .chef-panel-nav-link) {
+  border: 1px solid var(--color-grey-200);
+  background: var(--color-white);
+  color: var(--color-black);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   font-weight: 600;
   transition:
     background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast),
     color var(--motion-fast),
-    font-weight var(--motion-fast);
+    transform var(--motion-fast);
 }
 
-:where(button, [role="tab"], .btn-primary, .craves-button-link, .chef-panel-nav-link):not(:disabled):hover,
-:where(button, [role="tab"], .btn-primary, .craves-button-link, .chef-panel-nav-link):not(:disabled):focus-visible {
-  border: 1px solid transparent !important;
-  background: var(--color-flame-red) !important;
-  color: var(--color-white) !important;
-  font-weight: 700 !important;
-  box-shadow: none !important;
-  transform: none !important;
+:where(button, [role="tab"], .craves-button-link, .chef-panel-nav-link):not(:disabled):hover {
+  border-color: #d7dadf;
+  background: var(--color-grey-50);
+  color: var(--color-black);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+:where(button, [role="tab"], .craves-button-link, .chef-panel-nav-link):not(:disabled):focus-visible {
+  border-color: var(--color-grey-400);
+  background: var(--color-white);
+  color: var(--color-black);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-flame-red) 12%, transparent);
+}
+
+.btn-primary {
+  border-color: var(--color-contrast-red);
+  background: var(--color-contrast-red);
+  color: var(--color-white);
+  box-shadow: 0 3px 10px rgba(201, 39, 22, 0.18);
+}
+
+.btn-primary:not(:disabled):hover {
+  border-color: #b92314;
+  background: #b92314;
+  color: var(--color-white);
+  box-shadow: 0 5px 14px rgba(201, 39, 22, 0.22);
+  transform: translateY(-1px);
 }
 
 :where(button, [role="tab"], .btn-primary):disabled {

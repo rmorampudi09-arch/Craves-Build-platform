@@ -181,7 +181,7 @@ export function HomeCategoryRail({
                 className="group flex w-[6.6rem] shrink-0 snap-start flex-col items-center gap-3 !border-0 !bg-transparent p-0 text-center text-[#1A1A1A] !shadow-none outline-none hover:!bg-transparent hover:!shadow-none hover:!transform-none active:!transform-none sm:w-[7.25rem]"
               >
                 <span
-                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center overflow-hidden rounded-full bg-white transition-[border-color,transform] duration-300 ease-out group-hover:-translate-y-1 group-hover:scale-[1.04] group-hover:border-[#F62E18]/30 group-focus-visible:ring-2 group-focus-visible:ring-[#F62E18]/35 motion-reduce:transform-none sm:h-[7.25rem] sm:w-[7.25rem] ${
+                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center overflow-hidden rounded-full bg-white transition-[border-color,transform] duration-[450ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] group-hover:-translate-y-0.5 group-hover:border-[#F62E18]/30 group-focus-visible:ring-2 group-focus-visible:ring-[#F62E18]/35 motion-reduce:transform-none sm:h-[7.25rem] sm:w-[7.25rem] ${
                     active
                       ? "border border-[#F62E18] ring-2 ring-[#F62E18]/10"
                       : "border border-[#F1F3F5]"
@@ -192,7 +192,7 @@ export function HomeCategoryRail({
                       src={image}
                       alt=""
                       loading="lazy"
-                      className="h-full w-full rounded-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04] motion-reduce:transform-none"
+                      className="h-full w-full rounded-full object-cover transition-transform duration-[450ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] group-hover:scale-[1.025] motion-reduce:transform-none"
                     />
                   ) : (
                     <span className="flex h-[72%] w-[72%] items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
@@ -216,29 +216,31 @@ export function HomeCategoryRail({
           className={`pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-white to-transparent transition-opacity duration-200 ${canScrollLeft ? "opacity-100" : "invisible opacity-0"}`}
           aria-hidden="true"
         />
-        <button
-          type="button"
-          onClick={() => scrollCategories(-1)}
-          disabled={!canScrollLeft}
-          aria-label="Show previous craving categories"
-          className={`absolute -left-3 top-[3.6rem] z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] transition-[opacity,box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:flex ${canScrollLeft ? "visible opacity-100" : "invisible pointer-events-none opacity-0"}`}
-        >
-          <FaChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
+        {canScrollLeft ? (
+          <button
+            type="button"
+            onClick={() => scrollCategories(-1)}
+            aria-label="Show previous craving categories"
+            className="absolute -left-3 top-[3.6rem] z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] transition-[box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:flex"
+          >
+            <FaChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        ) : null}
 
         <div
           className={`pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-white to-transparent transition-opacity duration-200 ${canScrollRight ? "opacity-100" : "invisible opacity-0"}`}
           aria-hidden="true"
         />
-        <button
-          type="button"
-          onClick={() => scrollCategories(1)}
-          disabled={!canScrollRight}
-          aria-label="Show more craving categories"
-          className={`absolute -right-3 top-[3.6rem] z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] transition-[opacity,box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:flex ${canScrollRight ? "visible opacity-100" : "invisible pointer-events-none opacity-0"}`}
-        >
-          <FaChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
+        {canScrollRight ? (
+          <button
+            type="button"
+            onClick={() => scrollCategories(1)}
+            aria-label="Show more craving categories"
+            className="absolute -right-3 top-[3.6rem] z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] transition-[box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:flex"
+          >
+            <FaChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
     </section>
   );

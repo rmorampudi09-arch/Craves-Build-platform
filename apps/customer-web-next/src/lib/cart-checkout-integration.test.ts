@@ -8,7 +8,7 @@ function source(relativePath: string): string {
 
 test("cart has no demo or local mutation fallback", () => {
   const cart = source("../services/api/cravesCart.ts");
-  assert.match(cart, /fetch\(path/);
+  assert.match(cart, /sessionFetch\(path/);
   assert.match(cart, /\/api\/cart/);
   assert.match(cart, /throw error/);
   assert.doesNotMatch(cart, /demo|localStorage|sessionStorage|fallback/i);
@@ -26,8 +26,9 @@ test("checkout uses parsed active saved addresses and backend checkout", () => {
   const page = source("../screens/Checkout/Checkout.tsx");
   assert.match(page, /parseCustomerAddresses\(raw\)/);
   assert.match(page, /filter\(isDeliveryReadyAddress\)/);
-  assert.match(page, /fetch\("\/api\/checkout"/);
-  assert.match(page, /deliveryAddressId: selectedId/);
+  assert.match(page, /sessionFetch\("\/api\/checkout"/);
+  assert.match(page, /createAuthoritativeCheckout/);
+  assert.match(page, /deliveryAddressId,/);
   assert.match(page, /parseCheckout\(raw\)/);
   assert.doesNotMatch(page, /deliveryFee\s*=|platformFee\s*=|taxAmount\s*=/);
 });
@@ -39,6 +40,8 @@ test("Razorpay payment is contract validated and backend verified", () => {
   assert.match(payment, /parsePaymentStatus\(raw\)/);
   assert.match(payment, /parsePaymentVerification\(raw\)/);
   assert.match(payment, /\/api\/payments\/orders/);
+  assert.match(payment, /sessionFetch/);
+  assert.match(payment, /const session = await loadSession\(\)/);
   assert.match(payment, /\/verify/);
   assert.doesNotMatch(
     payment,

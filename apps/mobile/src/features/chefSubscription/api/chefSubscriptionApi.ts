@@ -54,20 +54,22 @@ export const chefMealScheduleSchema = z.object({
 });
 export type ChefMealSchedule = z.infer<typeof chefMealScheduleSchema>;
 
-const slotRuleSchema = z.object({
+export const slotRuleSchema = z.object({
   id: uuid,
   chefIdentityId: uuid,
   isoDayOfWeek: z.number().int().min(1).max(7),
-  mealSlotCode: z.string(),
-  totalCapacityUnits: z.number().int().nonnegative(),
-  subscriptionCapacityUnits: z.number().int().nonnegative(),
+  mealSlotCode: z.string().min(1).max(40),
+  totalCapacityUnits: z.number().int().min(0).max(100000),
+  subscriptionCapacityUnits: z.number().int().min(0).max(100000),
   salesEnabled: z.boolean(),
   recurringReservedUnits: z.number().int().nonnegative(),
   recurringAvailableUnits: z.number().int(),
   recurringDeficitUnits: z.number().int().nonnegative(),
-  version: z.number().int(),
-  updatedAt: z.string(),
+  version: z.number().int().positive(),
+  updatedAt: z.string().refine(value => !Number.isNaN(Date.parse(value))),
 }).strict();
+
+export type ChefSlotCapacityRule = z.infer<typeof slotRuleSchema>;
 
 export const menuItemRuleSchema = z.object({
   id: uuid,
@@ -155,6 +157,15 @@ export interface PutChefScheduleRequest {
   items: ChefScheduleItemInput[];
 }
 
+export interface PutChefSlotCapacityRuleRequest {
+  isoDayOfWeek: number;
+  mealSlotCode: string;
+  totalCapacityUnits: number;
+  subscriptionCapacityUnits: number;
+  salesEnabled: boolean;
+  reason: string;
+}
+
 export interface PutChefMenuItemCapacityRuleRequest {
   menuItemId: string;
   isoDayOfWeek: number;
@@ -204,6 +215,24 @@ const slotCodeSchema = z
   .max(40)
   .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/)
   .transform(value => value.toUpperCase());
+
+const putChefSlotCapacityRuleRequestSchema = z
+  .object({
+    isoDayOfWeek: z.number().int().min(1).max(7),
+    mealSlotCode: slotCodeSchema,
+    totalCapacityUnits: z.number().int().min(0).max(100000),
+    subscriptionCapacityUnits: z.number().int().min(0).max(100000),
+    salesEnabled: z.boolean(),
+    reason: z.string().trim().min(1).max(1000),
+  })
+  .strict()
+  .refine(
+    value => value.subscriptionCapacityUnits <= value.totalCapacityUnits,
+    {
+      path: ['subscriptionCapacityUnits'],
+      message: 'Subscription capacity cannot exceed total capacity.',
+    },
+  );
 
 const putChefDateCapacityOverrideRequestSchema = z
   .object({
@@ -290,15 +319,18 @@ export const chefSubscriptionApi = {
       'Chef capacity could not be verified.',
     );
   },
-  async putSlotRule(request: {
-    isoDayOfWeek: number;
-    mealSlotCode: string;
-    totalCapacityUnits: number;
-    subscriptionCapacityUnits: number;
-    salesEnabled: boolean;
-    reason: string;
-  }): Promise<void> {
-    await httpClient.put<unknown>('/api/v1/chef/subscription-capacity/rules/slots', request);
+  async putSlotRule(
+    request: PutChefSlotCapacityRuleRequest,
+  ): Promise<ChefSlotCapacityRule> {
+    const body = putChefSlotCapacityRuleRequestSchema.parse(request);
+    return parseOne(
+      slotRuleSchema,
+      await httpClient.put<unknown>(
+        '/api/v1/chef/subscription-capacity/rules/slots',
+        body,
+      ),
+      'Chef slot capacity rule could not be verified.',
+    );
   },
 
   async putMenuItemRule(

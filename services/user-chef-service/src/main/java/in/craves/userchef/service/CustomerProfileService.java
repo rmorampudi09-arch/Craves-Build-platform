@@ -354,6 +354,12 @@ public class CustomerProfileService {
         if (!StringUtils.hasText(request.areaName())) {
             throw ApiException.badRequest("AREA_NAME_REQUIRED", "Area name is required");
         }
+        if (!StringUtils.hasText(request.landmark())) {
+            throw ApiException.badRequest("LANDMARK_REQUIRED", "Landmark is required");
+        }
+        if (!StringUtils.hasText(request.districtName())) {
+            throw ApiException.badRequest("DISTRICT_NAME_REQUIRED", "District is required");
+        }
         if (!StringUtils.hasText(request.postalCode())) {
             throw ApiException.badRequest("POSTAL_CODE_REQUIRED", "Postal code is required");
         }

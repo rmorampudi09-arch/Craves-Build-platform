@@ -191,7 +191,7 @@ export default function AddressesPage() {
           <Link
             to="/profile"
             aria-label="Back to profile"
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#E5E7EB] bg-white transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#F1F3F5] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#E5E7EB] bg-white transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[#F1F3F5] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
           >
             <ArrowLeft className="h-6 w-6 text-[#1A1A1A]" strokeWidth={2.25} />
           </Link>

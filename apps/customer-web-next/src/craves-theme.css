@@ -186,13 +186,10 @@ nav[aria-label="Filter orders"] button {
 
 nav[aria-label="Filter orders"] button:not(:disabled):hover,
 nav[aria-label="Filter orders"] button:not(:disabled):focus-visible {
-  background: var(--color-flame-red) !important;
-  color: var(--color-white) !important;
-}
-
-nav[aria-label="Filter orders"] button:not(:disabled):hover::after,
-nav[aria-label="Filter orders"] button:not(:disabled):focus-visible::after {
-  background: var(--color-white) !important;
+  background: var(--color-grey-50) !important;
+  border-color: var(--color-grey-200) !important;
+  color: var(--color-black) !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07) !important;
 }
 
 [aria-label="Notification filters"] {
@@ -210,19 +207,26 @@ nav[aria-label="Filter orders"] button:not(:disabled):focus-visible::after {
   box-shadow: none !important;
 }
 
-[aria-label="Notification filters"] button[aria-pressed="true"],
-[aria-label="Notification filters"] button:not(:disabled):hover,
-[aria-label="Notification filters"] button:not(:disabled):focus-visible {
-  background: var(--color-flame-red) !important;
+[aria-label="Notification filters"] button[aria-pressed="true"] {
+  background: var(--color-contrast-red) !important;
   color: var(--color-white) !important;
   font-weight: 700 !important;
 }
 
+[aria-label="Notification filters"] button:not([aria-pressed="true"]):not(:disabled):hover,
+[aria-label="Notification filters"] button:not([aria-pressed="true"]):not(:disabled):focus-visible {
+  background: var(--color-white) !important;
+  border-color: var(--color-grey-400) !important;
+  color: var(--color-black) !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07) !important;
+}
+
 nav[aria-label="Customer services"] a:hover,
 nav[aria-label="Customer services"] a:focus-visible {
-  background: var(--color-flame-red) !important;
-  color: var(--color-white) !important;
-  font-weight: 700 !important;
+  background: var(--color-grey-50) !important;
+  color: var(--color-black) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  transform: translateY(-1px);
 }
 
 :where(input, textarea, select):focus,

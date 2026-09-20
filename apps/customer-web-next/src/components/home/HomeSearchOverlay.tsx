@@ -18,7 +18,9 @@ interface HomeSearchOverlayProps {
   dishes: Dish[];
   kitchens: NearbyKitchen[];
   searchTerm: string;
+  vegOnly: boolean;
   onSearchTermChange: (value: string) => void;
+  onDisableVeg: () => void;
   onClose: () => void;
 }
 
@@ -38,7 +40,9 @@ export function HomeSearchOverlay({
   dishes,
   kitchens,
   searchTerm,
+  vegOnly,
   onSearchTermChange,
+  onDisableVeg,
   onClose,
 }: HomeSearchOverlayProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -86,6 +90,7 @@ export function HomeSearchOverlay({
   }, [kitchens, normalized]);
 
   const hasResults = dishResults.length > 0 || kitchenResults.length > 0;
+  const showVegEmptyState = vegOnly && dishResults.length === 0;
 
   return (
     <div className={`${styles.searchOverlay} fixed inset-0 z-[70] overflow-y-auto bg-white text-[#1A1A1A]`} role="dialog" aria-modal="true" aria-label="Search Craves">
@@ -132,7 +137,24 @@ export function HomeSearchOverlay({
           </p>
         </div>
 
-        {!hasResults ? (
+        {showVegEmptyState ? (
+          <div className="mb-8 rounded-[1.75rem] border border-dashed border-[#E5E7EB] bg-[#F1F3F5] p-8 text-center">
+            <SearchX className="mx-auto h-9 w-9 text-[#6B6B6B]" aria-hidden="true" />
+            <h3 className="mt-4 text-lg font-black text-[#1A1A1A]">
+              No vegetarian dishes found
+            </h3>
+            <p className="mt-2 text-sm text-[#6B6B6B]">
+              Turn off the Veg filter to see all available dishes.
+            </p>
+            <button
+              type="button"
+              onClick={onDisableVeg}
+              className="mt-5 min-h-10 rounded-full !bg-[#F1F3F5] px-4 text-xs font-black !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
+            >
+              Turn off Veg filter
+            </button>
+          </div>
+        ) : !hasResults ? (
           <div className="rounded-[1.75rem] border border-dashed border-[#E5E7EB] bg-[#F1F3F5] p-10 text-center">
             <SearchX className="mx-auto h-9 w-9 text-[#6B6B6B]" aria-hidden="true" />
             <h3 className="mt-4 text-lg font-black text-[#1A1A1A]">No matching dishes or chefs</h3>

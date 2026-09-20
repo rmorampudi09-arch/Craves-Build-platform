@@ -1,4 +1,4 @@
-import {httpClient} from '../../../core/http/httpClient';
+import {publicApiClient} from '../../../core/http/transport';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -339,7 +339,7 @@ export const publicKitchenReviewsApi = {
     const params: Record<string, string | number> = {limit};
     if (options?.cursor) params.cursor = options.cursor;
 
-    const value = await httpClient.get<unknown>(baseRoute, {
+    const value = await publicApiClient.get<unknown>(baseRoute, {
       signal: options?.signal,
       params,
       dedupeKey: `public-kitchen-reviews:${kitchenId}:${limit}:${
@@ -361,7 +361,7 @@ export const publicKitchenReviewsApi = {
     signal?: AbortSignal,
   ): Promise<PublicKitchenReviewSummary> {
     const baseRoute = route(kitchenId);
-    const value = await httpClient.get<unknown>(`${baseRoute}/summary`, {
+    const value = await publicApiClient.get<unknown>(`${baseRoute}/summary`, {
       signal,
       dedupeKey: `public-kitchen-review-summary:${kitchenId}`,
     });

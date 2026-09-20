@@ -101,10 +101,6 @@ for (const action of mappings) {
   expectedBySource.set(action.source, expected);
 }
 
-const escapeRegex = value => value.replace(/[.*+?^\${}()|[\]\\]/g, '\\  expectedBySource.set(action.source, expected);
-}
-
-const callPattern =');
 for (const item of sourceOnly) {
   if (typeof item.reason !== 'string' || !item.reason.trim()) {
     fail(`Source-only contract action is missing reason: ${JSON.stringify(item)}`);
@@ -125,7 +121,7 @@ for (const item of sourceOnly) {
   }
   const availabilityCode = fs.readFileSync(availabilityPath, 'utf8');
   const availabilityPattern = new RegExp(
-    `export\\s+const\\s+${escapeRegex(item.availabilityFlag)}\\s*=\\s*false\\s*;`,
+    'export\\s+const\\s+' + item.availabilityFlag + '\\s*=\\s*false\\s*;',
   );
   if (!availabilityPattern.test(availabilityCode)) {
     fail(

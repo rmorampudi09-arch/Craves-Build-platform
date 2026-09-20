@@ -45,7 +45,7 @@ test("buttons use neutral tactile hover while primary actions keep the Craves ac
   assert.match(theme, /button, \[role="tab"\]/);
   assert.match(theme, /border:\s*1px solid var\(--color-grey-200\)/);
   assert.match(theme, /background:\s*var\(--color-white\)/);
-  assert.match(theme, /background:\s*var\(--color-grey-50\)/);
+  assert.match(theme, /border-color:\s*#d7dadf/);
   assert.match(theme, /box-shadow:\s*0 4px 12px rgba\(0, 0, 0, 0\.08\)/);
   assert.match(theme, /\.btn-primary \{/);
   assert.match(theme, /background:\s*var\(--color-contrast-red\)/);

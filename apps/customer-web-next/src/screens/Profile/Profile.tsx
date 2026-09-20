@@ -205,11 +205,6 @@ function ProfileContent() {
     };
   }, [navigate]);
 
-  async function logout() {
-    await clearSession();
-    navigate({ to: "/" });
-  }
-
   if (loading || !user) {
     return (
       <div className="min-h-screen bg-white">
@@ -304,16 +299,6 @@ function ProfileContent() {
           />
         </section>
 
-        <div className="mt-9 flex justify-center">
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="group inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold !text-[#1A1A1A] transition-colors"
-          >
-            <FaRightFromBracket className="text-base" aria-hidden="true" />
-            <span>Sign out</span>
-          </button>
-        </div>
       </main>
 
       <EditProfileModal

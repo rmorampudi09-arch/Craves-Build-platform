@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -63,6 +64,7 @@ public final class ApiDtos {
 
     public record CustomerAddressRequest(
         AddressLabel addressLabel,
+        @Size(max = 80) String addressName,
         @NotBlank String recipientName,
         @NotBlank @Pattern(regexp = "^\\+?[0-9]{10,15}$") String contactPhoneNumber,
         @NotBlank String addressLine1,
@@ -83,6 +85,7 @@ public final class ApiDtos {
         UUID id,
         UUID identityId,
         AddressLabel addressLabel,
+        String addressName,
         String recipientName,
         String contactPhoneNumber,
         String addressLine1,

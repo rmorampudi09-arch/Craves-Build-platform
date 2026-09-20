@@ -18,7 +18,7 @@ concurrency:
 jobs:
   build-arm64-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
 
     steps:
       - name: Checkout mobile branch
@@ -53,97 +53,92 @@ jobs:
           CRAVES_API_BASE_URL=https://api.craves.in
           EOF
 
-      - name: Configure Firebase Android app
+      - name: Validate Firebase Android config
         working-directory: apps/mobile
-        env:
-          CRAVES_MOBILE_GOOGLE_SERVICES_JSON_B64: ${{ secrets.CRAVES_MOBILE_GOOGLE_SERVICES_JSON_B64 }}
-          MOBILE_GOOGLE_SERVICES_JSON_B64: ${{ secrets.MOBILE_GOOGLE_SERVICES_JSON_B64 }}
-          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
-          CRAVES_MOBILE_GOOGLE_SERVICES_JSON: ${{ secrets.CRAVES_MOBILE_GOOGLE_SERVICES_JSON }}
-          MOBILE_GOOGLE_SERVICES_JSON: ${{ secrets.MOBILE_GOOGLE_SERVICES_JSON }}
-          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           set -euo pipefail
-          mkdir -p build/arm64-test
-          mode=placeholder
-
-          b64="${CRAVES_MOBILE_GOOGLE_SERVICES_JSON_B64:-}"
-          [ -n "$b64" ] || b64="${MOBILE_GOOGLE_SERVICES_JSON_B64:-}"
-          [ -n "$b64" ] || b64="${GOOGLE_SERVICES_JSON_B64:-}"
-
-          raw="${CRAVES_MOBILE_GOOGLE_SERVICES_JSON:-}"
-          [ -n "$raw" ] || raw="${MOBILE_GOOGLE_SERVICES_JSON:-}"
-          [ -n "$raw" ] || raw="${GOOGLE_SERVICES_JSON:-}"
-
-          if [ -n "$b64" ]; then
-            printf '%s' "$b64" | base64 --decode > android/app/google-services.json
-            mode=repository-secret-base64
-          elif [ -n "$raw" ]; then
-            printf '%s' "$raw" > android/app/google-services.json
-            mode=repository-secret-json
-          else
-            cat > android/app/google-services.json <<'JSON'
-          {
-            "project_info": {
-              "project_number": "201887934076",
-              "project_id": "cravesapp-dev",
-              "storage_bucket": "cravesapp-dev.invalid"
-            },
-            "client": [{
-              "client_info": {
-                "mobilesdk_app_id": "1:201887934076:android:0000000000000000",
-                "android_client_info": {"package_name": "com.cravesapp"}
-              },
-              "api_key": [{"current_key": "arm64-test-placeholder-not-a-runtime-key"}]
-            }],
-            "configuration_version": "1"
+          test -s android/app/google-services.json
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'android/app/google-services.json';
+          const json = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const clients = Array.isArray(json.client) ? json.client : [];
+          const client = clients.find(
+            item => item?.client_info?.android_client_info?.package_name === 'com.cravesapp',
+          );
+          if (!client) {
+            throw new Error('google-services.json does not contain com.cravesapp');
           }
-          JSON
-          fi
+          if (!client?.client_info?.mobilesdk_app_id) {
+            throw new Error('Firebase Android app id is missing');
+          }
+          if (!Array.isArray(client.api_key) || !client.api_key[0]?.current_key) {
+            throw new Error('Firebase Android API key is missing');
+          }
+          console.log('Firebase Android config validated for com.cravesapp.');
+          NODE
 
-          printf 'firebase_config=%s\n' "$mode" | tee build/arm64-test/build-metadata.txt
-
-      - name: Build ARM64 debug APK
+      - name: Build installable ARM64 bundled APK
         working-directory: apps/mobile/android
         env:
           NODE_ENV: production
+          CRAVES_ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/apps/mobile/android/app/debug.keystore
+          CRAVES_ANDROID_KEYSTORE_PASSWORD: android
+          CRAVES_ANDROID_KEY_ALIAS: androiddebugkey
+          CRAVES_ANDROID_KEY_PASSWORD: android
         run: |
           set -euo pipefail
-          ./gradlew :app:assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon
+          ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
 
-      - name: Verify APK architecture and package
+      - name: Verify standalone APK
         working-directory: apps/mobile
         run: |
           set -euo pipefail
-          apk="android/app/build/outputs/apk/debug/app-debug.apk"
+          mkdir -p build/arm64-test
+          apk="android/app/build/outputs/apk/release/app-release.apk"
           test -s "$apk"
 
           unzip -l "$apk" > build/arm64-test/apk-contents.txt
-          grep -q 'lib/arm64-v8a/' build/arm64-test/apk-contents.txt
 
+          # A standalone release-style RN APK must contain the JS bundle.
+          grep -q 'assets/index.android.bundle' build/arm64-test/apk-contents.txt
+
+          # ARM64 only.
+          grep -q 'lib/arm64-v8a/' build/arm64-test/apk-contents.txt
           if grep -Eq 'lib/(x86|x86_64|armeabi-v7a)/' build/arm64-test/apk-contents.txt; then
             echo 'APK contains non-arm64 native libraries.' >&2
             exit 1
           fi
 
-          cp "$apk" build/arm64-test/craves-mobile-arm64-debug.apk
+          # Verify APK signing.
+          apksigner="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$apksigner"
+          "$apksigner" verify --verbose "$apk" | tee build/arm64-test/signature-verification.txt
+
+          cp "$apk" build/arm64-test/craves-mobile-arm64-standalone.apk
+
           {
             printf 'commit=%s\n' "$GITHUB_SHA"
             printf 'abi=arm64-v8a\n'
+            printf 'build_type=release-style-internal-test\n'
+            printf 'javascript_bundle=embedded\n'
+            printf 'firebase_config=repository-google-services-json\n'
             printf 'api_base_url=https://api.craves.in\n'
-          } >> build/arm64-test/build-metadata.txt
+            printf 'signing=existing-debug-key-for-internal-installation\n'
+          } > build/arm64-test/build-metadata.txt
 
-      - name: Upload ARM64 APK
+      - name: Upload ARM64 standalone APK
         uses: actions/upload-artifact@v4
         with:
-          name: craves-mobile-arm64-test-apk
+          name: craves-mobile-arm64-standalone-apk
           path: |
-            apps/mobile/build/arm64-test/craves-mobile-arm64-debug.apk
+            apps/mobile/build/arm64-test/craves-mobile-arm64-standalone.apk
             apps/mobile/build/arm64-test/build-metadata.txt
+            apps/mobile/build/arm64-test/signature-verification.txt
           if-no-files-found: error
           retention-days: 14
 
-      - name: Cleanup runtime files
+      - name: Cleanup runtime file
         if: always()
         working-directory: apps/mobile
-        run: rm -f .env android/app/google-services.json
+        run: rm -f .env

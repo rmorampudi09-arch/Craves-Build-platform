@@ -130,7 +130,11 @@ function ProfileContent() {
     let active = true;
 
     void (async () => {
-      if (getSession() && !isSessionReady()) return;
+      if (getSession() && !isSessionReady()) {
+        setError("Your account details are temporarily unavailable. Sign-out controls remain available below.");
+        setLoading(false);
+        return;
+      }
       const session = await loadSession();
       if (!active) return;
       if (!session) {
@@ -213,10 +217,21 @@ function ProfileContent() {
           aria-busy={loading}
           className="mx-auto max-w-4xl space-y-4 px-4 py-6 md:px-6 md:py-8"
         >
-          <span className="sr-only">Loading profile</span>
-          <div className="h-60 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-          <div className="h-24 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-          <div className="h-24 animate-pulse rounded-2xl bg-[#F1F3F5]" />
+          {loading ? (
+            <>
+              <span className="sr-only">Loading profile</span>
+              <div className="h-60 animate-pulse rounded-2xl bg-[#F1F3F5]" />
+              <div className="h-24 animate-pulse rounded-2xl bg-[#F1F3F5]" />
+              <div className="h-24 animate-pulse rounded-2xl bg-[#F1F3F5]" />
+            </>
+          ) : error ? (
+            <p
+              role="alert"
+              className="rounded-xl border border-[#F62E18]/20 bg-[#F62E18]/5 p-4 text-sm text-[#C92716]"
+            >
+              {error}
+            </p>
+          ) : null}
         </main>
       </div>
     );

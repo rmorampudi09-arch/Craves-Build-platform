@@ -344,21 +344,11 @@ public class CustomerProfileService {
         if (request == null) {
             throw ApiException.badRequest("CUSTOMER_ADDRESS_REQUIRED", "Customer address is required");
         }
-        if (labelOrDefault(request.addressLabel()) == AddressLabel.OTHER
-            && !StringUtils.hasText(request.addressName())) {
-            throw ApiException.badRequest("ADDRESS_NAME_REQUIRED", "Name this address before saving");
-        }
         if (!StringUtils.hasText(request.recipientName())) {
             throw ApiException.badRequest("RECIPIENT_NAME_REQUIRED", "Recipient name is required");
         }
         if (!StringUtils.hasText(request.areaName())) {
             throw ApiException.badRequest("AREA_NAME_REQUIRED", "Area name is required");
-        }
-        if (!StringUtils.hasText(request.landmark())) {
-            throw ApiException.badRequest("LANDMARK_REQUIRED", "Landmark is required");
-        }
-        if (!StringUtils.hasText(request.districtName())) {
-            throw ApiException.badRequest("DISTRICT_NAME_REQUIRED", "District is required");
         }
         if (!StringUtils.hasText(request.postalCode())) {
             throw ApiException.badRequest("POSTAL_CODE_REQUIRED", "Postal code is required");

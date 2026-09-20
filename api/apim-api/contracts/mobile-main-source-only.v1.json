@@ -444,7 +444,7 @@
       "responseModel": "Page<CustomerReviewView>",
       "requestValidator": "paging",
       "responseValidator": "parseCustomerReviewPage",
-      "availabilityFlag": "CUSTOMER_REVIEWS_AVAILABLE",
+      "availabilityFlag": "CUSTOMER_REVIEW_EXTRAS_AVAILABLE",
       "reason": "Backend route exists on current main, but no approved mobile APIM publication was found; keep fail-closed."
     },
     {
@@ -457,7 +457,7 @@
       "responseModel": "TagDefinitionView[]",
       "requestValidator": "auth",
       "responseValidator": "parseReviewTagDefinition",
-      "availabilityFlag": "CUSTOMER_REVIEWS_AVAILABLE",
+      "availabilityFlag": "CUSTOMER_REVIEW_EXTRAS_AVAILABLE",
       "reason": "Backend route exists on current main, but no approved mobile APIM publication was found; keep fail-closed."
     },
     {
@@ -470,7 +470,7 @@
       "responseModel": "HelpfulResponse",
       "requestValidator": "uuid",
       "responseValidator": "parseHelpfulResponse",
-      "availabilityFlag": "CUSTOMER_REVIEWS_AVAILABLE",
+      "availabilityFlag": "CUSTOMER_REVIEW_EXTRAS_AVAILABLE",
       "reason": "Backend route exists on current main, but no approved mobile APIM publication was found; keep fail-closed."
     },
     {
@@ -483,7 +483,7 @@
       "responseModel": "HelpfulResponse",
       "requestValidator": "uuid",
       "responseValidator": "parseHelpfulResponse",
-      "availabilityFlag": "CUSTOMER_REVIEWS_AVAILABLE",
+      "availabilityFlag": "CUSTOMER_REVIEW_EXTRAS_AVAILABLE",
       "reason": "Backend route exists on current main, but no approved mobile APIM publication was found; keep fail-closed."
     },
     {
@@ -496,7 +496,7 @@
       "responseModel": "ReportView",
       "requestValidator": "report",
       "responseValidator": "parseReviewReport",
-      "availabilityFlag": "CUSTOMER_REVIEWS_AVAILABLE",
+      "availabilityFlag": "CUSTOMER_REVIEW_EXTRAS_AVAILABLE",
       "reason": "Backend route exists on current main, but no approved mobile APIM publication was found; keep fail-closed."
     },
     {

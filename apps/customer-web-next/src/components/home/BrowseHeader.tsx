@@ -35,7 +35,7 @@ interface BrowseHeaderProps {
 }
 
 const headerIconActionClass =
-  "h-10 w-10 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#F62E18] transition-[background-color,color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:!text-[#F62E18] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none";
+  "h-10 w-10 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#F62E18] transition-[background-color,color,box-shadow] duration-200 ease-out hover:!bg-white hover:!text-[#F62E18] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]";
 
 function FoodPreferenceQuickToggles({
   value,
@@ -114,7 +114,7 @@ export function BrowseHeader({
           <button
             type="button"
             onClick={openLocation}
-            className="hidden min-h-11 min-w-0 max-w-[16rem] items-center gap-2.5 rounded-full !bg-[#F1F3F5] px-3.5 text-left !text-[#1A1A1A] transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none md:flex"
+            className="hidden min-h-11 min-w-0 max-w-[16rem] items-center gap-2.5 rounded-full !bg-[#F1F3F5] px-3.5 text-left !text-[#1A1A1A] transition-[background-color,box-shadow] duration-200 ease-out hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] md:flex"
             aria-label={`${locationTypeLabel} delivery address: ${locationLabel}. Manage address`}
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
@@ -212,7 +212,7 @@ export function BrowseHeader({
           <button
             type="button"
             onClick={openLocation}
-            className="flex min-w-0 max-w-[12rem] shrink items-center gap-2 rounded-full !bg-[#F1F3F5] px-2 py-1 text-left text-xs font-bold !text-[#1A1A1A] transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none sm:max-w-[15rem] md:hidden"
+            className="flex min-w-0 max-w-[12rem] shrink items-center gap-2 rounded-full !bg-[#F1F3F5] px-2 py-1 text-left text-xs font-bold !text-[#1A1A1A] transition-[background-color,box-shadow] duration-200 ease-out hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] sm:max-w-[15rem] md:hidden"
             aria-label={`${locationTypeLabel} delivery address: ${locationLabel}. Manage address`}
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">

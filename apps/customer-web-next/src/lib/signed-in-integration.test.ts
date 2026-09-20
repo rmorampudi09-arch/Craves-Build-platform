@@ -201,7 +201,7 @@ test("chef evidence UI imports components and contracts from their correct modul
   );
   assert.doesNotMatch(
     panel,
-    /ChefApplicationEvidenceUploader[\s\S]{0,160}from "@\/lib\/chef-application-evidence-contract"/,
+    /import\s*\{[^}]*ChefApplicationEvidenceUploader[^}]*\}\s*from "@\/lib\/chef-application-evidence-contract"/,
   );
   assert.match(
     uploader,

@@ -41,18 +41,15 @@ test("shared customer and chef palette removes espresso brown", () => {
   assert.match(theme, /--color-black:\s*#000000/i);
 });
 
-test("buttons use white surfaces without logo-colored borders and keep the requested hover state", () => {
+test("buttons use neutral tactile hover while primary actions keep the Craves accent", () => {
   assert.match(theme, /button, \[role="tab"\]/);
-  assert.match(theme, /border:\s*1px solid transparent\s*!important/);
-  assert.doesNotMatch(
-    theme,
-    /border:\s*1px solid var\(--color-flame-red\)\s*!important/,
-  );
-  assert.match(theme, /background:\s*var\(--color-white\)\s*!important/);
-  assert.match(theme, /color:\s*var\(--color-black\)\s*!important/);
-  assert.match(theme, /background:\s*var\(--color-flame-red\)\s*!important/);
-  assert.match(theme, /color:\s*var\(--color-white\)\s*!important/);
-  assert.match(theme, /font-weight:\s*700\s*!important/);
+  assert.match(theme, /border:\s*1px solid var\(--color-grey-200\)/);
+  assert.match(theme, /background:\s*var\(--color-white\)/);
+  assert.match(theme, /background:\s*var\(--color-grey-50\)/);
+  assert.match(theme, /box-shadow:\s*0 4px 12px rgba\(0, 0, 0, 0\.08\)/);
+  assert.match(theme, /\.btn-primary \{/);
+  assert.match(theme, /background:\s*var\(--color-contrast-red\)/);
+  assert.match(theme, /\.btn-primary:not\(:disabled\):hover/);
 });
 
 test("landing hero uses semantic HTML, canonical logo, approved rider artwork and wired controls", () => {

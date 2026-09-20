@@ -30,6 +30,10 @@ test("checkout uses parsed active saved addresses and backend checkout", () => {
   assert.match(page, /createAuthoritativeCheckout/);
   assert.match(page, /deliveryAddressId,/);
   assert.match(page, /parseCheckout\(raw\)/);
+  assert.doesNotMatch(
+    page,
+    /<AddressEditorFlow[\s\S]{0,320}\baddresses=/,
+  );
   assert.doesNotMatch(page, /deliveryFee\s*=|platformFee\s*=|taxAmount\s*=/);
 });
 

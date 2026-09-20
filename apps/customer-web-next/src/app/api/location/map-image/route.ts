@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { boundedFetch } from "@/lib/bounded-fetch";
 import { isRequestOriginAllowed } from "@/lib/request-security";
 import { renderAzureMapsStaticImage } from "@/lib/server/azure-maps";
 
@@ -8,6 +9,23 @@ const MAX_REQUESTS = 90;
 const admittedAt: number[] = [];
 let inFlight = 0;
 const MAX_IN_FLIGHT = 6;
+
+function locationProxyBase(): URL | null {
+  const configured = process.env.CRAVES_LOCATION_PROXY_BASE_URL?.trim();
+  if (!configured) return null;
+
+  const base = new URL(configured);
+  if (
+    base.protocol !== "https:"
+    || base.username
+    || base.password
+    || base.origin !== "https://craves.in"
+  ) {
+    throw new Error("CRAVES_LOCATION_PROXY_BASE_URL must be https://craves.in");
+  }
+  return base;
+}
+
 
 function publicOriginAllowed(request: NextRequest): boolean {
   if (request.headers.get("sec-fetch-site") === "same-origin") return true;
@@ -89,6 +107,43 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const proxyBase = locationProxyBase();
+    if (proxyBase) {
+      const proxyUrl = new URL("/api/location/map-image", proxyBase);
+      proxyUrl.searchParams.set("latitude", String(latitude));
+      proxyUrl.searchParams.set("longitude", String(longitude));
+      proxyUrl.searchParams.set("zoom", String(zoom));
+
+      const proxyResponse = await boundedFetch(
+        proxyUrl.toString(),
+        {
+          cache: "no-store",
+          headers: {
+            Referer: new URL("/profile/addresses", proxyBase).toString(),
+            "Sec-Fetch-Site": "same-origin",
+            Accept: "image/png,image/jpeg",
+          },
+        },
+        12_000,
+        3 * 1024 * 1024,
+      );
+      if (!proxyResponse.ok) {
+        throw new Error(`Map proxy failed with HTTP ${proxyResponse.status}`);
+      }
+      const contentType =
+        proxyResponse.headers.get("content-type")?.split(";")[0] ?? "";
+      if (contentType !== "image/png" && contentType !== "image/jpeg") {
+        throw new Error("Map proxy returned an invalid image type");
+      }
+      return new NextResponse(await proxyResponse.arrayBuffer(), {
+        headers: {
+          "Content-Type": contentType,
+          "Cache-Control": "private, no-store, max-age=0",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    }
+
     const image = await renderAzureMapsStaticImage(
       latitude,
       longitude,

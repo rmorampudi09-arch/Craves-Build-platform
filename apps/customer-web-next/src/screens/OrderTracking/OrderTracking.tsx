@@ -245,16 +245,8 @@ export default function TrackingPage() {
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
               <div className="space-y-5">
                 <CurrentStatusCard
-                  label={
-                    delivery
-                      ? deliveryPresentation.label
-                      : formatOrderStatus(order.status)
-                  }
-                  desc={
-                    delivery
-                      ? deliveryPresentation.description
-                      : "This is the current order status from Craves. Delivery tracking begins after a delivery job is created."
-                  }
+                  label={currentPresentation.label}
+                  desc={currentPresentation.description}
                 />
 
                 <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_3px_10px_rgba(0,0,0,0.05)] md:p-6">

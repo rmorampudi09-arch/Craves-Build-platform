@@ -207,7 +207,7 @@ test("checkout is one page with saved addresses, ASAP delivery and the shared ad
   assert.doesNotMatch(checkout, /Pick a time/);
   assert.doesNotMatch(checkout, /schedule\/capability/);
 
-  assert.match(addressEditor, /fetch\(\s*targetAddressId/);
+  assert.match(addressEditor, /sessionFetch\(\s*targetAddressId/);
   assert.match(addressEditor, /method:\s*targetAddressId \? "PUT" : "POST"/);
   assert.match(addressEditor, /Save and use this address/);
 });

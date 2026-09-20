@@ -19,6 +19,14 @@ function safeText(value: unknown, max = 300): string | null {
   return text && text.length <= max ? text : null;
 }
 
+const SAFE_CHECKOUT_SERVICE_ERRORS = new Set([
+  "DELIVERY_ADDRESS_LOOKUP_UNAVAILABLE",
+  "DELIVERY_ADDRESS_LOOKUP_INVALID_RESPONSE",
+  "DELIVERY_ADDRESS_LOOKUP_UNAUTHORIZED",
+  "LAUNCH_POLICY_NOT_CONFIGURED",
+  "LAUNCH_POLICY_CURRENCY_UNSUPPORTED",
+]);
+
 function checkoutFailure(
   status: number,
   body: unknown,
@@ -32,7 +40,15 @@ function checkoutFailure(
   const upstreamMessage =
     safeText(raw?.message) ?? safeText(raw?.detail);
 
-  if (status >= 400 && status < 500 && upstreamMessage) {
+  if (
+    upstreamMessage &&
+    (
+      (status >= 400 && status < 500) ||
+      (status === 503 &&
+        upstreamCode !== null &&
+        SAFE_CHECKOUT_SERVICE_ERRORS.has(upstreamCode))
+    )
+  ) {
     return {
       error: upstreamCode ?? "CHECKOUT_FAILED",
       message: upstreamMessage,

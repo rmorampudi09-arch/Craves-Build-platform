@@ -9,7 +9,6 @@ import {
   parsePaymentVerification,
 } from "@/lib/payment-contract";
 import type { CustomerCheckout } from "@/lib/checkout-contract";
-import { clearCart } from "@/services/api/cravesCart";
 import { loadSession } from "@/services/auth/cravesAuth";
 import { sessionFetch } from "@/services/auth/sessionFetch";
 
@@ -63,7 +62,6 @@ interface CheckoutPaymentButtonProps {
   previewAmount: number;
   currency: string;
   disabled?: boolean;
-  preparingCheckout?: boolean;
   failure: CheckoutPaymentFailure;
   ensureCheckout: () => Promise<CustomerCheckout>;
   onFailure: (failure: CheckoutPaymentFailure) => void;
@@ -148,7 +146,6 @@ export function CheckoutPaymentButton({
   previewAmount,
   currency,
   disabled = false,
-  preparingCheckout = false,
   failure,
   ensureCheckout,
   onFailure,
@@ -162,8 +159,8 @@ export function CheckoutPaymentButton({
       throw new Error("Confirmed checkout did not include an order.");
     }
 
-    await clearCart().catch(() => undefined);
     window.sessionStorage.removeItem("craves.checkout.instructions");
+    window.sessionStorage.removeItem("craves.checkout.id");
     router.replace(`/orders/${orderId}`);
   }
 
@@ -251,7 +248,12 @@ export function CheckoutPaymentButton({
       if (!session) {
         throw new Error("Your session expired. Sign in and try payment again.");
       }
-      const currentCheckout = checkout ?? (await ensureCheckout());
+      if (!checkout) {
+        await ensureCheckout();
+        return;
+      }
+
+      const currentCheckout = checkout;
       const payment = await createPayment(currentCheckout.id);
 
       await loadRazorpay();
@@ -346,15 +348,15 @@ export function CheckoutPaymentButton({
   }
 
   const authoritativeAmount = checkout?.grandTotal ?? null;
-  const buttonLabel = preparingCheckout
-    ? "Calculating total…"
-    : failure?.retryAllowed
+  const buttonLabel = failure?.retryAllowed
+    ? checkout
       ? "Try payment again"
-      : failure
-        ? "Payment pending"
-        : authoritativeAmount !== null
-          ? `Pay ${money(authoritativeAmount, checkout?.currency ?? currency)}`
-          : "Pay securely";
+      : "Review total again"
+    : failure
+      ? "Payment pending"
+      : authoritativeAmount !== null
+        ? `Pay ${money(authoritativeAmount, checkout?.currency ?? currency)}`
+        : "Review total";
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white shadow-[0_-8px_28px_rgba(17,24,39,0.06)]">
@@ -370,9 +372,7 @@ export function CheckoutPaymentButton({
               ? failure?.retryAllowed
                 ? "not charged"
                 : "incl. taxes"
-              : preparingCheckout
-                ? "calculating final total"
-                : "food subtotal · final total from Craves"}
+              : "food subtotal · review final total before payment"}
           </p>
         </div>
 
@@ -387,7 +387,11 @@ export function CheckoutPaymentButton({
           ) : (
             <LockKeyhole className="h-4 w-4" aria-hidden="true" />
           )}
-          {busy ? "Opening Razorpay…" : buttonLabel}
+          {busy
+            ? checkout
+              ? "Opening Razorpay…"
+              : "Reviewing total…"
+            : buttonLabel}
         </button>
       </div>
     </div>

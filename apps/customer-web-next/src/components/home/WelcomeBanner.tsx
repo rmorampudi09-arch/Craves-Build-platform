@@ -1,5 +1,4 @@
 import Image from "next/image";
-import { Heart } from "lucide-react";
 import { FaUtensils } from "react-icons/fa6";
 
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
@@ -36,10 +35,9 @@ export function WelcomeBanner({
         <div className={`${styles.heroBottomFade} absolute inset-x-0 bottom-0 h-24 sm:h-28`} />
 
         <div className={`${styles.heroContent} relative z-10 flex max-w-[43rem] flex-col justify-center px-5 py-8 sm:px-9 sm:py-10 md:px-12 lg:px-16`}>
-          <div className="mb-4 inline-flex max-w-full items-center gap-2 rounded-full border border-[#E5E7EB] bg-white/90 px-3.5 py-2 text-[0.68rem] font-black uppercase tracking-[0.13em] text-[#1A1A1A] backdrop-blur-sm">
-            <Heart className="h-3.5 w-3.5 shrink-0 fill-[#F62E18] text-[#F62E18]" aria-hidden="true" />
-            <span className="truncate">Welcome home, {firstName}</span>
-          </div>
+          <p className="mb-4 text-[0.68rem] font-black uppercase tracking-[0.13em] text-[#1A1A1A]">
+            Welcome home, {firstName}
+          </p>
 
           <h1
             id="discovery-heading"

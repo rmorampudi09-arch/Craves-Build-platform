@@ -728,7 +728,7 @@ function BrowseFoodsPage() {
         <HomeSearchOverlay
           dishes={searchDishes}
           kitchens={kitchens}
-          searchTerm=""
+          searchTerm={searchTerm}
           vegOnly={foodPreference === "veg"}
           onSearchTermChange={setSearchTerm}
           onDisableVeg={() => setFoodPreference("all")}

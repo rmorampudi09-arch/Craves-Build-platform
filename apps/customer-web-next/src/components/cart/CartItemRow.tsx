@@ -59,12 +59,12 @@ export function CartItemRow({
       </div>
 
       <div className="col-span-2 flex items-center justify-between gap-3 sm:col-span-1 sm:flex-col sm:items-end">
-        <div className="flex h-10 items-center overflow-hidden rounded-[11px] border border-[#F62E18]/35 bg-white shadow-[0_2px_8px_rgba(246,46,24,0.06)]">
+        <div className="flex h-10 items-center overflow-hidden rounded-[11px] border border-[#D7DADF] bg-[#F1F3F5] shadow-[0_1px_2px_rgba(26,26,26,0.05)]">
           <button
             type="button"
             onClick={onDecrease}
             disabled={disabled}
-            className="flex h-10 w-10 items-center justify-center text-[#F62E18] transition-colors hover:bg-[#F62E18]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#F62E18]/35 disabled:pointer-events-none disabled:opacity-45"
+            className="flex h-10 w-10 items-center justify-center border-0 bg-transparent text-[#1A1A1A] shadow-none transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BFC4C9] disabled:pointer-events-none disabled:opacity-45"
             aria-label={`Decrease quantity of ${item.name}`}
           >
             <FaMinus className="text-xs" aria-hidden="true" />
@@ -79,7 +79,7 @@ export function CartItemRow({
             type="button"
             onClick={onIncrease}
             disabled={disabled || item.qty >= 50}
-            className="flex h-10 w-10 items-center justify-center text-[#F62E18] transition-colors hover:bg-[#F62E18]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#F62E18]/35 disabled:pointer-events-none disabled:opacity-45"
+            className="flex h-10 w-10 items-center justify-center border-0 bg-transparent text-[#1A1A1A] shadow-none transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BFC4C9] disabled:pointer-events-none disabled:opacity-45"
             aria-label={`Increase quantity of ${item.name}`}
           >
             <FaPlus className="text-xs" aria-hidden="true" />

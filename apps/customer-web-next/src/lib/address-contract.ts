@@ -24,7 +24,9 @@ export type CustomerAddress = {
 
 export type DeliveryReadyAddress = CustomerAddress & {
   recipientName: string;
+  landmark: string;
   areaName: string;
+  districtName: string;
   postalCode: string;
   latitude: number;
   longitude: number;
@@ -131,6 +133,7 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
   const recipientName = text(raw.recipientName, 160);
   const contactPhoneNumber = text(raw.contactPhoneNumber, 16);
   const addressLine1 = text(raw.addressLine1, 250);
+  const landmark = text(raw.landmark, 160);
   const areaName = text(raw.areaName, 120);
   const districtName = text(raw.districtName, 120);
   const city = text(raw.city, 120);
@@ -147,6 +150,7 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
     || !contactPhoneNumber
     || !PHONE.test(contactPhoneNumber)
     || !addressLine1
+    || !landmark
     || !areaName
     || !districtName
     || !city
@@ -166,7 +170,7 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
     contactPhoneNumber,
     addressLine1,
     addressLine2: optionalText(raw.addressLine2, 250),
-    landmark: optionalText(raw.landmark, 160),
+    landmark,
     areaName,
     districtName,
     city,
@@ -228,7 +232,9 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
 
   const deliveryReady = Boolean(
     recipientName
+    && landmark
     && areaName
+    && districtName
     && postalCode
     && latitude !== null
     && longitude !== null
@@ -271,7 +277,9 @@ export function isDeliveryReadyAddress(
 ): address is DeliveryReadyAddress {
   return address.active
     && Boolean(address.recipientName)
+    && Boolean(address.landmark)
     && Boolean(address.areaName)
+    && Boolean(address.districtName)
     && Boolean(address.postalCode)
     && address.latitude !== null
     && address.longitude !== null;

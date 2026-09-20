@@ -344,6 +344,10 @@ public class CustomerProfileService {
         if (request == null) {
             throw ApiException.badRequest("CUSTOMER_ADDRESS_REQUIRED", "Customer address is required");
         }
+        if (labelOrDefault(request.addressLabel()) == AddressLabel.OTHER
+            && !StringUtils.hasText(request.addressName())) {
+            throw ApiException.badRequest("ADDRESS_NAME_REQUIRED", "Name this address before saving");
+        }
         if (!StringUtils.hasText(request.recipientName())) {
             throw ApiException.badRequest("RECIPIENT_NAME_REQUIRED", "Recipient name is required");
         }

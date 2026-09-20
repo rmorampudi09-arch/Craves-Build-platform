@@ -110,6 +110,16 @@ jobs:
             exit 1
           fi
 
+          # Verify release-style package metadata. Never publish a Metro-dependent/debuggable APK.
+          aapt="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          test -x "$aapt"
+          "$aapt" dump badging "$apk" | tee build/arm64-test/apk-badging.txt
+          grep -q "package: name='com.cravesapp'" build/arm64-test/apk-badging.txt
+          if grep -q 'application-debuggable' build/arm64-test/apk-badging.txt; then
+            echo 'APK is debuggable and may depend on Metro; refusing artifact.' >&2
+            exit 1
+          fi
+
           # Verify APK signing.
           apksigner="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -x "$apksigner"
@@ -135,6 +145,7 @@ jobs:
             apps/mobile/build/arm64-test/craves-mobile-arm64-standalone.apk
             apps/mobile/build/arm64-test/build-metadata.txt
             apps/mobile/build/arm64-test/signature-verification.txt
+            apps/mobile/build/arm64-test/apk-badging.txt
           if-no-files-found: error
           retention-days: 14
 

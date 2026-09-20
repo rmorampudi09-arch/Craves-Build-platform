@@ -27,6 +27,10 @@ test("checkout uses the idempotent backend operation with an exact cart snapshot
   const cartPage = source("../screens/Cart/Cart.tsx");
   assert.match(page, /parseCustomerAddresses\(raw\)/);
   assert.match(page, /filter\(isDeliveryReadyAddress\)/);
+  assert.match(
+    page,
+    /activeAddresses\.find\(\(address\) => address\.isDefault\)[\s\S]{0,180}activeAddresses\.find\(\(address\) => address\.id === lastUsedId\)/,
+  );
   assert.match(page, /\/api\/checkout\/operations\//);
   assert.match(page, /checkoutCartSnapshot\(validatedCart\)/);
   assert.match(page, /parseCheckoutOperationResponse\(raw\)/);

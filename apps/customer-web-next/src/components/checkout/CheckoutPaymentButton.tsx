@@ -161,6 +161,7 @@ export function CheckoutPaymentButton({
 
     window.sessionStorage.removeItem("craves.checkout.instructions");
     window.sessionStorage.removeItem("craves.checkout.id");
+    window.sessionStorage.removeItem("craves.checkout.operationId");
     router.replace(`/orders/${orderId}`);
   }
 

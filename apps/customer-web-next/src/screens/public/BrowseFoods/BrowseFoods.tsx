@@ -280,16 +280,16 @@ function BrowseFoodsPage() {
     );
     setDishSort(restored.dishSort);
     setFoodPreference(restored.foodPreference === "veg" ? "veg" : "all");
-    setSearchTerm(restored.searchTerm);
-    setSearchOpen(restored.searchOpen);
+    setSearchTerm("");
+    setSearchOpen(false);
   }, []);
 
   const rememberHomeView = useCallback(() => {
     window.history.scrollRestoration = "manual";
     saveHomeReturnState({
       scrollY: window.scrollY,
-      searchTerm,
-      searchOpen,
+      searchTerm: "",
+      searchOpen: false,
       homeCategory,
       dishSort,
       foodPreference,
@@ -751,7 +751,10 @@ function BrowseFoodsPage() {
           vegOnly={foodPreference === "veg"}
           onSearchTermChange={setSearchTerm}
           onDisableVeg={() => setFoodPreference("all")}
-          onClose={() => setSearchOpen(false)}
+          onClose={() => {
+            setSearchTerm("");
+            setSearchOpen(false);
+          }}
         />
       ) : null}
 

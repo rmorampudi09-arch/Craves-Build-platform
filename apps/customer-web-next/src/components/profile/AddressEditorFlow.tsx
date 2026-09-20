@@ -38,6 +38,7 @@ type ProfileDefaults = {
 };
 
 type FieldKey =
+  | "addressName"
   | "addressLine1"
   | "areaName"
   | "landmark"
@@ -60,6 +61,7 @@ interface AddressEditorFlowProps {
 
 const EMPTY_DRAFT: AddressDraft = {
   addressLabel: "HOME",
+  addressName: null,
   recipientName: "",
   contactPhoneNumber: "",
   addressLine1: "",
@@ -85,11 +87,12 @@ const LABELS: Array<{
   { value: "OTHER", label: "Other", icon: Tag },
 ];
 
-const PHONE = /^\\+?[0-9]{10,15}$/;
+const PHONE = /^\+?[0-9]{10,15}$/;
 
 function draftFrom(address: CustomerAddress): AddressDraft {
   return {
     addressLabel: address.addressLabel,
+    addressName: address.addressName ?? null,
     recipientName: address.recipientName ?? "",
     contactPhoneNumber: address.contactPhoneNumber,
     addressLine1: address.addressLine1,
@@ -195,6 +198,9 @@ function getBrowserLocation(): Promise<{ latitude: number; longitude: number }> 
 function validateDraft(draft: AddressDraft): FieldErrors {
   const errors: FieldErrors = {};
 
+  if (draft.addressLabel === "OTHER" && !draft.addressName?.trim()) {
+    errors.addressName = "Enter a name for this address.";
+  }
   if (!draft.addressLine1.trim()) {
     errors.addressLine1 = "Enter your flat, house, building or floor.";
   }
@@ -760,7 +766,12 @@ export function AddressEditorFlow({
                           <button
                             key={option.value}
                             type="button"
-                            onClick={() => update("addressLabel", option.value)}
+                            onClick={() => {
+                              update("addressLabel", option.value);
+                              if (option.value !== "OTHER") {
+                                update("addressName", null);
+                              }
+                            }}
                             className={
                               "flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-sm font-black transition-[background-color,box-shadow,transform] duration-200 ease-out " +
                               (selected
@@ -780,6 +791,30 @@ export function AddressEditorFlow({
                         );
                       })}
                     </div>
+                    {draft.addressLabel === "OTHER" ? (
+                      <label
+                        id="address-addressName"
+                        className="mt-3 block text-xs font-bold text-[#1A1A1A]"
+                      >
+                        Name this address
+                        <input
+                          autoFocus
+                          value={draft.addressName ?? ""}
+                          onChange={(event) =>
+                            update("addressName", event.target.value || null)
+                          }
+                          placeholder="e.g. Mom's home, Studio"
+                          maxLength={80}
+                          className={inputClass("addressName")}
+                          aria-invalid={Boolean(fieldErrors.addressName)}
+                        />
+                        {fieldErrors.addressName ? (
+                          <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                            {fieldErrors.addressName}
+                          </span>
+                        ) : null}
+                      </label>
+                    ) : null}
                   </div>
 
                   <div className="mt-7 grid gap-4 sm:grid-cols-2">

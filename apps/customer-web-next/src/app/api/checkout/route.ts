@@ -7,6 +7,15 @@ import {
   SessionRequiredError,
 } from "@/lib/server-api";
 
+const SAFE_CHECKOUT_SERVICE_ERRORS = new Set([
+  "CHECKOUT_PRICING_UNAVAILABLE",
+  "DELIVERY_ADDRESS_LOOKUP_UNAVAILABLE",
+  "DELIVERY_ADDRESS_LOOKUP_INVALID_RESPONSE",
+  "DELIVERY_ADDRESS_LOOKUP_UNAUTHORIZED",
+  "LAUNCH_POLICY_NOT_CONFIGURED",
+  "LAUNCH_POLICY_CURRENCY_UNSUPPORTED",
+]);
+
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -18,14 +27,6 @@ function safeText(value: unknown, max = 300): string | null {
   const text = value.trim();
   return text && text.length <= max ? text : null;
 }
-
-const SAFE_CHECKOUT_SERVICE_ERRORS = new Set([
-  "DELIVERY_ADDRESS_LOOKUP_UNAVAILABLE",
-  "DELIVERY_ADDRESS_LOOKUP_INVALID_RESPONSE",
-  "DELIVERY_ADDRESS_LOOKUP_UNAUTHORIZED",
-  "LAUNCH_POLICY_NOT_CONFIGURED",
-  "LAUNCH_POLICY_CURRENCY_UNSUPPORTED",
-]);
 
 function checkoutFailure(
   status: number,

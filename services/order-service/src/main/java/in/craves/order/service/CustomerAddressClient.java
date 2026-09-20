@@ -98,6 +98,7 @@ public class CustomerAddressClient {
         UUID id,
         UUID identityId,
         String addressLabel,
+        String addressName,
         String recipientName,
         String contactPhoneNumber,
         String addressLine1,

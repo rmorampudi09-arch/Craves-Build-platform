@@ -11,6 +11,7 @@ import {
 import type { CustomerCheckout } from "@/lib/checkout-contract";
 import { clearCart } from "@/services/api/cravesCart";
 import { loadSession } from "@/services/auth/cravesAuth";
+import { sessionFetch } from "@/services/auth/sessionFetch";
 
 type CheckoutWindow = Window & {
   Razorpay?: new (options: RazorpayCheckoutOptions) => RazorpayCheckout;
@@ -62,6 +63,7 @@ interface CheckoutPaymentButtonProps {
   previewAmount: number;
   currency: string;
   disabled?: boolean;
+  preparingCheckout?: boolean;
   failure: CheckoutPaymentFailure;
   ensureCheckout: () => Promise<CustomerCheckout>;
   onFailure: (failure: CheckoutPaymentFailure) => void;
@@ -121,7 +123,7 @@ function loadRazorpay(): Promise<void> {
 }
 
 async function readPaymentStatus(paymentOrderId: string) {
-  const response = await fetch(
+  const response = await sessionFetch(
     `/api/payments/orders/${encodeURIComponent(paymentOrderId)}`,
     {
       cache: "no-store",
@@ -146,6 +148,7 @@ export function CheckoutPaymentButton({
   previewAmount,
   currency,
   disabled = false,
+  preparingCheckout = false,
   failure,
   ensureCheckout,
   onFailure,
@@ -165,7 +168,7 @@ export function CheckoutPaymentButton({
   }
 
   async function createPayment(checkoutId: string) {
-    const response = await fetch("/api/payments/orders", {
+    const response = await sessionFetch("/api/payments/orders", {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
@@ -198,7 +201,7 @@ export function CheckoutPaymentButton({
     paymentOrderId: string,
     result: RazorpaySuccess,
   ) {
-    const response = await fetch(
+    const response = await sessionFetch(
       `/api/payments/orders/${encodeURIComponent(paymentOrderId)}/verify`,
       {
         method: "POST",
@@ -244,12 +247,12 @@ export function CheckoutPaymentButton({
     onFailure(null);
 
     try {
-      const currentCheckout = checkout ?? (await ensureCheckout());
-      const payment = await createPayment(currentCheckout.id);
       const session = await loadSession();
       if (!session) {
         throw new Error("Your session expired. Sign in and try payment again.");
       }
+      const currentCheckout = checkout ?? (await ensureCheckout());
+      const payment = await createPayment(currentCheckout.id);
 
       await loadRazorpay();
       if (!razorpayConstructor()) {
@@ -343,13 +346,15 @@ export function CheckoutPaymentButton({
   }
 
   const authoritativeAmount = checkout?.grandTotal ?? null;
-  const buttonLabel = failure?.retryAllowed
-    ? "Try payment again"
-    : failure
-      ? "Payment pending"
-      : authoritativeAmount !== null
-        ? `Pay ${money(authoritativeAmount, checkout?.currency ?? currency)}`
-        : "Pay securely";
+  const buttonLabel = preparingCheckout
+    ? "Calculating total…"
+    : failure?.retryAllowed
+      ? "Try payment again"
+      : failure
+        ? "Payment pending"
+        : authoritativeAmount !== null
+          ? `Pay ${money(authoritativeAmount, checkout?.currency ?? currency)}`
+          : "Pay securely";
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white shadow-[0_-8px_28px_rgba(17,24,39,0.06)]">
@@ -365,7 +370,9 @@ export function CheckoutPaymentButton({
               ? failure?.retryAllowed
                 ? "not charged"
                 : "incl. taxes"
-              : "food subtotal · final total from Craves"}
+              : preparingCheckout
+                ? "calculating final total"
+                : "food subtotal · final total from Craves"}
           </p>
         </div>
 
@@ -373,7 +380,7 @@ export function CheckoutPaymentButton({
           type="button"
           disabled={busy || disabled || Boolean(failure && !failure.retryAllowed)}
           onClick={() => void openPayment()}
-          className="ml-auto inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-[11px] bg-[#F62E18] px-5 py-[13px] text-[15px] font-semibold text-white transition-colors hover:bg-[#DF2815] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 focus-visible:ring-offset-2 sm:flex-none sm:min-w-52 disabled:pointer-events-none disabled:opacity-45"
+          className="ml-auto inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-[11px] border border-[#D92917] bg-[#F62E18] px-5 py-[13px] text-[15px] font-semibold text-white shadow-[0_3px_10px_rgba(246,46,24,0.20)] transition-[background-color,box-shadow,transform] hover:-translate-y-px hover:bg-[#E52A16] hover:shadow-[0_5px_14px_rgba(246,46,24,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 focus-visible:ring-offset-2 sm:flex-none sm:min-w-52 disabled:pointer-events-none disabled:opacity-45"
         >
           {busy ? (
             <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />

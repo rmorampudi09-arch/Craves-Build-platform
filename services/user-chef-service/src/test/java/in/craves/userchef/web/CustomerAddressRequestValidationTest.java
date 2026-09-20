@@ -79,6 +79,54 @@ class CustomerAddressRequestValidationTest {
     }
 
     @Test
+    void rejectsUnnamedOtherAddress() {
+        CustomerAddressRequest request = new CustomerAddressRequest(
+            AddressLabel.OTHER,
+            null,
+            "Customer Name",
+            "9876543210",
+            "Flat 101, Test Residency",
+            "Road No. 1",
+            "Near Metro",
+            "Madhapur",
+            "Hyderabad",
+            "Hyderabad",
+            "Telangana",
+            "500081",
+            new BigDecimal("17.4483"),
+            new BigDecimal("78.3915"),
+            true
+        );
+
+        assertThat(validator.validate(request))
+            .extracting(violation -> violation.getPropertyPath().toString())
+            .contains("addressNameValid");
+    }
+
+    @Test
+    void acceptsNamedOtherAddress() {
+        CustomerAddressRequest request = new CustomerAddressRequest(
+            AddressLabel.OTHER,
+            "Mom's home",
+            "Customer Name",
+            "9876543210",
+            "Flat 101, Test Residency",
+            "Road No. 1",
+            "Near Metro",
+            "Madhapur",
+            "Hyderabad",
+            "Hyderabad",
+            "Telangana",
+            "500081",
+            new BigDecimal("17.4483"),
+            new BigDecimal("78.3915"),
+            true
+        );
+
+        assertThat(validator.validate(request)).isEmpty();
+    }
+
+    @Test
     void rejectsMissingLatitude() {
         assertThat(validator.validate(request(
             "Customer Name",

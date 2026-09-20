@@ -517,37 +517,18 @@ function BrowseFoodsPage() {
     return result;
   }, [nearbyDishes]);
 
-  const filteredKitchens = useMemo(() => {
-    const term = searchTerm.trim().toLocaleLowerCase("en-IN");
-    if (!term) return kitchens;
-    return kitchens.filter((kitchen) =>
-      [
-        kitchen.kitchenName,
-        kitchen.description,
-        kitchen.areaName,
-        kitchen.city,
-        kitchen.state,
-      ].some((value) => value?.toLocaleLowerCase("en-IN").includes(term)),
-    );
-  }, [searchTerm, kitchens]);
+  const filteredKitchens = kitchens;
 
   const filteredDishes = useMemo(() => {
-    const term = searchTerm.trim().toLocaleLowerCase("en-IN");
     const homeKeywords = homeCategory ? HOME_CATEGORY_KEYWORDS[homeCategory] : null;
 
     const matchingDishes = nearbyDishes.filter((dish) => {
       const searchable = `${dish.name} ${dish.category} ${dish.desc}`.toLocaleLowerCase("en-IN");
       const categoryMatches =
         !homeKeywords || homeKeywords.some((keyword) => searchable.includes(keyword));
-      const searchMatches =
-        !term ||
-        dish.name.toLocaleLowerCase("en-IN").includes(term) ||
-        dish.chef.toLocaleLowerCase("en-IN").includes(term) ||
-        dish.category.toLocaleLowerCase("en-IN").includes(term) ||
-        dish.desc.toLocaleLowerCase("en-IN").includes(term);
       const foodType = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
       const foodTypeMatches = foodPreference !== "veg" || foodType === "VEG";
-      return categoryMatches && searchMatches && foodTypeMatches;
+      return categoryMatches && foodTypeMatches;
     });
 
     if (dishSort === "rating") {
@@ -560,7 +541,7 @@ function BrowseFoodsPage() {
       return [...matchingDishes].sort((left, right) => right.price - left.price);
     }
     return matchingDishes;
-  }, [dishSort, foodPreference, homeCategory, nearbyDishes, searchTerm]);
+  }, [dishSort, foodPreference, homeCategory, nearbyDishes]);
 
   const locationLabel = address
     ? [address.mandal, address.city].filter(Boolean).join(", ")
@@ -693,7 +674,7 @@ function BrowseFoodsPage() {
 
         <KitchensGrid
           kitchens={filteredKitchens}
-          searchTerm={searchTerm}
+          searchTerm=""
           state={discoveryState}
           message={catalogMessage}
           onSelectKitchen={(kitchen) => {
@@ -707,7 +688,7 @@ function BrowseFoodsPage() {
         <DishesGrid
           dishes={filteredDishes}
           selectedCategory={homeCategory ?? ALL_DISHES_CATEGORY}
-          searchTerm={searchTerm}
+          searchTerm=""
           state={discoveryState}
           message={catalogMessage}
           sort={dishSort}
@@ -747,7 +728,7 @@ function BrowseFoodsPage() {
         <HomeSearchOverlay
           dishes={searchDishes}
           kitchens={kitchens}
-          searchTerm={searchTerm}
+          searchTerm=""
           vegOnly={foodPreference === "veg"}
           onSearchTermChange={setSearchTerm}
           onDisableVeg={() => setFoodPreference("all")}

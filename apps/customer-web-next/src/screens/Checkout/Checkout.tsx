@@ -39,6 +39,7 @@ import {
 import { AddressEditorFlow } from "@/components/profile/AddressEditorFlow";
 
 const ADDRESS_KEY = "craves.checkout.addressId";
+const CHECKOUT_ID_KEY = "craves.checkout.id";
 const INSTRUCTIONS_KEY = "craves.checkout.instructions";
 
 function money(amount: number, currency = "INR") {
@@ -57,6 +58,15 @@ function checkoutMessage(error: unknown): string {
   return error instanceof Error
     ? error.message
     : "Checkout could not be prepared. Please try again.";
+}
+
+function responseMessage(body: unknown, fallback: string): string {
+  return body &&
+    typeof body === "object" &&
+    "message" in body &&
+    typeof body.message === "string"
+    ? body.message
+    : fallback;
 }
 
 function fullAddress(address: CustomerAddress): string {
@@ -80,17 +90,30 @@ async function fetchAddresses(): Promise<CustomerAddress[]> {
   });
   const raw = await response.json().catch(() => null);
   if (!response.ok) {
-    const message =
-      raw &&
-      typeof raw === "object" &&
-      "message" in raw &&
-      typeof raw.message === "string"
-        ? raw.message
-        : "Saved addresses could not be loaded.";
-    throw new Error(message);
+    throw new Error(responseMessage(raw, "Saved addresses could not be loaded."));
   }
   const parsed = parseCustomerAddresses(raw);
   if (!parsed) throw new Error("Craves returned an invalid address response.");
+  return parsed;
+}
+
+async function fetchCheckout(
+  checkoutId: string,
+): Promise<CustomerCheckout | null> {
+  const response = await sessionFetch(
+    `/api/checkout/${encodeURIComponent(checkoutId)}`,
+    {
+      cache: "no-store",
+      credentials: "same-origin",
+    },
+  );
+  const raw = await response.json().catch(() => null);
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(responseMessage(raw, "Checkout could not be restored."));
+  }
+  const parsed = parseCheckout(raw);
+  if (!parsed) throw new Error("Craves returned an invalid checkout response.");
   return parsed;
 }
 
@@ -110,14 +133,7 @@ async function createAuthoritativeCheckout(
   });
   const raw = await response.json().catch(() => null);
   if (!response.ok) {
-    const message =
-      raw &&
-      typeof raw === "object" &&
-      "message" in raw &&
-      typeof raw.message === "string"
-        ? raw.message
-        : "Checkout could not be created.";
-    throw new Error(message);
+    throw new Error(responseMessage(raw, "Checkout could not be created."));
   }
 
   const parsed = parseCheckout(raw);
@@ -143,7 +159,6 @@ export default function CheckoutPage() {
   const [paymentFailure, setPaymentFailure] =
     useState<CheckoutPaymentFailure>(null);
   const [loading, setLoading] = useState(true);
-  const [pricing, setPricing] = useState(false);
   const [error, setError] = useState("");
 
   const prepareCheckout = useCallback(async () => {
@@ -163,9 +178,37 @@ export default function CheckoutPage() {
           "",
         contactPhoneNumber: session.phoneNumber || session.phone || "",
       });
+
       const savedInstructions =
         window.sessionStorage.getItem(INSTRUCTIONS_KEY) ?? "";
       setInstructions(savedInstructions);
+
+      const parsedAddresses = await fetchAddresses();
+      const activeAddresses = parsedAddresses.filter(isDeliveryReadyAddress);
+      setAddresses(activeAddresses);
+
+      const lastUsedId = window.sessionStorage.getItem(ADDRESS_KEY);
+      const preferred =
+        activeAddresses.find((address) => address.id === lastUsedId) ??
+        activeAddresses.find((address) => address.isDefault) ??
+        activeAddresses[0];
+
+      const storedCheckoutId = window.sessionStorage.getItem(CHECKOUT_ID_KEY);
+      if (storedCheckoutId) {
+        try {
+          const restored = await fetchCheckout(storedCheckoutId);
+          if (restored?.status === "PAYMENT_PENDING") {
+            setCheckout(restored);
+            setSelectedId(restored.deliveryAddressId ?? preferred?.id ?? "");
+            setItems([]);
+            setLeadMinutes(null);
+            return;
+          }
+          window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
+        } catch {
+          window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
+        }
+      }
 
       await loadCart();
       const nextItems = getCart();
@@ -174,14 +217,6 @@ export default function CheckoutPage() {
         return;
       }
       await validateCart();
-
-      const parsedAddresses = await fetchAddresses();
-      const activeAddresses = parsedAddresses.filter(isDeliveryReadyAddress);
-      const lastUsedId = window.sessionStorage.getItem(ADDRESS_KEY);
-      const preferred =
-        activeAddresses.find((address) => address.id === lastUsedId) ??
-        activeAddresses.find((address) => address.isDefault) ??
-        activeAddresses[0];
 
       const dishResults = await Promise.allSettled(
         nextItems.map((item) => loadDish(item.menuItemId)),
@@ -195,25 +230,9 @@ export default function CheckoutPage() {
         .filter((value) => Number.isFinite(value) && value > 0);
 
       setItems(nextItems);
-      setAddresses(activeAddresses);
       setSelectedId(preferred?.id ?? "");
       setLeadMinutes(minutes.length ? Math.max(...minutes) : null);
       setCheckout(null);
-
-      if (preferred) {
-        setPricing(true);
-        try {
-          const prepared = await createAuthoritativeCheckout(
-            preferred.id,
-            savedInstructions,
-          );
-          setCheckout(prepared);
-        } catch (pricingError) {
-          setError(checkoutMessage(pricingError));
-        } finally {
-          setPricing(false);
-        }
-      }
     } catch (caught) {
       setItems([]);
       setAddresses([]);
@@ -231,32 +250,25 @@ export default function CheckoutPage() {
     void prepareCheckout();
   }, [prepareCheckout]);
 
-  async function selectAddress(id: string) {
+  function selectAddress(id: string) {
+    if (checkout) return;
     setSelectedId(id);
     window.sessionStorage.setItem(ADDRESS_KEY, id);
-    setCheckout(null);
     setPaymentFailure(null);
     setError("");
-    setPricing(true);
-    try {
-      const prepared = await createAuthoritativeCheckout(id, instructions);
-      setCheckout(prepared);
-    } catch (pricingError) {
-      setError(checkoutMessage(pricingError));
-    } finally {
-      setPricing(false);
-    }
   }
 
   async function ensureCheckout(): Promise<CustomerCheckout> {
     if (checkout) return checkout;
-    if (!selectedId) throw new Error("Choose a delivery address before paying.");
+    if (!selectedId) throw new Error("Choose a delivery address before reviewing the total.");
 
     const prepared = await createAuthoritativeCheckout(
       selectedId,
       instructions,
     );
+    window.sessionStorage.setItem(CHECKOUT_ID_KEY, prepared.id);
     setCheckout(prepared);
+    setPaymentFailure(null);
     return prepared;
   }
 
@@ -270,16 +282,17 @@ export default function CheckoutPage() {
         ? next.find((address) => address.id === saved.id)
         : null;
     if (selected) {
-      await selectAddress(selected.id);
+      selectAddress(selected.id);
     } else if (!selectedId && next[0]) {
-      await selectAddress(next[0].id);
+      selectAddress(next[0].id);
     }
   }
 
-  const subtotal = cartTotal();
-  const currency = cartCurrency();
+  const subtotal = checkout?.foodSubtotal ?? cartTotal();
+  const currency = checkout?.currency ?? cartCurrency();
   const selectedAddress = addresses.find((address) => address.id === selectedId);
   const visibleAddresses = showAllAddresses ? addresses : addresses.slice(0, 3);
+  const hasCheckoutContext = items.length > 0 || checkout !== null;
 
   return (
     <div className="min-h-screen bg-white pb-36 text-[#1A1A1A]">
@@ -296,7 +309,7 @@ export default function CheckoutPage() {
             <div className="h-28 animate-pulse rounded-[14px] bg-[#F1F3F5]" />
             <div className="h-52 animate-pulse rounded-[14px] bg-[#F1F3F5]" />
           </div>
-        ) : error && items.length === 0 ? (
+        ) : error && !hasCheckoutContext ? (
           <section className="rounded-[14px] border border-[#F62E18]/20 bg-white p-8 text-center shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
             <AlertTriangle className="mx-auto h-9 w-9 text-[#F62E18]" aria-hidden="true" />
             <h1 className="mt-4 text-xl font-semibold">Checkout could not be prepared</h1>
@@ -317,7 +330,9 @@ export default function CheckoutPage() {
                 className="rounded-[14px] border border-[#C92716]/20 bg-[#FFF2F0] p-4"
               >
                 <h2 className="text-sm font-semibold text-[#9F2114]">
-                  Payment didn&apos;t go through
+                  {checkout
+                    ? "Payment didn&apos;t go through"
+                    : "Order could not be reviewed"}
                 </h2>
                 <p className="mt-1 text-xs leading-5 text-[#7A2C22]">
                   {paymentFailure.message}
@@ -334,7 +349,8 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => setEditorOpen(true)}
-                  className="inline-flex min-h-9 items-center rounded-[10px] border border-[#D7DADF] bg-white px-3 text-xs font-semibold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:border-[#C8CDD2] hover:bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/25"
+                  disabled={Boolean(checkout)}
+                  className="inline-flex min-h-9 items-center rounded-[10px] border border-[#D7DADF] bg-white px-3 text-xs font-semibold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:border-[#C8CDD2] hover:bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/25 disabled:pointer-events-none disabled:opacity-45"
                 >
                   Add new
                 </button>
@@ -354,8 +370,9 @@ export default function CheckoutPage() {
                           name="delivery-address"
                           value={address.id}
                           checked={checked}
-                          onChange={() => void selectAddress(address.id)}
-                          className="mt-1 h-4 w-4 accent-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35"
+                          disabled={Boolean(checkout)}
+                          onChange={() => selectAddress(address.id)}
+                          className="mt-1 h-4 w-4 accent-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 disabled:cursor-not-allowed disabled:opacity-55"
                         />
                         <span className="min-w-0 flex-1">
                           <span className="flex flex-wrap items-center gap-2">
@@ -397,7 +414,8 @@ export default function CheckoutPage() {
                   <button
                     type="button"
                     onClick={() => setEditorOpen(true)}
-                    className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-[11px] bg-[#F62E18] px-4 text-sm font-semibold text-white"
+                    disabled={Boolean(checkout)}
+                    className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-[11px] bg-[#F62E18] px-4 text-sm font-semibold text-white disabled:pointer-events-none disabled:opacity-45"
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" />
                     Add a new address
@@ -431,7 +449,9 @@ export default function CheckoutPage() {
               <dl className="mt-4 space-y-2.5 text-sm">
                 <div className="flex items-center justify-between gap-4">
                   <dt className="text-[#6B6B6B]">Item total</dt>
-                  <dd className="font-medium tabular-nums">{money(subtotal, currency)}</dd>
+                  <dd className="font-medium tabular-nums">
+                    {money(subtotal, currency)}
+                  </dd>
                 </div>
 
                 {checkout ? (
@@ -464,22 +484,9 @@ export default function CheckoutPage() {
                 ) : (
                   <div className="mt-3 flex items-start gap-2 border-t border-[#E5E7EB] pt-3">
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs leading-5 text-[#6B6B6B]">
-                        {pricing
-                          ? "Calculating delivery fee, tax and your final total…"
-                          : "Your final total must be confirmed by Craves before payment."}
-                      </p>
-                      {!pricing && selectedId ? (
-                        <button
-                          type="button"
-                          onClick={() => void selectAddress(selectedId)}
-                          className="mt-3 inline-flex min-h-9 items-center rounded-[10px] border border-[#D7DADF] bg-white px-3 text-xs font-semibold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:border-[#C8CDD2] hover:bg-[#F1F3F5]"
-                        >
-                          Refresh total
-                        </button>
-                      ) : null}
-                    </div>
+                    <p className="text-xs leading-5 text-[#6B6B6B]">
+                      Review the order to load the authoritative delivery fee, tax and final total before payment.
+                    </p>
                   </div>
                 )}
               </dl>
@@ -487,14 +494,16 @@ export default function CheckoutPage() {
 
             {instructions.trim() ? (
               <section className="rounded-[14px] border border-[#E5E7EB] bg-[#F1F3F5] p-4">
-                <p className="text-xs font-semibold text-[#6B6B6B]">Cooking instructions</p>
+                <p className="text-xs font-semibold text-[#6B6B6B]">
+                  Cooking instructions
+                </p>
                 <p className="mt-1 text-sm leading-5">{instructions.trim()}</p>
               </section>
             ) : null}
           </div>
         )}
 
-        {error && items.length > 0 ? (
+        {error && hasCheckoutContext ? (
           <p
             role="alert"
             className="mt-4 rounded-[11px] border border-[#F62E18]/20 bg-[#F62E18]/5 p-3 text-sm font-medium text-[#C92716]"
@@ -504,13 +513,12 @@ export default function CheckoutPage() {
         ) : null}
       </main>
 
-      {!loading && items.length > 0 ? (
+      {!loading && hasCheckoutContext ? (
         <CheckoutPaymentButton
           checkout={checkout}
           previewAmount={subtotal}
           currency={currency}
-          disabled={!selectedAddress || pricing || !checkout}
-          preparingCheckout={pricing}
+          disabled={!checkout && !selectedAddress}
           failure={paymentFailure}
           ensureCheckout={ensureCheckout}
           onFailure={setPaymentFailure}

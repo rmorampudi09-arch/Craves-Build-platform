@@ -31,6 +31,7 @@ import {Icon} from '../../../shared/components/Icon';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {
   REFERRAL_REWARD_PAGE_SIZE,
+  REFERRAL_REWARDS_AVAILABLE,
   referralRewardsApi,
   type ReferralOverview,
   type ReferralReward,
@@ -46,6 +47,9 @@ const PROGRAM_UNAVAILABLE_CODES = new Set([
   'REFERRAL_ACCOUNT_NOT_ENROLLED_OR_INACTIVE',
   'ACCOUNT_INACTIVE',
 ]);
+
+const REFERRAL_UNAVAILABLE_COPY =
+  'Referral rewards are not available in the app yet because the current main backend keeps Referral Service member routes private until their APIM publication is approved.';
 
 function formatPaise(value: string): string {
   const paise = Number(value);
@@ -90,7 +94,7 @@ function rewardTitle(reward: ReferralReward): string {
 
 function unavailableMessage(code: string, status?: number): string | null {
   if (PROGRAM_UNAVAILABLE_CODES.has(code) || status === 404) {
-    return 'Referral rewards are not available for this account yet. Craves will show your real referral code and rewards here when the programme is enabled.';
+    return REFERRAL_UNAVAILABLE_COPY;
   }
   return null;
 }
@@ -100,10 +104,12 @@ export function ReferralRewardsScreen() {
   const [overview, setOverview] = React.useState<ReferralOverview | null>(null);
   const [rewards, setRewards] = React.useState<ReferralReward[]>([]);
   const [nextCursor, setNextCursor] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(true);
+  const [loading, setLoading] = React.useState(REFERRAL_REWARDS_AVAILABLE);
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [sharing, setSharing] = React.useState(false);
-  const [unavailable, setUnavailable] = React.useState<string | null>(null);
+  const [unavailable, setUnavailable] = React.useState<string | null>(
+    REFERRAL_REWARDS_AVAILABLE ? null : REFERRAL_UNAVAILABLE_COPY,
+  );
   const [error, setError] = React.useState<string | null>(null);
   const [historyError, setHistoryError] = React.useState<string | null>(null);
 
@@ -116,9 +122,19 @@ export function ReferralRewardsScreen() {
   );
 
   const load = React.useCallback(async () => {
-    setLoading(true);
     setError(null);
     setHistoryError(null);
+
+    if (!REFERRAL_REWARDS_AVAILABLE) {
+      setOverview(null);
+      setRewards([]);
+      setNextCursor(null);
+      setUnavailable(REFERRAL_UNAVAILABLE_COPY);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     setUnavailable(null);
 
     try {
@@ -155,7 +171,7 @@ export function ReferralRewardsScreen() {
   }, [load]);
 
   const loadMore = React.useCallback(async () => {
-    if (!nextCursor || loadingMore) return;
+    if (!REFERRAL_REWARDS_AVAILABLE || !nextCursor || loadingMore) return;
     setLoadingMore(true);
     setHistoryError(null);
     try {

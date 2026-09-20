@@ -30,6 +30,9 @@ test("checkout uses parsed active saved addresses and backend checkout", () => {
   assert.match(page, /createAuthoritativeCheckout/);
   assert.match(page, /deliveryAddressId,/);
   assert.match(page, /parseCheckout\(raw\)/);
+  assert.match(page, /CHECKOUT_ID_KEY/);
+  assert.match(page, /fetchCheckout\(storedCheckoutId\)/);
+  assert.match(page, /window\.sessionStorage\.setItem\(CHECKOUT_ID_KEY, prepared\.id\)/);
   assert.doesNotMatch(
     page,
     /<AddressEditorFlow[\s\S]{0,320}\baddresses=/,
@@ -46,6 +49,8 @@ test("Razorpay payment is contract validated and backend verified", () => {
   assert.match(payment, /\/api\/payments\/orders/);
   assert.match(payment, /sessionFetch/);
   assert.match(payment, /const session = await loadSession\(\)/);
+  assert.match(payment, /if \(!checkout\) \{[\s\S]*await ensureCheckout\(\);[\s\S]*return;/);
+  assert.match(payment, /Review total/);
   assert.match(payment, /\/verify/);
   assert.doesNotMatch(
     payment,

@@ -2,14 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   BadgeIndianRupee,
-  ChevronDown,
+  Clock3,
+  FileCheck2,
   RefreshCw,
+  RotateCcw,
+  WalletCards,
 } from "lucide-react";
 import {
+  formatChefEarningStatus,
   parseChefEarnings,
   type ChefEarning,
+  type ChefEarningStatus,
 } from "@/lib/chef-earnings-contract";
+
+type LedgerView = "ALL" | ChefEarningStatus;
 
 function money(value: number, currency: string): string {
   try {
@@ -23,38 +31,21 @@ function money(value: number, currency: string): string {
   }
 }
 
-function isThisWeek(value: string): boolean {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-  const now = new Date();
-  const start = new Date(now);
-  const day = start.getDay();
-  const distanceFromMonday = day === 0 ? 6 : day - 1;
-  start.setDate(start.getDate() - distanceFromMonday);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 7);
-  return date >= start && date < end;
-}
-
-function friendlyStatus(status: ChefEarning["status"]): string {
-  if (status === "SETTLED") return "Paid";
-  if (status === "SETTLEMENT_PENDING") return "Payment being prepared";
-  if (status === "APPROVED") return "Approved";
-  if (status === "REVERSED") return "Adjusted";
-  return "Being checked";
+function statusClass(status: ChefEarningStatus): string {
+  if (status === "SETTLED") return "bg-success/10 text-success";
+  if (status === "REVERSED") return "bg-error/10 text-error";
+  if (status === "SETTLEMENT_PENDING") return "bg-warning/10 text-warning";
+  return "bg-secondary text-contrast-red";
 }
 
 export function ChefEarningsLedger() {
   const [entries, setEntries] = useState<ChefEarning[]>([]);
+  const [view, setView] = useState<LedgerView>("ALL");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showAll, setShowAll] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
-  // The browser never calculates commission. Every amount shown here comes
-  // from the existing finance-owned earnings response.
   const load = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
     else setLoading(true);
@@ -72,11 +63,11 @@ export function ChefEarningsLedger() {
           "message" in raw &&
           typeof raw.message === "string"
             ? raw.message
-            : "We couldn’t load what you’ve earned right now.";
+            : "Chef earnings are temporarily unavailable.";
         throw new Error(message);
       }
       const parsed = parseChefEarnings(raw);
-      if (!parsed) throw new Error("We couldn’t read your latest earnings. Please refresh.");
+      if (!parsed) throw new Error("Craves returned an invalid chef earnings response.");
       setEntries(
         [...parsed].sort(
           (left, right) =>
@@ -85,7 +76,11 @@ export function ChefEarningsLedger() {
       );
       setLastUpdatedAt(new Date());
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "We couldn’t load what you’ve earned right now.");
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Chef earnings are temporarily unavailable.",
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -96,19 +91,26 @@ export function ChefEarningsLedger() {
     void load();
   }, [load]);
 
-  const summary = useMemo(() => {
-    const counted = entries.filter(
-      (entry) =>
-        ["APPROVED", "SETTLEMENT_PENDING", "SETTLED"].includes(entry.status) &&
-        isThisWeek(entry.createdAt),
-    );
-    const currency = counted[0]?.currency ?? entries[0]?.currency ?? "INR";
-    return {
-      amount: counted.reduce((sum, entry) => sum + entry.netPayable, 0),
-      currency,
-      hasRecordedEarnings: entries.length > 0,
-    };
-  }, [entries]);
+  const visibleEntries = useMemo(
+    () =>
+      view === "ALL"
+        ? entries
+        : entries.filter((entry) => entry.status === view),
+    [entries, view],
+  );
+
+  const currency = entries[0]?.currency ?? "INR";
+  const approvedPayable = entries
+    .filter((entry) =>
+      ["APPROVED", "SETTLEMENT_PENDING", "SETTLED"].includes(entry.status),
+    )
+    .reduce((sum, entry) => sum + entry.netPayable, 0);
+  const settledPayable = entries
+    .filter((entry) => entry.status === "SETTLED")
+    .reduce((sum, entry) => sum + entry.netPayable, 0);
+  const pendingPayable = entries
+    .filter((entry) => entry.status === "SETTLEMENT_PENDING")
+    .reduce((sum, entry) => sum + entry.netPayable, 0);
 
   return (
     <div className="space-y-6">
@@ -170,12 +172,34 @@ export function ChefEarningsLedger() {
           </button>
         </div>
 
-          {summary.hasRecordedEarnings ? (
-            <section className="rounded-3xl border border-[#E5E7EB] bg-white p-5 md:p-6">
-              <button type="button" onClick={() => setShowAll((current) => !current)} aria-expanded={showAll} className="flex min-h-12 w-full items-center justify-between gap-4 rounded-2xl px-2 text-left font-semibold text-[#1A1A1A]">
-                <span>{showAll ? "Hide older earnings" : "See all earnings"}</span>
-                <ChevronDown className={`h-5 w-5 transition-transform ${showAll ? "rotate-180" : ""}`} aria-hidden="true" />
-              </button>
+        <div className="mt-5 flex gap-2 overflow-x-auto pb-1" aria-label="Filter earning ledger">
+          {(
+            [
+              "ALL",
+              "DRAFT",
+              "APPROVED",
+              "SETTLEMENT_PENDING",
+              "SETTLED",
+              "REVERSED",
+            ] as const
+          ).map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => setView(status)}
+              aria-pressed={view === status}
+              className={`min-h-11 shrink-0 rounded-full border px-4 text-sm font-semibold ${
+                view === status
+                  ? "border-primary bg-primary text-white"
+                  : "border-border bg-white text-ink hover:border-primary"
+              }`}
+            >
+              {status === "ALL"
+                ? "All"
+                : formatChefEarningStatus(status)}
+            </button>
+          ))}
+        </div>
 
         {loading ? (
           <div className="mt-6 space-y-3" aria-hidden="true">
@@ -238,11 +262,6 @@ export function ChefEarningsLedger() {
                     </p>
                   </div>
                 </div>
-              ) : null}
-            </section>
-          ) : null}
-        </>
-      )}
 
                 <dl className="mt-5 grid gap-3 border-t border-border pt-4 text-sm sm:grid-cols-4">
                   <div>

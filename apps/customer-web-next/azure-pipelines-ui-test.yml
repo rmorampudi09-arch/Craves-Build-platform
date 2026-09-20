@@ -343,14 +343,9 @@ steps:
           --only-show-errors || printf '0')
 
         if [[ "$ACR_PULL_COUNT" == '0' ]]; then
-          echo 'Granting AcrPull to the isolated test Container App identity.'
-          az role assignment create \
-            --assignee-object-id "$PRINCIPAL_ID" \
-            --assignee-principal-type ServicePrincipal \
-            --role AcrPull \
-            --scope "$ACR_ID" \
-            -o none \
-            --only-show-errors
+          echo 'ERROR: The isolated test Container App identity is missing AcrPull on the existing registry.' >&2
+          echo 'ERROR: This pipeline intentionally does not create Azure RBAC assignments because the service connection does not have roleAssignments/write.' >&2
+          exit 2
         fi
 
         az containerapp registry set \
@@ -394,17 +389,15 @@ steps:
             -o tsv \
             --only-show-errors || printf '0')
 
+          LOCATION_PROXY_BASE_URL=''
           if [[ "$MAPS_READER_COUNT" == '0' ]]; then
-            echo 'Granting Azure Maps Data Reader to the isolated test Container App identity.'
-            az role assignment create \
-              --subscription "$EXPECTED_SUBSCRIPTION" \
-              --assignee-object-id "$PRINCIPAL_ID" \
-              --assignee-principal-type ServicePrincipal \
-              --role 'Azure Maps Data Reader' \
-              --scope "$MAPS_ID" \
-              -o none \
-              --only-show-errors
+            echo 'WARNING: The isolated test Container App identity does not have Azure Maps Data Reader.'
+            echo 'WARNING: The service connection cannot create Azure RBAC assignments, so this deployment will use the production location BFF as the test-only Maps transport.'
+            LOCATION_PROXY_BASE_URL='https://craves.in'
           fi
+        else
+          LOCATION_PROXY_BASE_URL='https://craves.in'
+          echo 'WARNING: Production Azure Maps configuration was not found; using the production location BFF for the isolated UI test app.'
         fi
 
         ENV_ARGS=(
@@ -412,6 +405,7 @@ steps:
           'NEXT_PUBLIC_RAZORPAY_MODE=sandbox'
           'NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=false'
           "CRAVES_BUILD_SHA=$(Build.SourceVersion)"
+          "CRAVES_LOCATION_PROXY_BASE_URL=$LOCATION_PROXY_BASE_URL"
         )
         [[ -n "$MAPS_CLIENT_ID" ]] && ENV_ARGS+=("AZURE_MAPS_CLIENT_ID=$MAPS_CLIENT_ID")
         [[ -n "$MAPS_ENDPOINT" ]] && ENV_ARGS+=("AZURE_MAPS_ENDPOINT=$MAPS_ENDPOINT")

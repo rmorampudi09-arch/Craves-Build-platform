@@ -23,17 +23,21 @@ public class FinancePolicyService {
     public record Draft(UUID id,String contentHash,FinancePolicy settings) {}
     public record ActivateRequest(long expectedRevision,String expectedHash,String reason) {}
     private final JdbcTemplate jdbc;private final ObjectMapper json;
-    private final boolean financialSourceReady;private final boolean postingEnabled;private final boolean payoutReady;private final boolean manualReady;
+    private final boolean financialSourceReady;private final boolean postingEnabled;private final boolean payoutReady;private final boolean manualReady;private final boolean deliveryTariffReady;
     public FinancePolicyService(JdbcTemplate jdbc,ObjectMapper json,boolean sourceReady,boolean postingEnabled,boolean payoutReady) {
         this(jdbc,json,sourceReady,postingEnabled,payoutReady,false);
+    }
+    public FinancePolicyService(JdbcTemplate jdbc,ObjectMapper json,boolean sourceReady,boolean postingEnabled,boolean payoutReady,boolean manualReady) {
+        this(jdbc,json,sourceReady,postingEnabled,payoutReady,manualReady,false);
     }
     @org.springframework.beans.factory.annotation.Autowired
     public FinancePolicyService(JdbcTemplate jdbc,ObjectMapper json,
         @Value("${craves.finance.authoritative-source-ready:false}") boolean sourceReady,
         @Value("${craves.ledger.posting-enabled:false}") boolean postingEnabled,
         @Value("${craves.razorpayx.production-approved:false}") boolean payoutReady,
-        @Value("${CRAVES_MANUAL_SETTLEMENT_ENABLED:false}") boolean manualReady) {
-        this.jdbc=jdbc;this.json=json;this.financialSourceReady=sourceReady;this.postingEnabled=postingEnabled;this.payoutReady=payoutReady;this.manualReady=manualReady;
+        @Value("${CRAVES_MANUAL_SETTLEMENT_ENABLED:false}") boolean manualReady,
+        @Value("${CRAVES_DELIVERY_TARIFF_SOURCE_READY:false}") boolean deliveryTariffReady) {
+        this.jdbc=jdbc;this.json=json;this.financialSourceReady=sourceReady;this.postingEnabled=postingEnabled;this.payoutReady=payoutReady;this.manualReady=manualReady;this.deliveryTariffReady=deliveryTariffReady;
     }
     public View view(CravesPrincipal actor) {reader(actor);return current();}
     public View current() {
@@ -44,6 +48,9 @@ public class FinancePolicyService {
         var result=new ArrayList<String>();
         if(!financialSourceReady) result.add("AUTHORITATIVE_ORDER_SNAPSHOT_AND_CAPTURE_WIRING_NOT_CERTIFIED");
         if(!postingEnabled) result.add("JOURNAL_POSTING_DISABLED");
+        if(policy.deliveryTariff()!=null && !deliveryTariffReady) result.add("DISTANCE_TARIFF_CHECKOUT_WIRING_NOT_CERTIFIED");
+        if(policy.deliveryTariff()!=null && policy.deliveryTariff().distanceBasis()==DeliveryTariff.DistanceBasis.ROAD_ROUTE)
+            result.add("VERIFIED_ROAD_ROUTE_DISTANCE_NOT_CONNECTED");
         if(policy.taxApprovalReference()==null || policy.chefFeeTaxTreatment()==FinancePolicy.FeeTaxTreatment.UNCONFIRMED)
             result.add("COMMISSION_GST_TREATMENT_AND_TAX_CLASSIFICATION_UNCONFIRMED");
         if(policy.automaticPayoutsEnabled() && !payoutReady) result.add("RAZORPAYX_ACCOUNT_PAYOUT_PERMISSION_NOT_CERTIFIED");
@@ -71,6 +78,10 @@ public class FinancePolicyService {
         if(rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Policy not found");var candidate=rows.getFirst();
         if(!candidate.contentHash().equals(request.expectedHash())) throw conflict("Reviewed policy hash differs");
         var policy=candidate.settings();
+        if(policy.ledgerEnabled() && policy.deliveryTariff()!=null && !deliveryTariffReady)
+            throw conflict("Distance tariff checkout deployment has not been certified");
+        if(policy.ledgerEnabled() && policy.deliveryTariff()!=null && policy.deliveryTariff().distanceBasis()==DeliveryTariff.DistanceBasis.ROAD_ROUTE)
+            throw conflict("Verified road-route distance is not connected; choose only an approved supported distance basis");
         if(policy.ledgerEnabled() && (!financialSourceReady || !postingEnabled)) throw conflict("Authoritative earning source and journal release gates are not certified");
         if(policy.automaticPayoutsEnabled() && !payoutReady) throw conflict("RazorpayX automatic payout activation has not been certified");
         if(policy.manualWithdrawalsEnabled() && !payoutReady && !manualReady) throw conflict("Manual settlement runtime has not been certified");

@@ -194,8 +194,10 @@ export function ChefApplicationWorkspace() {
   const [message, setMessage] = useState("Loading your application…");
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   async function load() {
+    setLoadFailed(false);
     const [applicationResponse, profileResponse, addressesResponse] = await Promise.all([
       fetch("/api/chef/application", { cache: "no-store" }),
       fetch("/api/customer/profile", { cache: "no-store" }),
@@ -236,8 +238,12 @@ export function ChefApplicationWorkspace() {
   useEffect(() => {
     void load().catch((error) => {
       setLoadFailed(true);
-      setMessage(error instanceof Error ? error.message : "We couldn’t load your application right now."),
-    );
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "We couldn’t load your application right now.",
+      );
+    });
   }, []);
 
   function field<K extends keyof FormState>(name: K, value: FormState[K]) {
@@ -323,7 +329,11 @@ export function ChefApplicationWorkspace() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const locked = application?.status === "APPROVED";
-    if (locked) return;
+    if (locked || loadFailed) return;
+    if (!chefEmailEligible(emailVerification)) {
+      setMessage("Verify your email before submitting your chef application.");
+      return;
+    }
     if (!form.email.trim() || !form.firstName.trim() || !form.lastName.trim()) {
       setMessage("Please check your name and email before continuing.");
       return;
@@ -471,7 +481,7 @@ export function ChefApplicationWorkspace() {
           <div className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_2px_10px_rgba(0,0,0,0.08)]"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold text-[#6B6B6B]">Kitchen address</p><p className="mt-1 text-sm leading-6 text-[#1A1A1A]">{addressSummary(form) || "Address not added"}</p></div><button type="button" onClick={() => go("address")} className="rounded-full bg-[#F1F3F5] px-4 py-2 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">Change</button></div></div>
         </div>
         {message ? <p role="alert" className="mt-4 text-sm font-medium text-[#F62E18]">{message}</p> : null}
-        <button type="submit" disabled={busy || locked} aria-label={application?.status === "PENDING" ? PENDING_UPDATE_LABEL : undefined} className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white disabled:opacity-50">{busy ? "Saving…" : "Save and continue"}{!busy ? <ChevronRight className="h-4 w-4" aria-hidden="true" /> : null}</button>
+        <button type="submit" disabled={busy || locked || !chefEmailEligible(emailVerification)} aria-label={application?.status === "PENDING" ? PENDING_UPDATE_LABEL : undefined} className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white disabled:opacity-50">{busy ? "Saving…" : "Save and continue"}{!busy ? <ChevronRight className="h-4 w-4" aria-hidden="true" /> : null}</button>
         {application?.id ? <button type="button" onClick={() => go("documents-intro")} className="mt-3 min-h-11 w-full text-sm font-semibold text-[#6B6B6B] hover:text-[#1A1A1A]">Go to my photos</button> : null}
       </form>
     );

@@ -56,13 +56,15 @@ for (const manifestPath of manifestPaths) {
 if (!manifests.length) process.exit();
 
 const actions = manifests.flatMap(manifest => manifest.actions ?? []);
+const sourceOnly = manifests.flatMap(manifest => manifest.sourceOnly ?? []);
+const mappings = [...actions, ...sourceOnly];
 const quarantined = manifests.flatMap(manifest => manifest.quarantined ?? []);
 const validMethods = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const validAuth = new Set(['public', 'bearer']);
 const ids = new Set();
 const expectedBySource = new Map();
 
-for (const action of actions) {
+for (const action of mappings) {
   for (const field of [
     'id',
     'source',
@@ -97,6 +99,39 @@ for (const action of actions) {
   const expected = expectedBySource.get(action.source) ?? new Map();
   expected.set(key, (expected.get(key) ?? 0) + 1);
   expectedBySource.set(action.source, expected);
+}
+
+const escapeRegex = value => value.replace(/[.*+?^\${}()|[\]\\]/g, '\\  expectedBySource.set(action.source, expected);
+}
+
+const callPattern =');
+for (const item of sourceOnly) {
+  if (typeof item.reason !== 'string' || !item.reason.trim()) {
+    fail(`Source-only contract action is missing reason: ${JSON.stringify(item)}`);
+  }
+  if (
+    typeof item.availabilityFlag !== 'string' ||
+    !/^[A-Z][A-Z0-9_]*$/.test(item.availabilityFlag)
+  ) {
+    fail(`Source-only contract action has invalid availabilityFlag: ${JSON.stringify(item)}`);
+    continue;
+  }
+
+  const availabilitySource = item.availabilitySource ?? item.source;
+  const availabilityPath = path.join(mobileRoot, availabilitySource);
+  if (!fs.existsSync(availabilityPath)) {
+    fail(`${item.id} availability source is missing: ${availabilitySource}`);
+    continue;
+  }
+  const availabilityCode = fs.readFileSync(availabilityPath, 'utf8');
+  const availabilityPattern = new RegExp(
+    `export\\s+const\\s+${escapeRegex(item.availabilityFlag)}\\s*=\\s*false\\s*;`,
+  );
+  if (!availabilityPattern.test(availabilityCode)) {
+    fail(
+      `${item.id} is source-only but ${item.availabilityFlag} is not explicitly false in ${availabilitySource}.`,
+    );
+  }
 }
 
 const callPattern = /\b(httpClient|publicApiClient)\.(get|head|post|put|patch|delete)\s*(?:<[^;()]*?>)?\s*\(/g;
@@ -157,5 +192,5 @@ for (const item of quarantined) {
 }
 
 if (!process.exitCode) {
-  console.log(`[P119] PASS: ${actions.length} production mobile HTTP actions across ${manifests.length} published manifests are mapped; ${callBearingSources.size} call-bearing source files audited.`);
+  console.log(`[P119] PASS: ${actions.length} published mobile HTTP actions and ${sourceOnly.length} source-only fail-closed actions across ${manifests.length} manifests are mapped; ${callBearingSources.size} call-bearing source files audited.`);
 }

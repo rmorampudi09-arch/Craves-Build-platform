@@ -122,6 +122,12 @@ test("welcome banner stays focused on home content while discovery uses the save
   assert.match(welcome, /src="\/home\/reference\/home-hero-reference\.webp"/);
   assert.match(welcome, /styles\.heroArtwork/);
   assert.match(welcome, /Welcome home, \{firstName\}/);
+  assert.doesNotMatch(welcome, /import \{ Heart \} from "lucide-react"/);
+  assert.doesNotMatch(
+    welcome,
+    /Welcome home,[\s\S]{0,220}rounded-full[\s\S]{0,220}bg-white\/90/,
+  );
+  assert.doesNotMatch(welcome, /backdrop-blur-sm/);
   assert.match(welcome, /Eat for Health\./);
   assert.match(welcome, /Taste the Comfort of Home\./);
   assert.match(welcome, /dishCount/);

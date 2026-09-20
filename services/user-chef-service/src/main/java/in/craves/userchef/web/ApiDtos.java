@@ -1,5 +1,6 @@
 package in.craves.userchef.web;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
@@ -79,6 +80,11 @@ public final class ApiDtos {
         @NotNull @DecimalMin("-180.0") @DecimalMax("180.0") BigDecimal longitude,
         Boolean isDefault
     ) {
+        @AssertTrue(message = "Name this address before saving")
+        public boolean isAddressNameValid() {
+            return addressLabel != AddressLabel.OTHER
+                || (addressName != null && !addressName.isBlank());
+        }
     }
 
     public record CustomerAddressResponse(

@@ -146,7 +146,7 @@ test("welcome banner stays focused on home content while discovery uses the save
 test("address manager owns default selection and the shared location-first editor", () => {
   assert.match(addresses, /Add New Address/);
   assert.match(addresses, /Choose your default delivery address here/);
-  assert.match(addresses, /Select as default/);
+  assert.match(addresses, /Set as default/);
   assert.match(addresses, /Default address/);
   assert.match(addresses, /async function selectDefault/);
   assert.match(addresses, /invalidateHomeDeliveryContext/);

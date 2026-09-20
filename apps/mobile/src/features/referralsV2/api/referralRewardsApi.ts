@@ -8,6 +8,10 @@ const NON_NEGATIVE_PAISE_PATTERN = /^[0-9]{1,13}$/;
 const INTEGER_STRING_PATTERN = /^[0-9]{1,19}$/;
 const CURSOR_PATTERN = /^[A-Za-z0-9_-]{1,180}$/;
 
+// Referral Service is deployed privately on current main and its public/member
+// gateway publication is not enabled yet. Keep mobile fail-closed until APIM is published.
+export const REFERRAL_REWARDS_AVAILABLE = false;
+
 export const REFERRAL_OVERVIEW_ROUTE = '/api/v1/referrals/me' as const;
 export const REFERRAL_REWARDS_ROUTE =
   '/api/v1/referrals/me/rewards' as const;

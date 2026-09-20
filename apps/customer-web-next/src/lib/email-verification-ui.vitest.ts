@@ -144,15 +144,25 @@ describe("registration and verify-later email UI", () => {
       return Response.json(current);
     });
     render(createElement(ChefApplicationWorkspace));
+    fireEvent.click(await screen.findByRole("button", { name: "Start my application" }));
+
+    const email = await screen.findByLabelText("Email") as HTMLInputElement;
+    fireEvent.change(email, { target: { value: "stale@example.invalid" } });
+    fireEvent.click(button("Continue"));
+    await screen.findByRole("heading", { name: "Where do you cook?" });
+    fireEvent.click(button("Continue"));
+    await screen.findByRole("heading", { name: "Does everything look right?" });
+
     await waitFor(() => expect(button("Refresh verification status").disabled).toBe(false));
-    expect(button("Submit application").disabled).toBe(true);
-    fireEvent.submit(document.querySelector("form")!);
+    expect(button("Save and continue").disabled).toBe(true);
+    fireEvent.submit(button("Save and continue").closest("form")!);
     await screen.findByText("Verify your email before submitting your chef application.");
     expect(fetcher.mock.calls.some(([url, init]) => url === "/api/chef/application" && init?.method === "POST")).toBe(false);
+
     current = verified;
     fireEvent.click(button("Refresh verification status"));
-    await waitFor(() => expect(button("Submit application").disabled).toBe(false));
-    fireEvent.submit(document.querySelector("form")!);
+    await waitFor(() => expect(button("Save and continue").disabled).toBe(false));
+    fireEvent.submit(button("Save and continue").closest("form")!);
     await waitFor(() => expect(fetcher.mock.calls.some(([url, init]) => url === "/api/chef/application" && init?.method === "POST")).toBe(true));
     const submitted = fetcher.mock.calls.find(([url, init]) => url === "/api/chef/application" && init?.method === "POST");
     expect(JSON.parse(String(submitted?.[1]?.body)).email).toBe(verified.email);

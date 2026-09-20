@@ -125,14 +125,13 @@ h6 {
     background-color var(--motion-fast),
     border-color var(--motion-fast),
     box-shadow var(--motion-fast),
-    color var(--motion-fast),
-    transform var(--motion-fast);
+    color var(--motion-fast);
 }
 
 :where(button, [role="tab"], .craves-button-link, .chef-panel-nav-link):not(:disabled):hover {
   border-color: #d7dadf;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transform: translateY(-1px);
+  transform: none !important;
 }
 
 :where(button, [role="tab"], .craves-button-link, .chef-panel-nav-link):not(:disabled):focus-visible {
@@ -152,7 +151,7 @@ h6 {
   background: #b92314;
   color: var(--color-white);
   box-shadow: 0 5px 14px rgba(201, 39, 22, 0.22);
-  transform: translateY(-1px);
+  transform: none !important;
 }
 
 :where(button, [role="tab"], .btn-primary):disabled {

@@ -49,8 +49,14 @@ for (const manifestPath of manifestPaths) {
   if (manifest.schemaVersion !== 1 || manifest.phase !== 'P119') {
     fail(`Contract manifest schemaVersion/phase is not the P119 v1 contract: ${manifestPath}`);
   }
-  if (!Array.isArray(manifest.actions) || manifest.actions.length === 0) {
-    fail(`Contract manifest contains no production actions: ${manifestPath}`);
+  if (!Array.isArray(manifest.actions)) {
+    fail(`Contract manifest actions must be an array: ${manifestPath}`);
+  }
+  if (manifest.sourceOnly != null && !Array.isArray(manifest.sourceOnly)) {
+    fail(`Contract manifest sourceOnly must be an array: ${manifestPath}`);
+  }
+  if ((manifest.actions?.length ?? 0) + (manifest.sourceOnly?.length ?? 0) === 0) {
+    fail(`Contract manifest contains no mapped mobile actions: ${manifestPath}`);
   }
   manifests.push(manifest);
 }

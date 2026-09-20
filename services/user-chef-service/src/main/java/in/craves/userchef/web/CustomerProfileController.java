@@ -90,6 +90,14 @@ public class CustomerProfileController {
         return service.updateAddress(user, addressId, request);
     }
 
+    @PutMapping("/addresses/{addressId}/default")
+    public CustomerAddressResponse setDefaultAddress(
+        @AuthenticationPrincipal CurrentUser user,
+        @PathVariable UUID addressId
+    ) {
+        return service.setDefaultAddress(user, addressId);
+    }
+
     @DeleteMapping("/addresses/{addressId}")
     public void deleteAddress(@AuthenticationPrincipal CurrentUser user, @PathVariable UUID addressId) {
         service.deleteAddress(user, addressId);

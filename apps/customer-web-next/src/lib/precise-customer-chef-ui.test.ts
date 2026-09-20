@@ -27,7 +27,7 @@ const checkout = source("../screens/Checkout/Checkout.tsx");
 const orders = source("../screens/OrderHistory/OrderHistory.tsx");
 const cart = source("../screens/Cart/Cart.tsx");
 const notifications = source("../screens/Notifications/Notifications.tsx");
-const addressDialog = source("../components/checkout/CheckoutAddressDialog.tsx");
+const addressEditor = source("../components/profile/AddressEditorFlow.tsx");
 const chefActions = source("../components/chef-order-actions.tsx");
 const mealPlans = source("../components/subscription-plan-browser.tsx");
 const mealPlanPage = source("../app/subscriptions/plans/page.tsx");
@@ -140,7 +140,7 @@ test("welcome banner stays focused on home content while discovery uses the save
   assert.doesNotMatch(home, /resolveLiveBrowsingLocation/);
 });
 
-test("address manager owns default selection and reference-style editing", () => {
+test("address manager owns default selection and the shared location-first editor", () => {
   assert.match(addresses, /Add New Address/);
   assert.match(addresses, /Choose your default delivery address here/);
   assert.match(addresses, /Select as default/);
@@ -150,13 +150,18 @@ test("address manager owns default selection and reference-style editing", () =>
   assert.match(addresses, /invalidateSelectedAddress/);
   assert.match(addresses, /clearDishDiscoveryCache/);
   assert.match(addresses, /clearKitchenDiscoveryCache/);
-  assert.match(addresses, /role="dialog"/);
-  assert.match(addresses, /Address label/);
-  assert.match(addresses, /Contact details/);
-  assert.match(addresses, /Address details/);
-  assert.match(addresses, /Use my current location/);
-  assert.match(addresses, /Update address/);
-  assert.doesNotMatch(addresses, /Make this my default address/);
+  assert.match(addresses, /<AddressEditorFlow/);
+
+  assert.match(addressEditor, /<Dialog\.Root/);
+  assert.match(addressEditor, /<AddressMapPicker/);
+  assert.match(addressEditor, /Search for area, street name/);
+  assert.match(addressEditor, /Use current location/);
+  assert.match(addressEditor, /Confirm delivery location/);
+  assert.match(addressEditor, /Flat \/ house \/ floor/);
+  assert.match(addressEditor, /Receiver&apos;s phone/);
+  assert.match(addressEditor, /Save and use this address/);
+  assert.doesNotMatch(addressEditor, /Skip/);
+  assert.doesNotMatch(addressEditor, /Add later/);
 });
 
 test("home rechecks cart availability after default-address changes", () => {
@@ -184,20 +189,25 @@ test("meal plans keep their previous card layout and navigation flow", () => {
   assert.match(mealPlanPage, /bg-\[#0B1426\]/);
 });
 
-test("checkout shows only the current address and manages all addresses in a dialog", () => {
-  assert.match(checkout, /CheckoutAddressDialog/);
-  assert.match(checkout, /Only the address selected for this checkout is shown here/);
-  assert.match(checkout, /Manage address/);
-  assert.match(checkout, /onAddressesChange=\{setAddresses\}/);
-  assert.doesNotMatch(checkout, /<fieldset/);
-  assert.doesNotMatch(checkout, /addresses\.map/);
+test("checkout is one page with saved addresses, ASAP delivery and the shared address sheet", () => {
+  assert.match(checkout, /Deliver to/);
+  assert.match(checkout, /visibleAddresses\.map/);
+  assert.match(checkout, /addresses\.slice\(0, 3\)/);
+  assert.match(checkout, /Show all/);
+  assert.match(checkout, /Earliest delivery/);
+  assert.match(checkout, /As soon as possible/);
+  assert.match(checkout, /Bill details/);
+  assert.match(checkout, /<CheckoutPaymentButton/);
+  assert.match(checkout, /<AddressEditorFlow/);
+  assert.match(checkout, /fetch\("\/api\/checkout"/);
+  assert.match(checkout, /deliveryAddressId:\s*selectedId/);
+  assert.doesNotMatch(checkout, /CheckoutAddressDialog/);
+  assert.doesNotMatch(checkout, /Pick a time/);
+  assert.doesNotMatch(checkout, /schedule\/capability/);
 
-  assert.match(addressDialog, /role="dialog"/);
-  assert.match(addressDialog, /fetch\("\/api\/customer\/addresses"/);
-  assert.match(addressDialog, /method:\s*"POST"/);
-  assert.match(addressDialog, /parseCustomerAddresses/);
-  assert.match(addressDialog, /Add new address/);
-  assert.match(addressDialog, /Save and use this address/);
+  assert.match(addressEditor, /fetch\(\s*targetAddressId/);
+  assert.match(addressEditor, /method:\s*targetAddressId \? "PUT" : "POST"/);
+  assert.match(addressEditor, /Save and use this address/);
 });
 
 test("customer orders page uses a white page surface", () => {
@@ -206,8 +216,12 @@ test("customer orders page uses a white page surface", () => {
 });
 
 test("customer cart and notifications use white page surfaces", () => {
-  assert.match(cart, /min-h-screen bg-white pb-32 text-ink/);
-  assert.doesNotMatch(cart, /min-h-screen bg-cream pb-32 text-ink/);
+  assert.match(cart, /min-h-screen bg-white pb-36 text-\[#1A1A1A\]/);
+  assert.match(cart, /Cooking instructions/);
+  assert.match(cart, /Add more from this kitchen/);
+  assert.match(cart, /Undo/);
+  assert.match(cart, /navigate\(\{ to: "\/checkout" \}\)/);
+  assert.doesNotMatch(cart, /min-h-screen bg-cream/);
   assert.match(notifications, /min-h-screen bg-white pb-12/);
   assert.match(notifications, /border-b border-border bg-white\/95/);
   assert.doesNotMatch(notifications, /min-h-screen bg-cream pb-12/);

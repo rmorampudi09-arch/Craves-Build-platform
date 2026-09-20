@@ -91,9 +91,9 @@
       "path": "/api/v1/subscriptions/{subscriptionId}/skips",
       "auth": "bearer",
       "requestModel": "{ serviceDate, reason? }",
-      "responseModel": "SkipRequestResponse",
+      "responseModel": "CustomerSubscriptionSkip (SkipRequestResponse)",
       "requestValidator": "subscription UUID + local date",
-      "responseValidator": "server acknowledgement"
+      "responseValidator": "customerSubscriptionSkipSchema + subscription/date identity check"
     },
     {
       "id": "customerSubscriptions.pause",

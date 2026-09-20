@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { Crosshair, Loader2, MapPin, Minus, Plus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Crosshair, Loader2, MapPin, Minus, Plus, RefreshCw } from "lucide-react";
 
 type Coordinate = {
   latitude: number;
@@ -60,6 +60,7 @@ export function AddressMapPicker({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [imageLoading, setImageLoading] = useState(true);
   const [imageFailed, setImageFailed] = useState(false);
+  const [imageAttempt, setImageAttempt] = useState(0);
   const viewportRef = useRef<HTMLDivElement>(null);
   const pointerRef = useRef<{
     id: number;
@@ -73,7 +74,13 @@ export function AddressMapPicker({
       longitude: longitude.toFixed(7),
       zoom: String(zoom),
     });
+    query.set("attempt", String(imageAttempt));
     return `/api/location/map-image?${query}`;
+  }, [imageAttempt, latitude, longitude, zoom]);
+
+  useEffect(() => {
+    setImageLoading(true);
+    setImageFailed(false);
   }, [latitude, longitude, zoom]);
 
   const moveByScreenPixels = (dx: number, dy: number) => {
@@ -177,8 +184,24 @@ export function AddressMapPicker({
             }}
           />
         ) : (
-          <div className="absolute inset-0 grid place-items-center bg-[#F1F3F5] px-8 text-center text-sm font-semibold text-[#6B6B6B]">
-            Map preview is temporarily unavailable. Your selected location is still preserved.
+          <div className="absolute inset-0 grid place-items-center bg-[#F1F3F5] px-8 text-center">
+            <div>
+              <p className="text-sm font-semibold text-[#6B6B6B]">
+                Map preview could not load.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setImageLoading(true);
+                  setImageFailed(false);
+                  setImageAttempt((current) => current + 1);
+                }}
+                className="mx-auto mt-3 inline-flex min-h-10 items-center gap-2 rounded-full !border !border-[#E5E7EB] !bg-white px-4 text-xs font-black !text-[#1A1A1A] shadow-[0_3px_10px_rgba(26,26,26,0.07)] transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:!bg-[#F1F3F5] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none"
+              >
+                <RefreshCw className="h-4 w-4 text-[#F62E18]" />
+                Retry map
+              </button>
+            </div>
           </div>
         )}
 
@@ -208,7 +231,7 @@ export function AddressMapPicker({
               setImageFailed(false);
             }}
             disabled={disabled || zoom >= MAX_ZOOM}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/80 bg-white/95 text-[#1A1A1A] shadow-[0_5px_16px_rgba(26,26,26,0.12)] backdrop-blur disabled:opacity-45"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/95 text-[#1A1A1A] shadow-[0_5px_16px_rgba(26,26,26,0.12)] backdrop-blur transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:bg-[#F1F3F5] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none disabled:opacity-45"
             aria-label="Zoom in"
           >
             <Plus className="h-4 w-4" />
@@ -221,7 +244,7 @@ export function AddressMapPicker({
               setImageFailed(false);
             }}
             disabled={disabled || zoom <= MIN_ZOOM}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/80 bg-white/95 text-[#1A1A1A] shadow-[0_5px_16px_rgba(26,26,26,0.12)] backdrop-blur disabled:opacity-45"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/95 text-[#1A1A1A] shadow-[0_5px_16px_rgba(26,26,26,0.12)] backdrop-blur transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:bg-[#F1F3F5] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none disabled:opacity-45"
             aria-label="Zoom out"
           >
             <Minus className="h-4 w-4" />
@@ -232,7 +255,7 @@ export function AddressMapPicker({
           type="button"
           onClick={onUseCurrentLocation}
           disabled={disabled || locating}
-          className="absolute bottom-3 right-3 z-30 inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/80 bg-white/95 px-3 text-xs font-black text-[#1A1A1A] shadow-[0_5px_16px_rgba(26,26,26,0.12)] backdrop-blur hover:text-[#F62E18] disabled:opacity-50"
+          className="absolute bottom-3 right-3 z-30 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/80 bg-white/95 px-3 text-xs font-black text-[#1A1A1A] shadow-[0_5px_16px_rgba(26,26,26,0.12)] backdrop-blur transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:bg-[#F1F3F5] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none disabled:opacity-50"
         >
           {locating ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -247,9 +270,6 @@ export function AddressMapPicker({
         </span>
       </div>
 
-      <p className="text-center text-xs font-medium leading-5 text-[#6B6B6B]">
-        Move the map until the pin is exactly at your delivery entrance.
-      </p>
     </div>
   );
 }

@@ -20,6 +20,10 @@ import {
   parseCheckout,
   type CustomerCheckout,
 } from "@/lib/checkout-contract";
+import {
+  checkoutCartSnapshot,
+  parseCheckoutOperationResponse,
+} from "@/lib/checkout-operation-contract";
 import { loadSession } from "@/services/auth/cravesAuth";
 import { sessionFetch } from "@/services/auth/sessionFetch";
 import {
@@ -40,6 +44,7 @@ import { AddressEditorFlow } from "@/components/profile/AddressEditorFlow";
 
 const ADDRESS_KEY = "craves.checkout.addressId";
 const CHECKOUT_ID_KEY = "craves.checkout.id";
+const CHECKOUT_OPERATION_ID_KEY = "craves.checkout.operationId";
 const INSTRUCTIONS_KEY = "craves.checkout.instructions";
 
 function money(amount: number, currency = "INR") {
@@ -117,28 +122,64 @@ async function fetchCheckout(
   return parsed;
 }
 
+async function fetchCheckoutOperation(
+  operationId: string,
+) {
+  const response = await sessionFetch(
+    `/api/checkout/operations/${encodeURIComponent(operationId)}`,
+    {
+      cache: "no-store",
+      credentials: "same-origin",
+    },
+  );
+  const raw = await response.json().catch(() => null);
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(
+      responseMessage(raw, "Checkout attempt could not be restored."),
+    );
+  }
+  const parsed = parseCheckoutOperationResponse(raw);
+  if (!parsed) {
+    throw new Error("Craves returned an invalid checkout attempt response.");
+  }
+  return parsed;
+}
+
 async function createAuthoritativeCheckout(
+  operationId: string,
   deliveryAddressId: string,
   note: string,
 ): Promise<CustomerCheckout> {
-  await validateCart();
-  const response = await sessionFetch("/api/checkout", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      deliveryAddressId,
-      note: note.trim() || null,
-    }),
-  });
+  const validatedCart = await validateCart();
+  const response = await sessionFetch(
+    `/api/checkout/operations/${encodeURIComponent(operationId)}`,
+    {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deliveryAddressId,
+        note: note.trim() || null,
+        expectedCart: checkoutCartSnapshot(validatedCart),
+      }),
+    },
+  );
   const raw = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(responseMessage(raw, "Checkout could not be created."));
   }
 
-  const parsed = parseCheckout(raw);
-  if (!parsed) throw new Error("Craves returned an invalid checkout response.");
-  return parsed;
+  const operation = parseCheckoutOperationResponse(raw);
+  if (!operation) {
+    throw new Error("Craves returned an invalid checkout attempt response.");
+  }
+
+  const checkout = await fetchCheckout(operation.checkoutId);
+  if (!checkout) {
+    throw new Error("Checkout was created but could not be loaded.");
+  }
+  return checkout;
 }
 
 export default function CheckoutPage() {
@@ -205,8 +246,34 @@ export default function CheckoutPage() {
             return;
           }
           window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
+          window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
         } catch {
           window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
+        }
+      }
+
+      const storedOperationId =
+        window.sessionStorage.getItem(CHECKOUT_OPERATION_ID_KEY);
+      if (storedOperationId) {
+        try {
+          const operation = await fetchCheckoutOperation(storedOperationId);
+          if (operation) {
+            const restored = await fetchCheckout(operation.checkoutId);
+            if (restored?.status === "PAYMENT_PENDING") {
+              window.sessionStorage.setItem(
+                CHECKOUT_ID_KEY,
+                operation.checkoutId,
+              );
+              setCheckout(restored);
+              setSelectedId(restored.deliveryAddressId ?? preferred?.id ?? "");
+              setItems([]);
+              setLeadMinutes(null);
+              return;
+            }
+          }
+          window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
+        } catch {
+          window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
         }
       }
 
@@ -254,15 +321,24 @@ export default function CheckoutPage() {
     if (checkout) return;
     setSelectedId(id);
     window.sessionStorage.setItem(ADDRESS_KEY, id);
+    window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
     setPaymentFailure(null);
     setError("");
   }
 
   async function ensureCheckout(): Promise<CustomerCheckout> {
     if (checkout) return checkout;
-    if (!selectedId) throw new Error("Choose a delivery address before reviewing the total.");
+    if (!selectedId) {
+      throw new Error("Choose a delivery address before reviewing the total.");
+    }
+
+    const operationId =
+      window.sessionStorage.getItem(CHECKOUT_OPERATION_ID_KEY) ??
+      crypto.randomUUID();
+    window.sessionStorage.setItem(CHECKOUT_OPERATION_ID_KEY, operationId);
 
     const prepared = await createAuthoritativeCheckout(
+      operationId,
       selectedId,
       instructions,
     );

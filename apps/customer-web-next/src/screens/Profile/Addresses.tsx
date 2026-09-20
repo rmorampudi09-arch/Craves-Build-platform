@@ -14,9 +14,7 @@ import {
 } from "lucide-react";
 import {
   isDeliveryReadyAddress,
-  parseAddressInput,
   type CustomerAddress,
-  type CustomerAddressInput,
 } from "@/lib/address-contract";
 import { clearDishDiscoveryCache } from "@/services/api/dishes";
 import { clearKitchenDiscoveryCache } from "@/services/api/kitchens";
@@ -26,32 +24,6 @@ import {
 } from "@/services/auth/cravesAuth";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 import { AddressEditorFlow } from "@/components/profile/AddressEditorFlow";
-
-type AddressDraft = Omit<CustomerAddressInput, "latitude" | "longitude"> & {
-  latitude: string;
-  longitude: string;
-};
-
-
-function draftFrom(address: CustomerAddress): AddressDraft {
-  return {
-    addressLabel: address.addressLabel,
-    addressName: address.addressName ?? null,
-    recipientName: address.recipientName ?? "",
-    contactPhoneNumber: address.contactPhoneNumber,
-    addressLine1: address.addressLine1,
-    addressLine2: address.addressLine2,
-    landmark: address.landmark,
-    areaName: address.areaName ?? "",
-    districtName: address.districtName ?? "",
-    city: address.city,
-    state: address.state,
-    postalCode: address.postalCode ?? "",
-    latitude: address.latitude == null ? "" : String(address.latitude),
-    longitude: address.longitude == null ? "" : String(address.longitude),
-    isDefault: address.isDefault,
-  };
-}
 
 function addressLine(address: CustomerAddress): string {
   return [
@@ -72,6 +44,12 @@ function recipientLine(address: CustomerAddress): string {
   return [address.recipientName, address.contactPhoneNumber]
     .filter(Boolean)
     .join(" · ");
+}
+
+function addressDisplayName(address: CustomerAddress): string {
+  return address.addressLabel === "OTHER" && address.addressName
+    ? address.addressName
+    : address.addressLabel.charAt(0) + address.addressLabel.slice(1).toLowerCase();
 }
 
 function invalidateHomeDeliveryContext(): void {
@@ -151,30 +129,24 @@ export default function AddressesPage() {
   async function selectDefault(address: CustomerAddress) {
     if (address.isDefault || busy) return;
 
-    const input = parseAddressInput({
-      ...draftFrom(address),
-      isDefault: true,
-    });
-    if (!input) {
-      beginEdit(address);
-      setMessage("Complete this address before selecting it as your default delivery address.");
-      return;
-    }
-
     setBusy(true);
     try {
-      const response = await fetch(`/api/customer/addresses/${address.id}`, {
-        method: "PUT",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-      });
+      const response = await fetch(
+        `/api/customer/addresses/${address.id}/default`,
+        {
+          method: "PUT",
+          credentials: "same-origin",
+        },
+      );
       const body = await response.json().catch(() => null);
-      if (!response.ok)
+      if (!response.ok) {
         throw new Error(body?.message || "Default address could not be updated.");
+      }
       invalidateHomeDeliveryContext();
       await load();
-      setMessage(`${address.addressLabel} is now your default delivery address.`);
+      setMessage(
+        `${addressDisplayName(address)} is now your default delivery address.`,
+      );
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -277,9 +249,7 @@ export default function AddressesPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-display text-lg font-black text-[#1A1A1A] md:text-xl">
-                        {address.addressLabel === "OTHER" && address.addressName
-                          ? address.addressName
-                          : address.addressLabel}
+                        {addressDisplayName(address)}
                       </h2>
                       {address.isDefault ? (
                         <span className="inline-flex items-center rounded-full bg-[#F62E18]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#F62E18] md:text-[11px]">
@@ -311,7 +281,7 @@ export default function AddressesPage() {
                 <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-[#F1F3F5] pt-4">
                   <button
                     type="button"
-                    disabled={busy || address.isDefault || !ready}
+                    disabled={busy || address.isDefault}
                     onClick={() => void selectDefault(address)}
                     className={`inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-xs font-black transition-[background-color,box-shadow,transform] duration-200 ease-out sm:flex-none sm:text-sm ${
                       address.isDefault
@@ -320,11 +290,7 @@ export default function AddressesPage() {
                     } disabled:cursor-not-allowed disabled:opacity-55`}
                   >
                     <Check className="h-4 w-4" strokeWidth={2.5} />
-                    {address.isDefault
-                      ? "Default address"
-                      : ready
-                        ? "Select as default"
-                        : "Complete to select"}
+                    {address.isDefault ? "Default address" : "Set as default"}
                   </button>
                   <button
                     type="button"

@@ -331,7 +331,7 @@ export default function CheckoutPage() {
               >
                 <h2 className="text-sm font-semibold text-[#9F2114]">
                   {checkout
-                    ? "Payment didn&apos;t go through"
+                    ? "Payment didn't go through"
                     : "Order could not be reviewed"}
                 </h2>
                 <p className="mt-1 text-xs leading-5 text-[#7A2C22]">

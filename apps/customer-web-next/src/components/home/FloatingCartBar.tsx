@@ -39,12 +39,12 @@ export function FloatingCartBar({
       <button
         type="button"
         onClick={onViewCart}
-        className="group/shiny pointer-events-auto relative isolate mx-auto flex min-h-[4.25rem] w-full max-w-[58rem] items-center gap-3 overflow-hidden rounded-[1.4rem] border border-white/80 !bg-white/45 px-3 text-left !text-[#1A1A1A] shadow-[0_22px_60px_rgba(26,26,26,0.16),0_3px_12px_rgba(26,26,26,0.07),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[22px] transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-white hover:!bg-white/55 hover:shadow-[0_24px_60px_rgba(26,26,26,0.16),0_10px_30px_rgba(246,46,24,0.09),inset_0_1px_0_rgba(255,255,255,0.95)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 motion-reduce:transform-none sm:min-h-[4.7rem] sm:gap-4 sm:rounded-[1.7rem] sm:px-6"
+        className="group/shiny pointer-events-auto relative isolate mx-auto flex min-h-[4.25rem] w-full max-w-[58rem] items-center gap-3 overflow-hidden rounded-[1.4rem] border border-white/80 !bg-white/45 px-3 text-left !text-[#1A1A1A] shadow-[0_22px_60px_rgba(26,26,26,0.16),0_3px_12px_rgba(26,26,26,0.07),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[8px] transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-white hover:!bg-white/55 hover:shadow-[0_24px_60px_rgba(26,26,26,0.16),0_10px_30px_rgba(246,46,24,0.09),inset_0_1px_0_rgba(255,255,255,0.95)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 motion-reduce:transform-none sm:min-h-[4.7rem] sm:gap-4 sm:rounded-[1.7rem] sm:px-6"
         aria-label={`View cart with ${itemCount} ${itemCount === 1 ? "item" : "items"}`}
       >
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-white/45 via-white/15 to-white/35 backdrop-blur-[22px]"
+          className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-white/45 via-white/15 to-white/35 backdrop-blur-[8px]"
         />
         <span
           aria-hidden="true"
@@ -55,7 +55,7 @@ export function FloatingCartBar({
           className="pointer-events-none absolute inset-x-10 top-0 h-px bg-white/95"
         />
 
-        <span className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/80 bg-white/55 text-[#F62E18] shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_8px_20px_rgba(26,26,26,0.08)] backdrop-blur-[18px] sm:h-11 sm:w-11">
+        <span className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/80 bg-white/55 text-[#F62E18] shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_8px_20px_rgba(26,26,26,0.08)] backdrop-blur-[8px] sm:h-11 sm:w-11">
           <CravesCartIcon className="h-[1.05rem] w-[1.05rem]" />
         </span>
 

@@ -1,4 +1,5 @@
 import { boundBffRequest } from "@/lib/bff-request-limits";
+import { boundedFetch } from "@/lib/bounded-fetch";
 import { NextRequest, NextResponse } from "next/server";
 import { reverseGeocodeWithAzureMaps } from "@/lib/server/azure-maps";
 
@@ -9,6 +10,23 @@ const MAX_IN_FLIGHT = 4;
 // At most 30 timestamps are retained, independent of request/header cardinality.
 const admittedAt: number[] = [];
 let inFlight = 0;
+
+function locationProxyBase(): URL | null {
+  const configured = process.env.CRAVES_LOCATION_PROXY_BASE_URL?.trim();
+  if (!configured) return null;
+
+  const base = new URL(configured);
+  if (
+    base.protocol !== "https:"
+    || base.username
+    || base.password
+    || base.origin !== "https://craves.in"
+  ) {
+    throw new Error("CRAVES_LOCATION_PROXY_BASE_URL must be https://craves.in");
+  }
+  return base;
+}
+
 
 function admissionRetryAfter(): number | null {
   const now = Date.now();
@@ -59,6 +77,35 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const proxyBase = locationProxyBase();
+    if (proxyBase) {
+      const proxyResponse = await boundedFetch(
+        new URL("/api/location/reverse-geocode", proxyBase).toString(),
+        {
+          method: "POST",
+          cache: "no-store",
+          headers: {
+            "Content-Type": "application/json",
+            Origin: proxyBase.origin,
+            Referer: new URL("/profile/addresses", proxyBase).toString(),
+          },
+          body: JSON.stringify({ latitude, longitude }),
+        },
+        8_000,
+        256 * 1_024,
+      );
+      const body = await proxyResponse.json().catch(() => null);
+      if (!proxyResponse.ok || !body) {
+        throw new Error(`Location proxy failed with HTTP ${proxyResponse.status}`);
+      }
+      return NextResponse.json(body, {
+        headers: {
+          "Cache-Control": "no-store, private",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    }
+
     const address = await reverseGeocodeWithAzureMaps(latitude, longitude);
     return NextResponse.json(address, {
       headers: {

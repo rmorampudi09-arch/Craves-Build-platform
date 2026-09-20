@@ -19,6 +19,8 @@ import { selectActiveDeliveryAddress } from "@/lib/address-selection";
 import type { ChefApplication } from "@/lib/chef-application-contract";
 import type { CustomerProfile } from "@/lib/profile-contract";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
+import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel";
+import { chefEmailEligible, type EmailVerificationState } from "@/lib/email-verification-contract";
 
 type FormState = {
   email: string;
@@ -87,7 +89,7 @@ function prefillNewApplication(
   const address = selectActiveDeliveryAddress(addresses);
   return {
     ...form,
-    email: form.email || profile?.email || "",
+    email: "",
     firstName: form.firstName || profile?.firstName || "",
     lastName: form.lastName || profile?.lastName || "",
     addressLine1: form.addressLine1 || address?.addressLine1 || "",
@@ -186,6 +188,7 @@ function IconCircle({ children }: { children: React.ReactNode }) {
 export function ChefApplicationWorkspace() {
   const [application, setApplication] = useState<ChefApplication | null>(null);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const [emailVerification, setEmailVerification] = useState<EmailVerificationState | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [step, setStep] = useState<ApplicationStep>("welcome");
   const [message, setMessage] = useState("Loading your application…");
@@ -231,7 +234,8 @@ export function ChefApplicationWorkspace() {
   }
 
   useEffect(() => {
-    void load().catch((error) =>
+    void load().catch((error) => {
+      setLoadFailed(true);
       setMessage(error instanceof Error ? error.message : "We couldn’t load your application right now."),
     );
   }, []);
@@ -338,6 +342,7 @@ export function ChefApplicationWorkspace() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          email: emailVerification?.email,
           addressLine2: form.addressLine2 || null,
           landmark: form.landmark || null,
           postalCode: form.postalCode || null,
@@ -378,7 +383,7 @@ export function ChefApplicationWorkspace() {
     }
   }
 
-  const locked = application?.status === "APPROVED";
+  const locked = !application || loadFailed || application.status === "APPROVED";
   const calmCorrection = application?.status === "REJECTED" ? application.rejectionReason : null;
 
   if (message.startsWith("Loading") && !application) {
@@ -450,9 +455,12 @@ export function ChefApplicationWorkspace() {
     );
   }
 
+  const emailVerificationPanel = <EmailVerificationPanel required onStateChange={setEmailVerification} />;
+
   if (step === "review") {
     return (
       <form onSubmit={submit} className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
+        {emailVerificationPanel}
         <StepHeader part={1} label="Check your details" onBack={() => go("address")} />
         <div className="mt-7"><IconCircle><Check className="h-7 w-7" aria-hidden="true" /></IconCircle></div>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">Does everything look right?</h1>

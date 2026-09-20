@@ -339,7 +339,9 @@ export function CheckoutPaymentButton({
       onFailure({
         message: uncertain
           ? `${message} Do not pay again until the payment status is confirmed.`
-          : `${message} Nothing was charged by Craves. Your cart is still here.`,
+          : checkout
+            ? `${message} Nothing was charged by Craves. Your reviewed order is still available.`
+            : `${message} Nothing was charged by Craves. Your cart is still here.`,
         retryAllowed: !uncertain,
       });
     } finally {

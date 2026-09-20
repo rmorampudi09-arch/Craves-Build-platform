@@ -520,7 +520,6 @@ export default function CheckoutPage() {
       <AddressEditorFlow
         open={editorOpen}
         initialAddress={null}
-        addresses={addresses}
         profileDefaults={profileDefaults}
         onClose={() => setEditorOpen(false)}
         onSaved={handleAddressSaved}

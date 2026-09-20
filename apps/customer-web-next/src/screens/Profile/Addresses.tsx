@@ -1,5 +1,6 @@
 "use client";
 
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -88,6 +89,7 @@ export default function AddressesPage() {
     contactPhoneNumber: "",
   });
   const [busy, setBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<CustomerAddress | null>(null);
   const [message, setMessage] = useState("Loading saved addresses…");
 
   async function load() {
@@ -184,8 +186,6 @@ export default function AddressesPage() {
   }
 
   async function remove(address: CustomerAddress) {
-    if (!window.confirm(`Delete ${address.addressLabel.toLowerCase()} address?`))
-      return;
     setBusy(true);
     try {
       const response = await fetch(`/api/customer/addresses/${address.id}`, {
@@ -198,6 +198,7 @@ export default function AddressesPage() {
       }
       invalidateHomeDeliveryContext();
       await load();
+      setDeleteTarget(null);
       setMessage("Address deleted.");
     } catch (error) {
       setMessage(
@@ -217,7 +218,7 @@ export default function AddressesPage() {
           <Link
             to="/profile"
             aria-label="Back to profile"
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#E5E7EB] bg-white transition-colors hover:border-[#F62E18] hover:bg-[#F1F3F5]"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#E5E7EB] bg-white transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#F1F3F5] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none"
           >
             <ArrowLeft className="h-6 w-6 text-[#1A1A1A]" strokeWidth={2.25} />
           </Link>
@@ -232,7 +233,7 @@ export default function AddressesPage() {
           <button
             type="button"
             onClick={beginCreate}
-            className="inline-flex min-h-12 items-center gap-2 rounded-xl !border !border-[#E5E7EB] !bg-white px-4 py-3 text-sm font-bold !text-[#1A1A1A] shadow-none hover:!border-[#F62E18] hover:!bg-[#F62E18] hover:!text-white md:px-5"
+            className="inline-flex min-h-12 items-center gap-2 rounded-xl !border !border-[#E5E7EB] !bg-[#F1F3F5] px-4 py-3 text-sm font-bold !text-[#1A1A1A] transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none md:px-5"
           >
             <Plus className="h-5 w-5" strokeWidth={2.25} />
             <span className="hidden sm:inline">Add New Address</span>
@@ -312,7 +313,7 @@ export default function AddressesPage() {
                     className={`inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-xs font-black transition-colors sm:flex-none sm:text-sm ${
                       address.isDefault
                         ? "!bg-[#F1F3F5] !text-[#6B6B6B]"
-                        : "!border !border-[#F62E18]/30 !bg-white !text-[#F62E18] hover:!border-[#F62E18] hover:!bg-[#F62E18] hover:!text-white"
+                        : "!border !border-[#E5E7EB] !bg-[#F1F3F5] !text-[#1A1A1A] hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
                     } disabled:cursor-not-allowed disabled:opacity-55`}
                   >
                     <Check className="h-4 w-4" strokeWidth={2.5} />
@@ -325,18 +326,18 @@ export default function AddressesPage() {
                   <button
                     type="button"
                     onClick={() => beginEdit(address)}
-                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl !bg-[#F1F3F5] px-3.5 py-2 text-xs font-black !text-[#1A1A1A] hover:!text-[#F62E18] sm:text-sm"
+                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl !bg-[#F1F3F5] px-3.5 py-2 text-xs font-black !text-[#1A1A1A] transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none sm:text-sm"
                   >
-                    <Pencil className="h-4 w-4" strokeWidth={2.25} />
+                    <Pencil className="h-4 w-4 text-[#F62E18]" strokeWidth={2.25} />
                     Edit
                   </button>
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => void remove(address)}
-                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl !bg-transparent px-3 py-2 text-xs font-black !text-[#6B6B6B] hover:!bg-[#F1F3F5] hover:!text-[#F62E18] disabled:opacity-50 sm:text-sm"
+                    onClick={() => setDeleteTarget(address)}
+                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl !bg-transparent px-3 py-2 text-xs font-black !text-[#6B6B6B] transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-[#F1F3F5] hover:!text-[#1A1A1A] hover:shadow-[0_7px_18px_rgba(26,26,26,0.08)] active:translate-y-0 motion-reduce:transform-none disabled:opacity-50 sm:text-sm"
                   >
-                    <Trash2 className="h-4 w-4" strokeWidth={2.25} />
+                    <Trash2 className="h-4 w-4 text-[#F62E18]" strokeWidth={2.25} />
                     Delete
                   </button>
                 </div>
@@ -355,7 +356,7 @@ export default function AddressesPage() {
             <button
               type="button"
               onClick={beginCreate}
-              className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl !bg-[#F62E18] px-5 py-2.5 text-sm font-black !text-white"
+              className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl !border !border-[#E5E7EB] !bg-[#F1F3F5] px-5 py-2.5 text-sm font-black !text-[#1A1A1A] transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none"
             >
               <Plus className="h-4.5 w-4.5" />
               Add New Address
@@ -371,7 +372,6 @@ export default function AddressesPage() {
       <AddressEditorFlow
         open={editorOpen}
         initialAddress={editorAddress}
-        addresses={addresses}
         profileDefaults={profileDefaults}
         onClose={() => {
           setEditorOpen(false);
@@ -389,6 +389,69 @@ export default function AddressesPage() {
           );
         }}
       />
+
+      <AlertDialog.Root
+        open={Boolean(deleteTarget)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !busy) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="fixed inset-0 z-[95] bg-black/55 backdrop-blur-[2px]" />
+          <AlertDialog.Content className="fixed left-1/2 top-1/2 z-[96] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-[1.75rem] bg-white p-6 shadow-[0_28px_80px_rgba(26,26,26,0.28)] outline-none md:p-7">
+            <AlertDialog.Cancel asChild>
+              <button
+                type="button"
+                disabled={busy}
+                className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#1A1A1A] transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none disabled:opacity-50"
+                aria-label="Close delete confirmation"
+              >
+                <span className="text-2xl font-light leading-none">×</span>
+              </button>
+            </AlertDialog.Cancel>
+
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F62E18]/10 text-[#F62E18]">
+              <Trash2 className="h-8 w-8" strokeWidth={2} />
+            </div>
+
+            <AlertDialog.Title className="mt-6 text-center font-display text-2xl font-black tracking-[-0.03em] text-[#1A1A1A]">
+              Delete this address?
+            </AlertDialog.Title>
+            <AlertDialog.Description className="mx-auto mt-3 max-w-sm text-center text-sm leading-6 text-[#6B6B6B]">
+              {deleteTarget
+                ? "This will remove your " +
+                  deleteTarget.addressLabel.toLowerCase() +
+                  " address from your saved delivery addresses."
+                : "This address will be removed from your saved delivery addresses."}
+            </AlertDialog.Description>
+
+            <div className="mt-7 flex items-center justify-center gap-3">
+              <AlertDialog.Cancel asChild>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="min-h-11 rounded-xl !border !border-[#E5E7EB] !bg-[#F1F3F5] px-5 text-sm font-black !text-[#1A1A1A] transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <button
+                  type="button"
+                  disabled={busy || !deleteTarget}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (deleteTarget) void remove(deleteTarget);
+                  }}
+                  className="min-h-11 rounded-xl bg-[#F62E18] px-6 text-sm font-black text-white shadow-[0_7px_18px_rgba(246,46,24,0.18)] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(246,46,24,0.24)] active:translate-y-0 motion-reduce:transform-none disabled:opacity-50"
+                >
+                  {busy ? "Deleting…" : "Delete"}
+                </button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
     </div>
   );
 }

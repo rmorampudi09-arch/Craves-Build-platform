@@ -113,10 +113,13 @@ export function HomeCategoryRail({
 
     const updateScrollState = () => {
       const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
-      setCanScrollLeft(scroller.scrollLeft > 8);
-      setCanScrollRight(scroller.scrollLeft < maxScrollLeft - 8);
+      const scrollLeft = Math.min(maxScrollLeft, Math.max(0, scroller.scrollLeft));
+      const edgeTolerance = 3;
+      setCanScrollLeft(scrollLeft > edgeTolerance);
+      setCanScrollRight(scrollLeft < maxScrollLeft - edgeTolerance);
     };
 
+    scroller.scrollLeft = 0;
     updateScrollState();
     scroller.addEventListener("scroll", updateScrollState, { passive: true });
     window.addEventListener("resize", updateScrollState);
@@ -130,8 +133,14 @@ export function HomeCategoryRail({
   const scrollCategories = (direction: -1 | 1) => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
-    scroller.scrollBy({
-      left: direction * Math.max(260, scroller.clientWidth * 0.68),
+    const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    const distance = Math.max(260, scroller.clientWidth * 0.68);
+    const target = Math.min(
+      maxScrollLeft,
+      Math.max(0, scroller.scrollLeft + direction * distance),
+    );
+    scroller.scrollTo({
+      left: target,
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
     });
   };
@@ -169,13 +178,13 @@ export function HomeCategoryRail({
                 type="button"
                 onClick={() => onSelect(value)}
                 aria-pressed={active}
-                className="group flex w-[6.6rem] shrink-0 snap-start flex-col items-center gap-3 border-0 bg-white p-0 text-center text-[#1A1A1A] outline-none sm:w-[7.25rem]"
+                className="group flex w-[6.6rem] shrink-0 snap-start flex-col items-center gap-3 !border-0 !bg-transparent p-0 text-center text-[#1A1A1A] !shadow-none outline-none hover:!bg-transparent hover:!shadow-none hover:!transform-none active:!transform-none sm:w-[7.25rem]"
               >
                 <span
-                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center overflow-hidden rounded-full bg-white transition-[border-color,box-shadow,transform] duration-300 ease-out group-hover:-translate-y-1 group-hover:scale-[1.04] group-hover:border-[#F62E18]/30 group-hover:shadow-[0_14px_32px_rgba(26,26,26,0.12)] group-focus-visible:ring-2 group-focus-visible:ring-[#F62E18]/35 motion-reduce:transform-none sm:h-[7.25rem] sm:w-[7.25rem] ${
+                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center overflow-hidden rounded-full bg-white transition-[border-color,transform] duration-300 ease-out group-hover:-translate-y-1 group-hover:scale-[1.04] group-hover:border-[#F62E18]/30 group-focus-visible:ring-2 group-focus-visible:ring-[#F62E18]/35 motion-reduce:transform-none sm:h-[7.25rem] sm:w-[7.25rem] ${
                     active
-                      ? "border border-[#F62E18] shadow-[0_10px_28px_rgba(26,26,26,0.10),0_0_0_2px_rgba(246,46,24,0.12)]"
-                      : "border border-[#F1F3F5] shadow-[0_10px_28px_rgba(26,26,26,0.10)]"
+                      ? "border border-[#F62E18] ring-2 ring-[#F62E18]/10"
+                      : "border border-[#F1F3F5]"
                   }`}
                 >
                   {image ? (
@@ -204,7 +213,7 @@ export function HomeCategoryRail({
         </div>
 
         <div
-          className={`pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-white to-transparent transition-opacity duration-200 ${canScrollLeft ? "opacity-100" : "opacity-0"}`}
+          className={`pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-white to-transparent transition-opacity duration-200 ${canScrollLeft ? "opacity-100" : "invisible opacity-0"}`}
           aria-hidden="true"
         />
         <button
@@ -212,13 +221,13 @@ export function HomeCategoryRail({
           onClick={() => scrollCategories(-1)}
           disabled={!canScrollLeft}
           aria-label="Show previous craving categories"
-          className={`absolute -left-3 top-[3.6rem] z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] transition-[opacity,box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:flex ${canScrollLeft ? "opacity-100" : "pointer-events-none opacity-0"}`}
+          className={`absolute -left-3 top-[3.6rem] z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] transition-[opacity,box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:flex ${canScrollLeft ? "visible opacity-100" : "invisible pointer-events-none opacity-0"}`}
         >
           <FaChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
 
         <div
-          className={`pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-white to-transparent transition-opacity duration-200 ${canScrollRight ? "opacity-100" : "opacity-0"}`}
+          className={`pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-white to-transparent transition-opacity duration-200 ${canScrollRight ? "opacity-100" : "invisible opacity-0"}`}
           aria-hidden="true"
         />
         <button
@@ -226,7 +235,7 @@ export function HomeCategoryRail({
           onClick={() => scrollCategories(1)}
           disabled={!canScrollRight}
           aria-label="Show more craving categories"
-          className={`absolute -right-3 top-[3.6rem] z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] transition-[opacity,box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:flex ${canScrollRight ? "opacity-100" : "pointer-events-none opacity-0"}`}
+          className={`absolute -right-3 top-[3.6rem] z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] transition-[opacity,box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:flex ${canScrollRight ? "visible opacity-100" : "invisible pointer-events-none opacity-0"}`}
         >
           <FaChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
         </button>

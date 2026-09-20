@@ -20,22 +20,10 @@ import type { Dish } from "@/services/api/dishes";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
-type FoodFilterOption = {
-  value: Exclude<HomeFoodPreference, "all">;
-  label: string;
-  dotClass: string;
-};
-
 type SortFilterOption = {
   value: Exclude<HomeDishSort, "recommended">;
   label: string;
 };
-
-const FOOD_FILTERS: readonly FoodFilterOption[] = [
-  { value: "veg", label: "Veg", dotClass: "bg-[#2E7D32]" },
-  { value: "non-veg", label: "Non Veg", dotClass: "bg-[#F62E18]" },
-  { value: "egg", label: "Egg", dotClass: "bg-[#D99A00]" },
-];
 
 const SORT_FILTERS: readonly SortFilterOption[] = [
   { value: "rating", label: "Rating" },
@@ -104,22 +92,20 @@ export function DishesGrid({
 }: DishesGridProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftSort, setDraftSort] = useState<HomeDishSort>(sort);
-  const [draftFoodPreference, setDraftFoodPreference] =
-    useState<HomeFoodPreference>(foodPreference);
   const normalizedSearch = searchTerm.trim();
-  const hasFilters =
-    selectedCategory !== "All" ||
-    sort !== "recommended" ||
-    foodPreference !== "all";
+  const hasFilters = selectedCategory !== "All" || sort !== "recommended";
   const activeFilterCount =
-    Number(selectedCategory !== "All") +
-    Number(sort !== "recommended") +
-    Number(foodPreference !== "all");
-  const emptyMessage = normalizedSearch
-    ? `No live dishes match “${normalizedSearch}”. Try another search.`
-    : selectedCategory === "All"
-      ? message || "No active dishes are available for this delivery location yet."
-      : `No active ${selectedCategory.toLowerCase()} dishes are available for this delivery location yet.`;
+    Number(selectedCategory !== "All") + Number(sort !== "recommended");
+  const emptyMessage =
+    foodPreference === "veg"
+      ? normalizedSearch
+        ? `No vegetarian dishes match “${normalizedSearch}”. Turn off the Veg filter to see all available dishes.`
+        : "No vegetarian dishes are available for this view. Turn off the Veg filter to see all available dishes."
+      : normalizedSearch
+        ? `No live dishes match “${normalizedSearch}”. Try another search.`
+        : selectedCategory === "All"
+          ? message || "No active dishes are available for this delivery location yet."
+          : `No active ${selectedCategory.toLowerCase()} dishes are available for this delivery location yet.`;
 
   const scrollToDishes = () => {
     const heading = document.getElementById("available-dishes-heading");
@@ -132,21 +118,18 @@ export function DishesGrid({
   const handleFilterOpenChange = (open: boolean) => {
     if (open) {
       setDraftSort(sort);
-      setDraftFoodPreference(foodPreference);
     }
     setFiltersOpen(open);
   };
 
   const applyFilters = () => {
     onSortChange(draftSort);
-    onFoodPreferenceChange(draftFoodPreference);
     setFiltersOpen(false);
     window.requestAnimationFrame(scrollToDishes);
   };
 
   const removeFilters = () => {
     setDraftSort("recommended");
-    setDraftFoodPreference("all");
     onRemoveFilters();
     setFiltersOpen(false);
     window.requestAnimationFrame(scrollToDishes);
@@ -212,37 +195,7 @@ export function DishesGrid({
                 className="z-[80] w-[22rem] max-w-[calc(100vw-2rem)] origin-top-left overflow-hidden rounded-[1.55rem] border border-[#F1F3F5] bg-white shadow-[0_24px_60px_rgba(26,26,26,0.16)] outline-none"
                 aria-label="Dish filter options"
               >
-                <div className="px-5 pb-4 pt-5">
-                  <p className="text-[0.66rem] font-black uppercase tracking-[0.16em] text-[#6B6B6B]">
-                    Food Type
-                  </p>
-                  <div className="mt-2" role="radiogroup" aria-label="Food type">
-                    {FOOD_FILTERS.map((option) => {
-                      const selected = draftFoodPreference === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          role="radio"
-                          aria-checked={selected}
-                          onClick={() => setDraftFoodPreference(option.value)}
-                          className="group flex w-full items-center justify-between gap-4 rounded-xl !border-0 !bg-white px-1 py-2.5 text-left text-sm font-bold !text-[#1A1A1A] !shadow-none transition-colors hover:!bg-[#F1F3F5]/70 active:!transform-none"
-                        >
-                          <span className="inline-flex items-center gap-2.5">
-                            <span
-                              className={`h-2.5 w-2.5 rounded-full ${option.dotClass}`}
-                              aria-hidden="true"
-                            />
-                            {option.label}
-                          </span>
-                          <SelectionCircle selected={selected} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="border-t border-[#F1F3F5] px-5 py-4">
+                <div className="px-5 py-4">
                   <p className="text-[0.66rem] font-black uppercase tracking-[0.16em] text-[#6B6B6B]">
                     Sorting
                   </p>
@@ -370,7 +323,15 @@ export function DishesGrid({
           <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
             {emptyMessage}
           </p>
-          {!normalizedSearch ? (
+          {foodPreference === "veg" ? (
+            <button
+              type="button"
+              onClick={() => onFoodPreferenceChange("all")}
+              className="mt-5 min-h-10 rounded-full !bg-[#F1F3F5] px-4 text-xs font-black !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
+            >
+              Turn off Veg filter
+            </button>
+          ) : !normalizedSearch ? (
             <button
               type="button"
               onClick={onRetry}

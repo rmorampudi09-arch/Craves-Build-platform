@@ -114,7 +114,7 @@ export function HomeCategoryRail({
     const updateScrollState = () => {
       const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
       const scrollLeft = Math.min(maxScrollLeft, Math.max(0, scroller.scrollLeft));
-      const edgeTolerance = 3;
+      const edgeTolerance = 48;
       setCanScrollLeft(scrollLeft > edgeTolerance);
       setCanScrollRight(scrollLeft < maxScrollLeft - edgeTolerance);
     };
@@ -135,10 +135,17 @@ export function HomeCategoryRail({
     if (!scroller) return;
     const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
     const distance = Math.max(260, scroller.clientWidth * 0.68);
-    const target = Math.min(
+    const rawTarget = Math.min(
       maxScrollLeft,
       Math.max(0, scroller.scrollLeft + direction * distance),
     );
+    const edgeTolerance = 48;
+    const target =
+      rawTarget <= edgeTolerance
+        ? 0
+        : rawTarget >= maxScrollLeft - edgeTolerance
+          ? maxScrollLeft
+          : rawTarget;
     scroller.scrollTo({
       left: target,
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
@@ -181,9 +188,9 @@ export function HomeCategoryRail({
                 className="group flex w-[6.6rem] shrink-0 snap-start flex-col items-center gap-3 !border-0 !bg-transparent p-0 text-center text-[#1A1A1A] !shadow-none outline-none hover:!bg-transparent hover:!shadow-none hover:!transform-none active:!transform-none sm:w-[7.25rem]"
               >
                 <span
-                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center overflow-hidden rounded-full bg-white transition-[border-color,transform] duration-[450ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] group-hover:-translate-y-0.5 group-hover:border-[#F62E18]/30 group-focus-visible:ring-2 group-focus-visible:ring-[#F62E18]/35 motion-reduce:transform-none sm:h-[7.25rem] sm:w-[7.25rem] ${
+                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center overflow-hidden rounded-full bg-white transition-transform duration-[520ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] group-hover:scale-[1.008] group-focus-visible:ring-2 group-focus-visible:ring-[#1A1A1A]/10 motion-reduce:transform-none sm:h-[7.25rem] sm:w-[7.25rem] ${
                     active
-                      ? "border border-[#F62E18] ring-2 ring-[#F62E18]/10"
+                      ? "border border-[#E5E7EB]"
                       : "border border-[#F1F3F5]"
                   }`}
                 >
@@ -192,7 +199,7 @@ export function HomeCategoryRail({
                       src={image}
                       alt=""
                       loading="lazy"
-                      className="h-full w-full rounded-full object-cover transition-transform duration-[450ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] group-hover:scale-[1.025] motion-reduce:transform-none"
+                      className="h-full w-full rounded-full object-cover"
                     />
                   ) : (
                     <span className="flex h-[72%] w-[72%] items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">

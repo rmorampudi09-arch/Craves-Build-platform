@@ -3,6 +3,7 @@
 import type { CustomerCart, ServerCartItem } from "@/lib/cart-contract";
 import { requestCartKitchenReplacement } from "@/lib/cart-kitchen-replacement";
 import type { CustomerOrder } from "@/lib/order-contract";
+import { sessionFetch } from "@/services/auth/sessionFetch";
 import { getDish, loadDish } from "./dishes";
 
 export type CartItem = {
@@ -105,7 +106,7 @@ function cartMatchesCheckout(items: CheckoutCartItem[]): boolean {
 }
 
 async function cartRequest(path: string, init?: RequestInit): Promise<CustomerCart> {
-  const response = await fetch(path, {
+  const response = await sessionFetch(path, {
     ...init,
     credentials: "same-origin",
     headers: {

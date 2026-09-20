@@ -613,11 +613,5 @@
       "responseValidator": "requireCartSnapshot; server validates every historical dish before transactional cart replacement"
     }
   ],
-  "quarantined": [
-    {
-      "path": "/api/v1/chef/earnings",
-      "reason": "A backend route exists, but the branch audit in chefPayoutApi states there is no approved APIM mobile operation. P119 must not publish or call it until APIM exposes an approved contract.",
-      "evidence": "apps/mobile/src/features/chefPayout/api/chefPayoutApi.ts"
-    }
-  ]
+  "quarantined": []
 }

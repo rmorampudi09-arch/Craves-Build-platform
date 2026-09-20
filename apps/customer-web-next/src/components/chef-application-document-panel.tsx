@@ -1,78 +1,77 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ChefApplicationEvidenceUploader,
   type ChefEvidenceMetadata,
-} from "@/components/chef-application-evidence-uploader";
+} from "@/lib/chef-application-evidence-contract";
+import { parseChefApplication } from "@/lib/chef-application-contract";
 
-function safeMetadata(value: unknown): ChefEvidenceMetadata | null {
-  if (!value || typeof value !== "object") return null;
-  const raw = value as Record<string, unknown>;
-  if (
-    typeof raw.id !== "string" ||
-    typeof raw.documentType !== "string" ||
-    typeof raw.originalFileName !== "string" ||
-    typeof raw.fileSizeBytes !== "number" ||
-    typeof raw.status !== "string"
-  ) return null;
-  return {
-    id: raw.id,
-    documentType: raw.documentType,
-    originalFileName: raw.originalFileName,
-    fileSizeBytes: raw.fileSizeBytes,
-    status: raw.status,
-  };
-}
+type Loaded = { applicationReady: boolean; locked: boolean; documents: ChefEvidenceMetadata[] };
+class DocumentLoadError extends Error {}
 
-export function ChefApplicationDocumentPanel({
-  onComplete,
-}: {
-  onComplete?: () => void;
-}) {
-  const [ready, setReady] = useState(false);
-  const [locked, setLocked] = useState(false);
-  const [documents, setDocuments] = useState<ChefEvidenceMetadata[]>([]);
+export function ChefApplicationDocumentPanel({ onComplete }: { onComplete?: () => void }) {
+  const [data, setData] = useState<Loaded | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [version, setVersion] = useState(0);
+  const request = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
-    const applicationResponse = await fetch("/api/chef/application", { cache: "no-store" });
-    const application = (await applicationResponse.json().catch(() => null)) as {
-      id?: unknown;
-      status?: unknown;
-    } | null;
-    if (!applicationResponse.ok) return;
-
-    const applicationReady = typeof application?.id === "string" && application.id.length > 0;
-    setReady(applicationReady);
-    setLocked(application?.status === "APPROVED");
-    if (!applicationReady) return;
-
-    const documentResponse = await fetch("/api/chef/application/evidence-status", {
-      cache: "no-store",
-    });
-    const body = await documentResponse.json().catch(() => null);
-    if (!documentResponse.ok || !Array.isArray(body)) return;
-    const parsed = body.map(safeMetadata);
-    if (parsed.some((item) => item === null)) return;
-    setDocuments(parsed as ChefEvidenceMetadata[]);
-    setVersion((current) => current + 1);
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/chef/application", { cache: "no-store", signal: controller.signal });
+      if (!response.ok) throw new DocumentLoadError(response.status === 401 ? "Please sign in again to view your documents." : "We couldn’t load your application. Please try again.");
+      const application = parseChefApplication(await response.json());
+      if (!application || (application.status !== "NOT_SUBMITTED" && !application.id)) throw new DocumentLoadError("We couldn’t confirm your application details. Please try again.");
+      const applicationReady = Boolean(application.id);
+      let documents: ChefEvidenceMetadata[] = [];
+      if (applicationReady) {
+        const documentResponse = await fetch("/api/chef/application/evidence-status", { cache: "no-store", signal: controller.signal });
+        if (!documentResponse.ok) throw new DocumentLoadError(documentResponse.status === 401 ? "Please sign in again to view your documents." : "We couldn’t load your document history. Please try again.");
+        const parsed = parseChefEvidenceList(await documentResponse.json());
+        if (!parsed) throw new DocumentLoadError("We couldn’t confirm your document history. Please try again.");
+        documents = parsed;
+      }
+      if (request.current !== controller) return;
+      if (controller.signal.aborted) throw new DocumentLoadError("Your document check took too long. Please try again.");
+      setData({ applicationReady, locked: application.status === "APPROVED", documents });
+      setVersion(current => current + 1);
+    } catch (cause) {
+      if (request.current !== controller) return;
+      setData(null); // Unavailable evidence is not zero uploaded documents.
+      setError(controller.signal.aborted ? "Your document check took too long. Please try again." : cause instanceof DocumentLoadError ? cause.message : "We couldn’t load your documents. Please try again.");
+    } finally {
+      window.clearTimeout(timeout);
+      if (request.current === controller) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     void load();
-    if (ready) return;
-    const timer = window.setInterval(() => void load(), 2_500);
-    return () => window.clearInterval(timer);
-  }, [load, ready]);
+    const refresh = () => { void load(); };
+    window.addEventListener("craves:chef-application-updated", refresh);
+    return () => {
+      window.removeEventListener("craves:chef-application-updated", refresh);
+      const active = request.current;
+      request.current = null;
+      active?.abort();
+    };
+  }, [load]);
+
+  if (loading) return <section className="rounded-3xl border border-slate-200 bg-white p-6" aria-busy="true" aria-live="polite"><h2 className="text-xl font-bold">Your documents</h2><p className="mt-2 text-sm text-slate-600">Checking your document history…</p></section>;
+  if (error) return <section className="rounded-3xl border border-slate-200 bg-white p-6"><h2 className="text-xl font-bold">Your documents</h2><p role="alert" className="mt-2 text-sm text-slate-700">{error}</p><button type="button" onClick={() => void load()} className="mt-4 min-h-12 rounded-full border border-slate-300 px-5 font-semibold">Try again</button></section>;
+  if (!data) return null;
 
   return (
-    <ChefApplicationEvidenceUploader
-      key={`${ready}-${locked}-${version}`}
-      applicationReady={ready}
-      locked={locked}
-      initialDocuments={documents}
-      onComplete={onComplete}
-    />
+    <>
+      <ChefApplicationEvidenceUploader key={version} applicationReady={data.applicationReady} locked={data.locked} initialDocuments={data.documents} onComplete={onComplete} />
+      <button type="button" onClick={() => void load()} className="min-h-12 rounded-full border border-slate-300 px-5 font-semibold">{data.applicationReady ? "Refresh document history" : "I’ve submitted my details — refresh documents"}</button>
+    </>
   );
 }

@@ -31,6 +31,12 @@ body .chef-panel-theme :is(button, a, [role="button"], [role="tab"]) {
   border-color: var(--color-grey-200) !important;
 }
 
+button[data-craves-borderless="true"] {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
 body :is(
     .btn-primary,
     button[class*="bg-[#F62E18]"],

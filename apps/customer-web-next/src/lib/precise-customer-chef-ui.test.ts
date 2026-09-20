@@ -151,9 +151,12 @@ test("address manager owns default selection and the shared location-first edito
 
   assert.match(addressEditor, /<Dialog\.Root/);
   assert.match(addressEditor, /<AddressMapPicker/);
-  assert.match(addressEditor, /Search for area, street name/);
+  assert.doesNotMatch(addressEditor, /Search for area, street name/);
+  assert.doesNotMatch(addressEditor, /Saved Addresses/);
   assert.match(addressEditor, /Use current location/);
-  assert.match(addressEditor, /Confirm delivery location/);
+  assert.match(addressEditor, /Add address details/);
+  assert.match(addressEditor, /Name this address/);
+  assert.match(addressEditor, /Please complete the highlighted fields/);
   assert.match(addressEditor, /Flat \/ house \/ floor/);
   assert.match(addressEditor, /Receiver&apos;s phone/);
   assert.match(addressEditor, /Save and use this address/);

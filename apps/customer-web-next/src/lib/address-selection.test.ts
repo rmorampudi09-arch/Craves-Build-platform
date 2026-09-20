@@ -11,7 +11,7 @@ function address(id: string, active: boolean, isDefault: boolean): CustomerAddre
     contactPhoneNumber: "+919876543210",
     addressLine1: "1-1",
     addressLine2: null,
-    landmark: null,
+    landmark: "Near Metro",
     areaName: "Madhapur",
     districtName: "Hyderabad",
     city: "Hyderabad",

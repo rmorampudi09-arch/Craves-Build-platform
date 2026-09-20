@@ -88,14 +88,21 @@ const LABELS: Array<{
   { value: "OTHER", label: "Other", icon: Tag },
 ];
 
-const PHONE = /^\+?[0-9]{10,15}$/;
+const PHONE = /^[0-9]{10}$/;
+
+function localPhone(value: string | null | undefined): string {
+  const digits = (value ?? "").replace(/\D/g, "");
+  return digits.length === 12 && digits.startsWith("91")
+    ? digits.slice(2)
+    : digits.slice(0, 10);
+}
 
 function draftFrom(address: CustomerAddress): AddressDraft {
   return {
     addressLabel: address.addressLabel,
     addressName: address.addressName ?? null,
     recipientName: address.recipientName ?? "",
-    contactPhoneNumber: address.contactPhoneNumber,
+    contactPhoneNumber: localPhone(address.contactPhoneNumber),
     addressLine1: address.addressLine1,
     addressLine2: address.addressLine2,
     landmark: address.landmark,
@@ -217,7 +224,7 @@ function validateDraft(draft: AddressDraft): FieldErrors {
   if (!draft.contactPhoneNumber.trim()) {
     errors.contactPhoneNumber = "Enter the receiver's phone number.";
   } else if (!PHONE.test(draft.contactPhoneNumber.trim())) {
-    errors.contactPhoneNumber = "Enter a valid 10–15 digit phone number.";
+    errors.contactPhoneNumber = "Enter a valid 10-digit phone number.";
   }
   if (!draft.districtName.trim()) {
     errors.districtName = "Enter the district.";
@@ -261,7 +268,7 @@ export function AddressEditorFlow({
       : {
           ...EMPTY_DRAFT,
           recipientName: profileDefaults.recipientName,
-          contactPhoneNumber: profileDefaults.contactPhoneNumber,
+          contactPhoneNumber: localPhone(profileDefaults.contactPhoneNumber),
         };
 
     setDraft(nextDraft);
@@ -805,11 +812,11 @@ export function AddressEditorFlow({
                       <input
                         value={draft.contactPhoneNumber}
                         onChange={(event) =>
-                          update("contactPhoneNumber", event.target.value)
+                          update("contactPhoneNumber", localPhone(event.target.value))
                         }
-                        placeholder="+919876543210"
-                        inputMode="tel"
-                        maxLength={16}
+                        placeholder="9876543210"
+                        inputMode="numeric"
+                        maxLength={10}
                         className={inputClass("contactPhoneNumber")}
                         aria-invalid={Boolean(fieldErrors.contactPhoneNumber)}
                       />

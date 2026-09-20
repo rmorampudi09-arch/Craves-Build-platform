@@ -136,7 +136,7 @@ function ProfileContent() {
       if (!session) {
         if (!getSession()) navigate({ to: "/" });
         else {
-          setError("Your account details are temporarily unavailable. You can retry sign out below.");
+          setError("Your account details are temporarily unavailable. Sign-out controls remain available below.");
           setLoading(false);
         }
         return;

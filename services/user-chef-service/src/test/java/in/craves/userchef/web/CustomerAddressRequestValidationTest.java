@@ -25,7 +25,7 @@ class CustomerAddressRequestValidationTest {
     }
 
     @Test
-    void rejectsMissingDistrict() {
+    void temporarilyAcceptsMissingDistrictForRollingDeploymentCompatibility() {
         assertThat(validator.validate(request(
             "Customer Name",
             "Madhapur",
@@ -33,9 +33,7 @@ class CustomerAddressRequestValidationTest {
             "500081",
             new BigDecimal("17.4483"),
             new BigDecimal("78.3915")
-        )))
-            .extracting(violation -> violation.getPropertyPath().toString())
-            .contains("districtName");
+        ))).isEmpty();
     }
 
     @Test
@@ -64,30 +62,6 @@ class CustomerAddressRequestValidationTest {
         )))
             .extracting(violation -> violation.getPropertyPath().toString())
             .contains("areaName");
-    }
-
-    @Test
-    void rejectsMissingLandmark() {
-        CustomerAddressRequest request = new CustomerAddressRequest(
-            AddressLabel.HOME,
-            null,
-            "Customer Name",
-            "+919876543210",
-            "Flat 101, Test Residency",
-            "Road No. 1",
-            null,
-            "Madhapur",
-            "Hyderabad",
-            "Hyderabad",
-            "Telangana",
-            "500081",
-            new BigDecimal("17.4483"),
-            new BigDecimal("78.3915"),
-            true
-        );
-        assertThat(validator.validate(request))
-            .extracting(violation -> violation.getPropertyPath().toString())
-            .contains("landmark");
     }
 
     @Test

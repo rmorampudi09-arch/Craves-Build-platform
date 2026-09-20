@@ -339,14 +339,11 @@ export const publicKitchenReviewsApi = {
     const params: Record<string, string | number> = {limit};
     if (options?.cursor) params.cursor = options.cursor;
 
-    const value = await publicApiClient.get<unknown>(baseRoute, {
+    const response = await publicApiClient.get<unknown>(baseRoute, {
       signal: options?.signal,
       params,
-      dedupeKey: `public-kitchen-reviews:${kitchenId}:${limit}:${
-        options?.cursor ?? ''
-      }`,
     });
-    const parsed = parsePublicKitchenReviewPage(value);
+    const parsed = parsePublicKitchenReviewPage(response.data);
     if (
       !parsed ||
       parsed.items.some(review => review.kitchenId !== kitchenId)
@@ -361,11 +358,10 @@ export const publicKitchenReviewsApi = {
     signal?: AbortSignal,
   ): Promise<PublicKitchenReviewSummary> {
     const baseRoute = route(kitchenId);
-    const value = await publicApiClient.get<unknown>(`${baseRoute}/summary`, {
+    const response = await publicApiClient.get<unknown>(`${baseRoute}/summary`, {
       signal,
-      dedupeKey: `public-kitchen-review-summary:${kitchenId}`,
     });
-    const parsed = parsePublicKitchenReviewSummary(value);
+    const parsed = parsePublicKitchenReviewSummary(response.data);
     if (!parsed || parsed.kitchenId !== kitchenId) {
       throw new Error('PUBLIC_KITCHEN_REVIEW_SUMMARY_INVALID_RESPONSE');
     }

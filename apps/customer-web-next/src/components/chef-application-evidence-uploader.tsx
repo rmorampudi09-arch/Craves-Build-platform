@@ -135,14 +135,13 @@ export function ChefApplicationEvidenceUploader({
   const requestRef = useRef<XMLHttpRequest | null>(null);
 
   useEffect(() => {
-    const requests = requestRefs.current;
     return () => {
-      for (const xhr of Object.values(requests)) {
-        if (!xhr) continue;
-        xhr.onload = xhr.onerror = xhr.onabort = xhr.ontimeout = null;
-        xhr.upload.onprogress = null;
-        xhr.abort();
-      }
+      const xhr = requestRef.current;
+      requestRef.current = null;
+      if (!xhr) return;
+      xhr.onload = xhr.onerror = xhr.onabort = xhr.ontimeout = null;
+      xhr.upload.onprogress = null;
+      xhr.abort();
     };
   }, []);
 

@@ -67,9 +67,10 @@ class FinancialCheckoutDatabaseTest {
         context.registerBean(DataSourceTransactionManager.class,()->manager);context.registerBean(CatalogClient.class,()->catalog);context.registerBean(CustomerAddressClient.class,()->addresses);
         context.registerBean(FinanceSourceClient.class,()->finance);context.registerBean(CheckoutSnapshotFactory.class,CheckoutSnapshotFactory::new);
         context.registerBean(NotificationInternalClient.class,()->new NotificationInternalClient(new NotificationClientProperties(),RestClient.builder(),notifications));
-        context.registerBean(OrderService.class);context.registerBean(OrderFinancialBindingService.class);context.registerBean(FinancialCheckoutTransactionAspect.class);context.refresh();
+        context.registerBean(OrderService.class);context.registerBean(OrderFinancialBindingService.class);context.registerBean(FinancialCheckoutTransactionAspect.class);registerAdditionalOwners();context.refresh();
         orders=context.getBean(OrderService.class);orders.addCartItem(actor,new AddCartItemRequest(menu,1));
     }
+    void registerAdditionalOwners() {}
     @AfterEach void close(){if(context!=null)context.close();}
     CheckoutResponse checkout(){return orders.checkout(actor,new CheckoutRequest(address,"Finance integration test"));}
     ObjectNode quote(JsonNode request){
@@ -99,6 +100,12 @@ class FinancialCheckoutDatabaseTest {
     @Test void quoteFailureRollsBackOrdersAndPreservesCart(){
         doThrow(new IllegalStateException("Finance not reachable")).when(finance).quote(any());assertThrows(RuntimeException.class,this::checkout);
         assertEquals(0,count("customer_order"));assertEquals(0,count("checkout"));assertEquals(0,count("finance_source_outbox"));assertEquals(1,count("cart_item"));verifyNoInteractions(notifications);
+    }
+    @Test void unexpectedDistanceTariffWithoutCertifiedSourceRollsBack(){
+        doAnswer(invocation->{var result=quote(invocation.getArgument(0));var snap=(ObjectNode)result.path("snapshots").get(0);
+            snap.putObject("policy").putObject("deliveryTariff").put("baseCharge","20.00");
+            snap.remove("hash");snap.put("hash",hash(snap));return result;}).when(finance).quote(any());
+        assertThrows(RuntimeException.class,this::checkout);assertEquals(0,count("checkout"));assertEquals(1,count("cart_item"));verifyNoInteractions(notifications);
     }
     @Test void changedQuoteIdentityRollsBackInsteadOfChargingWrongMoney(){
         doAnswer(invocation->{var result=quote(invocation.getArgument(0));result.put("checkoutId",UUID.randomUUID().toString());return result;}).when(finance).quote(any());

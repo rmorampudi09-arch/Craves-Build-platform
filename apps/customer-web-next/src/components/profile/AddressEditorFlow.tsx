@@ -431,6 +431,15 @@ export function AddressEditorFlow({
   if (!open) return null;
 
   const point = currentPoint(draft);
+  const missingLocationFields = [
+    ["districtName", "District"],
+    ["city", "City"],
+    ["state", "State"],
+    ["postalCode", "Pincode"],
+  ] as const;
+  const unresolvedRequired = missingLocationFields.filter(
+    ([key]) => !draft[key].trim(),
+  );
   const title =
     step === "locate"
       ? targetAddressId
@@ -674,84 +683,31 @@ export function AddressEditorFlow({
                       ) : null}
                     </label>
 
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <label
-                        id="address-districtName"
-                        className="text-xs font-bold text-[#1A1A1A]"
-                      >
-                        District
-                        <input
-                          value={draft.districtName}
-                          onChange={(event) =>
-                            update("districtName", event.target.value)
-                          }
-                          className={inputClass("districtName")}
-                          aria-invalid={Boolean(fieldErrors.districtName)}
-                        />
-                        {fieldErrors.districtName ? (
-                          <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
-                            {fieldErrors.districtName}
-                          </span>
-                        ) : null}
-                      </label>
-
-                      <label
-                        id="address-city"
-                        className="text-xs font-bold text-[#1A1A1A]"
-                      >
-                        City
-                        <input
-                          value={draft.city}
-                          onChange={(event) => update("city", event.target.value)}
-                          className={inputClass("city")}
-                          aria-invalid={Boolean(fieldErrors.city)}
-                        />
-                        {fieldErrors.city ? (
-                          <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
-                            {fieldErrors.city}
-                          </span>
-                        ) : null}
-                      </label>
-
-                      <label
-                        id="address-state"
-                        className="text-xs font-bold text-[#1A1A1A]"
-                      >
-                        State
-                        <input
-                          value={draft.state}
-                          onChange={(event) => update("state", event.target.value)}
-                          className={inputClass("state")}
-                          aria-invalid={Boolean(fieldErrors.state)}
-                        />
-                        {fieldErrors.state ? (
-                          <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
-                            {fieldErrors.state}
-                          </span>
-                        ) : null}
-                      </label>
-
-                      <label
-                        id="address-postalCode"
-                        className="text-xs font-bold text-[#1A1A1A]"
-                      >
-                        Pincode
-                        <input
-                          value={draft.postalCode}
-                          onChange={(event) =>
-                            update("postalCode", event.target.value)
-                          }
-                          inputMode="numeric"
-                          className={inputClass("postalCode")}
-                          aria-invalid={Boolean(fieldErrors.postalCode)}
-                        />
-                        {fieldErrors.postalCode ? (
-                          <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
-                            {fieldErrors.postalCode}
-                          </span>
-                        ) : null}
-                      </label>
-                    </div>
+                    {unresolvedRequired.length > 0 ? (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        {unresolvedRequired.map(([key, label]) => (
+                          <label
+                            key={key}
+                            id={"address-" + key}
+                            className="text-xs font-bold text-[#1A1A1A]"
+                          >
+                            {label}
+                            <input
+                              value={draft[key]}
+                              onChange={(event) => update(key, event.target.value)}
+                              inputMode={key === "postalCode" ? "numeric" : "text"}
+                              className={inputClass(key)}
+                              aria-invalid={Boolean(fieldErrors[key])}
+                            />
+                            {fieldErrors[key] ? (
+                              <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                                {fieldErrors[key]}
+                              </span>
+                            ) : null}
+                          </label>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="mt-7">

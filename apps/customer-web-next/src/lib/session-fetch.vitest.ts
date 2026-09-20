@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { sessionFetch } from "@/services/auth/sessionFetch";
+import { sessionFetch } from "../services/auth/sessionFetch";
 
 afterEach(() => {
   vi.unstubAllGlobals();

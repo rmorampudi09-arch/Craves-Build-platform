@@ -50,7 +50,10 @@ export function DetailBrowseHeader({ returnPath, onBack }: DetailBrowseHeaderPro
 
   const locationLabel = address
     ? [address.mandal, address.city].filter(Boolean).join(", ")
-    : "Choose default address";
+    : "Choose address";
+  const locationTypeLabel = address?.label
+    ? `${address.label.charAt(0).toUpperCase()}${address.label.slice(1).toLowerCase()}`
+    : "Location";
 
   const openSearch = () => {
     window.sessionStorage.setItem("craves-home-open-search", "1");
@@ -65,6 +68,7 @@ export function DetailBrowseHeader({ returnPath, onBack }: DetailBrowseHeaderPro
   return (
     <BrowseHeader
       locationLabel={locationLabel}
+      locationTypeLabel={locationTypeLabel}
       onOpenLocation={() => navigate({ to: "/addresses" })}
       cartCount={cartItemCount}
       onOpenCart={() => navigate({ to: "/cart" })}

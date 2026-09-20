@@ -52,6 +52,8 @@ public class AuthService {
     private final RefreshTokenGenerator refreshTokenGenerator;
     private final TokenHasher tokenHasher;
     private final AdminSessionService adminSessions;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private in.craves.auth.referrals.ReferralEnrollment referralEnrollment;
 
     public AuthService(
         FirebaseApp firebaseApp,
@@ -95,9 +97,16 @@ public class AuthService {
             }
 
             AuthIdentity identity = loadOrCreateIdentity(decodedToken, phoneNumber);
+            boolean newIdentity = identity.getId() == null;
             identity.setLastLoginAt(Instant.now());
             identity = identityRepository.save(identity);
             ensureCustomerRole(identity.getId());
+            if (newIdentity && request.referral() != null) {
+                if (referralEnrollment == null) throw AuthException.conflict("REFERRAL_SIGNUP_UNAVAILABLE", "Referral signup is not enabled");
+                identityRepository.flush();
+                referralEnrollment.signup(identity, in.craves.auth.referrals.ReferralSignup.parse(request.referral()));
+            }
+            // Existing-account login never changes immutable creation-time referral ancestry.
 
             List<String> roles = identityRoleRepository.findRoleCodesByIdentityId(identity.getId());
             saveLoginAttempt(firebaseUid, phoneNumber, true, null, ipAddress, userAgent);

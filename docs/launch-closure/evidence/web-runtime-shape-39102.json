@@ -1,0 +1,17 @@
+{
+  "runId": 39102,
+  "result": "succeeded",
+  "source": "54800c5f9acfd5b082f7a59a758b98200128695e",
+  "observedAt": "2026-09-16T15:53:56.3408910Z",
+  "app": "ca-craves-web-prodlow",
+  "revision": "ca-craves-web-prodlow--0000086",
+  "readOnly": true,
+  "literalSettingsIncluded": false,
+  "accepted": false,
+  "differences": [
+    {"path": "$.containers[0].probes", "desired": {"absent": true}, "running": {"type": "list", "empty": true}},
+    {"path": "$.containers[0].resources.ephemeralStorage", "desired": {"type": "str"}, "running": {"absent": true}},
+    {"path": "$.scale.cooldownPeriod", "desired": {"type": "int", "scalar": 300}, "running": {"type": "NoneType", "empty": true}},
+    {"path": "$.scale.pollingInterval", "desired": {"type": "int", "scalar": 30}, "running": {"type": "NoneType", "empty": true}}
+  ]
+}

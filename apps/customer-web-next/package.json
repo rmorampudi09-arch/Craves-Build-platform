@@ -5,9 +5,9 @@
   "type": "module",
   "sideEffects": false,
   "scripts": {
-    "predev": "node scripts/extract-brand-logo.mjs && node scripts/extract-landing-reference-assets.mjs",
+    "predev": "node scripts/extract-brand-logo.mjs && node scripts/extract-landing-reference-assets.mjs && node scripts/restore-landing-media.mjs && node scripts/build-landing-auth.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/extract-brand-logo.mjs && node scripts/extract-landing-reference-assets.mjs",
+    "prebuild": "node scripts/extract-brand-logo.mjs && node scripts/extract-landing-reference-assets.mjs && node scripts/restore-landing-media.mjs && node scripts/build-landing-auth.mjs",
     "build": "next build",
     "standalone:prepare": "node scripts/prepare-standalone.mjs",
     "start": "npm run standalone:prepare && node .next/standalone/server.js",
@@ -83,16 +83,19 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",
+    "@testing-library/react": "16.3.3",
     "@types/node": "^24.10.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "eslint": "^9.32.0",
     "eslint-config-next": "16.3.5",
     "eslint-config-prettier": "^10.1.1",
+    "jsdom": "30.0.1",
     "postcss": "^8.5.6",
     "prettier": "^3.7.3",
     "tailwindcss": "4.3.3",
     "typescript": "^5.9.3",
-    "vitest": "4.1.10"
+    "vitest": "4.1.10",
+    "vite": "8.1.3"
   }
 }

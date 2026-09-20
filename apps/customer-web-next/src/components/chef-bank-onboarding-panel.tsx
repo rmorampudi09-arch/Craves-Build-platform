@@ -1,13 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { z } from "zod";
 import { bankConsentVersion, bankStatusSchema, bankSubmissionSchema, type BankStatus } from "@/lib/bank-onboarding-contract";
+import { captureSessionContext, isSessionReady, loadSession, subscribeSession } from "@/services/auth/cravesAuth";
 
 const applicantSchema = z.object({firstName: z.string().nullable().optional(), lastName: z.string().nullable().optional(), status: z.string()});
 const inputClass = "mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-950";
 
+function bankOwnerScope(): string {
+  const context = captureSessionContext();
+  return JSON.stringify([context.generation, context.identityId, isSessionReady()]);
+}
+const serverBankScope = () => "server";
+
 export function ChefBankOnboardingPanel() {
+  const scope = useSyncExternalStore(subscribeSession, bankOwnerScope, serverBankScope);
+  // The application page also hosts this panel before CHEF role approval.
+  // Establish Auth ownership without treating business approval as bank approval.
+  useEffect(() => { void loadSession().catch(() => null); }, []);
+  if (!isSessionReady()) return <section className="rounded-2xl border border-slate-200 bg-white p-6"><p role="status">Sign in to view or update your payout bank account.</p></section>;
+  return <ChefBankOnboardingContent key={scope} />;
+}
+
+function ChefBankOnboardingContent() {
   const [bank, setBank] = useState<BankStatus | null>(null);
   const [name, setName] = useState("");
   const [registered, setRegistered] = useState(false);

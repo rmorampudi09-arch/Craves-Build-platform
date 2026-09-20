@@ -1,4 +1,5 @@
 "use client";
+import { ChefAccountingBreakdown } from "@/components/chef-accounting-breakdown";
 
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
@@ -52,7 +53,7 @@ export function ManualChefSettlementPanel() {
     <p className="text-sm text-slate-600">Reserve the verified payable before paying through the approved Craves bank account. Record the actual outcome and evidence here. No button on this page sends money or verifies a bank account.</p>
     <label className="block text-sm">Approved chef<select className={input} value={chef} disabled={busy} onChange={event => edit(() => {setChef(event.target.value);setBalance(null);setSelected(null);})}><option value="">Select a chef</option>{chefs.map(row => <option key={row.identityId} value={row.identityId}>{row.displayName}</option>)}</select></label>
     <button type="button" className={button} disabled={busy || !chef} onClick={() => void run(load)}>Load current balance and payments</button>
-    {balance && <><p className="text-lg font-semibold">Available for manual payment: ₹{balance.available}</p>
+    {balance && <><ChefAccountingBreakdown accounting={balance.accounting} /><p className="text-lg font-semibold">Available for manual payment: ₹{balance.available}</p>
       <p className="text-sm">{balance.onHold ? "An independent financial hold blocks a new transfer." : "No current financial hold."} {balance.enabled ? "Manual settlement is enabled." : "Manual settlement is not enabled."}</p>
       <label className="block text-sm">Operator reason<textarea className={input} maxLength={1000} value={reason} disabled={busy} onChange={event => edit(() => setReason(event.target.value))} /></label>
       <button type="button" className={button} disabled={busy || !reason.trim() || !balance.enabled || balance.onHold || balance.manualRequestUsedToday || balance.available === "0.00"} onClick={() => void run(async () => {

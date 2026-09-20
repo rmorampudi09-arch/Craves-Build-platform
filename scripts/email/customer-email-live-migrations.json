@@ -1,0 +1,40 @@
+{
+  "source": {
+    "auth-service": "151c36cb2afaaf7b8482ee784704d983f7d87324",
+    "notification-service": "6691aa2ff663e51a257407b9b1f4b5b7b4ba87d5",
+    "user-chef-service": "3a4dfa69a547a64223ec09373bfcefbd5d487131"
+  },
+  "files": {
+    "services/auth-service/src/main/resources/db/migration/V12__referral_source_outbox.sql": "ef39892abfa913bea6251682e14d1d6ee0c9d994",
+    "services/auth-service/src/main/resources/db/migration/V13__referral_enrollment.sql": "a2b00519386349e14e3881c854e103512496ac3a",
+    "services/auth-service/src/main/resources/db/migration/V14__referral_account_status.sql": "2af358927e206141c753d69fe67087ce20522ec1",
+    "services/auth-service/src/main/resources/db/migration/V1__auth_schema.sql": "6249f63f5fce47e20aacae2b2cfcc19d6e9f720a",
+    "services/auth-service/src/main/resources/db/migration/V2__admin_account_intervention.sql": "f45969d3d4a2a372b4b4be5f881f4510c26f1bba",
+    "services/auth-service/src/main/resources/db/migration/V3__normalize_account_intervention_audit.sql": "7cdacf148fb1200657c43c9fcbb670df75bc54b7",
+    "services/auth-service/src/main/resources/db/migration/V4__token_revocation_projection_outbox.sql": "0fd3d1933b0892685d16ddcd44ced471320145c3",
+    "services/auth-service/src/main/resources/db/migration/V5__serialize_account_provider_sync.sql": "586123a14d3c6521f397efb5102648f374e8348d",
+    "services/auth-service/src/main/resources/db/migration/V6__internal_admin_rbac.sql": "550f0f07feb676967cc371316438fd645e2c130d",
+    "services/auth-service/src/main/resources/db/migration/V7__craves_academy.sql": "25888d3e6d9666b4dfe63557313a9784226972fb",
+    "services/auth-service/src/main/resources/db/migration/V8__admin_session_families.sql": "dffa41722252e6b510ab5ec71f7016bae7bcb6f3",
+    "services/auth-service/src/main/resources/db/migration/V9_1__admin_explorer_admission.sql": "21504cce2d45c02c4cb14364d2e71a53cce03ec7",
+    "services/auth-service/src/main/resources/db/migration/V9__admin_explorer_audit.sql": "3c9008aa686f4ad00b867f0d2e8d60f625ff3cd7",
+    "services/notification-service/src/main/resources/db/migration/V1__notification_schema.sql": "a58226d02f7c12e64effd9c5c0ad5d5e34c9e365",
+    "services/notification-service/src/main/resources/db/migration/V2__chef_rejected_template.sql": "b7b4d4ad0e2b06cebc032b12882dc261f1afc82f",
+    "services/notification-service/src/main/resources/db/migration/V3__production_delivery_channels.sql": "bb9398688f37e58a6032b86f4d6572f28fcd593f",
+    "services/notification-service/src/main/resources/db/migration/V4__notification_recovery_operations.sql": "da8149a5dab3b3c886d78423df167499183b1e95",
+    "services/notification-service/src/main/resources/db/migration/V5__in_app_notification_inbox_indexes.sql": "8a82fdc0b59d03c3d38756cfacb5303274f17f45",
+    "services/notification-service/src/main/resources/db/migration/V6__private_pdf_documents.sql": "b0fbda0bfa5410b43b6e4fa1cf64897151cee1b3",
+    "services/user-chef-service/src/main/resources/db/migration/V10__customer_home_relationship_favorites.sql": "2eb634d6253c85d756dbb7e7ea2935f8bbccdf95",
+    "services/user-chef-service/src/main/resources/db/migration/V11_1__admin_explorer_admission.sql": "21504cce2d45c02c4cb14364d2e71a53cce03ec7",
+    "services/user-chef-service/src/main/resources/db/migration/V11__admin_explorer_audit.sql": "3c9008aa686f4ad00b867f0d2e8d60f625ff3cd7",
+    "services/user-chef-service/src/main/resources/db/migration/V1__user_chef_schema.sql": "3aa2f6fc093e1410584ea4ae66a388f531d35940",
+    "services/user-chef-service/src/main/resources/db/migration/V2__notification_outbox.sql": "9ac24985fdb76f915a327928efdbbe9959c0da43",
+    "services/user-chef-service/src/main/resources/db/migration/V3__customer_address_location.sql": "c3576eae2e4e2e86f3aa4f40faabdbec4d7b6489",
+    "services/user-chef-service/src/main/resources/db/migration/V4__customer_address_district.sql": "d45bb03e66e579b1b6bc0a8075b86a00366f541f",
+    "services/user-chef-service/src/main/resources/db/migration/V5__chef_document_type_extensibility.sql": "38c0907d65e8e00d1cf7a48cd2c3361183e3d616",
+    "services/user-chef-service/src/main/resources/db/migration/V6__customer_favorites.sql": "bd9ab5e825492948c1a6a96beb238381f26e4e47",
+    "services/user-chef-service/src/main/resources/db/migration/V7__support_case_domain.sql": "21452e91a66c35bc561f0aa036449341f06a1292",
+    "services/user-chef-service/src/main/resources/db/migration/V8__chef_document_review_decisions.sql": "ec649f6ad51e69de807ce5b70c0c06137728be27",
+    "services/user-chef-service/src/main/resources/db/migration/V9__admin_directory_search.sql": "0697f08cd979b3b4470eac860c94d4e80a167cc5"
+  }
+}

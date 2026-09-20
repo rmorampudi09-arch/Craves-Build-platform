@@ -1,6 +1,7 @@
 "use client";
 
 import { adminFetch, observeAdminSession, type SessionState } from "@/lib/admin-renewal";
+import { adminSignInUrl } from "@/lib/admin-sign-in";
 
 import { InvestigationPanel } from "@/components/investigation-panel";
 import { HistoryControls } from "@/components/history-controls";
@@ -29,8 +30,8 @@ async function json<T>(response: Response): Promise<T> {
 }
 
 function signedOutRedirect() {
-  const returnTo = encodeURIComponent(BASE_PATH);
-  window.location.assign(`/sign-in?returnTo=${returnTo}`);
+  // Cross-app navigation must load the main app, not this basePath's router.
+  window.location.assign(adminSignInUrl(window.location.origin));
 }
 
 export function DeliveryIntelligenceApp() {

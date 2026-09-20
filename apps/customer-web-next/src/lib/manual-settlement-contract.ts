@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { moneySchema } from "@/lib/finance-contract";
+import { chefAccountingSchema, moneySchema } from "@/lib/finance-contract";
 const id = z.string().uuid();
 const reason = z.string().trim().min(1).max(1000);
 const ref = z.string().trim().min(1).max(240).refine(value => !/[\u0000-\u001f\u007f]/.test(value));
@@ -21,7 +21,7 @@ export const manualInstructionSchema = z.object({
   version: z.number().int().nonnegative(), destinationReference: ref.nullable(), bankReference: z.string().max(160).nullable(),
   authorizedAt: z.string().datetime({offset: true}).nullable(), paidAt: z.string().datetime({offset: true}).nullable(), createdAt: z.string().datetime({offset: true}),
 });
-export const manualBalanceSchema = z.object({chefIdentityId: id, available: moneySchema, onHold: z.boolean(), enabled: z.boolean(), manualRequestUsedToday: z.boolean(), recent: z.array(manualInstructionSchema).max(100)});
+export const manualBalanceSchema = z.object({chefIdentityId: id, available: moneySchema, onHold: z.boolean(), enabled: z.boolean(), manualRequestUsedToday: z.boolean(), recent: z.array(manualInstructionSchema).max(100), accounting: chefAccountingSchema.optional()});
 export type ManualInstruction = z.infer<typeof manualInstructionSchema>;
 export type ManualAction = z.infer<typeof manualActionSchema>;
 export type ManualBalance = z.infer<typeof manualBalanceSchema>;

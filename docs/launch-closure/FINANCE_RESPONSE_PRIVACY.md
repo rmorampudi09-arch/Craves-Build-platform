@@ -1,0 +1,56 @@
+# Finance response privacy repair
+
+## Observed problem
+
+On16 September2026 at12:49:07 UTC, four fresh anonymous GET requests to the public API returned HTTP401 with `Cache-Control: private` and no Pragma header:
+
+- `/api/v1/admin/finance/settings`
+- `/api/v1/admin/finance/source-status`
+- `/api/v1/admin/finance/manual-settlements`
+- `/api/v1/chef/finance/balance`
+
+Only response headers were inspected. No customer body, token, account detail, payment, order or finance mutation was requested. These are freshly reproduced affected paths; the unavailable September15 continuation's exact four historical paths have not been independently identified. Do not equate the two sets without the original record.
+
+## Responsible policy and narrowly selected change
+
+The existing finance release archive describes an API-level missing-Bearer `return-response` with no cache header and an outbound `no-store` header. Microsoft's policy contract says `return-response` cancels the processing pipeline, so an outbound header alone does not cover this denial. The current byte fingerprints of the two selected API policies match each other. Current inherited policy structure must pass inspection before repair.
+
+`scripts/apim/finance-response-privacy.py` operates only on the existing `craves-finance-admin-v1` and `craves-chef-finance-v1` API policies. It adds `Cache-Control: private, no-store, max-age=0` and `Pragma: no-cache` to each local early response, outbound section and error section. Header insertion respects APIM's status/header/body ordering. Authentication conditions, status codes, body values, backends, CORS, operation routing and all non-privacy XML structure must remain equivalent.
+
+Write mode refuses unknown policy bytes, inherited-policy drift, missing ETags, wildcard ETags and off-scope management URLs. Read-only inspection may report baseline mismatches as hashes and structural metadata, but never accepts or applies them. Writes use the actual current ETag and fail on concurrent changes. Global policies and operations are never written. Current Azure service-connection authentication is used in memory, never logged or exported. Public probes do not follow redirects or read response bodies.
+
+## Test and execution boundary
+
+### Live correction receipt
+
+Read-only39089 passed all resource/collection comparisons on b9f9ee0de0d8d76126a7974c0db3607008851884. Publication39091 conditionally wrote both API-level policies, re-read matching proposed structure and recorded actual SHA256 `0228e53486bfffef88a53b3a29b95a53c7b76e20d80fa15f36a309816dd872ae` for both. The original run remains FAILED: its immediate check saw the old chef-route header, while all three admin routes passed. No second write was attempted.
+
+Independent 14:28:34 UTC checks found all four anonymous denials using private/no-store/max-age=0 and Pragma:no-cache. All four synthetic-invalid-token denials also used no-store/no-cache; manual-settlements used no-store without the additional private/max-age directives. This is delayed live-header verification, not a relabelled successful pipeline run. No app image, database, transaction or global policy was changed. F14 remains open for authorized success/wrong-role/validation/upstream-error and unaffected-static-cache evidence. Older notes below describe their respective earlier checkpoints.
+
+### Continued after sole-owner approval
+
+Read-only Azure run39086 succeeded on source7d3a695fd9ebb236055866466bf177af4b40a770. It observed the resource-level global hash `be15daa26fce12414c353e55c31dba2e43177dc754ad57b3312ea43d6c6a287c` (990 bytes, inbound/backend/outbound with no on-error) and both finance resource hashes `f34e6e2623f818053b7afebf7afc379736c0f1293df62b1b84f0a2ed97a0322e` (695 bytes, all four sections, exact ETags available). Each finance policy has one early response and outbound-only no-store. All four anonymous probes still failed privacy acceptance. No writes occurred.
+
+The helper now reads BOTH collection and resource representations for these exact three scopes. Write mode requires both previously observed byte fingerprints AND equal parsed XML structure; meaningful expression, body, backend or ordering differences cannot be dismissed as formatting. The known global three-section shape is allowed for inheritance inspection only; global and collection writes remain forbidden. It repeats these comparisons immediately before conditional writes. The existing pipeline has an explicit `publish-finance-response-privacy` action requiring the exact checked source SHA; inspection remains its separate read-only action. Run read-only comparison first, require candidate checks to pass, and only then select publication. No app image, database, product or operation change is part of this action.
+
+The updated local suite passed 21 finance-helper tests / 37 total APIM tests, including resource/collection equivalence, meaningful drift, pagination/format rejection, forbidden collection writes, missing inherited sections, and ETag races. This is not yet live publication evidence or F14 acceptance. Original checkpoint details below are retained chronologically.
+
+Fifteen local regression tests cover header placement and uniqueness, idempotence, nested errors, unchanged routing/auth/body, malformed XML, scope restrictions, exact ETags, no-write inspection including drift/partial-shape diagnostics, and protected apply/readback. All 31 current APIM tests passed locally. These are isolated structural and mocked management tests, not authenticated production 200/403/400/500 acceptance.
+
+Read-only Azure run 39081 at source 0ea1fc397b93521de93c2767f6f0e35606157251 stopped at `Inherited global policy drifted`. No policy write was attempted. The earlier inventory used the collection endpoint while the repair helper reads a policy resource; formatting differences are only a hypothesis until comparison, not a reason to relax write guards. Diagnostic metadata was added without changing apply guards. F14 remains OPEN.
+
+Read-only run 39083 at e535e0fa5ec8339eebabb51af0a91691f6558444 then stopped at `Unexpected policy sections`. Inspection now permits reporting partial or differently ordered section structures; patch/apply still reject them. No live change has been attempted, and neither failure is relabelled as success. A fresh diagnostic is needed before planning any write.
+
+The pipeline122 action `inspect-finance-response-privacy` runs the tests and a read-only live inspection. At this checkpoint the action does not expose a write option. An application image rollout is unnecessary for this cache-only gateway repair. Before publication, attach the current exact-source test result and inspect the emitted plan. After publication, record exact after-policy hashes and independently repeat the anonymous probes; then verify authenticated success, wrong-role denial, validation error and upstream-failure handling through controlled authorized paths. Keep F14 OPEN until all required evidence exists.
+
+## Recovery
+
+Do not overwrite a drifted policy or retry a timed-out write blindly. Read the exact target and compare the non-privacy structure and expected repaired structure. Preserve existing routing, JWT enforcement and newer policies. A verified cache-only correction should not be reverted merely because a later unrelated authenticated check fails. If routing truly breaks, use a separately reviewed compatible policy while retaining safe uncached failure responses; do not restore the original missing privacy control as a convenience.
+
+## Primary references
+
+- https://learn.microsoft.com/en-us/azure/api-management/return-response-policy
+- https://learn.microsoft.com/en-us/azure/api-management/api-management-error-handling-policies
+- https://learn.microsoft.com/en-us/rest/api/apimanagement/api-policy/create-or-update?view=rest-apimanagement-2024-05-01
+
+These explain policy execution and conditional writes. They are not evidence of Craves deployment or acceptance.

@@ -33,11 +33,13 @@ class RefundMigrationDatabaseTest {
         assertEquals("133",latest.info().current().getVersion().getVersion());
         var pending=java.util.Arrays.stream(latest.info().pending()).map(m->m.getVersion().getVersion()).toList();
         // V134 is the separately reviewed manual channel; V135 has never existed.
-        // Both the isolated refund branch and the combined release start from real production V133.
-        assertTrue(pending.equals(java.util.List.of("136")) || pending.equals(java.util.List.of("134","136")),pending.toString());
+        // V146 adds empty review storage; it must never auto-classify historical rows.
+        assertEquals(java.util.List.of("134","136","137","138","139","140","141","142","143","144","145","146"),pending);
         assertEquals(pending.size(),latest.migrate().migrationsExecuted);latest.validate();assertEquals(0,latest.migrate().migrationsExecuted);
         assertEquals(before,jdbc.queryForMap("SELECT status,attempt_count,last_error,provider_payload,created_at,updated_at FROM payment_schema.refund WHERE id=?",id));
         assertEquals(beforeEvent,jdbc.queryForMap("SELECT * FROM payment_schema.refund_status_outbox WHERE id=?",event));
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM payment_schema.refund_sandbox_context_review",Integer.class));
+        assertFalse(Boolean.TRUE.equals(jdbc.queryForObject("SELECT payment_schema.refund_verified_cashfree_sandbox(?)",Boolean.class,id)));
         assertNull(jdbc.queryForObject("SELECT dispatch_protocol FROM payment_schema.refund WHERE id=?",String.class,id));
         assertThrows(RuntimeException.class,()->jdbc.update("""
             UPDATE payment_schema.refund SET dispatch_protocol='RAZORPAY_REFUND_IDEMPOTENCY_V1',dispatch_request_body='{}',

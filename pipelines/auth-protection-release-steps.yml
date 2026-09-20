@@ -1,0 +1,35 @@
+parameters:
+  - name: sourceSha
+    type: string
+  - name: regressionRunId
+    type: string
+steps:
+  - script: python3 -m unittest discover -s scripts/release/tests -p 'test_auth_activation.py' -v
+    displayName: Verify Auth-only activation and bounded acceptance guards
+  - task: AzureCLI@2
+    displayName: Build exact reviewed Auth image and activate bounded protection
+    env:
+      EXPECTED_RELEASE_SHA: ${{ parameters.sourceSha }}
+      REQUESTED_IMAGE_TAG: ${{ parameters.sourceSha }}
+      AUTH_REGRESSION_RUN_ID: ${{ parameters.regressionRunId }}
+    inputs:
+      azureSubscription: Craves-Dev-Service-Connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        bash scripts/release/verify-reviewed-service-source.sh
+        python3 scripts/release/verify-web-release-evidence.py --sha "$EXPECTED_RELEASE_SHA" --run-id "$AUTH_REGRESSION_RUN_ID"
+        # Read-only checksum comparison; do not repair or rewrite applied migrations.
+        python3 scripts/email/inspect-applied-email-history.py
+        az acr login --name cravesprodlowacr82121 --only-show-errors
+        IMAGE="cravesprodlowacr82121.azurecr.io/craves/auth-service:$EXPECTED_RELEASE_SHA"
+        docker build --label "org.opencontainers.image.revision=$EXPECTED_RELEASE_SHA" -t "$IMAGE" services/auth-service
+        EXPECTED_IMAGE_CONFIG_ID=$(docker image inspect "$IMAGE" --format '{{.Id}}')
+        export EXPECTED_IMAGE_CONFIG_ID
+        docker push "$IMAGE"
+        PINNED_IMAGE=$(bash scripts/release/resolve-reviewed-service-image.sh cravesprodlowacr82121 craves/auth-service "$EXPECTED_IMAGE_CONFIG_ID")
+        bash scripts/release/verify-reviewed-service-source.sh
+        python3 scripts/release/verify-web-release-evidence.py --sha "$EXPECTED_RELEASE_SHA" --run-id "$AUTH_REGRESSION_RUN_ID"
+        python3 scripts/release/release-auth-protection.py --image "$PINNED_IMAGE"

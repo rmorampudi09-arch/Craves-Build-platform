@@ -1,0 +1,409 @@
+# Read-only device-acceptance probe. This branch-specific file can run in the
+# existing audit pipeline without changing that pipeline's default branch.
+trigger: none
+pr: none
+parameters:
+  - name: action
+    displayName: Device acceptance action
+    type: string
+    default: inspect
+    values:
+      - inspect
+      - release-cart
+      - inspect-cart-policy
+      - publish-cart-routes
+      - inspect-customer-fixes
+      - publish-review-routes
+      - test-email-upgrade
+      - release-customer-email
+      - release-customer-checkout
+      - inspect-email-runtime
+      - capture-launch-runtime
+      - inspect-core-readiness
+      - inspect-backup-metadata
+      - inspect-finance-migrations
+      - inspect-referral-upgrade
+      - build-referral-upgrade
+      - upgrade-existing-referral
+      - capture-gateway-fingerprints
+      - inspect-finance-response-privacy
+      - publish-finance-response-privacy
+      - inspect-applied-email-history
+      - inspect-email-operational-health
+      - inspect-customer-web-shape
+      - inspect-auth-protection
+      - release-auth-protection
+      - verify-auth-protection
+      - inspect-catalog-finance-read
+      - connect-catalog-finance-read
+      - inspect-finance-source-cutover
+      - activate-finance-source-cutover
+  - name: referralUpgradeConfirmation
+    displayName: Type UPGRADE_EXISTING_DORMANT_REFERRAL for existing referral upgrade only
+    type: string
+    default: DO_NOT_UPGRADE
+  - name: referralUpgradeDigest
+    displayName: Exact sha256 digest from the reviewed referral build (upgrade only)
+    type: string
+    default: NOT_SELECTED
+  - name: financeSourceReleaseSha
+    displayName: Exact tested main SHA for Finance source cutover
+    type: string
+    default: NOT_AUTHORIZED
+  - name: financeSourceRegressionRunId
+    displayName: Successful exact-main complete regression run for Finance cutover
+    type: string
+    default: NOT_AUTHORIZED
+  - name: catalogFinanceReadSource
+    displayName: Exact tested main SHA for dedicated Catalog Finance read connection
+    type: string
+    default: NOT_AUTHORIZED
+  - name: catalogFinanceReadRegressionRunId
+    displayName: Successful exact-main complete regression run for Catalog Finance connection
+    type: string
+    default: NOT_AUTHORIZED
+  - name: expectedAuthReleaseSha
+    displayName: Exact tested main SHA for Auth protection activation
+    type: string
+    default: NOT_AUTHORIZED
+  - name: authRegressionRunId
+    displayName: Successful exact-main full regression run for Auth activation
+    type: string
+    default: NOT_AUTHORIZED
+  - name: expectedFinancePrivacySource
+    displayName: Exact checked source SHA for finance header publication (unused for inspection)
+    type: string
+    default: NOT_AUTHORIZED
+  - name: authVerificationImage
+    displayName: Existing immutable Auth image for verification only
+    type: string
+    default: NOT_AUTHORIZED
+  - name: authVerificationFingerprint
+    displayName: Original unrelated-settings hash for Auth verification only
+    type: string
+    default: NOT_AUTHORIZED
+pool:
+  vmImage: ubuntu-latest
+steps:
+  - checkout: self
+    persistCredentials: false
+    fetchDepth: 1
+  - ${{ if or(eq(parameters.action, 'inspect-referral-upgrade'), eq(parameters.action, 'build-referral-upgrade'), eq(parameters.action, 'upgrade-existing-referral')) }}:
+      - task: JavaToolInstaller@0
+        inputs:
+          versionSpec: '21'
+          jdkArchitectureOption: x64
+          jdkSourceOption: PreInstalled
+      - script: python3 -m unittest discover -s scripts/referrals -p 'test_existing_upgrade.py' -v
+        displayName: Verify dormant existing-referral upgrade boundaries
+      - task: AzureCLI@2
+        displayName: Inspect build or upgrade only the existing dormant referral backend
+        env:
+          REFERRAL_UPGRADE_CONFIRMATION: ${{ parameters.referralUpgradeConfirmation }}
+          REFERRAL_UPGRADE_DIGEST: ${{ parameters.referralUpgradeDigest }}
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            umask 077
+            git fetch --quiet origin 135df3d23c61bc14e1ce742f9cf9f5f25a09d0e1
+            action=inspect
+            if [ '${{ parameters.action }}' = build-referral-upgrade ]; then action=build; fi
+            if [ '${{ parameters.action }}' = upgrade-existing-referral ]; then action=upgrade; fi
+            python3 scripts/referrals/upgrade-existing-backend.py "$action"
+  - ${{ if eq(parameters.action, 'inspect-finance-migrations') }}:
+      - script: python3 -m unittest discover -s scripts/release -p 'test_finance_migration_preflight.py' -v
+        displayName: Verify immutable Finance migration history guards
+      - task: AzureCLI@2
+        displayName: Compare applied Finance migrations without repair or writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            command -v psql >/dev/null
+            python3 scripts/release/inspect-finance-migrations.py
+  - ${{ if eq(parameters.action, 'inspect-backup-metadata') }}:
+      - script: python3 -m unittest discover -s scripts/release -p 'test_backup_metadata.py' -v
+        displayName: Verify exact-resource read-only backup inspection
+      - task: AzureCLI@2
+        displayName: Inspect recorded PostgreSQL backups without writes or restores
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/inspect-backup-metadata.py
+  - ${{ if eq(parameters.action, 'inspect-core-readiness') }}:
+      - script: python3 -m unittest discover -s scripts/release -p 'test_core_readiness.py' -v
+        displayName: Verify read-only core readiness boundaries
+      - task: AzureCLI@2
+        displayName: Read refund, subscription and security readiness without writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            command -v psql >/dev/null
+            python3 scripts/release/inspect-core-readiness.py
+  - ${{ if or(eq(parameters.action, 'inspect-finance-source-cutover'), eq(parameters.action, 'activate-finance-source-cutover')) }}:
+      - script: python3 -m unittest discover -s scripts/finance -p 'test_source_activation.py' -v
+        displayName: Verify bounded Finance cutover guards
+      - task: AzureCLI@2
+        displayName: Verify and configure existing Finance accounting source
+        env:
+          SOURCE_CUTOVER_ACTION: ${{ parameters.action }}
+          EXPECTED_RELEASE_SHA: ${{ parameters.financeSourceReleaseSha }}
+          REQUESTED_IMAGE_TAG: ${{ parameters.financeSourceReleaseSha }}
+          SOURCE_REGRESSION_RUN_ID: ${{ parameters.financeSourceRegressionRunId }}
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            git fetch --quiet --no-tags origin main
+            git fetch --quiet --unshallow || test "$(git rev-parse --is-shallow-repository)" = false
+            if [ "$SOURCE_CUTOVER_ACTION" = 'activate-finance-source-cutover' ]; then
+              bash scripts/release/verify-reviewed-service-source.sh
+              python3 scripts/release/verify-web-release-evidence.py --sha "$EXPECTED_RELEASE_SHA" --run-id "$SOURCE_REGRESSION_RUN_ID"
+              python3 scripts/finance/activate_source_runtime.py --apply --expected-source-sha "$EXPECTED_RELEASE_SHA"
+            else
+              python3 scripts/finance/activate_source_runtime.py
+            fi
+  - ${{ if or(eq(parameters.action, 'inspect-catalog-finance-read'), eq(parameters.action, 'connect-catalog-finance-read')) }}:
+      - script: python3 -m unittest discover -s scripts/finance -p 'test_catalog_read_runtime.py' -v
+        displayName: Verify dedicated read connection scope and secret preservation
+      - task: AzureCLI@2
+        displayName: Configure only the approved Catalog Finance read connection
+        env:
+          CATALOG_READ_ACTION: ${{ parameters.action }}
+          EXPECTED_RELEASE_SHA: ${{ parameters.catalogFinanceReadSource }}
+          REQUESTED_IMAGE_TAG: ${{ parameters.catalogFinanceReadSource }}
+          CATALOG_READ_REGRESSION_RUN_ID: ${{ parameters.catalogFinanceReadRegressionRunId }}
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            if [ "$CATALOG_READ_ACTION" = 'connect-catalog-finance-read' ]; then
+              bash scripts/release/verify-reviewed-service-source.sh
+              python3 scripts/release/verify-web-release-evidence.py --sha "$EXPECTED_RELEASE_SHA" --run-id "$CATALOG_READ_REGRESSION_RUN_ID"
+              python3 scripts/finance/configure_catalog_read_runtime.py --apply --expected-source-sha "$EXPECTED_RELEASE_SHA"
+            else
+              python3 scripts/finance/configure_catalog_read_runtime.py
+            fi
+  - ${{ if eq(parameters.action, 'release-auth-protection') }}:
+      - template: pipelines/auth-protection-release-steps.yml
+        parameters:
+          sourceSha: ${{ parameters.expectedAuthReleaseSha }}
+          regressionRunId: ${{ parameters.authRegressionRunId }}
+  - ${{ if eq(parameters.action, 'verify-auth-protection') }}:
+      - script: python3 -m unittest discover -s scripts/release/tests -p 'test_auth_activation.py' -v
+        displayName: Verify Auth convergence and no-update recovery guards
+      - task: AzureCLI@2
+        displayName: Verify existing Auth protection without another deployment
+        env:
+          AUTH_VERIFY_IMAGE: ${{ parameters.authVerificationImage }}
+          AUTH_VERIFY_FINGERPRINT: ${{ parameters.authVerificationFingerprint }}
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/release-auth-protection.py --verify-only --image "$AUTH_VERIFY_IMAGE" --expected-unrelated-hash "$AUTH_VERIFY_FINGERPRINT"
+  - ${{ if eq(parameters.action, 'inspect-auth-protection') }}:
+      - script: python3 -m unittest discover -s scripts/release/tests -p 'test_auth_protection_inventory.py' -v
+        displayName: Verify read-only Auth protection metadata boundaries
+      - script: python3 -m unittest discover -s scripts/release/tests -p 'test_auth_gateway_inventory.py' -v
+        displayName: Verify Auth gateway inspection redaction and inheritance
+      - task: AzureCLI@2
+        displayName: Read Auth protection settings without activation or customer requests
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/inspect-auth-protection.py
+            python3 scripts/release/inspect-auth-gateway.py
+  - ${{ if eq(parameters.action, 'inspect-customer-web-shape') }}:
+      - script: python3 -m unittest discover -s scripts/release/tests -p 'test_web_runtime_shape.py' -v
+        displayName: Verify read-only web shape redaction
+      - task: AzureCLI@2
+        displayName: Read web template shape differences without settings values
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/inspect-customer-web-shape.py
+  - ${{ if eq(parameters.action, 'inspect-email-operational-health') }}:
+      - script: python3 -m unittest discover -s scripts/email/tests -p 'test_email_operations.py' -v
+        displayName: Verify aggregate-only email inspection boundaries
+      - task: AzureCLI@2
+        displayName: Read email operational counts without account data or writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            command -v psql >/dev/null
+            python3 scripts/email/inspect-email-operations.py
+  - ${{ if eq(parameters.action, 'inspect-applied-email-history') }}:
+      - script: python3 -m unittest discover -s scripts/email/tests -p 'test_applied_email_history.py' -v
+        displayName: Verify read-only migration inspection boundaries
+      - task: AzureCLI@2
+        displayName: Read applied email migration checksums without database writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            command -v psql >/dev/null
+            python3 scripts/email/inspect-applied-email-history.py
+  - ${{ if or(eq(parameters.action, 'inspect-finance-response-privacy'), eq(parameters.action, 'publish-finance-response-privacy')) }}:
+      - script: python3 -m unittest discover -s scripts/apim/tests -p 'test_finance_response_privacy.py'
+        displayName: Verify narrow finance response header guards
+      - task: AzureCLI@2
+        displayName: Verify finance policy representations and optionally publish cache-only correction
+        env:
+          FINANCE_PRIVACY_ACTION: ${{ parameters.action }}
+          EXPECTED_FINANCE_PRIVACY_SOURCE: ${{ parameters.expectedFinancePrivacySource }}
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            if [ "$FINANCE_PRIVACY_ACTION" = 'publish-finance-response-privacy' ]; then
+              python3 scripts/apim/finance-response-privacy.py --apply --expected-source-sha "$EXPECTED_FINANCE_PRIVACY_SOURCE"
+            else
+              python3 scripts/apim/finance-response-privacy.py
+            fi
+  - ${{ if eq(parameters.action, 'capture-gateway-fingerprints') }}:
+      - script: python3 -m unittest discover -s scripts/release/tests -p 'test_gateway_policy_fingerprints.py'
+        displayName: Verify gateway fingerprint scope and redaction
+      - task: AzureCLI@2
+        displayName: Read existing gateway policy fingerprints without writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/capture-gateway-policy-fingerprints.py --output "$(Build.ArtifactStagingDirectory)/gateway-policy-fingerprints.json"
+      - task: PublishPipelineArtifact@1
+        condition: succeededOrFailed()
+        inputs:
+          targetPath: $(Build.ArtifactStagingDirectory)
+          artifact: gateway-policy-fingerprints
+  - ${{ if eq(parameters.action, 'capture-launch-runtime') }}:
+      - script: python3 -m unittest discover -s scripts/release/tests -p 'test_launch_runtime_capture.py'
+        displayName: Verify launch inventory read-only and redaction boundaries
+      - task: AzureCLI@2
+        displayName: Capture launch serving metadata and safety baseline without writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/capture-launch-runtime.py --output "$(Build.ArtifactStagingDirectory)/launch-runtime.json"
+      - task: PublishPipelineArtifact@1
+        condition: succeededOrFailed()
+        inputs:
+          targetPath: $(Build.ArtifactStagingDirectory)
+          artifact: launch-runtime-metadata
+  - ${{ if eq(parameters.action, 'inspect-email-runtime') }}:
+      - task: AzureCLI@2
+        displayName: Inspect email runtime metadata without secret values
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/email/customer-email-release.py --inspect
+  - ${{ if eq(parameters.action, 'test-email-upgrade') }}:
+      - template: pipelines/customer-email-test-steps.yml
+  - ${{ if eq(parameters.action, 'release-customer-email') }}:
+      - template: pipelines/customer-email-release-steps.yml
+  - ${{ if eq(parameters.action, 'release-customer-checkout') }}:
+      - template: pipelines/customer-checkout-release-steps.yml
+  - ${{ if or(eq(parameters.action, 'inspect-customer-fixes'), eq(parameters.action, 'publish-review-routes')) }}:
+      - task: AzureCLI@2
+        displayName: Inspect customer routes and optionally repair review writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            if [ '${{ parameters.action }}' = 'publish-review-routes' ]; then
+              python3 scripts/apim/customer-five-fixes.py --apply-reviews
+            else
+              python3 scripts/apim/customer-five-fixes.py
+            fi
+  - ${{ if eq(parameters.action, 'inspect') }}:
+      - task: AzureCLI@2
+        displayName: Read cart dependencies and live revision, without secrets or writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/release/device-cart-readiness.py
+  - ${{ if eq(parameters.action, 'release-cart') }}:
+      - template: pipelines/device-cart-release-steps.yml
+  - ${{ if eq(parameters.action, 'inspect-cart-policy') }}:
+      - task: AzureCLI@2
+        displayName: Inspect owned cart policy structure without values or writes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 scripts/apim/inspect-device-cart-policy.py
+  - ${{ if eq(parameters.action, 'publish-cart-routes') }}:
+      - task: AzureCLI@2
+        displayName: Verify pinned healthy Order image and finish owned cart routes
+        inputs:
+          azureSubscription: Craves-Dev-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            set +x
+            python3 -m unittest discover -s scripts/apim/tests -p 'test_device_safe_cart_routes.py'
+            python3 scripts/apim/device-safe-cart-routes.py --expected-image cravesprodlowacr82121.azurecr.io/craves/order-service:device-cart-e1cf04e0537e2eaf32f1c494142dd52a3e3bafa0 --apply

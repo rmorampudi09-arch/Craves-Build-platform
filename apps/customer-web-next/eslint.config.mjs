@@ -12,7 +12,8 @@ export default defineConfig([
     }
   },
   globalIgnores([
-    ".next/**", "node_modules/**", "dist/**", "coverage/**",
+    ".next/**", "node_modules/**", "dist/**", "coverage/**", "public/landing-v20/**",
+      "public/landing-auth/**",
     "src/routes/**", "src/router.tsx", "src/routeTree.gen.ts", "src/server.ts", "src/start.ts"
   ])
 ]);

@@ -58,9 +58,10 @@ public class RedisTokenRevocationWebConfiguration implements WebMvcConfigurer {
                 if (failClosed) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Token revocation store is unavailable");
                 return true;
             }
-            if (projection == null || projection.isBlank()) return true;
+            if (projection == null) return true;
             String[] values = projection.split("\\|", -1);
-            if (values.length != 2) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Token revocation state is invalid");
+            if (values.length != 2 || !java.util.Set.of("ACTIVE","SUSPENDED").contains(values[0])
+                || !values[1].matches("[1-9][0-9]{0,18}")) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Token revocation state is invalid");
             long minimumVersion;
             try { minimumVersion = Long.parseLong(values[1]); }
             catch (NumberFormatException exception) { throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Token revocation version is invalid"); }
@@ -77,7 +78,7 @@ public class RedisTokenRevocationWebConfiguration implements WebMvcConfigurer {
             if (parts.length != 3) throw new IllegalArgumentException("JWT format is invalid");
             Map<String, Object> claims = objectMapper.readValue(Base64.getUrlDecoder().decode(pad(parts[1])), new TypeReference<Map<String, Object>>() {});
             Object version = claims.get("token_version");
-            if (!(version instanceof Number number)) throw new IllegalArgumentException("token_version is missing");
+            if (!(version instanceof Number number) || !(number instanceof Long || number instanceof Integer) || number.longValue() < 1) throw new IllegalArgumentException("token_version is invalid");
             return new TokenIdentity(UUID.fromString(String.valueOf(claims.get("sub"))), number.longValue());
         } catch (Exception exception) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Access token revocation claims are invalid");

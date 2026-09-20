@@ -64,7 +64,7 @@ public class ChefApplicationService {
         emailProjection.lockIdentity(user.identityId());
         String canonicalEmail = authInternalClient.requireVerifiedEmail(user.identityId(), request.email());
         List<String> statuses = jdbcTemplate.query(
-            "SELECT status FROM chef_application WHERE identity_id = ?",
+              "SELECT status FROM chef_application WHERE identity_id = ? FOR UPDATE",
             (rs, rowNum) -> rs.getString("status"),
             user.identityId()
         );
@@ -94,6 +94,7 @@ public class ChefApplicationService {
 
     @Transactional
     public KycDocumentResponse uploadDocument(CurrentUser user, KycDocumentType documentType, MultipartFile file) {
+        jdbcTemplate.query("SELECT id FROM chef_application WHERE identity_id=? FOR UPDATE",(rs,row)->rs.getObject(1,UUID.class),user.identityId());
         ChefApplicationResponse application = getExistingApplication(user.identityId());
         if (application.status() == ChefApplicationStatus.APPROVED) {
             throw ApiException.conflict("CHEF_ALREADY_APPROVED", "Documents cannot be changed after approval");
@@ -171,6 +172,7 @@ public class ChefApplicationService {
             throw ApiException.conflict("CHEF_APPLICATION_NOT_PENDING", "Only pending chef applications can be approved");
         }
         emailProjection.lockIdentity(application.identityId());
+        jdbcTemplate.query("SELECT id FROM chef_application WHERE id=? FOR UPDATE",(rs,row)->rs.getObject(1,UUID.class),applicationId);
         // Re-read after the projection lock: an email replacement may have synchronized while review was opened.
         application = getApplicationForAdmin(admin, applicationId);
         if (application.status() != ChefApplicationStatus.PENDING) {
@@ -188,6 +190,7 @@ public class ChefApplicationService {
     @Transactional
     public ChefApplicationResponse reject(CurrentUser admin, UUID applicationId, AdminDecisionRequest request) {
         requireDecisionAccess(admin);
+        jdbcTemplate.query("SELECT id FROM chef_application WHERE id=? FOR UPDATE",(rs,row)->rs.getObject(1,UUID.class),applicationId);
         if (request == null || !StringUtils.hasText(request.reason())) {
             throw ApiException.badRequest("REJECTION_REASON_REQUIRED", "Rejection reason is required");
         }

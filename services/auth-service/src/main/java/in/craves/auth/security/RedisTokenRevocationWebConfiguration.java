@@ -68,11 +68,12 @@ public class RedisTokenRevocationWebConfiguration implements WebMvcConfigurer {
                 }
                 return true;
             }
-            if (projection == null || projection.isBlank()) {
+            if (projection == null) {
                 return true;
             }
             String[] values = projection.split("\\|", -1);
-            if (values.length != 2) {
+            if (values.length != 2 || !java.util.Set.of("ACTIVE","SUSPENDED").contains(values[0])
+                || !values[1].matches("[1-9][0-9]{0,18}")) {
                 throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Token revocation state is invalid");
             }
             long minimumVersion;
@@ -100,7 +101,7 @@ public class RedisTokenRevocationWebConfiguration implements WebMvcConfigurer {
             );
             UUID identityId = UUID.fromString(String.valueOf(claims.get("sub")));
             Object version = claims.get("token_version");
-            if (!(version instanceof Number number)) {
+            if (!(version instanceof Number number) || !(number instanceof Long || number instanceof Integer) || number.longValue() < 1) {
                 throw new IllegalArgumentException("token_version is missing");
             }
             return new TokenIdentity(identityId, number.longValue());

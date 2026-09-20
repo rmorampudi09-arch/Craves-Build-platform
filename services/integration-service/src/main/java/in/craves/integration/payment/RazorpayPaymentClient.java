@@ -5,8 +5,11 @@ import in.craves.integration.config.RazorpayProviderProperties;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.http.HttpHeaders;
@@ -55,6 +58,84 @@ public class RazorpayPaymentClient {
         } catch (RestClientResponseException exception) {
             throw providerFailure("Razorpay order creation failed", exception);
         }
+    }
+
+    /** Read-only recovery of an uncertain original order; verifies the persisted receipt and amount. */
+    public CreatedOrder fetchCreatedOrder(String id,String receipt,BigDecimal amount,String currency) {
+        requireCredentials();
+        if(id==null || !id.matches("order_[A-Za-z0-9]+"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Original provider order ID required");
+        JsonNode response=client.get().uri("/v1/orders/{id}",id).headers(this::basicAuth).retrieve().body(JsonNode.class);
+        if(!id.equals(text(response,"id")) || !receipt.equals(text(response,"receipt")))throw new ResponseStatusException(HttpStatus.CONFLICT,"Original provider order context differs");
+        RazorpayRequestSafety.requireMoney(amount,currency,longValue(response,"amount"),text(response,"currency"),"Recovered Razorpay order");
+        return new CreatedOrder(id,text(response,"status"),properties.keyId(),Map.of("receipt",receipt,"amount",RazorpayRequestSafety.toSubunits(amount),"currency",currency),response);
+    }
+
+    /**
+     * Read-only catch-up for an existing order whose callback/webhook was missed.
+     * Never creates, captures or refunds a payment. Pausing new payment execution
+     * does not stop this read; changing the original account binding does.
+     */
+    public Optional<VerifiedPayment> findCapturedOrderPayment(
+        String orderId, BigDecimal amount, String currency, String originalCheckoutKeyId
+    ) {
+        if (!StringUtils.hasText(properties.keyId()) || !StringUtils.hasText(properties.keySecret())) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Razorpay read credentials are unavailable");
+        }
+        if (orderId == null || !orderId.matches("order_[A-Za-z0-9]+")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Original provider order ID required");
+        }
+        if (!properties.keyId().equals(originalCheckoutKeyId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Original Razorpay account binding requires review");
+        }
+        String prefix = properties.production() ? "rzp_live_" : "rzp_test_";
+        if (!originalCheckoutKeyId.startsWith(prefix)
+            || (properties.production() && !properties.productionActivationApproved())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Razorpay recovery environment differs");
+        }
+        try {
+            JsonNode response = client.get().uri("/v1/orders/{id}/payments", orderId)
+                .headers(this::basicAuth).retrieve().body(JsonNode.class);
+            JsonNode items = response == null ? null : response.get("items");
+            if (!"collection".equals(text(response, "entity")) || items == null || !items.isArray()
+                || items.size() > 1000 || exactLong(response, "count") != items.size()) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Razorpay payment collection is incomplete");
+            }
+            VerifiedPayment captured = null;
+            Set<String> seen = new HashSet<>();
+            for (JsonNode payment : items) {
+                String id = text(payment, "id");
+                String status = text(payment, "status");
+                if (!"payment".equals(text(payment, "entity")) || id == null
+                    || !id.matches("pay_[A-Za-z0-9]+") || !seen.add(id)
+                    || !orderId.equals(text(payment, "order_id"))
+                    || !Set.of("created", "authorized", "captured", "refunded", "failed").contains(status == null ? "" : status)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Razorpay recovery payment identity differs");
+                }
+                if (!"captured".equals(status)) continue;
+                RazorpayRequestSafety.requireMoney(
+                    amount, currency, exactLong(payment, "amount"), text(payment, "currency"), "Recovered Razorpay payment"
+                );
+                JsonNode capturedFlag = payment.get("captured");
+                JsonNode refundStatus = payment.get("refund_status");
+                if (capturedFlag == null || !capturedFlag.isBoolean() || !capturedFlag.booleanValue()
+                    || exactLong(payment, "amount_refunded") != 0
+                    || refundStatus == null || !refundStatus.isNull() || captured != null) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Razorpay captured payment requires recovery review");
+                }
+                captured = new VerifiedPayment(id, status, payment);
+            }
+            return Optional.ofNullable(captured);
+        } catch (RestClientResponseException exception) {
+            throw providerFailure("Razorpay order-payment recovery failed", exception);
+        }
+    }
+
+    private static long exactLong(JsonNode node, String field) {
+        JsonNode value = node == null ? null : node.get(field);
+        if (value == null || !value.isIntegralNumber() || !value.canConvertToLong()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Razorpay recovery field is invalid");
+        }
+        return value.longValue();
     }
 
     public VerifiedPayment verifyCheckout(

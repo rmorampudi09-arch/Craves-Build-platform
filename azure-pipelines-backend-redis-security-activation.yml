@@ -128,18 +128,17 @@ steps:
         case "$PHASE" in
           PUBLISHER)
             require_redis_secret_ref "$AUTH"
+            # Enabling or replaying the publisher must not disable existing Auth
+            # protection or replace the deployed Redis prefix. Other phases own
+            # consumer/rate-limit changes; preserve every other setting here.
             az containerapp update \
               --resource-group "$RG" \
               --name "$AUTH" \
               --set-env-vars \
                 CRAVES_TOKEN_REVOCATION_PUBLISHER_ENABLED=true \
-                CRAVES_TOKEN_REVOCATION_ENABLED=false \
-                CRAVES_AUTH_RATE_LIMIT_ENABLED=false \
-                CRAVES_TOKEN_REVOCATION_FAIL_CLOSED=true \
-                CRAVES_TOKEN_REVOCATION_KEY_PREFIX="$KEY_PREFIX" \
               --output none
             wait_ready "$AUTH" CRAVES_TOKEN_REVOCATION_PUBLISHER_ENABLED true
-            echo 'Revocation publisher enabled. API consumers and Auth rate limiting remain disabled.'
+            echo 'Revocation publisher enabled. Existing consumers, rate limits and other settings are preserved.'
             ;;
 
           CONSUMERS)

@@ -53,9 +53,31 @@ public class ChefFinancialRepository {
 
     public List<EarningResponse> listForChef(UUID chefIdentityId, int limit) {
         return jdbcTemplate.query(
-            "SELECT * FROM payment_schema.chef_earning_entry WHERE chef_identity_id = ? " +
-                "ORDER BY created_at DESC LIMIT ?",
+            """
+            SELECT * FROM (
+              SELECT id,order_id,chef_identity_id,order_source,currency,gross_amount,commission_amount,
+                     tax_withheld_amount,adjustment_amount,net_payable,allocation_reference,status,reason,
+                     approved_at,reversed_at,created_at,updated_at
+              FROM payment_schema.chef_earning_entry l WHERE chef_identity_id=?
+                AND NOT EXISTS(SELECT 1 FROM payment_schema.finance_earning_projection e WHERE e.chef_order_id=l.order_id)
+              UNION ALL
+              SELECT e.journal_id,e.chef_order_id,e.chef_identity_id,'ON_DEMAND','INR',e.gross,
+                     e.service_fee+e.fee_gst,e.withholding,0,e.payable,'source-ledger/'||e.journal_id,
+                     CASE WHEN reversal.id IS NOT NULL THEN 'REVERSED'
+                          WHEN i.settlement_journal_id IS NOT NULL AND i.reversal_journal_id IS NULL THEN 'SETTLED'
+                          WHEN i.id IS NOT NULL THEN 'SETTLEMENT_PENDING' ELSE 'APPROVED' END,
+                     'Paid and delivered order. Total service fee includes fee GST. Original earnings before subsequent adjustments; not a withdrawable balance.',
+                     e.created_at,reversal.posted_at,e.created_at,greatest(e.created_at,i.updated_at,reversal.posted_at)
+              FROM payment_schema.finance_earning_projection e
+              LEFT JOIN payment_schema.ledger_transaction reversal ON reversal.reversal_of=e.journal_id
+              LEFT JOIN payment_schema.finance_payable p ON p.chef_order_id=e.chef_order_id
+              LEFT JOIN payment_schema.finance_payout_allocation a ON a.payable_id=p.id AND a.active
+              LEFT JOIN payment_schema.finance_payout_instruction i ON i.id=a.instruction_id
+              WHERE e.chef_identity_id=?
+            ) entries ORDER BY created_at DESC,id DESC LIMIT ?
+            """,
             this::mapEarning,
+            chefIdentityId,
             chefIdentityId,
             limit
         );

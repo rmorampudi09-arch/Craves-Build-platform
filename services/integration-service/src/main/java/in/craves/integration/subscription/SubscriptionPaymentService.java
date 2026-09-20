@@ -118,7 +118,7 @@ public class SubscriptionPaymentService {
                 && routing.provider().equalsIgnoreCase(intent.provider())
                 && StringUtils.hasText(intent.providerOrderId())
         ) {
-            return repository.response(intent);
+            return repository.response(reconcilePending(intent));
         }
         if (routing.razorpay()) {
             return createRazorpayOrder(intent);
@@ -252,6 +252,9 @@ public class SubscriptionPaymentService {
     }
 
     private PaymentIntent reconcilePending(PaymentIntent intent) {
+        if ("RAZORPAY".equalsIgnoreCase(intent.provider())) {
+            return reconcileRazorpay(intent);
+        }
         if (!"CASHFREE".equalsIgnoreCase(intent.provider())
             || !"PAYMENT_PENDING".equals(intent.status()) || !StringUtils.hasText(intent.cashfreeOrderId())) {
             return intent;
@@ -312,6 +315,33 @@ public class SubscriptionPaymentService {
                 intent.cashfreeOrderId(),
                 safeLog(exception)
             );
+            return intent;
+        }
+    }
+
+    private PaymentIntent reconcileRazorpay(PaymentIntent intent) {
+        if (!("PAYMENT_PENDING".equals(intent.status()) || "FAILED".equals(intent.status()))
+            || !StringUtils.hasText(intent.providerOrderId()) || !StringUtils.hasText(intent.checkoutKeyId())) {
+            return intent;
+        }
+        if (intent.updatedAt() != null
+            && Duration.between(intent.updatedAt(), Instant.now()).getSeconds() < RECONCILIATION_MIN_AGE_SECONDS) {
+            return intent;
+        }
+        try {
+            var payment = razorpayClient.findCapturedOrderPayment(
+                intent.providerOrderId(), intent.amount(), intent.currency(), intent.checkoutKeyId()
+            );
+            if (payment.isPresent()) {
+                var captured = payment.get();
+                applyStatusEvent(intent, "PAID", captured.providerStatus(), captured.paymentId());
+            }
+            // A concurrent webhook can already have committed the authoritative state.
+            return repository.findByInvoice(intent.invoiceId()).orElse(intent);
+        } catch (RuntimeException exception) {
+            // A timeout, mismatched provider response or database error is never proof
+            // of payment failure and must never start a second provider order.
+            LOGGER.warn("Subscription Razorpay recovery retained existing state; details suppressed");
             return intent;
         }
     }

@@ -1,0 +1,41 @@
+name: Atomic account revocation
+on:
+  pull_request:
+    paths: ['services/auth-service/**', '.github/workflows/revocation-atomic-ci.yml']
+permissions:
+  contents: read
+jobs:
+  redis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: mvn -B -ntp -f services/auth-service/pom.xml test -Dtest=RedisTokenRevocationPublisherTest,RedisRevocationAtomicTest,RedisRevocationConsumerTest
+        env:
+          CRAVES_DISPOSABLE_REDIS_TEST: YES_LOCAL_REDIS_ONLY
+      - name: Reject skipped security evidence
+        run: |
+          python3 - <<'PY'
+          import pathlib,xml.etree.ElementTree as E
+          for name,minimum in [('RedisTokenRevocationPublisherTest',4),('RedisRevocationAtomicTest',5),('RedisRevocationConsumerTest',6)]:
+              files=list(pathlib.Path('services/auth-service/target/surefire-reports').glob('TEST-*.'+name+'.xml'))
+              assert len(files)==1
+              suite=E.parse(files[0]).getroot()
+              assert int(suite.get('tests'))>=minimum
+              assert all(int(suite.get(k,'0'))==0 for k in ['failures','errors','skipped'])
+          PY

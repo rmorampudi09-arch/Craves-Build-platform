@@ -65,6 +65,24 @@ public class CartController {
         return orderService.validateCart(principal);
     }
 
+    @PostMapping("/clear-if-unchanged")
+    public CartResponse clearIfUnchanged(@AuthenticationPrincipal CravesPrincipal principal,
+        @Valid @RequestBody ApiDtos.CartSnapshotRequest request) {
+        return orderService.clearCartIfUnchanged(principal, request);
+    }
+
+    @PostMapping("/switch-kitchen")
+    public CartResponse switchKitchen(@AuthenticationPrincipal CravesPrincipal principal,
+        @Valid @RequestBody ApiDtos.SwitchKitchenRequest request) {
+        return orderService.switchCartKitchen(principal, request);
+    }
+
+    @PostMapping("/reorder-if-unchanged/{orderId}")
+    public CartResponse reorderIfUnchanged(@AuthenticationPrincipal CravesPrincipal principal,
+        @PathVariable UUID orderId, @Valid @RequestBody ApiDtos.ReorderCartRequest request) {
+        return orderService.replaceCartFromOrderIfUnchanged(principal, orderId, request);
+    }
+
     @PostMapping("/reorder/{orderId}")
     public CartResponse reorder(
         @AuthenticationPrincipal CravesPrincipal principal,

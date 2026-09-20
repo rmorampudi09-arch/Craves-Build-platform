@@ -30,10 +30,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 class AuthEmailProjectionDbTest {
     DriverManagerDataSource data;JdbcTemplate jdbc;TransactionTemplate tx;AuthEmailProjectionService projection;AuthInternalClient auth;
     CustomerProfileService profiles;ChefApplicationService chefs;NotificationInternalClient notifications;
+    BlobDocumentStorageService storage;
     final Instant verifiedAt=Instant.now().minusSeconds(30).truncatedTo(ChronoUnit.MICROS);
     @BeforeEach void disposableDatabaseOnly() {
         String url=System.getenv("EMAIL_TEST_DB_URL");
-        assertEquals("true",System.getenv("GITHUB_ACTIONS"),"Destructive suite must run in disposable GitHub CI");
+        assertTrue("true".equals(System.getenv("GITHUB_ACTIONS")) || "true".equalsIgnoreCase(System.getenv("TF_BUILD")),"Destructive suite must run in disposable CI");
         assertEquals("true",System.getenv("EMAIL_TEST_DISPOSABLE"));
         assertTrue(url.matches("jdbc:postgresql://(?:localhost|127\\.0\\.0\\.1):[0-9]+/craves_email_test"));
         var admin=new JdbcTemplate(new DriverManagerDataSource(url,System.getenv("EMAIL_TEST_DB_USER"),System.getenv("EMAIL_TEST_DB_PASSWORD")));
@@ -43,7 +44,8 @@ class AuthEmailProjectionDbTest {
         data=new DriverManagerDataSource(url+"?currentSchema=email_userchef_test,public",System.getenv("EMAIL_TEST_DB_USER"),System.getenv("EMAIL_TEST_DB_PASSWORD"));jdbc=new JdbcTemplate(data);
         flyway(null).migrate();tx=new TransactionTemplate(new DataSourceTransactionManager(data));projection=new AuthEmailProjectionService(jdbc);
         auth=mock(AuthInternalClient.class);notifications=mock(NotificationInternalClient.class);profiles=new CustomerProfileService(jdbc,auth,projection);
-        chefs=new ChefApplicationService(jdbc,mock(BlobDocumentStorageService.class),auth,notifications,projection);
+        storage=mock(BlobDocumentStorageService.class);
+        chefs=new ChefApplicationService(jdbc,storage,auth,notifications,projection);
     }
     Flyway flyway(String target) {
         var config=Flyway.configure().dataSource(data).schemas("email_userchef_test").defaultSchema("email_userchef_test").locations("classpath:db/migration");
@@ -128,6 +130,36 @@ class AuthEmailProjectionDbTest {
     @Test void wrongRoleCannotApproveBeforeAnyEmailLookup() {
         UUID id=UUID.randomUUID();UUID app=insertChef(id,"verified@example.test");
         assertEquals(403,assertThrows(ApiException.class,()->tx.execute(ignored->chefs.approve(user(UUID.randomUUID()),app))).getStatus());verifyNoInteractions(auth);
+    }
+    @Test void concurrentUploadsOfSameEvidenceTypeSerializeWithoutDuplicateRows() throws Exception {
+        UUID id=UUID.randomUUID();UUID app=insertChef(id,"verified@example.test");
+        var entered=new CountDownLatch(1);var release=new CountDownLatch(1);
+        var calls=new java.util.concurrent.atomic.AtomicInteger();
+        when(storage.uploadKycDocument(eq(id),eq(ApiDtos.KycDocumentType.GOVERNMENT_ID_FRONT),any())).thenAnswer(invocation->{
+            int n=calls.incrementAndGet();if(n==1){entered.countDown();assertTrue(release.await(5,TimeUnit.SECONDS));}
+            return new BlobDocumentStorageService.StoredDocument("documents","kyc/"+id+"/synthetic-"+n,"synthetic.pdf","application/pdf",20);
+        });
+        var file=new org.springframework.mock.web.MockMultipartFile("file","synthetic.pdf","application/pdf",new byte[20]);
+        try(var executor=Executors.newFixedThreadPool(2)) {
+            var first=executor.submit(()->tx.execute(s->chefs.uploadDocument(user(id),ApiDtos.KycDocumentType.GOVERNMENT_ID_FRONT,file)));
+            assertTrue(entered.await(5,TimeUnit.SECONDS));
+            var second=executor.submit(()->tx.execute(s->chefs.uploadDocument(user(id),ApiDtos.KycDocumentType.GOVERNMENT_ID_FRONT,file)));
+            release.countDown();var one=first.get(10,TimeUnit.SECONDS);var two=second.get(10,TimeUnit.SECONDS);
+            assertEquals(one.id(),two.id());assertEquals(2,calls.get());
+        } finally {release.countDown();}
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM chef_kyc_document WHERE application_id=?",Integer.class,app));
+        assertEquals("kyc/"+id+"/synthetic-2",jdbc.queryForObject("SELECT blob_name FROM chef_kyc_document WHERE application_id=?",String.class,app));
+    }
+    @Test void approvedDocumentsAndApplicationsCannotBeOverwrittenAndOtherOwnerCannotSeeEvidence() {
+        UUID id=UUID.randomUUID();UUID app=insertChef(id,"verified@example.test");
+        UUID document=UUID.randomUUID();
+        jdbc.update("INSERT INTO chef_kyc_document(id,application_id,identity_id,document_type,original_file_name,blob_container,blob_name,content_type,file_size_bytes,status) VALUES (?,?,?,'GOVERNMENT_ID_FRONT','synthetic.pdf','documents',?,'application/pdf',20,'APPROVED')",document,app,id,"kyc/"+id+"/synthetic");
+        var file=new org.springframework.mock.web.MockMultipartFile("file","synthetic.pdf","application/pdf",new byte[20]);
+        assertThrows(ApiException.class,()->tx.execute(s->chefs.uploadDocument(user(id),ApiDtos.KycDocumentType.GOVERNMENT_ID_FRONT,file)));
+        UUID other=UUID.randomUUID();insertChef(other,"other@example.test");assertTrue(chefs.listMyApplicationEvidence(user(other)).isEmpty());
+        jdbc.update("UPDATE chef_application SET status='APPROVED' WHERE id=?",app);
+        assertThrows(ApiException.class,()->tx.execute(s->chefs.uploadDocument(user(id),ApiDtos.KycDocumentType.TAX_ID_CARD,file)));
+        verifyNoInteractions(storage);
     }
     private AuthEmailProjectionService.Receipt receive(AuthEmailProjectionService.Event event,String token){return tx.execute(ignored->projection.receive(event,token.repeat(64)));}
     private AuthEmailProjectionService.Event event(UUID id,long revision,String email){return new AuthEmailProjectionService.Event(UUID.randomUUID(),id,email,true,revision,verifiedAt);}

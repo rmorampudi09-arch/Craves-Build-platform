@@ -205,7 +205,10 @@ test("checkout is one page with saved addresses, ASAP delivery and the shared ad
   assert.match(checkout, /Bill details/);
   assert.match(checkout, /<CheckoutPaymentButton/);
   assert.match(checkout, /<AddressEditorFlow/);
-  assert.match(checkout, /sessionFetch\("\/api\/checkout"/);
+  assert.match(checkout, /\/api\/checkout\/operations\//);
+  assert.match(checkout, /checkoutCartSnapshot\(validatedCart\)/);
+  assert.match(checkout, /parseCheckoutOperationResponse/);
+  assert.match(checkout, /CHECKOUT_OPERATION_ID_KEY/);
   assert.match(checkout, /createAuthoritativeCheckout/);
   assert.match(checkout, /deliveryAddressId,/);
   assert.match(checkout, /window\.sessionStorage\.setItem\(CHECKOUT_ID_KEY, prepared\.id\)/);

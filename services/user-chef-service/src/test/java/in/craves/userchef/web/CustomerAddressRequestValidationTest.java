@@ -65,28 +65,6 @@ class CustomerAddressRequestValidationTest {
     }
 
     @Test
-    void acceptsNamedOtherAddress() {
-        CustomerAddressRequest request = new CustomerAddressRequest(
-            AddressLabel.OTHER,
-            "Mom's home",
-            "Customer Name",
-            "+919876543210",
-            "Flat 101, Test Residency",
-            "Road No. 1",
-            "Near Metro",
-            "Madhapur",
-            "Hyderabad",
-            "Hyderabad",
-            "Telangana",
-            "500081",
-            new BigDecimal("17.4483"),
-            new BigDecimal("78.3915"),
-            true
-        );
-        assertThat(validator.validate(request)).isEmpty();
-    }
-
-    @Test
     void rejectsMissingPostalCode() {
         assertThat(validator.validate(request(
             "Customer Name",

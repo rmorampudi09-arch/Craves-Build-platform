@@ -40,8 +40,15 @@ function addressLine(address: CustomerAddress): string {
     .join(", ");
 }
 
+function displayPhone(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  return digits.length === 12 && digits.startsWith("91")
+    ? digits.slice(2)
+    : value;
+}
+
 function recipientLine(address: CustomerAddress): string {
-  return [address.recipientName, address.contactPhoneNumber]
+  return [address.recipientName, displayPhone(address.contactPhoneNumber)]
     .filter(Boolean)
     .join(" · ");
 }

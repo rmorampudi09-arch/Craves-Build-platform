@@ -1,6 +1,7 @@
 "use client";
 
 import type { CravesIdentity } from "@/lib/auth-contract";
+import { emailVerificationStateSchema, type EmailVerificationState } from "@/lib/email-verification-contract";
 import type {
   CustomerAddress,
   DeliveryReadyAddress,
@@ -21,6 +22,7 @@ export type CravesUser = {
   profileComplete: boolean;
   createdAt: number;
   email?: string;
+  emailVerified: boolean;
   roles: string[];
   status: string;
 };
@@ -39,6 +41,23 @@ export type CravesAddress = {
 };
 
 let session: CravesUser | null = null;
+let sessionEmailRevision = -1;
+let sessionGeneration = 0;
+let sessionEnding = false;
+let identityRequestSequence = 0;
+let acceptedIdentityRequest = 0;
+export type SessionContext = Readonly<{ generation: number; identityId: string | null }>;
+export function captureSessionContext(): SessionContext { return { generation: sessionGeneration, identityId: session?.id ?? null }; }
+export function isSessionContextCurrent(context: SessionContext): boolean {
+  return context.generation === sessionGeneration && context.identityId === (session?.id ?? null);
+}
+export function getSessionEmailRevision(): number { return sessionEmailRevision; }
+export function isSessionReady(): boolean { return !sessionEnding && session?.status === "ACTIVE"; }
+function invalidatePendingSessionWork() { sessionGeneration += 1; roleSynchronization = null; }
+export function invalidateSession(context: SessionContext): void { if (isSessionContextCurrent(context)) forgetSession(); }
+function forgetSession() {
+  invalidatePendingSessionWork(); sessionEnding = false; session = null; sessionEmailRevision = -1; selectedLocation = null; notify();
+}
 let selectedLocation: CravesAddress | null = null;
 let roleSynchronization: Promise<CravesUser | null> | null = null;
 const listeners = new Set<() => void>();
@@ -56,6 +75,7 @@ function fromIdentity(identity: CravesIdentity): CravesUser {
     profileComplete: false,
     createdAt: Date.now(),
     email: identity.email ?? undefined,
+    emailVerified: identity.emailVerified === true && !!identity.email,
     roles: identity.roles,
     status: identity.status,
   };
@@ -73,13 +93,12 @@ function withCustomerProfile(current: CravesUser, profile: CustomerProfile): Cra
     firstName: profile.firstName,
     lastName: profile.lastName,
     profileComplete: true,
-    email: profile.email ?? undefined,
     phone: profile.registeredPhoneNumber.replace(/\D/g, "").slice(-10),
     phoneNumber: profile.registeredPhoneNumber,
   };
 }
 
-async function hydrateCustomerProfile(current: CravesUser): Promise<CravesUser> {
+async function hydrateCustomerProfile(current: CravesUser, context = captureSessionContext()): Promise<CravesUser | null> {
   const isCustomer = current.roles.some((role) => role.toUpperCase() === "CUSTOMER");
   if (!isCustomer) return current;
 
@@ -87,24 +106,28 @@ async function hydrateCustomerProfile(current: CravesUser): Promise<CravesUser> 
     cache: "no-store",
     credentials: "same-origin",
   }).catch(() => null);
-  if (!response?.ok) return current;
+  if (!isSessionContextCurrent(context)) return session;
+  if (!response?.ok) return session;
 
   const profile = parseCustomerProfile(await response.json().catch(() => null));
-  if (!profile) return current;
-
-  session = withCustomerProfile(current, profile);
+  if (!profile || !isSessionContextCurrent(context) || session?.id !== current.id) return session;
+  session = withCustomerProfile(session, profile);
   notify();
   return session;
 }
 
 export function setSessionIdentity(identity: CravesIdentity): CravesUser {
+  // An explicit phone sign-in establishes a new session generation even for the same owner.
+  invalidatePendingSessionWork();
+  sessionEnding = false;
+  sessionEmailRevision = -1;
   session = fromIdentity(identity);
   notify();
   return session;
 }
 
-export function setSessionProfile(profile: CustomerProfile): CravesUser | null {
-  if (!session) return null;
+export function setSessionProfile(profile: CustomerProfile, context = captureSessionContext()): CravesUser | null {
+  if (!session || !isSessionContextCurrent(context)) return session;
   session = withCustomerProfile(session, profile);
   notify();
   return session;
@@ -114,56 +137,107 @@ export function getSession(): CravesUser | null {
   return session;
 }
 
+/** Accept only the current owner's validated Auth response; a stale profile projection never changes this field. */
+export function setSessionEmailVerification(identityId: string, value: EmailVerificationState, context = captureSessionContext()): CravesUser | null {
+  const parsed = emailVerificationStateSchema.safeParse(value);
+  if (!session || !isSessionContextCurrent(context) || session.id !== identityId || !parsed.success || parsed.data.emailRevision < sessionEmailRevision) return session;
+  sessionEmailRevision = parsed.data.emailRevision;
+  session = { ...session, email: parsed.data.email ?? undefined, emailVerified: parsed.data.emailVerified };
+  notify();
+  return session;
+}
+
+/** /me and refresh do not carry emailRevision. Preserve the versioned email channel while updating roles/status. */
+function applyIdentityLookup(identity: CravesIdentity, context: SessionContext, sequence: number): CravesUser | null {
+  if (!isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) return session;
+  acceptedIdentityRequest = sequence;
+  const previous = session;
+  if (previous?.id !== identity.id) {
+    invalidatePendingSessionWork(); sessionEmailRevision = -1;
+  } else if (previous.status !== identity.status) invalidatePendingSessionWork();
+  session = fromIdentity(identity);
+  if (previous?.id === identity.id && sessionEmailRevision >= 0) {
+    session = { ...session, email: previous.email, emailVerified: previous.emailVerified };
+  }
+  notify();
+  return session;
+}
+
 export async function loadSession(): Promise<CravesUser | null> {
+  if (sessionEnding) return null;
+  const context = captureSessionContext();
+  const sequence = ++identityRequestSequence;
   const lookup = async () => fetch("/api/auth/me", { cache: "no-store", credentials: "same-origin" });
   let response = await lookup();
+  if (!isSessionContextCurrent(context)) return session;
   if (response.status === 401) {
     const refreshed = await fetch("/api/auth/refresh", {
-      method: "POST",
-      credentials: "same-origin",
+      method: "POST", credentials: "same-origin",
     }).catch(() => null);
+    if (!isSessionContextCurrent(context)) return session;
     if (refreshed?.ok) response = await lookup();
   }
+  if (!isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) return session;
   if (!response.ok) {
-    session = null;
-    notify();
+    if ((response.status === 401 || response.status === 403) && session) forgetSession();
     return null;
   }
   const identity = (await response.json().catch(() => null)) as CravesIdentity | null;
-  if (!identity?.id) return null;
-  const current = setSessionIdentity(identity);
-  return hydrateCustomerProfile(current);
+  if (!identity?.id || !isSessionContextCurrent(context)) return session;
+  const current = applyIdentityLookup(identity, context, sequence);
+  return current ? hydrateCustomerProfile(current) : null;
 }
 
 export async function synchronizeSessionRoles(): Promise<CravesUser | null> {
+  if (sessionEnding) return null;
   if (roleSynchronization) return roleSynchronization;
-  roleSynchronization = (async () => {
+  const context = captureSessionContext();
+  const sequence = ++identityRequestSequence;
+  const pending = (async () => {
     const response = await fetch("/api/auth/refresh", {
-      method: "POST",
-      credentials: "same-origin",
+      method: "POST", credentials: "same-origin",
     }).catch(() => null);
+    if (!isSessionContextCurrent(context)) return session;
     if (!response?.ok) return null;
     const body = (await response.json().catch(() => null)) as { identity?: CravesIdentity } | null;
-    if (!body?.identity?.id) return null;
-    const current = setSessionIdentity(body.identity);
-    return hydrateCustomerProfile(current);
-  })().finally(() => {
-    roleSynchronization = null;
-  });
-  return roleSynchronization;
+    if (!body?.identity?.id || !isSessionContextCurrent(context)) return session;
+    const current = applyIdentityLookup(body.identity, context, sequence);
+    return current ? hydrateCustomerProfile(current) : null;
+  })();
+  roleSynchronization = pending;
+  try { return await pending; }
+  finally { if (roleSynchronization === pending) roleSynchronization = null; }
+}
+
+/** A retry belongs only to the session this failed logout restored, never a later sign-in. */
+export class LogoutUnconfirmedError extends Error {
+  constructor(readonly retryContext: SessionContext | null) {
+    super("Sign-out could not be confirmed. You are still signed in. Please try again.");
+    this.name = "LogoutUnconfirmedError";
+  }
 }
 
 export async function clearSession(): Promise<void> {
+  // Invalidate pending reads at the start as well as successful completion. Keep the visible account on an unconfirmed logout.
+  invalidatePendingSessionWork();
+  sessionEnding = true;
+  const context = captureSessionContext();
+  notify();
   try {
     const response = await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(8_000) });
     const receipt = await response.json().catch(() => null) as { signedOut?: unknown } | null;
-    if (!response.ok || receipt?.signedOut !== true) throw new Error("LOGOUT_UNCONFIRMED");
+    if (!response.ok || receipt?.signedOut !== true || !isSessionContextCurrent(context)) throw new Error("LOGOUT_UNCONFIRMED");
   } catch {
-    throw new Error("Sign-out could not be confirmed. You are still signed in. Please try again.");
+    let retryContext: SessionContext | null = null;
+    if (isSessionContextCurrent(context)) {
+      sessionEnding = false;
+      invalidatePendingSessionWork();
+      retryContext = isSessionReady() ? captureSessionContext() : null;
+      notify();
+    }
+    throw new LogoutUnconfirmedError(retryContext);
   }
-  session = null;
-  selectedLocation = null;
-  notify();
+  forgetSession();
 }
 
 export function subscribeSession(listener: () => void): () => void {

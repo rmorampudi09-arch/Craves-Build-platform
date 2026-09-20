@@ -51,9 +51,16 @@ export function DetailBrowseHeader({ returnPath, onBack }: DetailBrowseHeaderPro
   const locationLabel = address
     ? [address.mandal, address.city].filter(Boolean).join(", ")
     : "Choose address";
-  const locationTypeLabel = address?.label
-    ? `${address.label.charAt(0).toUpperCase()}${address.label.slice(1).toLowerCase()}`
-    : "Location";
+  const rawLocationType = address?.label?.trim();
+  const normalizedLocationType = rawLocationType?.toUpperCase();
+  const locationTypeLabel =
+    normalizedLocationType === "HOME"
+      ? "Home"
+      : normalizedLocationType === "WORK"
+        ? "Work"
+        : normalizedLocationType === "OTHER"
+          ? "Other"
+          : rawLocationType || "Location";
 
   const openSearch = () => {
     window.sessionStorage.setItem("craves-home-open-search", "1");

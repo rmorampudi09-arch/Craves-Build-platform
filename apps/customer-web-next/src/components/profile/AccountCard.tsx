@@ -48,36 +48,26 @@ export function AccountCard({
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-semibold text-[#1A1A1A]">
               <FaCircleCheck className="text-[#F62E18]" aria-hidden="true" />
-              Verified
+              Phone verified
             </span>
           </div>
 
-          {email && (
+          {email ? (
             <p className="mt-2.5 flex min-w-0 items-center gap-2 text-sm text-[#1A1A1A]">
               <FaEnvelope className="shrink-0 text-sm" aria-hidden="true" />
               <span className="truncate">{email}</span>
+              <span className="shrink-0 text-xs font-semibold text-[#6B6B6B]">
+                {user.emailVerified ? "Verified" : "Not verified"}
+              </span>
             </p>
-          )}
+          ) : null}
 
-          {!profile && (
+          {!profile ? (
             <p className="mt-3 max-w-md text-sm leading-6 text-[#C92716]">
-              Add your first name, last name and optional email so checkout and
-              support use the correct details.
+              Add your first name and last name so checkout and support use the
+              correct details.
             </p>
-            {email && (
-              <p className="mt-2 flex items-center gap-2 truncate text-sm text-muted-foreground">
-                <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">{email}</span>
-                <span className="shrink-0 text-xs font-semibold">{user.emailVerified ? "Verified" : "Not verified"}</span>
-              </p>
-            )}
-            {!profile && (
-              <p className="mt-3 max-w-md text-sm leading-6 text-contrast-red">
-                Add your first name and last name so checkout and
-                support use the correct details.
-              </p>
-            )}
-          </div>
+          ) : null}
         </div>
 
         <button
@@ -94,15 +84,11 @@ export function AccountCard({
       <dl className="mt-6 grid grid-cols-3 divide-x divide-[#E5E7EB] border-t border-[#E5E7EB] pt-5 text-center">
         <div className="px-2">
           <dt className="text-xs text-[#6B6B6B]">Orders</dt>
-          <dd className="mt-1 text-xl font-semibold text-[#1A1A1A]">
-            {orderCount}
-          </dd>
+          <dd className="mt-1 text-xl font-semibold text-[#1A1A1A]">{orderCount}</dd>
         </div>
         <div className="px-2">
           <dt className="text-xs text-[#6B6B6B]">Addresses</dt>
-          <dd className="mt-1 text-xl font-semibold text-[#1A1A1A]">
-            {addressCount}
-          </dd>
+          <dd className="mt-1 text-xl font-semibold text-[#1A1A1A]">{addressCount}</dd>
         </div>
         <div className="px-2">
           <dt className="text-xs text-[#6B6B6B]">Profile</dt>

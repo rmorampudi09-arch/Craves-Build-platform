@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangle,
@@ -127,6 +127,7 @@ async function createAuthoritativeCheckout(
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
+  const prepareStartedRef = useRef(false);
   const [items, setItems] = useState<CartItem[]>([]);
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -225,6 +226,8 @@ export default function CheckoutPage() {
   }, [navigate]);
 
   useEffect(() => {
+    if (prepareStartedRef.current) return;
+    prepareStartedRef.current = true;
     void prepareCheckout();
   }, [prepareCheckout]);
 

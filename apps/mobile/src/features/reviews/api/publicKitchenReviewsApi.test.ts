@@ -112,9 +112,11 @@ describe('publicKitchenReviewsApi contract', () => {
 
   it('reads the exact public review list route and validates kitchen ownership', async () => {
     (publicApiClient.get as jest.Mock).mockResolvedValue({
-      items: [review],
-      nextCursor: null,
-      hasMore: false,
+      data: {
+        items: [review],
+        nextCursor: null,
+        hasMore: false,
+      },
     });
 
     await expect(
@@ -130,19 +132,20 @@ describe('publicKitchenReviewsApi contract', () => {
       {
         signal: undefined,
         params: {limit: 3},
-        dedupeKey: `public-kitchen-reviews:${kitchenId}:3:`,
       },
     );
 
     (publicApiClient.get as jest.Mock).mockResolvedValue({
-      items: [
-        {
-          ...review,
-          kitchenId: '33333333-3333-4333-8333-333333333333',
-        },
-      ],
-      nextCursor: null,
-      hasMore: false,
+      data: {
+        items: [
+          {
+            ...review,
+            kitchenId: '33333333-3333-4333-8333-333333333333',
+          },
+        ],
+        nextCursor: null,
+        hasMore: false,
+      },
     });
 
     await expect(
@@ -151,7 +154,7 @@ describe('publicKitchenReviewsApi contract', () => {
   });
 
   it('reads the exact public summary route', async () => {
-    (publicApiClient.get as jest.Mock).mockResolvedValue(summary);
+    (publicApiClient.get as jest.Mock).mockResolvedValue({data: summary});
 
     await expect(
       publicKitchenReviewsApi.summary(kitchenId),
@@ -161,7 +164,6 @@ describe('publicKitchenReviewsApi contract', () => {
       `/api/v1/public/kitchens/${kitchenId}/reviews/summary`,
       {
         signal: undefined,
-        dedupeKey: `public-kitchen-review-summary:${kitchenId}`,
       },
     );
   });

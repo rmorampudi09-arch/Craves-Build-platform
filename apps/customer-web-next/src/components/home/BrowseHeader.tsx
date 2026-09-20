@@ -85,7 +85,7 @@ export function BrowseHeader({
   };
 
   return (
-    <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
+    <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white">
       <div className="mx-auto max-w-[88rem] px-4 md:px-7 lg:px-10">
         <div className="flex min-h-[4.4rem] items-center gap-2.5 py-2 sm:gap-3 lg:gap-5 lg:py-2.5">
           {onBack ? (

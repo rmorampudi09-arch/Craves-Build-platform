@@ -36,6 +36,7 @@ type AddressDraft = Omit<CustomerAddressInput, "latitude" | "longitude"> & {
 function draftFrom(address: CustomerAddress): AddressDraft {
   return {
     addressLabel: address.addressLabel,
+    addressName: address.addressName ?? null,
     recipientName: address.recipientName ?? "",
     contactPhoneNumber: address.contactPhoneNumber,
     addressLine1: address.addressLine1,
@@ -276,7 +277,9 @@ export default function AddressesPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-display text-lg font-black text-[#1A1A1A] md:text-xl">
-                        {address.addressLabel}
+                        {address.addressLabel === "OTHER" && address.addressName
+                          ? address.addressName
+                          : address.addressLabel}
                       </h2>
                       {address.isDefault ? (
                         <span className="inline-flex items-center rounded-full bg-[#F62E18]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#F62E18] md:text-[11px]">

@@ -11,14 +11,10 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-
-export type ChefEvidenceMetadata = {
-  id: string;
-  documentType: string;
-  originalFileName: string;
-  fileSizeBytes: number;
-  status: string;
-};
+import {
+  parseChefEvidenceMetadata,
+  type ChefEvidenceMetadata,
+} from "@/lib/chef-application-evidence-contract";
 
 type EvidenceType =
   | "APPLICANT_PHOTO"
@@ -72,22 +68,7 @@ const INITIAL_PROGRESS: ProgressState = { phase: "IDLE", message: "" };
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 function parseUploadResponse(value: unknown): ChefEvidenceMetadata | null {
-  if (!value || typeof value !== "object") return null;
-  const raw = value as Record<string, unknown>;
-  if (
-    typeof raw.id !== "string" ||
-    typeof raw.documentType !== "string" ||
-    typeof raw.originalFileName !== "string" ||
-    typeof raw.fileSizeBytes !== "number" ||
-    typeof raw.status !== "string"
-  ) return null;
-  return {
-    id: raw.id,
-    documentType: raw.documentType,
-    originalFileName: raw.originalFileName,
-    fileSizeBytes: raw.fileSizeBytes,
-    status: raw.status,
-  };
+  return parseChefEvidenceMetadata(value);
 }
 
 function firstTaskIndex(documents: ChefEvidenceMetadata[]): number {

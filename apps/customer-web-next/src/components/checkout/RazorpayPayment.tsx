@@ -285,13 +285,14 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
       ) {
         throw new Error("Razorpay checkout configuration is incomplete.");
       }
+      const amountPaise = nextPayment.amountPaise;
       setMessage(
         "Complete payment inside the Razorpay window. Craves does not receive your card number, CVV or UPI PIN.",
       );
       const result = await new Promise<RazorpaySuccess>((resolve, reject) => {
         const instance = new window.Razorpay!({
           key: nextPayment.checkoutKeyId!,
-          amount: nextPayment.amountPaise,
+          amount: amountPaise,
           currency: nextPayment.currency,
           order_id: nextPayment.providerOrderId!,
           name: "Craves",

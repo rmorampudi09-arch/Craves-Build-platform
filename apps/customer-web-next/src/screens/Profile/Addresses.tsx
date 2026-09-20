@@ -313,10 +313,10 @@ export default function AddressesPage() {
                     type="button"
                     disabled={busy || address.isDefault || !ready}
                     onClick={() => void selectDefault(address)}
-                    className={`inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-xs font-black transition-colors sm:flex-none sm:text-sm ${
+                    className={`inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-xs font-black transition-[background-color,box-shadow,transform] duration-200 ease-out sm:flex-none sm:text-sm ${
                       address.isDefault
                         ? "!bg-[#F1F3F5] !text-[#6B6B6B]"
-                        : "!border !border-[#E5E7EB] !bg-[#F1F3F5] !text-[#1A1A1A] hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
+                        : "!border !border-[#E5E7EB] !bg-[#F1F3F5] !text-[#1A1A1A] hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none"
                     } disabled:cursor-not-allowed disabled:opacity-55`}
                   >
                     <Check className="h-4 w-4" strokeWidth={2.5} />
@@ -423,7 +423,9 @@ export default function AddressesPage() {
             <AlertDialog.Description className="mx-auto mt-3 max-w-sm text-center text-sm leading-6 text-[#6B6B6B]">
               {deleteTarget
                 ? "This will remove your " +
-                  deleteTarget.addressLabel.toLowerCase() +
+                  (deleteTarget.addressLabel === "OTHER" && deleteTarget.addressName
+                    ? deleteTarget.addressName
+                    : deleteTarget.addressLabel.toLowerCase()) +
                   " address from your saved delivery addresses."
                 : "This address will be removed from your saved delivery addresses."}
             </AlertDialog.Description>

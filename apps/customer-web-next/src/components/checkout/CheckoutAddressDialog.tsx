@@ -27,6 +27,7 @@ type AddressDraft = Omit<CustomerAddressInput, "latitude" | "longitude"> & {
 
 const blankAddress: AddressDraft = {
   addressLabel: "HOME",
+  addressName: null,
   recipientName: "",
   contactPhoneNumber: "",
   addressLine1: "",
@@ -289,7 +290,9 @@ export function CheckoutAddressDialog({
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block font-display text-base font-bold">
-                          {address.addressLabel}{address.isDefault ? " · Default" : ""}
+                          {address.addressLabel === "OTHER" && address.addressName
+                            ? address.addressName
+                            : address.addressLabel}{address.isDefault ? " · Default" : ""}
                         </span>
                         <span className="mt-1 block text-sm font-semibold">
                           {[address.recipientName, address.contactPhoneNumber].filter(Boolean).join(" · ")}
@@ -334,7 +337,8 @@ export function CheckoutAddressDialog({
             </button>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <label className="text-xs font-semibold text-ink">Label<select value={draft.addressLabel} onChange={(event) => update("addressLabel", event.target.value as AddressLabel)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]"><option value="HOME">Home</option><option value="WORK">Work</option><option value="OTHER">Other</option></select></label>
+              <label className="text-xs font-semibold text-ink">Label<select value={draft.addressLabel} onChange={(event) => { const label = event.target.value as AddressLabel; update("addressLabel", label); if (label !== "OTHER") update("addressName", null); }} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]"><option value="HOME">Home</option><option value="WORK">Work</option><option value="OTHER">Other</option></select></label>
+              {draft.addressLabel === "OTHER" ? <label className="text-xs font-semibold text-ink">Name this address<input required maxLength={80} value={draft.addressName ?? ""} onChange={(event) => update("addressName", event.target.value || null)} placeholder="e.g. Mom's home" className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label> : null}
               <label className="text-xs font-semibold text-ink">Recipient<input value={draft.recipientName} onChange={(event) => update("recipientName", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
               <label className="text-xs font-semibold text-ink">Phone<input value={draft.contactPhoneNumber} onChange={(event) => update("contactPhoneNumber", event.target.value)} placeholder="+919876543210" className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
               <label className="text-xs font-semibold text-ink">Pincode<input value={draft.postalCode} onChange={(event) => update("postalCode", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
@@ -344,7 +348,7 @@ export function CheckoutAddressDialog({
               <label className="text-xs font-semibold text-ink">District<input value={draft.districtName} onChange={(event) => update("districtName", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
               <label className="text-xs font-semibold text-ink">City<input value={draft.city} onChange={(event) => update("city", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
               <label className="text-xs font-semibold text-ink">State<input value={draft.state} onChange={(event) => update("state", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
-              <label className="text-xs font-semibold text-ink sm:col-span-2">Landmark (optional)<input value={draft.landmark ?? ""} onChange={(event) => update("landmark", event.target.value || null)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
+              <label className="text-xs font-semibold text-ink sm:col-span-2">Landmark<input required value={draft.landmark ?? ""} onChange={(event) => update("landmark", event.target.value || null)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
               <label className="flex items-center gap-2 text-sm font-semibold text-ink sm:col-span-2"><input type="checkbox" checked={draft.isDefault} onChange={(event) => update("isDefault", event.target.checked)} />Make this my default address</label>
             </div>
 

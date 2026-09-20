@@ -292,8 +292,8 @@ export async function renderAzureMapsStaticImage(
         Accept: "image/png",
       },
     },
-    7_000,
-    2 * 1024 * 1024,
+    12_000,
+    3 * 1024 * 1024,
   );
 
   if (!response.ok) {

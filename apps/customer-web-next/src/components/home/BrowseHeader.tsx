@@ -19,6 +19,7 @@ import type { CravesUser } from "@/services/auth/cravesAuth";
 interface BrowseHeaderProps {
   user?: CravesUser;
   locationLabel: string;
+  locationTypeLabel?: string;
   onOpenLocation: () => void;
   cartCount: number;
   onOpenCart: () => void;
@@ -47,8 +48,8 @@ function FoodPreferenceQuickToggles({
 }) {
   return (
     <div
-      className={`items-center gap-3 rounded-[1.15rem] bg-[#F1F3F5] px-3 py-2 ${className}`}
-      aria-label="Quick food type filters"
+      className={`items-center rounded-[1.15rem] bg-[#F1F3F5] px-3 py-2 ${className}`}
+      aria-label="Vegetarian filter"
     >
       <AppleSwitch
         checked={value === "veg"}
@@ -58,21 +59,13 @@ function FoodPreferenceQuickToggles({
         tone="neutral"
         aria-label="Show only vegetarian dishes"
       />
-      <span className="h-6 w-px bg-[#D7DADF]" aria-hidden="true" />
-      <AppleSwitch
-        checked={value === "non-veg"}
-        onCheckedChange={(checked) => onChange(checked ? "non-veg" : "all")}
-        label="Non Veg"
-        size="sm"
-        tone="accent"
-        aria-label="Show only non vegetarian dishes"
-      />
     </div>
   );
 }
 
 export function BrowseHeader({
   locationLabel,
+  locationTypeLabel = "Location",
   onOpenLocation,
   cartCount,
   onOpenCart,
@@ -121,14 +114,14 @@ export function BrowseHeader({
           <button
             type="button"
             onClick={openLocation}
-            className="hidden min-h-11 min-w-0 max-w-[16rem] items-center gap-2.5 rounded-full bg-[#F1F3F5] px-3.5 text-left transition-shadow duration-200 hover:shadow-[0_8px_20px_rgba(26,26,26,0.08)] md:flex"
-            aria-label={`Default delivery address: ${locationLabel}. Manage address`}
+            className="hidden min-h-11 min-w-0 max-w-[16rem] items-center gap-2.5 rounded-full !bg-[#F1F3F5] px-3.5 text-left !text-[#1A1A1A] transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none md:flex"
+            aria-label={`${locationTypeLabel} delivery address: ${locationLabel}. Manage address`}
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
               <FaMapMarkerAlt className="h-4 w-4" aria-hidden="true" />
             </span>
             <span className="min-w-0">
-              <span className="block text-[0.6rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">Default delivery</span>
+              <span className="block text-[0.6rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">{locationTypeLabel}</span>
               <span className="block truncate text-xs font-extrabold text-[#1A1A1A]">{locationLabel}</span>
             </span>
           </button>
@@ -171,7 +164,7 @@ export function BrowseHeader({
               className={`relative flex ${headerIconActionClass}`}
               aria-label={`Open cart${cartCount ? ` with ${cartCount} items` : ""}`}
             >
-              <CravesCartIcon className="h-[1.18rem] w-[1.18rem]" />
+              <CravesCartIcon className="h-[1.05rem] w-[1.05rem]" />
               {cartCount > 0 ? (
                 <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-[#F62E18] bg-white px-1 text-[0.62rem] font-bold text-[#1A1A1A] shadow-[0_1px_3px_rgba(26,26,26,0.08)]">
                   <AnimateCount aria-live="polite">{cartCount}</AnimateCount>
@@ -219,14 +212,14 @@ export function BrowseHeader({
           <button
             type="button"
             onClick={openLocation}
-            className="flex min-w-0 max-w-[11rem] shrink items-center gap-2 text-left text-xs font-bold text-[#1A1A1A] sm:max-w-[14rem] md:hidden"
-            aria-label={`Default delivery address: ${locationLabel}. Manage address`}
+            className="flex min-w-0 max-w-[12rem] shrink items-center gap-2 rounded-full !bg-[#F1F3F5] px-2 py-1 text-left text-xs font-bold !text-[#1A1A1A] transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none sm:max-w-[15rem] md:hidden"
+            aria-label={`${locationTypeLabel} delivery address: ${locationLabel}. Manage address`}
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
               <FaMapMarkerAlt className="h-4 w-4" aria-hidden="true" />
             </span>
             <span className="min-w-0">
-              <span className="block text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#6B6B6B]">Default</span>
+              <span className="block text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#6B6B6B]">{locationTypeLabel}</span>
               <span className="block truncate">{locationLabel}</span>
             </span>
           </button>

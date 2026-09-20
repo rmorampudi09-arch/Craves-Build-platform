@@ -64,11 +64,12 @@ export function parseCheckoutOperationRequest(
 
   const expected = record(raw.expectedCart);
   const cartId = expected ? text(expected.cartId, 64) : null;
-  if (!cartId || !UUID.test(cartId) || !Array.isArray(expected?.items)) return null;
-  if (expected.items.length > 200) return null;
+  const rawItems = expected?.items;
+  if (!cartId || !UUID.test(cartId) || !Array.isArray(rawItems)) return null;
+  if (rawItems.length > 200) return null;
 
   const items: CheckoutCartSnapshot["items"] = [];
-  for (const value of expected.items) {
+  for (const value of rawItems) {
     const item = record(value);
     if (!item) return null;
     const id = text(item.id, 64);

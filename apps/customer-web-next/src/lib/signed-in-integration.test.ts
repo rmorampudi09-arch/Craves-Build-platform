@@ -189,7 +189,7 @@ test("every home-chef call to action opens the live chef registration flow", () 
 
 test("pending chef applications remain editable exactly as the backend permits", () => {
   const contents = source("../components/chef-application-workspace.tsx");
-  assert.match(contents, /const locked = application\?\.status === "APPROVED"/);
+  assert.match(contents, /const locked = !application \|\| loadFailed \|\| application.status === "APPROVED"/);
   assert.match(contents, /onSubmit=\{submit\}/);
   assert.match(contents, /Update pending application/);
   assert.doesNotMatch(
@@ -222,7 +222,7 @@ test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   assert.match(auth, /fetch\("\/api\/auth\/refresh"/);
   assert.match(boundary, /loadSession\(\)/);
   assert.match(boundary, /synchronizeSessionRoles\(\)/);
-  assert.match(boundary, /setState\("not-approved"\)/);
+  // Role denial and session races are exercised by rendered components in chef-profile-session.vitest.ts.
 
   for (const page of [
     "../app/chef/kitchen/page.tsx",

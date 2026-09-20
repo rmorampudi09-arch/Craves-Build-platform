@@ -29,6 +29,68 @@ const rule = {
   updatedAt: '2026-09-20T12:00:00Z',
 };
 
+describe('chefSubscriptionApi slot capacity', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('sends the exact slot-capacity request and verifies the response', async () => {
+    const slotRule = {
+      id: '66666666-6666-4666-8666-666666666666',
+      chefIdentityId: CHEF_ID,
+      isoDayOfWeek: 3,
+      mealSlotCode: 'LUNCH',
+      totalCapacityUnits: 20,
+      subscriptionCapacityUnits: 8,
+      salesEnabled: true,
+      recurringReservedUnits: 3,
+      recurringAvailableUnits: 5,
+      recurringDeficitUnits: 0,
+      version: 2,
+      updatedAt: '2026-09-20T12:00:00Z',
+    };
+    (httpClient.put as jest.Mock).mockResolvedValue(slotRule);
+
+    await expect(
+      chefSubscriptionApi.putSlotRule({
+        isoDayOfWeek: 3,
+        mealSlotCode: ' lunch ',
+        totalCapacityUnits: 20,
+        subscriptionCapacityUnits: 8,
+        salesEnabled: true,
+        reason: ' Updated from Chef mobile ',
+      }),
+    ).resolves.toEqual(slotRule);
+
+    expect(httpClient.put).toHaveBeenCalledWith(
+      '/api/v1/chef/subscription-capacity/rules/slots',
+      {
+        isoDayOfWeek: 3,
+        mealSlotCode: 'LUNCH',
+        totalCapacityUnits: 20,
+        subscriptionCapacityUnits: 8,
+        salesEnabled: true,
+        reason: 'Updated from Chef mobile',
+      },
+    );
+  });
+
+  it('rejects slot subscription capacity above total capacity before transport', async () => {
+    await expect(
+      chefSubscriptionApi.putSlotRule({
+        isoDayOfWeek: 3,
+        mealSlotCode: 'LUNCH',
+        totalCapacityUnits: 5,
+        subscriptionCapacityUnits: 6,
+        salesEnabled: true,
+        reason: 'Invalid',
+      }),
+    ).rejects.toThrow();
+
+    expect(httpClient.put).not.toHaveBeenCalled();
+  });
+});
+
 describe('chefSubscriptionApi menu item capacity', () => {
   beforeEach(() => {
     jest.clearAllMocks();

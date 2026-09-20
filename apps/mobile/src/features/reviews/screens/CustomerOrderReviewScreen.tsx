@@ -28,6 +28,7 @@ import {
 import {Icon} from '../../../shared/components/Icon';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {
+  CUSTOMER_REVIEW_EXTRAS_AVAILABLE,
   customerReviewsApi,
   type CustomerReview,
   type ReviewTagDefinition,
@@ -77,7 +78,9 @@ export function CustomerOrderReviewScreen() {
 
     const [reviewResult, tagsResult] = await Promise.allSettled([
       customerReviewsApi.getForOrder(orderId),
-      customerReviewsApi.listTags(),
+      CUSTOMER_REVIEW_EXTRAS_AVAILABLE
+        ? customerReviewsApi.listTags()
+        : Promise.resolve([] as ReviewTagDefinition[]),
     ]);
 
     let ownedReview: CustomerReview | null = null;

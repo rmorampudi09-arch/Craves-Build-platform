@@ -24,6 +24,10 @@ on:
       - apps/mobile/package.json
       - apps/mobile/package-lock.json
       - api/apim-api/contracts/mobile-production.v1.json
+      - api/apim-api/contracts/mobile-subscriptions.v1.json
+      - api/apim-api/contracts/mobile-catalog-presentation.v1.json
+      - api/apim-api/contracts/mobile-main-published.v1.json
+      - api/apim-api/contracts/mobile-main-source-only.v1.json
   workflow_dispatch:
 
 permissions:

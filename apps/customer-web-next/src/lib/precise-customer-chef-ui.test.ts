@@ -202,7 +202,8 @@ test("checkout is one page with saved addresses, ASAP delivery and the shared ad
   assert.match(checkout, /sessionFetch\("\/api\/checkout"/);
   assert.match(checkout, /createAuthoritativeCheckout/);
   assert.match(checkout, /deliveryAddressId,/);
-  assert.match(checkout, /prepared = await createAuthoritativeCheckout/);
+  assert.match(checkout, /window\.sessionStorage\.setItem\(CHECKOUT_ID_KEY, prepared\.id\)/);
+  assert.match(checkout, /Review the order to load the authoritative delivery fee, tax and final total before payment/);
   assert.doesNotMatch(checkout, /CheckoutAddressDialog/);
   assert.doesNotMatch(checkout, /Pick a time/);
   assert.doesNotMatch(checkout, /schedule\/capability/);

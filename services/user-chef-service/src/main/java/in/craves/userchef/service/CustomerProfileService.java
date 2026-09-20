@@ -226,6 +226,19 @@ public class CustomerProfileService {
     }
 
     @Transactional
+    public CustomerAddressResponse setDefaultAddress(CurrentUser user, UUID addressId) {
+        getActiveAddress(user.identityId(), addressId);
+        clearDefaultAddress(user.identityId());
+        jdbcTemplate.update(
+            "UPDATE customer_address SET is_default = true, updated_at = now() " +
+                "WHERE id = ? AND identity_id = ? AND is_active = true",
+            addressId,
+            user.identityId()
+        );
+        return getActiveAddress(user.identityId(), addressId);
+    }
+
+    @Transactional
     public void deleteAddress(CurrentUser user, UUID addressId) {
         getActiveAddress(user.identityId(), addressId);
         jdbcTemplate.update(

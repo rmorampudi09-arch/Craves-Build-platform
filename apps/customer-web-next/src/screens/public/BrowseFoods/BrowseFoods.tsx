@@ -279,7 +279,7 @@ function BrowseFoodsPage() {
       isCravingCategory(restored.homeCategory) ? restored.homeCategory : null,
     );
     setDishSort(restored.dishSort);
-    setFoodPreference(restored.foodPreference);
+    setFoodPreference(restored.foodPreference === "veg" ? "veg" : "all");
     setSearchTerm(restored.searchTerm);
     setSearchOpen(restored.searchOpen);
   }, []);
@@ -546,11 +546,7 @@ function BrowseFoodsPage() {
         dish.category.toLocaleLowerCase("en-IN").includes(term) ||
         dish.desc.toLocaleLowerCase("en-IN").includes(term);
       const foodType = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
-      const foodTypeMatches =
-        foodPreference === "all" ||
-        (foodPreference === "veg" && foodType === "VEG") ||
-        (foodPreference === "non-veg" && foodType === "NON_VEG") ||
-        (foodPreference === "egg" && foodType === "EGG");
+      const foodTypeMatches = foodPreference !== "veg" || foodType === "VEG";
       return categoryMatches && searchMatches && foodTypeMatches;
     });
 
@@ -568,7 +564,21 @@ function BrowseFoodsPage() {
 
   const locationLabel = address
     ? [address.mandal, address.city].filter(Boolean).join(", ")
-    : "Choose default address";
+    : "Choose address";
+  const locationTypeLabel = address?.label
+    ? `${address.label.charAt(0).toUpperCase()}${address.label.slice(1).toLowerCase()}`
+    : "Location";
+
+  const searchDishes = useMemo(
+    () =>
+      foodPreference === "veg"
+        ? nearbyDishes.filter((dish) => {
+            const foodType = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
+            return foodType === "VEG";
+          })
+        : nearbyDishes,
+    [foodPreference, nearbyDishes],
+  );
 
   const cartAvailabilityKey = unavailableCartItems.length > 0
     ? `${address?.id ?? `${address?.lat ?? ""}:${address?.lng ?? ""}`}|${unavailableCartItems
@@ -642,6 +652,7 @@ function BrowseFoodsPage() {
       <BrowseHeader
         user={user}
         locationLabel={locationLabel}
+        locationTypeLabel={locationTypeLabel}
         onOpenLocation={openAddressManager}
         cartCount={cartItemCount}
         onOpenCart={() => navigate({ to: "/cart" })}
@@ -728,10 +739,12 @@ function BrowseFoodsPage() {
 
       {searchOpen ? (
         <HomeSearchOverlay
-          dishes={nearbyDishes}
+          dishes={searchDishes}
           kitchens={kitchens}
           searchTerm={searchTerm}
+          vegOnly={foodPreference === "veg"}
           onSearchTermChange={setSearchTerm}
+          onDisableVeg={() => setFoodPreference("all")}
           onClose={() => setSearchOpen(false)}
         />
       ) : null}

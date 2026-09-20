@@ -62,6 +62,7 @@ export function CartItemRow({
         <div className="flex h-10 items-center overflow-hidden rounded-[11px] border border-[#D7DADF] bg-[#F1F3F5] shadow-[0_1px_2px_rgba(26,26,26,0.05)]">
           <button
             type="button"
+            data-craves-borderless="true"
             onClick={onDecrease}
             disabled={disabled}
             className="flex h-10 w-10 items-center justify-center border-0 bg-transparent text-[#1A1A1A] shadow-none transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BFC4C9] disabled:pointer-events-none disabled:opacity-45"
@@ -77,6 +78,7 @@ export function CartItemRow({
           </AnimateCount>
           <button
             type="button"
+            data-craves-borderless="true"
             onClick={onIncrease}
             disabled={disabled || item.qty >= 50}
             className="flex h-10 w-10 items-center justify-center border-0 bg-transparent text-[#1A1A1A] shadow-none transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BFC4C9] disabled:pointer-events-none disabled:opacity-45"

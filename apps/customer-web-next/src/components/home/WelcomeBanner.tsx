@@ -18,13 +18,13 @@ export function WelcomeBanner({
 }: WelcomeBannerProps) {
   return (
     <section
-      className={styles.fadeUp + " mx-auto max-w-[88rem] px-4 pt-4 md:px-7 md:pt-5 lg:px-10"}
+      className={styles.fadeUp + " mx-auto max-w-[88rem] px-4 pt-4 md:px-5 md:pt-4 lg:px-10 lg:pt-5"}
       aria-labelledby="discovery-heading"
     >
       <div
         className={
           styles.heroShell +
-          " relative overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white shadow-[0_22px_70px_rgba(26,26,26,0.08)] sm:rounded-[1.65rem] md:rounded-[2rem]"
+          " relative overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white shadow-[0_22px_70px_rgba(26,26,26,0.08)] sm:rounded-[1.65rem] md:rounded-[1.7rem] lg:rounded-[2rem]"
         }
       >
         <div className={styles.heroMobileVisual + " relative md:hidden"}>
@@ -59,7 +59,7 @@ export function WelcomeBanner({
         <div
           className={
             styles.heroContent +
-            " relative z-10 flex max-w-[43rem] flex-col justify-center px-5 pb-7 pt-3 sm:px-7 md:px-12 md:py-10 lg:px-16"
+            " relative z-10 flex max-w-[43rem] flex-col justify-center px-5 pb-7 pt-3 sm:px-7 md:max-w-[34rem] md:px-8 md:py-7 lg:max-w-[43rem] lg:px-16 lg:py-10"
           }
         >
           <p className="mb-3 text-[0.64rem] font-black uppercase tracking-[0.13em] text-[#1A1A1A] md:mb-4 md:text-[0.68rem]">
@@ -70,7 +70,7 @@ export function WelcomeBanner({
             id="discovery-heading"
             className={
               styles.heroTitle +
-              " max-w-[38rem] font-display text-[clamp(1.95rem,8vw,3rem)] font-black leading-[1.01] tracking-[-0.048em] text-[#1A1A1A] md:text-[clamp(2.6rem,5vw,4.2rem)]"
+              " max-w-[38rem] font-display text-[clamp(1.95rem,8vw,3rem)] font-black leading-[1.01] tracking-[-0.048em] text-[#1A1A1A] md:text-[2.15rem] lg:text-[clamp(2.8rem,5vw,4.2rem)]"
             }
           >
             Eat for Health.
@@ -78,12 +78,12 @@ export function WelcomeBanner({
             <span className="text-[#F62E18]">Taste the Comfort of Home.</span>
           </h1>
 
-          <p className="mt-4 max-w-[34rem] text-sm font-medium leading-6 text-[#6B6B6B] md:mt-5 md:text-base md:leading-7">
+          <p className="mt-4 max-w-[34rem] text-sm font-medium leading-6 text-[#6B6B6B] md:mt-3 md:max-w-[29rem] md:text-[0.8rem] md:leading-5 lg:mt-5 lg:max-w-[34rem] lg:text-base lg:leading-7">
             Fresh food from nearby home kitchens, made with familiar ingredients,
             personal recipes and the kind of care that feels like home.
           </p>
 
-          <div className="mt-5 flex flex-wrap items-stretch gap-2.5 md:mt-7">
+          <div className="mt-5 flex flex-wrap items-stretch gap-2.5 md:mt-4 lg:mt-7">
             <span className="inline-flex items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3.5 py-2 text-xs font-bold text-[#1A1A1A] shadow-[0_6px_18px_rgba(26,26,26,0.04)]">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
                 <FaUtensils className="h-3.5 w-3.5" aria-hidden="true" />

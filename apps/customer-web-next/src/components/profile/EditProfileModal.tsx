@@ -12,6 +12,7 @@ import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel
 interface EditProfileModalProps {
   open: boolean;
   profile: CustomerProfile | null;
+  initialEmail?: string;
   onClose: () => void;
   onSaved: (profile: CustomerProfile) => void;
 }
@@ -19,6 +20,7 @@ interface EditProfileModalProps {
 export function EditProfileModal({
   open,
   profile,
+  initialEmail = "",
   onClose,
   onSaved,
 }: EditProfileModalProps) {
@@ -181,7 +183,7 @@ export function EditProfileModal({
           </label>
         </div>
 
-        <div className="mt-4"><EmailVerificationPanel /></div>
+        <div className="mt-5"><EmailVerificationPanel initialEmail={initialEmail} /></div>
 
         {profile && (
           <p className="mt-4 rounded-xl bg-[#F1F3F5] p-3 text-sm text-[#6B6B6B]">

@@ -14,7 +14,6 @@ import {
 } from "react-icons/fa6";
 import { GiChefToque } from "react-icons/gi";
 
-import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel";
 import { AccountCard } from "@/components/profile/AccountCard";
 import { AddressCard } from "@/components/profile/AddressCard";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
@@ -384,8 +383,6 @@ function ProfileContent({
     : "No delivery address saved yet.";
 
   const chef = chefLink(user, application);
-  const emailForVerification = user.email ?? profile?.email ?? "";
-
   return (
     <div className="min-h-screen bg-[#FAFAFA] pb-8 text-[#1A1A1A] md:pb-12">
       <ProfileHeader />
@@ -559,30 +556,13 @@ function ProfileContent({
             </p>
           ) : null}
 
-          {!editOpen ? (
-            <div className="mt-3">
-              <EmailVerificationPanel
-                initialEmail={emailForVerification}
-                onVerified={(state) => {
-                  setUser((current) =>
-                    current
-                      ? {
-                          ...current,
-                          email: state.email ?? undefined,
-                          emailVerified: true,
-                        }
-                      : current,
-                  );
-                }}
-              />
-            </div>
-          ) : null}
         </section>
       </main>
 
       <EditProfileModal
         open={editOpen}
         profile={profile}
+        initialEmail={user.email ?? profile?.email ?? ""}
         onClose={() => setEditOpen(false)}
         onSaved={(savedProfile) => {
           setProfile(savedProfile);

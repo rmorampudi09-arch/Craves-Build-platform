@@ -1,18 +1,23 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, ChefHat, Home, Soup, User } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  ArrowRight,
+  CalendarDays,
+  ChefHat,
+  Home,
+  ShoppingCart,
+  UserRound,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 
-import { CravesCartIcon } from "@/components/home/CravesCartIcon";
 import {
   cartCount,
   cartCurrency,
@@ -26,7 +31,12 @@ type CartSummary = {
   currency: string;
 };
 
-type NavKey = "home" | "meals" | "chefs" | "profile" | "cart";
+type NavKey =
+  | "home"
+  | "subscriptions"
+  | "chefs"
+  | "profile"
+  | "cart";
 
 const HIDDEN_PATH_PREFIXES = [
   "/sign-in",
@@ -41,6 +51,28 @@ const HIDDEN_PATH_PREFIXES = [
   "/refunds-cancellations",
   "/products-pricing",
 ];
+
+const NAV_ITEMS = [
+  { key: "home" as const, href: "/home", label: "Home", icon: Home },
+  {
+    key: "subscriptions" as const,
+    href: "/subscriptions",
+    label: "Meal Subscription",
+    icon: CalendarDays,
+  },
+  {
+    key: "chefs" as const,
+    href: "/home#nearby-kitchens-heading",
+    label: "Chefs",
+    icon: ChefHat,
+  },
+  {
+    key: "profile" as const,
+    href: "/profile",
+    label: "Profile",
+    icon: UserRound,
+  },
+] as const;
 
 function readCartSummary(): CartSummary {
   return {
@@ -67,9 +99,19 @@ function shouldHide(pathname: string): boolean {
 
 function activeKeyForPath(pathname: string): NavKey | null {
   if (pathname === "/cart" || pathname.startsWith("/cart/")) return "cart";
-  if (pathname === "/profile" || pathname.startsWith("/profile/")) return "profile";
+  if (
+    pathname === "/subscriptions" ||
+    pathname.startsWith("/subscriptions/")
+  ) {
+    return "subscriptions";
+  }
+  if (
+    pathname === "/profile" ||
+    pathname.startsWith("/profile/")
+  ) {
+    return "profile";
+  }
   if (pathname.startsWith("/kitchen")) return "chefs";
-  if (pathname.startsWith("/dish")) return "meals";
   if (pathname === "/home") return "home";
   return null;
 }
@@ -96,9 +138,9 @@ export function BottomNav() {
       const currentY = Math.max(window.scrollY, 0);
       const delta = currentY - lastScrollY.current;
 
-      if (currentY <= 48 || delta < -6) {
+      if (currentY <= 44 || delta < -5) {
         setCartMode(false);
-      } else if (currentY > 112 && delta > 7) {
+      } else if (currentY > 96 && delta > 5) {
         setCartMode(true);
       }
 
@@ -126,31 +168,14 @@ export function BottomNav() {
     };
   }, [pathname]);
 
-  const hidden = shouldHide(pathname);
+  if (shouldHide(pathname)) return null;
+
   const activeKey = activeKeyForPath(pathname);
-  const expandedCart = cartMode && summary.itemCount > 0;
-
-  const items = useMemo(
-    () => [
-      { key: "home" as const, href: "/home", label: "Home", icon: Home },
-      {
-        key: "meals" as const,
-        href: "/home#available-dishes-heading",
-        label: "Meals",
-        icon: Soup,
-      },
-      {
-        key: "chefs" as const,
-        href: "/home#nearby-kitchens-heading",
-        label: "Chefs",
-        icon: ChefHat,
-      },
-      { key: "profile" as const, href: "/profile", label: "Profile", icon: User },
-    ],
-    [],
-  );
-
-  if (hidden) return null;
+  const expandedCart =
+    pathname !== "/cart" &&
+    !pathname.startsWith("/cart/") &&
+    cartMode &&
+    summary.itemCount > 0;
 
   const openHomeSection = (
     event: ReactMouseEvent<HTMLAnchorElement>,
@@ -179,132 +204,166 @@ export function BottomNav() {
     <>
       <div
         aria-hidden="true"
-        className="h-[calc(4.65rem+env(safe-area-inset-bottom))] md:hidden"
+        className="h-[calc(4.7rem+env(safe-area-inset-bottom))] md:hidden"
       />
 
-      <AnimatePresence initial={false} mode="sync">
-        {expandedCart ? (
-          <motion.div
-            key="mobile-cart-expanded"
-            initial={reduceMotion ? false : { opacity: 0, y: 16, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={
-              reduceMotion
-                ? { opacity: 0 }
-                : { opacity: 0, y: 10, scale: 0.98 }
-            }
-            transition={{
-              duration: reduceMotion ? 0 : 0.22,
-              ease: [0.22, 1, 0.36, 1],
-            }}
-            className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 md:hidden"
-          >
-            <Link
-              href="/cart"
-              className="flex min-h-[3.75rem] w-full items-center gap-3 rounded-[1.2rem] bg-[#F62E18] px-3.5 text-white shadow-[0_16px_38px_rgba(246,46,24,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 focus-visible:ring-offset-2"
-              aria-label={
-                "View cart with " +
-                summary.itemCount +
-                " " +
-                (summary.itemCount === 1 ? "item" : "items")
-              }
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15">
-                <CravesCartIcon className="h-[1.08rem] w-[1.08rem] text-white" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-black leading-tight">
-                  View cart
-                </span>
-                <span className="mt-0.5 block truncate text-[0.68rem] font-semibold text-white/85">
-                  {summary.itemCount}{" "}
-                  {summary.itemCount === 1 ? "item" : "items"} ·{" "}
-                  {formatMoney(summary.total, summary.currency)}
-                </span>
-              </span>
-              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-            </Link>
-          </motion.div>
-        ) : (
-          <motion.nav
-            key="mobile-five-item-nav"
-            initial={reduceMotion ? false : { opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 12 }}
-            transition={{
-              duration: reduceMotion ? 0 : 0.22,
-              ease: [0.22, 1, 0.36, 1],
-            }}
-            className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E5E7EB] bg-white/95 shadow-[0_-8px_26px_rgba(26,26,26,0.07)] backdrop-blur-xl md:hidden"
-            aria-label="Customer navigation"
-          >
-            <ul className="mx-auto grid max-w-lg grid-cols-5 items-stretch px-1.5 pb-[max(0.38rem,env(safe-area-inset-bottom))] pt-1.5">
-              {items.map(({ key, href, label, icon: Icon }) => {
-                const active = activeKey === key;
-                const sectionId =
-                  key === "meals"
-                    ? "available-dishes-heading"
-                    : key === "chefs"
-                      ? "nearby-kitchens-heading"
-                      : null;
+      <motion.nav
+        initial={false}
+        animate={{
+          backgroundColor: expandedCart
+            ? "rgba(255,255,255,0)"
+            : "rgba(255,255,255,0.95)",
+        }}
+        transition={{
+          duration: reduceMotion ? 0 : 0.22,
+          ease: [0.22, 1, 0.36, 1],
+        }}
+        className={[
+          "fixed inset-x-0 bottom-0 z-40 md:hidden",
+          expandedCart
+            ? "border-t border-transparent shadow-none"
+            : "border-t border-[#E5E7EB] shadow-[0_-8px_26px_rgba(26,26,26,0.07)] backdrop-blur-xl",
+        ].join(" ")}
+        aria-label="Customer navigation"
+      >
+        <motion.ul
+          initial={false}
+          animate={{
+            opacity: expandedCart ? 0 : 1,
+            y: expandedCart ? 4 : 0,
+          }}
+          transition={{
+            duration: reduceMotion ? 0 : 0.16,
+          }}
+          className={[
+            "mx-auto grid max-w-lg grid-cols-5 items-stretch px-1.5 pb-[max(0.38rem,env(safe-area-inset-bottom))] pt-1.5",
+            expandedCart ? "pointer-events-none" : "",
+          ].join(" ")}
+        >
+          {NAV_ITEMS.map(({ key, href, label, icon: Icon }) => {
+            const active = activeKey === key;
+            const sectionId =
+              key === "chefs" ? "nearby-kitchens-heading" : null;
 
-                return (
-                  <li key={key}>
-                    <Link
-                      href={href}
-                      onClick={
-                        sectionId
-                          ? (event) => openHomeSection(event, sectionId)
-                          : undefined
-                      }
-                      className={[
-                        "flex min-h-[3.4rem] flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[0.62rem] font-extrabold transition-colors",
-                        active
-                          ? "text-[#F62E18]"
-                          : "text-[#6B6B6B] hover:text-[#1A1A1A]",
-                      ].join(" ")}
-                      aria-current={active ? "page" : undefined}
-                    >
-                      <Icon
-                        className={[
-                          "h-[1.16rem] w-[1.16rem]",
-                          active ? "stroke-[2.5]" : "stroke-[2]",
-                        ].join(" ")}
-                        aria-hidden="true"
-                      />
-                      <span>{label}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-
-              <li>
+            return (
+              <li key={key}>
                 <Link
-                  href="/cart"
+                  href={href}
+                  onClick={
+                    sectionId
+                      ? (event) => openHomeSection(event, sectionId)
+                      : undefined
+                  }
                   className={[
-                    "relative flex min-h-[3.4rem] flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[0.62rem] font-extrabold transition-colors",
-                    activeKey === "cart"
+                    "flex min-h-[3.45rem] flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 text-center text-[0.61rem] font-extrabold leading-[0.72rem] transition-colors",
+                    active
                       ? "text-[#F62E18]"
                       : "text-[#6B6B6B] hover:text-[#1A1A1A]",
                   ].join(" ")}
-                  aria-current={activeKey === "cart" ? "page" : undefined}
-                  aria-label={cartAria}
+                  aria-current={active ? "page" : undefined}
                 >
-                  <span className="relative">
-                    <CravesCartIcon className="h-[1.16rem] w-[1.16rem]" />
-                    {summary.itemCount > 0 ? (
-                      <span className="absolute -right-2.5 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F62E18] px-1 text-[0.52rem] font-black leading-none text-white">
-                        {summary.itemCount > 99 ? "99+" : summary.itemCount}
-                      </span>
-                    ) : null}
+                  <Icon
+                    className="h-[1.18rem] w-[1.18rem] shrink-0"
+                    strokeWidth={active ? 2.5 : 2}
+                    aria-hidden="true"
+                  />
+                  <span className="max-w-[4.4rem]">
+                    {label}
                   </span>
-                  <span>Cart</span>
                 </Link>
               </li>
-            </ul>
-          </motion.nav>
-        )}
-      </AnimatePresence>
+            );
+          })}
+          <li aria-hidden="true" />
+        </motion.ul>
+
+        <motion.div
+          initial={false}
+          animate={{
+            width: expandedCart
+              ? "calc(100% - 0.75rem)"
+              : "calc(20% - 0.15rem)",
+            backgroundColor: expandedCart
+              ? "#2563EB"
+              : "rgba(255,255,255,0)",
+            borderRadius: expandedCart ? 18 : 12,
+            boxShadow: expandedCart
+              ? "0 16px 38px rgba(37,99,235,0.28)"
+              : "0 0 0 rgba(37,99,235,0)",
+          }}
+          transition={{
+            duration: reduceMotion ? 0 : 0.28,
+            ease: [0.22, 1, 0.36, 1],
+          }}
+          className="absolute right-1.5 top-1.5 h-[3.45rem] overflow-hidden"
+        >
+          <Link
+            href="/cart"
+            className={[
+              "flex h-full w-full items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/40 focus-visible:ring-offset-2",
+              expandedCart
+                ? "flex-row gap-3 px-3.5 text-white"
+                : "flex-col justify-center gap-0.5 px-0.5 text-[0.61rem] font-extrabold leading-[0.72rem]",
+              !expandedCart && activeKey === "cart"
+                ? "text-[#2563EB]"
+                : !expandedCart
+                  ? "text-[#6B6B6B]"
+                  : "",
+            ].join(" ")}
+            aria-current={activeKey === "cart" ? "page" : undefined}
+            aria-label={
+              expandedCart && summary.itemCount > 0
+                ? "View cart with " +
+                  summary.itemCount +
+                  " " +
+                  (summary.itemCount === 1 ? "item" : "items")
+                : cartAria
+            }
+          >
+            <span
+              className={[
+                "relative flex shrink-0 items-center justify-center",
+                expandedCart
+                  ? "h-9 w-9 rounded-full bg-white/15"
+                  : "h-[1.2rem] w-[1.2rem]",
+              ].join(" ")}
+            >
+              <ShoppingCart
+                className="h-[1.18rem] w-[1.18rem]"
+                strokeWidth={activeKey === "cart" && !expandedCart ? 2.5 : 2}
+                aria-hidden="true"
+              />
+              {!expandedCart && summary.itemCount > 0 ? (
+                <span className="absolute -right-2.5 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#2563EB] px-1 text-[0.5rem] font-black leading-none text-white">
+                  {summary.itemCount > 99 ? "99+" : summary.itemCount}
+                </span>
+              ) : null}
+            </span>
+
+            {expandedCart ? (
+              <>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-black leading-tight">
+                    View cart
+                  </span>
+                  <span className="mt-0.5 block truncate text-[0.68rem] font-semibold text-white/85">
+                    {summary.itemCount}{" "}
+                    {summary.itemCount === 1 ? "item" : "items"} ·{" "}
+                    {formatMoney(summary.total, summary.currency)}
+                  </span>
+                </span>
+                <ArrowRight
+                  className="h-4 w-4 shrink-0"
+                  strokeWidth={2.2}
+                  aria-hidden="true"
+                />
+              </>
+            ) : (
+              <span>Cart</span>
+            )}
+          </Link>
+        </motion.div>
+      </motion.nav>
     </>
   );
 }

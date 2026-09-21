@@ -147,7 +147,7 @@ export function DishesGrid({
           </p>
           <h2
             id="available-dishes-heading"
-            className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-4xl"
+            className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-3xl lg:text-4xl"
           >
             {selectedCategory === "All" ? "Dishes near you" : selectedCategory}
           </h2>

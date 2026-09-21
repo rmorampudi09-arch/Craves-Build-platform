@@ -106,7 +106,6 @@ export function HomeCategoryRail({
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
-  const [hasOverflow, setHasOverflow] = useState(false);
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -116,7 +115,6 @@ export function HomeCategoryRail({
       const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
       const scrollLeft = Math.min(maxScrollLeft, Math.max(0, scroller.scrollLeft));
       const edgeTolerance = 18;
-      setHasOverflow(maxScrollLeft > edgeTolerance);
       setCanScrollLeft(scrollLeft > edgeTolerance);
       setCanScrollRight(scrollLeft < maxScrollLeft - edgeTolerance);
     };

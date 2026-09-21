@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { BrowseHeader } from "@/components/home/BrowseHeader";
+import { BottomNav } from "@/components/layout/BottomNav";
 import { CartAddressAvailabilityDialog } from "@/components/home/CartAddressAvailabilityDialog";
 import { CustomerSignOutDialog } from "@/components/home/CustomerSignOutDialog";
 import { DishesGrid } from "@/components/home/DishesGrid";
@@ -707,6 +708,7 @@ function BrowseFoodsPage() {
       </main>
 
       <CustomerFloatingCart />
+      <BottomNav />
 
       <CartAddressAvailabilityDialog
         open={cartAvailabilityOpen}

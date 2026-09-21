@@ -1,27 +1,63 @@
-import { Link, useRouterState } from "@tanstack/react-router";
-import { Home, ClipboardList, User } from "lucide-react";
-export function BottomNav() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const items = [
-    { to: "/profile", label: "Profile", icon: User },
-    { to: "/home", label: "Home", icon: Home },
-    { to: "/orders", label: "Orders", icon: ClipboardList },
-  ] as const;
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { CalendarDays, ClipboardList, Home, User } from "lucide-react";
+
+type CustomerNavItem = {
+  href: string;
+  label: string;
+  icon: typeof Home;
+};
+
+function CustomerBottomNav({ allScreens = false }: { allScreens?: boolean }) {
+  const pathname = usePathname();
+  const onHome = pathname === "/home";
+
+  const items: CustomerNavItem[] = [
+    onHome
+      ? { href: "/subscriptions", label: "Meal plans", icon: CalendarDays }
+      : { href: "/home", label: "Home", icon: Home },
+    { href: "/orders", label: "Orders", icon: ClipboardList },
+    { href: "/profile", label: "Profile", icon: User },
+  ];
+
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-cream/95 backdrop-blur md:hidden">
-      <ul className="mx-auto flex max-w-lg items-center justify-around px-2 py-2">
-        {items.map(({ to, label, icon: Icon }) => {
-          const active = pathname === to;
+    <nav
+      className={[
+        "fixed inset-x-0 bottom-0 z-40 border-t border-[#E5E7EB] bg-white/95 shadow-[0_-6px_24px_rgba(26,26,26,0.06)] backdrop-blur-xl",
+        allScreens ? "" : "md:hidden",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      aria-label="Customer navigation"
+    >
+      <ul className="mx-auto flex max-w-lg items-stretch justify-around px-2 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-1.5">
+        {items.map(({ href, label, icon: Icon }) => {
+          const active =
+            pathname === href ||
+            (href !== "/home" && pathname.startsWith(href + "/"));
+
           return (
-            <li key={to} className="flex-1">
+            <li key={href} className="flex-1">
               <Link
-                to={to}
-                className={`flex flex-col items-center gap-0.5 rounded-lg py-1.5 text-[11px] font-semibold transition-colors ${
-                  active ? "text-primary" : "text-ink/70 hover:text-primary"
-                }`}
+                href={href}
+                className={[
+                  "flex min-h-[3.35rem] flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[0.66rem] font-extrabold transition-colors",
+                  active
+                    ? "text-[#F62E18]"
+                    : "text-[#6B6B6B] hover:text-[#1A1A1A]",
+                ].join(" ")}
+                aria-current={active ? "page" : undefined}
               >
-                <Icon className={`h-5 w-5 ${active ? "fill-primary/10" : ""}`} />
-                {label}
+                <Icon
+                  className={[
+                    "h-[1.15rem] w-[1.15rem]",
+                    active ? "stroke-[2.4]" : "stroke-[2]",
+                  ].join(" ")}
+                  aria-hidden="true"
+                />
+                <span className="whitespace-nowrap">{label}</span>
               </Link>
             </li>
           );
@@ -30,34 +66,11 @@ export function BottomNav() {
     </nav>
   );
 }
-/** Desktop-friendlier variant shown as a fixed island on wide screens too */
+
+export function BottomNav() {
+  return <CustomerBottomNav />;
+}
+
 export function BottomNavAll() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const items = [
-    { to: "/profile", label: "Profile", icon: User },
-    { to: "/home", label: "Home", icon: Home },
-    { to: "/orders", label: "Orders", icon: ClipboardList },
-  ] as const;
-  return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-cream/95 backdrop-blur">
-      <ul className="mx-auto flex max-w-lg items-center justify-around px-2 py-2">
-        {items.map(({ to, label, icon: Icon }) => {
-          const active = pathname === to;
-          return (
-            <li key={to} className="flex-1">
-              <Link
-                to={to}
-                className={`flex flex-col items-center gap-0.5 rounded-lg py-1.5 text-[11px] font-semibold transition-colors ${
-                  active ? "text-primary" : "text-ink/70 hover:text-primary"
-                }`}
-              >
-                <Icon className="h-5 w-5" />
-                {label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
-  );
+  return <CustomerBottomNav allScreens />;
 }

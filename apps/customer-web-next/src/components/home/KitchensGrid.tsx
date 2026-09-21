@@ -42,7 +42,7 @@ export function KitchensGrid({ kitchens, searchTerm, state, message, onSelectKit
       <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">From real home kitchens</p>
-          <h2 id="nearby-kitchens-heading" className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-4xl">Home chefs near you</h2>
+          <h2 id="nearby-kitchens-heading" className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-3xl lg:text-4xl">Home chefs near you</h2>
           <p className="mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">Explore nearby kitchens, see what they are cooking and open their live menu.</p>
         </div>
         {state === "ready" ? (

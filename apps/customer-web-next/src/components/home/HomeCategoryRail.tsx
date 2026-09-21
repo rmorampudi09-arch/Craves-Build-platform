@@ -10,10 +10,6 @@ import {
   FaUtensils,
 } from "react-icons/fa";
 
-import biryaniImage from "@/assets/images/food-chicken-biryani.jpg";
-import curryImage from "@/assets/images/food-chicken-curry.jpg";
-import mealsImage from "@/assets/images/food-thali.jpg";
-
 export type CravingCategory =
   | "Biryani"
   | "Tiffins"
@@ -38,31 +34,31 @@ const categories: readonly VisualCategory[] = [
   {
     label: "Biryani",
     value: "Biryani",
-    fallbackImage: biryaniImage,
+    fallbackImage: "/home/cravings/craving-biryani.webp",
     icon: FaUtensils,
   },
   {
     label: "Tiffins",
     value: "Tiffins",
-    fallbackImage: "/home/cravings/craving-idli.webp",
+    fallbackImage: "/home/cravings/craving-tiffins.webp",
     icon: FaUtensils,
   },
   {
     label: "Curry",
     value: "Curry",
-    fallbackImage: curryImage,
+    fallbackImage: "/home/cravings/craving-curry.webp",
     icon: FaUtensils,
   },
   {
     label: "Meals",
     value: "Meals",
-    fallbackImage: mealsImage,
+    fallbackImage: "/home/cravings/craving-meals.webp",
     icon: FaUtensils,
   },
   {
     label: "Snacks",
     value: "Snacks",
-    fallbackImage: "/home/cravings/craving-rolls.webp",
+    fallbackImage: "/home/cravings/craving-snacks.webp",
     icon: FaCookieBite,
   },
   {
@@ -191,7 +187,7 @@ export function HomeCategoryRail({
           >
             {categories.map(({ label, value, fallbackImage, icon: Icon }) => {
               const active = selected === value;
-              const image = images[value] || fallbackImage;
+              const image = fallbackImage || images[value];
 
               return (
                 <button
@@ -214,6 +210,7 @@ export function HomeCategoryRail({
                         src={image}
                         alt=""
                         loading="lazy"
+                        decoding="async"
                         className="pointer-events-none h-full w-full select-none rounded-full object-cover"
                       />
                     ) : (

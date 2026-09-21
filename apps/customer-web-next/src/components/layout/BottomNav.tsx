@@ -197,7 +197,7 @@ export function BottomNav() {
               duration: reduceMotion ? 0 : 0.22,
               ease: [0.22, 1, 0.36, 1],
             }}
-            className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-[60] md:hidden"
+            className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 md:hidden"
           >
             <Link
               href="/cart"
@@ -235,7 +235,7 @@ export function BottomNav() {
               duration: reduceMotion ? 0 : 0.22,
               ease: [0.22, 1, 0.36, 1],
             }}
-            className="fixed inset-x-0 bottom-0 z-[60] border-t border-[#E5E7EB] bg-white/95 shadow-[0_-8px_26px_rgba(26,26,26,0.07)] backdrop-blur-xl md:hidden"
+            className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E5E7EB] bg-white/95 shadow-[0_-8px_26px_rgba(26,26,26,0.07)] backdrop-blur-xl md:hidden"
             aria-label="Customer navigation"
           >
             <ul className="mx-auto grid max-w-lg grid-cols-5 items-stretch px-1.5 pb-[max(0.38rem,env(safe-area-inset-bottom))] pt-1.5">

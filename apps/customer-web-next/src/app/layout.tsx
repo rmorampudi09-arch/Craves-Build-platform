@@ -3,6 +3,7 @@ import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { CartKitchenReplacementDialogHost } from "@/components/cart/CartKitchenReplacementDialogHost";
+import { BottomNav } from "@/components/layout/BottomNav";
 
 import "../styles.css";
 import "../craves-theme.css";
@@ -55,6 +56,7 @@ export default function RootLayout({
     >
       <body>
         {children}
+        <BottomNav />
         <CartKitchenReplacementDialogHost />
       </body>
     </html>

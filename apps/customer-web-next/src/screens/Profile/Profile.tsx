@@ -94,6 +94,26 @@ type ProfileContentProps = {
   onSignOut: () => void;
 };
 
+function ProfileSignOutAction({
+  logoutBusy,
+  logoutError,
+  onSignOut,
+}: ProfileContentProps) {
+  const label = logoutBusy
+    ? "Signing out…"
+    : logoutError
+      ? "Retry sign out"
+      : "Sign out";
+
+  return (
+            <ProfileSignOutAction
+              logoutBusy={logoutBusy}
+              logoutError={logoutError}
+              onSignOut={onSignOut}
+            />
+  );
+}
+
 export default function ProfilePage() {
   const navigate = useNavigate();
   const scope = useSyncExternalStore(
@@ -309,6 +329,23 @@ function ProfileContent({
               {error}
             </p>
           ) : null}
+
+          {getSession() ? (
+            <ProfileSignOutAction
+              logoutBusy={logoutBusy}
+              logoutError={logoutError}
+              onSignOut={onSignOut}
+            />
+          ) : null}
+
+          {logoutError ? (
+            <p
+              role="alert"
+              className="rounded-xl bg-[#FFF1EF] p-3 text-xs font-semibold text-[#C92716]"
+            >
+              {logoutError}
+            </p>
+          ) : null}
         </main>
       </div>
     );
@@ -331,7 +368,7 @@ function ProfileContent({
     : "No delivery address saved yet.";
 
   const chef = chefLink(user, application);
-  const emailForVerification = profile?.email ?? user.email ?? "";
+  const emailForVerification = user.email ?? profile?.email ?? "";
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] pb-8 text-[#1A1A1A] md:pb-12">

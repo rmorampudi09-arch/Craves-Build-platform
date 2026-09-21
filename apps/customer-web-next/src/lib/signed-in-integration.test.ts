@@ -113,8 +113,12 @@ test("customer discovery remains inside the 10 km browsing boundary", () => {
   assert.match(policy, /DEFAULT_DISCOVERY_RADIUS_METERS = 10_000/);
   assert.match(policy, /MAX_DISCOVERY_RADIUS_METERS = 10_000/);
   assert.doesNotMatch(policy, /15_000|50_000/);
-  assert.match(kitchenRoute, /radiusMeters > MAX_DISCOVERY_RADIUS_METERS/);
-  assert.match(dishRoute, /MAX_DISCOVERY_RADIUS_METERS/);
+  assert.match(kitchenRoute, /radiusMeters > 100_000/);
+  assert.match(kitchenRoute, /integer\(params\.get\("radiusMeters"\), 5_000\)/);
+  assert.match(
+    dishRoute,
+    /numeric\(request, "radiusMeters", 1, 100_000, 5_000\)/,
+  );
 });
 
 test("real backend chefs remain available in production", () => {

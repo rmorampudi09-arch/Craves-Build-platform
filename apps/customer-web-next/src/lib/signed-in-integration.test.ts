@@ -47,9 +47,12 @@ test("signed-in home loads live discovery and opens customer kitchen details wit
   assert.match(contents, /loadCart\(\)/);
   assert.match(
     contents,
-    /discoverKitchens\(activeAddress\.lat, activeAddress\.lng, 5_000\)/,
+    /discoverKitchens\([\s\S]{0,180}DEFAULT_DISCOVERY_RADIUS_METERS/,
   );
-  assert.match(contents, /discoverDishes\(activeAddress\.lat, activeAddress\.lng\)/);
+  assert.match(
+    contents,
+    /discoverDishes\([\s\S]{0,180}DEFAULT_DISCOVERY_RADIUS_METERS/,
+  );
   assert.match(contents, /<HomeCategoryRail/);
   assert.doesNotMatch(contents, /<TodaysSpecial/);
   assert.match(contents, /<KitchensGrid/);
@@ -98,16 +101,20 @@ test("production catalogue has no demo dish fallback", () => {
   assert.match(contents, /\/api\/discovery\/menu-items/);
 });
 
-test("empty nearby discovery expands without changing checkout serviceability", () => {
+test("customer discovery remains inside the 10 km browsing boundary", () => {
   const dishes = source("../services/api/dishes.ts");
+  const kitchens = source("../services/api/kitchens.ts");
   const policy = source("./catalog-discovery-policy.ts");
-  assert.match(dishes, /candidateDiscoveryRadii\(radiusMeters\)/);
-  assert.match(
-    dishes,
-    /if \(discoveredDishes\.length > 0\) return \[\.\.\.discoveredDishes\]/,
-  );
-  assert.match(policy, /15_000/);
-  assert.match(policy, /MAX_DISCOVERY_RADIUS_METERS = 50_000/);
+  const kitchenRoute = source("../app/api/discovery/kitchens/route.ts");
+  const dishRoute = source("../app/api/discovery/menu-items/route.ts");
+
+  assert.match(dishes, /MAX_DISCOVERY_RADIUS_METERS/);
+  assert.match(kitchens, /MAX_DISCOVERY_RADIUS_METERS/);
+  assert.match(policy, /DEFAULT_DISCOVERY_RADIUS_METERS = 10_000/);
+  assert.match(policy, /MAX_DISCOVERY_RADIUS_METERS = 10_000/);
+  assert.doesNotMatch(policy, /15_000|50_000/);
+  assert.match(kitchenRoute, /radiusMeters > MAX_DISCOVERY_RADIUS_METERS/);
+  assert.match(dishRoute, /MAX_DISCOVERY_RADIUS_METERS/);
 });
 
 test("real backend chefs remain available in production", () => {
@@ -124,6 +131,7 @@ test("dish and customer kitchen detail pages recover live data and return to sav
   const customerKitchenRoute = source("../app/kitchen/[id]/page.tsx");
   const legacyChefRoute = source("../app/chef/[id]/page.tsx");
 
+  assert.match(dishPage, /discoverDishes\([\s\S]{0,180}DEFAULT_DISCOVERY_RADIUS_METERS/);
   assert.match(dishPage, /loadDish\(id\)/);
   assert.match(dishPage, /const cachedDish = getDish\(id\)/);
   assert.match(dishPage, /hasHomeReturnState\(\)/);
@@ -132,7 +140,7 @@ test("dish and customer kitchen detail pages recover live data and return to sav
   assert.match(dishService, /const loadedIds = new Set/);
   assert.match(kitchenPage, /getRouteApi\("\/kitchen\/\$id"\)/);
   assert.match(kitchenPage, /loadSelectedAddress\(\)/);
-  assert.match(kitchenPage, /discoverDishes\(address\.lat, address\.lng\)/);
+  assert.match(kitchenPage, /discoverKitchens\([\s\S]{0,180}DEFAULT_DISCOVERY_RADIUS_METERS/);
   assert.match(kitchenPage, /hasHomeReturnState\(\)/);
   assert.match(kitchenPage, /window\.history\.back\(\)/);
   assert.match(customerKitchenRoute, /ChefProfilePage/);
@@ -297,4 +305,5 @@ test("customer headers stay lean and share the same responsive scroll behavior",
   assert.match(autoHide, /duration-\[240ms\]/);
   assert.match(autoHide, /motion-reduce:transition-none/);
   assert.match(autoHide, /onFocusCapture=\{\(\) => setHidden\(false\)\}/);
+  assert.match(homeHeader, /<AutoHideCustomerHeader mobileStatic/);
 });

@@ -26,7 +26,7 @@ export function CartCheckoutBar({
   onContinue,
 }: CartCheckoutBarProps) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white shadow-[0_-8px_28px_rgba(17,24,39,0.06)]">
+    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-[#E5E7EB] bg-white shadow-[0_-8px_28px_rgba(17,24,39,0.06)]">
       <div className="mx-auto flex max-w-4xl items-center gap-4 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-6">
         <div className="min-w-[6.5rem]">
           <p className="flex items-center gap-1 text-[11px] font-medium text-[#6B6B6B]">

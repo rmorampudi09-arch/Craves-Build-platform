@@ -1,14 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import {
-  ArrowRight,
-  CalendarDays,
-  ChefHat,
-  Home,
-  ShoppingCart,
-  UserRound,
-} from "lucide-react";
+import { ArrowRight, CalendarDays } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -17,7 +10,10 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { FaHome, FaUser } from "react-icons/fa";
+import { GiChefToque } from "react-icons/gi";
 
+import { CravesCartIcon } from "@/components/home/CravesCartIcon";
 import {
   cartCount,
   cartCurrency,
@@ -40,6 +36,7 @@ type NavKey =
 
 const HIDDEN_PATH_PREFIXES = [
   "/sign-in",
+  "/cart",
   "/checkout",
   "/confirmation",
   "/chef",
@@ -53,7 +50,7 @@ const HIDDEN_PATH_PREFIXES = [
 ];
 
 const NAV_ITEMS = [
-  { key: "home" as const, href: "/home", label: "Home", icon: Home },
+  { key: "home" as const, href: "/home", label: "Home", icon: FaHome },
   {
     key: "subscriptions" as const,
     href: "/subscriptions",
@@ -64,13 +61,13 @@ const NAV_ITEMS = [
     key: "chefs" as const,
     href: "/home#nearby-kitchens-heading",
     label: "Chefs",
-    icon: ChefHat,
+    icon: GiChefToque,
   },
   {
     key: "profile" as const,
     href: "/profile",
     label: "Profile",
-    icon: UserRound,
+    icon: FaUser,
   },
 ] as const;
 
@@ -171,11 +168,7 @@ export function BottomNav() {
   if (shouldHide(pathname)) return null;
 
   const activeKey = activeKeyForPath(pathname);
-  const expandedCart =
-    pathname !== "/cart" &&
-    !pathname.startsWith("/cart/") &&
-    cartMode &&
-    summary.itemCount > 0;
+  const expandedCart = cartMode && summary.itemCount > 0;
 
   const openHomeSection = (
     event: ReactMouseEvent<HTMLAnchorElement>,
@@ -232,9 +225,7 @@ export function BottomNav() {
             opacity: expandedCart ? 0 : 1,
             y: expandedCart ? 4 : 0,
           }}
-          transition={{
-            duration: reduceMotion ? 0 : 0.16,
-          }}
+          transition={{ duration: reduceMotion ? 0 : 0.16 }}
           className={[
             "mx-auto grid max-w-lg grid-cols-5 items-stretch px-1.5 pb-[max(0.38rem,env(safe-area-inset-bottom))] pt-1.5",
             expandedCart ? "pointer-events-none" : "",
@@ -263,13 +254,10 @@ export function BottomNav() {
                   aria-current={active ? "page" : undefined}
                 >
                   <Icon
-                    className="h-[1.18rem] w-[1.18rem] shrink-0"
-                    strokeWidth={active ? 2.5 : 2}
+                    className="h-[1.12rem] w-[1.12rem] shrink-0"
                     aria-hidden="true"
                   />
-                  <span className="max-w-[4.4rem]">
-                    {label}
-                  </span>
+                  <span className="max-w-[4.4rem]">{label}</span>
                 </Link>
               </li>
             );
@@ -284,28 +272,34 @@ export function BottomNav() {
               ? "calc(100% - 0.75rem)"
               : "calc(20% - 0.15rem)",
             backgroundColor: expandedCart
-              ? "#2563EB"
+              ? "rgba(255,255,255,0.45)"
+              : "rgba(255,255,255,0)",
+            borderColor: expandedCart
+              ? "rgba(255,255,255,0.80)"
               : "rgba(255,255,255,0)",
             borderRadius: expandedCart ? 18 : 12,
             boxShadow: expandedCart
-              ? "0 16px 38px rgba(37,99,235,0.28)"
-              : "0 0 0 rgba(37,99,235,0)",
+              ? "0 22px 60px rgba(26,26,26,0.16), 0 3px 12px rgba(26,26,26,0.07)"
+              : "0 0 0 rgba(26,26,26,0)",
           }}
           transition={{
-            duration: reduceMotion ? 0 : 0.28,
+            duration: reduceMotion ? 0 : 0.3,
             ease: [0.22, 1, 0.36, 1],
           }}
-          className="absolute right-1.5 top-1.5 h-[3.45rem] overflow-hidden"
+          className={[
+            "absolute right-1.5 top-1.5 h-[3.45rem] overflow-hidden border will-change-[width]",
+            expandedCart ? "backdrop-blur-[8px]" : "backdrop-blur-none",
+          ].join(" ")}
         >
           <Link
             href="/cart"
             className={[
-              "flex h-full w-full items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/40 focus-visible:ring-offset-2",
+              "relative flex h-full w-full items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 focus-visible:ring-offset-2",
               expandedCart
-                ? "flex-row gap-3 px-3.5 text-white"
+                ? "flex-row gap-3 px-3.5 text-[#1A1A1A]"
                 : "flex-col justify-center gap-0.5 px-0.5 text-[0.61rem] font-extrabold leading-[0.72rem]",
               !expandedCart && activeKey === "cart"
-                ? "text-[#2563EB]"
+                ? "text-[#F62E18]"
                 : !expandedCart
                   ? "text-[#6B6B6B]"
                   : "",
@@ -320,46 +314,42 @@ export function BottomNav() {
                 : cartAria
             }
           >
-            <span
-              className={[
-                "relative flex shrink-0 items-center justify-center",
-                expandedCart
-                  ? "h-9 w-9 rounded-full bg-white/15"
-                  : "h-[1.2rem] w-[1.2rem]",
-              ].join(" ")}
-            >
-              <ShoppingCart
-                className="h-[1.18rem] w-[1.18rem]"
-                strokeWidth={activeKey === "cart" && !expandedCart ? 2.5 : 2}
-                aria-hidden="true"
-              />
-              {!expandedCart && summary.itemCount > 0 ? (
-                <span className="absolute -right-2.5 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#2563EB] px-1 text-[0.5rem] font-black leading-none text-white">
-                  {summary.itemCount > 99 ? "99+" : summary.itemCount}
-                </span>
-              ) : null}
-            </span>
-
             {expandedCart ? (
               <>
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-white/45 via-white/15 to-white/35"
+                />
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/80 bg-white/55 text-[#F62E18] shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_7px_18px_rgba(26,26,26,0.08)]">
+                  <CravesCartIcon className="h-[1.08rem] w-[1.08rem]" />
+                </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-black leading-tight">
                     View cart
                   </span>
-                  <span className="mt-0.5 block truncate text-[0.68rem] font-semibold text-white/85">
+                  <span className="mt-0.5 block truncate text-[0.68rem] font-semibold text-[#6B6B6B]">
                     {summary.itemCount}{" "}
                     {summary.itemCount === 1 ? "item" : "items"} ·{" "}
                     {formatMoney(summary.total, summary.currency)}
                   </span>
                 </span>
                 <ArrowRight
-                  className="h-4 w-4 shrink-0"
-                  strokeWidth={2.2}
+                  className="h-4 w-4 shrink-0 text-[#1A1A1A]"
                   aria-hidden="true"
                 />
               </>
             ) : (
-              <span>Cart</span>
+              <>
+                <span className="relative flex h-[1.2rem] w-[1.2rem] shrink-0 items-center justify-center">
+                  <CravesCartIcon className="h-[1.12rem] w-[1.12rem]" />
+                  {summary.itemCount > 0 ? (
+                    <span className="absolute -right-2.5 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F62E18] px-1 text-[0.5rem] font-black leading-none text-white">
+                      {summary.itemCount > 99 ? "99+" : summary.itemCount}
+                    </span>
+                  ) : null}
+                </span>
+                <span>Cart</span>
+              </>
             )}
           </Link>
         </motion.div>

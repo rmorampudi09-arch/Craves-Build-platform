@@ -476,26 +476,41 @@ function ProfileContent({
           </div>
         </section>
 
+        <section aria-labelledby="profile-meal-subscription" className="mt-7">
+          <div className="mb-3 px-1">
+            <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#F62E18]">
+              Meal Subscription
+            </p>
+            <h2
+              id="profile-meal-subscription"
+              className="mt-1 text-lg font-black text-[#1A1A1A]"
+            >
+              Your recurring meal plans
+            </h2>
+          </div>
+
+          <ProfileLinkCard
+            to="/subscriptions"
+            icon={FaCalendarDays}
+            title="Meal Subscription"
+            subtitle="Browse, start and manage recurring home-cooked meal plans"
+          />
+        </section>
+
         <section aria-labelledby="profile-benefits" className="mt-7">
           <div className="mb-3 px-1">
             <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#F62E18]">
-              Plans & benefits
+              Payments & more
             </p>
             <h2
               id="profile-benefits"
               className="mt-1 text-lg font-black text-[#1A1A1A]"
             >
-              Membership, payments & referrals
+              Payments, referrals & chef tools
             </h2>
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
-            <ProfileLinkCard
-              to="/subscriptions"
-              icon={FaCalendarDays}
-              title="Membership"
-              subtitle="Meal subscriptions and benefits"
-            />
             <ProfileLinkCard
               to="/cart"
               icon={FaCreditCard}

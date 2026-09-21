@@ -89,7 +89,7 @@ export function BrowseHeader({
   const chefActionLabel = isChef ? "Switch to chef mode" : "Open chef application";
 
   return (
-    <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 backdrop-blur-xl">
+    <AutoHideCustomerHeader mobileStatic className="border-b border-[#E5E7EB] bg-white/95 backdrop-blur-xl">
       <div className="mx-auto max-w-[88rem] px-4 md:px-7 lg:px-10">
         <div className="hidden min-h-[4.25rem] items-center gap-2 py-2 md:flex lg:min-h-[4.65rem] lg:gap-2.5 lg:py-2.5 xl:gap-3">
           {onBack ? (

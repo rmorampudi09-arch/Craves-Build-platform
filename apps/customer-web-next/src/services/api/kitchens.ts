@@ -1,4 +1,8 @@
-import { candidateDiscoveryRadii } from "@/lib/catalog-discovery-policy";
+import {
+  candidateDiscoveryRadii,
+  DEFAULT_DISCOVERY_RADIUS_METERS,
+  MAX_DISCOVERY_RADIUS_METERS,
+} from "@/lib/catalog-discovery-policy";
 import {
   parseKitchenDiscovery,
   type NearbyKitchen,
@@ -10,12 +14,12 @@ export type KitchenDiscoveryResult = {
 };
 
 let discoveredKitchens: NearbyKitchen[] = [];
-let kitchenDiscoveryRadiusMeters = 5_000;
+let kitchenDiscoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;
 
 export async function discoverKitchens(
   latitude: number,
   longitude: number,
-  radiusMeters = 5_000,
+  radiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS,
 ): Promise<KitchenDiscoveryResult> {
   let usedRadius = radiusMeters;
 
@@ -51,8 +55,12 @@ export async function discoverKitchens(
       throw new Error("Craves returned an invalid kitchen discovery response.");
     }
 
-    if (payload.kitchens.length > 0) {
-      discoveredKitchens = payload.kitchens;
+    const serviceableKitchens = payload.kitchens.filter(
+      (kitchen) => kitchen.distanceMeters <= MAX_DISCOVERY_RADIUS_METERS,
+    );
+
+    if (serviceableKitchens.length > 0) {
+      discoveredKitchens = serviceableKitchens;
       kitchenDiscoveryRadiusMeters = candidateRadius;
       return {
         kitchens: [...discoveredKitchens],
@@ -67,7 +75,9 @@ export async function discoverKitchens(
 }
 
 export function allKitchens(): NearbyKitchen[] {
-  return [...discoveredKitchens];
+  return discoveredKitchens.filter(
+    (kitchen) => kitchen.distanceMeters <= MAX_DISCOVERY_RADIUS_METERS,
+  );
 }
 
 export function getKitchenDiscoveryRadiusMeters(): number {
@@ -76,5 +86,5 @@ export function getKitchenDiscoveryRadiusMeters(): number {
 
 export function clearKitchenDiscoveryCache(): void {
   discoveredKitchens = [];
-  kitchenDiscoveryRadiusMeters = 5_000;
+  kitchenDiscoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;
 }

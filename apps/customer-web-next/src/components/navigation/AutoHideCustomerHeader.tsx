@@ -15,11 +15,13 @@ const SHOW_DELTA_PX = 6;
 interface AutoHideCustomerHeaderProps {
   children: ReactNode;
   className?: string;
+  mobileStatic?: boolean;
 }
 
 export function AutoHideCustomerHeader({
   children,
   className = "",
+  mobileStatic = false,
 }: AutoHideCustomerHeaderProps) {
   const [hidden, setHidden] = useState(false);
   const lastScrollY = useRef(0);
@@ -70,16 +72,30 @@ export function AutoHideCustomerHeader({
     };
   }, []);
 
+  const positionClass = mobileStatic
+    ? "static md:sticky md:top-0"
+    : "sticky top-0";
+
+  const visibilityClass = mobileStatic
+    ? hidden
+      ? "translate-y-0 md:-translate-y-full md:pointer-events-none"
+      : "translate-y-0"
+    : hidden
+      ? "-translate-y-full pointer-events-none"
+      : "translate-y-0";
+
   return (
     <header
       data-craves-auto-hide-header="true"
       data-header-state={hidden ? "hidden" : "visible"}
+      data-mobile-static={mobileStatic ? "true" : "false"}
       onFocusCapture={() => setHidden(false)}
       className={[
-        "sticky top-0 z-40",
+        positionClass,
+        "z-40",
         "transition-transform duration-[240ms] ease-[cubic-bezier(0.2,0.8,0.2,1)]",
         "motion-reduce:transition-none",
-        hidden ? "-translate-y-full pointer-events-none" : "translate-y-0",
+        visibilityClass,
         className,
       ]
         .filter(Boolean)

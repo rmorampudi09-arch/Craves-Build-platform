@@ -3,7 +3,11 @@ import {
   type NearbyMenuItem,
 } from "@/lib/discovery-contract";
 import type { PublicMenuItemDetail } from "@/lib/public-menu-item-contract";
-import { candidateDiscoveryRadii } from "@/lib/catalog-discovery-policy";
+import {
+  candidateDiscoveryRadii,
+  DEFAULT_DISCOVERY_RADIUS_METERS,
+  MAX_DISCOVERY_RADIUS_METERS,
+} from "@/lib/catalog-discovery-policy";
 
 export type Dish = {
   id: string;
@@ -38,7 +42,7 @@ export type Dish = {
 
 const PLACEHOLDER_IMAGE = "/brand/craves-logo.svg";
 let discoveredDishes: Dish[] = [];
-let discoveryRadiusMeters = 5_000;
+let discoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;
 
 function spiceLabel(
   value: NearbyMenuItem["spiceLevel"] | PublicMenuItemDetail["spiceLevel"],
@@ -162,7 +166,7 @@ function remember(dish: Dish): Dish {
 export async function discoverDishes(
   latitude: number,
   longitude: number,
-  radiusMeters = 5_000,
+  radiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS,
 ): Promise<Dish[]> {
   for (const candidateRadius of candidateDiscoveryRadii(radiusMeters)) {
     const query = new URLSearchParams({
@@ -189,7 +193,9 @@ export async function discoverDishes(
     }
     const payload = parseMenuDiscovery(body);
     if (!payload) throw new Error("Craves returned an invalid discovery response.");
-    discoveredDishes = payload.menuItems.map(mapNearbyItem);
+    discoveredDishes = payload.menuItems
+      .filter((item) => item.distanceMeters <= MAX_DISCOVERY_RADIUS_METERS)
+      .map(mapNearbyItem);
     discoveryRadiusMeters = candidateRadius;
     if (discoveredDishes.length > 0) return [...discoveredDishes];
   }
@@ -258,12 +264,16 @@ export function getDiscoveryRadiusMeters(): number {
 }
 
 export function allDishes(): Dish[] {
-  return [...discoveredDishes];
+  return discoveredDishes.filter(
+    (dish) =>
+      typeof dish.distanceMeters !== "number" ||
+      dish.distanceMeters <= MAX_DISCOVERY_RADIUS_METERS,
+  );
 }
 
 export function clearDishDiscoveryCache(): void {
   discoveredDishes = [];
-  discoveryRadiusMeters = 5_000;
+  discoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;
 }
 
 export function getDish(id: string): Dish | undefined {

@@ -4,15 +4,20 @@ import {
   Images,
   MapPin,
   PackageCheck,
+  Star,
   UtensilsCrossed,
 } from "lucide-react";
+import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/lib/catalog-discovery-policy";
 import { hasHomeReturnState } from "@/lib/home-return-state";
+import type { KitchenReviewSummary } from "@/lib/review-summary-contract";
 import {
   getChef,
   getDishesByChef,
   type Chef,
 } from "@/services/api/chefs";
-import { discoverDishes, loadKitchenMenu } from "@/services/api/dishes";
+import { loadKitchenMenu } from "@/services/api/dishes";
+import { discoverKitchens } from "@/services/api/kitchens";
+import { loadKitchenReviewSummary } from "@/services/api/reviews";
 import {
   loadSelectedAddress,
   loadSession,
@@ -48,23 +53,20 @@ const routeApi = getRouteApi("/kitchen/$id");
 function ChefProfilePage() {
   const { id } = routeApi.useParams();
   const navigate = useNavigate();
-  const [chef, setChef] = useState<Chef | undefined>(() => getChef(id));
-  const [loading, setLoading] = useState(!chef);
+  const [chef, setChef] = useState<Chef | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [photoNotice, setPhotoNotice] = useState(false);
+  const [reviewSummary, setReviewSummary] = useState<KitchenReviewSummary | null>(null);
   const cartSummary = useCustomerCartSummary();
 
   useEffect(() => {
     let active = true;
-    const cachedChef = getChef(id);
-    if (cachedChef) {
-      setChef(cachedChef);
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
+    setChef(undefined);
+    setLoading(true);
     setMessage("");
     setPhotoNotice(false);
+    setReviewSummary(null);
 
     void (async () => {
       const session = await loadSession();
@@ -73,38 +75,59 @@ function ChefProfilePage() {
         return;
       }
 
-      let resolved = getChef(id);
-      try {
-        await loadKitchenMenu(id);
-        resolved = getChef(id);
-      } catch {
-        // Older customer links can still recover from location discovery.
+      const address = await loadSelectedAddress();
+      if (
+        typeof address?.lat !== "number" ||
+        typeof address.lng !== "number"
+      ) {
+        throw new Error(
+          "Choose a delivery address before opening this home kitchen.",
+        );
       }
 
-      if (!resolved) {
-        const address = await loadSelectedAddress();
-        if (
-          typeof address?.lat === "number" &&
-          typeof address.lng === "number"
-        ) {
-          await discoverDishes(address.lat, address.lng);
-          resolved = getChef(id);
-        }
+      const discovery = await discoverKitchens(
+        address.lat,
+        address.lng,
+        DEFAULT_DISCOVERY_RADIUS_METERS,
+      );
+      const nearbyKitchen = discovery.kitchens.find(
+        (kitchen) => kitchen.id === id,
+      );
+      if (!nearbyKitchen) {
+        throw new Error(
+          "This home kitchen is outside the 10 km Craves browsing area for your selected address.",
+        );
       }
-      if (active) setChef(resolved);
-    })()
-      .catch((error) => {
-        if (active) {
-          setMessage(
-            error instanceof Error
-              ? error.message
-              : "Kitchen details could not be loaded.",
-          );
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+
+      await loadKitchenMenu(id);
+      const resolved = getChef(id);
+      if (!resolved) {
+        throw new Error(
+          "This home kitchen has no active dishes available right now.",
+        );
+      }
+
+      if (!active) return;
+      setChef(resolved);
+      setLoading(false);
+
+      void loadKitchenReviewSummary(resolved.id)
+        .then((summary) => {
+          if (active) setReviewSummary(summary);
+        })
+        .catch(() => {
+          if (active) setReviewSummary(null);
+        });
+    })().catch((error) => {
+      if (!active) return;
+      setChef(undefined);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Kitchen details could not be loaded.",
+      );
+      setLoading(false);
+    });
 
     return () => {
       active = false;
@@ -216,7 +239,7 @@ function ChefProfilePage() {
               ) : null}
             </div>
 
-            <div className="grid shrink-0 grid-cols-2 gap-2.5 sm:grid-cols-3 lg:w-[25rem]">
+            <div className="grid shrink-0 grid-cols-2 gap-2.5 lg:w-[27rem]">
               <div className="rounded-2xl bg-[#F1F3F5] p-3.5">
                 <UtensilsCrossed className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
                 <p className="mt-2 text-lg font-black text-[#1A1A1A]">{chef.activeDishCount}</p>
@@ -235,6 +258,23 @@ function ChefProfilePage() {
                     : "Home-cooked dishes"}
                 </p>
               </div>
+              {reviewSummary ? (
+                <div className="rounded-2xl bg-[#F1F3F5] p-3.5">
+                  <Star
+                    className="h-4 w-4 fill-[#F62E18] text-[#F62E18]"
+                    aria-hidden="true"
+                  />
+                  <p className="mt-2 text-lg font-black text-[#1A1A1A]">
+                    {reviewSummary.overallAverage !== null
+                      ? reviewSummary.overallAverage.toFixed(1)
+                      : "—"}
+                  </p>
+                  <p className="text-[0.68rem] font-bold text-[#6B6B6B]">
+                    {reviewSummary.reviewCount}{" "}
+                    {reviewSummary.reviewCount === 1 ? "review" : "reviews"}
+                  </p>
+                </div>
+              ) : null}
             </div>
           </div>
         </section>

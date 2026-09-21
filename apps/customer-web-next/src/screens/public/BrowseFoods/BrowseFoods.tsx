@@ -22,7 +22,10 @@ import { HomeSearchOverlay } from "@/components/home/HomeSearchOverlay";
 import { KitchensGrid } from "@/components/home/KitchensGrid";
 import { WelcomeBanner } from "@/components/home/WelcomeBanner";
 import { ALL_DISHES_CATEGORY } from "@/constants/dishCategories";
-import { formatDiscoveryRadius } from "@/lib/catalog-discovery-policy";
+import {
+  DEFAULT_DISCOVERY_RADIUS_METERS,
+  formatDiscoveryRadius,
+} from "@/lib/catalog-discovery-policy";
 import { type NearbyKitchen } from "@/lib/discovery-contract";
 import {
   clearHomeReturnState,
@@ -101,15 +104,6 @@ function isCravingCategory(value: string | null): value is CravingCategory {
   return value !== null && CRAVING_CATEGORIES.has(value as CravingCategory);
 }
 
-function isSameBrowsingAddress(
-  left: CravesAddress | null,
-  right: CravesAddress | null,
-): boolean {
-  if (!left || !right) return left === right;
-  if (left.id && right.id) return left.id === right.id;
-  return left.lat === right.lat && left.lng === right.lng;
-}
-
 function forceInstantWindowScroll(top: number): void {
   const root = document.documentElement;
   const body = document.body;
@@ -125,18 +119,13 @@ function forceInstantWindowScroll(top: number): void {
 
 function BrowseFoodsPage() {
   const navigate = useNavigate();
-  const [initialCache] = useState(() => {
-    const cachedUser = getSession();
-    const cachedAddress = getAddress();
-    const canRestoreCatalog = Boolean(cachedUser && cachedAddress);
-    return {
-      user: cachedUser,
-      address: cachedAddress,
-      dishes: canRestoreCatalog ? allDishes() : [],
-      kitchens: canRestoreCatalog ? allKitchens() : [],
-    };
-  });
-  const hasInitialCatalog = initialCache.dishes.length > 0 || initialCache.kitchens.length > 0;
+  const [initialCache] = useState(() => ({
+    user: getSession(),
+    address: getAddress(),
+    dishes: [] as Dish[],
+    kitchens: [] as NearbyKitchen[],
+  }));
+  const hasInitialCatalog = false;
 
   const [user, setUser] = useState<CravesUser | null>(initialCache.user);
   const [address, setAddress] = useState<CravesAddress | null>(initialCache.address);
@@ -216,8 +205,16 @@ function BrowseFoodsPage() {
     }
 
     const [kitchenResult, dishResult] = await Promise.allSettled([
-      discoverKitchens(activeAddress.lat, activeAddress.lng, 5_000),
-      discoverDishes(activeAddress.lat, activeAddress.lng),
+      discoverKitchens(
+        activeAddress.lat,
+        activeAddress.lng,
+        DEFAULT_DISCOVERY_RADIUS_METERS,
+      ),
+      discoverDishes(
+        activeAddress.lat,
+        activeAddress.lng,
+        DEFAULT_DISCOVERY_RADIUS_METERS,
+      ),
     ]);
 
     const loadedKitchens = kitchenResult.status === "fulfilled" ? kitchenResult.value.kitchens : [];
@@ -260,7 +257,7 @@ function BrowseFoodsPage() {
 
     setDiscoveryState("ready");
     if (loadedKitchens.length === 0 && loadedDishes.length === 0) {
-      setCatalogMessage("No active home kitchens or dishes were returned for your default address yet.");
+      setCatalogMessage("No active home kitchens or dishes are available within 10 km of your default address.");
     } else if (kitchenResult.status === "rejected" || dishResult.status === "rejected") {
       setCatalogMessage("Some nearby results are temporarily unavailable. Showing the live results we could load.");
     } else {
@@ -386,17 +383,13 @@ function BrowseFoodsPage() {
       try {
         const defaultAddress = await loadSelectedAddress();
         if (!active) return;
-        const canPreserveInitialCatalog = isSameBrowsingAddress(
-          initialCache.address,
-          defaultAddress,
-        );
         setAddress(defaultAddress);
         setCatalogMessage(
           defaultAddress
             ? "Loading food near your default delivery address…"
             : "Choose a default delivery address to see nearby food.",
         );
-        await refreshDiscovery(defaultAddress, false, canPreserveInitialCatalog);
+        await refreshDiscovery(defaultAddress, false, false);
         if (active) setDefaultAddressResolved(true);
       } catch (error) {
         if (!active) return;
@@ -430,7 +423,7 @@ function BrowseFoodsPage() {
       active = false;
       unsubscribeCart();
     };
-  }, [initialCache.address, navigate, refreshDiscovery]);
+  }, [navigate, refreshDiscovery]);
 
   useEffect(() => {
     let active = true;
@@ -687,7 +680,7 @@ function BrowseFoodsPage() {
             rememberHomeView();
             navigate({ to: "/kitchen/$id", params: { id: kitchen.id } });
           }}
-          onRetry={() => void refreshDiscovery(address, false, true)}
+          onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}
         />
 
@@ -705,7 +698,7 @@ function BrowseFoodsPage() {
             setHomeCategory(null);
             setDishSort("recommended");
           }}
-          onRetry={() => void refreshDiscovery(address, false, true)}
+          onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}
         />
 

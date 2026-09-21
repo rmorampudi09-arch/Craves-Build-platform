@@ -1,15 +1,19 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { MapPin, Minus, Plus } from "lucide-react";
+import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/lib/catalog-discovery-policy";
 import { hasHomeReturnState } from "@/lib/home-return-state";
-import { loadSession } from "@/services/auth/cravesAuth";
+import type { KitchenReviewSummary } from "@/lib/review-summary-contract";
+import { loadSelectedAddress, loadSession } from "@/services/auth/cravesAuth";
 import {
+  discoverDishes,
   getDish,
   getSimilarDishes,
   loadDish,
   type Dish,
 } from "@/services/api/dishes";
 import { addToCart } from "@/services/api/cravesCart";
+import { loadKitchenReviewSummary } from "@/services/api/reviews";
 import { DetailBrowseHeader } from "@/components/navigation/DetailBrowseHeader";
 import { DishImageHeader } from "@/components/order/DishImageHeader";
 import { DishInfoSummary } from "@/components/order/DishInfoSummary";
@@ -61,27 +65,24 @@ function locationLabel(dish: Dish): string {
 function DishDetailPage() {
   const { id } = routeApi.useParams();
   const navigate = useNavigate();
-  const [dish, setDish] = useState<Dish | undefined>(() => getDish(id));
-  const [loading, setLoading] = useState(!dish);
+  const [dish, setDish] = useState<Dish | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
   const [message, setMessage] = useState("");
   const [adding, setAdding] = useState(false);
   const [messageKind, setMessageKind] = useState<"error" | "success" | null>(null);
+  const [reviewSummary, setReviewSummary] = useState<KitchenReviewSummary | null>(null);
   const cartSummary = useCustomerCartSummary();
   const feedbackTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
-    const cachedDish = getDish(id);
-    if (cachedDish) {
-      setDish(cachedDish);
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
+    setDish(undefined);
+    setLoading(true);
     setQty(1);
     setMessage("");
     setMessageKind(null);
+    setReviewSummary(null);
 
     void (async () => {
       const session = await loadSession();
@@ -89,22 +90,63 @@ function DishDetailPage() {
         navigate({ to: "/" });
         return;
       }
-      const resolved = await loadDish(id);
-      if (active) setDish(resolved);
-    })()
-      .catch((error) => {
-        if (active && !cachedDish) {
-          setDish(undefined);
-          setMessage(
-            error instanceof Error
-              ? error.message
-              : "Dish details could not be loaded.",
-          );
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+
+      const address = await loadSelectedAddress();
+      if (
+        typeof address?.lat !== "number" ||
+        typeof address.lng !== "number"
+      ) {
+        throw new Error(
+          "Choose a delivery address before opening this dish.",
+        );
+      }
+
+      const nearby = await discoverDishes(
+        address.lat,
+        address.lng,
+        DEFAULT_DISCOVERY_RADIUS_METERS,
+      );
+      const nearbyDish = nearby.find((candidate) => candidate.id === id);
+      if (!nearbyDish) {
+        throw new Error(
+          "This dish is outside the 10 km Craves browsing area for your selected address.",
+        );
+      }
+
+      const cachedDish = getDish(id);
+      const detail =
+        cachedDish?.detailsLoaded ? cachedDish : await loadDish(id);
+      const resolved: Dish = {
+        ...detail,
+        distanceMeters: nearbyDish.distanceMeters,
+        areaName: detail.areaName ?? nearbyDish.areaName,
+        city: detail.city ?? nearbyDish.city,
+        state: detail.state ?? nearbyDish.state,
+      };
+
+      if (!active) return;
+      setDish(resolved);
+      setLoading(false);
+
+      if (resolved.kitchenId) {
+        void loadKitchenReviewSummary(resolved.kitchenId)
+          .then((summary) => {
+            if (active) setReviewSummary(summary);
+          })
+          .catch(() => {
+            if (active) setReviewSummary(null);
+          });
+      }
+    })().catch((error) => {
+      if (!active) return;
+      setDish(undefined);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Dish details could not be loaded.",
+      );
+      setLoading(false);
+    });
 
     return () => {
       active = false;
@@ -243,7 +285,8 @@ function DishDetailPage() {
             <ChefInfoCard
               chefId={dish.kitchenId}
               chefName={dish.chef}
-              rating={dish.rating}
+              rating={reviewSummary?.overallAverage ?? dish.rating}
+              reviewCount={reviewSummary?.reviewCount ?? null}
               distanceMeters={dish.distanceMeters}
             />
 

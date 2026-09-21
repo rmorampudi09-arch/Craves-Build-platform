@@ -9,7 +9,6 @@ import {
 } from "react";
 
 import { BrowseHeader } from "@/components/home/BrowseHeader";
-import { BottomNav } from "@/components/layout/BottomNav";
 import { CartAddressAvailabilityDialog } from "@/components/home/CartAddressAvailabilityDialog";
 import { CustomerSignOutDialog } from "@/components/home/CustomerSignOutDialog";
 import { DishesGrid } from "@/components/home/DishesGrid";
@@ -545,8 +544,14 @@ function BrowseFoodsPage() {
   }, [dishSort, foodPreference, homeCategory, nearbyDishes]);
 
   const locationLabel = address
-    ? [address.mandal, address.city].filter(Boolean).join(", ")
-    : "Choose address";
+    ? Array.from(
+        new Set(
+          [address.hno, address.street, address.mandal, address.city]
+            .map((part) => part?.trim())
+            .filter((part): part is string => Boolean(part)),
+        ),
+      ).join(", ")
+    : "Choose delivery location";
   const rawLocationType = address?.label?.trim();
   const normalizedLocationType = rawLocationType?.toUpperCase();
   const locationTypeLabel =
@@ -708,7 +713,6 @@ function BrowseFoodsPage() {
       </main>
 
       <CustomerFloatingCart />
-      <BottomNav />
 
       <CartAddressAvailabilityDialog
         open={cartAvailabilityOpen}

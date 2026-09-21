@@ -65,12 +65,13 @@ function shouldHide(pathname: string): boolean {
   );
 }
 
-function activeKeyForPath(pathname: string): NavKey {
+function activeKeyForPath(pathname: string): NavKey | null {
   if (pathname === "/cart" || pathname.startsWith("/cart/")) return "cart";
   if (pathname === "/profile" || pathname.startsWith("/profile/")) return "profile";
   if (pathname.startsWith("/kitchen")) return "chefs";
   if (pathname.startsWith("/dish")) return "meals";
-  return "home";
+  if (pathname === "/home") return "home";
+  return null;
 }
 
 export function BottomNav() {

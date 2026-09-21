@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeftRight, Bell, CalendarDays } from "lucide-react";
+import { ArrowLeftRight, Bell, CalendarDays, ChevronDown } from "lucide-react";
 import {
   FaArrowLeft,
   FaMapMarkerAlt,
@@ -34,7 +34,7 @@ interface BrowseHeaderProps {
 }
 
 const headerIconActionClass =
-  "h-10 w-10 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#F62E18] transition-[background-color,color,box-shadow] duration-200 ease-out hover:!bg-white hover:!text-[#F62E18] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30";
+  "h-9 w-9 items-center justify-center rounded-full !bg-[#F1F3F5] lg:h-10 lg:w-10 !text-[#F62E18] transition-[background-color,color,box-shadow] duration-200 ease-out hover:!bg-white hover:!text-[#F62E18] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30";
 
 function FoodPreferenceQuickToggles({
   value,
@@ -91,7 +91,7 @@ export function BrowseHeader({
   return (
     <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 backdrop-blur-xl">
       <div className="mx-auto max-w-[88rem] px-4 md:px-7 lg:px-10">
-        <div className="hidden min-h-[4.65rem] items-center gap-2.5 py-2.5 lg:flex xl:gap-3.5">
+        <div className="hidden min-h-[4.25rem] items-center gap-2 py-2 md:flex lg:min-h-[4.65rem] lg:gap-2.5 lg:py-2.5 xl:gap-3">
           {onBack ? (
             <button
               type="button"
@@ -109,8 +109,8 @@ export function BrowseHeader({
             className="flex shrink-0 items-center gap-2 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
             aria-label="Craves home"
           >
-            <CravesLogo size="md" />
-            <span className="hidden border-l border-[#E5E7EB] pl-3 text-xs font-bold tracking-[0.02em] text-[#1A1A1A] xl:block">
+            <CravesLogo size="sm" />
+            <span className="hidden border-l border-[#E5E7EB] pl-3 text-xs font-bold tracking-[0.02em] text-[#1A1A1A] 2xl:block">
               Food From Home
             </span>
           </Link>
@@ -118,11 +118,11 @@ export function BrowseHeader({
           <button
             type="button"
             onClick={openLocation}
-            className="flex min-h-11 min-w-0 max-w-[15rem] items-center gap-2.5 rounded-full !bg-[#F1F3F5] px-3 text-left !text-[#1A1A1A] transition-[background-color,box-shadow] duration-200 ease-out hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
+            className="flex min-h-10 min-w-0 max-w-[10.5rem] items-center gap-2 rounded-full !bg-[#F1F3F5] px-2.5 text-left !text-[#1A1A1A] transition-[background-color,box-shadow] duration-200 ease-out hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] lg:min-h-11 lg:max-w-[13rem] lg:gap-2.5 lg:px-3 xl:max-w-[15rem]"
             aria-label={locationTypeLabel + " delivery address: " + locationLabel + ". Manage address"}
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
-              <FaMapMarkerAlt className="h-4 w-4" aria-hidden="true" />
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18] lg:h-8 lg:w-8">
+              <FaMapMarkerAlt className="h-3.5 w-3.5 lg:h-4 lg:w-4" aria-hidden="true" />
             </span>
             <span className="min-w-0">
               <span className="block text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">
@@ -134,15 +134,15 @@ export function BrowseHeader({
             </span>
           </button>
 
-          <label className="ml-auto flex min-h-12 min-w-[13rem] flex-1 items-center gap-3 rounded-[1.2rem] bg-[#F1F3F5] px-4 transition-[box-shadow,ring-color] duration-200 ease-out hover:ring-2 hover:ring-[#F62E18]/30 focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_10px_28px_rgba(246,46,24,0.14)] xl:min-h-14 xl:max-w-[34rem] xl:px-5">
-            <FaSearch className="h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" />
+          <label className="ml-auto flex min-h-10 min-w-[8rem] flex-1 items-center gap-2 rounded-[1.05rem] bg-[#F1F3F5] px-3 transition-[box-shadow,ring-color] duration-200 ease-out hover:ring-2 hover:ring-[#F62E18]/30 focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_10px_28px_rgba(246,46,24,0.14)] lg:min-h-12 lg:min-w-[12rem] lg:gap-3 lg:px-4 xl:min-h-14 xl:max-w-[34rem] xl:px-5">
+            <FaSearch className="h-4 w-4 shrink-0 text-[#F62E18] lg:h-5 lg:w-5" aria-hidden="true" />
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
               value={searchTerm}
               onFocus={onSearchFocus}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search homemade dishes or kitchens"
-              className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-[#1A1A1A] shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
+              className="w-full appearance-none border-0 bg-transparent p-0 text-xs font-semibold text-[#1A1A1A] lg:text-sm shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
               type="text"
               inputMode="search"
               autoComplete="off"
@@ -160,7 +160,7 @@ export function BrowseHeader({
 
           <Link
             to="/subscriptions"
-            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-[#F1F3F5] px-2.5 text-xs font-extrabold text-[#1A1A1A] transition-[background-color,box-shadow] hover:bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] 2xl:px-3.5"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-full bg-[#F1F3F5] text-xs font-extrabold text-[#1A1A1A] transition-[background-color,box-shadow] hover:bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] lg:h-10 lg:w-10 2xl:w-auto 2xl:px-3.5"
             aria-label="Open meal plans"
             title="Meal plans"
           >
@@ -188,7 +188,7 @@ export function BrowseHeader({
 
           <Link
             to={chefDestination}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F62E18] text-white shadow-[0_8px_18px_rgba(246,46,24,0.22)] transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(246,46,24,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 motion-reduce:transform-none"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F62E18] lg:h-10 lg:w-10 text-white shadow-[0_8px_18px_rgba(246,46,24,0.22)] transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(246,46,24,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 motion-reduce:transform-none"
             aria-label={chefActionLabel}
             title={chefActionLabel}
           >
@@ -206,7 +206,7 @@ export function BrowseHeader({
           </button>
         </div>
 
-        <div className="py-2.5 lg:hidden">
+        <div className="py-2.5 md:hidden">
           <div className="flex min-w-0 items-center gap-2">
             {onBack ? (
               <button
@@ -223,19 +223,18 @@ export function BrowseHeader({
             <button
               type="button"
               onClick={openLocation}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-[1.05rem] bg-[#F1F3F5] px-2.5 py-2 text-left text-[#1A1A1A] transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+              className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-1 py-1 text-left text-[#1A1A1A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
               aria-label={locationTypeLabel + " delivery address: " + locationLabel + ". Manage address"}
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
-                <FaMapMarkerAlt className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFF1EF] text-[#F62E18]">
+                <FaMapMarkerAlt className="h-4 w-4" aria-hidden="true" />
               </span>
-              <span className="min-w-0">
-                <span className="block text-[0.55rem] font-black uppercase tracking-[0.1em] text-[#6B6B6B]">
-                  {locationTypeLabel}
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1 text-sm font-black leading-none text-[#1A1A1A]">
+                  <span className="truncate">{locationTypeLabel}</span>
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#F62E18]" aria-hidden="true" />
                 </span>
-                <span className="block truncate text-xs font-extrabold">
-                  {locationLabel}
-                </span>
+                <span className="mt-1 block truncate text-[0.69rem] font-semibold text-[#6B6B6B]">{locationLabel}</span>
               </span>
             </button>
 

@@ -38,7 +38,7 @@ export function AccountCard({
   const name = ((firstName ?? "") + " " + (lastName ?? "")).trim();
   const displayName = name || user.username || "Craves customer";
   const phone = profile?.registeredPhoneNumber || user.phoneNumber;
-  const email = profile?.email ?? user.email ?? null;
+  const email = user.email ?? profile?.email ?? null;
   const profileReady = Boolean(profile && firstName && lastName);
 
   return (

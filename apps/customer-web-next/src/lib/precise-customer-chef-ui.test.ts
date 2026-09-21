@@ -118,15 +118,15 @@ test("public landing keeps the approved semantic reference experience and wired 
   assert.doesNotMatch(landing, /min-h-screen bg-cream text-ink/);
 });
 
-test("welcome banner stays focused on home content while discovery uses the saved default address", () => {
-  assert.match(welcome, /src="\/home\/reference\/home-hero-reference\.webp"/);
-  assert.match(welcome, /styles\.heroArtwork/);
-  assert.match(welcome, /Welcome home, \{firstName\}/);
+test("welcome banner uses the approved responsive full-art asset while discovery uses the saved default address", () => {
+  assert.match(welcome, /src="\/home\/reference\/home-hero-banner\.avif"/);
+  assert.match(welcome, /width=\{1200\}/);
+  assert.match(welcome, /height=\{487\}/);
+  assert.match(welcome, /className="block h-auto w-full"/);
+  assert.match(welcome, /aria-label=\{\`Welcome Taste Rebel home food banner for \$\{firstName\}\`\}/);
+  assert.match(welcome, /data-live-dish-count=\{dishCount\}/);
+  assert.doesNotMatch(welcome, /styles\.heroArtwork/);
   assert.doesNotMatch(welcome, /import \{ Heart \} from "lucide-react"/);
-  assert.doesNotMatch(
-    welcome,
-    /Welcome home,[\s\S]{0,220}rounded-full[\s\S]{0,220}bg-white\/90/,
-  );
   assert.doesNotMatch(welcome, /backdrop-blur-sm/);
   assert.match(welcome, /Eat for Health\./);
   assert.match(welcome, /Taste the Comfort of Home\./);

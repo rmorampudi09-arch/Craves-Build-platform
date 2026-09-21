@@ -6,40 +6,46 @@ import {
   FaBagShopping,
   FaBell,
   FaCalendarDays,
+  FaCreditCard,
+  FaGift,
+  FaHeadset,
+  FaHeart,
   FaRightFromBracket,
 } from "react-icons/fa6";
 import { GiChefToque } from "react-icons/gi";
-import type { CustomerProfile } from "@/lib/profile-contract";
+
+import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel";
+import { AccountCard } from "@/components/profile/AccountCard";
+import { AddressCard } from "@/components/profile/AddressCard";
+import { EditProfileModal } from "@/components/profile/EditProfileModal";
+import { ProfileHeader } from "@/components/profile/ProfileHeader";
+import { ProfileLinkCard } from "@/components/profile/ProfileLinkCard";
 import type { CustomerAddress } from "@/lib/address-contract";
-import type { CustomerOrder } from "@/lib/order-contract";
 import type { ChefApplication } from "@/lib/chef-application-contract";
+import type { CustomerOrder } from "@/lib/order-contract";
+import type { CustomerProfile } from "@/lib/profile-contract";
 import {
-  clearSession,
   captureSessionContext,
+  clearSession,
+  getSession,
   isSessionContextCurrent,
   isSessionReady,
-  LogoutUnconfirmedError,
   loadSession,
-  getSession,
+  LogoutUnconfirmedError,
   subscribeSession,
   type CravesUser,
   type SessionContext,
 } from "@/services/auth/cravesAuth";
-import { ProfileHeader } from "@/components/profile/ProfileHeader";
-import { AccountCard } from "@/components/profile/AccountCard";
-import { EditProfileModal } from "@/components/profile/EditProfileModal";
-import { AddressCard } from "@/components/profile/AddressCard";
-import { ProfileLinkCard } from "@/components/profile/ProfileLinkCard";
-import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel";
 
 function chefLink(user: CravesUser, application: ChefApplication | null) {
   if (user.roles.some((role) => role.toUpperCase() === "CHEF")) {
     return {
       to: "/chef",
-      title: "Switch to chef mode",
+      title: "Switch to Chef mode",
       subtitle: "Manage your kitchen, menu and orders",
     };
   }
+
   if (application?.status === "PENDING") {
     return {
       to: "/chef/application",
@@ -47,6 +53,7 @@ function chefLink(user: CravesUser, application: ChefApplication | null) {
       subtitle: "Review your application and document status",
     };
   }
+
   if (application?.status === "REJECTED") {
     return {
       to: "/chef/application",
@@ -54,13 +61,15 @@ function chefLink(user: CravesUser, application: ChefApplication | null) {
       subtitle: "Read the review note and submit corrected details",
     };
   }
+
   if (application?.status === "APPROVED") {
     return {
       to: "/chef",
       title: "Chef approval received",
-      subtitle: "Open chef mode and finish your kitchen setup",
+      subtitle: "Open Chef mode and finish your kitchen setup",
     };
   }
+
   return {
     to: "/chef/application",
     title: "Become a home chef",
@@ -70,24 +79,49 @@ function chefLink(user: CravesUser, application: ChefApplication | null) {
 
 function profileScope(): string {
   const context = captureSessionContext();
-  return JSON.stringify([context.generation, context.identityId, isSessionReady()]);
+  return JSON.stringify([
+    context.generation,
+    context.identityId,
+    isSessionReady(),
+  ]);
 }
+
 const serverProfileScope = () => "server";
+
+type ProfileContentProps = {
+  logoutBusy: boolean;
+  logoutError: string;
+  onSignOut: () => void;
+};
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const scope = useSyncExternalStore(subscribeSession, profileScope, serverProfileScope);
+  const scope = useSyncExternalStore(
+    subscribeSession,
+    profileScope,
+    serverProfileScope,
+  );
   const logoutAttempt = useRef(0);
-  const [logout, setLogout] = useState<{ context: SessionContext | null; busy: boolean; error: string }>({ context: null, busy: false, error: "" });
-  const owner = getSession()?.id ?? null;
-  const currentLogout = logout.context !== null && isSessionContextCurrent(logout.context);
+  const [logout, setLogout] = useState<{
+    context: SessionContext | null;
+    busy: boolean;
+    error: string;
+  }>({ context: null, busy: false, error: "" });
+
+  const currentLogout =
+    logout.context !== null && isSessionContextCurrent(logout.context);
+
   async function signOut() {
     if (logout.busy && currentLogout) return;
+
     const attempt = ++logoutAttempt.current;
-    // clearSession synchronously advances the operation generation before its
-    // network request; capture that generation rather than only the owner ID.
     const pending = clearSession();
-    setLogout({ context: captureSessionContext(), busy: true, error: "" });
+    setLogout({
+      context: captureSessionContext(),
+      busy: true,
+      error: "",
+    });
+
     try {
       await pending;
       if (attempt !== logoutAttempt.current) return;
@@ -95,26 +129,38 @@ export default function ProfilePage() {
       setLogout({ context: null, busy: false, error: "" });
     } catch (error) {
       if (attempt !== logoutAttempt.current) return;
-      if (!(error instanceof LogoutUnconfirmedError) || !error.retryContext || !isSessionContextCurrent(error.retryContext)) return;
-      setLogout({ context: error.retryContext, busy: false, error: "Sign-out could not be confirmed. You are still signed in. Please try again." });
+      if (
+        !(error instanceof LogoutUnconfirmedError) ||
+        !error.retryContext ||
+        !isSessionContextCurrent(error.retryContext)
+      ) {
+        return;
+      }
+
+      setLogout({
+        context: error.retryContext,
+        busy: false,
+        error:
+          "Sign-out could not be confirmed. You are still signed in. Please try again.",
+      });
     }
   }
-  const logoutBusy = currentLogout && logout.busy;
-  const logoutError = currentLogout ? logout.error : "";
-  return <>
-    <ProfileContent key={scope} />
-    {owner && <section className="mx-auto max-w-3xl px-4 pb-10 md:px-6" aria-label="Account sign out">
-      {logoutError && <p role="alert" className="mb-4 text-sm text-contrast-red">{logoutError}</p>}
-      <button type="button" onClick={() => void signOut()} disabled={logoutBusy}
-        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-contrast-red bg-white px-4 text-sm font-semibold text-contrast-red transition-colors hover:bg-secondary">
-        <FaRightFromBracket className="text-base" aria-hidden="true" />
-        {logoutBusy ? "Signing out…" : logoutError ? "Retry sign out" : "Sign out"}
-      </button>
-    </section>}
-  </>;
+
+  return (
+    <ProfileContent
+      key={scope}
+      logoutBusy={currentLogout && logout.busy}
+      logoutError={currentLogout ? logout.error : ""}
+      onSignOut={() => void signOut()}
+    />
+  );
 }
 
-function ProfileContent() {
+function ProfileContent({
+  logoutBusy,
+  logoutError,
+  onSignOut,
+}: ProfileContentProps) {
   const navigate = useNavigate();
   const [user, setUser] = useState<CravesUser | null>(null);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
@@ -131,68 +177,99 @@ function ProfileContent() {
 
     void (async () => {
       if (getSession() && !isSessionReady()) {
-        setError("Your account details are temporarily unavailable. Sign-out controls remain available below.");
+        setError(
+          "Your account details are temporarily unavailable. Sign-out controls remain available below.",
+        );
         setLoading(false);
         return;
       }
+
       const session = await loadSession();
       if (!active) return;
+
       if (!session) {
-        if (!getSession()) navigate({ to: "/" });
-        else {
-          setError("Your account details are temporarily unavailable. Sign-out controls remain available below.");
+        if (!getSession()) {
+          navigate({ to: "/" });
+        } else {
+          setError(
+            "Your account details are temporarily unavailable. Sign-out controls remain available below.",
+          );
           setLoading(false);
         }
         return;
       }
+
       if (!isSessionReady() || getSession()?.id !== session.id) return;
+
       const context = captureSessionContext();
       setUser(session);
 
-      const [profileResponse, addressResponse, ordersResponse, chefResponse] =
-        await Promise.all([
-          fetch("/api/customer/profile", {
-            cache: "no-store",
-            credentials: "same-origin",
-          }),
-          fetch("/api/customer/addresses", {
-            cache: "no-store",
-            credentials: "same-origin",
-          }),
-          fetch("/api/orders", {
-            cache: "no-store",
-            credentials: "same-origin",
-          }),
-          fetch("/api/chef/application", {
-            cache: "no-store",
-            credentials: "same-origin",
-          }),
-        ]);
+      const [
+        profileResponse,
+        addressResponse,
+        ordersResponse,
+        chefResponse,
+      ] = await Promise.all([
+        fetch("/api/customer/profile", {
+          cache: "no-store",
+          credentials: "same-origin",
+        }),
+        fetch("/api/customer/addresses", {
+          cache: "no-store",
+          credentials: "same-origin",
+        }),
+        fetch("/api/orders", {
+          cache: "no-store",
+          credentials: "same-origin",
+        }),
+        fetch("/api/chef/application", {
+          cache: "no-store",
+          credentials: "same-origin",
+        }),
+      ]);
 
-      if (!active || !isSessionContextCurrent(context) || !isSessionReady()) return;
+      if (
+        !active ||
+        !isSessionContextCurrent(context) ||
+        !isSessionReady()
+      ) {
+        return;
+      }
 
       if (profileResponse.ok) {
         setProfile((await profileResponse.json()) as CustomerProfile);
       }
+
       if (addressResponse.ok) {
         const body = await addressResponse.json().catch(() => []);
-        setAddresses(Array.isArray(body) ? (body as CustomerAddress[]) : []);
+        setAddresses(
+          Array.isArray(body) ? (body as CustomerAddress[]) : [],
+        );
       }
+
       if (ordersResponse.ok) {
         const body = await ordersResponse.json().catch(() => []);
-        setOrderCount(Array.isArray(body) ? (body as CustomerOrder[]).length : 0);
+        setOrderCount(
+          Array.isArray(body) ? (body as CustomerOrder[]).length : 0,
+        );
       }
+
       if (chefResponse.ok) {
         setApplication((await chefResponse.json()) as ChefApplication);
       }
 
       if (!profileResponse.ok && profileResponse.status !== 404) {
-        setError("Your profile details could not be loaded. Try refreshing the page.");
+        setError(
+          "Your profile details could not be loaded. Try refreshing the page.",
+        );
       } else if (!profileResponse.ok) {
-        setMessage("Complete your profile before placing your next order.");
+        setMessage(
+          "Complete your profile before placing your next order.",
+        );
       } else {
         setMessage("Your details are synced with Craves.");
       }
+
       setLoading(false);
     })().catch(() => {
       if (!active) return;
@@ -215,14 +292,14 @@ function ProfileContent() {
         <ProfileHeader />
         <main
           aria-busy={loading}
-          className="mx-auto max-w-4xl space-y-4 px-4 py-6 md:px-6 md:py-8"
+          className="mx-auto max-w-5xl space-y-4 px-4 py-5 md:px-6 md:py-7"
         >
           {loading ? (
             <>
               <span className="sr-only">Loading profile</span>
-              <div className="h-60 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-              <div className="h-24 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-              <div className="h-24 animate-pulse rounded-2xl bg-[#F1F3F5]" />
+              <div className="h-56 animate-pulse rounded-[1.6rem] bg-[#F1F3F5]" />
+              <div className="h-28 animate-pulse rounded-[1.6rem] bg-[#F1F3F5]" />
+              <div className="h-48 animate-pulse rounded-[1.6rem] bg-[#F1F3F5]" />
             </>
           ) : error ? (
             <p
@@ -239,6 +316,7 @@ function ProfileContent() {
 
   const preferred =
     addresses.find((address) => address.isDefault) ?? addresses[0];
+
   const addressLine = preferred
     ? [
         preferred.addressLine1,
@@ -251,12 +329,15 @@ function ProfileContent() {
         .filter(Boolean)
         .join(", ")
     : "No delivery address saved yet.";
+
   const chef = chefLink(user, application);
+  const emailForVerification = profile?.email ?? user.email ?? "";
 
   return (
-    <div className="min-h-screen bg-white pb-12 text-[#1A1A1A]">
+    <div className="min-h-screen bg-[#FAFAFA] pb-8 text-[#1A1A1A] md:pb-12">
       <ProfileHeader />
-      <main className="mx-auto max-w-4xl px-4 pb-8 pt-3 md:px-6 md:pb-10 md:pt-4">
+
+      <main className="mx-auto max-w-5xl px-4 pb-8 pt-4 md:px-6 md:pt-6">
         <AccountCard
           user={user}
           profile={profile}
@@ -265,55 +346,207 @@ function ProfileContent() {
           onEdit={() => setEditOpen(true)}
         />
 
-        {!editOpen && <div className="mt-4"><EmailVerificationPanel /></div>}
-
         {error ? (
           <p
             role="alert"
-            className="mt-5 rounded-xl border border-[#F62E18]/20 bg-[#F62E18]/5 p-3 text-sm text-[#C92716]"
+            className="mt-4 rounded-xl border border-[#F62E18]/20 bg-[#F62E18]/5 p-3 text-xs font-semibold text-[#C92716]"
           >
             {error}
           </p>
         ) : (
-          <p role="status" className="mt-5 text-sm text-[#6B6B6B]">
+          <p
+            role="status"
+            className="mt-3 px-1 text-xs font-semibold text-[#6B6B6B]"
+          >
             {message}
           </p>
         )}
 
-        <section aria-labelledby="account-actions" className="mt-6 space-y-4">
-          <h2 id="account-actions" className="sr-only">
-            Account actions
-          </h2>
-          <ProfileLinkCard
-            to={chef.to}
-            icon={GiChefToque}
-            title={chef.title}
-            subtitle={chef.subtitle}
-          />
-          <AddressCard
-            addressLine={addressLine}
-            onEdit={() => navigate({ to: "/addresses" })}
-          />
-          <ProfileLinkCard
-            to="/orders"
-            icon={FaBagShopping}
-            title="My orders"
-            subtitle={`${orderCount} order${orderCount === 1 ? "" : "s"} in your history`}
-          />
-          <ProfileLinkCard
-            to="/notifications"
-            icon={FaBell}
-            title="Notifications"
-            subtitle="Order, delivery and account updates"
-          />
-          <ProfileLinkCard
-            to="/subscriptions"
-            icon={FaCalendarDays}
-            title="Meal subscriptions"
-            subtitle="View available plans and manage active subscriptions"
-          />
+        <section className="mt-5 rounded-[1.55rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_8px_24px_rgba(26,26,26,0.05)] sm:p-5">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFF1EF] text-[#F62E18]">
+              <FaGift className="text-lg" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-[0.6rem] font-black uppercase tracking-[0.14em] text-[#F62E18]">
+                Craves Rewards
+              </p>
+              <h2 className="mt-1 text-base font-black text-[#1A1A1A]">
+                Rewards currently unavailable
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-[#6B6B6B]">
+                Your rewards balance and tier will appear here when the
+                customer rewards experience is available on web.
+              </p>
+            </div>
+          </div>
         </section>
 
+        <section aria-labelledby="profile-your-craves" className="mt-7">
+          <div className="mb-3 px-1">
+            <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#F62E18]">
+              Your Craves
+            </p>
+            <h2
+              id="profile-your-craves"
+              className="mt-1 text-lg font-black text-[#1A1A1A]"
+            >
+              Orders, favorites & delivery
+            </h2>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <AddressCard
+              addressLine={addressLine}
+              onEdit={() => navigate({ to: "/addresses" })}
+            />
+            <ProfileLinkCard
+              to="/orders"
+              icon={FaBagShopping}
+              title="My orders"
+              subtitle={
+                orderCount +
+                " " +
+                (orderCount === 1 ? "order" : "orders") +
+                " in your history"
+              }
+            />
+            <ProfileLinkCard
+              to="/wishlist"
+              icon={FaHeart}
+              title="Favorites"
+              subtitle="Saved meals and kitchens"
+            />
+            <ProfileLinkCard
+              to="/notifications"
+              icon={FaBell}
+              title="Notifications"
+              subtitle="Order, delivery and account updates"
+            />
+          </div>
+        </section>
+
+        <section aria-labelledby="profile-benefits" className="mt-7">
+          <div className="mb-3 px-1">
+            <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#F62E18]">
+              Plans & benefits
+            </p>
+            <h2
+              id="profile-benefits"
+              className="mt-1 text-lg font-black text-[#1A1A1A]"
+            >
+              Membership, payments & referrals
+            </h2>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <ProfileLinkCard
+              to="/subscriptions"
+              icon={FaCalendarDays}
+              title="Membership"
+              subtitle="Meal subscriptions and benefits"
+            />
+            <ProfileLinkCard
+              to="/cart"
+              icon={FaCreditCard}
+              title="Payments"
+              subtitle="Choose and confirm your payment method securely at checkout"
+              badge="Checkout"
+            />
+            <ProfileLinkCard
+              icon={FaGift}
+              title="Referral to friend"
+              subtitle="Invite friends and earn rewards"
+              badge="Soon"
+              disabled
+            />
+            <ProfileLinkCard
+              to={chef.to}
+              icon={GiChefToque}
+              title={chef.title}
+              subtitle={chef.subtitle}
+            />
+          </div>
+        </section>
+
+        <section aria-labelledby="profile-support" className="mt-7">
+          <div className="mb-3 px-1">
+            <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#F62E18]">
+              Account & support
+            </p>
+            <h2
+              id="profile-support"
+              className="mt-1 text-lg font-black text-[#1A1A1A]"
+            >
+              Email, help & security
+            </h2>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <ProfileLinkCard
+              to="/contact"
+              icon={FaHeadset}
+              title="Contact us"
+              subtitle="Help and support"
+            />
+
+            <button
+              type="button"
+              onClick={onSignOut}
+              disabled={logoutBusy}
+              className="group flex min-h-[76px] items-center justify-between gap-3 rounded-2xl border border-[#F62E18]/20 bg-white p-3.5 text-left transition-[box-shadow,background-color] hover:bg-[#FFF8F7] hover:shadow-[0_8px_22px_rgba(246,46,24,0.07)] disabled:opacity-50 sm:p-4"
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFF1EF] text-[#F62E18]">
+                  <FaRightFromBracket
+                    className="text-[18px]"
+                    aria-hidden="true"
+                  />
+                </span>
+                <span>
+                  <span className="block text-sm font-black text-[#C92716]">
+                    {logoutBusy
+                      ? "Signing out…"
+                      : logoutError
+                        ? "Retry sign out"
+                        : "Logout"}
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-5 text-[#6B6B6B]">
+                    Sign out of this Craves account
+                  </span>
+                </span>
+              </span>
+            </button>
+          </div>
+
+          {logoutError ? (
+            <p
+              role="alert"
+              className="mt-3 rounded-xl bg-[#FFF1EF] p-3 text-xs font-semibold text-[#C92716]"
+            >
+              {logoutError}
+            </p>
+          ) : null}
+
+          {!editOpen ? (
+            <div className="mt-3">
+              <EmailVerificationPanel
+                initialEmail={emailForVerification}
+                onVerified={(state) => {
+                  setUser((current) =>
+                    current
+                      ? {
+                          ...current,
+                          email: state.email ?? undefined,
+                          emailVerified: true,
+                        }
+                      : current,
+                  );
+                }}
+              />
+            </div>
+          ) : null}
+        </section>
       </main>
 
       <EditProfileModal

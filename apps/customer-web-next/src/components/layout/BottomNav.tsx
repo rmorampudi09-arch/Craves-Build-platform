@@ -209,7 +209,7 @@ export function BottomNav() {
                 (summary.itemCount === 1 ? "item" : "items")
               }
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/16">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15">
                 <CravesCartIcon className="h-[1.08rem] w-[1.08rem] text-white" />
               </span>
               <span className="min-w-0 flex-1">
@@ -235,7 +235,7 @@ export function BottomNav() {
               duration: reduceMotion ? 0 : 0.22,
               ease: [0.22, 1, 0.36, 1],
             }}
-            className="fixed inset-x-0 bottom-0 z-[60] border-t border-[#E5E7EB] bg-white/96 shadow-[0_-8px_26px_rgba(26,26,26,0.07)] backdrop-blur-xl md:hidden"
+            className="fixed inset-x-0 bottom-0 z-[60] border-t border-[#E5E7EB] bg-white/95 shadow-[0_-8px_26px_rgba(26,26,26,0.07)] backdrop-blur-xl md:hidden"
             aria-label="Customer navigation"
           >
             <ul className="mx-auto grid max-w-lg grid-cols-5 items-stretch px-1.5 pb-[max(0.38rem,env(safe-area-inset-bottom))] pt-1.5">

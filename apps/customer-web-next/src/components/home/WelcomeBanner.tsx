@@ -31,7 +31,7 @@ export function WelcomeBanner({
           width={1983}
           height={793}
           priority
-          unoptimized
+          quality={90}
           sizes="(min-width: 1440px) 1344px, (min-width: 1024px) calc(100vw - 80px), (min-width: 768px) calc(100vw - 40px), calc(100vw - 32px)"
           className="block h-auto w-full"
         />

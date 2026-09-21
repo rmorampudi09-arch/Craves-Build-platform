@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { CravesLogo } from "@/components/brand/CravesLogo";
-import { BottomNav } from "@/components/layout/BottomNav";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 import { SubscriptionManager } from "@/components/subscription-manager";
 
@@ -11,7 +10,7 @@ export const metadata = {
 
 export default function SubscriptionsPage() {
   return (
-    <div className="min-h-screen pb-20 md:pb-0">
+    <div className="min-h-screen">
       <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
         <div className="mx-auto flex min-h-[64px] max-w-5xl items-center gap-3 px-5 py-2.5 sm:px-8">
           <Link href="/home" className="flex items-center gap-3 rounded-xl" aria-label="Craves home">
@@ -37,7 +36,6 @@ export default function SubscriptionsPage() {
           <SubscriptionManager />
         </div>
       </main>
-      <BottomNav />
     </div>
   );
 }

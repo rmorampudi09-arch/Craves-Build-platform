@@ -494,6 +494,13 @@ function ProfileContent({
               type="button"
               onClick={onSignOut}
               disabled={logoutBusy}
+              aria-label={
+                logoutBusy
+                  ? "Signing out…"
+                  : logoutError
+                    ? "Retry sign out"
+                    : "Sign out"
+              }
               className="group flex min-h-[76px] items-center justify-between gap-3 rounded-2xl border border-[#F62E18]/20 bg-white p-3.5 text-left transition-[box-shadow,background-color] hover:bg-[#FFF8F7] hover:shadow-[0_8px_22px_rgba(246,46,24,0.07)] disabled:opacity-50 sm:p-4"
             >
               <span className="flex min-w-0 items-center gap-3">

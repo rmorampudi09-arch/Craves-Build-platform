@@ -419,11 +419,17 @@
 @media (min-width: 768px) {
   .heroShell,
   .heroContent {
-    min-height: clamp(25rem, 64svh, 34rem);
+    min-height: 22rem;
   }
 }
 
 @media (min-width: 1024px) {
+  .heroShell,
+  .heroContent {
+    min-height: clamp(25rem, 64svh, 34rem);
+  }
+
+
   .dishGrid,
   .kitchenGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -106,6 +106,7 @@ export function HomeCategoryRail({
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [hasOverflow, setHasOverflow] = useState(false);
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -114,7 +115,8 @@ export function HomeCategoryRail({
     const updateScrollState = () => {
       const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
       const scrollLeft = Math.min(maxScrollLeft, Math.max(0, scroller.scrollLeft));
-      const edgeTolerance = 48;
+      const edgeTolerance = 18;
+      setHasOverflow(maxScrollLeft > edgeTolerance);
       setCanScrollLeft(scrollLeft > edgeTolerance);
       setCanScrollRight(scrollLeft < maxScrollLeft - edgeTolerance);
     };
@@ -139,7 +141,7 @@ export function HomeCategoryRail({
       maxScrollLeft,
       Math.max(0, scroller.scrollLeft + direction * distance),
     );
-    const edgeTolerance = 48;
+    const edgeTolerance = 18;
     const target =
       rawTarget <= edgeTolerance
         ? 0
@@ -154,7 +156,7 @@ export function HomeCategoryRail({
 
   return (
     <section
-      className="mx-auto max-w-[88rem] bg-white px-4 pt-10 md:px-7 lg:px-10 lg:pt-14"
+      className="mx-auto max-w-[88rem] bg-white px-4 pt-9 md:px-7 md:pt-10 lg:px-10 lg:pt-14"
       aria-labelledby="craving-categories-heading"
     >
       <div className="bg-white">
@@ -164,17 +166,17 @@ export function HomeCategoryRail({
           </p>
           <h2
             id="craving-categories-heading"
-            className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-4xl"
+            className="mt-1.5 font-display text-[1.7rem] font-black tracking-[-0.045em] text-[#1A1A1A] md:text-3xl lg:text-4xl"
           >
             What are you craving?
           </h2>
         </div>
       </div>
 
-      <div className="relative mt-7 bg-white">
+      <div className="relative mt-5 bg-white md:mt-6 lg:mt-7">
         <div
           ref={scrollerRef}
-          className="flex snap-x snap-mandatory gap-4 overflow-x-auto bg-white px-1 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-6 lg:gap-8"
+          className="flex snap-x snap-mandatory gap-3 overflow-x-auto bg-white px-1 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-4 md:gap-5 lg:gap-8"
         >
           {categories.map(({ label, value, fallbackImage, icon: Icon }) => {
             const active = selected === value;
@@ -185,10 +187,10 @@ export function HomeCategoryRail({
                 type="button"
                 onClick={() => onSelect(value)}
                 aria-pressed={active}
-                className="group flex w-[6.6rem] shrink-0 snap-start flex-col items-center gap-3 !border-0 !bg-transparent p-0 text-center text-[#1A1A1A] !shadow-none outline-none hover:!bg-transparent hover:!shadow-none hover:!transform-none active:!transform-none sm:w-[7.25rem]"
+                className="group flex w-[5.35rem] shrink-0 snap-start flex-col items-center gap-2 !border-0 !bg-transparent p-0 text-center text-[#1A1A1A] !shadow-none outline-none hover:!bg-transparent hover:!shadow-none hover:!transform-none active:!transform-none sm:w-[5.8rem] md:w-[6.15rem] lg:w-[7.25rem] lg:gap-3"
               >
                 <span
-                  className={`flex h-[6.6rem] w-[6.6rem] items-center justify-center overflow-hidden rounded-full bg-white transition-[transform,box-shadow] duration-[480ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] group-hover:-translate-y-1 group-hover:shadow-[0_10px_24px_rgba(26,26,26,0.10)] group-focus-visible:ring-2 group-focus-visible:ring-[#1A1A1A]/10 motion-reduce:transform-none sm:h-[7.25rem] sm:w-[7.25rem] ${
+                  className={`flex h-[5.35rem] w-[5.35rem] items-center justify-center overflow-hidden rounded-full bg-white transition-[transform,box-shadow] duration-[480ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] group-hover:-translate-y-1 group-hover:shadow-[0_10px_24px_rgba(26,26,26,0.10)] group-focus-visible:ring-2 group-focus-visible:ring-[#1A1A1A]/10 motion-reduce:transform-none sm:h-[5.8rem] sm:w-[5.8rem] md:h-[6.15rem] md:w-[6.15rem] lg:h-[7.25rem] lg:w-[7.25rem] ${
                     active
                       ? "border border-[#E5E7EB]"
                       : "border border-[#F1F3F5]"
@@ -208,7 +210,7 @@ export function HomeCategoryRail({
                   )}
                 </span>
                 <span
-                  className={`text-sm font-bold transition-colors duration-200 ${
+                  className={`text-[0.72rem] font-bold transition-colors duration-200 sm:text-xs lg:text-sm ${
                     active ? "text-[#F62E18]" : "text-[#1A1A1A]"
                   }`}
                 >
@@ -228,9 +230,9 @@ export function HomeCategoryRail({
             type="button"
             onClick={() => scrollCategories(-1)}
             aria-label="Show previous craving categories"
-            className="absolute -left-3 top-[3.6rem] z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] transition-[box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:flex"
+            className="absolute left-0 top-[2.7rem] z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_6px_18px_rgba(26,26,26,0.14)] transition-[box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:top-[2.9rem] md:top-[3.05rem] lg:-left-3 lg:top-[3.6rem] lg:h-10 lg:w-10"
           >
-            <FaChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            <FaChevronLeft className="h-3 w-3 lg:h-3.5 lg:w-3.5" aria-hidden="true" />
           </button>
         ) : null}
 
@@ -243,9 +245,9 @@ export function HomeCategoryRail({
             type="button"
             onClick={() => scrollCategories(1)}
             aria-label="Show more craving categories"
-            className="absolute -right-3 top-[3.6rem] z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] transition-[box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:flex"
+            className="absolute right-0 top-[2.7rem] z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_6px_18px_rgba(26,26,26,0.14)] transition-[box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:top-[2.9rem] md:top-[3.05rem] lg:-right-3 lg:top-[3.6rem] lg:h-10 lg:w-10"
           >
-            <FaChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            <FaChevronRight className="h-3 w-3 lg:h-3.5 lg:w-3.5" aria-hidden="true" />
           </button>
         ) : null}
       </div>

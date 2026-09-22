@@ -46,15 +46,18 @@ jobs:
           while IFS= read -r file_path; do
             [[ -z "$file_path" ]] && continue
             case "$file_path" in
-              apps/mobile/* | \
-              api/apim-api/contracts/mobile-*.json | \
-              .github/workflows/mobile-world-class-consolidation-ci.yml | \
-              .github/workflows/ios-xcode-build.yml | \
-              docs/handover/2026-09-10-mobile-world-class-consolidation.md)
+              apps/mobile/*|api/apim-api/contracts/mobile-*.json|.github/workflows/mobile-world-class-consolidation-ci.yml|.github/workflows/ios-xcode-build.yml|docs/handover/2026-09-10-mobile-world-class-consolidation.md)
                 ;;
               *)
-                disallowed+="${file_path}"
-
+                disallowed="$(printf '%s%s\n' "$disallowed" "$file_path")"
+                ;;
+            esac
+          done <<< "$changed"
+          if [[ -n "$disallowed" ]]; then
+            echo 'ERROR: consolidation contains non-mobile runtime changes:' >&2
+            printf '%s' "$disallowed" >&2
+            exit 1
+          fi
       - name: Reject committed Firebase and signing material
         shell: bash
         run: |

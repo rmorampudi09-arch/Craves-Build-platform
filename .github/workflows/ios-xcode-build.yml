@@ -258,6 +258,8 @@ jobs:
             exit 1
           fi
 
+          # Prove the app reaches its safe auth shell even when location is denied.
+          xcrun simctl privacy "${SIMULATOR_UDID}" deny location "${built_bundle_id}" || true
           xcrun simctl install "${SIMULATOR_UDID}" "${SIMULATOR_APP_PATH}"
           launch_output="$(xcrun simctl launch --terminate-running-process "${SIMULATOR_UDID}" "${built_bundle_id}")"
           echo "${launch_output}"
@@ -277,6 +279,11 @@ jobs:
           if grep -Eiq 'com\.facebook\.react\.log:javascript.*\[(TypeError|ReferenceError|SyntaxError|Invariant Violation|Error:)' "$RUNNER_TEMP/CravesMobile-simulator.log"; then
             echo "CravesMobile emitted a fatal JavaScript runtime error during launch." >&2
             grep -Ei 'com\.facebook\.react\.log:javascript' "$RUNNER_TEMP/CravesMobile-simulator.log" | tail -50 >&2 || true
+            exit 1
+          fi
+          if ! grep -Fq 'CRAVES_SIMULATOR_SMOKE_READY:RoleSelection' "$RUNNER_TEMP/CravesMobile-simulator.log"; then
+            echo "CravesMobile did not render the expected anonymous auth shell." >&2
+            grep -Ei 'CRAVES_SIMULATOR_SMOKE_READY|com\.facebook\.react\.log:javascript' "$RUNNER_TEMP/CravesMobile-simulator.log" | tail -50 >&2 || true
             exit 1
           fi
           xcrun simctl io "${SIMULATOR_UDID}" screenshot "$RUNNER_TEMP/CravesMobile-simulator-launched.png"

@@ -23,7 +23,10 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(chefs, /discoverDishes\(/);
   assert.match(chefs, /dishImagesByKitchen=\{dishImagesByKitchen\}/);
   assert.match(kitchens, /KitchenDishPreview/);
-  assert.match(kitchens, /kitchenPreviewTrack/);
+  assert.match(kitchens, /window\.setInterval/);
+  assert.match(kitchens, /ChevronLeft/);
+  assert.match(kitchens, /ChevronRight/);
+  assert.doesNotMatch(kitchens, /kitchenPreviewTrack/);
   assert.match(cravings, /sticky top-0 z-30/);
   assert.match(header, /hover:-translate-y-0\.5/);
   assert.match(header, /focus-within:bg-white/);
@@ -37,6 +40,9 @@ test("profile edit stays focused on name, phone and optional OTP email verificat
 
   assert.match(edit, /Phone number/);
   assert.match(edit, /readOnly/);
+  assert.match(edit, /body\.style\.overflow = "hidden"/);
+  assert.match(edit, /overscroll-contain/);
+  assert.match(edit, /replace\(\/\^\\\+91/);
   assert.match(edit, /EmailVerificationPanel initialEmail=\{initialEmail\} compact/);
   assert.doesNotMatch(edit, /Verified phone:/);
   assert.match(email, /Email <span[^>]*>\(optional\)<\/span>/);
@@ -74,7 +80,7 @@ test("profile destinations preserve contextual back navigation", () => {
   assert.match(policy, /data-contextual-back="true"/);
 });
 
-test("favorites hydrate the shared cart and notifications expose supported bulk actions", () => {
+test("favorites hydrate the shared cart and notifications expose only supported clear actions", () => {
   const wishlist = source("../screens/Wishlist/Wishlist.tsx");
   const notifications = source("../screens/Notifications/Notifications.tsx");
   const readAll = source("../app/api/notifications/in-app/read-all/route.ts");
@@ -82,7 +88,7 @@ test("favorites hydrate the shared cart and notifications expose supported bulk 
   assert.match(wishlist, /loadCart\(\)/);
   assert.match(wishlist, /CustomerFloatingCart/);
   assert.match(wishlist, /CustomerPageSkeleton/);
-  assert.match(notifications, /Mark all read/);
+  assert.doesNotMatch(notifications, /Mark all read/);
   assert.match(notifications, /Clear read/);
   assert.match(notifications, /Clear all/);
   assert.match(notifications, /craves\.notifications\.cleared:/);

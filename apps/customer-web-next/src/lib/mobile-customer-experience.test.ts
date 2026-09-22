@@ -11,10 +11,12 @@ test("mobile customer nav uses website icons and the cart morphs as frosted glas
 
   assert.match(nav, /FaHome/);
   assert.match(nav, /CalendarDays/);
-  assert.match(nav, /GiChefToque/);
+  assert.match(nav, /ChefHat/);
   assert.match(nav, /FaUser/);
   assert.match(nav, /CravesCartIcon/);
   assert.match(nav, /label: "Meal Subscription"/);
+  assert.match(nav, /href: "\/chefs"/);
+  assert.doesNotMatch(nav, /home#nearby-kitchens-heading/);
   assert.match(nav, /calc\(100% - 0\.75rem\)/);
   assert.match(nav, /backdrop-blur-\[8px\]/);
   assert.match(nav, /rgba\(255,255,255,0\.45\)/);

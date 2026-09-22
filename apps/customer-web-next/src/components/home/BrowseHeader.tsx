@@ -118,7 +118,8 @@ export function BrowseHeader({
           <button
             type="button"
             onClick={openLocation}
-            className="flex min-h-10 min-w-0 max-w-[10.5rem] items-center gap-2 rounded-full !bg-[#F1F3F5] px-2.5 text-left !text-[#1A1A1A] transition-[background-color,box-shadow] duration-200 ease-out hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] lg:min-h-11 lg:max-w-[13rem] lg:gap-2.5 lg:px-3 xl:max-w-[15rem]"
+            data-craves-location-button="desktop"
+            className="flex min-h-10 min-w-0 max-w-[11.5rem] items-center gap-2 rounded-[1.1rem] border border-[#E5E7EB] !bg-white px-2.5 text-left !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.06)] transition-[border-color,box-shadow,transform] duration-200 ease-out hover:border-[#F62E18]/30 hover:shadow-[0_8px_20px_rgba(26,26,26,0.10)] active:scale-[0.99] lg:min-h-11 lg:max-w-[14rem] lg:gap-2.5 lg:px-3 xl:max-w-[16rem]"
             aria-label={locationTypeLabel + " delivery address: " + locationLabel + ". Manage address"}
           >
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18] lg:h-8 lg:w-8">
@@ -223,18 +224,21 @@ export function BrowseHeader({
             <button
               type="button"
               onClick={openLocation}
-              className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-1 py-1 text-left text-[#1A1A1A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+              data-craves-location-button="mobile"
+              className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-[1.1rem] border border-[#E5E7EB] !bg-white px-2.5 py-2 text-left !text-[#1A1A1A] shadow-[0_4px_16px_rgba(26,26,26,0.07)] transition-[border-color,box-shadow,transform] duration-200 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
               aria-label={locationTypeLabel + " delivery address: " + locationLabel + ". Manage address"}
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFF1EF] text-[#F62E18]">
                 <FaMapMarkerAlt className="h-4 w-4" aria-hidden="true" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1 text-sm font-black leading-none text-[#1A1A1A]">
+                <span className="flex items-center gap-1.5 text-[0.92rem] font-black leading-none text-[#1A1A1A]">
                   <span className="truncate">{locationTypeLabel}</span>
                   <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#F62E18]" aria-hidden="true" />
                 </span>
-                <span className="mt-1 block truncate text-[0.69rem] font-semibold text-[#6B6B6B]">{locationLabel}</span>
+                <span className="mt-1.5 block truncate text-[0.7rem] font-semibold leading-none text-[#6B6B6B]">
+                  {locationLabel}
+                </span>
               </span>
             </button>
 

@@ -1,17 +1,15 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, CalendarDays } from "lucide-react";
+import { ArrowRight, CalendarDays, ChefHat } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   useEffect,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { FaHome, FaUser } from "react-icons/fa";
-import { GiChefToque } from "react-icons/gi";
 
 import { CravesCartIcon } from "@/components/home/CravesCartIcon";
 import {
@@ -59,9 +57,9 @@ const NAV_ITEMS = [
   },
   {
     key: "chefs" as const,
-    href: "/home#nearby-kitchens-heading",
+    href: "/chefs",
     label: "Chefs",
-    icon: GiChefToque,
+    icon: ChefHat,
   },
   {
     key: "profile" as const,
@@ -108,7 +106,7 @@ function activeKeyForPath(pathname: string): NavKey | null {
   ) {
     return "profile";
   }
-  if (pathname.startsWith("/kitchen")) return "chefs";
+  if (pathname === "/chefs" || pathname.startsWith("/chefs/") || pathname.startsWith("/kitchen")) return "chefs";
   if (pathname === "/home") return "home";
   return null;
 }
@@ -170,25 +168,6 @@ export function BottomNav() {
   const activeKey = activeKeyForPath(pathname);
   const expandedCart = cartMode && summary.itemCount > 0;
 
-  const openHomeSection = (
-    event: ReactMouseEvent<HTMLAnchorElement>,
-    id: string,
-  ) => {
-    if (pathname !== "/home") return;
-    const target = document.getElementById(id);
-    const section = target?.closest("section");
-    if (!section) return;
-
-    event.preventDefault();
-    section.scrollIntoView({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
-      block: "start",
-    });
-    window.history.replaceState(null, "", "#" + id);
-  };
-
   const cartAria =
     "Cart" +
     (summary.itemCount > 0 ? ", " + summary.itemCount + " items" : "");
@@ -233,18 +212,11 @@ export function BottomNav() {
         >
           {NAV_ITEMS.map(({ key, href, label, icon: Icon }) => {
             const active = activeKey === key;
-            const sectionId =
-              key === "chefs" ? "nearby-kitchens-heading" : null;
 
             return (
               <li key={key}>
                 <Link
                   href={href}
-                  onClick={
-                    sectionId
-                      ? (event) => openHomeSection(event, sectionId)
-                      : undefined
-                  }
                   className={[
                     "flex min-h-[3.45rem] flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 text-center text-[0.61rem] font-extrabold leading-[0.72rem] transition-colors",
                     active

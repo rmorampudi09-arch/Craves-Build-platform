@@ -3,6 +3,7 @@ const RETURN_ROUTE_PREFIX = "craves:return-route:";
 export type CustomerReturnRoute =
   | "/home"
   | "/profile"
+  | "/chefs"
   | `/dish/${string}`
   | `/kitchen/${string}`;
 
@@ -17,7 +18,9 @@ export function toCustomerReturnRoute(
   value: string,
   fallback: CustomerReturnRoute = "/home",
 ): CustomerReturnRoute {
-  if (value === "/home" || value === "/profile") return value;
+  if (value === "/home" || value === "/profile" || value === "/chefs") {
+    return value;
+  }
   return DETAIL_RETURN_ROUTE.test(value)
     ? (value as CustomerReturnRoute)
     : fallback;

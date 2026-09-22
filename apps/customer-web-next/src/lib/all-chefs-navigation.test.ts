@@ -10,6 +10,7 @@ test("mobile Chefs navigation opens the dedicated all-chefs page", () => {
   const nav = source("../components/layout/BottomNav.tsx");
   const route = source("../app/chefs/page.tsx");
   const page = source("../screens/public/AllChefs/AllChefs.tsx");
+  const returnNavigation = source("./return-navigation.ts");
 
   assert.match(nav, /href: "\/chefs"/);
   assert.match(nav, /pathname === "\/chefs"/);
@@ -21,6 +22,8 @@ test("mobile Chefs navigation opens the dedicated all-chefs page", () => {
   assert.match(page, /<KitchensGrid/);
   assert.match(page, /returnPath="\/chefs"/);
   assert.match(page, /rememberReturnRoute\("\/addresses", "\/chefs"\)/);
+  assert.match(returnNavigation, /\| "\/chefs"/);
+  assert.match(returnNavigation, /value === "\/chefs"/);
 });
 
 test("delivery location control uses the compact Swiggy-Zomato style address button", () => {

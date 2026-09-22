@@ -171,7 +171,7 @@ export function KitchensGrid({
 
   return (
     <section
-      className="mx-auto max-w-[88rem] px-4 pb-10 pt-7 md:px-7 md:pt-9 lg:px-10 lg:pb-14 lg:pt-10"
+      className="mx-auto max-w-[88rem] px-4 pb-7 pt-6 md:px-7 md:pt-7 lg:px-10 lg:pb-9 lg:pt-8"
       aria-labelledby="nearby-kitchens-heading"
     >
       <div className="mb-7 flex flex-wrap items-end justify-between gap-4">

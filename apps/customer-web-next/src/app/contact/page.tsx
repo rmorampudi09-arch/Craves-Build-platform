@@ -1,4 +1,5 @@
 import { PolicySection, PublicPolicyPage } from "@/components/legal/PublicPolicyPage";
+import { ContextualBackBoundary } from "@/components/navigation/ContextualBackBoundary";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export default function ContactPage() {
   const businessName = registeredBusinessName();
 
   return (
+    <ContextualBackBoundary destination="/contact" fallback="/home">
     <PublicPolicyPage
       eyebrow="Contact us"
       title="We’re here to help."
@@ -69,5 +71,6 @@ export default function ContactPage() {
         <p>Craves · Hyderabad, Telangana, India.</p>
       </PolicySection>
     </PublicPolicyPage>
+    </ContextualBackBoundary>
   );
 }

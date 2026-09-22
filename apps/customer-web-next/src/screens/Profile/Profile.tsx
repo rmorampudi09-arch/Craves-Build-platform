@@ -297,12 +297,8 @@ function ProfileContent({
         setError(
           "Your profile details could not be loaded. Try refreshing the page.",
         );
-      } else if (!profileResponse.ok) {
-        setMessage(
-          "Complete your profile before placing your next order.",
-        );
       } else {
-        setMessage("Your details are synced with Craves.");
+        setMessage("");
       }
 
       setLoading(false);
@@ -403,14 +399,14 @@ function ProfileContent({
           >
             {error}
           </p>
-        ) : (
+        ) : message ? (
           <p
             role="status"
-            className="mt-3 px-1 text-xs font-semibold text-[#6B6B6B]"
+            className="mt-3 rounded-xl bg-[#EDF7EE] px-3 py-2.5 text-xs font-semibold text-[#2E7D32]"
           >
             {message}
           </p>
-        )}
+        ) : null}
 
         <section className="mt-5 rounded-[1.55rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_8px_24px_rgba(26,26,26,0.05)] sm:p-5">
           <div className="flex items-start gap-3">
@@ -543,7 +539,7 @@ function ProfileContent({
               id="profile-support"
               className="mt-1 text-lg font-black text-[#1A1A1A]"
             >
-              Email, help & security
+              Help & security
             </h2>
           </div>
 

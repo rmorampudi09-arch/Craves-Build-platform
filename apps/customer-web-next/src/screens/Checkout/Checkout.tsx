@@ -29,6 +29,7 @@ import { sessionFetch } from "@/services/auth/sessionFetch";
 import {
   cartCurrency,
   cartTotal,
+  ensureCheckoutCart,
   getCart,
   loadCart,
   validateCart,
@@ -348,6 +349,28 @@ export default function CheckoutPage() {
     return prepared;
   }
 
+  async function handleBackToCart() {
+    setError("");
+    try {
+      if (checkout) {
+        const restored = await ensureCheckoutCart(checkout.orders);
+        if (!restored) {
+          throw new Error("Your reviewed order could not be restored to the cart.");
+        }
+        window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
+        window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
+        setCheckout(null);
+      }
+      navigate({ to: "/cart" });
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Your cart could not be restored.",
+      );
+    }
+  }
+
   async function handleAddressSaved(saved: CustomerAddress | null) {
     const next = (await fetchAddresses()).filter(isDeliveryReadyAddress);
     setAddresses(next);
@@ -371,29 +394,29 @@ export default function CheckoutPage() {
   const hasCheckoutContext = items.length > 0 || checkout !== null;
 
   return (
-    <div className="min-h-screen bg-white pb-36 text-[#1A1A1A]">
+    <div className="min-h-screen bg-[#F7F7F7] pb-36 text-[#1A1A1A]">
       <CheckoutHeader
-        onBack={() => navigate({ to: "/cart" })}
+        onBack={() => void handleBackToCart()}
         title="Checkout"
-        subtitle="Delivery as soon as possible"
+        subtitle="Review delivery and total before payment"
       />
 
-      <main className="mx-auto max-w-2xl px-4 py-5 md:px-6 md:py-7">
+      <main className="mx-auto max-w-3xl px-4 py-5 md:px-6 md:py-8">
         {loading ? (
           <div className="space-y-4" aria-hidden="true">
-            <div className="h-64 animate-pulse rounded-[14px] bg-[#F1F3F5]" />
-            <div className="h-28 animate-pulse rounded-[14px] bg-[#F1F3F5]" />
-            <div className="h-52 animate-pulse rounded-[14px] bg-[#F1F3F5]" />
+            <div className="h-64 animate-pulse rounded-[1.25rem] bg-[#F1F3F5]" />
+            <div className="h-28 animate-pulse rounded-[1.25rem] bg-[#F1F3F5]" />
+            <div className="h-52 animate-pulse rounded-[1.25rem] bg-[#F1F3F5]" />
           </div>
         ) : error && !hasCheckoutContext ? (
-          <section className="rounded-[14px] border border-[#F62E18]/20 bg-white p-8 text-center shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
+          <section className="rounded-[1.25rem] border border-[#F62E18]/20 bg-white p-8 text-center shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
             <AlertTriangle className="mx-auto h-9 w-9 text-[#F62E18]" aria-hidden="true" />
             <h1 className="mt-4 text-xl font-semibold">Checkout could not be prepared</h1>
             <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{error}</p>
             <button
               type="button"
               onClick={() => void prepareCheckout()}
-              className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-[11px] bg-[#F62E18] px-5 text-sm font-semibold text-white"
+              className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#F62E18] px-5 text-sm font-semibold text-white"
             >
               <RefreshCw className="h-4 w-4" aria-hidden="true" /> Try again
             </button>
@@ -403,7 +426,7 @@ export default function CheckoutPage() {
             {paymentFailure ? (
               <section
                 role="alert"
-                className="rounded-[14px] border border-[#C92716]/20 bg-[#FFF2F0] p-4"
+                className="rounded-[1.25rem] border border-[#C92716]/20 bg-[#FFF2F0] p-4"
               >
                 <h2 className="text-sm font-semibold text-[#9F2114]">
                   {checkout
@@ -416,11 +439,11 @@ export default function CheckoutPage() {
               </section>
             ) : null}
 
-            <section className="overflow-hidden rounded-[14px] border border-[#E5E7EB] bg-white shadow-[0_4px_18px_rgba(26,26,26,0.05)]">
+            <section className="overflow-hidden rounded-[1.25rem] border border-[#E5E7EB] bg-white shadow-[0_4px_18px_rgba(26,26,26,0.05)]">
               <div className="flex items-center justify-between gap-3 border-b border-[#F1F3F5] px-4 py-4">
                 <div className="flex items-center gap-2.5">
                   <MapPin className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-                  <h1 className="text-base font-semibold">Deliver to</h1>
+                  <div><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#F62E18]">Step 1</p><h1 className="text-base font-semibold">Delivery address</h1></div>
                 </div>
                 <button
                   type="button"
@@ -491,7 +514,7 @@ export default function CheckoutPage() {
                     type="button"
                     onClick={() => setEditorOpen(true)}
                     disabled={Boolean(checkout)}
-                    className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-[11px] bg-[#F62E18] px-4 text-sm font-semibold text-white disabled:pointer-events-none disabled:opacity-45"
+                    className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#F62E18] px-4 text-sm font-semibold text-white disabled:pointer-events-none disabled:opacity-45"
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" />
                     Add a new address
@@ -500,12 +523,12 @@ export default function CheckoutPage() {
               )}
             </section>
 
-            <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-4 shadow-[0_4px_18px_rgba(26,26,26,0.05)]">
+            <section className="rounded-[1.25rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_4px_18px_rgba(26,26,26,0.05)]">
               <div className="flex items-center gap-2.5">
                 <Clock3 className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-                <h2 className="text-base font-semibold">Delivery</h2>
+                <div><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#F62E18]">Step 2</p><h2 className="text-base font-semibold">Delivery timing</h2></div>
               </div>
-              <div className="mt-3 rounded-[11px] border border-[#F6B545]/35 bg-[#FFF8EC] p-4">
+              <div className="mt-3 rounded-xl border border-[#F6B545]/35 bg-[#FFF8EC] p-4">
                 <p className="text-xs text-[#6B6B6B]">Earliest delivery</p>
                 <p className="mt-0.5 text-base font-semibold">As soon as possible</p>
                 <p className="mt-1 text-xs leading-5 text-[#6B6B6B]">
@@ -516,10 +539,10 @@ export default function CheckoutPage() {
               </div>
             </section>
 
-            <section className="rounded-[14px] border border-[#E5E7EB] bg-white p-4 shadow-[0_4px_18px_rgba(26,26,26,0.05)]">
+            <section className="rounded-[1.25rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_4px_18px_rgba(26,26,26,0.05)]">
               <div className="flex items-center gap-2.5">
                 <ReceiptText className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-                <h2 className="text-base font-semibold">Bill details</h2>
+                <div><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#F62E18]">Step 3</p><h2 className="text-base font-semibold">Bill details</h2></div>
               </div>
 
               <dl className="mt-4 space-y-2.5 text-sm">
@@ -569,7 +592,7 @@ export default function CheckoutPage() {
             </section>
 
             {instructions.trim() ? (
-              <section className="rounded-[14px] border border-[#E5E7EB] bg-[#F1F3F5] p-4">
+              <section className="rounded-[1.25rem] border border-[#E5E7EB] bg-[#F1F3F5] p-4">
                 <p className="text-xs font-semibold text-[#6B6B6B]">
                   Cooking instructions
                 </p>
@@ -582,7 +605,7 @@ export default function CheckoutPage() {
         {error && hasCheckoutContext ? (
           <p
             role="alert"
-            className="mt-4 rounded-[11px] border border-[#F62E18]/20 bg-[#F62E18]/5 p-3 text-sm font-medium text-[#C92716]"
+            className="mt-4 rounded-xl border border-[#F62E18]/20 bg-[#F62E18]/5 p-3 text-sm font-medium text-[#C92716]"
           >
             {error}
           </p>

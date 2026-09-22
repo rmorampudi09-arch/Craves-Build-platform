@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { BrowseHeader } from "@/components/home/BrowseHeader";
+import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
 import { CartAddressAvailabilityDialog } from "@/components/home/CartAddressAvailabilityDialog";
 import { CustomerSignOutDialog } from "@/components/home/CustomerSignOutDialog";
 import { DishesGrid } from "@/components/home/DishesGrid";
@@ -510,6 +511,18 @@ function BrowseFoodsPage() {
     return result;
   }, [nearbyDishes]);
 
+  const kitchenDishImages = useMemo<Record<string, string[]>>(() => {
+    const grouped: Record<string, string[]> = {};
+    for (const dish of nearbyDishes) {
+      if (!dish.kitchenId || dish.imageIsPlaceholder || !dish.img) continue;
+      const current = grouped[dish.kitchenId] ?? [];
+      if (!current.includes(dish.img) && current.length < 5) {
+        grouped[dish.kitchenId] = [...current, dish.img];
+      }
+    }
+    return grouped;
+  }, [nearbyDishes]);
+
   const filteredKitchens = kitchens;
 
   const filteredDishes = useMemo(() => {
@@ -620,15 +633,8 @@ function BrowseFoodsPage() {
     }
   };
 
-  if (!user) {
-    return (
-      <main className={`flex min-h-screen items-center justify-center ${styles.paperSurface}`}>
-        <div className="text-center" role="status">
-          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-[#F1F3F5] border-t-[#F62E18]" />
-          <p className="mt-4 text-sm font-bold text-[#6B6B6B]">Opening your Craves home…</p>
-        </div>
-      </main>
-    );
+  if (!user || !defaultAddressResolved) {
+    return <CustomerPageSkeleton label="Loading your Craves home" />;
   }
 
   return (
@@ -682,6 +688,7 @@ function BrowseFoodsPage() {
           }}
           onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}
+          dishImagesByKitchen={kitchenDishImages}
         />
 
         <DishesGrid

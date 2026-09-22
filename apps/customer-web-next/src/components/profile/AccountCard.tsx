@@ -1,5 +1,4 @@
 import {
-  FaCircleCheck,
   FaEnvelope,
   FaPen,
   FaPhone,
@@ -39,7 +38,6 @@ export function AccountCard({
   const displayName = name || user.username || "Craves customer";
   const phone = profile?.registeredPhoneNumber || user.phoneNumber;
   const email = user.email ?? profile?.email ?? null;
-  const profileReady = Boolean(profile && firstName && lastName);
 
   return (
     <section
@@ -76,19 +74,6 @@ export function AccountCard({
             </button>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span
-              className={[
-                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.67rem] font-bold",
-                profileReady
-                  ? "bg-[#EDF7EE] text-[#2E7D32]"
-                  : "bg-[#F1F3F5] text-[#6B6B6B]",
-              ].join(" ")}
-            >
-              <FaCircleCheck aria-hidden="true" />
-              {profileReady ? "Profile ready" : "Profile incomplete"}
-            </span>
-          </div>
         </div>
       </div>
 
@@ -99,7 +84,7 @@ export function AccountCard({
           </span>
           <div className="min-w-0">
             <p className="text-[0.62rem] font-bold text-[#6B6B6B]">
-              Registered phone
+              Phone number
             </p>
             <p className="truncate text-xs font-black text-[#1A1A1A]">
               {phone}
@@ -122,7 +107,7 @@ export function AccountCard({
         </div>
       </div>
 
-      <dl className="mt-5 grid grid-cols-3 divide-x divide-[#E5E7EB] border-t border-[#E5E7EB] pt-4 text-center">
+      <dl className="mt-5 grid grid-cols-2 divide-x divide-[#E5E7EB] border-t border-[#E5E7EB] pt-4 text-center">
         <div className="px-2">
           <dt className="text-[0.68rem] font-semibold text-[#6B6B6B]">
             Orders
@@ -137,14 +122,6 @@ export function AccountCard({
           </dt>
           <dd className="mt-1 text-lg font-black text-[#1A1A1A]">
             {addressCount}
-          </dd>
-        </div>
-        <div className="px-2">
-          <dt className="text-[0.68rem] font-semibold text-[#6B6B6B]">
-            Phone
-          </dt>
-          <dd className="mt-1 text-xs font-black text-[#2E7D32]">
-            Verified
           </dd>
         </div>
       </dl>

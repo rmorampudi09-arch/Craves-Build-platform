@@ -26,10 +26,24 @@ export function ContextualBackBoundary({
     if (!(target instanceof Element)) return;
 
     const anchor = target.closest("a");
-    if (!anchor || anchor.getAttribute("href") !== "/profile") return;
+    if (!anchor) return;
+
+    const href = anchor.getAttribute("href");
+    const label = anchor.getAttribute("aria-label") ?? "";
+    const isBackControl =
+      anchor.getAttribute("data-contextual-back") === "true" ||
+      /^Back\b/i.test(label) ||
+      (anchor.textContent ?? "").trim().startsWith("←");
+
+    if (
+      !isBackControl ||
+      (href !== "/profile" && href !== "/home" && href !== "/")
+    ) {
+      return;
+    }
 
     const returnTo = consumeReturnRoute(destination, fallback);
-    if (returnTo === "/profile") return;
+    if (returnTo === href) return;
 
     event.preventDefault();
     event.stopPropagation();

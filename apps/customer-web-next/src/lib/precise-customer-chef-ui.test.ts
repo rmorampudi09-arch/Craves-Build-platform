@@ -119,10 +119,10 @@ test("public landing keeps the approved semantic reference experience and wired 
 });
 
 test("welcome banner uses the approved responsive full-art asset while discovery uses the saved default address", () => {
-  assert.match(welcome, /src="\/home\/reference\/home-hero-banner\.webp"/);
-  assert.match(welcome, /width=\{1983\}/);
-  assert.match(welcome, /height=\{793\}/);
-  assert.match(welcome, /quality=\{90\}/);
+  assert.match(welcome, /src="\/home\/reference\/home-hero-reference\.webp"/);
+  assert.match(welcome, /width=\{1200\}/);
+  assert.match(welcome, /height=\{487\}/);
+  assert.match(welcome, /unoptimized/);
   assert.match(welcome, /className="block h-auto w-full"/);
   assert.match(welcome, /aria-label=\{\`Welcome Taste Rebel home food banner for \$\{firstName\}\`\}/);
   assert.match(welcome, /data-live-dish-count=\{dishCount\}/);
@@ -204,7 +204,7 @@ test("meal plans keep their previous card layout and navigation flow", () => {
 });
 
 test("checkout is one page with saved addresses, ASAP delivery and the shared address sheet", () => {
-  assert.match(checkout, /Deliver to/);
+  assert.match(checkout, /Delivery address/);
   assert.match(checkout, /visibleAddresses\.map/);
   assert.match(checkout, /addresses\.slice\(0, 3\)/);
   assert.match(checkout, /Show all/);
@@ -220,6 +220,8 @@ test("checkout is one page with saved addresses, ASAP delivery and the shared ad
   assert.match(checkout, /createAuthoritativeCheckout/);
   assert.match(checkout, /deliveryAddressId,/);
   assert.match(checkout, /window\.sessionStorage\.setItem\(CHECKOUT_ID_KEY, prepared\.id\)/);
+  assert.match(checkout, /ensureCheckoutCart\(checkout\.orders\)/);
+  assert.match(checkout, /handleBackToCart/);
   assert.match(checkout, /Review the order to load the authoritative delivery fee, tax and final total before payment/);
   assert.doesNotMatch(checkout, /CheckoutAddressDialog/);
   assert.doesNotMatch(checkout, /Pick a time/);

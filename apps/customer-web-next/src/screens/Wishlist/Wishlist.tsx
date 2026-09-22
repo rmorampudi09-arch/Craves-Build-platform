@@ -8,7 +8,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { addToCart } from "@/services/api/cravesCart";
+import { addToCart, loadCart } from "@/services/api/cravesCart";
 import {
   loadCustomerFavoriteIds,
   removeCustomerFavorite,
@@ -16,6 +16,8 @@ import {
 import { loadDish, type Dish } from "@/services/api/dishes";
 import { loadSession } from "@/services/auth/cravesAuth";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
+import { CustomerFloatingCart } from "@/components/cart/CustomerFloatingCart";
+import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
 
 export const routeMeta = {
   head: () => ({
@@ -79,6 +81,7 @@ function WishlistPage() {
       }
       setReady(true);
       void loadFavorites();
+      void loadCart().catch(() => undefined);
     });
     return () => {
       active = false;
@@ -131,7 +134,7 @@ function WishlistPage() {
     }
   }, [busyId]);
 
-  if (!ready) return null;
+  if (!ready) return <CustomerPageSkeleton label="Loading saved dishes" />;
 
   return (
     <div className="min-h-screen bg-white pb-20 text-[#1A1A1A]">
@@ -260,6 +263,7 @@ function WishlistPage() {
           </>
         )}
       </main>
+      <CustomerFloatingCart />
     </div>
   );
 }

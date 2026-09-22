@@ -13,6 +13,8 @@ import {
   FaBagShopping,
   FaBell,
   FaCalendarDays,
+  FaCheckDouble,
+  FaTrashCan,
 } from "react-icons/fa6";
 import { GiChefToque } from "react-icons/gi";
 import { CravesLogo } from "@/components/brand/CravesLogo";
@@ -71,6 +73,8 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState<NotificationFilter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [busyAction, setBusyAction] = useState(false);
+  const [identityId, setIdentityId] = useState("");
   const shownUnreadIds = useRef<Set<string>>(new Set());
 
   const markShownUnreadAsRead = useCallback(() => {
@@ -91,9 +95,23 @@ export default function NotificationsPage() {
     let active = true;
 
     void (async () => {
-      if (!(await loadSession())) {
+      const session = await loadSession();
+      if (!session) {
         if (active) navigate({ to: "/" });
         return;
+      }
+      if (!active) return;
+      setIdentityId(session.id);
+
+      const dismissedKey = "craves.notifications.cleared:" + session.id;
+      let dismissed = new Set<string>();
+      try {
+        const saved = JSON.parse(window.localStorage.getItem(dismissedKey) || "[]");
+        if (Array.isArray(saved)) {
+          dismissed = new Set(saved.filter((value): value is string => typeof value === "string"));
+        }
+      } catch {
+        dismissed = new Set();
       }
 
       const response = await fetch("/api/notifications/in-app?limit=50", {
@@ -106,7 +124,9 @@ export default function NotificationsPage() {
       }
       if (!active) return;
 
-      const loadedNotices = body as CustomerNotification[];
+      const loadedNotices = (body as CustomerNotification[]).filter(
+        (notice) => !dismissed.has(notice.id),
+      );
       setNotices(loadedNotices);
       shownUnreadIds.current = new Set(
         loadedNotices.filter((notice) => !notice.readAt).map((notice) => notice.id),
@@ -133,6 +153,64 @@ export default function NotificationsPage() {
     window.addEventListener("pagehide", handlePageHide);
     return () => window.removeEventListener("pagehide", handlePageHide);
   }, [markShownUnreadAsRead]);
+
+  function persistCleared(ids: string[]) {
+    if (!identityId || ids.length === 0) return;
+    const key = "craves.notifications.cleared:" + identityId;
+    let current: string[] = [];
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
+      current = Array.isArray(parsed)
+        ? parsed.filter((value): value is string => typeof value === "string")
+        : [];
+    } catch {
+      current = [];
+    }
+    window.localStorage.setItem(
+      key,
+      JSON.stringify(Array.from(new Set([...current, ...ids])).slice(-250)),
+    );
+  }
+
+  async function markAllRead() {
+    if (busyAction || unreadCount === 0) return;
+    setBusyAction(true);
+    setError("");
+    try {
+      const response = await fetch("/api/notifications/in-app/read-all", {
+        method: "PATCH",
+        credentials: "same-origin",
+      });
+      if (!response.ok) {
+        throw new Error("Notifications could not be marked as read.");
+      }
+      const readAt = new Date().toISOString();
+      setNotices((current) =>
+        current.map((notice) => ({
+          ...notice,
+          readAt: notice.readAt ?? readAt,
+        })),
+      );
+      shownUnreadIds.current.clear();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Notifications could not be updated.",
+      );
+    } finally {
+      setBusyAction(false);
+    }
+  }
+
+  function clearNotices(ids: string[]) {
+    if (busyAction || ids.length === 0) return;
+    persistCleared(ids);
+    setNotices((current) =>
+      current.filter((notice) => !ids.includes(notice.id)),
+    );
+    ids.forEach((id) => shownUnreadIds.current.delete(id));
+  }
 
   const unreadCount = notices.filter((notice) => !notice.readAt).length;
   const readCount = notices.length - unreadCount;
@@ -190,8 +268,47 @@ export default function NotificationsPage() {
       </AutoHideCustomerHeader>
 
       <main className="mx-auto max-w-4xl px-4 pb-8 pt-3 md:px-6 md:pb-10 md:pt-4">
-        {!loading && !error && notices.length > 0 ? (
+        {!loading && notices.length > 0 ? (
           <div className="mb-6">
+            <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+              {unreadCount > 0 ? (
+                <button
+                  type="button"
+                  disabled={busyAction}
+                  onClick={() => void markAllRead()}
+                  className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#1A1A1A] transition hover:border-[#F62E18]/25 hover:text-[#F62E18] disabled:opacity-50"
+                >
+                  <FaCheckDouble aria-hidden="true" />
+                  Mark all read
+                </button>
+              ) : null}
+              {readCount > 0 ? (
+                <button
+                  type="button"
+                  disabled={busyAction}
+                  onClick={() =>
+                    clearNotices(
+                      notices
+                        .filter((notice) => Boolean(notice.readAt))
+                        .map((notice) => notice.id),
+                    )
+                  }
+                  className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#1A1A1A] transition hover:border-[#F62E18]/25 hover:text-[#F62E18] disabled:opacity-50"
+                >
+                  <FaTrashCan aria-hidden="true" />
+                  Clear read
+                </button>
+              ) : null}
+              <button
+                type="button"
+                disabled={busyAction}
+                onClick={() => clearNotices(notices.map((notice) => notice.id))}
+                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#6B6B6B] transition hover:border-[#F62E18]/25 hover:text-[#F62E18] disabled:opacity-50"
+              >
+                <FaTrashCan aria-hidden="true" />
+                Clear all
+              </button>
+            </div>
             <div
               className="flex gap-7 border-b border-[#E5E7EB] sm:gap-9"
               aria-label="Notification filters"
@@ -308,11 +425,24 @@ export default function NotificationsPage() {
                               <p className="mt-1 text-sm leading-6 text-[#6B6B6B]">
                                 {notice.body}
                               </p>
-                              <p className="mt-2 text-xs text-[#6B6B6B]">
-                                {notificationTimestamp(notice.createdAt)}
-                                <span aria-hidden="true"> · </span>
-                                <span>{unread ? "Unread" : "Read"}</span>
-                              </p>
+                              <div className="mt-2 flex items-center justify-between gap-3">
+                                <p className="text-xs text-[#6B6B6B]">
+                                  {notificationTimestamp(notice.createdAt)}
+                                  <span aria-hidden="true"> · </span>
+                                  <span>{unread ? "Unread" : "Read"}</span>
+                                </p>
+                                {!unread ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => clearNotices([notice.id])}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#F1F3F5] text-[#6B6B6B] transition hover:text-[#F62E18]"
+                                    aria-label={`Clear ${notice.title}`}
+                                    title="Clear read notification"
+                                  >
+                                    <FaTrashCan aria-hidden="true" />
+                                  </button>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
                         </article>

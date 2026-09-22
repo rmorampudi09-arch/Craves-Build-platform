@@ -8,6 +8,7 @@ import { captureSessionContext, getSession, getSessionEmailRevision, isSessionCo
 type Props = {
   initialEmail?: string;
   required?: boolean;
+  compact?: boolean;
   onStateChange?: (state: EmailVerificationState | null) => void;
   onVerified?: (state: EmailVerificationState) => void;
 };
@@ -15,7 +16,7 @@ type Props = {
 const inputClass = "mt-2 min-h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10 disabled:opacity-50";
 const buttonClass = "min-h-10 rounded-xl border border-[#E5E7EB] bg-[#F1F3F5] px-4 text-xs font-black text-[#1A1A1A] hover:bg-white disabled:opacity-50";
 
-export function EmailVerificationPanel({ initialEmail = "", required = false, onStateChange, onVerified }: Props) {
+export function EmailVerificationPanel({ initialEmail = "", required = false, compact = false, onStateChange, onVerified }: Props) {
   const id = useId();
   const [state, setState] = useState<EmailVerificationState | null>(null);
   const [email, setEmail] = useState(initialEmail);
@@ -183,6 +184,144 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, on
   const verified = chefEmailEligible(state);
   const pending = state?.pending;
   const disabled = busy || sessionExpired || !state;
+
+  if (compact) {
+    const sameVerifiedEmail =
+      verified &&
+      Boolean(state?.email) &&
+      email.trim().toLocaleLowerCase("en-IN") ===
+        state?.email?.trim().toLocaleLowerCase("en-IN");
+    const canSend =
+      !pending &&
+      Boolean(email.trim()) &&
+      verificationEmail.safeParse(email).success;
+
+    return (
+      <section
+        aria-label="Email"
+        aria-busy={busy}
+        className="rounded-2xl border border-[#E5E7EB] bg-[#FAFAFA] p-4"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <label
+            htmlFor={`${id}-email`}
+            className="text-sm font-semibold text-[#1A1A1A]"
+          >
+            Email <span className="font-medium text-[#6B6B6B]">(optional)</span>
+          </label>
+          {sameVerifiedEmail ? (
+            <span className="rounded-full bg-[#EDF7EE] px-2.5 py-1 text-[0.68rem] font-bold text-[#2E7D32]">
+              Verified
+            </span>
+          ) : null}
+        </div>
+
+        <div className="mt-2 flex gap-2">
+          <input
+            id={`${id}-email`}
+            aria-label="Email address"
+            type="email"
+            autoComplete="email"
+            maxLength={EMAIL_VERIFICATION_MAX_LENGTH}
+            value={email}
+            disabled={busy || sessionExpired}
+            className="min-h-12 min-w-0 flex-1 rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10 disabled:opacity-50"
+            placeholder="you@example.com"
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setError("");
+            }}
+          />
+          {!sameVerifiedEmail && canSend ? (
+            <button
+              type="button"
+              aria-label="Send email code"
+              disabled={disabled || !!retrySend}
+              className="min-h-12 shrink-0 rounded-xl bg-[#F62E18] px-4 text-xs font-black text-white disabled:opacity-50"
+              onClick={() =>
+                void send(createEmailSendAttempt("challenges", email))
+              }
+            >
+              Verify
+            </button>
+          ) : null}
+        </div>
+
+        {pending ? (
+          <div className="mt-3 rounded-xl border border-[#E5E7EB] bg-white p-3">
+            <label
+              htmlFor={`${id}-code`}
+              className="text-xs font-semibold text-[#1A1A1A]"
+            >
+              Enter the 6-digit code
+            </label>
+            <div className="mt-2 flex gap-2">
+              <input
+                id={`${id}-code`}
+                aria-label="Six-digit email code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                value={code}
+                disabled={disabled || timing.expiresIn === 0}
+                className="min-h-11 min-w-0 flex-1 rounded-xl border border-[#E5E7EB] bg-white px-3 text-center text-base font-bold tracking-[0.24em] text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10"
+                onChange={(event) =>
+                  setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                }
+              />
+              <button
+                type="button"
+                className="min-h-11 rounded-xl bg-[#F62E18] px-4 text-xs font-black text-white disabled:opacity-50"
+                disabled={
+                  disabled ||
+                  timing.expiresIn === 0 ||
+                  !/^\d{6}$/.test(code)
+                }
+                onClick={() => void verify()}
+              >
+                Verify email
+              </button>
+            </div>
+            <button
+              type="button"
+              className="mt-2 text-xs font-bold text-[#F62E18] disabled:text-[#9CA3AF]"
+              disabled={disabled || timing.resendIn > 0 || !!retrySend}
+              onClick={() =>
+                void send(createEmailSendAttempt("resend", pending.challengeId))
+              }
+            >
+              {timing.resendIn > 0
+                ? `Resend in ${timing.resendIn}s`
+                : "Resend email code"}
+            </button>
+          </div>
+        ) : null}
+
+        {error ? (
+          <p role="alert" className="mt-2 text-xs font-semibold text-[#C92716]">
+            {error}
+          </p>
+        ) : null}
+        {notice && sameVerifiedEmail ? (
+          <p role="status" className="mt-2 text-xs font-semibold text-[#2E7D32]">
+            {notice}
+          </p>
+        ) : null}
+
+        <button
+          type="button"
+          aria-label="Refresh verification status"
+          className="sr-only"
+          disabled={busy}
+          onClick={() => void refresh(true)}
+        >
+          Refresh verification status
+        </button>
+      </section>
+    );
+  }
 
   return (
     <section aria-labelledby={`${id}-title`} aria-busy={busy} className="rounded-2xl border border-[#E5E7EB] bg-white p-4 text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.04)] sm:p-5">

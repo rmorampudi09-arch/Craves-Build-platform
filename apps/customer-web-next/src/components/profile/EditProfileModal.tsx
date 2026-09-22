@@ -133,9 +133,6 @@ export function EditProfileModal({
             >
               Edit profile
             </h2>
-            <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">
-              These details are used in checkout, order history and support.
-            </p>
           </div>
           <button
             type="button"
@@ -148,7 +145,11 @@ export function EditProfileModal({
           </button>
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="mt-6">
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-[#6B6B6B]">
+            Name
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
           <label
             htmlFor={`${fieldPrefix}-first-name`}
             className="text-sm font-semibold text-[#1A1A1A]"
@@ -181,16 +182,26 @@ export function EditProfileModal({
               required
             />
           </label>
+          </div>
         </div>
 
-        <div className="mt-5"><EmailVerificationPanel initialEmail={initialEmail} /></div>
+        <label
+          htmlFor={`${fieldPrefix}-phone`}
+          className="mt-5 block text-sm font-semibold text-[#1A1A1A]"
+        >
+          Phone number
+          <input
+            id={`${fieldPrefix}-phone`}
+            value={profile?.registeredPhoneNumber ?? ""}
+            readOnly
+            autoComplete="tel"
+            className="mt-2 min-h-12 w-full rounded-xl border border-[#E5E7EB] bg-[#F8F9FA] px-3 text-base text-[#1A1A1A] outline-none"
+          />
+        </label>
 
-        {profile && (
-          <p className="mt-4 rounded-xl bg-[#F1F3F5] p-3 text-sm text-[#6B6B6B]">
-            Verified phone: {profile.registeredPhoneNumber}. Verify the new number
-            to change your phone.
-          </p>
-        )}
+        <div className="mt-5">
+          <EmailVerificationPanel initialEmail={initialEmail} compact />
+        </div>
 
         {error && (
           <p

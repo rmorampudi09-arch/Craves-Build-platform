@@ -135,7 +135,7 @@ export function BrowseHeader({
             </span>
           </button>
 
-          <label className="ml-auto flex min-h-10 min-w-[8rem] flex-1 items-center gap-2 rounded-[1.05rem] bg-[#F1F3F5] px-3 transition-[box-shadow,ring-color] duration-200 ease-out hover:ring-2 hover:ring-[#F62E18]/30 focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_10px_28px_rgba(246,46,24,0.14)] lg:min-h-12 lg:min-w-[12rem] lg:gap-3 lg:px-4 xl:min-h-14 xl:max-w-[34rem] xl:px-5">
+          <label className="ml-auto flex min-h-10 min-w-[8rem] flex-1 items-center gap-2 rounded-[1.05rem] bg-[#F1F3F5] px-3 transition-[transform,background-color,box-shadow,ring-color] duration-200 ease-out hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_10px_26px_rgba(26,26,26,0.10)] hover:ring-2 hover:ring-[#F62E18]/20 focus-within:-translate-y-0.5 focus-within:bg-white focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_12px_30px_rgba(246,46,24,0.14)] motion-reduce:transform-none lg:min-h-12 lg:min-w-[12rem] lg:gap-3 lg:px-4 xl:min-h-14 xl:max-w-[34rem] xl:px-5">
             <FaSearch className="h-4 w-4 shrink-0 text-[#F62E18] lg:h-5 lg:w-5" aria-hidden="true" />
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
@@ -262,7 +262,7 @@ export function BrowseHeader({
           </div>
 
           <div className="mt-2 flex items-stretch gap-2">
-            <label className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 rounded-[1.05rem] bg-[#F1F3F5] px-3.5 transition-shadow focus-within:ring-2 focus-within:ring-[#F62E18]">
+            <label className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 rounded-[1.05rem] bg-[#F1F3F5] px-3.5 transition-[transform,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_9px_22px_rgba(26,26,26,0.10)] focus-within:-translate-y-0.5 focus-within:bg-white focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_10px_24px_rgba(246,46,24,0.12)] motion-reduce:transform-none">
               <FaSearch className="h-[1.05rem] w-[1.05rem] shrink-0 text-[#F62E18]" aria-hidden="true" />
               <span className="sr-only">Search dishes or home kitchens</span>
               <input

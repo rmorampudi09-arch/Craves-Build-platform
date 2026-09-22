@@ -42,6 +42,29 @@ export function EditProfileModal({
 
   useEffect(() => {
     if (!open) return;
+
+    const body = document.body;
+    const root = document.documentElement;
+    const previousBodyOverflow = body.style.overflow;
+    const previousBodyPaddingRight = body.style.paddingRight;
+    const previousOverscroll = root.style.overscrollBehavior;
+    const scrollbarGap = Math.max(0, window.innerWidth - root.clientWidth);
+
+    body.style.overflow = "hidden";
+    if (scrollbarGap > 0) {
+      body.style.paddingRight = `${scrollbarGap}px`;
+    }
+    root.style.overscrollBehavior = "none";
+
+    return () => {
+      body.style.overflow = previousBodyOverflow;
+      body.style.paddingRight = previousBodyPaddingRight;
+      root.style.overscrollBehavior = previousOverscroll;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !busy) onClose();
     };
@@ -111,7 +134,7 @@ export function EditProfileModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 md:items-center md:px-4"
+      className="fixed inset-0 z-50 flex items-end justify-center overscroll-contain bg-black/55 md:items-center md:px-4"
       onClick={() => !busy && onClose()}
       role="presentation"
     >
@@ -119,7 +142,7 @@ export function EditProfileModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${fieldPrefix}-title`}
-        className="max-h-[95vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-border bg-white p-6 shadow-[var(--shadow-pop)] md:rounded-2xl"
+        className="max-h-[95vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-2xl border border-border bg-white p-6 shadow-[var(--shadow-pop)] md:rounded-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
@@ -192,7 +215,7 @@ export function EditProfileModal({
           Phone number
           <input
             id={`${fieldPrefix}-phone`}
-            value={profile?.registeredPhoneNumber ?? ""}
+            value={(profile?.registeredPhoneNumber ?? "").replace(/^\+91[\s-]?/, "")}
             readOnly
             autoComplete="tel"
             className="mt-2 min-h-12 w-full rounded-xl border border-[#E5E7EB] bg-[#F8F9FA] px-3 text-base text-[#1A1A1A] outline-none"

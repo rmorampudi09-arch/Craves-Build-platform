@@ -212,9 +212,9 @@ jobs:
           fi
 
           collect_evidence() {
-            xcrun simctl io "${SIMULATOR_UDID}" screenshot "$RUNNER_TEMP/CravesMobile-simulator.png" || true
+            xcrun simctl io "${SIMULATOR_UDID}" screenshot "$RUNNER_TEMP/CravesMobile-simulator-final.png" || true
             xcrun simctl spawn "${SIMULATOR_UDID}" log show \
-              --last 3m \
+              --last 5m \
               --style compact \
               --predicate 'process == "CravesMobile"' \
               > "$RUNNER_TEMP/CravesMobile-simulator.log" || true
@@ -243,8 +243,23 @@ jobs:
             exit 1
           fi
 
+          curl -fsS \
+            --max-time 240 \
+            "http://127.0.0.1:8081/index.bundle?platform=ios&dev=true&minify=false&modulesOnly=false&runModule=true" \
+            -o "$RUNNER_TEMP/CravesMobile-index.bundle"
+          if [[ "$(wc -c < "$RUNNER_TEMP/CravesMobile-index.bundle")" -lt 100000 ]]; then
+            echo "Metro produced an unexpectedly small iOS bundle." >&2
+            exit 1
+          fi
+
+          built_bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${SIMULATOR_APP_PATH}/Info.plist")"
+          if [[ "${built_bundle_id}" != "${BUNDLE_IDENTIFIER}" ]]; then
+            echo "Built bundle id ${built_bundle_id} does not match ${BUNDLE_IDENTIFIER}." >&2
+            exit 1
+          fi
+
           xcrun simctl install "${SIMULATOR_UDID}" "${SIMULATOR_APP_PATH}"
-          launch_output="$(xcrun simctl launch --terminate-running-process "${SIMULATOR_UDID}" "${BUNDLE_IDENTIFIER}")"
+          launch_output="$(xcrun simctl launch --terminate-running-process "${SIMULATOR_UDID}" "${built_bundle_id}")"
           echo "${launch_output}"
           app_pid="${launch_output##*: }"
           if [[ ! "${app_pid}" =~ ^[0-9]+$ ]]; then
@@ -252,19 +267,28 @@ jobs:
             exit 1
           fi
 
-          sleep 15
+          sleep 20
           if ! kill -0 "${app_pid}" 2>/dev/null; then
             echo "CravesMobile exited during initial simulator launch smoke." >&2
             exit 1
           fi
 
+          collect_evidence
+          if grep -Eiq 'com\.facebook\.react\.log:javascript.*\[(TypeError|ReferenceError|SyntaxError|Invariant Violation|Error:)' "$RUNNER_TEMP/CravesMobile-simulator.log"; then
+            echo "CravesMobile emitted a fatal JavaScript runtime error during launch." >&2
+            grep -Ei 'com\.facebook\.react\.log:javascript' "$RUNNER_TEMP/CravesMobile-simulator.log" | tail -50 >&2 || true
+            exit 1
+          fi
+          xcrun simctl io "${SIMULATOR_UDID}" screenshot "$RUNNER_TEMP/CravesMobile-simulator-launched.png"
+
           xcrun simctl openurl "${SIMULATOR_UDID}" "craves://"
           sleep 5
           if ! kill -0 "${app_pid}" 2>/dev/null; then
-            echo "CravesMobile exited after craves:// deep-link smoke." >&2
+            echo "CravesMobile exited after custom URL registration smoke." >&2
             exit 1
           fi
-          echo "Simulator install, launch, process-survival, and deep-link smoke passed."
+          xcrun simctl io "${SIMULATOR_UDID}" screenshot "$RUNNER_TEMP/CravesMobile-simulator-deeplink-registration.png"
+          echo "Simulator install, launch, runtime-error scan, and custom URL registration smoke passed."
 
       - name: Upload simulator app artifact
         uses: actions/upload-artifact@v4
@@ -280,7 +304,7 @@ jobs:
         with:
           name: CravesMobile-simulator-smoke
           path: |
-            ${{ runner.temp }}/CravesMobile-simulator.png
+            ${{ runner.temp }}/CravesMobile-simulator-*.png
             ${{ runner.temp }}/CravesMobile-simulator.log
             ${{ runner.temp }}/metro.log
           if-no-files-found: warn

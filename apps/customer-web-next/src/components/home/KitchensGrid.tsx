@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -78,13 +78,13 @@ function KitchenDishPreview({
     );
   }
 
-  const showPrevious = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const showPrevious = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
     setActiveIndex((current) => (current - 1 + usable.length) % usable.length);
   };
 
-  const showNext = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const showNext = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
     setActiveIndex((current) => (current + 1) % usable.length);

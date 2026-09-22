@@ -354,12 +354,12 @@ export function CheckoutPaymentButton({
   const buttonLabel = failure?.retryAllowed
     ? checkout
       ? "Try payment again"
-      : "Review total again"
+      : "Retry total"
     : failure
       ? "Payment pending"
       : authoritativeAmount !== null
         ? `Pay ${money(authoritativeAmount, checkout?.currency ?? currency)}`
-        : "Review total";
+        : "Preparing total…";
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white shadow-[0_-8px_28px_rgba(17,24,39,0.06)]">
@@ -375,7 +375,7 @@ export function CheckoutPaymentButton({
               ? failure?.retryAllowed
                 ? "not charged"
                 : "incl. taxes"
-              : "food subtotal · review final total before payment"}
+              : "food subtotal · final total calculates automatically"}
           </p>
         </div>
 
@@ -383,7 +383,7 @@ export function CheckoutPaymentButton({
           type="button"
           disabled={busy || disabled || Boolean(failure && !failure.retryAllowed)}
           onClick={() => void openPayment()}
-          className="ml-auto inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-[11px] border border-[#D92917] bg-[#F62E18] px-5 py-[13px] text-[15px] font-semibold text-white shadow-[0_3px_10px_rgba(246,46,24,0.20)] transition-[background-color,box-shadow,transform] hover:-translate-y-px hover:bg-[#E52A16] hover:shadow-[0_5px_14px_rgba(246,46,24,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 focus-visible:ring-offset-2 sm:flex-none sm:min-w-52 disabled:pointer-events-none disabled:opacity-45"
+          className="ml-auto inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-[11px] border border-[#138A3D] bg-[#16A34A] px-5 py-[13px] text-[15px] font-semibold text-white shadow-[0_4px_12px_rgba(22,163,74,0.22)] transition-[background-color,box-shadow,transform] hover:-translate-y-px hover:bg-[#15803D] hover:shadow-[0_7px_18px_rgba(22,163,74,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A]/35 focus-visible:ring-offset-2 sm:flex-none sm:min-w-52 disabled:pointer-events-none disabled:opacity-45"
         >
           {busy ? (
             <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -393,7 +393,7 @@ export function CheckoutPaymentButton({
           {busy
             ? checkout
               ? "Opening Razorpay…"
-              : "Reviewing total…"
+              : "Preparing total…"
             : buttonLabel}
         </button>
       </div>

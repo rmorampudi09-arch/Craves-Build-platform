@@ -10,6 +10,11 @@ require File.join(File.dirname(`node --print "require.resolve('expo/package.json
 platform :ios, '16.4'
 prepare_react_native_project!
 
+# React Native's precompiled core does not expose the standalone Swift modules
+# required by the official AppDelegate template when static frameworks are used.
+ENV['RCT_USE_PREBUILT_RNCORE'] = '0'
+ENV['RCT_USE_RN_DEP'] = '0'
+
 $RNFirebaseDisableSPM = true
 $RNFirebaseAsStaticFramework = true
 

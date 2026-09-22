@@ -1,6 +1,8 @@
 import UIKit
 import FirebaseCore
 import React
+import React_RCTAppDelegate
+import React_RCTLinking
 import ReactAppDependencyProvider
 
 @main

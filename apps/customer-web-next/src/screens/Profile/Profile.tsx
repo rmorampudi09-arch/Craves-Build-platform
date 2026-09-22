@@ -19,6 +19,7 @@ import { AddressCard } from "@/components/profile/AddressCard";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { ProfileLinkCard } from "@/components/profile/ProfileLinkCard";
+import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
 import type { CustomerAddress } from "@/lib/address-contract";
 import type { ChefApplication } from "@/lib/chef-application-contract";
 import type { CustomerOrder } from "@/lib/order-contract";
@@ -328,7 +329,11 @@ function ProfileContent({
     };
   }, [navigate]);
 
-  if (loading || !user) {
+  if (loading) {
+    return <CustomerPageSkeleton label="Loading your Craves profile" />;
+  }
+
+  if (!user) {
     return (
       <div className="min-h-screen bg-white">
         <ProfileHeader />

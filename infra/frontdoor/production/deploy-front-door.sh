@@ -185,7 +185,7 @@ ensure_static_identity_encoding(){
 purge_static_assets(){
   local purge_uri purge_body
   purge_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/afdEndpoints/${ENDPOINT}/purge?api-version=2025-04-15"
-  purge_body="$(jq -nc '{contentPaths:["/_next/static/*"]}')"
+  purge_body="$(jq -nc '{contentPaths:["/_next/static/*","/home/cravings/*"]}')"
   az rest --method post --uri "$purge_uri" --headers Content-Type=application/json --body "$purge_body" --only-show-errors >/dev/null
 }
 
@@ -210,13 +210,13 @@ ensure_edge(){
   else
     az afd route create -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$APP_ROUTE" --origin-group "$ogid" --patterns-to-match '/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$rs" --enabled-state Enabled --only-show-errors >/dev/null
   fi
-  # Cache immutable Next.js build assets, but do not ask Front Door to
-  # generate compressed representations. The origin already provides safe
+  # Cache immutable Next.js build assets and the curated home craving images,
+  # but do not ask Front Door to generate compressed representations. The origin already provides safe
   # HTTP compression, and disabling edge compression prevents cold clients
   # from stalling on JavaScript/CSS bundles.
   cache='{compression-settings:{content-types-to-compress:[text/css,text/javascript,application/javascript,application/json,image/svg+xml,font/woff2,font/woff],is-compression-enabled:false},query-string-caching-behavior:IgnoreQueryString}'
   if az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" >/dev/null 2>&1; then
-    az afd route update -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --origin-group "$ogid" --patterns-to-match '/_next/static/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$static_rs" --cache-configuration "$cache" --enabled-state Enabled --only-show-errors >/dev/null
+    az afd route update -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --origin-group "$ogid" --patterns-to-match '/_next/static/*' '/home/cravings/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$static_rs" --cache-configuration "$cache" --enabled-state Enabled --only-show-errors >/dev/null
   else
     az afd route create -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --origin-group "$ogid" --patterns-to-match '/_next/static/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$static_rs" --cache-configuration "$cache" --enabled-state Enabled --only-show-errors >/dev/null
   fi
@@ -421,6 +421,8 @@ validate_edge(){
   local app_cache static_cache
   app_cache="$(az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$APP_ROUTE" --query cacheConfiguration -o json)"
   static_cache="$(az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --query cacheConfiguration -o json)"
+  local static_patterns
+  static_patterns="$(az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --query patternsToMatch -o json)"
   # Azure CLI 2.88.0 emits an empty string (instead of JSON null) when the
   # route has no cache configuration. Normalize it before semantic validation.
   [[ -n "$app_cache" ]] || app_cache='null'
@@ -444,6 +446,11 @@ validate_edge(){
     (.queryStringCachingBehavior == "IgnoreQueryString") and
     (.compressionSettings.isCompressionEnabled == false)
   ' <<<"$static_cache" >/dev/null || fail "Static route caching must remain enabled with Front Door compression disabled: $static_cache"
+
+  jq -e '
+    (index("/_next/static/*") != null) and
+    (index("/home/cravings/*") != null)
+  ' <<<"$static_patterns" >/dev/null || fail "Static route must cache both Next.js assets and home craving images: $static_patterns"
 
   local static_rule_uri
   static_rule_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/ruleSets/${STATIC_RULESET}/rules/${STATIC_RULE_NAME}?api-version=2025-04-15"

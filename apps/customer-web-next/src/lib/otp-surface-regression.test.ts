@@ -44,11 +44,13 @@ test("customer and chef OTP flows hide visible captcha and enforce one border", 
 
 test("signed-in discovery keeps the rebuilt paper reference surface", () => {
   const browse = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
+  const skeleton = source("../components/loading/CustomerPageSkeleton.tsx");
 
   assert.match(
     browse,
-    /flex min-h-screen items-center justify-center \$\{styles\.paperSurface\}/,
+    /return <CustomerPageSkeleton label="Loading your Craves home" \/>/,
   );
+  assert.match(skeleton, /animate-pulse/);
   assert.match(
     browse,
     /\$\{styles\.paperSurface\} min-h-screen pb-24 text-\[#1A1A1A\]/,

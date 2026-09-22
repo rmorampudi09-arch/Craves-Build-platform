@@ -1,7 +1,10 @@
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   ArrowUpRight,
   ChefHat,
+  ChevronLeft,
+  ChevronRight,
   MapPin,
   RefreshCw,
   SearchX,
@@ -48,6 +51,25 @@ function KitchenDishPreview({
   images: string[];
 }) {
   const usable = Array.from(new Set(images.filter(Boolean))).slice(0, 5);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [images]);
+
+  useEffect(() => {
+    if (usable.length <= 1) return;
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reducedMotion.matches) return;
+
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % usable.length);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [usable.length]);
+
   if (!usable.length) {
     return (
       <div className="flex aspect-[16/10] items-center justify-center bg-[#F1F3F5] text-[#F62E18]">
@@ -56,28 +78,62 @@ function KitchenDishPreview({
     );
   }
 
-  const moving = usable.length > 1;
-  const rail = moving ? [...usable, ...usable] : usable;
+  const showPrevious = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setActiveIndex((current) => (current - 1 + usable.length) % usable.length);
+  };
+
+  const showNext = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setActiveIndex((current) => (current + 1) % usable.length);
+  };
 
   return (
     <div className={styles.kitchenPreviewViewport}>
-      <div
-        className={
-          moving ? styles.kitchenPreviewTrack : styles.kitchenPreviewStatic
-        }
-        aria-label={`Popular dishes from ${name}`}
-      >
-        {rail.map((src, index) => (
-          <img
-            key={src + "-" + index}
-            src={src}
-            alt={index < usable.length ? `${name} dish preview` : ""}
-            loading="lazy"
-            decoding="async"
-            className={styles.kitchenPreviewImage}
-          />
-        ))}
-      </div>
+      <img
+        key={usable[activeIndex]}
+        src={usable[activeIndex]}
+        alt={`${name} dish preview ${activeIndex + 1} of ${usable.length}`}
+        loading="lazy"
+        decoding="async"
+        className={styles.kitchenPreviewImage}
+      />
+
+      {usable.length > 1 ? (
+        <>
+          <button
+            type="button"
+            onClick={showPrevious}
+            className="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/80 bg-white/85 text-[#1A1A1A] shadow-[0_6px_18px_rgba(26,26,26,0.14)] backdrop-blur-md transition-[background-color,box-shadow] hover:bg-white hover:shadow-[0_8px_22px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35"
+            aria-label={`Show previous dish from ${name}`}
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={showNext}
+            className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/80 bg-white/85 text-[#1A1A1A] shadow-[0_6px_18px_rgba(26,26,26,0.14)] backdrop-blur-md transition-[background-color,box-shadow] hover:bg-white hover:shadow-[0_8px_22px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35"
+            aria-label={`Show next dish from ${name}`}
+          >
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </button>
+          <div
+            className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-full bg-black/25 px-2 py-1 backdrop-blur-sm"
+            aria-hidden="true"
+          >
+            {usable.map((src, index) => (
+              <span
+                key={src}
+                className={`h-1.5 rounded-full transition-all duration-200 ${
+                  index === activeIndex ? "w-4 bg-white" : "w-1.5 bg-white/60"
+                }`}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -96,7 +152,7 @@ export function KitchensGrid({
 
   return (
     <section
-      className="mx-auto max-w-[88rem] px-4 pb-12 pt-10 md:px-7 lg:px-10 lg:pb-16 lg:pt-14"
+      className="mx-auto max-w-[88rem] px-4 pb-10 pt-7 md:px-7 md:pt-9 lg:px-10 lg:pb-14 lg:pt-10"
       aria-labelledby="nearby-kitchens-heading"
     >
       <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
@@ -180,14 +236,19 @@ export function KitchensGrid({
             return (
               <article
                 key={kitchen.id}
-                className="group overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white shadow-[0_8px_28px_rgba(26,26,26,0.07)] transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-[#F62E18]/25 hover:shadow-[0_18px_42px_rgba(26,26,26,0.12)] motion-reduce:transform-none"
+                role="button"
+                tabIndex={0}
+                onClick={() => onSelectKitchen(kitchen)}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelectKitchen(kitchen);
+                  }
+                }}
+                className="group cursor-pointer overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white text-left text-[#1A1A1A] shadow-[0_8px_28px_rgba(26,26,26,0.07)] transition-[border-color,box-shadow] duration-300 hover:border-[#F62E18]/25 hover:shadow-[0_18px_42px_rgba(26,26,26,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+                aria-label={`Open ${name}`}
               >
-                <button
-                  type="button"
-                  onClick={() => onSelectKitchen(kitchen)}
-                  className="block w-full !border-0 !bg-transparent p-0 text-left !text-[#1A1A1A] !shadow-none hover:!bg-transparent"
-                  aria-label={`Open ${name}`}
-                >
                   <KitchenDishPreview name={name} images={previews} />
                   <div className="p-4 sm:p-4.5">
                     <div className="flex items-start justify-between gap-3">
@@ -215,7 +276,6 @@ export function KitchensGrid({
                       </span>
                     </div>
                   </div>
-                </button>
               </article>
             );
           })}

@@ -1,5 +1,5 @@
 import * as Popover from "@radix-ui/react-popover";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ChevronDown,
@@ -30,6 +30,9 @@ const SORT_FILTERS: readonly SortFilterOption[] = [
   { value: "price-low-high", label: "Cost: Low to High" },
   { value: "price-high-low", label: "Cost: High to Low" },
 ];
+
+const INITIAL_DISH_COUNT = 12;
+const DISH_BATCH_SIZE = 8;
 
 interface DishesGridProps {
   dishes: Dish[];
@@ -92,7 +95,42 @@ export function DishesGrid({
 }: DishesGridProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftSort, setDraftSort] = useState<HomeDishSort>(sort);
+  const [visibleCount, setVisibleCount] = useState(INITIAL_DISH_COUNT);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const normalizedSearch = searchTerm.trim();
+  const dishListKey = useMemo(
+    () => dishes.map((dish) => dish.id).join("|"),
+    [dishes],
+  );
+  const visibleDishes = useMemo(
+    () => dishes.slice(0, visibleCount),
+    [dishes, visibleCount],
+  );
+  const hasMoreDishes = visibleCount < dishes.length;
+
+  useEffect(() => {
+    setVisibleCount(Math.min(INITIAL_DISH_COUNT, dishes.length));
+  }, [dishListKey, dishes.length]);
+
+  useEffect(() => {
+    if (state !== "ready" || !hasMoreDishes) return;
+
+    const target = loadMoreRef.current;
+    if (!target || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        setVisibleCount((current) =>
+          Math.min(current + DISH_BATCH_SIZE, dishes.length),
+        );
+      },
+      { rootMargin: "600px 0px" },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [dishes.length, hasMoreDishes, state]);
   const hasFilters = selectedCategory !== "All" || sort !== "recommended";
   const activeFilterCount =
     Number(selectedCategory !== "All") + Number(sort !== "recommended");
@@ -344,11 +382,24 @@ export function DishesGrid({
       ) : null}
 
       {state === "ready" && dishes.length > 0 ? (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {dishes.map((dish) => (
-            <DishCard key={dish.id} dish={dish} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {visibleDishes.map((dish) => (
+              <DishCard key={dish.id} dish={dish} />
+            ))}
+          </div>
+          {hasMoreDishes ? (
+            <div
+              ref={loadMoreRef}
+              className="flex min-h-24 items-center justify-center"
+              role="status"
+              aria-label="Loading more nearby dishes"
+            >
+              <span className="h-7 w-7 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-[#F62E18]" />
+              <span className="sr-only">Loading more dishes</span>
+            </div>
+          ) : null}
+        </>
       ) : null}
     </section>
   );

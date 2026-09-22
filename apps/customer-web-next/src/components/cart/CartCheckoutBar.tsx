@@ -42,13 +42,17 @@ export function CartCheckoutBar({
           type="button"
           onClick={onContinue}
           disabled={disabled}
-          className="group ml-auto inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-[11px] bg-[#F62E18] px-6 py-[13px] text-[15px] font-semibold text-white transition-colors hover:bg-[#DF2815] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 focus-visible:ring-offset-2 sm:flex-none sm:min-w-52 disabled:pointer-events-none disabled:opacity-45"
+          className="group/shiny relative isolate ml-auto inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 overflow-hidden rounded-[11px] bg-[#F62E18] px-6 py-[13px] text-[15px] font-semibold text-white shadow-[0_6px_18px_rgba(246,46,24,0.18)] transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:bg-[#DF2815] hover:shadow-[0_9px_24px_rgba(246,46,24,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 focus-visible:ring-offset-2 motion-reduce:transform-none sm:flex-none sm:min-w-52 disabled:pointer-events-none disabled:opacity-45"
         >
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 -left-1/2 z-0 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/55 to-transparent opacity-0 transition-[left,opacity] duration-700 ease-out group-hover/shiny:left-[120%] group-hover/shiny:opacity-100 motion-reduce:hidden"
+          />
           {disabled ? (
-            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+            <LoaderCircle className="relative z-10 h-4 w-4 animate-spin" aria-hidden="true" />
           ) : null}
-          {disabled ? "Checking cart…" : "Continue"}
-          {!disabled ? <FaArrowRight className="text-sm" aria-hidden="true" /> : null}
+          <span className="relative z-10">{disabled ? "Checking cart…" : "Continue"}</span>
+          {!disabled ? <FaArrowRight className="relative z-10 text-sm" aria-hidden="true" /> : null}
         </button>
       </div>
     </div>

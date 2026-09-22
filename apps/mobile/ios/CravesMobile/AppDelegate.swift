@@ -1,6 +1,6 @@
 import UIKit
 import FirebaseCore
-import Expo
+internal import Expo
 import React
 import ReactAppDependencyProvider
 

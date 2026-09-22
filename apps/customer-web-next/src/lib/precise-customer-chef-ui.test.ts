@@ -155,6 +155,13 @@ test("address manager owns default selection and the shared location-first edito
   assert.match(addresses, /clearDishDiscoveryCache/);
   assert.match(addresses, /clearKitchenDiscoveryCache/);
   assert.match(addresses, /<AddressEditorFlow/);
+  assert.match(addresses, /initialLoadState/);
+  assert.match(addresses, /aria-label="Loading saved addresses"/);
+  assert.match(
+    addresses,
+    /initialLoadState === "ready" && addresses\.length === 0/,
+  );
+  assert.match(addresses, /initialLoadState === "error"/);
 
   assert.match(addressEditor, /<Dialog\.Root/);
   assert.match(addressEditor, /<AddressMapPicker/);

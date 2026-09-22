@@ -68,6 +68,9 @@ function invalidateHomeDeliveryContext(): void {
 export default function AddressesPage() {
   const navigate = useNavigate();
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
+  const [initialLoadState, setInitialLoadState] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorAddress, setEditorAddress] = useState<CustomerAddress | null>(null);
   const [profileDefaults, setProfileDefaults] = useState({
@@ -87,6 +90,7 @@ export default function AddressesPage() {
     if (!response.ok)
       throw new Error(body?.message || "Addresses could not be loaded.");
     setAddresses(body);
+    setInitialLoadState("ready");
     const incomplete = body.filter(
       (address: CustomerAddress) => !isDeliveryReadyAddress(address),
     ).length;
@@ -114,13 +118,14 @@ export default function AddressesPage() {
         contactPhoneNumber: current.phoneNumber || current.phone || "",
       });
       await load();
-    })().catch((error) =>
+    })().catch((error) => {
+      setInitialLoadState("error");
       setMessage(
         error instanceof Error
           ? error.message
           : "Addresses could not be loaded.",
-      ),
-    );
+      );
+    });
   }, [navigate]);
 
   function beginCreate() {
@@ -322,7 +327,48 @@ export default function AddressesPage() {
           })}
         </div>
 
-        {addresses.length === 0 ? (
+        {initialLoadState === "loading" ? (
+          <div
+            className="space-y-4"
+            role="status"
+            aria-label="Loading saved addresses"
+          >
+            {Array.from({ length: 2 }, (_, index) => (
+              <div
+                key={index}
+                className="rounded-[24px] border border-[#E5E7EB] bg-white px-5 py-5 shadow-[0_4px_18px_rgba(26,26,26,0.04)] md:px-6 md:py-6"
+                aria-hidden="true"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="h-12 w-12 shrink-0 animate-pulse rounded-2xl bg-[#F1F3F5] md:h-14 md:w-14" />
+                  <div className="min-w-0 flex-1">
+                    <div className="h-5 w-28 animate-pulse rounded-full bg-[#F1F3F5]" />
+                    <div className="mt-3 h-4 w-40 animate-pulse rounded-full bg-[#F1F3F5]" />
+                    <div className="mt-3 h-4 w-full max-w-md animate-pulse rounded-full bg-[#F1F3F5]" />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <span className="sr-only">Loading saved addresses…</span>
+          </div>
+        ) : null}
+
+        {initialLoadState === "error" ? (
+          <div
+            role="alert"
+            className="rounded-[24px] border border-[#F62E18]/20 bg-[#FFF8F7] px-6 py-8 text-center"
+          >
+            <AlertTriangle className="mx-auto h-8 w-8 text-[#F62E18]" />
+            <h2 className="mt-3 font-display text-xl font-black">
+              Saved addresses could not be loaded
+            </h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">
+              {message}
+            </p>
+          </div>
+        ) : null}
+
+        {initialLoadState === "ready" && addresses.length === 0 ? (
           <div className="rounded-[24px] border border-dashed border-[#D7DADF] bg-white px-6 py-10 text-center">
             <MapPin className="mx-auto h-8 w-8 text-[#F62E18]" />
             <h2 className="mt-3 font-display text-xl font-black">No saved addresses yet</h2>

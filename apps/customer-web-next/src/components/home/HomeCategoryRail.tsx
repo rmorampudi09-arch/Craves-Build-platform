@@ -175,7 +175,7 @@ export function HomeCategoryRail({
   return (
     <>
       <section
-        className="mx-auto max-w-[88rem] bg-white px-4 pt-9 md:px-7 md:pt-10 lg:px-10 lg:pt-14"
+        className="mx-auto max-w-[88rem] bg-white px-4 pt-6 md:px-7 md:pt-7 lg:px-10 lg:pt-8"
         aria-labelledby="craving-categories-heading"
       >
         <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">
@@ -190,7 +190,7 @@ export function HomeCategoryRail({
       </section>
 
       <div className="sticky top-0 z-30 bg-white/95 shadow-[0_7px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl md:static md:bg-white md:shadow-none md:backdrop-blur-none">
-        <div className="relative mx-auto max-w-[88rem] bg-white/95 px-4 pb-1 pt-4 md:bg-white md:px-7 md:pb-0 md:pt-6 lg:px-10 lg:pt-7">
+        <div className="relative mx-auto max-w-[88rem] bg-white/95 px-4 pb-1 pt-3 md:bg-white md:px-7 md:pb-0 md:pt-4 lg:px-10 lg:pt-4">
           <div
             ref={scrollerRef}
             className="flex snap-x snap-mandatory gap-3 overflow-x-auto bg-transparent px-1 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-4 md:gap-5 md:pb-4 lg:gap-8"

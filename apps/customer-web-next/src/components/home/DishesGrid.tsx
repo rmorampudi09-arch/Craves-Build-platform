@@ -175,7 +175,7 @@ export function DishesGrid({
 
   return (
     <section
-      className="mx-auto max-w-[88rem] scroll-mt-32 px-4 pb-10 pt-11 md:px-7 lg:px-10 lg:pt-14"
+      className="mx-auto max-w-[88rem] scroll-mt-32 px-4 pb-10 pt-5 md:px-7 md:pt-6 lg:px-10 lg:pt-7"
       aria-labelledby="available-dishes-heading"
     >
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">

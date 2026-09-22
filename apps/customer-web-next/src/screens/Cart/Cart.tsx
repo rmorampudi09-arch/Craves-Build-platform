@@ -21,6 +21,7 @@ import { CartHeader } from "@/components/cart/CartHeader";
 import { EmptyCartState } from "@/components/cart/EmptyCartState";
 import { CartItemList } from "@/components/cart/CartItemList";
 import { CartCheckoutBar } from "@/components/cart/CartCheckoutBar";
+import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
 
 const CHECKOUT_ID_KEY = "craves.checkout.id";
 const CHECKOUT_OPERATION_ID_KEY = "craves.checkout.operationId";
@@ -216,6 +217,10 @@ function CartPage() {
   const itemCount = items.reduce((total, item) => total + item.qty, 0);
   const kitchenName = items[0]?.chef;
   const kitchenId = items[0]?.kitchenId;
+
+  if (loading) {
+    return <CustomerPageSkeleton label="Loading your Craves cart" />;
+  }
 
   return (
     <div className="min-h-screen bg-white pb-36 text-[#1A1A1A]">

@@ -36,7 +36,7 @@ export function AccountCard({
   const lastName = profile?.lastName ?? user.lastName;
   const name = ((firstName ?? "") + " " + (lastName ?? "")).trim();
   const displayName = name || user.username || "Craves customer";
-  const phone = profile?.registeredPhoneNumber || user.phoneNumber;
+  const phone = (profile?.registeredPhoneNumber || user.phoneNumber || "").replace(/^\+91[\s-]?/, "");
   const email = user.email ?? profile?.email ?? null;
 
   return (

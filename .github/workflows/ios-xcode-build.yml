@@ -179,6 +179,7 @@ jobs:
           )"
           if [[ -n "${simulator_udid}" ]]; then
             destination="platform=iOS Simulator,id=${simulator_udid}"
+            echo "SIMULATOR_UDID=${simulator_udid}" >> "$GITHUB_ENV"
           else
             destination="generic/platform=iOS Simulator"
           fi
@@ -198,7 +199,72 @@ jobs:
             echo "Simulator .app artifact was not produced." >&2
             exit 1
           fi
+          echo "SIMULATOR_APP_PATH=${app_path}" >> "$GITHUB_ENV"
           ditto -c -k --keepParent "${app_path}" "$RUNNER_TEMP/CravesMobile-simulator-app.zip"
+
+      - name: Install and launch simulator smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${SIMULATOR_UDID:-}" || -z "${SIMULATOR_APP_PATH:-}" ]]; then
+            echo "An available iPhone simulator and built .app are required for launch smoke." >&2
+            exit 1
+          fi
+
+          collect_evidence() {
+            xcrun simctl io "${SIMULATOR_UDID}" screenshot "$RUNNER_TEMP/CravesMobile-simulator.png" || true
+            xcrun simctl spawn "${SIMULATOR_UDID}" log show \
+              --last 3m \
+              --style compact \
+              --predicate 'process == "CravesMobile"' \
+              > "$RUNNER_TEMP/CravesMobile-simulator.log" || true
+          }
+          trap collect_evidence EXIT
+
+          xcrun simctl boot "${SIMULATOR_UDID}" 2>/dev/null || true
+          xcrun simctl bootstatus "${SIMULATOR_UDID}" -b
+
+          (
+            cd "${MOBILE_DIR}"
+            nohup npm start -- --host 127.0.0.1 > "$RUNNER_TEMP/metro.log" 2>&1 &
+            echo "$!" > "$RUNNER_TEMP/metro.pid"
+          )
+          metro_ready=false
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8081/status | grep -q "packager-status:running"; then
+              metro_ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [[ "${metro_ready}" != "true" ]]; then
+            echo "Metro did not become ready for the Debug simulator app." >&2
+            tail -200 "$RUNNER_TEMP/metro.log" || true
+            exit 1
+          fi
+
+          xcrun simctl install "${SIMULATOR_UDID}" "${SIMULATOR_APP_PATH}"
+          launch_output="$(xcrun simctl launch --terminate-running-process "${SIMULATOR_UDID}" "${BUNDLE_IDENTIFIER}")"
+          echo "${launch_output}"
+          app_pid="${launch_output##*: }"
+          if [[ ! "${app_pid}" =~ ^[0-9]+$ ]]; then
+            echo "Unable to determine the launched CravesMobile process id." >&2
+            exit 1
+          fi
+
+          sleep 15
+          if ! kill -0 "${app_pid}" 2>/dev/null; then
+            echo "CravesMobile exited during initial simulator launch smoke." >&2
+            exit 1
+          fi
+
+          xcrun simctl openurl "${SIMULATOR_UDID}" "craves://"
+          sleep 5
+          if ! kill -0 "${app_pid}" 2>/dev/null; then
+            echo "CravesMobile exited after craves:// deep-link smoke." >&2
+            exit 1
+          fi
+          echo "Simulator install, launch, process-survival, and deep-link smoke passed."
 
       - name: Upload simulator app artifact
         uses: actions/upload-artifact@v4
@@ -206,6 +272,18 @@ jobs:
           name: CravesMobile-simulator-app
           path: ${{ runner.temp }}/CravesMobile-simulator-app.zip
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload simulator smoke evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: CravesMobile-simulator-smoke
+          path: |
+            ${{ runner.temp }}/CravesMobile-simulator.png
+            ${{ runner.temp }}/CravesMobile-simulator.log
+            ${{ runner.temp }}/metro.log
+          if-no-files-found: warn
           retention-days: 14
 
   signed-ipa:

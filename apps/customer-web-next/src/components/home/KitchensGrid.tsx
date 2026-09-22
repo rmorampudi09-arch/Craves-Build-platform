@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -51,14 +51,31 @@ function KitchenDishPreview({
   images: string[];
 }) {
   const usable = Array.from(new Set(images.filter(Boolean))).slice(0, 5);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     setActiveIndex(0);
   }, [images]);
 
   useEffect(() => {
-    if (usable.length <= 1) return;
+    const target = viewportRef.current;
+    if (!target || typeof IntersectionObserver === "undefined") {
+      setIsVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsVisible(Boolean(entry?.isIntersecting)),
+      { rootMargin: "160px 0px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (usable.length <= 1 || !isVisible) return;
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (reducedMotion.matches) return;
@@ -68,7 +85,7 @@ function KitchenDishPreview({
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [usable.length]);
+  }, [isVisible, usable.length]);
 
   if (!usable.length) {
     return (
@@ -93,7 +110,7 @@ function KitchenDishPreview({
   };
 
   return (
-    <div className={styles.kitchenPreviewViewport}>
+    <div ref={viewportRef} className={styles.kitchenPreviewViewport}>
       <img
         key={usable[safeIndex]}
         src={usable[safeIndex]}

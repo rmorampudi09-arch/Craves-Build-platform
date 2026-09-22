@@ -94,7 +94,13 @@
 }
 
 .categoryImage {
-  transform: none;
+  transform: scale(1);
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.categoryButton:hover .categoryImage {
+  transform: scale(1.035);
 }
 
 .categoryButton:hover .categoryImageShell {
@@ -527,6 +533,10 @@
   .categoryImageShell,
   .categoryImage {
     transition: none;
+  }
+
+  .categoryButton:hover .categoryImage {
+    transform: none;
   }
 
   .filterTriggerButton:hover,

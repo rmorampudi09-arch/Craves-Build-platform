@@ -15,7 +15,7 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   const header = source("../components/home/BrowseHeader.tsx");
   const skeleton = source("../components/loading/CustomerPageSkeleton.tsx");
 
-  assert.match(banner, /home-hero-reference\.webp/);
+  assert.match(banner, /home-hero-banner\.webp/);
   assert.match(banner, /unoptimized/);
   assert.match(home, /CustomerPageSkeleton/);
   assert.match(home, /dishImagesByKitchen=\{kitchenDishImages\}/);

@@ -78,6 +78,8 @@ function KitchenDishPreview({
     );
   }
 
+  const safeIndex = activeIndex % usable.length;
+
   const showPrevious = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -93,9 +95,9 @@ function KitchenDishPreview({
   return (
     <div className={styles.kitchenPreviewViewport}>
       <img
-        key={usable[activeIndex]}
-        src={usable[activeIndex]}
-        alt={`${name} dish preview ${activeIndex + 1} of ${usable.length}`}
+        key={usable[safeIndex]}
+        src={usable[safeIndex]}
+        alt={`${name} dish preview ${safeIndex + 1} of ${usable.length}`}
         loading="lazy"
         decoding="async"
         className={styles.kitchenPreviewImage}
@@ -127,7 +129,7 @@ function KitchenDishPreview({
               <span
                 key={src}
                 className={`h-1.5 rounded-full transition-all duration-200 ${
-                  index === activeIndex ? "w-4 bg-white" : "w-1.5 bg-white/60"
+                  index === safeIndex ? "w-4 bg-white" : "w-1.5 bg-white/60"
                 }`}
               />
             ))}

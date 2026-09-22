@@ -114,8 +114,8 @@ requireMarker(
 );
 requireMarker(
   'ios/CravesMobile/AppDelegate.swift',
-  'import React_RCTLinking',
-  'missing React Native linking import required by the Swift AppDelegate.',
+  'import React',
+  'missing the React module import required by the Swift AppDelegate.',
 );
 requireMarker(
   'ios/CravesMobile/CravesCurrentLocation.m',

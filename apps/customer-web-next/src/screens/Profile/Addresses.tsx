@@ -1,7 +1,7 @@
 "use client";
 
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangle,
@@ -81,7 +81,7 @@ export default function AddressesPage() {
   const [deleteTarget, setDeleteTarget] = useState<CustomerAddress | null>(null);
   const [message, setMessage] = useState("Loading saved addresses…");
 
-  async function load() {
+  const load = useCallback(async () => {
     const response = await fetch("/api/customer/addresses", {
       cache: "no-store",
       credentials: "same-origin",
@@ -101,7 +101,7 @@ export default function AddressesPage() {
           ? `${body.length} saved address${body.length === 1 ? "" : "es"}.`
           : "No addresses saved yet.",
     );
-  }
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -126,7 +126,7 @@ export default function AddressesPage() {
           : "Addresses could not be loaded.",
       );
     });
-  }, [navigate]);
+  }, [load, navigate]);
 
   function beginCreate() {
     setEditorAddress(null);

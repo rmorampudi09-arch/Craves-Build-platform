@@ -12,6 +12,7 @@ import {
   Animated,
   Easing,
   Keyboard,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -159,6 +160,20 @@ export function CustomerBottomTabBar(props: BottomTabBarProps) {
   return <CustomerBottomTabBarContent {...props} />;
 }
 
+export function resolveCustomerBottomNavKeyboardEvents(
+  platformOS: string = Platform.OS,
+) {
+  return platformOS === 'ios'
+    ? {
+        show: 'keyboardWillShow' as const,
+        hide: 'keyboardWillHide' as const,
+      }
+    : {
+        show: 'keyboardDidShow' as const,
+        hide: 'keyboardDidHide' as const,
+      };
+}
+
 function CustomerBottomTabBarContent(props: BottomTabBarProps) {
   const {animationProgress, isVisible} =
     useCustomerBottomNavVisibilityContext();
@@ -179,10 +194,11 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
   }, []);
 
   useEffect(() => {
-    const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
+    const keyboardEvents = resolveCustomerBottomNavKeyboardEvents();
+    const showSubscription = Keyboard.addListener(keyboardEvents.show, () => {
       setKeyboardVisible(true);
     });
-    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+    const hideSubscription = Keyboard.addListener(keyboardEvents.hide, () => {
       setKeyboardVisible(false);
     });
     return () => {

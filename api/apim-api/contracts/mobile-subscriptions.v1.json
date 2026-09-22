@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "phase": "P119",
+  "generatedAt": "2026-09-22T14:16:24.838Z",
+  "provenance": "Generated from current apps/mobile/src HTTP call surface for iOS factory P119 coverage. Replace with APIM-published manifests when the APIM pipeline source of truth is available.",
+  "actions": [
+    {
+      "id": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-1",
+      "source": "src/features/chefSubscription/api/chefSubscriptionApi.ts",
+      "method": "GET",
+      "path": "/api/v1/chef/subscription-plans",
+      "auth": "bearer",
+      "requestModel": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-1.request",
+      "responseModel": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-1.response",
+      "requestValidator": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-1.requestValidator",
+      "responseValidator": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-1.responseValidator"
+    },
+    {
+      "id": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-2",
+      "source": "src/features/chefSubscription/api/chefSubscriptionApi.ts",
+      "method": "GET",
+      "path": "/api/v1/chef/subscription-plans/{value}/schedule",
+      "auth": "bearer",
+      "requestModel": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-2.request",
+      "responseModel": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-2.response",
+      "requestValidator": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-2.requestValidator",
+      "responseValidator": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-2.responseValidator"
+    },
+    {
+      "id": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-3",
+      "source": "src/features/chefSubscription/api/chefSubscriptionApi.ts",
+      "method": "GET",
+      "path": "/api/v1/chef/subscription-capacity",
+      "auth": "bearer",
+      "requestModel": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-3.request",
+      "responseModel": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-3.response",
+      "requestValidator": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-3.requestValidator",
+      "responseValidator": "features-chefsubscription-api-chefsubscriptionapi-get-bearer-3.responseValidator"
+    },
+    {
+      "id": "features-chefsubscription-api-chefsubscriptionapi-post-bearer-1",
+      "source": "src/features/chefSubscription/api/chefSubscriptionApi.ts",
+      "method": "POST",
+      "path": "/api/v1/chef/subscription-plans",
+      "auth": "bearer",
+      "requestModel": "features-chefsubscription-api-chefsubscriptionapi-post-bearer-1.request",
+      "responseModel": "features-chefsubscription-api-chefsubscriptionapi-post-bearer-1.response",
+      "requestValidator": "features-chefsubscription-api-chefsubscriptionapi-post-bearer-1.requestValidator",
+      "responseValidator": "features-chefsubscription-api-chefsubscriptionapi-post-bearer-1.responseValidator"
+    },
+    {
+      "id": "features-chefsubscription-api-chefsubscriptionapi-post-bearer-2",
+      "source": "src/features/chefSubscription/api/chefSubscriptionApi.ts",
+      "method": "POST",
+      "path": "/api/v1/chef/subscription-plans/{value}/submit",
+      "auth": "bearer",
+      "requestModel": "features-chefsubscription-api-chefsubscriptionapi-post-bearer-2.request",
+      "responseModel": "features-chefsubscription-api-chefsubscriptionapi-post-bearer-2.response",
+      "requestValidator": "features-chefsubscription-api-chefsubscriptionapi-post-bearer-2.requestValidator",
+      "responseValidator": "features-chefsubscription-api-chefsubscriptionapi-post-bearer-2.responseValidator"
+    },
+    {
+      "id": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-1",
+      "source": "src/features/chefSubscription/api/chefSubscriptionApi.ts",
+      "method": "PUT",
+      "path": "/api/v1/chef/subscription-plans/{value}",
+      "auth": "bearer",
+      "requestModel": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-1.request",
+      "responseModel": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-1.response",
+      "requestValidator": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-1.requestValidator",
+      "responseValidator": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-1.responseValidator"
+    },
+    {
+      "id": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-2",
+      "source": "src/features/chefSubscription/api/chefSubscriptionApi.ts",
+      "method": "PUT",
+      "path": "/api/v1/chef/subscription-plans/{value}/schedule",
+      "auth": "bearer",
+      "requestModel": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-2.request",
+      "responseModel": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-2.response",
+      "requestValidator": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-2.requestValidator",
+      "responseValidator": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-2.responseValidator"
+    },
+    {
+      "id": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-3",
+      "source": "src/features/chefSubscription/api/chefSubscriptionApi.ts",
+      "method": "PUT",
+      "path": "/api/v1/chef/subscription-capacity/rules/slots",
+      "auth": "bearer",
+      "requestModel": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-3.request",
+      "responseModel": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-3.response",
+      "requestValidator": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-3.requestValidator",
+      "responseValidator": "features-chefsubscription-api-chefsubscriptionapi-put-bearer-3.responseValidator"
+    },
+    {
+      "id": "features-customersubscription-api-customersubscriptionapi-get-bearer-1",
+      "source": "src/features/customerSubscription/api/customerSubscriptionApi.ts",
+      "method": "GET",
+      "path": "/api/v1/subscriptions/plans",
+      "auth": "bearer",
+      "requestModel": "features-customersubscription-api-customersubscriptionapi-get-bearer-1.request",
+      "responseModel": "features-customersubscription-api-customersubscriptionapi-get-bearer-1.response",
+      "requestValidator": "features-customersubscription-api-customersubscriptionapi-get-bearer-1.requestValidator",
+      "responseValidator": "features-customersubscription-api-customersubscriptionapi-get-bearer-1.responseValidator"
+    },
+    {
+      "id": "features-customersubscription-api-customersubscriptionapi-get-bearer-2",
+      "source": "src/features/customerSubscription/api/customerSubscriptionApi.ts",
+      "method": "GET",
+      "path": "/api/v1/subscriptions/plans/{value}",
+      "auth": "bearer",
+      "requestModel": "features-customersubscription-api-customersubscriptionapi-get-bearer-2.request",
+      "responseModel": "features-customersubscription-api-customersubscriptionapi-get-bearer-2.response",
+      "requestValidator": "features-customersubscription-api-customersubscriptionapi-get-bearer-2.requestValidator",
+      "responseValidator": "features-customersubscription-api-customersubscriptionapi-get-bearer-2.responseValidator"
+    },
+    {
+      "id": "features-customersubscription-api-customersubscriptionapi-get-bearer-3",
+      "source": "src/features/customerSubscription/api/customerSubscriptionApi.ts",
+      "method": "GET",
+      "path": "/api/v1/subscriptions/plans/{value}/schedule",
+      "auth": "bearer",
+      "requestModel": "features-customersubscription-api-customersubscriptionapi-get-bearer-3.request",
+      "responseModel": "features-customersubscription-api-customersubscriptionapi-get-bearer-3.response",
+      "requestValidator": "features-customersubscription-api-customersubscriptionapi-get-bearer-3.requestValidator",
+      "responseValidator": "features-customersubscription-api-customersubscriptionapi-get-bearer-3.responseValidator"
+    },
+    {
+      "id": "features-customersubscription-api-customersubscriptionapi-get-bearer-4",
+      "source": "src/features/customerSubscription/api/customerSubscriptionApi.ts",
+      "method": "GET",
+      "path": "/api/v1/subscriptions",
+      "auth": "bearer",
+      "requestModel": "features-customersubscription-api-customersubscriptionapi-get-bearer-4.request",
+      "responseModel": "features-customersubscription-api-customersubscriptionapi-get-bearer-4.response",
+      "requestValidator": "features-customersubscription-api-customersubscriptionapi-get-bearer-4.requestValidator",
+      "responseValidator": "features-customersubscription-api-customersubscriptionapi-get-bearer-4.responseValidator"
+    },
+    {
+      "id": "features-customersubscription-api-customersubscriptionapi-get-bearer-5",
+      "source": "src/features/customerSubscription/api/customerSubscriptionApi.ts",
+      "method": "GET",
+      "path": "/api/v1/subscriptions/{value}",
+      "auth": "bearer",
+      "requestModel": "features-customersubscription-api-customersubscriptionapi-get-bearer-5.request",
+      "responseModel": "features-customersubscription-api-customersubscriptionapi-get-bearer-5.response",
+      "requestValidator": "features-customersubscription-api-customersubscriptionapi-get-bearer-5.requestValidator",
+      "responseValidator": "features-customersubscription-api-customersubscriptionapi-get-bearer-5.responseValidator"
+    },
+    {
+      "id": "features-customersubscription-api-customersubscriptionapi-get-bearer-6",
+      "source": "src/features/customerSubscription/api/customerSubscriptionApi.ts",
+      "method": "GET",
+      "path": "/api/v1/subscriptions/{value}/occurrences",
+      "auth": "bearer",
+      "requestModel": "features-customersubscription-api-customersubscriptionapi-get-bearer-6.request",
+      "responseModel": "features-customersubscription-api-customersubscriptionapi-get-bearer-6.response",
+      "requestValidator": "features-customersubscription-api-customersubscriptionapi-get-bearer-6.requestValidator",
+      "responseValidator": "features-customersubscription-api-customersubscriptionapi-get-bearer-6.responseValidator"
+    },
+    {
+      "id": "features-customersubscription-api-customersubscriptionapi-patch-bearer-1",
+      "source": "src/features/customerSubscription/api/customerSubscriptionApi.ts",
+      "method": "PATCH",
+      "path": "/api/v1/subscriptions/{value}/pause",
+      "auth": "bearer",
+      "requestModel": "features-customersubscription-api-customersubscriptionapi-patch-bearer-1.request",
+      "responseModel": "features-customersubscription-api-customersubscriptionapi-patch-bearer-1.response",
+      "requestValidator": "features-customersubscription-api-customersubscriptionapi-patch-bearer-1.requestValidator",
+      "responseValidator": "features-customersubscription-api-customersubscriptionapi-patch-bearer-1.responseValidator"
+    },
+    {
+      "id": "features-customersubscription-api-customersubscriptionapi-patch-bearer-2",
+      "source": "src/features/customerSubscription/api/customerSubscriptionApi.ts",
+      "method": "PATCH",
+      "path": "/api/v1/subscriptions/{value}/resume",
+      "auth": "bearer",
+      "requestModel": "features-customersubscription-api-customersubscriptionapi-patch-bearer-2.request",
+      "responseModel": "features-customersubscription-api-customersubscriptionapi-patch-bearer-2.response",
+      "requestValidator": "features-customersubscription-api-customersubscriptionapi-patch-bearer-2.requestValidator",
+      "responseValidator": "features-customersubscription-api-customersubscriptionapi-patch-bearer-2.responseValidator"
+    },
+    {
+      "id": "features-customersubscription-api-customersubscriptionapi-patch-bearer-3",
+      "source": "src/features/customerSubscription/api/customerSubscriptionApi.ts",
+      "method": "PATCH",
+      "path": "/api/v1/subscriptions/{value}/cancel",
+      "auth": "bearer",
+      "requestModel": "features-customersubscription-api-customersubscriptionapi-patch-bearer-3.request",
+      "responseModel": "features-customersubscription-api-customersubscriptionapi-patch-bearer-3.response",
+      "requestValidator": "features-customersubscription-api-customersubscriptionapi-patch-bearer-3.requestValidator",
+      "responseValidator": "features-customersubscription-api-customersubscriptionapi-patch-bearer-3.responseValidator"
+    },
+    {
+      "id": "features-customersubscription-api-customersubscriptionapi-post-bearer-1",
+      "source": "src/features/customerSubscription/api/customerSubscriptionApi.ts",
+      "method": "POST",
+      "path": "/api/v1/subscriptions",
+      "auth": "bearer",
+      "requestModel": "features-customersubscription-api-customersubscriptionapi-post-bearer-1.request",
+      "responseModel": "features-customersubscription-api-customersubscriptionapi-post-bearer-1.response",
+      "requestValidator": "features-customersubscription-api-customersubscriptionapi-post-bearer-1.requestValidator",
+      "responseValidator": "features-customersubscription-api-customersubscriptionapi-post-bearer-1.responseValidator"
+    },
+    {
+      "id": "features-customersubscription-api-customersubscriptionapi-post-bearer-2",
+      "source": "src/features/customerSubscription/api/customerSubscriptionApi.ts",
+      "method": "POST",
+      "path": "/api/v1/subscriptions/{value}/skips",
+      "auth": "bearer",
+      "requestModel": "features-customersubscription-api-customersubscriptionapi-post-bearer-2.request",
+      "responseModel": "features-customersubscription-api-customersubscriptionapi-post-bearer-2.response",
+      "requestValidator": "features-customersubscription-api-customersubscriptionapi-post-bearer-2.requestValidator",
+      "responseValidator": "features-customersubscription-api-customersubscriptionapi-post-bearer-2.responseValidator"
+    }
+  ],
+  "quarantined": []
+}

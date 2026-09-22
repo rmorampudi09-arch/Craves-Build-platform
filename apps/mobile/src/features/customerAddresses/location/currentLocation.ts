@@ -11,7 +11,7 @@ export const Accuracy = {
   High: 'high',
 } as const;
 
-type PermissionStatusValue =
+export type PermissionStatusValue =
   (typeof PermissionStatus)[keyof typeof PermissionStatus];
 
 interface PermissionResponse {
@@ -26,17 +26,19 @@ interface NativeCoordinate {
 }
 
 interface CravesCurrentLocationNativeModule {
-  requestPermission?: () => Promise<PermissionStatusValue>;
-  getPermissionStatus?: () => Promise<PermissionStatusValue>;
+  requestPermission?: () => Promise<unknown>;
+  getPermissionStatus?: () => Promise<unknown>;
   getCurrentLocation?: () => Promise<NativeCoordinate>;
 }
 
-const nativeLocation = NativeModules.CravesCurrentLocation as
-  | CravesCurrentLocationNativeModule
-  | undefined;
-
 const LOCATION_PERMISSION_REQUESTED_KEY =
   'craves:location-permission-requested:v1';
+
+function getNativeLocation(): CravesCurrentLocationNativeModule | undefined {
+  return NativeModules.CravesCurrentLocation as
+    | CravesCurrentLocationNativeModule
+    | undefined;
+}
 
 async function wasPermissionRequested(): Promise<boolean> {
   try {
@@ -54,10 +56,22 @@ async function markPermissionRequested(): Promise<void> {
   }
 }
 
-function permissionResponse(status: PermissionStatusValue): PermissionResponse {
+export function normalizePermissionStatus(status: unknown): PermissionStatusValue {
+  if (
+    status === PermissionStatus.GRANTED ||
+    status === PermissionStatus.DENIED ||
+    status === PermissionStatus.UNDETERMINED
+  ) {
+    return status;
+  }
+  return PermissionStatus.DENIED;
+}
+
+function permissionResponse(status: unknown): PermissionResponse {
+  const normalizedStatus = normalizePermissionStatus(status);
   return {
-    status,
-    canAskAgain: status === PermissionStatus.UNDETERMINED,
+    status: normalizedStatus,
+    canAskAgain: normalizedStatus === PermissionStatus.UNDETERMINED,
   };
 }
 
@@ -81,8 +95,13 @@ export async function getForegroundPermissionsAsync(): Promise<PermissionRespons
       : {status: PermissionStatus.UNDETERMINED, canAskAgain: true};
   }
 
+  const nativeLocation = getNativeLocation();
   if (Platform.OS === 'ios' && nativeLocation?.getPermissionStatus) {
-    return permissionResponse(await nativeLocation.getPermissionStatus());
+    try {
+      return permissionResponse(await nativeLocation.getPermissionStatus());
+    } catch {
+      return {status: PermissionStatus.DENIED, canAskAgain: false};
+    }
   }
 
   return {status: PermissionStatus.DENIED, canAskAgain: false};
@@ -113,8 +132,13 @@ export async function requestForegroundPermissionsAsync(): Promise<PermissionRes
     };
   }
 
+  const nativeLocation = getNativeLocation();
   if (Platform.OS === 'ios' && nativeLocation?.requestPermission) {
-    return permissionResponse(await nativeLocation.requestPermission());
+    try {
+      return permissionResponse(await nativeLocation.requestPermission());
+    } catch {
+      return {status: PermissionStatus.DENIED, canAskAgain: false};
+    }
   }
 
   return {status: PermissionStatus.DENIED, canAskAgain: false};
@@ -123,6 +147,7 @@ export async function requestForegroundPermissionsAsync(): Promise<PermissionRes
 export async function getCurrentPositionAsync(_options?: {
   accuracy?: unknown;
 }): Promise<{coords: NativeCoordinate}> {
+  const nativeLocation = getNativeLocation();
   if (!nativeLocation?.getCurrentLocation) {
     throw new Error('Current location is not available on this device.');
   }

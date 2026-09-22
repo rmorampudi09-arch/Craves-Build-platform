@@ -1,0 +1,16 @@
+PODS:
+  - CravesMobileReleasePlaceholder (0.0.0)
+
+DEPENDENCIES:
+  - CravesMobileReleasePlaceholder
+
+SPEC REPOS:
+  trunk:
+    - CravesMobileReleasePlaceholder
+
+SPEC CHECKSUMS:
+  CravesMobileReleasePlaceholder: 0000000000000000000000000000000000000000
+
+PODFILE CHECKSUM: 0000000000000000000000000000000000000000
+
+COCOAPODS: 1.16.2

@@ -369,23 +369,15 @@ export default function CheckoutPage() {
     if (autoReviewKeyRef.current === reviewKey) return;
     autoReviewKeyRef.current = reviewKey;
 
-    let active = true;
     setReviewing(true);
     void ensureCheckout()
       .catch((caught) => {
-        if (!active) return;
         setPaymentFailure({
           message: checkoutMessage(caught),
           retryAllowed: true,
         });
       })
-      .finally(() => {
-        if (active) setReviewing(false);
-      });
-
-    return () => {
-      active = false;
-    };
+      .finally(() => setReviewing(false));
   }, [
     checkout,
     ensureCheckout,

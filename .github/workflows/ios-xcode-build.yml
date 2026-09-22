@@ -171,14 +171,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          destination="platform=iOS Simulator,name=iPhone 16"
+          if ! xcrun simctl list devices available | grep -q 'iPhone 16'; then
+            destination="platform=iOS Simulator,name=iPhone 15"
+          fi
+          if ! xcrun simctl list devices available | grep -Eq 'iPhone 1[56]'; then
+            destination="generic/platform=iOS Simulator"
+          fi
+          echo "Using simulator destination: ${destination}"
           xcodebuild \
             -workspace "${IOS_DIR}/${SCHEME}.xcworkspace" \
             -scheme "${SCHEME}" \
             -configuration Debug \
             -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination "${destination}" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=YES \
             build
           app_path="$(find "$RUNNER_TEMP/DerivedData/Build/Products" -maxdepth 4 -type d -path "*Debug-iphonesimulator/*.app" | head -1)"
           if [[ -z "${app_path}" ]]; then

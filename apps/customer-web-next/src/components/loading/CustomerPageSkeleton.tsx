@@ -9,7 +9,7 @@ export function CustomerPageSkeleton({
 }) {
   return (
     <main
-      className="min-h-screen bg-white px-4 pb-24 pt-4 text-[#1A1A1A] md:px-7 lg:px-10"
+      className="h-[100dvh] overflow-hidden bg-white px-4 pb-6 pt-4 text-[#1A1A1A] md:px-7 lg:px-10"
       aria-busy="true"
       role="status"
       aria-label={label}

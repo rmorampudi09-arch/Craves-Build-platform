@@ -42,6 +42,7 @@ import {
   type CheckoutPaymentFailure,
 } from "@/components/checkout/CheckoutPaymentButton";
 import { AddressEditorFlow } from "@/components/profile/AddressEditorFlow";
+import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
 
 const ADDRESS_KEY = "craves.checkout.addressId";
 const CHECKOUT_ID_KEY = "craves.checkout.id";
@@ -186,6 +187,7 @@ async function createAuthoritativeCheckout(
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const prepareStartedRef = useRef(false);
+  const autoReviewKeyRef = useRef("");
   const [items, setItems] = useState<CartItem[]>([]);
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -201,6 +203,7 @@ export default function CheckoutPage() {
   const [paymentFailure, setPaymentFailure] =
     useState<CheckoutPaymentFailure>(null);
   const [loading, setLoading] = useState(true);
+  const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState("");
 
   const prepareCheckout = useCallback(async () => {
@@ -320,6 +323,7 @@ export default function CheckoutPage() {
 
   function selectAddress(id: string) {
     if (checkout) return;
+    autoReviewKeyRef.current = "";
     setSelectedId(id);
     window.sessionStorage.setItem(ADDRESS_KEY, id);
     window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
@@ -327,10 +331,10 @@ export default function CheckoutPage() {
     setError("");
   }
 
-  async function ensureCheckout(): Promise<CustomerCheckout> {
+  const ensureCheckout = useCallback(async (): Promise<CustomerCheckout> => {
     if (checkout) return checkout;
     if (!selectedId) {
-      throw new Error("Choose a delivery address before reviewing the total.");
+      throw new Error("Choose a delivery address before continuing.");
     }
 
     const operationId =
@@ -347,7 +351,51 @@ export default function CheckoutPage() {
     setCheckout(prepared);
     setPaymentFailure(null);
     return prepared;
-  }
+  }, [checkout, instructions, selectedId]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      reviewing ||
+      checkout ||
+      !selectedId ||
+      items.length === 0 ||
+      paymentFailure
+    ) {
+      return;
+    }
+
+    const reviewKey = `${selectedId}:${instructions.trim()}`;
+    if (autoReviewKeyRef.current === reviewKey) return;
+    autoReviewKeyRef.current = reviewKey;
+
+    let active = true;
+    setReviewing(true);
+    void ensureCheckout()
+      .catch((caught) => {
+        if (!active) return;
+        setPaymentFailure({
+          message: checkoutMessage(caught),
+          retryAllowed: true,
+        });
+      })
+      .finally(() => {
+        if (active) setReviewing(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    checkout,
+    ensureCheckout,
+    instructions,
+    items.length,
+    loading,
+    paymentFailure,
+    reviewing,
+    selectedId,
+  ]);
 
   async function handleBackToCart() {
     setError("");
@@ -393,12 +441,16 @@ export default function CheckoutPage() {
   const visibleAddresses = showAllAddresses ? addresses : addresses.slice(0, 3);
   const hasCheckoutContext = items.length > 0 || checkout !== null;
 
+  if (loading) {
+    return <CustomerPageSkeleton label="Preparing your checkout" />;
+  }
+
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-36 text-[#1A1A1A]">
       <CheckoutHeader
         onBack={() => void handleBackToCart()}
         title="Checkout"
-        subtitle="Review delivery and total before payment"
+        subtitle="Choose delivery, then pay securely"
       />
 
       <main className="mx-auto max-w-3xl px-4 py-5 md:px-6 md:py-8">
@@ -582,9 +634,11 @@ export default function CheckoutPage() {
                   </>
                 ) : (
                   <div className="mt-3 flex items-start gap-2 border-t border-[#E5E7EB] pt-3">
-                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />
+                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#16A34A]" aria-hidden="true" />
                     <p className="text-xs leading-5 text-[#6B6B6B]">
-                      Review the order to load the authoritative delivery fee, tax and final total before payment.
+                      {reviewing
+                        ? "Calculating delivery fee, tax and your final total…"
+                        : "Your final total is calculated automatically for the selected address."}
                     </p>
                   </div>
                 )}
@@ -617,7 +671,7 @@ export default function CheckoutPage() {
           checkout={checkout}
           previewAmount={subtotal}
           currency={currency}
-          disabled={!checkout && !selectedAddress}
+          disabled={reviewing || (!checkout && !selectedAddress)}
           failure={paymentFailure}
           ensureCheckout={ensureCheckout}
           onFailure={setPaymentFailure}

@@ -119,9 +119,9 @@ test("public landing keeps the approved semantic reference experience and wired 
 });
 
 test("welcome banner uses the approved responsive full-art asset while discovery uses the saved default address", () => {
-  assert.match(welcome, /src="\/home\/reference\/home-hero-reference\.webp"/);
-  assert.match(welcome, /width=\{1200\}/);
-  assert.match(welcome, /height=\{487\}/);
+  assert.match(welcome, /src="\/home\/reference\/home-hero-banner\.webp"/);
+  assert.match(welcome, /width=\{1600\}/);
+  assert.match(welcome, /height=\{650\}/);
   assert.match(welcome, /unoptimized/);
   assert.match(welcome, /className="block h-auto w-full"/);
   assert.match(welcome, /aria-label=\{\`Welcome Taste Rebel home food banner for \$\{firstName\}\`\}/);

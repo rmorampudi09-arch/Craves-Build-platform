@@ -28,8 +28,8 @@ export function WelcomeBanner({
         <Image
           src="/home/reference/home-hero-banner.webp"
           alt="Welcome Taste Rebel. Eat for Health. Taste the Comfort of Home. Fresh food from nearby home kitchens, made with familiar ingredients, personal recipes and the kind of care that feels like home."
-          width={1983}
-          height={793}
+          width={1600}
+          height={650}
           priority
           unoptimized
           sizes="(min-width: 1440px) 1344px, (min-width: 1024px) calc(100vw - 80px), (min-width: 768px) calc(100vw - 40px), calc(100vw - 32px)"

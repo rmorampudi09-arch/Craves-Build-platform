@@ -35,6 +35,8 @@ import {
   type CravesUser,
   type SessionContext,
 } from "@/services/auth/cravesAuth";
+import { cartCount, loadCart } from "@/services/api/cravesCart";
+import { loadCustomerFavoriteIds } from "@/services/api/customerFavorites";
 
 function chefLink(user: CravesUser, application: ChefApplication | null) {
   if (user.roles.some((role) => role.toUpperCase() === "CHEF")) {
@@ -201,6 +203,8 @@ function ProfileContent({
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [orderCount, setOrderCount] = useState(0);
+  const [favoriteCount, setFavoriteCount] = useState(0);
+  const [cartItemCount, setCartItemCount] = useState(0);
   const [application, setApplication] = useState<ChefApplication | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -244,6 +248,8 @@ function ProfileContent({
         addressResponse,
         ordersResponse,
         chefResponse,
+        favoriteIds,
+        loadedCart,
       ] = await Promise.all([
         fetch("/api/customer/profile", {
           cache: "no-store",
@@ -261,6 +267,8 @@ function ProfileContent({
           cache: "no-store",
           credentials: "same-origin",
         }),
+        loadCustomerFavoriteIds().catch(() => new Set<string>()),
+        loadCart().catch(() => []),
       ]);
 
       if (
@@ -292,6 +300,9 @@ function ProfileContent({
       if (chefResponse.ok) {
         setApplication((await chefResponse.json()) as ChefApplication);
       }
+
+      setFavoriteCount(favoriteIds.size);
+      setCartItemCount(loadedCart.length ? cartCount() : 0);
 
       if (!profileResponse.ok && profileResponse.status !== 404) {
         setError(
@@ -461,7 +472,12 @@ function ProfileContent({
               to="/wishlist"
               icon={FaHeart}
               title="Favorites"
-              subtitle="Saved meals and kitchens"
+              subtitle={
+                favoriteCount +
+                " " +
+                (favoriteCount === 1 ? "saved dish" : "saved dishes")
+              }
+              badge={String(favoriteCount)}
             />
             <ProfileLinkCard
               to="/notifications"
@@ -510,9 +526,13 @@ function ProfileContent({
             <ProfileLinkCard
               to="/cart"
               icon={FaCreditCard}
-              title="Payments"
-              subtitle="Choose and confirm your payment method securely at checkout"
-              badge="Checkout"
+              title="Cart & checkout"
+              subtitle={
+                cartItemCount +
+                " " +
+                (cartItemCount === 1 ? "item ready in your cart" : "items ready in your cart")
+              }
+              badge={String(cartItemCount)}
             />
             <ProfileLinkCard
               icon={FaGift}

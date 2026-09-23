@@ -45,8 +45,8 @@ test("mobile discovery keeps search, veg and cravings accessible while scrolling
   assert.match(header, /mobileCompact/);
   assert.match(header, /fixed inset-x-0 top-0 z-50/);
   assert.match(cravings, /translate-y-\[var\(--craves-mobile-search-offset,0px\)\]/);
-  assert.match(cravings, /md:top-\[4\.25rem\]/);
-  assert.match(cravings, /lg:top-\[4\.65rem\]/);
+  assert.match(cravings, /md:top-\[var\(--craves-desktop-header-offset-md,4\.25rem\)\]/);
+  assert.match(cravings, /lg:top-\[var\(--craves-desktop-header-offset-lg,4\.65rem\)\]/);
   assert.match(header, /--craves-mobile-search-offset/);
   assert.match(header, /mobileDirectionAnchorRef/);
   assert.match(header, /direction === "up" && travel >= 20/);
@@ -54,7 +54,10 @@ test("mobile discovery keeps search, veg and cravings accessible while scrolling
   assert.match(header, /mobileCompact \? "3\.75rem" : "0px"/);
   assert.match(header, /duration-\[340ms\]/);
   assert.match(cravings, /duration-\[340ms\]/);
-  assert.match(cravings, /lg:top-\[4\.65rem\]/);
+  assert.match(autoHide, /--craves-desktop-header-offset-md/);
+  assert.match(autoHide, /duration-\[300ms\]/);
+  assert.match(cravings, /md:duration-\[300ms\]/);
+  assert.match(cravings, /lg:top-\[var\(--craves-desktop-header-offset-lg,4\.65rem\)\]/);
   assert.doesNotMatch(cravings, /md:static/);
 });
 
@@ -69,8 +72,8 @@ test("mobile browse proportions and cart glass stay aligned with the compact ref
   assert.doesNotMatch(card, /aspect-\[4\/3\]/);
   assert.match(grid, /aspect-\[16\/9\] sm:aspect-\[16\/10\]/);
   assert.doesNotMatch(grid, /aspect-\[4\/3\]/);
-  assert.match(cravings, /h-\[3\.4rem\] w-\[3\.4rem\]/);
-  assert.match(nav, /backdrop-blur-\[8px\]/);
+  assert.match(cravings, /h-\[3\.8rem\] w-\[3\.8rem\]/);
+  assert.match(nav, /bg-white\/50/);\n  assert.match(nav, /backdrop-blur-\[8px\]/);\n  assert.match(nav, /backdrop-saturate-\[145%\]/);
   assert.match(homeStyles, /backdrop-filter: blur\(8px\) saturate\(145%\)/);
   assert.doesNotMatch(homeStyles, /blur\(48px\)/);
 });

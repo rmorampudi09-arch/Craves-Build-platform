@@ -358,6 +358,32 @@ jobs:
             "allow location access to fill and map this delivery address" \
             "recipient name"
 
+          payment_launch_output="$(xcrun simctl launch --terminate-running-process \
+            "${SIMULATOR_UDID}" \
+            "${built_bundle_id}" \
+            -CRAVES_E2E_PAYMENT_UNAVAILABLE YES)"
+          echo "${payment_launch_output}"
+          app_pid="${payment_launch_output##*: }"
+          if [[ ! "${app_pid}" =~ ^[0-9]+$ ]]; then
+            echo "Unable to determine the payment-safe-failure CravesMobile process id." >&2
+            exit 1
+          fi
+          sleep 10
+          if ! kill -0 "${app_pid}" 2>/dev/null; then
+            echo "CravesMobile exited during payment-safe-failure smoke." >&2
+            exit 1
+          fi
+          collect_evidence
+          if grep -Eiq 'com\\.facebook\\.react\\.log:javascript.*\\[(TypeError|ReferenceError|SyntaxError|Invariant Violation|Error:)' "$RUNNER_TEMP/CravesMobile-simulator.log"; then
+            echo "CravesMobile emitted a fatal JavaScript runtime error during payment-safe-failure smoke." >&2
+            exit 1
+          fi
+          xcrun simctl io "${SIMULATOR_UDID}" screenshot "$RUNNER_TEMP/CravesMobile-simulator-payment-unavailable.png"
+          swift "$RUNNER_TEMP/verify-auth-shell.swift" \
+            "$RUNNER_TEMP/CravesMobile-simulator-payment-unavailable.png" \
+            "payment could not start" \
+            "secure payment checkout is not available"
+
           xcrun simctl openurl "${SIMULATOR_UDID}" "craves://"
           sleep 5
           if ! kill -0 "${app_pid}" 2>/dev/null; then

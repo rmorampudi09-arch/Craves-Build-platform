@@ -41,6 +41,51 @@ export type CravesAddress = {
   lng?: number;
 };
 
+const SESSION_SNAPSHOT_KEY = "craves.customer.session.snapshot.v1";
+
+function readSessionSnapshot(): CravesUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_SNAPSHOT_KEY);
+    if (!raw) return null;
+    const candidate = JSON.parse(raw) as Partial<CravesUser> | null;
+    if (
+      !candidate ||
+      typeof candidate.id !== "string" ||
+      typeof candidate.phoneNumber !== "string" ||
+      !Array.isArray(candidate.roles) ||
+      candidate.status !== "ACTIVE"
+    ) {
+      return null;
+    }
+    return candidate as CravesUser;
+  } catch {
+    return null;
+  }
+}
+
+function persistSessionSnapshot(value: CravesUser | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (!value) {
+      window.sessionStorage.removeItem(SESSION_SNAPSHOT_KEY);
+      return;
+    }
+    window.sessionStorage.setItem(SESSION_SNAPSHOT_KEY, JSON.stringify(value));
+  } catch {
+    // Storage availability must never decide whether the customer stays signed in.
+  }
+}
+
+function recoverSessionSnapshot(): CravesUser | null {
+  if (session) return session;
+  const cached = readSessionSnapshot();
+  if (!cached) return null;
+  session = cached;
+  notify();
+  return session;
+}
+
 let session: CravesUser | null = null;
 let sessionEmailRevision = -1;
 let sessionGeneration = 0;
@@ -57,7 +102,7 @@ export function isSessionReady(): boolean { return !sessionEnding && session?.st
 function invalidatePendingSessionWork() { sessionGeneration += 1; roleSynchronization = null; }
 export function invalidateSession(context: SessionContext): void { if (isSessionContextCurrent(context)) forgetSession(); }
 function forgetSession() {
-  invalidatePendingSessionWork(); sessionEnding = false; session = null; sessionEmailRevision = -1; selectedLocation = null; notify();
+  invalidatePendingSessionWork(); sessionEnding = false; session = null; sessionEmailRevision = -1; selectedLocation = null; persistSessionSnapshot(null); notify();
 }
 let selectedLocation: CravesAddress | null = null;
 let roleSynchronization: Promise<CravesUser | null> | null = null;
@@ -134,6 +179,7 @@ async function hydrateCustomerProfile(current: CravesUser, context = captureSess
   const profile = parseCustomerProfile(await response.json().catch(() => null));
   if (!profile || !isSessionContextCurrent(context) || session?.id !== current.id) return session;
   session = withCustomerProfile(session, profile);
+  persistSessionSnapshot(session);
   notify();
   return session;
 }
@@ -144,6 +190,7 @@ export function setSessionIdentity(identity: CravesIdentity): CravesUser {
   sessionEnding = false;
   sessionEmailRevision = -1;
   session = fromIdentity(identity);
+  persistSessionSnapshot(session);
   notify();
   return session;
 }
@@ -165,6 +212,7 @@ export function setSessionEmailVerification(identityId: string, value: EmailVeri
   if (!session || !isSessionContextCurrent(context) || session.id !== identityId || !parsed.success || parsed.data.emailRevision < sessionEmailRevision) return session;
   sessionEmailRevision = parsed.data.emailRevision;
   session = { ...session, email: parsed.data.email ?? undefined, emailVerified: parsed.data.emailVerified };
+  persistSessionSnapshot(session);
   notify();
   return session;
 }
@@ -181,6 +229,7 @@ function applyIdentityLookup(identity: CravesIdentity, context: SessionContext, 
   if (previous?.id === identity.id && sessionEmailRevision >= 0) {
     session = { ...session, email: previous.email, emailVerified: previous.emailVerified };
   }
+  persistSessionSnapshot(session);
   notify();
   return session;
 }
@@ -193,10 +242,14 @@ export async function loadSession(): Promise<CravesUser | null> {
     fetch("/api/auth/me", {
       cache: "no-store",
       credentials: "same-origin",
-    });
+    }).catch(() => null);
 
   let response = await lookup();
   if (!isSessionContextCurrent(context)) return session;
+
+  if (!response) {
+    return recoverSessionSnapshot();
+  }
 
   if (response.status === 401) {
     const refreshed = await refreshSessionForGeneration(context.generation);
@@ -208,17 +261,26 @@ export async function loadSession(): Promise<CravesUser | null> {
     return session;
   }
 
+  if (!response) {
+    return recoverSessionSnapshot();
+  }
+
   if (!response.ok) {
-    if ((response.status === 401 || response.status === 403) && session) {
-      forgetSession();
+    if (response.status === 401 || response.status === 403) {
+      if (session || readSessionSnapshot()) forgetSession();
+      return null;
     }
-    return null;
+
+    // A transient BFF/provider error is not proof that the customer signed out.
+    return recoverSessionSnapshot();
   }
 
   const identity = (await response.json().catch(() => null)) as CravesIdentity | null;
-  if (!identity?.id || !isSessionContextCurrent(context)) return session;
+  if (!identity?.id || !isSessionContextCurrent(context)) {
+    return recoverSessionSnapshot();
+  }
   const current = applyIdentityLookup(identity, context, sequence);
-  return current ? hydrateCustomerProfile(current) : null;
+  return current ? hydrateCustomerProfile(current) : recoverSessionSnapshot();
 }
 
 export async function synchronizeSessionRoles(): Promise<CravesUser | null> {

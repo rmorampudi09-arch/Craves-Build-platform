@@ -69,6 +69,7 @@ The published manifest covers the current production calls across:
 - cart;
 - checkout;
 - payment order create/read/verify;
+- subscription-payment latest-invoice/read/create-order/Razorpay-verify;
 - customer orders and delivery tracking;
 - customer profile hub;
 - in-app notifications;
@@ -78,7 +79,7 @@ The published manifest covers the current production calls across:
 - Chef kitchen profile read/replace;
 - Chef business-verification read.
 
-After quarantining Chef earnings, the manifest contains **49 production mobile HTTP actions**.
+The current five-manifest P119 inventory contains **120 published mobile HTTP actions** plus **44 source-only fail-closed actions** after adding the four subscription-payment operations.
 
 ## Request and response validation audit
 
@@ -99,6 +100,8 @@ Performed through repository inspection after the implementation commits:
 - verified the existing Chef payout module's explicit APIM-unavailable boundary before removing the dashboard earnings call;
 - re-read the updated branch HEAD and changed-file contents through GitHub;
 - manually reconciled the manifest action counts/methods against the audited production API modules.
+- added the four authenticated subscription-payment operations to `mobile-subscriptions.v1.json`;
+- extended `subscriptionPaymentApi.test.ts` with invalid-invoice and mismatched-verification fail-closed regression coverage.
 
 Not claimed:
 

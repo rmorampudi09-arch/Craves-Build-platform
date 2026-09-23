@@ -180,6 +180,41 @@ describe('subscription payment contract', () => {
     );
   });
 
+  it('rejects an invalid invoice id before creating a provider order', async () => {
+    await expect(
+      subscriptionPaymentApi.createOrder('not-an-invoice-id', {
+        customerName: 'Ashoka Sanjapu',
+        customerPhone: '+919876543210',
+      }),
+    ).rejects.toMatchObject({
+      code: 'SUBSCRIPTION_PAYMENT_INVALID_ID',
+    });
+
+    expect(postMock).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when verification returns a different invoice', async () => {
+    postMock.mockResolvedValue({
+      ...razorpayPending,
+      invoiceId: '44444444-4444-4444-8444-444444444444',
+      status: 'PAID',
+      providerPaymentId: 'pay_subscription123',
+      providerStatus: 'captured',
+      updatedAt: '2026-09-23T08:02:00Z',
+      paidAt: '2026-09-23T08:02:00Z',
+    });
+
+    await expect(
+      subscriptionPaymentApi.verifyRazorpay(INVOICE_ID, {
+        providerOrderId: 'order_subscription123',
+        providerPaymentId: 'pay_subscription123',
+        providerSignature: 'a'.repeat(64),
+      }),
+    ).rejects.toMatchObject({
+      code: 'SUBSCRIPTION_PAYMENT_IDENTITY_MISMATCH',
+    });
+  });
+
   it('fails closed when a backend response belongs to another subscription', async () => {
     getMock.mockResolvedValue({
       ...requestedPayment,

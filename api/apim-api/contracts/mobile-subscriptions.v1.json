@@ -129,6 +129,50 @@
       "responseValidator": "customerSubscriptionSchema"
     },
     {
+      "id": "subscriptionPayments.getLatestForSubscription",
+      "source": "src/features/customerSubscription/api/subscriptionPaymentApi.ts",
+      "method": "GET",
+      "path": "/api/v1/subscription-payments/subscriptions/{subscriptionId}",
+      "auth": "bearer",
+      "requestModel": "none",
+      "responseModel": "SubscriptionPayment",
+      "requestValidator": "requireUuid(subscriptionId)",
+      "responseValidator": "requirePayment + subscription identity check"
+    },
+    {
+      "id": "subscriptionPayments.getInvoice",
+      "source": "src/features/customerSubscription/api/subscriptionPaymentApi.ts",
+      "method": "GET",
+      "path": "/api/v1/subscription-payments/invoices/{invoiceId}",
+      "auth": "bearer",
+      "requestModel": "none",
+      "responseModel": "SubscriptionPayment",
+      "requestValidator": "requireUuid(invoiceId)",
+      "responseValidator": "requirePayment + invoice identity check"
+    },
+    {
+      "id": "subscriptionPayments.createOrder",
+      "source": "src/features/customerSubscription/api/subscriptionPaymentApi.ts",
+      "method": "POST",
+      "path": "/api/v1/subscription-payments/invoices/{invoiceId}/orders",
+      "auth": "bearer",
+      "requestModel": "CreateSubscriptionPaymentOrderRequest",
+      "responseModel": "SubscriptionPayment",
+      "requestValidator": "requireUuid(invoiceId) + requireCreateOrderRequest",
+      "responseValidator": "requirePayment + invoice identity check"
+    },
+    {
+      "id": "subscriptionPayments.verifyRazorpay",
+      "source": "src/features/customerSubscription/api/subscriptionPaymentApi.ts",
+      "method": "POST",
+      "path": "/api/v1/subscription-payments/invoices/{invoiceId}/verify",
+      "auth": "bearer",
+      "requestModel": "RazorpayVerificationProof",
+      "responseModel": "SubscriptionPayment",
+      "requestValidator": "requireUuid(invoiceId) + requireVerificationRequest",
+      "responseValidator": "requirePayment + invoice identity check"
+    },
+    {
       "id": "chefSubscriptions.listPlans",
       "source": "src/features/chefSubscription/api/chefSubscriptionApi.ts",
       "method": "GET",

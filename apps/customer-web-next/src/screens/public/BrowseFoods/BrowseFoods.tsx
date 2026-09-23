@@ -65,6 +65,7 @@ import {
   getSession,
   loadSelectedAddress,
   loadSession,
+  recoverSessionSnapshotForNavigation,
   type CravesAddress,
   type CravesUser,
 } from "@/services/auth/cravesAuth";
@@ -406,11 +407,12 @@ function BrowseFoodsPage() {
         try {
           current = await loadSession();
         } catch {
-          if (active) {
+          current = getSession() ?? recoverSessionSnapshotForNavigation();
+          if (!current && active) {
             setSessionUnavailable(true);
             setDefaultAddressResolved(true);
+            return;
           }
-          return;
         }
       }
       if (!active) return;
@@ -423,11 +425,18 @@ function BrowseFoodsPage() {
         try {
           current = await loadSession();
         } catch {
-          setSessionUnavailable(true);
-          setDefaultAddressResolved(true);
-          return;
+          current = getSession() ?? recoverSessionSnapshotForNavigation();
+          if (!current) {
+            setSessionUnavailable(true);
+            setDefaultAddressResolved(true);
+            return;
+          }
         }
         if (!active) return;
+      }
+
+      if (!current) {
+        current = getSession() ?? recoverSessionSnapshotForNavigation();
       }
 
       if (!current) {

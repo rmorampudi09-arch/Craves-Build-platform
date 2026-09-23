@@ -355,24 +355,24 @@ export function KitchensGrid({
                 aria-label={`Open ${name}`}
               >
                   <KitchenDishPreview name={name} images={previews} />
-                  <div className="px-3.5 pb-3 pt-3 sm:px-4 sm:pb-3.5">
+                  <div className="px-3.5 pb-2.5 pt-2.5 sm:px-4 sm:pb-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <h3 className="truncate font-display text-lg font-black tracking-[-0.025em] text-[#1A1A1A]">
+                        <h3 className="truncate font-display text-base font-black tracking-[-0.02em] text-[#1A1A1A] sm:text-[1.05rem]">
                           {name}
                         </h3>
-                        <p className="mt-1 flex items-center gap-1.5 text-xs font-bold text-[#6B6B6B]">
+                        <p className="mt-0.5 flex items-center gap-1.5 text-[0.7rem] font-bold text-[#6B6B6B] sm:text-xs">
                           <MapPin className="h-3.5 w-3.5 shrink-0 fill-[#F62E18] text-[#F62E18]" strokeWidth={1.4} aria-hidden="true" />
                           <span className="truncate">{location || `${kitchen.city}, ${kitchen.state}`}</span>
                         </p>
                       </div>
-                      <span className="shrink-0 rounded-lg bg-[#F1F3F5] px-2.5 py-1.5 text-[0.68rem] font-black text-[#1A1A1A]">
+                      <span className="shrink-0 rounded-lg bg-[#F1F3F5] px-2.5 py-1 text-[0.66rem] font-black text-[#1A1A1A]">
                         {formatDistance(kitchen.distanceMeters)}
                       </span>
                     </div>
 
-                    <div className="mt-2.5 border-t border-[#F1F3F5] pt-2.5">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-black text-[#1A1A1A]">
+                    <div className="mt-2 flex items-center border-t border-[#F1F3F5] pt-2">
+                      <span className="inline-flex items-center gap-1.5 text-[0.7rem] font-black text-[#1A1A1A] sm:text-xs">
                         <UtensilsCrossed className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
                         {kitchen.activeMenuItemCount} active {kitchen.activeMenuItemCount === 1 ? "dish" : "dishes"}
                       </span>

@@ -31,15 +31,6 @@ export function PaymentProviderUnavailableE2EScreen() {
       })
       .catch(error => {
         if (!active) return;
-        const errorCode =
-          error && typeof error === 'object' && 'code' in error
-            ? String(error.code)
-            : 'UNKNOWN';
-        if (__DEV__) {
-          console.info(
-            `E2E_PAYMENT_PROVIDER_UNAVAILABLE_VISIBLE:${errorCode}`,
-          );
-        }
         setMessage(
           error instanceof Error
             ? error.message

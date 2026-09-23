@@ -2,6 +2,7 @@ import React from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Modal,
   Pressable,
   RefreshControl,
@@ -27,7 +28,10 @@ import {
   typography,
 } from '../../../design/tokens';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {toAppApiError} from '../../../core/http/apiError';
 import {customerAddressesApi} from '../../customerAddresses/api/customerAddressesApi';
+import {customerProfileApi} from '../../customerProfile/api/customerProfileApi';
+import {openRazorpayCheckout} from '../../payment/gateway/razorpayGateway';
 import {
   isCustomerAddressDeliveryReady,
   type CustomerAddress,
@@ -40,6 +44,9 @@ import {
   type PublicSubscriptionPlan,
   type PublicSubscriptionPolicy,
 } from '../api/customerSubscriptionApi';
+import {subscriptionPaymentApi} from '../api/subscriptionPaymentApi';
+import type {SubscriptionPayment} from '../domain/subscriptionPaymentTypes';
+import {pendingSubscriptionPaymentStore} from '../storage/pendingSubscriptionPaymentStore';
 
 type Navigation = NativeStackNavigationProp<CustomerProfileStackParamList>;
 type Category = 'ALL' | 'WEIGHT_LOSS' | 'HIGH_PROTEIN' | 'VEG' | 'BALANCED' | 'CUSTOM';
@@ -62,6 +69,39 @@ function money(plan: PublicSubscriptionPlan): string {
   const value = Number(plan.amount);
   const amount = Number.isFinite(value) ? value.toFixed(Number.isInteger(value) ? 0 : 2) : plan.amount;
   return plan.currency === 'INR' ? `₹${amount}` : `${plan.currency} ${amount}`;
+}
+
+function paymentMoney(payment: SubscriptionPayment): string {
+  const numeric = Number(payment.amount.amount);
+  const amount = Number.isFinite(numeric)
+    ? numeric.toFixed(Number.isInteger(numeric) ? 0 : 2)
+    : payment.amount.amount;
+  return payment.amount.currency === 'INR'
+    ? `₹${amount}`
+    : `${payment.amount.currency} ${amount}`;
+}
+
+function paymentActionLabel(payment: SubscriptionPayment): string {
+  if (payment.status === 'PAYMENT_REQUESTED') return 'Pay securely';
+  if (payment.status === 'PAYMENT_PENDING') return 'Continue payment';
+  return 'Retry payment';
+}
+
+async function waitForSubscriptionPayment(
+  subscriptionId: string,
+): Promise<SubscriptionPayment | null> {
+  const delays = [0, 400, 900, 1600];
+  for (let index = 0; index < delays.length; index += 1) {
+    if (delays[index] > 0) {
+      await new Promise(resolve => setTimeout(resolve, delays[index]));
+    }
+    try {
+      return await subscriptionPaymentApi.getLatestForSubscription(subscriptionId);
+    } catch {
+      if (index === delays.length - 1) return null;
+    }
+  }
+  return null;
 }
 
 function billingLabel(value: string): string {
@@ -174,6 +214,11 @@ export function CustomerMealPlansScreen() {
   const [policyLoading, setPolicyLoading] = React.useState(false);
   const [selectedSubscription, setSelectedSubscription] = React.useState<CustomerSubscription | null>(null);
   const [occurrences, setOccurrences] = React.useState<CustomerSubscriptionOccurrence[]>([]);
+  const [subscriptionPayment, setSubscriptionPayment] = React.useState<SubscriptionPayment | null>(null);
+  const [paymentLoading, setPaymentLoading] = React.useState(false);
+  const [paymentBusy, setPaymentBusy] = React.useState(false);
+  const [paymentRecoveryNotice, setPaymentRecoveryNotice] = React.useState<string | null>(null);
+  const [paymentRecoverySubscriptionId, setPaymentRecoverySubscriptionId] = React.useState<string | null>(null);
   const [myPlansVisible, setMyPlansVisible] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -214,6 +259,47 @@ export function CustomerMealPlansScreen() {
     load().catch(() => undefined);
   }, [load]);
 
+  const recoverInterruptedPayment = React.useCallback(async () => {
+    const pending = await pendingSubscriptionPaymentStore.load();
+    if (!pending) return;
+
+    try {
+      const latest = await subscriptionPaymentApi.getInvoice(pending.invoiceId);
+      if (latest.subscriptionId !== pending.subscriptionId) {
+        await pendingSubscriptionPaymentStore.clear();
+        return;
+      }
+
+      if (selectedSubscription?.id === latest.subscriptionId) {
+        setSubscriptionPayment(latest);
+      }
+
+      setPaymentRecoverySubscriptionId(latest.subscriptionId);
+      if (latest.status === 'PAID') {
+        await pendingSubscriptionPaymentStore.clear();
+        setPaymentRecoveryNotice('Your interrupted meal-plan payment was recovered and confirmed.');
+      } else if (latest.status === 'FAILED' || latest.status === 'CANCELLED') {
+        await pendingSubscriptionPaymentStore.clear();
+        setPaymentRecoveryNotice('Your previous meal-plan payment did not complete. You can retry safely.');
+      } else {
+        setPaymentRecoveryNotice('You have an unfinished meal-plan payment. Review it before starting another payment.');
+      }
+    } catch {
+      setPaymentRecoverySubscriptionId(pending.subscriptionId);
+      setPaymentRecoveryNotice('We found an unfinished meal-plan payment. Open it to check the latest status.');
+    }
+  }, [selectedSubscription?.id]);
+
+  React.useEffect(() => {
+    recoverInterruptedPayment().catch(() => undefined);
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        recoverInterruptedPayment().catch(() => undefined);
+      }
+    });
+    return () => subscription.remove();
+  }, [recoverInterruptedPayment]);
+
   React.useEffect(() => {
     if (!selectedPlan) {
       setSchedule(null);
@@ -239,10 +325,13 @@ export function CustomerMealPlansScreen() {
     setSelectedSubscription(subscription);
     setOccurrences([]);
     setSelectedPolicy(null);
+    setSubscriptionPayment(null);
     setPolicyLoading(true);
-    const [occurrencesResult, policyResult] = await Promise.allSettled([
+    setPaymentLoading(true);
+    const [occurrencesResult, policyResult, paymentResult] = await Promise.allSettled([
       customerSubscriptionApi.listOccurrences(subscription.id),
       customerSubscriptionApi.getPlanPolicy(subscription.planId),
+      subscriptionPaymentApi.getLatestForSubscription(subscription.id),
     ]);
     setOccurrences(
       occurrencesResult.status === 'fulfilled' ? occurrencesResult.value : [],
@@ -250,7 +339,11 @@ export function CustomerMealPlansScreen() {
     setSelectedPolicy(
       policyResult.status === 'fulfilled' ? policyResult.value : null,
     );
+    setSubscriptionPayment(
+      paymentResult.status === 'fulfilled' ? paymentResult.value : null,
+    );
     setPolicyLoading(false);
+    setPaymentLoading(false);
   }, []);
 
   const filteredPlans = React.useMemo(
@@ -269,6 +362,176 @@ export function CustomerMealPlansScreen() {
     ];
   }, [plans]);
 
+  const refreshSubscriptionPayment = React.useCallback(
+    async (subscription: CustomerSubscription, announce = false) => {
+      if (paymentLoading) return;
+      setPaymentLoading(true);
+      try {
+        const latest = await subscriptionPaymentApi.getLatestForSubscription(subscription.id);
+        setSubscriptionPayment(latest);
+        if (latest.status === 'PAID' || latest.status === 'FAILED' || latest.status === 'CANCELLED') {
+          const pending = await pendingSubscriptionPaymentStore.load();
+          if (pending?.invoiceId === latest.invoiceId) {
+            await pendingSubscriptionPaymentStore.clear();
+          }
+        }
+        if (announce) {
+          Alert.alert(
+            latest.status === 'PAID' ? 'Payment confirmed' : 'Payment status',
+            latest.status === 'PAID'
+              ? 'Your meal-plan payment is confirmed.'
+              : `Current status: ${statusLabel(latest.status)}.`,
+          );
+        }
+        return latest;
+      } catch (error) {
+        if (announce) {
+          Alert.alert('Payment status unavailable', toAppApiError(error).message);
+        }
+        return null;
+      } finally {
+        setPaymentLoading(false);
+      }
+    },
+    [paymentLoading],
+  );
+
+  const payForSubscription = React.useCallback(
+    async (
+      subscription: CustomerSubscription,
+      initialPayment?: SubscriptionPayment | null,
+    ) => {
+      if (paymentBusy) return;
+      setPaymentBusy(true);
+      try {
+        let payment =
+          initialPayment ??
+          (await subscriptionPaymentApi.getLatestForSubscription(subscription.id));
+        setSubscriptionPayment(payment);
+
+        if (payment.status === 'PAID') {
+          await pendingSubscriptionPaymentStore.clear();
+          Alert.alert('Payment already confirmed', 'This meal-plan invoice is already paid.');
+          return;
+        }
+
+        const profileHub = await customerProfileApi.getProfile();
+        const profile = profileHub?.profile;
+        const customerName = profile?.displayName?.trim();
+        const customerPhone = profile?.registeredPhone.registeredPhoneNumber;
+        if (!customerName || !customerPhone) {
+          Alert.alert(
+            'Profile details required',
+            'Add your name and verified phone number in Profile before paying for a meal plan.',
+          );
+          return;
+        }
+
+        payment = await subscriptionPaymentApi.createOrder(payment.invoiceId, {
+          customerName,
+          customerPhone,
+          customerEmail: profile.email,
+        });
+        setSubscriptionPayment(payment);
+
+        if (payment.status === 'PAID') {
+          await pendingSubscriptionPaymentStore.clear();
+          Alert.alert('Payment confirmed', 'Your meal-plan payment is already confirmed.');
+          load(true).catch(() => undefined);
+          return;
+        }
+
+        if (
+          payment.provider !== 'RAZORPAY' ||
+          !payment.providerOrderId ||
+          !payment.checkoutKeyId
+        ) {
+          Alert.alert(
+            'Payment provider unavailable',
+            'This meal-plan invoice is not ready for Razorpay in the mobile app yet. Refresh the payment status and try again.',
+          );
+          return;
+        }
+
+        await pendingSubscriptionPaymentStore.save({
+          invoiceId: payment.invoiceId,
+          subscriptionId: payment.subscriptionId,
+          providerOrderId: payment.providerOrderId,
+          amount: payment.amount,
+        });
+
+        const proof = await openRazorpayCheckout(
+          {
+            providerOrderId: payment.providerOrderId,
+            checkoutKeyId: payment.checkoutKeyId,
+            amount: payment.amount,
+          },
+          {
+            name: customerName,
+            email: profile.email,
+            phone: customerPhone,
+          },
+        );
+
+        const verified = await subscriptionPaymentApi.verifyRazorpay(
+          payment.invoiceId,
+          proof,
+        );
+        setSubscriptionPayment(verified);
+
+        if (verified.status === 'PAID') {
+          await pendingSubscriptionPaymentStore.clear();
+          setPaymentRecoveryNotice(null);
+          setPaymentRecoverySubscriptionId(null);
+          Alert.alert('Payment confirmed', 'Your meal-plan payment was successful.');
+          load(true).catch(() => undefined);
+        } else {
+          Alert.alert(
+            'Payment processing',
+            'Razorpay returned successfully, but Craves is still confirming the invoice. Use Refresh status before trying again.',
+          );
+        }
+      } catch (error) {
+        let recovered: SubscriptionPayment | null = null;
+        try {
+          const pending = await pendingSubscriptionPaymentStore.load();
+          if (pending?.subscriptionId === subscription.id) {
+            recovered = await subscriptionPaymentApi.getInvoice(pending.invoiceId);
+            setSubscriptionPayment(recovered);
+            if (
+              recovered.status === 'PAID' ||
+              recovered.status === 'FAILED' ||
+              recovered.status === 'CANCELLED'
+            ) {
+              await pendingSubscriptionPaymentStore.clear();
+            }
+          }
+        } catch {
+          // Keep the durable local reference when the authoritative status cannot be read.
+        }
+
+        if (recovered?.status === 'PAID') {
+          setPaymentRecoveryNotice(null);
+          setPaymentRecoverySubscriptionId(null);
+          Alert.alert(
+            'Payment confirmed',
+            'The app recovered the payment after Razorpay returned.',
+          );
+          load(true).catch(() => undefined);
+          return;
+        }
+
+        Alert.alert(
+          'Payment not completed',
+          `${toAppApiError(error).message} Craves kept the invoice reference so you can refresh the status or continue the same payment safely.`,
+        );
+      } finally {
+        setPaymentBusy(false);
+      }
+    },
+    [load, paymentBusy],
+  );
+
   const createSubscription = React.useCallback(async () => {
     if (!selectedPlan || !selectedAddressId || busy) return;
     setBusy(true);
@@ -284,13 +547,24 @@ export function CustomerMealPlansScreen() {
       setSchedule(null);
       setSelectedPolicy(null);
       setNotes('');
-      Alert.alert('Meal plan started', `Your subscription is ${statusLabel(created.status)}.`);
+
+      const payment = await waitForSubscriptionPayment(created.id);
+      if (!payment) {
+        setMyPlansVisible(true);
+        Alert.alert(
+          'Meal plan created',
+          'Your subscription was created, but its payment invoice is still being prepared. Open the subscription and use Refresh status.',
+        );
+        return;
+      }
+
+      await payForSubscription(created, payment);
     } catch {
       Alert.alert('Could not start meal plan', 'Your request was not confirmed. Please retry with the same details.');
     } finally {
       setBusy(false);
     }
-  }, [busy, notes, selectedAddressId, selectedPlan, startDate]);
+  }, [busy, notes, payForSubscription, selectedAddressId, selectedPlan, startDate]);
 
   const mutateSubscription = React.useCallback(
     async (action: 'PAUSE' | 'RESUME' | 'CANCEL' | 'SKIP') => {
@@ -368,6 +642,31 @@ export function CustomerMealPlansScreen() {
             <FilledIcon name="bowl-mix" size={72} color={colors.flameRed} />
           </View>
         </View>
+
+        {paymentRecoveryNotice ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              const target = subscriptions.find(
+                item => item.id === paymentRecoverySubscriptionId,
+              );
+              if (target) {
+                openSubscription(target).catch(() => undefined);
+              } else {
+                setMyPlansVisible(true);
+              }
+            }}
+            style={styles.paymentRecoveryCard}>
+            <View style={styles.paymentRecoveryIcon}>
+              <FilledIcon name="credit-card-refresh" color={colors.flameRed} />
+            </View>
+            <View style={styles.paymentRecoveryCopy}>
+              <Text style={styles.paymentRecoveryTitle}>Meal-plan payment</Text>
+              <Text style={styles.paymentRecoveryText}>{paymentRecoveryNotice}</Text>
+            </View>
+            <FilledIcon name="chevron-right" size={20} />
+          </Pressable>
+        ) : null}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
           {CATEGORIES.map(category => {
@@ -575,6 +874,85 @@ export function CustomerMealPlansScreen() {
                   <Text style={styles.detailPrice}>{statusLabel(selectedSubscription.status)}</Text>
                   <Text style={styles.detailDescription}>Start {dateLabel(selectedSubscription.startDate)}{selectedSubscription.nextServiceDate ? ` · Next service ${dateLabel(selectedSubscription.nextServiceDate)}` : ''}</Text>
                 </View>
+
+                <Text style={styles.sectionTitle}>Payment</Text>
+                {paymentLoading ? (
+                  <View style={styles.paymentCard}>
+                    <ActivityIndicator color={colors.flameRed} />
+                    <Text style={styles.helperText}>Checking the latest invoice status…</Text>
+                  </View>
+                ) : subscriptionPayment ? (
+                  <View style={styles.paymentCard}>
+                    <View style={styles.paymentHeaderRow}>
+                      <View style={styles.paymentIcon}>
+                        <FilledIcon
+                          name={subscriptionPayment.status === 'PAID' ? 'check-circle' : 'credit-card-outline'}
+                          color={subscriptionPayment.status === 'PAID' ? colors.success : colors.flameRed}
+                        />
+                      </View>
+                      <View style={styles.paymentCopy}>
+                        <Text style={styles.paymentAmount}>{paymentMoney(subscriptionPayment)}</Text>
+                        <Text style={[
+                          styles.paymentStatus,
+                          subscriptionPayment.status === 'PAID' && styles.paymentStatusPaid,
+                        ]}>
+                          {statusLabel(subscriptionPayment.status)}
+                        </Text>
+                        <Text style={styles.paymentMeta}>
+                          {dateLabel(subscriptionPayment.cycleStart)} – {dateLabel(subscriptionPayment.cycleEnd)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {subscriptionPayment.status === 'PAID' ? (
+                      <Text style={styles.paymentSuccessText}>
+                        Payment confirmed. Craves will keep the subscription status server-authoritative while activation completes.
+                      </Text>
+                    ) : (
+                      <>
+                        <Pressable
+                          accessibilityRole="button"
+                          disabled={paymentBusy}
+                          onPress={() => payForSubscription(selectedSubscription, subscriptionPayment)}
+                          style={[styles.primaryButton, paymentBusy && styles.primaryButtonDisabled]}>
+                          {paymentBusy ? (
+                            <ActivityIndicator color={colors.white} />
+                          ) : (
+                            <Text style={styles.primaryButtonText}>
+                              {paymentActionLabel(subscriptionPayment)}
+                            </Text>
+                          )}
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          disabled={paymentBusy || paymentLoading}
+                          onPress={() => refreshSubscriptionPayment(selectedSubscription, true)}
+                          style={styles.paymentRefreshButton}>
+                          <FilledIcon name="refresh" size={18} />
+                          <Text style={styles.secondaryButtonText}>Refresh status</Text>
+                        </Pressable>
+                        <Text style={styles.helperText}>
+                          Before Razorpay opens again, Craves rechecks this invoice and reuses the existing pending provider order when one already exists.
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                ) : (
+                  <View style={styles.paymentCard}>
+                    <Text style={styles.helperText}>
+                      The payment invoice is still being prepared or could not be loaded.
+                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={paymentLoading}
+                      onPress={() => refreshSubscriptionPayment(selectedSubscription, true)}
+                      style={styles.paymentRefreshButton}>
+                      <FilledIcon name="refresh" size={18} />
+                      <Text style={styles.secondaryButtonText}>Refresh status</Text>
+                    </Pressable>
+                  </View>
+                )}
+
                 <Text style={styles.sectionTitle}>Your plan rules</Text>
                 {policyLoading ? (
                   <View style={styles.policyCard}><ActivityIndicator color={colors.flameRed} /><Text style={styles.helperText}>Loading plan rules…</Text></View>
@@ -630,6 +1008,11 @@ const styles = StyleSheet.create({
   myPlansButton: {alignSelf: 'flex-start', marginTop: spacing.sm, minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: radius.pill, backgroundColor: ICON_SURFACE},
   myPlansText: {color: colors.flameRedAccessible, fontSize: typography.small, fontWeight: fontWeight.semibold},
   heroVisual: {width: 124, height: 124, alignItems: 'center', justifyContent: 'center', borderRadius: radius.xl, backgroundColor: ICON_SURFACE},
+  paymentRecoveryCard: {minHeight: 86, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.surfaceMuted},
+  paymentRecoveryIcon: {width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.white},
+  paymentRecoveryCopy: {minWidth: 0, flex: 1},
+  paymentRecoveryTitle: {color: colors.espressoBrown, fontSize: typography.small, fontWeight: fontWeight.bold},
+  paymentRecoveryText: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny, lineHeight: 17},
   categoryRow: {gap: spacing.sm, paddingVertical: spacing.xxs},
   categoryCard: {width: 92, minHeight: 104, alignItems: 'center', justifyContent: 'center', gap: spacing.xs, padding: spacing.xs, borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white},
   categoryCardSelected: {borderColor: colors.flameRed, borderWidth: borderWidth.strong},
@@ -689,6 +1072,16 @@ const styles = StyleSheet.create({
   detailTitle: {marginTop: spacing.sm, color: colors.espressoBrown, fontSize: typography.hero, fontWeight: fontWeight.bold, textAlign: 'center'},
   detailDescription: {marginTop: spacing.xs, color: colors.textSecondary, fontSize: typography.small, lineHeight: 20, textAlign: 'center'},
   detailPrice: {marginTop: spacing.sm, color: colors.flameRedAccessible, fontSize: typography.heading, fontWeight: fontWeight.bold},
+  paymentCard: {gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white},
+  paymentHeaderRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+  paymentIcon: {width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: ICON_SURFACE},
+  paymentCopy: {minWidth: 0, flex: 1},
+  paymentAmount: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
+  paymentStatus: {marginTop: spacing.xxs, color: colors.flameRedAccessible, fontSize: typography.small, fontWeight: fontWeight.semibold},
+  paymentStatusPaid: {color: colors.success},
+  paymentMeta: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny},
+  paymentSuccessText: {color: colors.success, fontSize: typography.small, lineHeight: 20},
+  paymentRefreshButton: {minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: ICON_SURFACE},
   scheduleRow: {minHeight: 74, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white},
   scheduleCopy: {minWidth: 0, flex: 1},
   scheduleTitle: {color: colors.espressoBrown, fontSize: typography.small, fontWeight: fontWeight.bold},

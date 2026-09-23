@@ -1,7 +1,7 @@
 import RazorpayCheckout from 'react-native-razorpay';
 import {AppApiError} from '../../../core/http/apiError';
 import type {
-  RazorpayHostedHandoff,
+  PaymentMoney,
   RazorpayVerificationProof,
 } from '../domain/paymentTypes';
 
@@ -11,6 +11,12 @@ export interface RazorpayCustomerPrefill {
   name?: string | null;
   email?: string | null;
   phone?: string | null;
+}
+
+export interface RazorpayCheckoutHandoff {
+  providerOrderId: string;
+  checkoutKeyId: string;
+  amount: PaymentMoney;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -85,7 +91,7 @@ function providerFailureMessage(error: unknown): string {
 }
 
 export async function openRazorpayCheckout(
-  handoff: RazorpayHostedHandoff,
+  handoff: RazorpayCheckoutHandoff,
   prefill: RazorpayCustomerPrefill = {},
 ): Promise<RazorpayVerificationProof> {
   const prefillName = boundedText(prefill.name, 120) ?? 'Craves Customer';

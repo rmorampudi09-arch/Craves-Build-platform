@@ -107,10 +107,12 @@ export function BrowseHeader({
       const currentY = Math.max(window.scrollY, 0);
       const delta = currentY - lastMobileScrollYRef.current;
 
-      if (currentY <= 84 || delta < -6) {
+      if (currentY <= 84) {
         setMobileCompact(false);
-      } else if (currentY > 148 && delta > 5) {
+      } else if (delta < -6) {
         setMobileCompact(true);
+      } else if (delta > 5) {
+        setMobileCompact(false);
       }
 
       lastMobileScrollYRef.current = currentY;
@@ -347,13 +349,13 @@ export function BrowseHeader({
       <div
         aria-hidden={!mobileCompact}
         className={[
-          "fixed inset-x-0 top-0 z-50 border-b border-[#E5E7EB] bg-white/94 px-3 py-2 shadow-[0_7px_20px_rgba(26,26,26,0.07)] backdrop-blur-xl transition-[transform,opacity] duration-300 md:hidden",
+          "fixed inset-x-0 top-0 z-50 border-b border-[#ECEEF0] bg-white/96 px-3 py-2 shadow-[0_7px_22px_rgba(26,26,26,0.065)] backdrop-blur-xl transition-[transform,opacity] duration-300 md:hidden",
           mobileCompact
             ? "translate-y-0 opacity-100"
             : "pointer-events-none -translate-y-full opacity-0",
         ].join(" ")}
       >
-        <div className="mx-auto flex max-w-xl items-stretch gap-2">
+        <div className="mx-auto flex max-w-xl items-center gap-2">
           <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[0.95rem] border border-[#E5E7EB] bg-[#F6F7F8] px-3 shadow-[0_3px_12px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,border-color] focus-within:border-[#F62E18]/25 focus-within:bg-white focus-within:shadow-[0_7px_20px_rgba(246,46,24,0.11)] focus-within:ring-2 focus-within:ring-[#F62E18]/15">
             <FaSearch className="h-[1.05rem] w-[1.05rem] shrink-0 text-[#F62E18]" aria-hidden="true" />
             <span className="sr-only">Search dishes or home kitchens</span>

@@ -242,12 +242,40 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          pattern: launch-*-${{ github.run_id }}-${{ github.run_attempt }}
+          pattern: launch-*-${{ github.run_id }}-*
           path: target/launch-evidence
+      - name: Select the latest successful evidence for each prerequisite
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import shutil
+          from pathlib import Path
+
+          run_id = os.environ['RUN_ID']
+          source = Path('target/launch-evidence')
+          selected = Path('target/launch-evidence-selected')
+          selected.mkdir(parents=True, exist_ok=True)
+
+          for component in ('source', 'backend', 'web'):
+              prefix = f'launch-{component}-{run_id}-'
+              candidates = []
+              for path in source.iterdir():
+                  if not path.is_dir() or not path.name.startswith(prefix):
+                      continue
+                  suffix = path.name.removeprefix(prefix)
+                  if suffix.isdigit():
+                      candidates.append((int(suffix), path))
+              if not candidates:
+                  raise SystemExit(f'Missing {component} evidence for run {run_id}')
+              _, latest = max(candidates)
+              shutil.copytree(latest, selected / latest.name)
+          PY
       - name: Require every component and required suite at the exact reviewed SHA
         env:
           EXPECTED_RELEASE_SHA: ${{ needs.source.outputs.release_sha }}
-        run: python3 scripts/launch/launch-regression.py summary --expected-sha "$EXPECTED_RELEASE_SHA" --evidence target/launch-evidence --output target/launch-regression-summary.json
+        run: python3 scripts/launch/launch-regression.py summary --expected-sha "$EXPECTED_RELEASE_SHA" --evidence target/launch-evidence-selected --output target/launch-regression-summary.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

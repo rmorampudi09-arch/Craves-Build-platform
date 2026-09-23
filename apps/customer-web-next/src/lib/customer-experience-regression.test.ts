@@ -26,13 +26,23 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(chefs, /dishImagesByKitchen=\{dishImagesByKitchen\}/);
   assert.match(kitchens, /KitchenDishPreview/);
   assert.match(kitchens, /window\.setInterval/);
-  assert.match(kitchens, /ChevronLeft/);
-  assert.match(kitchens, /ChevronRight/);
+  assert.doesNotMatch(kitchens, /ChevronLeft/);
+  assert.doesNotMatch(kitchens, /ChevronRight/);
   assert.doesNotMatch(kitchens, /kitchenPreviewTrack/);
-  assert.match(cravings, /sticky top-0 z-30/);
+  assert.match(kitchens, /3000/);
+  assert.match(kitchens, /onPointerDown/);
+  assert.doesNotMatch(kitchens, /View chef/);
+  assert.match(cravings, /sticky top-\[4\.35rem\] z-30/);
+  assert.match(cravings, /md:top-0/);
+  assert.doesNotMatch(cravings, /md:static/);
+  assert.match(cravings, /duration-\[1200ms\]/);
   assert.match(header, /hover:-translate-y-0\.5/);
   assert.match(header, /focus-within:bg-white/);
-  assert.match(skeleton, /animate-pulse/);
+  assert.match(header, /mobileCompact/);
+  assert.match(header, /fixed inset-x-0 top-0 z-50/);
+  assert.match(skeleton, /CustomerPageSkeleton\.module\.css/);
+  assert.match(skeleton, /SkeletonBlock/);
+  assert.doesNotMatch(skeleton, /animate-pulse/);
 });
 
 test("profile edit stays focused on name, phone and optional OTP email verification", () => {

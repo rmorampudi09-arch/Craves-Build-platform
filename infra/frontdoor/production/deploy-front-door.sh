@@ -185,7 +185,7 @@ ensure_static_identity_encoding(){
 purge_static_assets(){
   local purge_uri purge_body
   purge_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/afdEndpoints/${ENDPOINT}/purge?api-version=2025-04-15"
-  purge_body="$(jq -nc '{contentPaths:["/_next/static/*","/home/cravings/*"]}')"
+  purge_body="$(jq -nc '{contentPaths:["/_next/static/*","/home/cravings/*","/home/reference/*"]}')"
   az rest --method post --uri "$purge_uri" --headers Content-Type=application/json --body "$purge_body" --only-show-errors >/dev/null
 }
 

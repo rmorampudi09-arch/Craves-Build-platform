@@ -175,7 +175,7 @@ export function HomeCategoryRail({
   return (
     <>
       <section
-        className="mx-auto max-w-[88rem] bg-white px-4 pt-6 md:px-7 md:pt-7 lg:px-10 lg:pt-8"
+        className="mx-auto max-w-[88rem] bg-white px-4 pt-4 md:px-7 md:pt-5 lg:px-10 lg:pt-6"
         aria-labelledby="craving-categories-heading"
       >
         <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">
@@ -183,17 +183,17 @@ export function HomeCategoryRail({
         </p>
         <h2
           id="craving-categories-heading"
-          className="mt-1.5 font-display text-[1.7rem] font-black tracking-[-0.045em] text-[#1A1A1A] md:text-3xl lg:text-4xl"
+          className="mt-1 font-display text-[1.45rem] font-black tracking-[-0.04em] text-[#1A1A1A] md:text-[1.7rem] lg:text-3xl"
         >
           What are you craving?
         </h2>
       </section>
 
-      <div className="sticky top-[4.35rem] z-30 bg-white/95 shadow-[0_7px_18px_rgba(26,26,26,0.05)] backdrop-blur-xl md:top-[4.25rem] lg:top-[4.65rem]">
-        <div className="relative mx-auto max-w-[88rem] bg-white/95 px-4 pb-1 pt-3 md:bg-white md:px-7 md:pb-0 md:pt-4 lg:px-10 lg:pt-4">
+      <div className="sticky top-[var(--craves-mobile-search-offset,0px)] z-30 border-b border-[#F1F3F5] bg-white/96 shadow-[0_5px_16px_rgba(26,26,26,0.045)] backdrop-blur-xl transition-[top] duration-300 md:top-[4.25rem] lg:top-[4.65rem]">
+        <div className="relative mx-auto max-w-[88rem] bg-white/95 px-3 pb-0 pt-2 md:bg-white md:px-7 md:pt-2.5 lg:px-10 lg:pt-3">
           <div
             ref={scrollerRef}
-            className="flex snap-x snap-mandatory gap-3 overflow-x-auto bg-transparent px-1 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-4 md:gap-5 md:pb-4 lg:gap-8"
+            className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto bg-transparent px-1 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-3 md:gap-4 md:pb-3 lg:gap-5"
             aria-label="Craving filters"
           >
             {categories.map(({ label, value, fallbackImage, icon: Icon }) => {
@@ -206,14 +206,14 @@ export function HomeCategoryRail({
                   type="button"
                   onClick={() => onSelect(value)}
                   aria-pressed={active}
-                  className="group flex w-[5.35rem] shrink-0 snap-start flex-col items-center gap-2 !border-0 !bg-transparent p-0 text-center text-[#1A1A1A] !shadow-none outline-none hover:!bg-transparent hover:!shadow-none hover:!transform-none active:!transform-none sm:w-[5.8rem] md:w-[6.15rem] lg:w-[7.25rem] lg:gap-3"
+                  className="group flex w-[4.55rem] shrink-0 snap-start flex-col items-center gap-1.5 !border-0 !bg-transparent p-0 text-center text-[#1A1A1A] !shadow-none outline-none hover:!bg-transparent hover:!shadow-none hover:!transform-none active:!transform-none sm:w-[4.9rem] md:w-[5.1rem] lg:w-[5.75rem] lg:gap-2"
                 >
                   <span
                     className={[
-                      "flex h-[5.35rem] w-[5.35rem] items-center justify-center overflow-hidden rounded-full bg-white transition-[box-shadow,border-color] duration-500 group-hover:shadow-[0_10px_24px_rgba(26,26,26,0.10)] group-focus-visible:ring-2 group-focus-visible:ring-[#1A1A1A]/10 sm:h-[5.8rem] sm:w-[5.8rem] md:h-[6.15rem] md:w-[6.15rem] lg:h-[7.25rem] lg:w-[7.25rem]",
+                      "flex h-[4.15rem] w-[4.15rem] items-center justify-center overflow-hidden rounded-full bg-white shadow-[0_3px_11px_rgba(26,26,26,0.08)] ring-1 ring-black/[0.025] transition-[box-shadow,border-color,transform] duration-500 group-hover:-translate-y-0.5 group-hover:shadow-[0_7px_18px_rgba(26,26,26,0.12)] group-focus-visible:ring-2 group-focus-visible:ring-[#F62E18]/20 motion-reduce:transform-none sm:h-[4.5rem] sm:w-[4.5rem] md:h-[4.75rem] md:w-[4.75rem] lg:h-[5.35rem] lg:w-[5.35rem]",
                       active
-                        ? "border border-[#E5E7EB]"
-                        : "border border-[#F1F3F5]",
+                        ? "border border-[#F62E18]/35 shadow-[0_5px_16px_rgba(246,46,24,0.12)]"
+                        : "border border-[#E9EBEE]",
                     ].join(" ")}
                   >
                     {image ? (
@@ -232,7 +232,7 @@ export function HomeCategoryRail({
                   </span>
                   <span
                     className={[
-                      "text-[0.72rem] font-bold transition-colors duration-200 sm:text-xs lg:text-sm",
+                      "text-[0.69rem] font-extrabold leading-tight transition-colors duration-200 sm:text-[0.72rem] lg:text-xs",
                       active ? "text-[#F62E18]" : "text-[#1A1A1A]",
                     ].join(" ")}
                   >
@@ -245,7 +245,7 @@ export function HomeCategoryRail({
 
           <div
             className={[
-              "pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-white to-transparent transition-opacity duration-200",
+              "pointer-events-none absolute inset-y-0 left-0 z-10 hidden w-12 bg-gradient-to-r from-white to-transparent transition-opacity duration-200 md:block",
               canScrollLeft ? "opacity-100" : "invisible opacity-0",
             ].join(" ")}
             aria-hidden="true"

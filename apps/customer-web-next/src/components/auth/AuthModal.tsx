@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ChefHat, UserRound, X } from "lucide-react";
 import {
@@ -421,13 +422,13 @@ export function AuthModal({
       >
         <header className="flex items-center justify-between border-b border-border px-6 py-4">
           <div className="flex items-center gap-3">
-            <a
+            <Link
               href="/"
               className="inline-flex rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
               aria-label="Craves home"
             >
               <CravesLogo size="sm" />
-            </a>
+            </Link>
             <div>
               <p className="craves-overline">{modalEyebrow}</p>
               <h2

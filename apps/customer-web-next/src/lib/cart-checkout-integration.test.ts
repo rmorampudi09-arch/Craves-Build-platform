@@ -17,9 +17,15 @@ test("cart has no demo or local mutation fallback", () => {
 
 test("cart validates with the backend before address selection", () => {
   const page = source("../screens/Cart/Cart.tsx");
+  const bar = source("../components/cart/CartCheckoutBar.tsx");
+  const cartService = source("../services/api/cravesCart.ts");
   assert.match(page, /await validateCart\(\)/);
   assert.match(page, /navigate\(\{ to: "\/checkout" \}\)/);
   assert.match(page, /cartCurrency\(\)/);
+  assert.match(bar, /bg-\[#6B6B6B\]/);
+  assert.match(bar, /hover:bg-\[#555555\]/);
+  assert.match(cartService, /await cartRequest\("\/api\/cart", \{ method: "DELETE" \}\)/);
+  assert.match(cartService, /return cartMatchesCheckout\(expected\)/);
 });
 
 test("checkout uses the idempotent backend operation with an exact cart snapshot", () => {

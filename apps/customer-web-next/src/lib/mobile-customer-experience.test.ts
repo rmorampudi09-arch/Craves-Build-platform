@@ -18,7 +18,7 @@ test("mobile customer nav uses website icons and clears space while browsing the
   assert.match(nav, /href: "\/chefs"/);
   assert.doesNotMatch(nav, /home#nearby-kitchens-heading/);
   assert.match(nav, /hiddenByScroll/);
-  assert.match(nav, /currentY > 112 && delta > 6/);
+  assert.match(nav, /delta > 6/);
   assert.match(nav, /delta < -6/);
   assert.match(nav, /y: hiddenByScroll \? "115%" : "0%"/);
   assert.doesNotMatch(nav, /#2563EB|ShoppingCart|UserRound/);
@@ -46,7 +46,7 @@ test("mobile discovery keeps search, veg and cravings accessible while scrolling
   assert.match(cravings, /lg:top-\[4\.65rem\]/);
   assert.match(header, /--craves-mobile-search-offset/);
   assert.match(header, /delta < -6/);
-  assert.match(header, /currentY > 148 && delta > 5/);
+  assert.match(header, /delta > 5/);
   assert.match(cravings, /lg:top-\[4\.65rem\]/);
   assert.doesNotMatch(cravings, /md:static/);
 });

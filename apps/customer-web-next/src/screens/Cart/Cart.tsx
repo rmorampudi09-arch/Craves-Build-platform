@@ -26,6 +26,7 @@ import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton"
 const CHECKOUT_ID_KEY = "craves.checkout.id";
 const CHECKOUT_OPERATION_ID_KEY = "craves.checkout.operationId";
 const INSTRUCTIONS_KEY = "craves.checkout.instructions";
+const CART_NOTICE_KEY = "craves.cart.notice";
 
 export const routeMeta = {
   head: () => ({
@@ -64,6 +65,12 @@ function CartPage() {
       await loadCart();
       const nextItems = getCart();
       setItems(nextItems);
+
+      const checkoutNotice = window.sessionStorage.getItem(CART_NOTICE_KEY);
+      if (checkoutNotice) {
+        window.sessionStorage.removeItem(CART_NOTICE_KEY);
+        setMessage(checkoutNotice);
+      }
 
       const dishResults = await Promise.allSettled(
         nextItems.map((item) => loadDish(item.menuItemId)),

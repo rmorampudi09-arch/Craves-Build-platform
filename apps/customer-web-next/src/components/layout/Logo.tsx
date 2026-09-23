@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 
 /**
@@ -15,13 +16,13 @@ export function Logo(props: { light?: boolean }) {
   void props.light;
 
   return (
-    <a
+    <Link
       href="/"
       className="inline-flex items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
       aria-label="Craves home"
     >
       <CravesLogo size="lg" decorative priority className="h-14 w-14" />
-    </a>
+    </Link>
   );
 }
 

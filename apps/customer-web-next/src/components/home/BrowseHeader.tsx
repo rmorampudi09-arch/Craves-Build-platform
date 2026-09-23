@@ -128,9 +128,9 @@ export function BrowseHeader({
 
         // Require meaningful travel before toggling. This prevents the compact
         // search/filter row from fluttering on tiny touch/trackpad movements.
-        if (direction === "up" && travel >= 26) {
+        if (direction === "up" && travel >= 20) {
           setMobileCompact(true);
-        } else if (direction === "down" && travel >= 20) {
+        } else if (direction === "down" && travel >= 16) {
           setMobileCompact(false);
         }
       }
@@ -155,7 +155,7 @@ export function BrowseHeader({
     const root = document.documentElement;
     root.style.setProperty(
       "--craves-mobile-search-offset",
-      mobileCompact ? "3.65rem" : "0px",
+      mobileCompact ? "3.75rem" : "0px",
     );
     return () => {
       root.style.removeProperty("--craves-mobile-search-offset");
@@ -369,7 +369,7 @@ export function BrowseHeader({
       <div
         aria-hidden={!mobileCompact}
         className={[
-          "fixed inset-x-0 top-0 z-50 border-b border-[#ECEEF0] bg-white/96 px-3 py-2 shadow-[0_7px_22px_rgba(26,26,26,0.065)] backdrop-blur-xl will-change-transform transition-[transform,opacity,box-shadow] duration-[500ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden",
+          "fixed inset-x-0 top-0 z-50 border-b border-[#ECEEF0] bg-white/96 px-3 py-2 shadow-[0_7px_22px_rgba(26,26,26,0.065)] backdrop-blur-xl will-change-[transform,opacity] transition-[transform,opacity,box-shadow] duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden",
           mobileCompact
             ? "translate-y-0 opacity-100"
             : "pointer-events-none -translate-y-[115%] opacity-0 shadow-none",

@@ -296,7 +296,7 @@ export function BottomNav() {
               >
                 <Link
                   href="/cart"
-                  className="relative flex h-full min-h-[3.45rem] items-center gap-3 overflow-hidden rounded-[1.05rem] border border-white/80 bg-white/72 px-3.5 text-[#1A1A1A] shadow-[0_10px_28px_rgba(26,26,26,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-xl"
+                  className="relative flex h-full min-h-[3.45rem] items-center gap-3 overflow-hidden rounded-[1.05rem] border border-white/80 bg-white/68 px-3.5 text-[#1A1A1A] shadow-[0_10px_28px_rgba(26,26,26,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-[8px]"
                   aria-label={`View cart with ${itemCount} ${itemCount === 1 ? "item" : "items"}`}
                 >
                   <span

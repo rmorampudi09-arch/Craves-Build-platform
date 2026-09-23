@@ -256,7 +256,7 @@ export function DishesGrid({
                   type="button"
                   onClick={() => onSortChange(option.value)}
                   className={[
-                    "min-h-9 rounded-[0.85rem] px-3 text-xs font-black transition-[background-color,color,box-shadow,transform] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/10",
+                    "min-h-10 rounded-[0.9rem] px-3.5 text-xs font-black transition-[background-color,color,box-shadow,transform] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/10",
                     selected
                       ? "bg-[#1A1A1A] text-white shadow-[0_4px_12px_rgba(26,26,26,0.16)]"
                       : "bg-transparent text-[#6B6B6B] hover:bg-[#F1F3F5] hover:text-[#1A1A1A]",
@@ -274,7 +274,7 @@ export function DishesGrid({
             <Popover.Trigger asChild>
               <button
                 type="button"
-                className="inline-flex min-h-11 items-center gap-2 rounded-full !border !border-transparent !bg-[#F1F3F5] px-4 text-sm font-black !text-[#1A1A1A] !shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-shadow hover:!shadow-[0_8px_20px_rgba(26,26,26,0.09)] focus-visible:!outline-none focus-visible:!ring-2 focus-visible:!ring-[#1A1A1A]/10"
+                className="inline-flex min-h-12 items-center gap-2 rounded-full !border !border-transparent !bg-[#F1F3F5] px-[1.1rem] text-sm font-black !text-[#1A1A1A] !shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-shadow hover:!shadow-[0_8px_20px_rgba(26,26,26,0.09)] focus-visible:!outline-none focus-visible:!ring-2 focus-visible:!ring-[#1A1A1A]/10"
                 aria-label="Open dish filters"
               >
                 <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
@@ -359,7 +359,7 @@ export function DishesGrid({
           <p className="sr-only" role="status">
             Loading nearby dishes
           </p>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 8 }, (_, index) => (
               <DishSkeleton key={index} />
             ))}
@@ -460,7 +460,7 @@ export function DishesGrid({
 
       {state === "ready" && dishes.length > 0 ? (
         <>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
             {visibleDishes.map((dish) => (
               <DishCard key={dish.id} dish={dish} />
             ))}

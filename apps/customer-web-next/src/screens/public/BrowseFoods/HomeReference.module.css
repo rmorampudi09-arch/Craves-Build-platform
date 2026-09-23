@@ -223,8 +223,8 @@
   border: 1px solid rgba(255, 255, 255, 0.88) !important;
   background: rgba(255, 255, 255, 0.5) !important;
   color: #1a1a1a !important;
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(8px) saturate(145%);
+  backdrop-filter: blur(8px) saturate(145%);
   box-shadow:
     0 22px 60px rgba(26, 26, 26, 0.16),
     0 3px 12px rgba(26, 26, 26, 0.07),
@@ -254,8 +254,8 @@
     rgba(255, 255, 255, 0.2) 45%,
     rgba(255, 255, 255, 0.5) 100%
   );
-  -webkit-backdrop-filter: blur(48px) saturate(175%);
-  backdrop-filter: blur(48px) saturate(175%);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .floatingCartShine {

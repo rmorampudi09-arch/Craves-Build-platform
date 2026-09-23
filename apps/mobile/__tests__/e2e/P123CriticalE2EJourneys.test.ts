@@ -267,16 +267,34 @@ describe('P123 critical E2E journeys', () => {
     expect((await store.dispatch(refreshCartSnapshot())).status).toBe('APPLIED');
     expect(selectCartItemCount(store.getState())).toBe(1);
 
-    const createCheckout = jest.fn(async () => checkoutSession);
-    const checkoutCoordinator = createCheckoutSessionCoordinator(createCheckout);
+    const checkoutClient = {
+      executeOperation: jest.fn(async (operationId: string) => ({
+        operationId,
+        status: 'SUCCEEDED' as const,
+        checkoutId: CHECKOUT_ID,
+      })),
+      getOperation: jest.fn(),
+      getSession: jest.fn(async () => checkoutSession),
+    };
+    const checkoutCoordinator = createCheckoutSessionCoordinator(checkoutClient);
     const created = await checkoutCoordinator.create({
       cartId: CART_ID,
       cartClientRevision: 1,
       deliveryAddressId: ADDRESS_ID,
       note: null,
+      expectedCart: {
+        cartId: CART_ID,
+        items: [
+          {
+            id: LINE_ID,
+            quantity: 1,
+            updatedAt: cartSnapshot.lines[0].updatedAt,
+          },
+        ],
+      },
     });
     expect(created.checkoutId).toBe(CHECKOUT_ID);
-    expect(createCheckout).toHaveBeenCalledTimes(1);
+    expect(checkoutClient.executeOperation).toHaveBeenCalledTimes(1);
 
     const createPayment = jest.fn(async () => paymentOrder);
     const handoff = await createPaymentHandoffCoordinator(createPayment).prepare(
@@ -417,7 +435,7 @@ describe('P123 critical E2E journeys', () => {
   });
 
   it('records payment capability and remaining contract blockers instead of masking them', () => {
-    expect(checkoutSessionCapability.serverIdempotencySupported).toBe(false);
+    expect(checkoutSessionCapability.serverIdempotencySupported).toBe(true);
     expect(paymentHandoffCapability.nativeRazorpayLaunchSupported).toBe(true);
     expect(paymentHandoffCapability.tokenizedPaymentMethodContractSupported).toBe(false);
     expect(paymentRecoveryCapability.nativeRazorpayCallbackAdapterSupported).toBe(true);

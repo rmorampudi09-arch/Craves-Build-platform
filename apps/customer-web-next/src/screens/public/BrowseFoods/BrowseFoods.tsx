@@ -167,6 +167,8 @@ function BrowseFoodsPage() {
   });
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [sessionUnavailable, setSessionUnavailable] = useState(false);
+  const [sessionRetryNonce, setSessionRetryNonce] = useState(0);
   const pendingHomeScrollYRef = useRef<number | null>(null);
 
   const refreshDiscovery = useCallback(async (
@@ -391,15 +393,40 @@ function BrowseFoodsPage() {
     };
 
     void (async () => {
-      let current = await loadSession();
+      setSessionUnavailable(false);
+      let current: CravesUser | null = null;
+
+      try {
+        current = await loadSession();
+      } catch {
+        // Keep the customer on the signed-in surface during a network/BFF
+        // interruption. One retry handles short mobile hand-offs cleanly.
+        await new Promise((resolve) => window.setTimeout(resolve, 450));
+        if (!active) return;
+        try {
+          current = await loadSession();
+        } catch {
+          if (active) {
+            setSessionUnavailable(true);
+            setDefaultAddressResolved(true);
+          }
+          return;
+        }
+      }
       if (!active) return;
 
-      // A refresh race or brief BFF interruption must not throw an already
-      // signed-in customer back to the landing page. Confirm once more before
-      // treating the session as genuinely gone.
+      // A confirmed missing session gets one final check before we show the
+      // public landing page. Transient failures above never clear the screen.
       if (!current) {
         await new Promise((resolve) => window.setTimeout(resolve, 450));
-        current = await loadSession();
+        if (!active) return;
+        try {
+          current = await loadSession();
+        } catch {
+          setSessionUnavailable(true);
+          setDefaultAddressResolved(true);
+          return;
+        }
         if (!active) return;
       }
 
@@ -407,6 +434,8 @@ function BrowseFoodsPage() {
         navigate({ to: "/", replace: true });
         return;
       }
+
+      setSessionUnavailable(false);
       setUser(current);
 
       try {
@@ -452,7 +481,7 @@ function BrowseFoodsPage() {
       active = false;
       unsubscribeCart();
     };
-  }, [navigate, refreshDiscovery]);
+  }, [navigate, refreshDiscovery, sessionRetryNonce]);
 
   useEffect(() => {
     let active = true;
@@ -660,6 +689,35 @@ function BrowseFoodsPage() {
       setSigningOut(false);
     }
   };
+
+  if (sessionUnavailable) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-white px-5 text-[#1A1A1A]">
+        <section className="w-full max-w-md rounded-[1.5rem] border border-[#E5E7EB] bg-white p-6 text-center shadow-[0_14px_42px_rgba(26,26,26,0.08)]">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FFF1EF] text-xl font-black text-[#F62E18]">
+            C
+          </div>
+          <h1 className="mt-4 text-xl font-black tracking-[-0.02em]">
+            Reconnecting to Craves
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">
+            Your sign-in has not been cleared. We just couldn’t reach the session service for a moment.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setSessionUnavailable(false);
+              setDefaultAddressResolved(false);
+              setSessionRetryNonce((current) => current + 1);
+            }}
+            className="mt-5 min-h-11 rounded-xl bg-[#F62E18] px-5 text-sm font-bold text-white shadow-[0_6px_18px_rgba(246,46,24,0.18)]"
+          >
+            Try again
+          </button>
+        </section>
+      </main>
+    );
+  }
 
   if (!user || !defaultAddressResolved) {
     return <CustomerPageSkeleton label="Loading your Craves home" />;

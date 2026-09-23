@@ -294,15 +294,26 @@
       "responseValidator": "requireCartSnapshot"
     },
     {
-      "id": "checkout.create",
+      "id": "checkout.executeOperation",
       "source": "src/features/checkout/api/checkoutApi.ts",
       "method": "POST",
-      "path": "/api/v1/checkout",
+      "path": "/api/v1/checkout/operations/{operationId}",
       "auth": "bearer",
-      "requestModel": "CheckoutCreateRequest",
-      "responseModel": "CheckoutSession",
-      "requestValidator": "requireUuid + requireNote",
-      "responseValidator": "requireCheckoutSession + deliveryAddress identity check"
+      "requestModel": "CheckoutOperationRequest",
+      "responseModel": "CheckoutOperationResult",
+      "requestValidator": "requireUuid + requireNote + requireExpectedCart",
+      "responseValidator": "requireCheckoutOperationResult"
+    },
+    {
+      "id": "checkout.getOperation",
+      "source": "src/features/checkout/api/checkoutApi.ts",
+      "method": "GET",
+      "path": "/api/v1/checkout/operations/{operationId}",
+      "auth": "bearer",
+      "requestModel": "none",
+      "responseModel": "CheckoutOperationResult",
+      "requestValidator": "requireUuid",
+      "responseValidator": "requireCheckoutOperationResult"
     },
     {
       "id": "checkout.get",

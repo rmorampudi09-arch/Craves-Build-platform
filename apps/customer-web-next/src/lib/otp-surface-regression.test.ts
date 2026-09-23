@@ -50,7 +50,9 @@ test("signed-in discovery keeps the rebuilt paper reference surface", () => {
     browse,
     /return <CustomerPageSkeleton label="Loading your Craves home" \/>/,
   );
-  assert.match(skeleton, /animate-pulse/);
+  assert.match(skeleton, /CustomerPageSkeleton\.module\.css/);
+  assert.match(skeleton, /SkeletonBlock/);
+  assert.doesNotMatch(skeleton, /animate-pulse/);
   assert.match(
     browse,
     /\$\{styles\.paperSurface\} min-h-screen pb-24 text-\[#1A1A1A\]/,

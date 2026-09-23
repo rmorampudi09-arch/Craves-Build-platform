@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { FaArrowLeft, FaArrowsRotate } from "react-icons/fa6";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
@@ -27,7 +28,13 @@ export function TrackingHeader({
           <FaArrowLeft className="text-lg" aria-hidden="true" />
         </button>
 
-        <CravesLogo size="sm" decorative />
+        <Link
+          to="/home"
+          className="shrink-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+          aria-label="Craves home"
+        >
+          <CravesLogo size="sm" decorative />
+        </Link>
 
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold tracking-[-0.03em] text-[#1A1A1A]">

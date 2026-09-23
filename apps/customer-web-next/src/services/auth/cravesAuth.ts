@@ -11,6 +11,7 @@ import {
   parseCustomerProfile,
   type CustomerProfile,
 } from "@/lib/profile-contract";
+import { sessionFetch } from "@/services/auth/sessionFetch";
 
 export type CravesUser = {
   id: string;
@@ -102,7 +103,7 @@ async function hydrateCustomerProfile(current: CravesUser, context = captureSess
   const isCustomer = current.roles.some((role) => role.toUpperCase() === "CUSTOMER");
   if (!isCustomer) return current;
 
-  const response = await fetch("/api/customer/profile", {
+  const response = await sessionFetch("/api/customer/profile", {
     cache: "no-store",
     credentials: "same-origin",
   }).catch(() => null);
@@ -167,21 +168,35 @@ export async function loadSession(): Promise<CravesUser | null> {
   if (sessionEnding) return null;
   const context = captureSessionContext();
   const sequence = ++identityRequestSequence;
-  const lookup = async () => fetch("/api/auth/me", { cache: "no-store", credentials: "same-origin" });
+  const lookup = async () =>
+    sessionFetch("/api/auth/me", {
+      cache: "no-store",
+      credentials: "same-origin",
+    }).catch(() => null);
+
   let response = await lookup();
   if (!isSessionContextCurrent(context)) return session;
-  if (response.status === 401) {
-    const refreshed = await fetch("/api/auth/refresh", {
-      method: "POST", credentials: "same-origin",
-    }).catch(() => null);
-    if (!isSessionContextCurrent(context)) return session;
-    if (refreshed?.ok) response = await lookup();
+
+  if (!response || response.status >= 500) {
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    response = await lookup();
   }
-  if (!isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) return session;
+
+  if (!isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) {
+    return session;
+  }
+
+  if (!response) return session;
   if (!response.ok) {
-    if ((response.status === 401 || response.status === 403) && session) forgetSession();
-    return null;
+    if (response.status === 401 || response.status === 403) {
+      if (session) forgetSession();
+      return null;
+    }
+
+    // Do not turn a temporary BFF/provider failure into a customer sign-out.
+    return session;
   }
+
   const identity = (await response.json().catch(() => null)) as CravesIdentity | null;
   if (!identity?.id || !isSessionContextCurrent(context)) return session;
   const current = applyIdentityLookup(identity, context, sequence);
@@ -276,7 +291,7 @@ function fromCustomerAddress(address: DeliveryReadyAddress): CravesAddress {
 }
 
 export async function loadSelectedAddress(): Promise<CravesAddress | null> {
-  const response = await fetch("/api/customer/addresses", {
+  const response = await sessionFetch("/api/customer/addresses", {
     cache: "no-store",
     credentials: "same-origin",
   });

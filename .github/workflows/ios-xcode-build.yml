@@ -45,20 +45,6 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Guard branch-only signing attempt
-        shell: bash
-        run: |
-          set -euo pipefail
-          candidate_ref="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          if [[ "${candidate_ref}" == "main" || "${candidate_ref}" == "production" ]]; then
-            echo "Signed IPA evidence must never run from main or production." >&2
-            exit 1
-          fi
-          if grep -Eiq '^[[:space:]]*(xcrun[[:space:]]+(altool|notarytool)|fastlane[[:space:]]+(pilot|deliver))' .github/workflows/ios-xcode-build.yml; then
-            echo "Distribution tooling is forbidden in the branch-only signed IPA evidence lane." >&2
-            exit 1
-          fi
-
       - name: Checkout exact candidate
         uses: actions/checkout@v4
 
@@ -356,7 +342,7 @@ jobs:
             echo "Unable to determine the denied-location CravesMobile process id." >&2
             exit 1
           fi
-          sleep 10
+          sleep 20
           if ! kill -0 "${app_pid}" 2>/dev/null; then
             echo "CravesMobile exited during denied-location fallback smoke." >&2
             exit 1
@@ -382,7 +368,7 @@ jobs:
             echo "Unable to determine the payment-safe-failure CravesMobile process id." >&2
             exit 1
           fi
-          sleep 10
+          sleep 20
           if ! kill -0 "${app_pid}" 2>/dev/null; then
             echo "CravesMobile exited during payment-safe-failure smoke." >&2
             exit 1
@@ -412,7 +398,7 @@ jobs:
             echo "Unable to determine the customer-shell CravesMobile process id." >&2
             exit 1
           fi
-          sleep 12
+          sleep 20
           if ! kill -0 "${app_pid}" 2>/dev/null; then
             echo "CravesMobile exited during customer-shell smoke." >&2
             exit 1
@@ -438,7 +424,7 @@ jobs:
             echo "Unable to determine the chef-shell CravesMobile process id." >&2
             exit 1
           fi
-          sleep 12
+          sleep 20
           if ! kill -0 "${app_pid}" 2>/dev/null; then
             echo "CravesMobile exited during chef-shell smoke." >&2
             exit 1
@@ -495,6 +481,20 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      - name: Guard branch-only signing attempt
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_ref="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          if [[ "${candidate_ref}" == "main" || "${candidate_ref}" == "production" ]]; then
+            echo "Signed IPA evidence must never run from main or production." >&2
+            exit 1
+          fi
+          if grep -Eiq '^[[:space:]]*(xcrun[[:space:]]+(altool|notarytool)|fastlane[[:space:]]+(pilot|deliver))' .github/workflows/ios-xcode-build.yml; then
+            echo "Distribution tooling is forbidden in the branch-only signed IPA evidence lane." >&2
+            exit 1
+          fi
+
       - name: Checkout exact candidate
         uses: actions/checkout@v4
 

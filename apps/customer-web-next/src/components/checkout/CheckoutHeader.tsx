@@ -14,7 +14,7 @@ export function CheckoutHeader({
 }) {
   return (
     <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
-      <div className="mx-auto flex min-h-[84px] max-w-4xl items-center gap-3 px-4 py-3 md:px-6">
+      <div className="mx-auto flex min-h-[72px] max-w-[1180px] items-center gap-3 px-4 py-3 md:px-6 lg:min-h-[76px] lg:px-8">
         <button
           type="button"
           onClick={onBack}

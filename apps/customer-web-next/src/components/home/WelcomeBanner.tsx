@@ -26,7 +26,7 @@ export function WelcomeBanner({
     >
       <div className="overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-[#FFF8EF] shadow-[0_22px_70px_rgba(26,26,26,0.08)] sm:rounded-[1.65rem] md:rounded-[1.7rem] lg:rounded-[2rem]">
         <Image
-          src="/home/reference/home-hero-reference.webp"
+          src="/home/cravings/craves-home-banner.webp"
           alt="Welcome Taste Rebel. Eat for Health. Taste the Comfort of Home. Fresh food from nearby home kitchens, made with familiar ingredients, personal recipes and the kind of care that feels like home."
           width={1983}
           height={793}

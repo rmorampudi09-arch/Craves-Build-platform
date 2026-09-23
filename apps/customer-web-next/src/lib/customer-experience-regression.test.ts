@@ -25,7 +25,7 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(chefs, /discoverDishes\(/);
   assert.match(chefs, /dishImagesByKitchen=\{dishImagesByKitchen\}/);
   assert.match(kitchens, /KitchenDishPreview/);
-  assert.match(kitchens, /window\.setInterval/);
+  assert.match(kitchens, /window\.setTimeout/);
   assert.doesNotMatch(kitchens, /ChevronLeft/);
   assert.doesNotMatch(kitchens, /ChevronRight/);
   assert.doesNotMatch(kitchens, /kitchenPreviewTrack/);

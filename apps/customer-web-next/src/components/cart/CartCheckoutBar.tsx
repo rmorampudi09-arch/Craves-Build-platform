@@ -42,7 +42,7 @@ export function CartCheckoutBar({
           type="button"
           onClick={onContinue}
           disabled={disabled}
-          className="group/shiny relative isolate ml-auto inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 overflow-hidden rounded-[11px] bg-[#F62E18] px-6 py-[13px] text-[15px] font-semibold text-white shadow-[0_6px_18px_rgba(246,46,24,0.18)] transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:bg-[#DF2815] hover:shadow-[0_9px_24px_rgba(246,46,24,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 focus-visible:ring-offset-2 motion-reduce:transform-none sm:flex-none sm:min-w-52 disabled:pointer-events-none disabled:opacity-45"
+          className="group/shiny relative isolate ml-auto inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 overflow-hidden rounded-[11px] border border-[#5C5C5C] bg-[#6B6B6B] px-6 py-[13px] text-[15px] font-semibold text-white shadow-[0_6px_18px_rgba(26,26,26,0.15)] transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:bg-[#555555] hover:shadow-[0_9px_24px_rgba(26,26,26,0.20)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6B6B6B]/35 focus-visible:ring-offset-2 motion-reduce:transform-none sm:flex-none sm:min-w-52 disabled:pointer-events-none disabled:opacity-45"
         >
           <span
             aria-hidden="true"

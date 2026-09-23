@@ -135,7 +135,7 @@ export function BrowseHeader({
     const root = document.documentElement;
     root.style.setProperty(
       "--craves-mobile-search-offset",
-      mobileCompact ? "3.75rem" : "0px",
+      mobileCompact ? "3.7rem" : "0px",
     );
     return () => {
       root.style.removeProperty("--craves-mobile-search-offset");
@@ -349,10 +349,10 @@ export function BrowseHeader({
       <div
         aria-hidden={!mobileCompact}
         className={[
-          "fixed inset-x-0 top-0 z-50 border-b border-[#ECEEF0] bg-white/96 px-3 py-2 shadow-[0_7px_22px_rgba(26,26,26,0.065)] backdrop-blur-xl transition-[transform,opacity] duration-300 md:hidden",
+          "fixed inset-x-0 top-0 z-50 border-b border-[#ECEEF0] bg-white/96 px-3 py-2 shadow-[0_7px_22px_rgba(26,26,26,0.065)] backdrop-blur-xl will-change-transform transition-[transform,opacity,box-shadow] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden",
           mobileCompact
             ? "translate-y-0 opacity-100"
-            : "pointer-events-none -translate-y-full opacity-0",
+            : "pointer-events-none -translate-y-[115%] opacity-0 shadow-none",
         ].join(" ")}
       >
         <div className="mx-auto flex max-w-xl items-center gap-2">

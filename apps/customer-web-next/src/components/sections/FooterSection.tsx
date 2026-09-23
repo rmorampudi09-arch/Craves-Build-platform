@@ -22,7 +22,13 @@ export function FooterSection({ landingHrefPrefix = "" }: FooterSectionProps) {
       <div className="relative mx-auto max-w-7xl px-4 pb-8 pt-32 md:px-6 md:pt-36">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.25fr_0.8fr_0.8fr_0.9fr_0.8fr_1.15fr]">
           <div>
-            <CravesLogo size="lg" />
+            <a
+              href={landingHrefPrefix || "/"}
+              className="inline-flex rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              aria-label="Craves home"
+            >
+              <CravesLogo size="lg" />
+            </a>
             <p className="mt-5 max-w-[15rem] text-sm leading-6 text-[#C7C9CC]">Good food. Real impact. Homemade meals from real people.</p>
           </div>
 

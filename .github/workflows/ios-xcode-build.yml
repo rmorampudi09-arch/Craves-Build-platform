@@ -378,6 +378,14 @@ jobs:
             echo "CravesMobile emitted a fatal JavaScript runtime error during payment-safe-failure smoke." >&2
             exit 1
           fi
+          if ! grep -Fq 'E2E_PAYMENT_PROVIDER_UNAVAILABLE_VISIBLE:PAYMENT_PROVIDER_UNAVAILABLE' "$RUNNER_TEMP/CravesMobile-simulator.log"; then
+            echo "Expected deterministic payment-unavailable marker was not emitted." >&2
+            exit 1
+          fi
+          if grep -Eiq 'rzp_live_|key_id[=:]' "$RUNNER_TEMP/CravesMobile-simulator.log"; then
+            echo "Payment-safe-failure smoke exposed a live-key pattern." >&2
+            exit 1
+          fi
           xcrun simctl io "${SIMULATOR_UDID}" screenshot "$RUNNER_TEMP/CravesMobile-simulator-payment-unavailable.png"
           swift "$RUNNER_TEMP/verify-auth-shell.swift" \
             "$RUNNER_TEMP/CravesMobile-simulator-payment-unavailable.png" \

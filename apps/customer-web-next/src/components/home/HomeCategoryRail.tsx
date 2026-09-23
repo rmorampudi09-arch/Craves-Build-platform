@@ -189,7 +189,7 @@ export function HomeCategoryRail({
         </h2>
       </section>
 
-      <div className="sticky top-[4.35rem] z-30 bg-white/95 shadow-[0_7px_18px_rgba(26,26,26,0.05)] backdrop-blur-xl md:top-0">
+      <div className="sticky top-[4.35rem] z-30 bg-white/95 shadow-[0_7px_18px_rgba(26,26,26,0.05)] backdrop-blur-xl md:top-[4.25rem] lg:top-[4.65rem]">
         <div className="relative mx-auto max-w-[88rem] bg-white/95 px-4 pb-1 pt-3 md:bg-white md:px-7 md:pb-0 md:pt-4 lg:px-10 lg:pt-4">
           <div
             ref={scrollerRef}

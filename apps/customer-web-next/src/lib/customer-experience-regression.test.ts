@@ -31,9 +31,14 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.doesNotMatch(kitchens, /kitchenPreviewTrack/);
   assert.match(kitchens, /3000/);
   assert.match(kitchens, /onPointerDown/);
+  assert.match(kitchens, /new window\.Image\(\)/);
+  assert.match(kitchens, /preloadPromisesRef/);
+  assert.match(kitchens, /transition-\[opacity,transform\]/);
   assert.doesNotMatch(kitchens, /View chef/);
-  assert.match(cravings, /sticky top-\[4\.35rem\] z-30/);
+  assert.match(cravings, /top-\[var\(--craves-mobile-search-offset,0px\)\]/);
   assert.match(cravings, /md:top-\[4\.25rem\]/);
+  assert.match(cravings, /lg:top-\[4\.65rem\]/);
+  assert.match(cravings, /shadow-\[0_3px_11px_rgba\(26,26,26,0\.08\)\]/);
   assert.match(cravings, /lg:top-\[4\.65rem\]/);
   assert.doesNotMatch(cravings, /md:static/);
   assert.match(cravings, /duration-\[1200ms\]/);
@@ -74,6 +79,21 @@ test("reviewed checkout restores its server snapshot before returning to the car
   assert.match(checkout, /Step 1/);
   assert.match(checkout, /Step 2/);
   assert.match(checkout, /Step 3/);
+  assert.match(checkout, /CART_NOTICE_KEY/);
+  assert.match(checkout, /navigate\(\{ to: "\/cart" \}\)/);
+  assert.doesNotMatch(checkout, /Your reviewed order could not be restored to the cart/);
+});
+
+test("access-token expiry preserves refresh login instead of bouncing customers to landing", () => {
+  const authMe = source("../app/api/auth/me/route.ts");
+  const authClient = source("../services/auth/cravesAuth.ts");
+  const sessionFetch = source("../services/auth/sessionFetch.ts");
+
+  assert.doesNotMatch(authMe, /clearSessionCookies/);
+  assert.match(authClient, /if \(response\.status === 401\)/);
+  assert.match(authClient, /fetch\("\/api\/auth\/refresh"/);
+  assert.match(sessionFetch, /refreshSession\(\)/);
+  assert.match(sessionFetch, /response\.status !== 401/);
 });
 
 test("profile destinations preserve contextual back navigation", () => {

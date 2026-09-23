@@ -1,7 +1,6 @@
 import {AppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
 import type {
-  CheckoutCreateRequest,
   CheckoutDeliveryAddressSnapshot,
   CheckoutMoney,
   CheckoutOrderReference,

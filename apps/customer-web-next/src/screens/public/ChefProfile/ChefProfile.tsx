@@ -24,6 +24,7 @@ import {
 } from "@/services/auth/cravesAuth";
 import { DetailBrowseHeader } from "@/components/navigation/DetailBrowseHeader";
 import { ChefDishesGrid } from "@/components/chef/ChefDishesGrid";
+import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
 import { CustomerReviewsSection } from "@/components/order/CustomerReviewsSection";
 import {
   CustomerFloatingCart,
@@ -148,22 +149,7 @@ function ChefProfilePage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-white">
-        <DetailBrowseHeader returnPath={`/kitchen/${id}`} onBack={handleBack} />
-        <main className="px-4 py-8 md:py-10">
-          <div className="mx-auto max-w-6xl animate-pulse" aria-hidden="true">
-            <div className="h-44 rounded-[2rem] bg-[#F1F3F5]" />
-            <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {[0, 1, 2].map((item) => (
-                <div key={item} className="h-72 rounded-[1.75rem] bg-[#F1F3F5]" />
-              ))}
-            </div>
-          </div>
-          <p className="sr-only" role="status">Loading this home kitchen…</p>
-        </main>
-      </div>
-    );
+    return <CustomerPageSkeleton label="Loading this home kitchen" />;
   }
 
   if (!chef) {

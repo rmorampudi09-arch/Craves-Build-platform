@@ -48,6 +48,7 @@ const ADDRESS_KEY = "craves.checkout.addressId";
 const CHECKOUT_ID_KEY = "craves.checkout.id";
 const CHECKOUT_OPERATION_ID_KEY = "craves.checkout.operationId";
 const INSTRUCTIONS_KEY = "craves.checkout.instructions";
+const CART_NOTICE_KEY = "craves.cart.notice";
 
 function money(amount: number, currency = "INR") {
   try {
@@ -325,15 +326,21 @@ export default function CheckoutPage() {
   async function resetCheckoutForAddressChange(): Promise<void> {
     if (!checkout) return;
 
-    const restored = await ensureCheckoutCart(checkout.orders);
-    if (!restored) {
-      throw new Error("Your reviewed order could not be restored to change the delivery address.");
+    try {
+      const restored = await ensureCheckoutCart(checkout.orders);
+      if (!restored) {
+        throw new Error("CHECKOUT_CART_RESTORE_FAILED");
+      }
+      setItems(getCart());
+    } catch {
+      throw new Error(
+        "We couldn’t update the delivery address while keeping this checkout intact. Go back to your cart, review the items, and continue again.",
+      );
+    } finally {
+      window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
+      window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
+      setCheckout(null);
     }
-
-    window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
-    window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
-    setCheckout(null);
-    setItems(getCart());
   }
 
   async function selectAddress(id: string) {
@@ -434,24 +441,29 @@ export default function CheckoutPage() {
 
   async function handleBackToCart() {
     setError("");
-    try {
-      if (checkout) {
+
+    if (checkout) {
+      try {
         const restored = await ensureCheckoutCart(checkout.orders);
         if (!restored) {
-          throw new Error("Your reviewed order could not be restored to the cart.");
+          window.sessionStorage.setItem(
+            CART_NOTICE_KEY,
+            "Some checkout items could not be restored automatically. Please review your cart before continuing.",
+          );
         }
+      } catch {
+        window.sessionStorage.setItem(
+          CART_NOTICE_KEY,
+          "We opened your cart, but Craves could not restore every checkout item automatically. Please review the cart before continuing.",
+        );
+      } finally {
         window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
         window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
         setCheckout(null);
       }
-      navigate({ to: "/cart" });
-    } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Your cart could not be restored.",
-      );
     }
+
+    navigate({ to: "/cart" });
   }
 
   async function handleAddressSaved(saved: CustomerAddress | null) {

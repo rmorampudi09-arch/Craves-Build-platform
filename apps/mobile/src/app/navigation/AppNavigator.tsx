@@ -45,6 +45,7 @@ import {ChefRegistrationScreen} from '../../features/auth/screens/ChefRegistrati
 import {ChefAccountStatusScreen} from '../../features/auth/screens/ChefAccountStatusScreen';
 import {StartupErrorScreen} from '../../features/auth/screens/StartupErrorScreen';
 import {CustomerAddressEditorModal} from '../../features/customerAddresses/screens/CustomerAddressEditorModal';
+import {PaymentProviderUnavailableE2EScreen} from '../../features/payment/screens/PaymentProviderUnavailableE2EScreen';
 import {AccountRouterScreen} from '../../features/auth/screens/AccountRouterScreen';
 import type {
   AccountResolution,
@@ -305,6 +306,14 @@ export function AppNavigator() {
       | undefined;
     return __DEV__ && nativeLocation?.isLocationDeniedE2EEnabled?.() === true;
   });
+  const [paymentUnavailableE2E, setPaymentUnavailableE2E] = React.useState(() => {
+    const nativeControl = NativeModules.CravesCurrentLocation as
+      | {isPaymentUnavailableE2EEnabled?: () => boolean}
+      | undefined;
+    return (
+      __DEV__ && nativeControl?.isPaymentUnavailableE2EEnabled?.() === true
+    );
+  });
   useSessionLifecycle();
   const auth = useAppSelector(state => state.auth);
   const authRef = React.useRef(auth);
@@ -482,6 +491,10 @@ export function AppNavigator() {
         setLocationDeniedE2E(true);
         return;
       }
+      if (__DEV__ && url === 'craves://e2e/payment-unavailable') {
+        setPaymentUnavailableE2E(true);
+        return;
+      }
       const candidate = parseInboundUrl(url);
       trackAction('inbound_link_received', {initial, recognized: Boolean(candidate)});
       if (!candidate) return;
@@ -522,6 +535,10 @@ export function AppNavigator() {
         onClose={() => setLocationDeniedE2E(false)}
       />
     );
+  }
+
+  if (__DEV__ && paymentUnavailableE2E) {
+    return <PaymentProviderUnavailableE2EScreen />;
   }
 
   if (status === 'idle' || status === 'restoring') {

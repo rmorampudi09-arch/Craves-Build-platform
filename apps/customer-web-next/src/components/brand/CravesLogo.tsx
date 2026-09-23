@@ -35,7 +35,8 @@ export function CravesLogo({
   const router = useRouter();
 
   const goHome = (event: MouseEvent<HTMLImageElement>) => {
-    if (event.defaultPrevented) return;
+    event.preventDefault();
+    event.stopPropagation();
     router.push("/home");
   };
 

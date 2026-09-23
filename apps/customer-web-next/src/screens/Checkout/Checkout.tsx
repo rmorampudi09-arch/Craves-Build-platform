@@ -204,6 +204,7 @@ export default function CheckoutPage() {
     useState<CheckoutPaymentFailure>(null);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
+  const [addressChangeBusy, setAddressChangeBusy] = useState(false);
   const [error, setError] = useState("");
 
   const prepareCheckout = useCallback(async () => {
@@ -321,14 +322,54 @@ export default function CheckoutPage() {
     void prepareCheckout();
   }, [prepareCheckout]);
 
-  function selectAddress(id: string) {
-    if (checkout) return;
-    autoReviewKeyRef.current = "";
-    setSelectedId(id);
-    window.sessionStorage.setItem(ADDRESS_KEY, id);
+  async function resetCheckoutForAddressChange(): Promise<void> {
+    if (!checkout) return;
+
+    const restored = await ensureCheckoutCart(checkout.orders);
+    if (!restored) {
+      throw new Error("Your reviewed order could not be restored to change the delivery address.");
+    }
+
+    window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
     window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
-    setPaymentFailure(null);
+    setCheckout(null);
+    setItems(getCart());
+  }
+
+  async function selectAddress(id: string) {
+    if (addressChangeBusy || (id === selectedId && checkout)) return;
+
+    setAddressChangeBusy(true);
     setError("");
+    try {
+      await resetCheckoutForAddressChange();
+      autoReviewKeyRef.current = "";
+      setSelectedId(id);
+      window.sessionStorage.setItem(ADDRESS_KEY, id);
+      window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
+      setPaymentFailure(null);
+    } catch (caught) {
+      setError(checkoutMessage(caught));
+    } finally {
+      setAddressChangeBusy(false);
+    }
+  }
+
+  async function openAddressEditor() {
+    if (addressChangeBusy) return;
+
+    setAddressChangeBusy(true);
+    setError("");
+    try {
+      await resetCheckoutForAddressChange();
+      autoReviewKeyRef.current = "";
+      setPaymentFailure(null);
+      setEditorOpen(true);
+    } catch (caught) {
+      setError(checkoutMessage(caught));
+    } finally {
+      setAddressChangeBusy(false);
+    }
   }
 
   const ensureCheckout = useCallback(async (): Promise<CustomerCheckout> => {
@@ -357,6 +398,7 @@ export default function CheckoutPage() {
     if (
       loading ||
       reviewing ||
+      addressChangeBusy ||
       checkout ||
       !selectedId ||
       items.length === 0 ||
@@ -379,6 +421,7 @@ export default function CheckoutPage() {
       })
       .finally(() => setReviewing(false));
   }, [
+    addressChangeBusy,
     checkout,
     ensureCheckout,
     instructions,
@@ -421,9 +464,9 @@ export default function CheckoutPage() {
         ? next.find((address) => address.id === saved.id)
         : null;
     if (selected) {
-      selectAddress(selected.id);
+      await selectAddress(selected.id);
     } else if (!selectedId && next[0]) {
-      selectAddress(next[0].id);
+      await selectAddress(next[0].id);
     }
   }
 
@@ -491,8 +534,8 @@ export default function CheckoutPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setEditorOpen(true)}
-                  disabled={Boolean(checkout)}
+                  onClick={() => void openAddressEditor()}
+                  disabled={addressChangeBusy}
                   className="inline-flex min-h-9 items-center rounded-[10px] border border-[#D7DADF] bg-white px-3 text-xs font-semibold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:border-[#C8CDD2] hover:bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/25 disabled:pointer-events-none disabled:opacity-45"
                 >
                   Add new
@@ -513,8 +556,8 @@ export default function CheckoutPage() {
                           name="delivery-address"
                           value={address.id}
                           checked={checked}
-                          disabled={Boolean(checkout)}
-                          onChange={() => selectAddress(address.id)}
+                          disabled={addressChangeBusy}
+                          onChange={() => void selectAddress(address.id)}
                           className="mt-1 h-4 w-4 accent-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 disabled:cursor-not-allowed disabled:opacity-55"
                         />
                         <span className="min-w-0 flex-1">
@@ -556,8 +599,8 @@ export default function CheckoutPage() {
                   </p>
                   <button
                     type="button"
-                    onClick={() => setEditorOpen(true)}
-                    disabled={Boolean(checkout)}
+                    onClick={() => void openAddressEditor()}
+                    disabled={addressChangeBusy}
                     className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#F62E18] px-4 text-sm font-semibold text-white disabled:pointer-events-none disabled:opacity-45"
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" />
@@ -663,7 +706,11 @@ export default function CheckoutPage() {
           checkout={checkout}
           previewAmount={subtotal}
           currency={currency}
-          disabled={reviewing || (!checkout && !selectedAddress)}
+          disabled={
+            reviewing ||
+            addressChangeBusy ||
+            (!checkout && !selectedAddress)
+          }
           failure={paymentFailure}
           ensureCheckout={ensureCheckout}
           onFailure={setPaymentFailure}

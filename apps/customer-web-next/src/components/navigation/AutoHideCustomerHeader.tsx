@@ -84,6 +84,25 @@ export function AutoHideCustomerHeader({
       ? "-translate-y-full pointer-events-none"
       : "translate-y-0";
 
+  useEffect(() => {
+    if (!mobileStatic) return;
+
+    const root = document.documentElement;
+    root.style.setProperty(
+      "--craves-desktop-header-offset-md",
+      hidden ? "0px" : "4.25rem",
+    );
+    root.style.setProperty(
+      "--craves-desktop-header-offset-lg",
+      hidden ? "0px" : "4.65rem",
+    );
+
+    return () => {
+      root.style.removeProperty("--craves-desktop-header-offset-md");
+      root.style.removeProperty("--craves-desktop-header-offset-lg");
+    };
+  }, [hidden, mobileStatic]);
+
   return (
     <header
       data-craves-auto-hide-header="true"
@@ -93,7 +112,7 @@ export function AutoHideCustomerHeader({
       className={[
         positionClass,
         "z-40",
-        "transition-transform duration-[240ms] ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+        "will-change-transform transition-transform duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
         "motion-reduce:transition-none",
         visibilityClass,
         className,

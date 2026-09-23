@@ -49,9 +49,11 @@ function checkoutIntentKey(intent: CheckoutCreationIntent): string {
 }
 
 function hash32(value: string, seed: number): number {
-  let hash = seed >>> 0;
+  const modulus = 4_294_967_296;
+  let hash = seed % modulus;
   for (let index = 0; index < value.length; index += 1) {
-    hash = Math.imul(hash ^ value.charCodeAt(index), 16777619) >>> 0;
+    const multiplied = Math.imul(hash, 16_777_619);
+    hash = (multiplied + value.charCodeAt(index) + modulus) % modulus;
   }
   return hash;
 }
@@ -79,7 +81,7 @@ export function checkoutOperationIdForIntent(
     .map(hexWord)
     .join('');
 
-  const variant = ((Number.parseInt(raw[16], 16) & 0x3) | 0x8).toString(16);
+  const variant = (8 + (Number.parseInt(raw[16], 16) % 4)).toString(16);
   const uuidHex =
     raw.slice(0, 12) +
     '4' +

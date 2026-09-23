@@ -6,7 +6,7 @@ function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
-test("mobile customer nav uses website icons and the cart morphs as frosted glass", () => {
+test("mobile customer nav uses website icons and clears space while browsing the feed", () => {
   const nav = source("../components/layout/BottomNav.tsx");
 
   assert.match(nav, /FaHome/);
@@ -17,9 +17,10 @@ test("mobile customer nav uses website icons and the cart morphs as frosted glas
   assert.match(nav, /label: "Meal Subscription"/);
   assert.match(nav, /href: "\/chefs"/);
   assert.doesNotMatch(nav, /home#nearby-kitchens-heading/);
-  assert.match(nav, /calc\(100% - 0\.75rem\)/);
-  assert.match(nav, /backdrop-blur-\[8px\]/);
-  assert.match(nav, /rgba\(255,255,255,0\.45\)/);
+  assert.match(nav, /hiddenByScroll/);
+  assert.match(nav, /currentY > 112 && delta > 6/);
+  assert.match(nav, /delta < -6/);
+  assert.match(nav, /y: hiddenByScroll \? "115%" : "0%"/);
   assert.doesNotMatch(nav, /#2563EB|ShoppingCart|UserRound/);
 });
 
@@ -40,8 +41,12 @@ test("mobile discovery keeps search, veg and cravings accessible while scrolling
   assert.match(autoHide, /static md:sticky md:top-0/);
   assert.match(header, /mobileCompact/);
   assert.match(header, /fixed inset-x-0 top-0 z-50/);
-  assert.match(cravings, /sticky top-\[4\.35rem\] z-30/);
+  assert.match(cravings, /top-\[var\(--craves-mobile-search-offset,0px\)\]/);
   assert.match(cravings, /md:top-\[4\.25rem\]/);
+  assert.match(cravings, /lg:top-\[4\.65rem\]/);
+  assert.match(header, /--craves-mobile-search-offset/);
+  assert.match(header, /delta < -6/);
+  assert.match(header, /currentY > 148 && delta > 5/);
   assert.match(cravings, /lg:top-\[4\.65rem\]/);
   assert.doesNotMatch(cravings, /md:static/);
 });

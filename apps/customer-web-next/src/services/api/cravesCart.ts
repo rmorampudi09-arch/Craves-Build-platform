@@ -259,17 +259,25 @@ export async function ensureCheckoutCart(
 ): Promise<boolean> {
   const expected = checkoutCartItems(orders);
   await cartRequest("/api/cart", { cache: "no-store" });
-  if (!visualItems.length) {
-    for (const item of expected) {
-      await cartRequest("/api/cart/items", {
-        method: "POST",
-        body: JSON.stringify({
-          menuItemId: item.menuItemId,
-          quantity: item.quantity,
-        }),
-      });
-    }
+
+  if (cartMatchesCheckout(expected)) return true;
+
+  // Checkout creation may consume or mutate the server cart. Rebuild the cart
+  // from the checkout snapshot instead of blocking navigation when any stale
+  // cart rows remain.
+  await cartRequest("/api/cart", { method: "DELETE" });
+
+  for (const item of expected) {
+    await cartRequest("/api/cart/items", {
+      method: "POST",
+      body: JSON.stringify({
+        menuItemId: item.menuItemId,
+        quantity: item.quantity,
+      }),
+    });
   }
+
+  await cartRequest("/api/cart", { cache: "no-store" });
   return cartMatchesCheckout(expected);
 }
 

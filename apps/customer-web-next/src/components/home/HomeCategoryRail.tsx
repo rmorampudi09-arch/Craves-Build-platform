@@ -189,7 +189,7 @@ export function HomeCategoryRail({
         </h2>
       </section>
 
-      <div className="sticky top-[var(--craves-mobile-search-offset,0px)] z-30 border-b border-[#F1F3F5] bg-white/97 shadow-[0_5px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl transition-[top] duration-300 md:top-[4.25rem] lg:top-[4.65rem]">
+      <div className="sticky top-[var(--craves-mobile-search-offset,0px)] z-30 border-b border-[#F1F3F5] bg-white/97 shadow-[0_5px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl will-change-[top] transition-[top,box-shadow] duration-[500ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:top-[4.25rem] lg:top-[4.65rem]">
         <div className="relative mx-auto max-w-[88rem] bg-white/96 px-3 pb-0 pt-1.5 md:bg-white md:px-7 md:pt-2 lg:px-10">
           <div
             ref={scrollerRef}

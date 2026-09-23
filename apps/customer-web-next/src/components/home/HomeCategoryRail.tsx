@@ -255,7 +255,7 @@ export function HomeCategoryRail({
               type="button"
               onClick={() => scrollCategories(-1)}
               aria-label="Show previous craving categories"
-              className="absolute left-3 top-[3.1rem] z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_6px_18px_rgba(26,26,26,0.14)] transition-[box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:top-[3.3rem] md:left-4 md:top-[3.55rem] lg:left-7 lg:top-[4.1rem] lg:h-10 lg:w-10"
+              className="absolute left-3 top-[3.1rem] z-20 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_6px_18px_rgba(26,26,26,0.14)] transition-[box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 md:left-4 md:top-[3.55rem] md:flex lg:left-7 lg:top-[4.1rem] lg:h-10 lg:w-10"
             >
               <FaChevronLeft
                 className="h-3 w-3 lg:h-3.5 lg:w-3.5"
@@ -266,7 +266,7 @@ export function HomeCategoryRail({
 
           <div
             className={[
-              "pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-white to-transparent transition-opacity duration-200",
+              "pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-16 bg-gradient-to-l from-white to-transparent transition-opacity duration-200 md:block",
               canScrollRight ? "opacity-100" : "invisible opacity-0",
             ].join(" ")}
             aria-hidden="true"
@@ -276,7 +276,7 @@ export function HomeCategoryRail({
               type="button"
               onClick={() => scrollCategories(1)}
               aria-label="Show more craving categories"
-              className="absolute right-3 top-[3.1rem] z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_6px_18px_rgba(26,26,26,0.14)] transition-[box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 sm:top-[3.3rem] md:right-4 md:top-[3.55rem] lg:right-7 lg:top-[4.1rem] lg:h-10 lg:w-10"
+              className="absolute right-3 top-[3.1rem] z-20 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_6px_18px_rgba(26,26,26,0.14)] transition-[box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 md:right-4 md:top-[3.55rem] md:flex lg:right-7 lg:top-[4.1rem] lg:h-10 lg:w-10"
             >
               <FaChevronRight
                 className="h-3 w-3 lg:h-3.5 lg:w-3.5"

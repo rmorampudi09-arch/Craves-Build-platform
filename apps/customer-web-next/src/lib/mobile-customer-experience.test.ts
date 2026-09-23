@@ -41,7 +41,8 @@ test("mobile discovery keeps search, veg and cravings accessible while scrolling
   assert.match(header, /mobileCompact/);
   assert.match(header, /fixed inset-x-0 top-0 z-50/);
   assert.match(cravings, /sticky top-\[4\.35rem\] z-30/);
-  assert.match(cravings, /md:top-0/);
+  assert.match(cravings, /md:top-\[4\.25rem\]/);
+  assert.match(cravings, /lg:top-\[4\.65rem\]/);
   assert.doesNotMatch(cravings, /md:static/);
 });
 

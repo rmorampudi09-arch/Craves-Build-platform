@@ -41,6 +41,10 @@ async function refreshSession(): Promise<RefreshResult> {
   return pending;
 }
 
+export async function refreshSessionCookies(): Promise<boolean> {
+  return (await refreshSession()) === "refreshed";
+}
+
 /**
  * Same-origin client fetch for authenticated BFF routes.
  * If the short-lived access cookie expires, all concurrent requests share one

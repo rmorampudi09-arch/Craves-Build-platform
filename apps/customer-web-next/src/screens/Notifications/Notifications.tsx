@@ -12,6 +12,7 @@ import {
 import { GiChefToque } from "react-icons/gi";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
+import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
 import type { CustomerNotification } from "@/lib/notification-contract";
 import { loadSession } from "@/services/auth/cravesAuth";
 
@@ -171,6 +172,8 @@ export default function NotificationsPage() {
       notices: groups.get(label) ?? [],
     })).filter((group) => group.notices.length > 0);
   }, [filteredNotices]);
+
+  if (loading) return <CustomerPageSkeleton label="Loading notifications" />;
 
   return (
     <div className="min-h-screen bg-white pb-12 text-[#1A1A1A]">

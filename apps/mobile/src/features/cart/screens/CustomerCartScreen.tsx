@@ -388,6 +388,7 @@ export function CustomerCartScreen() {
   const persistedRecoveryRef = useRef<
     ReturnType<typeof recoverPersistedPaymentAttempt> | null
   >(null);
+  const skipNextAutomaticPaymentRecoveryRef = useRef(false);
 
   const sections = useMemo(
     () => groupCartItemsByKitchen(model?.items ?? []),
@@ -505,7 +506,11 @@ export function CustomerCartScreen() {
 
   useEffect(() => {
     if (!checkoutBusy) {
-      void reconcileInterruptedPayment(true).catch(() => undefined);
+      if (skipNextAutomaticPaymentRecoveryRef.current) {
+        skipNextAutomaticPaymentRecoveryRef.current = false;
+      } else {
+        void reconcileInterruptedPayment(true).catch(() => undefined);
+      }
     }
     const subscription = AppState.addEventListener('change', state => {
       if (state === 'active' && !checkoutBusy) {
@@ -663,6 +668,7 @@ export function CustomerCartScreen() {
         return;
       }
 
+      let preparedForReview = false;
       if (!checkout || checkout.status !== 'PAYMENT_PENDING') {
         if (!cartSnapshot) {
           setInteractionError('Refresh your cart before starting checkout.');
@@ -712,12 +718,21 @@ export function CustomerCartScreen() {
           expectedCart: buildCartSnapshotRequest(validatedCart),
         });
         activeCheckoutRef.current = checkout;
+        preparedForReview = true;
       }
 
       setCheckoutReview(checkout);
       const handoff = await paymentHandoffCoordinator.prepare(checkout);
       await pendingPaymentAttemptStore.save(handoff);
       setPaymentRecoveryActive(true);
+
+      if (preparedForReview) {
+        skipNextAutomaticPaymentRecoveryRef.current = true;
+        setPaymentNotice(
+          'Final total is ready. Review Bill Details, then continue payment.',
+        );
+        return;
+      }
 
       try {
         const proof = await razorpayGateway.open(handoff, {phone: authPhone});
@@ -918,7 +933,7 @@ export function CustomerCartScreen() {
       item={item}
       discovery={discoveryByMenuItem[item.menuItemId]}
       pending={isCartLineInteractionDisabled({
-        checkoutBusy,
+        checkoutBusy: checkoutBusy || checkoutReview?.status === 'PAYMENT_PENDING',
         lineMutationPending: mutations[`line:${item.lineId}`]?.status === 'PENDING',
         paymentRecoveryActive,
       })}

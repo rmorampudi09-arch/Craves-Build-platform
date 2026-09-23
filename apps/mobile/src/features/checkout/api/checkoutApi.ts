@@ -127,6 +127,34 @@ function parseMoney(value: unknown, currency: string): CheckoutMoney | null {
   return amount ? {amount, currency} : null;
 }
 
+function moneyInMinorUnits(money: CheckoutMoney): number | null {
+  const [whole, fractional = ''] = money.amount.split('.');
+  if (fractional.length > 2) return null;
+  const wholeUnits = Number(whole);
+  const minorUnits = Number(fractional.padEnd(2, '0') || '0');
+  const total = wholeUnits * 100 + minorUnits;
+  return Number.isSafeInteger(total) ? total : null;
+}
+
+function checkoutTotalsReconcile(
+  foodSubtotal: CheckoutMoney,
+  platformFee: CheckoutMoney,
+  taxAmount: CheckoutMoney,
+  deliveryFee: CheckoutMoney,
+  grandTotal: CheckoutMoney,
+): boolean {
+  const amounts = [
+    foodSubtotal,
+    platformFee,
+    taxAmount,
+    deliveryFee,
+    grandTotal,
+  ].map(moneyInMinorUnits);
+  if (amounts.some(amount => amount === null)) return false;
+  const [food, platform, tax, delivery, total] = amounts as number[];
+  return food + platform + tax + delivery === total;
+}
+
 function parseTimestamp(value: unknown): string | null {
   return typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : null;
 }
@@ -253,6 +281,17 @@ export function parseCheckoutSession(value: unknown): CheckoutSession | null {
   const deliveryFee = parseMoney(checkout.deliveryFee, currency);
   const grandTotal = parseMoney(checkout.grandTotal, currency);
   if (!foodSubtotal || !platformFee || !taxAmount || !deliveryFee || !grandTotal) {
+    return null;
+  }
+  if (
+    !checkoutTotalsReconcile(
+      foodSubtotal,
+      platformFee,
+      taxAmount,
+      deliveryFee,
+      grandTotal,
+    )
+  ) {
     return null;
   }
 

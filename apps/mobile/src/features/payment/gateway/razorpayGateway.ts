@@ -32,15 +32,21 @@ function boundedText(value: unknown, maxLength: number): string | null {
 }
 
 function amountInSubunits(amount: string): number {
-  if (!/^\d+(?:\.\d+)?$/.test(amount)) {
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(amount);
+  if (!match) {
     throw new AppApiError(
       'PAYMENT_AMOUNT_INVALID',
       'The payment amount could not be prepared securely.',
     );
   }
-  const numeric = Number(amount);
-  const subunits = Math.round(numeric * 100);
-  if (!Number.isFinite(numeric) || numeric <= 0 || !Number.isSafeInteger(subunits)) {
+  const wholeUnits = Number(match[1]);
+  const minorUnits = Number((match[2] ?? '').padEnd(2, '0') || '0');
+  const subunits = wholeUnits * 100 + minorUnits;
+  if (
+    !Number.isSafeInteger(wholeUnits) ||
+    !Number.isSafeInteger(subunits) ||
+    subunits <= 0
+  ) {
     throw new AppApiError(
       'PAYMENT_AMOUNT_INVALID',
       'The payment amount could not be prepared securely.',

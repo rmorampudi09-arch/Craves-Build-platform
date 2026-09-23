@@ -107,6 +107,34 @@ describe('P49 checkout session creation', () => {
     });
   });
 
+  it('rejects checkout totals whose bill components do not equal the payable total', () => {
+    expect(
+      parseCheckoutSession({
+        ...apiResponse,
+        grandTotal: 48.25,
+      }),
+    ).toBeNull();
+  });
+
+  it('accepts exact paise totals without floating-point drift', () => {
+    expect(
+      parseCheckoutSession({
+        ...apiResponse,
+        foodSubtotal: 40,
+        platformFee: 3.25,
+        taxAmount: 2,
+        deliveryFee: 3,
+        grandTotal: 48.25,
+      }),
+    ).toMatchObject({
+      foodSubtotal: {amount: '40', currency: 'INR'},
+      platformFee: {amount: '3.25', currency: 'INR'},
+      taxAmount: {amount: '2', currency: 'INR'},
+      deliveryFee: {amount: '3', currency: 'INR'},
+      grandTotal: {amount: '48.25', currency: 'INR'},
+    });
+  });
+
   it('keeps older persisted checkout responses compatible when no address snapshot exists', () => {
     const {deliveryAddress, ...legacyResponse} = apiResponse;
     expect(deliveryAddress).toBe(deliveryAddressSnapshot);

@@ -49,6 +49,39 @@ describe('production Razorpay native gateway adapter', () => {
     );
   });
 
+  it('converts an exact ₹48.25 payable total to 4825 paise', async () => {
+    mockRazorpayOpen.mockResolvedValue({
+      razorpay_payment_id: 'pay_Razorpay456',
+      razorpay_order_id: handoff.providerOrderId,
+      razorpay_signature: 'signed_payload_proof',
+    });
+
+    await openRazorpayCheckout({
+      ...handoff,
+      amount: {amount: '48.25', currency: 'INR'},
+    });
+
+    expect(mockRazorpayOpen).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 4825,
+        order_id: handoff.providerOrderId,
+      }),
+    );
+  });
+
+  it('rejects payment amounts with more than two INR decimal places', async () => {
+    await expect(
+      openRazorpayCheckout({
+        ...handoff,
+        amount: {amount: '48.251', currency: 'INR'},
+      }),
+    ).rejects.toMatchObject({
+      code: 'PAYMENT_AMOUNT_INVALID',
+    });
+
+    expect(mockRazorpayOpen).not.toHaveBeenCalled();
+  });
+
   it('rejects a success payload bound to a different provider order', async () => {
     mockRazorpayOpen.mockResolvedValue({
       razorpay_payment_id: 'pay_Razorpay456',

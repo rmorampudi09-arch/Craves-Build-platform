@@ -134,7 +134,7 @@ function WishlistPage() {
     }
   }, [busyId]);
 
-  if (!ready) return <CustomerPageSkeleton label="Loading saved dishes" />;
+  if (!ready || loading) return <CustomerPageSkeleton label="Loading saved dishes" />;
 
   return (
     <div className="min-h-screen bg-white pb-20 text-[#1A1A1A]">

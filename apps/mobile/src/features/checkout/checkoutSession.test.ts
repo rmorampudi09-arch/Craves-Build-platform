@@ -1,7 +1,10 @@
 import {AppApiError} from '../../core/http/apiError';
-import {parseCheckoutSession} from './api/checkoutApi';
 import {
-  CHECKOUT_SERVER_IDEMPOTENCY_CONTRACT_BLOCKER,
+  parseCheckoutOperationResult,
+  parseCheckoutSession,
+} from './api/checkoutApi';
+import {
+  checkoutOperationIdForIntent,
   checkoutSessionCapability,
   createCheckoutSessionCoordinator,
 } from './domain/checkoutSessionCoordinator';
@@ -17,6 +20,7 @@ const seededChargePolicyId = '20000000-0000-0000-0000-000000000001';
 const deliveryAddressId = '44444444-4444-4444-8444-444444444444';
 const orderId = '55555555-5555-4555-8555-555555555555';
 const cartId = '66666666-6666-4666-8666-666666666666';
+const cartLineId = '77777777-7777-4777-8777-777777777777';
 
 const deliveryAddressSnapshot = {
   sourceAddressId: deliveryAddressId,
@@ -61,6 +65,16 @@ const intent: CheckoutCreationIntent = {
   cartId,
   cartClientRevision: 8,
   deliveryAddressId,
+  expectedCart: {
+    cartId,
+    items: [
+      {
+        id: cartLineId,
+        quantity: 1,
+        updatedAt: '2026-08-08T11:59:00Z',
+      },
+    ],
+  },
 };
 
 function deferred<T>() {
@@ -147,72 +161,164 @@ describe('P49 checkout session creation', () => {
     ).toBeNull();
   });
 
+  it('parses the atomic checkout operation receipt', () => {
+    const operationId = checkoutOperationIdForIntent(intent);
+    expect(
+      parseCheckoutOperationResult({
+        operationId,
+        status: 'SUCCEEDED',
+        checkoutId,
+      }),
+    ).toEqual({operationId, status: 'SUCCEEDED', checkoutId});
+  });
+
+  it('derives a stable operation id from the exact server request', () => {
+    const original = checkoutOperationIdForIntent(intent);
+    expect(
+      checkoutOperationIdForIntent({...intent, cartClientRevision: 99}),
+    ).toBe(original);
+    expect(
+      checkoutOperationIdForIntent({
+        ...intent,
+        expectedCart: {
+          ...intent.expectedCart,
+          items: [{...intent.expectedCart.items[0], quantity: 2}],
+        },
+      }),
+    ).not.toBe(original);
+  });
+
   it('coalesces duplicate create taps and reuses the successful session for the same intent', async () => {
-    const pending = deferred<CheckoutSession>();
-    const createSession = jest.fn(() => pending.promise);
-    const coordinator = createCheckoutSessionCoordinator(createSession);
+    const operation = deferred<{
+      operationId: string;
+      status: 'SUCCEEDED';
+      checkoutId: string;
+    }>();
+    const client = {
+      executeOperation: jest.fn(() => operation.promise),
+      getOperation: jest.fn(),
+      getSession: jest.fn(async () => session),
+    };
+    const coordinator = createCheckoutSessionCoordinator(client);
 
     const first = coordinator.create(intent);
     const duplicate = coordinator.create(intent);
 
     expect(duplicate).toBe(first);
-    expect(createSession).toHaveBeenCalledTimes(1);
+    expect(client.executeOperation).toHaveBeenCalledTimes(1);
 
-    pending.resolve(session);
+    const operationId = checkoutOperationIdForIntent(intent);
+    operation.resolve({operationId, status: 'SUCCEEDED', checkoutId});
     await expect(first).resolves.toBe(session);
     await expect(coordinator.create(intent)).resolves.toBe(session);
-    expect(createSession).toHaveBeenCalledTimes(1);
+    expect(client.executeOperation).toHaveBeenCalledTimes(1);
+    expect(client.getSession).toHaveBeenCalledWith(checkoutId);
   });
 
-  it('blocks a different checkout intent while creation is already in flight', async () => {
-    const pending = deferred<CheckoutSession>();
-    const createSession = jest.fn(() => pending.promise);
-    const coordinator = createCheckoutSessionCoordinator(createSession);
+  it('blocks a different checkout request while creation is already in flight', async () => {
+    const operation = deferred<{
+      operationId: string;
+      status: 'SUCCEEDED';
+      checkoutId: string;
+    }>();
+    const client = {
+      executeOperation: jest.fn(() => operation.promise),
+      getOperation: jest.fn(),
+      getSession: jest.fn(async () => session),
+    };
+    const coordinator = createCheckoutSessionCoordinator(client);
 
     const first = coordinator.create(intent);
     await expect(
-      coordinator.create({...intent, cartClientRevision: 9}),
+      coordinator.create({
+        ...intent,
+        expectedCart: {
+          ...intent.expectedCart,
+          items: [{...intent.expectedCart.items[0], quantity: 2}],
+        },
+      }),
     ).rejects.toMatchObject({code: 'CHECKOUT_CREATION_IN_PROGRESS'});
-    expect(createSession).toHaveBeenCalledTimes(1);
 
-    pending.resolve(session);
+    const operationId = checkoutOperationIdForIntent(intent);
+    operation.resolve({operationId, status: 'SUCCEEDED', checkoutId});
     await expect(first).resolves.toBe(session);
   });
 
-  it('does not replay the same POST after an uncertain transport outcome', async () => {
-    const createSession = jest.fn(() =>
-      Promise.reject(
-        new AppApiError(
-          'NETWORK_ERROR',
-          'We could not reach Craves. Check your connection and try again.',
-          undefined,
-          undefined,
-          true,
-        ),
-      ),
+  it('recovers the original checkout after an uncertain POST outcome', async () => {
+    const operationId = checkoutOperationIdForIntent(intent);
+    const networkError = new AppApiError(
+      'NETWORK_ERROR',
+      'We could not reach Craves. Check your connection and try again.',
+      undefined,
+      undefined,
+      true,
     );
-    const coordinator = createCheckoutSessionCoordinator(createSession);
+    const client = {
+      executeOperation: jest.fn(async () => {
+        throw networkError;
+      }),
+      getOperation: jest.fn(async () => ({
+        operationId,
+        status: 'SUCCEEDED' as const,
+        checkoutId,
+      })),
+      getSession: jest.fn(async () => session),
+    };
+    const coordinator = createCheckoutSessionCoordinator(client);
 
-    await expect(coordinator.create(intent)).rejects.toMatchObject({
-      code: 'NETWORK_ERROR',
-    });
-    await expect(coordinator.create(intent)).rejects.toMatchObject({
-      code: 'CHECKOUT_CREATION_OUTCOME_UNCERTAIN',
-    });
-    expect(createSession).toHaveBeenCalledTimes(1);
+    await expect(coordinator.create(intent)).resolves.toBe(session);
+    expect(client.executeOperation).toHaveBeenCalledTimes(1);
+    expect(client.getOperation).toHaveBeenCalledWith(operationId);
+    expect(client.getSession).toHaveBeenCalledWith(checkoutId);
   });
 
-  it('allows a corrected retry after a definitive client rejection', async () => {
-    const createSession = jest.fn(() =>
-      Promise.reject(
-        new AppApiError(
+  it('safely replays the same operation when the recovery read races the POST', async () => {
+    const operationId = checkoutOperationIdForIntent(intent);
+    const networkError = new AppApiError(
+      'NETWORK_ERROR',
+      'Temporary network failure.',
+      undefined,
+      undefined,
+      true,
+    );
+    const client = {
+      executeOperation: jest
+        .fn()
+        .mockRejectedValueOnce(networkError)
+        .mockResolvedValueOnce({
+          operationId,
+          status: 'SUCCEEDED' as const,
+          checkoutId,
+        }),
+      getOperation: jest.fn(async () => {
+        throw new AppApiError(
+          'CHECKOUT_OPERATION_NOT_FOUND',
+          'Checkout attempt is not available yet.',
+          404,
+        );
+      }),
+      getSession: jest.fn(async () => session),
+    };
+    const coordinator = createCheckoutSessionCoordinator(client);
+
+    await expect(coordinator.create(intent)).resolves.toBe(session);
+    expect(client.executeOperation).toHaveBeenCalledTimes(2);
+    expect(client.getOperation).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not run recovery for a definitive client rejection', async () => {
+    const client = {
+      executeOperation: jest.fn(async () => {
+        throw new AppApiError(
           'DELIVERY_ADDRESS_REQUIRED',
           'Choose a delivery address.',
           400,
-        ),
-      ),
-    );
-    const coordinator = createCheckoutSessionCoordinator(createSession);
+        );
+      }),
+      getOperation: jest.fn(),
+      getSession: jest.fn(),
+    };
+    const coordinator = createCheckoutSessionCoordinator(client);
 
     await expect(coordinator.create(intent)).rejects.toMatchObject({
       code: 'DELIVERY_ADDRESS_REQUIRED',
@@ -220,17 +326,18 @@ describe('P49 checkout session creation', () => {
     await expect(coordinator.create(intent)).rejects.toMatchObject({
       code: 'DELIVERY_ADDRESS_REQUIRED',
     });
-    expect(createSession).toHaveBeenCalledTimes(2);
+    expect(client.executeOperation).toHaveBeenCalledTimes(2);
+    expect(client.getOperation).not.toHaveBeenCalled();
   });
 
-  it('records the missing server idempotency contract instead of inventing one', () => {
+  it('records the server idempotency contract as active', () => {
     expect(checkoutSessionCapability).toEqual({
       authoritativeCreationSupported: true,
       authoritativeRevalidationOwnedByServer: true,
       clientDuplicateTapCoalescing: true,
-      serverIdempotencySupported: false,
-      automaticCreateRetrySupported: false,
-      blockerCode: CHECKOUT_SERVER_IDEMPOTENCY_CONTRACT_BLOCKER,
+      serverIdempotencySupported: true,
+      automaticCreateRetrySupported: true,
+      blockerCode: null,
     });
   });
 });

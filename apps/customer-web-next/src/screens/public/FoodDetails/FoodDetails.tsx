@@ -25,6 +25,7 @@ import { CustomerReviewsSection } from "@/components/order/CustomerReviewsSectio
 import { SimilarDishesSection } from "@/components/order/SimilarDishesSection";
 import { DishBottomBar } from "@/components/order/DishBottomBar";
 import { CravesCartIcon } from "@/components/home/CravesCartIcon";
+import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
 import {
   CustomerFloatingCart,
   useCustomerCartSummary,
@@ -175,20 +176,7 @@ function DishDetailPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-white">
-        <DetailBrowseHeader returnPath={`/dish/${id}`} onBack={handleBack} />
-        <main className="px-4 py-8 md:py-10">
-          <div className="mx-auto max-w-6xl animate-pulse" aria-hidden="true">
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(19rem,0.9fr)] lg:justify-center xl:grid-cols-[minmax(0,42rem)_24rem]">
-              <div className="aspect-[4/3] rounded-[2rem] bg-[#F1F3F5] md:aspect-[16/10]" />
-              <div className="h-[28rem] rounded-[2rem] bg-[#F1F3F5]" />
-            </div>
-          </div>
-          <p className="sr-only" role="status">Loading live dish details</p>
-        </main>
-      </div>
-    );
+    return <CustomerPageSkeleton label="Loading live dish details" />;
   }
 
   if (!dish) {

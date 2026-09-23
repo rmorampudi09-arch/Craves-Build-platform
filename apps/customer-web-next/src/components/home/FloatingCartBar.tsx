@@ -40,7 +40,7 @@ export function FloatingCartBar({
         duration: reduceMotion ? 0 : 0.36,
         ease: [0.22, 1, 0.36, 1],
       }}
-      className="pointer-events-none fixed inset-x-0 bottom-[5.15rem] z-50 px-3 sm:bottom-6 sm:px-4 md:bottom-6 md:px-6"
+      className="pointer-events-none fixed inset-x-0 bottom-6 z-50 hidden px-6 md:block"
     >
       <button
         type="button"

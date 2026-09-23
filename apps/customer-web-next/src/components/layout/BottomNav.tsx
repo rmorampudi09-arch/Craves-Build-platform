@@ -191,7 +191,14 @@ export function BottomNav() {
         className="fixed inset-x-0 bottom-0 z-40 md:hidden"
         aria-label="Customer navigation"
       >
-        <div className="relative mx-auto max-w-lg overflow-hidden rounded-t-[1.15rem] border-t border-[#ECEEF0] bg-white/96 shadow-[0_-8px_24px_rgba(26,26,26,0.065)] backdrop-blur-xl">
+        <div
+          className={[
+            "relative mx-auto max-w-lg overflow-hidden rounded-t-[1.15rem] transition-[background-color,border-color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+            cartExpanded
+              ? "border-t border-white/70 bg-transparent shadow-none"
+              : "border-t border-[#ECEEF0] bg-white/96 shadow-[0_-8px_24px_rgba(26,26,26,0.065)] backdrop-blur-xl",
+          ].join(" ")}
+        >
           <motion.ul
             initial={false}
             animate={{
@@ -296,14 +303,14 @@ export function BottomNav() {
               >
                 <Link
                   href="/cart"
-                  className="relative flex h-full min-h-[3.45rem] items-center gap-3 overflow-hidden rounded-[1.05rem] border border-white/80 bg-white/68 px-3.5 text-[#1A1A1A] shadow-[0_10px_28px_rgba(26,26,26,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-[8px]"
+                  className="relative flex h-full min-h-[3.45rem] items-center gap-3 overflow-hidden rounded-[1.05rem] border border-white/80 bg-white/50 px-3.5 text-[#1A1A1A] shadow-[0_16px_42px_rgba(26,26,26,0.18),0_2px_8px_rgba(26,26,26,0.06),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-[8px] backdrop-saturate-[145%] backdrop-contrast-[96%]"
                   aria-label={`View cart with ${itemCount} ${itemCount === 1 ? "item" : "items"}`}
                 >
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 bg-[linear-gradient(112deg,rgba(255,255,255,0.72),rgba(241,243,245,0.58)_52%,rgba(255,255,255,0.76))]"
+                    className="pointer-events-none absolute inset-0 bg-[linear-gradient(112deg,rgba(255,255,255,0.24),rgba(255,255,255,0.06)_52%,rgba(255,255,255,0.18))]"
                   />
-                  <span className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18] shadow-[0_4px_14px_rgba(26,26,26,0.08)]">
+                  <span className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/78 text-[#F62E18] shadow-[0_4px_14px_rgba(26,26,26,0.08)] backdrop-blur-[4px]">
                     <CravesCartIcon className="h-4.5 w-4.5" />
                   </span>
                   <span className="relative z-10 min-w-0 flex-1">

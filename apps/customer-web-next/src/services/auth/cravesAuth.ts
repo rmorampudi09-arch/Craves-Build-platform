@@ -77,7 +77,7 @@ function persistSessionSnapshot(value: CravesUser | null): void {
   }
 }
 
-function recoverSessionSnapshot(): CravesUser | null {
+export function recoverSessionSnapshotForNavigation(): CravesUser | null {
   if (session) return session;
   const cached = readSessionSnapshot();
   if (!cached) return null;
@@ -244,26 +244,13 @@ export async function loadSession(): Promise<CravesUser | null> {
       credentials: "same-origin",
     });
 
-  let response: Response;
-  try {
-    response = await lookup();
-  } catch (error) {
-    if (!isSessionContextCurrent(context)) throw error;
-    return recoverSessionSnapshot();
-  }
+  let response = await lookup();
   if (!isSessionContextCurrent(context)) return session;
 
   if (response.status === 401) {
     const refreshed = await refreshSessionForGeneration(context.generation);
     if (!isSessionContextCurrent(context)) return session;
-    if (refreshed?.ok) {
-      try {
-        response = await lookup();
-      } catch (error) {
-        if (!isSessionContextCurrent(context)) throw error;
-        return recoverSessionSnapshot();
-      }
-    }
+    if (refreshed?.ok) response = await lookup();
   }
 
   if (!isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) {
@@ -271,21 +258,16 @@ export async function loadSession(): Promise<CravesUser | null> {
   }
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      if (session || readSessionSnapshot()) forgetSession();
-      return null;
+    if ((response.status === 401 || response.status === 403) && session) {
+      forgetSession();
     }
-
-    // A transient BFF/provider error is not proof that the customer signed out.
-    return recoverSessionSnapshot();
+    return null;
   }
 
   const identity = (await response.json().catch(() => null)) as CravesIdentity | null;
-  if (!identity?.id || !isSessionContextCurrent(context)) {
-    return recoverSessionSnapshot();
-  }
+  if (!identity?.id || !isSessionContextCurrent(context)) return session;
   const current = applyIdentityLookup(identity, context, sequence);
-  return current ? hydrateCustomerProfile(current) : recoverSessionSnapshot();
+  return current ? hydrateCustomerProfile(current) : null;
 }
 
 export async function synchronizeSessionRoles(): Promise<CravesUser | null> {

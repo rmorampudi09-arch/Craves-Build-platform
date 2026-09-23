@@ -41,8 +41,19 @@ export type Dish = {
 };
 
 const PLACEHOLDER_IMAGE = "/brand/craves-logo.svg";
+const DISCOVERY_PAGE_SIZE = 50;
+
+type DishDiscoveryCursor = {
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+  nextPage: number;
+  hasNext: boolean;
+};
+
 let discoveredDishes: Dish[] = [];
 let discoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;
+let discoveryCursor: DishDiscoveryCursor | null = null;
 
 function spiceLabel(
   value: NearbyMenuItem["spiceLevel"] | PublicMenuItemDetail["spiceLevel"],
@@ -168,13 +179,15 @@ export async function discoverDishes(
   longitude: number,
   radiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS,
 ): Promise<Dish[]> {
+  discoveryCursor = null;
+
   for (const candidateRadius of candidateDiscoveryRadii(radiusMeters)) {
     const query = new URLSearchParams({
       latitude: String(latitude),
       longitude: String(longitude),
       radiusMeters: String(candidateRadius),
       page: "0",
-      size: "50",
+      size: String(DISCOVERY_PAGE_SIZE),
     });
     const response = await fetch(`/api/discovery/menu-items?${query}`, {
       cache: "no-store",
@@ -193,13 +206,78 @@ export async function discoverDishes(
     }
     const payload = parseMenuDiscovery(body);
     if (!payload) throw new Error("Craves returned an invalid discovery response.");
+
     discoveredDishes = payload.menuItems
       .filter((item) => item.distanceMeters <= MAX_DISCOVERY_RADIUS_METERS)
       .map(mapNearbyItem);
     discoveryRadiusMeters = candidateRadius;
-    if (discoveredDishes.length > 0) return [...discoveredDishes];
+
+    if (discoveredDishes.length > 0) {
+      discoveryCursor = {
+        latitude,
+        longitude,
+        radiusMeters: candidateRadius,
+        nextPage: payload.page.page + 1,
+        hasNext: payload.page.hasNext,
+      };
+      return [...discoveredDishes];
+    }
   }
+
+  discoveryCursor = null;
   return [];
+}
+
+export function hasMoreDiscoveredDishes(): boolean {
+  return Boolean(discoveryCursor?.hasNext);
+}
+
+export async function loadMoreDiscoveredDishes(): Promise<Dish[]> {
+  const cursor = discoveryCursor;
+  if (!cursor?.hasNext) return [...discoveredDishes];
+
+  const query = new URLSearchParams({
+    latitude: String(cursor.latitude),
+    longitude: String(cursor.longitude),
+    radiusMeters: String(cursor.radiusMeters),
+    page: String(cursor.nextPage),
+    size: String(DISCOVERY_PAGE_SIZE),
+  });
+
+  const response = await fetch(`/api/discovery/menu-items?${query}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      body &&
+      typeof body === "object" &&
+      "message" in body &&
+      typeof body.message === "string"
+        ? body.message
+        : "More nearby dishes could not be loaded.";
+    throw new Error(message);
+  }
+
+  const payload = parseMenuDiscovery(body);
+  if (!payload) throw new Error("Craves returned an invalid discovery response.");
+
+  const next = payload.menuItems
+    .filter((item) => item.distanceMeters <= MAX_DISCOVERY_RADIUS_METERS)
+    .map(mapNearbyItem);
+  const existingIds = new Set(discoveredDishes.map((dish) => dish.id));
+  discoveredDishes = [
+    ...discoveredDishes,
+    ...next.filter((dish) => !existingIds.has(dish.id)),
+  ];
+  discoveryCursor = {
+    ...cursor,
+    nextPage: payload.page.page + 1,
+    hasNext: payload.page.hasNext,
+  };
+
+  return [...discoveredDishes];
 }
 
 export async function loadKitchenMenu(kitchenId: string): Promise<Dish[]> {
@@ -274,6 +352,7 @@ export function allDishes(): Dish[] {
 export function clearDishDiscoveryCache(): void {
   discoveredDishes = [];
   discoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;
+  discoveryCursor = null;
 }
 
 export function getDish(id: string): Dish | undefined {

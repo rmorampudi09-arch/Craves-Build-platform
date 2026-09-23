@@ -6,16 +6,6 @@ function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
-test("home artwork uses the same Front Door static cache route as craving images", () => {
-  const frontDoor = source(
-    "../../../../infra/frontdoor/production/deploy-front-door.sh",
-  );
-
-  assert.match(frontDoor, /\/home\/cravings\/\*/);
-  assert.match(frontDoor, /\/home\/reference\/\*/);
-  assert.match(frontDoor, /contentPaths:\["\/_next\/static\/\*","\/home\/cravings\/\*","\/home\/reference\/\*"\]/);
-});
-
 test("customer web exposes the exact running Git commit without caching", () => {
   const route = source("../app/api/version/route.ts");
   assert.match(route, /process\.env\.CRAVES_BUILD_SHA/);

@@ -51,7 +51,7 @@ test("canonical component, browser icons and build output use the uploaded versi
   const compatibilitySvg = source("../../public/brand/craves-logo.svg");
 
   assert.match(logo, new RegExp(canonicalLogoPath.replaceAll("/", "\\/")));
-  assert.match(logo, /router\.push\("\/home"\)/);
+  assert.match(logo, /window\.location\.assign\("\/home"\)/);
   assert.match(logo, /cursor-pointer/);
   assert.match(logo, /unoptimized/);
   assert.match(rootLayout, new RegExp(canonicalLogoPath.replaceAll("/", "\\/")));

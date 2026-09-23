@@ -11,7 +11,7 @@ import {
   parseCustomerProfile,
   type CustomerProfile,
 } from "@/lib/profile-contract";
-import { refreshSessionCookies, sessionFetch } from "@/services/auth/sessionFetch";
+import { sessionFetch } from "@/services/auth/sessionFetch";
 
 export type CravesUser = {
   id: string;
@@ -61,7 +61,28 @@ function forgetSession() {
 }
 let selectedLocation: CravesAddress | null = null;
 let roleSynchronization: Promise<CravesUser | null> | null = null;
+const sessionRefreshes = new Map<number, Promise<Response | null>>();
 const listeners = new Set<() => void>();
+
+function refreshSessionForGeneration(generation: number): Promise<Response | null> {
+  const existing = sessionRefreshes.get(generation);
+  if (existing) return existing;
+
+  const pending = fetch("/api/auth/refresh", {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+  })
+    .catch(() => null)
+    .finally(() => {
+      if (sessionRefreshes.get(generation) === pending) {
+        sessionRefreshes.delete(generation);
+      }
+    });
+
+  sessionRefreshes.set(generation, pending);
+  return pending;
+}
 
 function fromIdentity(identity: CravesIdentity): CravesUser {
   const digits = identity.phoneNumber.replace(/\D/g, "");
@@ -169,32 +190,29 @@ export async function loadSession(): Promise<CravesUser | null> {
   const context = captureSessionContext();
   const sequence = ++identityRequestSequence;
   const lookup = async () =>
-    sessionFetch("/api/auth/me", {
+    fetch("/api/auth/me", {
       cache: "no-store",
       credentials: "same-origin",
-    }).catch(() => null);
+    });
 
   let response = await lookup();
   if (!isSessionContextCurrent(context)) return session;
 
-  if (!response || response.status >= 500) {
-    await new Promise((resolve) => window.setTimeout(resolve, 300));
-    response = await lookup();
+  if (response.status === 401) {
+    const refreshed = await refreshSessionForGeneration(context.generation);
+    if (!isSessionContextCurrent(context)) return session;
+    if (refreshed?.ok) response = await lookup();
   }
 
   if (!isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) {
     return session;
   }
 
-  if (!response) return session;
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      if (session) forgetSession();
-      return null;
+    if ((response.status === 401 || response.status === 403) && session) {
+      forgetSession();
     }
-
-    // Do not turn a temporary BFF/provider failure into a customer sign-out.
-    return session;
+    return null;
   }
 
   const identity = (await response.json().catch(() => null)) as CravesIdentity | null;
@@ -209,19 +227,15 @@ export async function synchronizeSessionRoles(): Promise<CravesUser | null> {
   const context = captureSessionContext();
   const sequence = ++identityRequestSequence;
   const pending = (async () => {
-    const refreshed = await refreshSessionCookies();
+    const response = await refreshSessionForGeneration(context.generation);
     if (!isSessionContextCurrent(context)) return session;
-    if (!refreshed) return session;
+    if (!response?.ok) return null;
 
-    const response = await sessionFetch("/api/auth/me", {
-      cache: "no-store",
-      credentials: "same-origin",
-    }).catch(() => null);
-    if (!response?.ok || !isSessionContextCurrent(context)) return session;
-
-    const identity = (await response.json().catch(() => null)) as CravesIdentity | null;
-    if (!identity?.id || !isSessionContextCurrent(context)) return session;
-    const current = applyIdentityLookup(identity, context, sequence);
+    const body = (await response.json().catch(() => null)) as {
+      identity?: CravesIdentity;
+    } | null;
+    if (!body?.identity?.id || !isSessionContextCurrent(context)) return session;
+    const current = applyIdentityLookup(body.identity, context, sequence);
     return current ? hydrateCustomerProfile(current) : null;
   })();
   roleSynchronization = pending;

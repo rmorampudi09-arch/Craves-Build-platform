@@ -245,7 +245,7 @@ export function HomeCategoryRail({
 
           <div
             className={[
-              "pointer-events-none absolute inset-y-0 left-0 z-10 hidden w-12 bg-gradient-to-r from-white to-transparent transition-opacity duration-200 md:block",
+              "pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-white via-white/85 to-transparent transition-opacity duration-200 md:w-12",
               canScrollLeft ? "opacity-100" : "invisible opacity-0",
             ].join(" ")}
             aria-hidden="true"
@@ -255,7 +255,7 @@ export function HomeCategoryRail({
               type="button"
               onClick={() => scrollCategories(-1)}
               aria-label="Show previous craving categories"
-              className="absolute left-3 top-[2.85rem] z-20 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_6px_18px_rgba(26,26,26,0.14)] transition-[box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 md:left-4 md:top-[3.15rem] md:flex lg:left-7 lg:top-[3.45rem] lg:h-10 lg:w-10"
+              className="absolute left-1.5 top-[2.65rem] z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white/94 !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] backdrop-blur transition-[box-shadow,background-color,transform] duration-200 hover:!bg-white hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 md:left-4 md:top-[3.15rem] md:h-8 md:w-8 lg:left-7 lg:top-[3.45rem] lg:h-9 lg:w-9"
             >
               <FaChevronLeft
                 className="h-3 w-3 lg:h-3.5 lg:w-3.5"
@@ -266,7 +266,7 @@ export function HomeCategoryRail({
 
           <div
             className={[
-              "pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-16 bg-gradient-to-l from-white to-transparent transition-opacity duration-200 md:block",
+              "pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-white via-white/90 to-transparent transition-opacity duration-200 md:w-16",
               canScrollRight ? "opacity-100" : "invisible opacity-0",
             ].join(" ")}
             aria-hidden="true"
@@ -276,7 +276,7 @@ export function HomeCategoryRail({
               type="button"
               onClick={() => scrollCategories(1)}
               aria-label="Show more craving categories"
-              className="absolute right-3 top-[2.85rem] z-20 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-[#F1F3F5] !bg-white !text-[#1A1A1A] shadow-[0_6px_18px_rgba(26,26,26,0.14)] transition-[box-shadow,background-color] duration-200 hover:!bg-white hover:shadow-[0_12px_28px_rgba(26,26,26,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 md:right-4 md:top-[3.15rem] md:flex lg:right-7 lg:top-[3.45rem] lg:h-10 lg:w-10"
+              className="absolute right-1.5 top-[2.65rem] z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white/94 !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] backdrop-blur transition-[box-shadow,background-color,transform] duration-200 hover:!bg-white hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 md:right-4 md:top-[3.15rem] md:h-8 md:w-8 lg:right-7 lg:top-[3.45rem] lg:h-9 lg:w-9"
             >
               <FaChevronRight
                 className="h-3 w-3 lg:h-3.5 lg:w-3.5"

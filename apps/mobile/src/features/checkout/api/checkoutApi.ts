@@ -5,6 +5,8 @@ import type {
   CheckoutDeliveryAddressSnapshot,
   CheckoutMoney,
   CheckoutOrderReference,
+  CheckoutOperationRequest,
+  CheckoutOperationResult,
   CheckoutOrderStatus,
   CheckoutSession,
   CheckoutStatus,
@@ -290,6 +292,77 @@ export function parseCheckoutSession(value: unknown): CheckoutSession | null {
   };
 }
 
+export function parseCheckoutOperationResult(
+  value: unknown,
+): CheckoutOperationResult | null {
+  const operation = asRecord(value);
+  if (!operation) return null;
+
+  const operationId = parseResourceUuid(operation.operationId);
+  const checkoutId = parseResourceUuid(operation.checkoutId);
+  if (!operationId || !checkoutId || operation.status !== 'SUCCEEDED') {
+    return null;
+  }
+
+  return {operationId, status: 'SUCCEEDED', checkoutId};
+}
+
+function requireCheckoutOperationResult(
+  value: unknown,
+  expectedOperationId: string,
+): CheckoutOperationResult {
+  const operation = parseCheckoutOperationResult(value);
+  if (!operation || operation.operationId !== expectedOperationId) {
+    throw new AppApiError(
+      'CHECKOUT_OPERATION_INVALID_RESPONSE',
+      'Checkout recovery information could not be verified. Please try again.',
+    );
+  }
+  return operation;
+}
+
+function requireExpectedCart(request: CheckoutOperationRequest): void {
+  requireUuid(
+    request.expectedCart.cartId,
+    'CHECKOUT_INVALID_CART_ID',
+    'Refresh your cart before checkout.',
+  );
+  if (
+    !Array.isArray(request.expectedCart.items) ||
+    request.expectedCart.items.length < 1 ||
+    request.expectedCart.items.length > 200
+  ) {
+    throw new AppApiError(
+      'CHECKOUT_INVALID_CART_SNAPSHOT',
+      'Refresh your cart before checkout.',
+    );
+  }
+
+  for (const item of request.expectedCart.items) {
+    requireUuid(
+      item.id,
+      'CHECKOUT_INVALID_CART_ITEM_ID',
+      'A cart item could not be verified. Refresh your cart and try again.',
+    );
+    if (
+      !Number.isSafeInteger(item.quantity) ||
+      item.quantity < 1 ||
+      item.quantity > 100
+    ) {
+      throw new AppApiError(
+        'CHECKOUT_INVALID_CART_QUANTITY',
+        'A cart item quantity could not be verified.',
+      );
+    }
+    if (!parseTimestamp(item.updatedAt)) {
+      throw new AppApiError(
+        'CHECKOUT_INVALID_CART_TIMESTAMP',
+        'A cart item changed. Refresh your cart and try again.',
+      );
+    }
+  }
+}
+
 function requireUuid(value: string, code: string, message: string): void {
   if (!RESOURCE_UUID_PATTERN.test(value)) {
     throw new AppApiError(code, message);
@@ -317,27 +390,53 @@ function requireNote(note: string | null | undefined): void {
 }
 
 export const checkoutApi = {
-  async createSession(request: CheckoutCreateRequest): Promise<CheckoutSession> {
+  async executeOperation(
+    operationId: string,
+    request: CheckoutOperationRequest,
+  ): Promise<CheckoutOperationResult> {
+    requireUuid(
+      operationId,
+      'CHECKOUT_INVALID_OPERATION_ID',
+      'This checkout attempt could not be verified.',
+    );
     requireUuid(
       request.deliveryAddressId,
       'CHECKOUT_INVALID_ADDRESS_ID',
       'Choose a valid delivery address before checkout.',
     );
     requireNote(request.note);
+    requireExpectedCart(request);
 
     const body =
       request.note === undefined
-        ? {deliveryAddressId: request.deliveryAddressId}
-        : {deliveryAddressId: request.deliveryAddressId, note: request.note};
-    const response = await httpClient.post<unknown>('/api/v1/checkout', body);
-    const session = requireCheckoutSession(response);
-    if (session.deliveryAddressId !== request.deliveryAddressId) {
-      throw new AppApiError(
-        'CHECKOUT_ADDRESS_MISMATCH',
-        'Checkout returned a different delivery address. Please refresh before trying again.',
-      );
-    }
-    return session;
+        ? {
+            deliveryAddressId: request.deliveryAddressId,
+            expectedCart: request.expectedCart,
+          }
+        : {
+            deliveryAddressId: request.deliveryAddressId,
+            note: request.note,
+            expectedCart: request.expectedCart,
+          };
+
+    const response = await httpClient.post<unknown>(
+      `/api/v1/checkout/operations/${operationId}`,
+      body,
+    );
+    return requireCheckoutOperationResult(response, operationId);
+  },
+
+  async getOperation(operationId: string): Promise<CheckoutOperationResult> {
+    requireUuid(
+      operationId,
+      'CHECKOUT_INVALID_OPERATION_ID',
+      'This checkout attempt could not be verified.',
+    );
+    const response = await httpClient.get<unknown>(
+      `/api/v1/checkout/operations/${operationId}`,
+      {dedupeKey: `customer-checkout-operation:${operationId}`},
+    );
+    return requireCheckoutOperationResult(response, operationId);
   },
 
   async getSession(checkoutId: string): Promise<CheckoutSession> {
@@ -346,9 +445,10 @@ export const checkoutApi = {
       'CHECKOUT_INVALID_ID',
       'This checkout could not be opened.',
     );
-    const response = await httpClient.get<unknown>(`/api/v1/checkout/${checkoutId}`, {
-      dedupeKey: `customer-checkout:${checkoutId}`,
-    });
+    const response = await httpClient.get<unknown>(
+      `/api/v1/checkout/${checkoutId}`,
+      {dedupeKey: `customer-checkout:${checkoutId}`},
+    );
     const session = requireCheckoutSession(response);
     if (session.checkoutId !== checkoutId) {
       throw new AppApiError(

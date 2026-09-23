@@ -49,7 +49,9 @@ import {
   allDishes,
   discoverDishes,
   getDiscoveryRadiusMeters,
+  hasMoreDiscoveredDishes,
   loadKitchenMenu,
+  loadMoreDiscoveredDishes,
   type Dish,
 } from "@/services/api/dishes";
 import {
@@ -145,6 +147,7 @@ function BrowseFoodsPage() {
   const [defaultAddressResolved, setDefaultAddressResolved] = useState(false);
   const [kitchenDiscoveryVerified, setKitchenDiscoveryVerified] = useState(hasInitialCatalog);
   const [nearbyDishes, setNearbyDishes] = useState<Dish[]>(initialCache.dishes);
+  const [dishLoadMoreBusy, setDishLoadMoreBusy] = useState(false);
   const [discoveryState, setDiscoveryState] = useState<DiscoveryState>(
     hasInitialCatalog ? "ready" : "loading",
   );
@@ -171,6 +174,7 @@ function BrowseFoodsPage() {
     resetFilters = true,
     preserveExistingCatalog = false,
   ) => {
+    setDishLoadMoreBusy(false);
     if (resetFilters) {
       setHomeCategory(null);
       setDishSort("recommended");
@@ -265,6 +269,20 @@ function BrowseFoodsPage() {
       setCatalogMessage("Fresh homemade food available near your default delivery address.");
     }
   }, []);
+
+  const loadMoreNearbyDishes = useCallback(async () => {
+    if (dishLoadMoreBusy || !hasMoreDiscoveredDishes()) return;
+
+    setDishLoadMoreBusy(true);
+    try {
+      const next = await loadMoreDiscoveredDishes();
+      setNearbyDishes(next);
+    } catch {
+      // Keep the already-rendered catalog stable. The next scroll can retry.
+    } finally {
+      setDishLoadMoreBusy(false);
+    }
+  }, [dishLoadMoreBusy]);
 
   const restoreHomeView = useCallback(() => {
     const restored = readHomeReturnState();
@@ -707,6 +725,9 @@ function BrowseFoodsPage() {
           }}
           onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}
+          hasMoreRemote={hasMoreDiscoveredDishes()}
+          loadingMoreRemote={dishLoadMoreBusy}
+          onLoadMore={() => void loadMoreNearbyDishes()}
         />
 
         <HomeBottomSections />

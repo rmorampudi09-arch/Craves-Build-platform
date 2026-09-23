@@ -1,3 +1,11 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+function source(relativePath: string): string {
+  return readFileSync(new URL(relativePath, import.meta.url), "utf8");
+}
+
 test("home artwork uses the same Front Door static cache route as craving images", () => {
   const frontDoor = source(
     "../../../../infra/frontdoor/production/deploy-front-door.sh",
@@ -7,14 +15,6 @@ test("home artwork uses the same Front Door static cache route as craving images
   assert.match(frontDoor, /\/home\/reference\/\*/);
   assert.match(frontDoor, /contentPaths:\["\/_next\/static\/\*","\/home\/cravings\/\*","\/home\/reference\/\*"\]/);
 });
-
-import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import test from "node:test";
-
-function source(relativePath: string): string {
-  return readFileSync(new URL(relativePath, import.meta.url), "utf8");
-}
 
 test("customer web exposes the exact running Git commit without caching", () => {
   const route = source("../app/api/version/route.ts");

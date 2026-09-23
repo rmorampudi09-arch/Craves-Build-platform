@@ -353,23 +353,22 @@ export default function CheckoutPage() {
     void prepareCheckout();
   }, [prepareCheckout]);
 
-  async function resetCheckoutForAddressChange(): Promise<void> {
-    if (!checkout) return;
+  async function resetCheckoutForAddressChange(): Promise<boolean> {
+    if (!checkout) return true;
 
     try {
       const restored = await ensureCheckoutCart(checkout.orders);
-      if (!restored) {
-        throw new Error("CHECKOUT_CART_RESTORE_FAILED");
-      }
+      if (!restored) return false;
+
       setItems(getCart());
-    } catch {
-      throw new Error(
-        "We couldn’t update the delivery address while keeping this checkout intact. Go back to your cart, review the items, and continue again.",
-      );
-    } finally {
       window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
       window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
       setCheckout(null);
+      return true;
+    } catch {
+      // Keep the existing checkout untouched if the cart cannot be rebuilt.
+      // The customer can still pay with the current address or go back.
+      return false;
     }
   }
 
@@ -379,7 +378,14 @@ export default function CheckoutPage() {
     setAddressChangeBusy(true);
     setError("");
     try {
-      await resetCheckoutForAddressChange();
+      const readyForAddressChange = await resetCheckoutForAddressChange();
+      if (!readyForAddressChange) {
+        setError(
+          "We couldn’t refresh delivery for that address just now. Your current checkout is unchanged — you can try again or return to your cart.",
+        );
+        return;
+      }
+
       autoReviewKeyRef.current = "";
       setSelectedId(id);
       window.sessionStorage.setItem(ADDRESS_KEY, id);
@@ -392,21 +398,14 @@ export default function CheckoutPage() {
     }
   }
 
-  async function openAddressEditor() {
+  function openAddressEditor() {
     if (addressChangeBusy) return;
 
-    setAddressChangeBusy(true);
+    // Opening the editor is safe and should never be blocked by a checkout
+    // restoration attempt. We only rebuild the cart if the customer actually
+    // selects a different saved address.
     setError("");
-    try {
-      await resetCheckoutForAddressChange();
-      autoReviewKeyRef.current = "";
-      setPaymentFailure(null);
-      setEditorOpen(true);
-    } catch (caught) {
-      setError(checkoutMessage(caught));
-    } finally {
-      setAddressChangeBusy(false);
-    }
+    setEditorOpen(true);
   }
 
   const ensureCheckout = useCallback(async (): Promise<CustomerCheckout> => {
@@ -472,28 +471,48 @@ export default function CheckoutPage() {
   async function handleBackToCart() {
     setError("");
 
-    if (checkout) {
-      try {
-        const restored = await ensureCheckoutCart(checkout.orders);
+    const currentCheckout = checkout;
+    window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
+    window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
+    setCheckout(null);
+
+    if (!currentCheckout) {
+      navigate({ to: "/cart" });
+      return;
+    }
+
+    // Never trap the customer on checkout. Give cart restoration a short head
+    // start, then return to the cart even if the network is slow. The shared
+    // cart store keeps updating if restoration finishes after navigation.
+    let finished = false;
+    const restoration = ensureCheckoutCart(currentCheckout.orders)
+      .then((restored) => {
+        finished = true;
         if (!restored) {
           window.sessionStorage.setItem(
             CART_NOTICE_KEY,
-            "Some checkout items could not be restored automatically. Please review your cart before continuing.",
+            "Your cart is open. Please check the items before continuing to checkout again.",
           );
         }
-      } catch {
+      })
+      .catch(() => {
+        finished = true;
         window.sessionStorage.setItem(
           CART_NOTICE_KEY,
-          "We opened your cart, but Craves could not restore every checkout item automatically. Please review the cart before continuing.",
+          "Your cart is open. We couldn’t refresh every item automatically, so please check it before continuing.",
         );
-      } finally {
-        window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
-        window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
-        setCheckout(null);
-      }
-    }
+      });
+
+    await Promise.race([
+      restoration,
+      new Promise<void>((resolve) => window.setTimeout(resolve, 900)),
+    ]);
 
     navigate({ to: "/cart" });
+
+    if (!finished) {
+      void restoration;
+    }
   }
 
   async function handleAddressSaved(saved: CustomerAddress | null) {
@@ -604,7 +623,7 @@ export default function CheckoutPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => void openAddressEditor()}
+                      onClick={openAddressEditor}
                       disabled={addressChangeBusy}
                       className="inline-flex min-h-9 items-center gap-1.5 rounded-[10px] border border-[#D7DADF] bg-white px-3 text-xs font-bold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:border-[#F62E18]/25 hover:bg-[#FFF8F6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/25 disabled:pointer-events-none disabled:opacity-45"
                     >
@@ -675,7 +694,7 @@ export default function CheckoutPage() {
                       </p>
                       <button
                         type="button"
-                        onClick={() => void openAddressEditor()}
+                        onClick={openAddressEditor}
                         disabled={addressChangeBusy}
                         className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#F62E18] px-4 text-sm font-semibold text-white disabled:pointer-events-none disabled:opacity-45"
                       >
@@ -826,12 +845,13 @@ export default function CheckoutPage() {
         )}
 
         {error && hasCheckoutContext ? (
-          <p
-            role="alert"
-            className="mt-4 rounded-xl border border-[#F62E18]/20 bg-[#F62E18]/5 p-3 text-sm font-medium text-[#C92716]"
+          <div
+            role="status"
+            className="mt-4 flex items-start gap-2.5 rounded-xl border border-[#F6B545]/40 bg-[#FFF8EC] p-3 text-sm font-medium text-[#6B5526]"
           >
-            {error}
-          </p>
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#B86E00]" aria-hidden="true" />
+            <p>{error}</p>
+          </div>
         ) : null}
       </main>
 

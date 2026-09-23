@@ -10,6 +10,7 @@ export type CartScreenItem = CartLine;
 
 export type CartScreenAmountSource =
   | 'CART_RESPONSE'
+  | 'CHECKOUT_RESPONSE'
   | 'PENDING_BACKEND_IMPLEMENTATION';
 
 export interface CartScreenAmountField {
@@ -19,6 +20,7 @@ export interface CartScreenAmountField {
 
 export interface CartBillSummaryModel {
   foodSubtotal: CartScreenAmountField;
+  platformFee: CartScreenAmountField;
   taxAmount: CartScreenAmountField;
   deliveryFee: CartScreenAmountField;
   couponDiscount: CartScreenAmountField;
@@ -71,9 +73,9 @@ export type CartQuantityInteraction =
   | {kind: 'REMOVE'}
   | {kind: 'INVALID'};
 
-function zeroAmount(currency: string): CartScreenAmountField {
+function pendingAmount(): CartScreenAmountField {
   return {
-    amount: {amount: '0', currency},
+    amount: null,
     source: 'PENDING_BACKEND_IMPLEMENTATION',
   };
 }
@@ -112,15 +114,16 @@ export function buildCartScreenModel(
     items: snapshot.lines,
     billSummary: {
       foodSubtotal: {amount: snapshot.totals.foodSubtotal, source: 'CART_RESPONSE'},
-      taxAmount: zeroAmount(snapshot.currency),
-      deliveryFee: zeroAmount(snapshot.currency),
-      couponDiscount: zeroAmount(snapshot.currency),
-      grandTotal: {amount: snapshot.totals.foodSubtotal, source: 'CART_RESPONSE'},
-      complete: true,
+      platformFee: pendingAmount(),
+      taxAmount: pendingAmount(),
+      deliveryFee: pendingAmount(),
+      couponDiscount: pendingAmount(),
+      grandTotal: pendingAmount(),
+      complete: false,
     },
     coupon: {
       status: dependencies.coupon.status,
-      discount: zeroAmount(snapshot.currency),
+      discount: pendingAmount(),
     },
     deliveryAddress: {
       status: dependencies.address.status,

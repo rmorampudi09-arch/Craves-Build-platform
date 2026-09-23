@@ -14,9 +14,9 @@ export default function ChefLayout({
         <div className="mx-auto w-full max-w-7xl px-4 py-3 md:px-6">
           <div className="flex min-h-11 items-center justify-between gap-4">
             <Link
-              href="/chef"
+              href="/home"
               className="inline-flex min-h-11 items-center gap-3 rounded-xl"
-              aria-label="Craves Chef Mode home"
+              aria-label="Craves home"
             >
               <CravesLogo size="sm" />
               <span className="hidden sm:block">

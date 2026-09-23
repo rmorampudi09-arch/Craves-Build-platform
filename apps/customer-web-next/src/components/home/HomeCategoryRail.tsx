@@ -189,7 +189,7 @@ export function HomeCategoryRail({
         </h2>
       </section>
 
-      <div className="sticky top-0 z-30 bg-white/95 shadow-[0_7px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl md:static md:bg-white md:shadow-none md:backdrop-blur-none">
+      <div className="sticky top-[4.35rem] z-30 bg-white/95 shadow-[0_7px_18px_rgba(26,26,26,0.05)] backdrop-blur-xl md:top-0">
         <div className="relative mx-auto max-w-[88rem] bg-white/95 px-4 pb-1 pt-3 md:bg-white md:px-7 md:pb-0 md:pt-4 lg:px-10 lg:pt-4">
           <div
             ref={scrollerRef}
@@ -210,7 +210,7 @@ export function HomeCategoryRail({
                 >
                   <span
                     className={[
-                      "flex h-[5.35rem] w-[5.35rem] items-center justify-center overflow-hidden rounded-full bg-white transition-[transform,box-shadow] duration-[480ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] group-hover:-translate-y-1 group-hover:shadow-[0_10px_24px_rgba(26,26,26,0.10)] group-focus-visible:ring-2 group-focus-visible:ring-[#1A1A1A]/10 motion-reduce:transform-none sm:h-[5.8rem] sm:w-[5.8rem] md:h-[6.15rem] md:w-[6.15rem] lg:h-[7.25rem] lg:w-[7.25rem]",
+                      "flex h-[5.35rem] w-[5.35rem] items-center justify-center overflow-hidden rounded-full bg-white transition-[box-shadow,border-color] duration-500 group-hover:shadow-[0_10px_24px_rgba(26,26,26,0.10)] group-focus-visible:ring-2 group-focus-visible:ring-[#1A1A1A]/10 sm:h-[5.8rem] sm:w-[5.8rem] md:h-[6.15rem] md:w-[6.15rem] lg:h-[7.25rem] lg:w-[7.25rem]",
                       active
                         ? "border border-[#E5E7EB]"
                         : "border border-[#F1F3F5]",
@@ -222,7 +222,7 @@ export function HomeCategoryRail({
                         alt=""
                         loading="lazy"
                         decoding="async"
-                        className="pointer-events-none h-full w-full select-none rounded-full object-cover"
+                        className="pointer-events-none h-full w-full select-none rounded-full object-cover transition-transform duration-[1200ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.085] group-focus-visible:scale-[1.055] motion-reduce:transform-none motion-reduce:transition-none"
                       />
                     ) : (
                       <span className="flex h-[72%] w-[72%] items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">

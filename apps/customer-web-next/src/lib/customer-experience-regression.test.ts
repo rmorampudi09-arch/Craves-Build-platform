@@ -32,7 +32,7 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(kitchens, /3000/);
   assert.match(kitchens, /onPointerDown/);
   assert.match(kitchens, /new window\.Image\(\)/);
-  assert.match(kitchens, /preloadPromisesRef/);
+  assert.match(kitchens, /kitchenImagePreloads/);
   assert.match(kitchens, /transition-\[opacity,transform\]/);
   assert.doesNotMatch(kitchens, /View chef/);
   assert.match(cravings, /top-\[var\(--craves-mobile-search-offset,0px\)\]/);

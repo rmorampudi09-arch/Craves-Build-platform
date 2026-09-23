@@ -238,9 +238,38 @@ export function DishesGrid({
 
       {state === "ready" ? (
         <div
-          className="mb-7 flex flex-wrap items-center gap-2.5"
+          className="mb-5 flex flex-wrap items-center gap-2.5 md:mb-6"
           aria-label="Dish filters"
         >
+          <div className="hidden items-center gap-2 rounded-[1.15rem] border border-[#E8EAED] bg-white p-1.5 shadow-[0_7px_22px_rgba(26,26,26,0.055)] md:flex">
+            <span className="px-2.5 text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">
+              Sort
+            </span>
+            {[
+              { value: "recommended" as HomeDishSort, label: "Recommended" },
+              ...SORT_FILTERS,
+            ].map((option) => {
+              const selected = sort === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onSortChange(option.value)}
+                  className={[
+                    "min-h-9 rounded-[0.85rem] px-3 text-xs font-black transition-[background-color,color,box-shadow,transform] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/10",
+                    selected
+                      ? "bg-[#1A1A1A] text-white shadow-[0_4px_12px_rgba(26,26,26,0.16)]"
+                      : "bg-transparent text-[#6B6B6B] hover:bg-[#F1F3F5] hover:text-[#1A1A1A]",
+                  ].join(" ")}
+                  aria-pressed={selected}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="md:hidden">
           <Popover.Root open={filtersOpen} onOpenChange={handleFilterOpenChange}>
             <Popover.Trigger asChild>
               <button
@@ -310,12 +339,13 @@ export function DishesGrid({
               </Popover.Content>
             </Popover.Portal>
           </Popover.Root>
+          </div>
 
           {hasFilters ? (
             <button
               type="button"
               onClick={removeFilters}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full !border !border-transparent !bg-[#F1F3F5] px-4 text-sm font-black !text-[#1A1A1A] !shadow-none transition-shadow hover:!shadow-[0_6px_16px_rgba(26,26,26,0.08)]"
+              className="inline-flex min-h-10 items-center gap-2 rounded-[0.9rem] !border !border-[#E5E7EB] !bg-white px-3.5 text-xs font-black !text-[#6B6B6B] !shadow-[0_4px_14px_rgba(26,26,26,0.045)] transition-[color,box-shadow,border-color] hover:!border-[#D7DADF] hover:!text-[#1A1A1A] hover:!shadow-[0_7px_18px_rgba(26,26,26,0.07)]"
             >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
               Remove Filters

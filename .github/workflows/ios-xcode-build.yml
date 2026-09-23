@@ -259,7 +259,7 @@ jobs:
           fi
 
           # Prove the app reaches its safe auth shell even when location is denied.
-          xcrun simctl privacy "${SIMULATOR_UDID}" deny location "${built_bundle_id}" || true
+          xcrun simctl privacy "${SIMULATOR_UDID}" revoke location "${built_bundle_id}" || true
           xcrun simctl install "${SIMULATOR_UDID}" "${SIMULATOR_APP_PATH}"
           launch_output="$(xcrun simctl launch --terminate-running-process "${SIMULATOR_UDID}" "${built_bundle_id}")"
           echo "${launch_output}"

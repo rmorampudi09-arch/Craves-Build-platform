@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeftRight, Bell, CalendarDays, ChevronDown } from "lucide-react";
 import {
@@ -41,14 +41,22 @@ function FoodPreferenceQuickToggles({
   value,
   onChange,
   className = "",
+  compact = false,
 }: {
   value: HomeFoodPreference;
   onChange: (preference: HomeFoodPreference) => void;
   className?: string;
+  compact?: boolean;
 }) {
   return (
     <div
-      className={"items-center rounded-[1.15rem] bg-[#F1F3F5] px-3 py-2 " + className}
+      className={[
+        "items-center border border-[#E5E7EB] bg-white",
+        compact
+          ? "rounded-[0.9rem] px-2.5 py-1.5 shadow-[0_4px_14px_rgba(26,26,26,0.07)]"
+          : "rounded-[1.15rem] px-3 py-2",
+        className,
+      ].join(" ")}
       aria-label="Vegetarian filter"
     >
       <AppleSwitch
@@ -88,25 +96,49 @@ export function BrowseHeader({
   );
   const chefDestination = isChef ? "/chef" : "/chef/application";
   const chefActionLabel = isChef ? "Switch to chef mode" : "Open chef application";
+  const lastMobileScrollYRef = useRef(0);
   const [mobileCompact, setMobileCompact] = useState(false);
 
   useEffect(() => {
     let frame = 0;
+    lastMobileScrollYRef.current = Math.max(window.scrollY, 0);
+
     const update = () => {
-      setMobileCompact(window.scrollY > 132);
+      const currentY = Math.max(window.scrollY, 0);
+      const delta = currentY - lastMobileScrollYRef.current;
+
+      if (currentY <= 84 || delta < -6) {
+        setMobileCompact(false);
+      } else if (currentY > 148 && delta > 5) {
+        setMobileCompact(true);
+      }
+
+      lastMobileScrollYRef.current = currentY;
       frame = 0;
     };
+
     const onScroll = () => {
       if (frame) return;
       frame = window.requestAnimationFrame(update);
     };
-    update();
+
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       window.removeEventListener("scroll", onScroll);
       if (frame) window.cancelAnimationFrame(frame);
     };
   }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty(
+      "--craves-mobile-search-offset",
+      mobileCompact ? "3.75rem" : "0px",
+    );
+    return () => {
+      root.style.removeProperty("--craves-mobile-search-offset");
+    };
+  }, [mobileCompact]);
 
   return (
     <>
@@ -290,7 +322,7 @@ export function BrowseHeader({
                 value={searchTerm}
                 onFocus={onSearchFocus}
                 onChange={(event) => onSearchTermChange(event.target.value)}
-                placeholder="Search dishes or kitchens"
+                placeholder="Search dishes, kitchens"
                 className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-[#1A1A1A] shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
                 type="text"
                 inputMode="search"
@@ -314,14 +346,14 @@ export function BrowseHeader({
       <div
         aria-hidden={!mobileCompact}
         className={[
-          "fixed inset-x-0 top-0 z-50 border-b border-[#E5E7EB] bg-white/92 px-3 py-2 shadow-[0_8px_24px_rgba(26,26,26,0.08)] backdrop-blur-xl transition-[transform,opacity] duration-300 md:hidden",
+          "fixed inset-x-0 top-0 z-50 border-b border-[#E5E7EB] bg-white/94 px-3 py-2 shadow-[0_7px_20px_rgba(26,26,26,0.07)] backdrop-blur-xl transition-[transform,opacity] duration-300 md:hidden",
           mobileCompact
             ? "translate-y-0 opacity-100"
             : "pointer-events-none -translate-y-full opacity-0",
         ].join(" ")}
       >
         <div className="mx-auto flex max-w-xl items-stretch gap-2">
-          <label className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 rounded-[1.05rem] border border-white/80 bg-[#F1F3F5]/90 px-3.5 shadow-[0_8px_24px_rgba(246,46,24,0.08)] backdrop-blur-xl transition-[background-color,box-shadow,border-color] focus-within:border-[#F62E18]/25 focus-within:bg-white focus-within:shadow-[0_12px_28px_rgba(246,46,24,0.15)] focus-within:ring-2 focus-within:ring-[#F62E18]/20">
+          <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[0.95rem] border border-[#E5E7EB] bg-[#F6F7F8] px-3 shadow-[0_3px_12px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,border-color] focus-within:border-[#F62E18]/25 focus-within:bg-white focus-within:shadow-[0_7px_20px_rgba(246,46,24,0.11)] focus-within:ring-2 focus-within:ring-[#F62E18]/15">
             <FaSearch className="h-[1.05rem] w-[1.05rem] shrink-0 text-[#F62E18]" aria-hidden="true" />
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
@@ -340,7 +372,8 @@ export function BrowseHeader({
             <FoodPreferenceQuickToggles
               value={foodPreference}
               onChange={onFoodPreferenceChange}
-              className="flex shrink-0 bg-white shadow-[0_7px_20px_rgba(26,26,26,0.07)]"
+              compact
+              className="flex shrink-0"
             />
           ) : null}
         </div>

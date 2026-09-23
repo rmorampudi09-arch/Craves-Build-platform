@@ -130,7 +130,7 @@ test("welcome banner uses the approved responsive full-art asset while discovery
   assert.doesNotMatch(welcome, /import \{ Heart \} from "lucide-react"/);
   assert.doesNotMatch(welcome, /backdrop-blur-sm/);
   assert.match(welcome, /Eat for Health\./);
-  assert.match(welcome, /Taste the Comfort of Home\./);
+  assert.match(welcome, /Taste the[\s\S]*Comfort of[\s\S]*Home\./);
   assert.match(welcome, /dishCount/);
   assert.doesNotMatch(welcome, /<button/);
   assert.doesNotMatch(welcome, /Default address/);

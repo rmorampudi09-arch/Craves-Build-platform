@@ -332,14 +332,23 @@ jobs:
             "how would you like to use craves" \
             "continue as customer"
 
-          xcrun simctl openurl "${SIMULATOR_UDID}" "craves://e2e/location-denied"
+          location_launch_output="$(xcrun simctl launch --terminate-running-process \
+            "${SIMULATOR_UDID}" \
+            "${built_bundle_id}" \
+            -CRAVES_E2E_LOCATION_DENIED YES)"
+          echo "${location_launch_output}"
+          app_pid="${location_launch_output##*: }"
+          if [[ ! "${app_pid}" =~ ^[0-9]+$ ]]; then
+            echo "Unable to determine the denied-location CravesMobile process id." >&2
+            exit 1
+          fi
           sleep 10
           if ! kill -0 "${app_pid}" 2>/dev/null; then
             echo "CravesMobile exited during denied-location fallback smoke." >&2
             exit 1
           fi
           collect_evidence
-          if grep -Eiq 'com\\.facebook\\.react\\.log:javascript.*\\[(TypeError|ReferenceError|SyntaxError|Invariant Violation|Error:)' "$RUNNER_TEMP/CravesMobile-simulator.log"; then
+          if grep -Eiq 'com\.facebook\.react\.log:javascript.*\[(TypeError|ReferenceError|SyntaxError|Invariant Violation|Error:)' "$RUNNER_TEMP/CravesMobile-simulator.log"; then
             echo "CravesMobile emitted a fatal JavaScript runtime error during denied-location fallback smoke." >&2
             exit 1
           fi

@@ -481,14 +481,14 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F7F7] pb-36 text-[#1A1A1A]">
+    <div className="min-h-screen bg-[#F7F7F7] pb-36 text-[#1A1A1A] lg:pb-12">
       <CheckoutHeader
         onBack={() => void handleBackToCart()}
         title="Checkout"
         subtitle="Choose delivery, then pay securely"
       />
 
-      <main className="mx-auto max-w-3xl px-4 py-5 md:px-6 md:py-8">
+      <main className="mx-auto max-w-[1180px] px-4 py-5 md:px-6 md:py-8 lg:px-8 lg:py-9">
         {loading ? (
           <div className="space-y-4" aria-hidden="true">
             <div className="h-64 animate-pulse rounded-[1.25rem] bg-[#F1F3F5]" />
@@ -509,185 +509,277 @@ export default function CheckoutPage() {
             </button>
           </section>
         ) : (
-          <div className="space-y-4">
-            {paymentFailure ? (
-              <section
-                role="alert"
-                className="rounded-[1.25rem] border border-[#C92716]/20 bg-[#FFF2F0] p-4"
-              >
-                <h2 className="text-sm font-semibold text-[#9F2114]">
-                  {checkout
-                    ? "Payment didn't go through"
-                    : "Order could not be reviewed"}
-                </h2>
-                <p className="mt-1 text-xs leading-5 text-[#7A2C22]">
-                  {paymentFailure.message}
-                </p>
-              </section>
-            ) : null}
-
-            <section className="overflow-hidden rounded-[1.25rem] border border-[#E5E7EB] bg-white shadow-[0_4px_18px_rgba(26,26,26,0.05)]">
-              <div className="flex items-center justify-between gap-3 border-b border-[#F1F3F5] px-4 py-4">
-                <div className="flex items-center gap-2.5">
-                  <MapPin className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-                  <div><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#F62E18]">Step 1</p><h1 className="text-base font-semibold">Delivery address</h1></div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void openAddressEditor()}
-                  disabled={addressChangeBusy}
-                  className="inline-flex min-h-9 items-center rounded-[10px] border border-[#D7DADF] bg-white px-3 text-xs font-semibold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:border-[#C8CDD2] hover:bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/25 disabled:pointer-events-none disabled:opacity-45"
-                >
-                  Add new
-                </button>
-              </div>
-
-              {visibleAddresses.length ? (
+          <div>
+            <div className="mb-6 hidden lg:block">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#F62E18]">
+                Secure checkout
+              </p>
+              <div className="mt-1 flex items-end justify-between gap-6">
                 <div>
-                  {visibleAddresses.map((address) => {
-                    const checked = address.id === selectedId;
-                    return (
-                      <label
-                        key={address.id}
-                        className="flex cursor-pointer items-start gap-3 border-b border-[#F1F3F5] px-4 py-3.5 last:border-b-0 focus-within:bg-[#F62E18]/[0.025]"
-                      >
-                        <input
-                          type="radio"
-                          name="delivery-address"
-                          value={address.id}
-                          checked={checked}
-                          disabled={addressChangeBusy}
-                          onChange={() => void selectAddress(address.id)}
-                          className="mt-1 h-4 w-4 accent-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 disabled:cursor-not-allowed disabled:opacity-55"
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-semibold capitalize">
-                              {address.addressLabel.toLowerCase()}
-                            </span>
-                            {address.isDefault ? (
-                              <span className="rounded-full bg-[#F62E18]/10 px-2 py-0.5 text-[10px] font-semibold text-[#F62E18]">
-                                Default
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className="mt-1 block text-xs leading-5 text-[#6B6B6B]">
-                            {fullAddress(address)}
-                          </span>
-                        </span>
-                      </label>
-                    );
-                  })}
+                  <h1 className="text-3xl font-black tracking-[-0.04em] text-[#1A1A1A]">
+                    Delivery & payment
+                  </h1>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6B6B6B]">
+                    Choose where to deliver. Craves calculates the final total automatically before payment.
+                  </p>
+                </div>
+                <span className="rounded-full border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#6B6B6B] shadow-[0_2px_8px_rgba(26,26,26,0.04)]">
+                  {items.length} {items.length === 1 ? "item" : "items"} in this order
+                </span>
+              </div>
+            </div>
 
-                  {addresses.length > 3 ? (
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start lg:gap-7 xl:grid-cols-[minmax(0,1fr)_420px]">
+              <div className="space-y-4">
+                {paymentFailure ? (
+                  <section
+                    role="alert"
+                    className="rounded-[1.25rem] border border-[#C92716]/20 bg-[#FFF2F0] p-4"
+                  >
+                    <h2 className="text-sm font-semibold text-[#9F2114]">
+                      {checkout
+                        ? "Payment didn't go through"
+                        : "Order could not be prepared"}
+                    </h2>
+                    <p className="mt-1 text-xs leading-5 text-[#7A2C22]">
+                      {paymentFailure.message}
+                    </p>
+                  </section>
+                ) : null}
+
+                <section className="overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white shadow-[0_8px_28px_rgba(26,26,26,0.055)]">
+                  <div className="flex items-center justify-between gap-3 border-b border-[#F1F3F5] px-4 py-4 sm:px-5">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FFF1EF] text-[#F62E18]">
+                        <MapPin className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.13em] text-[#F62E18]">
+                          Step 1
+                        </p>
+                        <h2 className="text-base font-bold">Delivery address</h2>
+                      </div>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setShowAllAddresses((current) => !current)}
-                      className="mx-4 my-3 inline-flex min-h-9 items-center rounded-[10px] border border-[#D7DADF] bg-white px-3 text-left text-xs font-semibold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:border-[#C8CDD2] hover:bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/25"
+                      onClick={() => void openAddressEditor()}
+                      disabled={addressChangeBusy}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-[10px] border border-[#D7DADF] bg-white px-3 text-xs font-bold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:border-[#F62E18]/25 hover:bg-[#FFF8F6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/25 disabled:pointer-events-none disabled:opacity-45"
                     >
-                      {showAllAddresses
-                        ? "Show fewer"
-                        : `Show all (${addresses.length - 3} more)`}
+                      <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                      Add new
                     </button>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="px-4 py-6 text-center">
-                  <p className="text-sm font-semibold">No delivery address yet</p>
-                  <p className="mt-1 text-xs leading-5 text-[#6B6B6B]">
-                    Add a mapped address so Craves can check delivery serviceability.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void openAddressEditor()}
-                    disabled={addressChangeBusy}
-                    className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#F62E18] px-4 text-sm font-semibold text-white disabled:pointer-events-none disabled:opacity-45"
-                  >
-                    <Plus className="h-4 w-4" aria-hidden="true" />
-                    Add a new address
-                  </button>
-                </div>
-              )}
-            </section>
-
-            <section className="rounded-[1.25rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_4px_18px_rgba(26,26,26,0.05)]">
-              <div className="flex items-center gap-2.5">
-                <Clock3 className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-                <div><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#F62E18]">Step 2</p><h2 className="text-base font-semibold">Delivery timing</h2></div>
-              </div>
-              <div className="mt-3 rounded-xl border border-[#F6B545]/35 bg-[#FFF8EC] p-4">
-                <p className="text-xs text-[#6B6B6B]">Earliest delivery</p>
-                <p className="mt-0.5 text-base font-semibold">As soon as possible</p>
-                <p className="mt-1 text-xs leading-5 text-[#6B6B6B]">
-                  {leadMinutes
-                    ? `Your chef usually needs about ${leadMinutes} min to prepare this order. Craves arranges delivery at the earliest available time.`
-                    : "This kitchen cooks to order. Craves arranges delivery at the earliest available time."}
-                </p>
-              </div>
-            </section>
-
-            <section className="rounded-[1.25rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_4px_18px_rgba(26,26,26,0.05)]">
-              <div className="flex items-center gap-2.5">
-                <ReceiptText className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-                <div><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#F62E18]">Step 3</p><h2 className="text-base font-semibold">Bill details</h2></div>
-              </div>
-
-              <dl className="mt-4 space-y-2.5 text-sm">
-                <div className="flex items-center justify-between gap-4">
-                  <dt className="text-[#6B6B6B]">Item total</dt>
-                  <dd className="font-medium tabular-nums">
-                    {money(subtotal, currency)}
-                  </dd>
-                </div>
-
-                {checkout ? (
-                  <>
-                    <div className="flex items-center justify-between gap-4">
-                      <dt className="text-[#6B6B6B]">Platform fee</dt>
-                      <dd className="font-medium tabular-nums">
-                        {money(checkout.platformFee, checkout.currency)}
-                      </dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <dt className="text-[#6B6B6B]">Delivery fee</dt>
-                      <dd className="font-medium tabular-nums">
-                        {money(checkout.deliveryFee, checkout.currency)}
-                      </dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <dt className="text-[#6B6B6B]">GST / tax</dt>
-                      <dd className="font-medium tabular-nums">
-                        {money(checkout.taxAmount, checkout.currency)}
-                      </dd>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between gap-4 border-t border-[#E5E7EB] pt-3 text-[15px] font-bold">
-                      <dt>To pay</dt>
-                      <dd className="tabular-nums">
-                        {money(checkout.grandTotal, checkout.currency)}
-                      </dd>
-                    </div>
-                  </>
-                ) : (
-                  <div className="mt-3 flex items-start gap-2 border-t border-[#E5E7EB] pt-3">
-                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#16A34A]" aria-hidden="true" />
-                    <p className="text-xs leading-5 text-[#6B6B6B]">
-                      {reviewing
-                        ? "Calculating delivery fee, tax and your final total…"
-                        : "Your final total is calculated automatically for the selected address."}
-                    </p>
                   </div>
-                )}
-              </dl>
-            </section>
 
-            {instructions.trim() ? (
-              <section className="rounded-[1.25rem] border border-[#E5E7EB] bg-[#F1F3F5] p-4">
-                <p className="text-xs font-semibold text-[#6B6B6B]">
-                  Cooking instructions
-                </p>
-                <p className="mt-1 text-sm leading-5">{instructions.trim()}</p>
-              </section>
-            ) : null}
+                  {visibleAddresses.length ? (
+                    <div className="grid gap-2.5 p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-1 xl:grid-cols-2">
+                      {visibleAddresses.map((address) => {
+                        const checked = address.id === selectedId;
+                        return (
+                          <label
+                            key={address.id}
+                            className={[
+                              "relative flex min-h-[116px] cursor-pointer items-start gap-3 rounded-[1rem] border p-3.5 transition-[border-color,background-color,box-shadow] focus-within:ring-2 focus-within:ring-[#F62E18]/20",
+                              checked
+                                ? "border-[#F62E18]/40 bg-[#FFF8F6] shadow-[0_5px_16px_rgba(246,46,24,0.08)]"
+                                : "border-[#E5E7EB] bg-white hover:border-[#C8CDD2] hover:bg-[#FAFAFA]",
+                            ].join(" ")}
+                          >
+                            <input
+                              type="radio"
+                              name="delivery-address"
+                              value={address.id}
+                              checked={checked}
+                              disabled={addressChangeBusy}
+                              onChange={() => void selectAddress(address.id)}
+                              className="mt-1 h-4 w-4 shrink-0 accent-[#F62E18] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-55"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-bold capitalize">
+                                  {address.addressLabel.toLowerCase()}
+                                </span>
+                                {address.isDefault ? (
+                                  <span className="rounded-full bg-[#F62E18]/10 px-2 py-0.5 text-[10px] font-bold text-[#F62E18]">
+                                    Default
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span className="mt-1.5 block text-xs leading-5 text-[#6B6B6B]">
+                                {fullAddress(address)}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
+
+                      {addresses.length > 3 ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllAddresses((current) => !current)}
+                          className="min-h-11 rounded-[1rem] border border-dashed border-[#D7DADF] bg-[#FAFAFA] px-4 text-sm font-bold text-[#1A1A1A] transition hover:border-[#F62E18]/30 hover:bg-[#FFF8F6] sm:col-span-2 lg:col-span-1 xl:col-span-2"
+                        >
+                          {showAllAddresses
+                            ? "Show fewer addresses"
+                            : `Show all ${addresses.length} addresses`}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="px-5 py-8 text-center">
+                      <p className="text-sm font-bold">No delivery address yet</p>
+                      <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[#6B6B6B]">
+                        Add a mapped address so Craves can check delivery serviceability and calculate your final total.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void openAddressEditor()}
+                        disabled={addressChangeBusy}
+                        className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#F62E18] px-4 text-sm font-semibold text-white disabled:pointer-events-none disabled:opacity-45"
+                      >
+                        <Plus className="h-4 w-4" aria-hidden="true" />
+                        Add a new address
+                      </button>
+                    </div>
+                  )}
+                </section>
+
+                <section className="rounded-[1.45rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_8px_28px_rgba(26,26,26,0.05)] sm:p-5">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FFF8EC] text-[#B86E00]">
+                      <Clock3 className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.13em] text-[#F62E18]">
+                        Step 2
+                      </p>
+                      <h2 className="text-base font-bold">Delivery timing</h2>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-start gap-3 rounded-[1rem] border border-[#F6B545]/35 bg-[#FFF8EC] p-4">
+                    <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#F6B545]" />
+                    <div>
+                      <p className="text-xs font-semibold text-[#7B5A1A]">Earliest delivery</p>
+                      <p className="mt-0.5 text-base font-black text-[#1A1A1A]">As soon as possible</p>
+                      <p className="mt-1 text-xs leading-5 text-[#6B6B6B]">
+                        {leadMinutes
+                          ? `Your chef usually needs about ${leadMinutes} min to prepare this order. Craves arranges delivery at the earliest available time.`
+                          : "This kitchen cooks to order. Craves arranges delivery at the earliest available time."}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                {instructions.trim() ? (
+                  <section className="rounded-[1.25rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_5px_18px_rgba(26,26,26,0.04)]">
+                    <p className="text-xs font-bold text-[#6B6B6B]">Cooking instructions</p>
+                    <p className="mt-1.5 text-sm leading-6 text-[#1A1A1A]">{instructions.trim()}</p>
+                  </section>
+                ) : null}
+              </div>
+
+              <aside className="lg:sticky lg:top-24">
+                <section className="overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white shadow-[0_12px_36px_rgba(26,26,26,0.07)]">
+                  <div className="border-b border-[#F1F3F5] px-4 py-4 sm:px-5">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EDF8F0] text-[#16803D]">
+                        <ReceiptText className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.13em] text-[#F62E18]">
+                          Step 3
+                        </p>
+                        <h2 className="text-base font-bold">Bill details</h2>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
+                    <div className="mb-4 rounded-[1rem] bg-[#F8F9FA] px-3.5 py-3">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-[#6B6B6B]">
+                        Order summary
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-[#1A1A1A]">
+                        {items.length} {items.length === 1 ? "item" : "items"} from your selected home kitchen
+                      </p>
+                    </div>
+
+                    <dl className="space-y-3 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <dt className="text-[#6B6B6B]">Item total</dt>
+                        <dd className="font-semibold tabular-nums">
+                          {money(subtotal, currency)}
+                        </dd>
+                      </div>
+
+                      {checkout ? (
+                        <>
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-[#6B6B6B]">Platform fee</dt>
+                            <dd className="font-medium tabular-nums">
+                              {money(checkout.platformFee, checkout.currency)}
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-[#6B6B6B]">Delivery fee</dt>
+                            <dd className="font-medium tabular-nums">
+                              {money(checkout.deliveryFee, checkout.currency)}
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-[#6B6B6B]">GST / tax</dt>
+                            <dd className="font-medium tabular-nums">
+                              {money(checkout.taxAmount, checkout.currency)}
+                            </dd>
+                          </div>
+                          <div className="mt-3 flex items-end justify-between gap-4 border-t border-[#E5E7EB] pt-4">
+                            <div>
+                              <dt className="text-sm font-black">To pay</dt>
+                              <p className="mt-0.5 text-[10px] text-[#6B6B6B]">Inclusive of applicable taxes</p>
+                            </div>
+                            <dd className="text-xl font-black tabular-nums text-[#1A1A1A]">
+                              {money(checkout.grandTotal, checkout.currency)}
+                            </dd>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="mt-3 flex items-start gap-2 border-t border-[#E5E7EB] pt-4">
+                          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#16A34A]" aria-hidden="true" />
+                          <p className="text-xs leading-5 text-[#6B6B6B]">
+                            {reviewing
+                              ? "Calculating delivery fee, tax and your final total…"
+                              : "Your final total is calculated automatically for the selected address."}
+                          </p>
+                        </div>
+                      )}
+                    </dl>
+
+                    <div className="mt-4 flex items-start gap-2.5 rounded-[0.9rem] bg-[#EDF8F0] px-3 py-2.5 text-[#176B38]">
+                      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <p className="text-[11px] font-semibold leading-5">
+                        Secure payment. Your order is placed only after Craves confirms payment.
+                      </p>
+                    </div>
+
+                    {hasCheckoutContext ? (
+                      <CheckoutPaymentButton
+                        checkout={checkout}
+                        previewAmount={subtotal}
+                        currency={currency}
+                        disabled={
+                          reviewing ||
+                          addressChangeBusy ||
+                          (!checkout && !selectedAddress)
+                        }
+                        failure={paymentFailure}
+                        ensureCheckout={ensureCheckout}
+                        onFailure={setPaymentFailure}
+                      />
+                    ) : null}
+                  </div>
+                </section>
+              </aside>
+            </div>
           </div>
         )}
 
@@ -700,22 +792,6 @@ export default function CheckoutPage() {
           </p>
         ) : null}
       </main>
-
-      {!loading && hasCheckoutContext ? (
-        <CheckoutPaymentButton
-          checkout={checkout}
-          previewAmount={subtotal}
-          currency={currency}
-          disabled={
-            reviewing ||
-            addressChangeBusy ||
-            (!checkout && !selectedAddress)
-          }
-          failure={paymentFailure}
-          ensureCheckout={ensureCheckout}
-          onFailure={setPaymentFailure}
-        />
-      ) : null}
 
       <AddressEditorFlow
         open={editorOpen}

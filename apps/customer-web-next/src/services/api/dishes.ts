@@ -54,6 +54,7 @@ type DishDiscoveryCursor = {
 let discoveredDishes: Dish[] = [];
 let discoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;
 let discoveryCursor: DishDiscoveryCursor | null = null;
+let discoveryGeneration = 0;
 
 function spiceLabel(
   value: NearbyMenuItem["spiceLevel"] | PublicMenuItemDetail["spiceLevel"],
@@ -179,6 +180,7 @@ export async function discoverDishes(
   longitude: number,
   radiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS,
 ): Promise<Dish[]> {
+  const generation = ++discoveryGeneration;
   discoveryCursor = null;
 
   for (const candidateRadius of candidateDiscoveryRadii(radiusMeters)) {
@@ -206,6 +208,7 @@ export async function discoverDishes(
     }
     const payload = parseMenuDiscovery(body);
     if (!payload) throw new Error("Craves returned an invalid discovery response.");
+    if (generation !== discoveryGeneration) return [...discoveredDishes];
 
     discoveredDishes = payload.menuItems
       .filter((item) => item.distanceMeters <= MAX_DISCOVERY_RADIUS_METERS)
@@ -234,6 +237,7 @@ export function hasMoreDiscoveredDishes(): boolean {
 
 export async function loadMoreDiscoveredDishes(): Promise<Dish[]> {
   const cursor = discoveryCursor;
+  const generation = discoveryGeneration;
   if (!cursor?.hasNext) return [...discoveredDishes];
 
   const query = new URLSearchParams({
@@ -262,6 +266,9 @@ export async function loadMoreDiscoveredDishes(): Promise<Dish[]> {
 
   const payload = parseMenuDiscovery(body);
   if (!payload) throw new Error("Craves returned an invalid discovery response.");
+  if (generation !== discoveryGeneration || discoveryCursor !== cursor) {
+    return [...discoveredDishes];
+  }
 
   const next = payload.menuItems
     .filter((item) => item.distanceMeters <= MAX_DISCOVERY_RADIUS_METERS)
@@ -350,6 +357,7 @@ export function allDishes(): Dish[] {
 }
 
 export function clearDishDiscoveryCache(): void {
+  discoveryGeneration += 1;
   discoveredDishes = [];
   discoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;
   discoveryCursor = null;

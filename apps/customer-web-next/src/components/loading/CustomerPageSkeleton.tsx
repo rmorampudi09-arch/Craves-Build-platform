@@ -38,7 +38,13 @@ export function CustomerPageSkeleton({
     >
       <div className="border-b border-[#E5E7EB] bg-white/95 px-4 py-3 md:px-7 lg:px-10">
         <div className="mx-auto flex max-w-[88rem] items-center gap-3">
-          <CravesLogo size="sm" decorative />
+          <a
+            href="/home"
+            className="shrink-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+            aria-label="Craves home"
+          >
+            <CravesLogo size="sm" decorative />
+          </a>
           <div className="ml-auto hidden items-center gap-2 md:flex">
             <SkeletonBlock className="h-10 w-44 rounded-[1rem]" soft />
             <SkeletonBlock className="h-10 w-72 rounded-[1rem]" />

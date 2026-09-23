@@ -66,6 +66,7 @@ import {
 import {
   getCartCheckoutActionLabel,
   isCartLineInteractionDisabled,
+  recoveredCheckoutMatchesCurrentCart,
 } from '../cartInteractionPolicy';
 import {cartSnapshotsRequireQuoteRefresh} from '../domain/cartDeliveryQuote';
 import type {
@@ -399,6 +400,13 @@ export function CustomerCartScreen() {
     [model?.items],
   );
 
+  const staleRecoveredCheckout = Boolean(
+    paymentRecoveryActive &&
+      checkoutReview &&
+      !recoveredCheckoutMatchesCurrentCart(checkoutReview, cartSnapshot),
+  );
+  const visibleCheckoutReview = staleRecoveredCheckout ? null : checkoutReview;
+
   const refreshCart = useCallback(async () => {
     setRefreshError(null);
     const outcome = await dispatch(refreshCartSnapshot());
@@ -642,6 +650,16 @@ export function CustomerCartScreen() {
       if (interrupted?.outcome === 'RECONCILING') {
         setPaymentNotice(
           'Your previous payment is still being confirmed. Check payment status before paying again.',
+        );
+        return;
+      }
+      if (
+        interrupted?.outcome === 'PENDING' &&
+        !recoveredCheckoutMatchesCurrentCart(interrupted.checkout, cartSnapshot)
+      ) {
+        activeCheckoutRef.current = null;
+        setPaymentNotice(
+          'A previous payment belongs to an older cart. Craves will not reuse that amount for this cart. Check its payment status before starting a new payment.',
         );
         return;
       }
@@ -924,7 +942,7 @@ export function CustomerCartScreen() {
             Offers will appear here when coupon verification is enabled.
           </Text>
         </View>
-        <BillSummary model={model} checkout={checkoutReview} />
+        <BillSummary model={model} checkout={visibleCheckoutReview} />
       </View>
     ) : null;
 
@@ -933,7 +951,10 @@ export function CustomerCartScreen() {
       item={item}
       discovery={discoveryByMenuItem[item.menuItemId]}
       pending={isCartLineInteractionDisabled({
-        checkoutBusy: checkoutBusy || checkoutReview?.status === 'PAYMENT_PENDING',
+        checkoutBusy:
+          checkoutBusy ||
+          (!staleRecoveredCheckout &&
+            checkoutReview?.status === 'PAYMENT_PENDING'),
         lineMutationPending: mutations[`line:${item.lineId}`]?.status === 'PENDING',
         paymentRecoveryActive,
       })}
@@ -997,12 +1018,14 @@ export function CustomerCartScreen() {
     );
   })();
 
-  const checkoutEnabled = Boolean(
-    model?.items.length &&
-      header.selectedLocation?.addressId &&
-      serviceability === 'SERVICEABLE' &&
-      !checkoutBusy,
-  );
+  const checkoutEnabled = staleRecoveredCheckout
+    ? !checkoutBusy
+    : Boolean(
+        model?.items.length &&
+          header.selectedLocation?.addressId &&
+          serviceability === 'SERVICEABLE' &&
+          !checkoutBusy,
+      );
 
   return (
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-cart">
@@ -1029,16 +1052,22 @@ export function CustomerCartScreen() {
           ]}>
           <View style={styles.checkoutCopy}>
             <Text style={styles.checkoutTotal}>
-              {checkoutReview
-                ? formatCartMoney(checkoutReview.grandTotal)
+              {visibleCheckoutReview
+                ? formatCartMoney(visibleCheckoutReview.grandTotal)
                 : `${formatAmountField(model.billSummary.foodSubtotal)} + fees`}
             </Text>
             <Text style={styles.checkoutLink}>View Bill Details</Text>
           </View>
           <Button
-            label={getCartCheckoutActionLabel(checkoutBusy, paymentRecoveryActive)}
+            label={getCartCheckoutActionLabel(
+              checkoutBusy,
+              paymentRecoveryActive,
+              staleRecoveredCheckout,
+            )}
             disabled={!checkoutEnabled}
-            onPress={handleCheckout}
+            onPress={
+              staleRecoveredCheckout ? handlePaymentStatusCheck : handleCheckout
+            }
             style={styles.checkoutButton}
           />
         </View>

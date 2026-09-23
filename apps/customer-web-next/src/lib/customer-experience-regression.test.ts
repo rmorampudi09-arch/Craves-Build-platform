@@ -33,7 +33,8 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(kitchens, /onPointerDown/);
   assert.doesNotMatch(kitchens, /View chef/);
   assert.match(cravings, /sticky top-\[4\.35rem\] z-30/);
-  assert.match(cravings, /md:top-0/);
+  assert.match(cravings, /md:top-\[4\.25rem\]/);
+  assert.match(cravings, /lg:top-\[4\.65rem\]/);
   assert.doesNotMatch(cravings, /md:static/);
   assert.match(cravings, /duration-\[1200ms\]/);
   assert.match(header, /hover:-translate-y-0\.5/);

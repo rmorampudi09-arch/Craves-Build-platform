@@ -54,7 +54,7 @@ jobs:
             echo "Signed IPA evidence must never run from main or production." >&2
             exit 1
           fi
-          if grep -Eiq 'pilot|upload_to_app_store|deliver|notarytool|altool' .github/workflows/ios-xcode-build.yml; then
+          if grep -Eiq '^[[:space:]]*(xcrun[[:space:]]+(altool|notarytool)|fastlane[[:space:]]+(pilot|deliver))' .github/workflows/ios-xcode-build.yml; then
             echo "Distribution tooling is forbidden in the branch-only signed IPA evidence lane." >&2
             exit 1
           fi

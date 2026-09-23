@@ -281,12 +281,51 @@ jobs:
             grep -Ei 'com\.facebook\.react\.log:javascript' "$RUNNER_TEMP/CravesMobile-simulator.log" | tail -50 >&2 || true
             exit 1
           fi
-          if ! grep -Fq 'CRAVES_SIMULATOR_SMOKE_READY:RoleSelection' "$RUNNER_TEMP/CravesMobile-simulator.log"; then
-            echo "CravesMobile did not render the expected anonymous auth shell." >&2
-            grep -Ei 'CRAVES_SIMULATOR_SMOKE_READY|com\.facebook\.react\.log:javascript' "$RUNNER_TEMP/CravesMobile-simulator.log" | tail -50 >&2 || true
-            exit 1
-          fi
           xcrun simctl io "${SIMULATOR_UDID}" screenshot "$RUNNER_TEMP/CravesMobile-simulator-launched.png"
+          cat > "$RUNNER_TEMP/verify-auth-shell.swift" <<'SWIFT'
+          import AppKit
+          import Darwin
+          import Foundation
+          import Vision
+
+          guard CommandLine.arguments.count == 2 else {
+            exit(2)
+          }
+          let screenshotPath = CommandLine.arguments[1]
+          guard let image = NSImage(contentsOfFile: screenshotPath) else {
+            fputs("Unable to read Simulator screenshot.\n", stderr)
+            exit(2)
+          }
+          var proposedRect = NSRect(origin: .zero, size: image.size)
+          guard let cgImage = image.cgImage(
+            forProposedRect: &proposedRect,
+            context: nil,
+            hints: nil
+          ) else {
+            fputs("Unable to decode Simulator screenshot.\n", stderr)
+            exit(2)
+          }
+
+          let request = VNRecognizeTextRequest()
+          request.recognitionLevel = .accurate
+          request.usesLanguageCorrection = true
+          try VNImageRequestHandler(cgImage: cgImage).perform([request])
+          let recognizedText = (request.results ?? [])
+            .compactMap { $0.topCandidates(1).first?.string }
+            .joined(separator: "\n")
+          print(recognizedText)
+          let normalizedText = recognizedText
+            .lowercased()
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+
+          guard normalizedText.contains("how would you like to use craves"),
+                normalizedText.contains("continue as customer") else {
+            fputs("Expected anonymous Craves auth shell text was not visible.\n", stderr)
+            exit(1)
+          }
+          SWIFT
+          swift "$RUNNER_TEMP/verify-auth-shell.swift" "$RUNNER_TEMP/CravesMobile-simulator-launched.png"
 
           xcrun simctl openurl "${SIMULATOR_UDID}" "craves://"
           sleep 5

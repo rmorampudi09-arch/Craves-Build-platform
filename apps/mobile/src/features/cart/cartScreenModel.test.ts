@@ -39,7 +39,7 @@ const dependencies: CartDependencies = {
 };
 
 describe('cart screen data and pricing model', () => {
-  it('uses cart subtotal and zero placeholders for charges not yet returned by cart API', () => {
+  it('uses cart subtotal without inventing charges not yet returned by cart API', () => {
     const model = buildCartScreenModel(snapshot, dependencies);
 
     expect(model.items).toBe(snapshot.lines);
@@ -47,11 +47,12 @@ describe('cart screen data and pricing model', () => {
       amount: snapshot.totals.foodSubtotal,
       source: 'CART_RESPONSE',
     });
-    expect(model.billSummary.taxAmount.amount?.amount).toBe('0');
-    expect(model.billSummary.deliveryFee.amount?.amount).toBe('0');
-    expect(model.billSummary.couponDiscount.amount?.amount).toBe('0');
-    expect(model.billSummary.grandTotal.amount).toEqual(snapshot.totals.foodSubtotal);
-    expect(model.billSummary.complete).toBe(true);
+    expect(model.billSummary.platformFee.amount).toBeNull();
+    expect(model.billSummary.taxAmount.amount).toBeNull();
+    expect(model.billSummary.deliveryFee.amount).toBeNull();
+    expect(model.billSummary.couponDiscount.amount).toBeNull();
+    expect(model.billSummary.grandTotal.amount).toBeNull();
+    expect(model.billSummary.complete).toBe(false);
   });
 
   it('carries the selected saved address into cart checkout preparation', () => {
@@ -69,7 +70,7 @@ describe('cart screen data and pricing model', () => {
       summary: null,
       summarySource: 'CUSTOMER_LOCATION',
     });
-    expect(model?.coupon.discount.amount?.amount).toBe('0');
+    expect(model?.coupon.discount.amount).toBeNull();
     expect(model?.checkout).toEqual({
       enabled: true,
       status: 'ELIGIBLE',

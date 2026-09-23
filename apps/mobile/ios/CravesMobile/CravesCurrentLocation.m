@@ -32,6 +32,22 @@ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(isPaymentUnavailableE2EEnabled) {
 #endif
 }
 
+RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(isCustomerShellE2EEnabled) {
+#if DEBUG
+  return @([[NSUserDefaults standardUserDefaults] boolForKey:@"CRAVES_E2E_CUSTOMER_SHELL"]);
+#else
+  return @NO;
+#endif
+}
+
+RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(isChefShellE2EEnabled) {
+#if DEBUG
+  return @([[NSUserDefaults standardUserDefaults] boolForKey:@"CRAVES_E2E_CHEF_SHELL"]);
+#else
+  return @NO;
+#endif
+}
+
 - (CLLocationManager *)locationManager {
   if (_manager == nil) {
     _manager = [CLLocationManager new];

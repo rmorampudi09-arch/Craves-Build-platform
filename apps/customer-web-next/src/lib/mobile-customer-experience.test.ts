@@ -73,7 +73,9 @@ test("mobile browse proportions and cart glass stay aligned with the compact ref
   assert.match(grid, /aspect-\[16\/9\] sm:aspect-\[16\/10\]/);
   assert.doesNotMatch(grid, /aspect-\[4\/3\]/);
   assert.match(cravings, /h-\[3\.8rem\] w-\[3\.8rem\]/);
-  assert.match(nav, /bg-white\/50/);\n  assert.match(nav, /backdrop-blur-\[8px\]/);\n  assert.match(nav, /backdrop-saturate-\[145%\]/);
+  assert.match(nav, /bg-white\/50/);
+  assert.match(nav, /backdrop-blur-\[8px\]/);
+  assert.match(nav, /backdrop-saturate-\[145%\]/);
   assert.match(homeStyles, /backdrop-filter: blur\(8px\) saturate\(145%\)/);
   assert.doesNotMatch(homeStyles, /blur\(48px\)/);
 });

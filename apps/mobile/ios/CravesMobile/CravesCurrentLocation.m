@@ -12,12 +12,16 @@
 RCT_EXPORT_MODULE(CravesCurrentLocation)
 + (BOOL)requiresMainQueueSetup { return YES; }
 
-RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(isLocationDeniedE2EEnabled) {
+- (BOOL)locationDeniedE2EEnabled {
 #if DEBUG
-  return @([[NSUserDefaults standardUserDefaults] boolForKey:@"CRAVES_E2E_LOCATION_DENIED"]);
+  return [[NSUserDefaults standardUserDefaults] boolForKey:@"CRAVES_E2E_LOCATION_DENIED"];
 #else
-  return @NO;
+  return NO;
 #endif
+}
+
+RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(isLocationDeniedE2EEnabled) {
+  return @([self locationDeniedE2EEnabled]);
 }
 
 - (CLLocationManager *)locationManager {
@@ -46,6 +50,7 @@ RCT_REMAP_METHOD(getPermissionStatus, getPermissionStatusWithResolver:(RCTPromis
 
 RCT_REMAP_METHOD(requestPermission, requestPermissionWithResolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
   dispatch_async(dispatch_get_main_queue(), ^{
+    if ([self locationDeniedE2EEnabled]) { resolve(@"denied"); return; }
     NSString *status = [self currentPermissionStatus];
     if (![status isEqualToString:@"undetermined"]) { resolve(status); return; }
     if (self.permissionResolve != nil) { reject(@"LOCATION_PERMISSION_BUSY", @"A location permission request is already active.", nil); return; }

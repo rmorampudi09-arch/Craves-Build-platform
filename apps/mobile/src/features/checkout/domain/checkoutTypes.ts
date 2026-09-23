@@ -69,7 +69,28 @@ export interface CheckoutCreateRequest {
   note?: string | null;
 }
 
-export interface CheckoutCreationIntent extends CheckoutCreateRequest {
+export interface CheckoutExpectedCartItem {
+  id: string;
+  quantity: number;
+  updatedAt: string;
+}
+
+export interface CheckoutExpectedCart {
+  cartId: string;
+  items: CheckoutExpectedCartItem[];
+}
+
+export interface CheckoutOperationRequest extends CheckoutCreateRequest {
+  expectedCart: CheckoutExpectedCart;
+}
+
+export interface CheckoutOperationResult {
+  operationId: string;
+  status: 'SUCCEEDED';
+  checkoutId: string;
+}
+
+export interface CheckoutCreationIntent extends CheckoutOperationRequest {
   cartId: string;
   cartClientRevision: number;
 }

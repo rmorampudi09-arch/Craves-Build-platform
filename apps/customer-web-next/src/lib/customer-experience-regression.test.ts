@@ -18,6 +18,8 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(banner, /home-hero-banner\.webp/);
   assert.match(banner, /unoptimized/);
   assert.match(home, /CustomerPageSkeleton/);
+  assert.match(home, /loadMoreDiscoveredDishes/);
+  assert.match(home, /hasMoreDiscoveredDishes/);
   assert.match(home, /dishImagesByKitchen=\{kitchenDishImages\}/);
   assert.match(chefs, /CustomerPageSkeleton/);
   assert.match(chefs, /discoverDishes\(/);
@@ -89,6 +91,8 @@ test("favorites hydrate the shared cart and notifications expose only supported 
   assert.match(wishlist, /CustomerFloatingCart/);
   assert.match(wishlist, /CustomerPageSkeleton/);
   assert.doesNotMatch(notifications, /Mark all read/);
+  assert.doesNotMatch(notifications, /\/read/);
+  assert.match(notifications, /CustomerPageSkeleton/);
   assert.match(notifications, /Clear read/);
   assert.match(notifications, /Clear all/);
   assert.match(notifications, /craves\.notifications\.cleared:/);

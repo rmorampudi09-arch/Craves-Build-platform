@@ -306,7 +306,7 @@ export function CheckoutPaymentButton({
               );
             },
           },
-          theme: { color: "#F62E18" },
+          theme: { color: "#16A34A" },
         });
 
         instance.on("payment.failed", (response) => {
@@ -362,9 +362,9 @@ export function CheckoutPaymentButton({
         : "Preparing total…";
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white shadow-[0_-8px_28px_rgba(17,24,39,0.06)]">
-      <div className="mx-auto flex max-w-2xl items-center gap-4 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-6">
-        <div className="min-w-[7.5rem]">
+    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white shadow-[0_-8px_28px_rgba(17,24,39,0.06)] lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:shadow-none">
+      <div className="mx-auto flex max-w-2xl items-center gap-4 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-6 lg:max-w-none lg:flex-col lg:items-stretch lg:gap-3 lg:px-0 lg:pb-0 lg:pt-4">
+        <div className="min-w-[7.5rem] lg:hidden">
           <p className="text-xl font-bold tabular-nums text-[#1A1A1A]">
             {authoritativeAmount !== null
               ? money(authoritativeAmount, checkout?.currency ?? currency)
@@ -383,7 +383,7 @@ export function CheckoutPaymentButton({
           type="button"
           disabled={busy || disabled || Boolean(failure && !failure.retryAllowed)}
           onClick={() => void openPayment()}
-          className="ml-auto inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-[11px] border border-[#138A3D] bg-[#16A34A] px-5 py-[13px] text-[15px] font-semibold text-white shadow-[0_4px_12px_rgba(22,163,74,0.22)] transition-[background-color,box-shadow,transform] hover:-translate-y-px hover:bg-[#15803D] hover:shadow-[0_7px_18px_rgba(22,163,74,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A]/35 focus-visible:ring-offset-2 sm:flex-none sm:min-w-52 disabled:pointer-events-none disabled:opacity-45"
+          className="ml-auto inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-[11px] border border-[#138A3D] bg-[#16A34A] px-5 py-[13px] text-[15px] font-semibold text-white shadow-[0_4px_12px_rgba(22,163,74,0.22)] transition-[background-color,box-shadow,transform] hover:-translate-y-px hover:bg-[#15803D] hover:shadow-[0_7px_18px_rgba(22,163,74,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A]/35 focus-visible:ring-offset-2 sm:flex-none sm:min-w-52 lg:ml-0 lg:w-full lg:min-w-0 lg:flex-none disabled:pointer-events-none disabled:opacity-45"
         >
           {busy ? (
             <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />

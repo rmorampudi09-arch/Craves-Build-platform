@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ChefHat,
@@ -13,6 +13,33 @@ import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 import skeletonStyles from "@/components/loading/CustomerPageSkeleton.module.css";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
+
+const kitchenImagePreloads = new Map<string, Promise<void>>();
+
+function preloadKitchenImage(src: string): Promise<void> {
+  const existing = kitchenImagePreloads.get(src);
+  if (existing) return existing;
+
+  const pending = new Promise<void>((resolve) => {
+    const image = new window.Image();
+    image.decoding = "async";
+    image.src = src;
+
+    const finish = () => resolve();
+    if (image.complete && image.naturalWidth > 0) {
+      void image.decode().catch(() => undefined).finally(finish);
+      return;
+    }
+
+    image.onload = () => {
+      void image.decode().catch(() => undefined).finally(finish);
+    };
+    image.onerror = finish;
+  });
+
+  kitchenImagePreloads.set(src, pending);
+  return pending;
+}
 
 interface KitchensGridProps {
   kitchens: NearbyKitchen[];
@@ -48,23 +75,24 @@ function KitchenDishPreview({
   name: string;
   images: string[];
 }) {
-  const usable = Array.from(new Set(images.filter(Boolean))).slice(0, 5);
+  const usable = useMemo(
+    () => Array.from(new Set(images.filter(Boolean))).slice(0, 5),
+    [images],
+  );
   const viewportRef = useRef<HTMLDivElement>(null);
   const swipeStartXRef = useRef<number | null>(null);
   const suppressClickRef = useRef(false);
-  const loadedSourcesRef = useRef<Set<string>>(new Set());
-  const preloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
   const [activeIndex, setActiveIndex] = useState(0);
-  const [loadedRevision, setLoadedRevision] = useState(0);
+  const [loadedSources, setLoadedSources] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [isVisible, setIsVisible] = useState(false);
   const imageKey = usable.join("|");
 
   useEffect(() => {
     setActiveIndex(0);
-    loadedSourcesRef.current = new Set(usable[0] ? [usable[0]] : []);
-    preloadPromisesRef.current.clear();
-    setLoadedRevision((current) => current + 1);
-  }, [imageKey]);
+    setLoadedSources(new Set(usable[0] ? [usable[0]] : []));
+  }, [imageKey, usable]);
 
   useEffect(() => {
     const target = viewportRef.current;
@@ -81,80 +109,77 @@ function KitchenDishPreview({
     return () => observer.disconnect();
   }, []);
 
-  const preload = (index: number): Promise<void> => {
-    if (!usable.length) return Promise.resolve();
-    const normalizedIndex = (index + usable.length) % usable.length;
-    const src = usable[normalizedIndex];
-    if (!src || loadedSourcesRef.current.has(src)) return Promise.resolve();
-
-    const existing = preloadPromisesRef.current.get(src);
-    if (existing) return existing;
-
-    const pending = new Promise<void>((resolve) => {
-      const nextImage = new window.Image();
-      nextImage.decoding = "async";
-      nextImage.src = src;
-
-      const ready = () => {
-        loadedSourcesRef.current.add(src);
-        preloadPromisesRef.current.delete(src);
-        setLoadedRevision((current) => current + 1);
-        resolve();
-      };
-
-      if (nextImage.complete && nextImage.naturalWidth > 0) {
-        void nextImage.decode().catch(() => undefined).finally(ready);
-        return;
-      }
-
-      nextImage.onload = () => {
-        void nextImage.decode().catch(() => undefined).finally(ready);
-      };
-      nextImage.onerror = () => {
-        preloadPromisesRef.current.delete(src);
-        resolve();
-      };
-    });
-
-    preloadPromisesRef.current.set(src, pending);
-    return pending;
-  };
-
-  const showIndex = (index: number) => {
-    if (!usable.length) return;
-    const normalizedIndex = (index + usable.length) % usable.length;
-    void preload(normalizedIndex).then(() => {
-      if (loadedSourcesRef.current.has(usable[normalizedIndex])) {
-        setActiveIndex(normalizedIndex);
-      }
-    });
-  };
-
   useEffect(() => {
     if (!isVisible || usable.length <= 1) return;
 
-    void preload(activeIndex + 1);
-    if (usable.length > 2) void preload(activeIndex + 2);
+    let active = true;
+    const candidates = [
+      usable[(activeIndex + 1) % usable.length],
+      usable[(activeIndex - 1 + usable.length) % usable.length],
+    ].filter(Boolean);
 
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    for (const src of candidates) {
+      void preloadKitchenImage(src).then(() => {
+        if (!active) return;
+        setLoadedSources((current) => {
+          if (current.has(src)) return current;
+          const next = new Set(current);
+          next.add(src);
+          return next;
+        });
+      });
+    }
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return () => {
+        active = false;
+      };
+    }
 
     const timer = window.setTimeout(() => {
-      showIndex(activeIndex + 1);
+      const nextIndex = (activeIndex + 1) % usable.length;
+      const src = usable[nextIndex];
+      void preloadKitchenImage(src).then(() => {
+        if (!active) return;
+        setLoadedSources((current) => {
+          if (current.has(src)) return current;
+          const next = new Set(current);
+          next.add(src);
+          return next;
+        });
+        setActiveIndex(nextIndex);
+      });
     }, 3000);
 
-    return () => window.clearTimeout(timer);
-  }, [activeIndex, isVisible, imageKey]);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [activeIndex, isVisible, usable]);
 
   if (!usable.length) {
     return (
-      <div className="flex aspect-[16/10] items-center justify-center bg-[#F1F3F5] text-[#F62E18]">
+      <div className="flex aspect-[16/9] items-center justify-center bg-[#F1F3F5] text-[#F62E18]">
         <ChefHat className="h-12 w-12" strokeWidth={1.6} aria-hidden="true" />
       </div>
     );
   }
 
   const safeIndex = activeIndex % usable.length;
-  void loadedRevision;
+
+  const showIndex = (index: number) => {
+    const normalizedIndex = (index + usable.length) % usable.length;
+    const src = usable[normalizedIndex];
+    void preloadKitchenImage(src).then(() => {
+      setLoadedSources((current) => {
+        if (current.has(src)) return current;
+        const next = new Set(current);
+        next.add(src);
+        return next;
+      });
+      setActiveIndex(normalizedIndex);
+    });
+  };
 
   const beginSwipe = (clientX: number) => {
     swipeStartXRef.current = clientX;
@@ -197,7 +222,7 @@ function KitchenDishPreview({
       }}
     >
       {usable.map((src, index) => {
-        const loaded = index === safeIndex || loadedSourcesRef.current.has(src);
+        const loaded = index === safeIndex || loadedSources.has(src);
         if (!loaded) return null;
 
         return (

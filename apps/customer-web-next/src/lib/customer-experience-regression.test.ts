@@ -92,9 +92,10 @@ test("access-token expiry preserves refresh login instead of bouncing customers 
   const sessionFetch = source("../services/auth/sessionFetch.ts");
 
   assert.doesNotMatch(authMe, /clearSessionCookies/);
-  assert.match(authClient, /sessionFetch\("\/api\/auth\/me"/);
-  assert.match(authClient, /refreshSessionCookies/);
-  assert.doesNotMatch(authClient, /fetch\("\/api\/auth\/refresh"/);
+  assert.match(authClient, /refreshSessionForGeneration/);
+  assert.match(authClient, /sessionRefreshes/);
+  assert.match(authClient, /fetch\("\/api\/auth\/refresh"/);
+  assert.match(authClient, /if \(response\.status === 401\)/);
   assert.match(sessionFetch, /refreshSession\(\)/);
   assert.match(sessionFetch, /refreshSessionCookies/);
   assert.match(sessionFetch, /response\.status !== 401/);

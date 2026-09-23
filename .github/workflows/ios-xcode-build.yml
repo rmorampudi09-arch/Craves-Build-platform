@@ -477,7 +477,7 @@ jobs:
     name: Signed iPhone IPA
     runs-on: macos-26
     needs: simulator-xcode-build
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.build_signed_ipa) || (github.event_name == 'pull_request' && github.head_ref == 'feat/ios-autonomous-factory-20260922') }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_signed_ipa }}
     timeout-minutes: 60
 
     steps:

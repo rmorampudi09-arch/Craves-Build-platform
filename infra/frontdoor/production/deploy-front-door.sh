@@ -185,7 +185,7 @@ ensure_static_identity_encoding(){
 purge_static_assets(){
   local purge_uri purge_body
   purge_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/afdEndpoints/${ENDPOINT}/purge?api-version=2025-04-15"
-  purge_body="$(jq -nc '{contentPaths:["/_next/static/*","/home/cravings/*","/home/reference/*"]}')"
+  purge_body="$(jq -nc '{contentPaths:["/_next/static/*","/home/cravings/*"]}')"
   az rest --method post --uri "$purge_uri" --headers Content-Type=application/json --body "$purge_body" --only-show-errors >/dev/null
 }
 
@@ -216,9 +216,9 @@ ensure_edge(){
   # from stalling on JavaScript/CSS bundles.
   cache='{compression-settings:{content-types-to-compress:[text/css,text/javascript,application/javascript,application/json,image/svg+xml,font/woff2,font/woff],is-compression-enabled:false},query-string-caching-behavior:IgnoreQueryString}'
   if az afd route show -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" >/dev/null 2>&1; then
-    az afd route update -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --origin-group "$ogid" --patterns-to-match '/_next/static/*' '/home/cravings/*' '/home/reference/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$static_rs" --cache-configuration "$cache" --enabled-state Enabled --only-show-errors >/dev/null
+    az afd route update -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --origin-group "$ogid" --patterns-to-match '/_next/static/*' '/home/cravings/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$static_rs" --cache-configuration "$cache" --enabled-state Enabled --only-show-errors >/dev/null
   else
-    az afd route create -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --origin-group "$ogid" --patterns-to-match '/_next/static/*' '/home/cravings/*' '/home/reference/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$static_rs" --cache-configuration "$cache" --enabled-state Enabled --only-show-errors >/dev/null
+    az afd route create -g "$RG" --profile-name "$PROFILE" --endpoint-name "$ENDPOINT" --route-name "$STATIC_ROUTE" --origin-group "$ogid" --patterns-to-match '/_next/static/*' '/home/cravings/*' --supported-protocols Http Https --forwarding-protocol HttpsOnly --https-redirect Enabled --link-to-default-domain Enabled --formatted-rule-sets "$static_rs" --cache-configuration "$cache" --enabled-state Enabled --only-show-errors >/dev/null
   fi
 }
 
@@ -449,9 +449,8 @@ validate_edge(){
 
   jq -e '
     (index("/_next/static/*") != null) and
-    (index("/home/cravings/*") != null) and
-    (index("/home/reference/*") != null)
-  ' <<<"$static_patterns" >/dev/null || fail "Static route must cache Next.js assets, home craving images, and home reference images: $static_patterns"
+    (index("/home/cravings/*") != null)
+  ' <<<"$static_patterns" >/dev/null || fail "Static route must cache both Next.js assets and home craving images: $static_patterns"
 
   local static_rule_uri
   static_rule_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/ruleSets/${STATIC_RULESET}/rules/${STATIC_RULE_NAME}?api-version=2025-04-15"

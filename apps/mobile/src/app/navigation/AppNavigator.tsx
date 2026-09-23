@@ -314,6 +314,20 @@ export function AppNavigator() {
       __DEV__ && nativeControl?.isPaymentUnavailableE2EEnabled?.() === true
     );
   });
+  const [shellRoleE2E, setShellRoleE2E] = React.useState<
+    'customer' | 'chef' | null
+  >(() => {
+    const nativeControl = NativeModules.CravesCurrentLocation as
+      | {
+          isCustomerShellE2EEnabled?: () => boolean;
+          isChefShellE2EEnabled?: () => boolean;
+        }
+      | undefined;
+    if (!__DEV__) return null;
+    if (nativeControl?.isCustomerShellE2EEnabled?.() === true) return 'customer';
+    if (nativeControl?.isChefShellE2EEnabled?.() === true) return 'chef';
+    return null;
+  });
   useSessionLifecycle();
   const auth = useAppSelector(state => state.auth);
   const authRef = React.useRef(auth);
@@ -495,6 +509,14 @@ export function AppNavigator() {
         setPaymentUnavailableE2E(true);
         return;
       }
+      if (__DEV__ && url === 'craves://e2e/shell/customer') {
+        setShellRoleE2E('customer');
+        return;
+      }
+      if (__DEV__ && url === 'craves://e2e/shell/chef') {
+        setShellRoleE2E('chef');
+        return;
+      }
       const candidate = parseInboundUrl(url);
       trackAction('inbound_link_received', {initial, recognized: Boolean(candidate)});
       if (!candidate) return;
@@ -539,6 +561,22 @@ export function AppNavigator() {
 
   if (__DEV__ && paymentUnavailableE2E) {
     return <PaymentProviderUnavailableE2EScreen />;
+  }
+
+  if (__DEV__ && shellRoleE2E === 'customer') {
+    return (
+      <NavigationContainer>
+        <CustomerRootNavigator />
+      </NavigationContainer>
+    );
+  }
+
+  if (__DEV__ && shellRoleE2E === 'chef') {
+    return (
+      <NavigationContainer>
+        <ChefRootNavigator />
+      </NavigationContainer>
+    );
   }
 
   if (status === 'idle' || status === 'restoring') {

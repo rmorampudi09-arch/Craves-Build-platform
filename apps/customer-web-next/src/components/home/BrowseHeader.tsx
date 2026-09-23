@@ -315,7 +315,7 @@ export function BrowseHeader({
           </div>
 
           <div className="mt-2 flex items-stretch gap-2">
-            <label className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 rounded-[1.05rem] border border-white/80 bg-[#F1F3F5]/90 px-3.5 backdrop-blur-xl transition-[transform,background-color,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-[#F62E18]/20 hover:bg-white/80 hover:shadow-[0_12px_28px_rgba(246,46,24,0.17),inset_0_1px_0_rgba(255,255,255,0.95)] focus-within:-translate-y-0.5 focus-within:border-[#F62E18]/30 focus-within:bg-white/90 focus-within:shadow-[0_12px_28px_rgba(246,46,24,0.17),inset_0_1px_0_rgba(255,255,255,0.95)] focus-within:ring-2 focus-within:ring-[#F62E18]/25 motion-reduce:transform-none">
+            <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[0.95rem] border border-[#E5E7EB] bg-[#F6F7F8] px-3 shadow-[0_3px_12px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,border-color] duration-200 focus-within:border-[#F62E18]/25 focus-within:bg-white focus-within:shadow-[0_7px_20px_rgba(246,46,24,0.11)] focus-within:ring-2 focus-within:ring-[#F62E18]/15">
               <FaSearch className="h-[1.05rem] w-[1.05rem] shrink-0 text-[#F62E18]" aria-hidden="true" />
               <span className="sr-only">Search dishes or home kitchens</span>
               <input
@@ -335,6 +335,7 @@ export function BrowseHeader({
               <FoodPreferenceQuickToggles
                 value={foodPreference}
                 onChange={onFoodPreferenceChange}
+                compact
                 className="flex shrink-0"
               />
             ) : null}

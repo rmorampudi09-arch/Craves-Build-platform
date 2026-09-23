@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PhoneAuthForm } from "@/components/phone-auth-form";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { safeReturnPath } from "@/lib/auth-contract";
@@ -21,7 +22,7 @@ export default async function SignInPage({ searchParams }: {
 
   return <main className="cr-admin cr-login">
     <section className="cr-login-story" aria-labelledby="cr-login-title">
-      <div className="cr-brand"><a href="/" aria-label="Craves home"><CravesLogo size="lg" priority/></a><span><strong>Craves</strong><small>ADMINISTRATION</small></span></div>
+      <div className="cr-brand"><Link href="/" aria-label="Craves home"><CravesLogo size="lg" priority/></Link><span><strong>Craves</strong><small>ADMINISTRATION</small></span></div>
       <div><p className="cr-eyebrow">Made for the people behind every meal</p><h2 id="cr-login-title">One workspace.<br/>Everyday control.</h2><p>Care for your customers. Support your home chefs. Keep orders, delivery and finance moving together.</p></div>
       <div className="cr-login-features"><span>Orders & delivery</span><span>People & kitchens</span><span>Finance & subscriptions</span><span>Recovery & learning</span></div>
       <p className="cr-login-quote">Different kitchens. Different recipes.<br/><strong>One feeling — home.</strong></p>

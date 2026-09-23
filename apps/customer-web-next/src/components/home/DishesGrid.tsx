@@ -47,6 +47,9 @@ interface DishesGridProps {
   onRemoveFilters: () => void;
   onRetry: () => void;
   onManageAddress: () => void;
+  hasMoreRemote?: boolean;
+  loadingMoreRemote?: boolean;
+  onLoadMore?: () => void;
 }
 
 function DishSkeleton() {
@@ -92,6 +95,9 @@ export function DishesGrid({
   onRemoveFilters,
   onRetry,
   onManageAddress,
+  hasMoreRemote = false,
+  loadingMoreRemote = false,
+  onLoadMore,
 }: DishesGridProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftSort, setDraftSort] = useState<HomeDishSort>(sort);
@@ -113,7 +119,13 @@ export function DishesGrid({
   }, [dishListKey, dishes.length]);
 
   useEffect(() => {
-    if (state !== "ready" || !hasMoreDishes) return;
+    if (
+      state !== "ready" ||
+      (!hasMoreDishes && !hasMoreRemote) ||
+      (loadingMoreRemote && !hasMoreDishes)
+    ) {
+      return;
+    }
 
     const target = loadMoreRef.current;
     if (!target || typeof IntersectionObserver === "undefined") return;
@@ -121,16 +133,31 @@ export function DishesGrid({
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries[0]?.isIntersecting) return;
-        setVisibleCount((current) =>
-          Math.min(current + DISH_BATCH_SIZE, dishes.length),
-        );
+
+        if (hasMoreDishes) {
+          setVisibleCount((current) =>
+            Math.min(current + DISH_BATCH_SIZE, dishes.length),
+          );
+          return;
+        }
+
+        if (hasMoreRemote && !loadingMoreRemote) {
+          onLoadMore?.();
+        }
       },
       { rootMargin: "600px 0px" },
     );
 
     observer.observe(target);
     return () => observer.disconnect();
-  }, [dishes.length, hasMoreDishes, state]);
+  }, [
+    dishes.length,
+    hasMoreDishes,
+    hasMoreRemote,
+    loadingMoreRemote,
+    onLoadMore,
+    state,
+  ]);
   const hasFilters = selectedCategory !== "All" || sort !== "recommended";
   const activeFilterCount =
     Number(selectedCategory !== "All") + Number(sort !== "recommended");
@@ -388,7 +415,7 @@ export function DishesGrid({
               <DishCard key={dish.id} dish={dish} />
             ))}
           </div>
-          {hasMoreDishes ? (
+          {hasMoreDishes || hasMoreRemote || loadingMoreRemote ? (
             <div
               ref={loadMoreRef}
               className="flex min-h-24 items-center justify-center"

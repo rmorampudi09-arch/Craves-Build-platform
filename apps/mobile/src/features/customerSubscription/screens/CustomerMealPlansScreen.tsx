@@ -93,7 +93,7 @@ async function waitForSubscriptionPayment(
   const delays = [0, 400, 900, 1600];
   for (let index = 0; index < delays.length; index += 1) {
     if (delays[index] > 0) {
-      await new Promise(resolve => setTimeout(resolve, delays[index]));
+      await new Promise<void>(resolve => setTimeout(() => resolve(), delays[index]));
     }
     try {
       return await subscriptionPaymentApi.getLatestForSubscription(subscriptionId);

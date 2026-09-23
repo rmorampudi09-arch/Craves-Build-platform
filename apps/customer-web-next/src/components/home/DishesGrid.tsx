@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { DishCard } from "@/components/home/DishCard";
+import skeletonStyles from "@/components/loading/CustomerPageSkeleton.module.css";
 import type { DishCategory } from "@/constants/dishCategories";
 import type {
   HomeDishSort,
@@ -58,12 +59,12 @@ function DishSkeleton() {
       className="overflow-hidden rounded-[1.65rem] border border-[#E5E7EB] bg-white"
       aria-hidden="true"
     >
-      <div className="aspect-[4/3] animate-pulse bg-[#F1F3F5]" />
+      <div className={`${skeletonStyles.block} aspect-[4/3]`} />
       <div className="space-y-3 p-5">
-        <div className="h-5 w-3/4 animate-pulse rounded-full bg-[#F1F3F5]" />
-        <div className="h-3.5 w-1/2 animate-pulse rounded-full bg-[#F1F3F5]" />
-        <div className="h-3.5 w-full animate-pulse rounded-full bg-[#F1F3F5]" />
-        <div className="h-10 w-full animate-pulse rounded-full bg-[#F1F3F5]" />
+        <div className={`${skeletonStyles.block} h-5 w-3/4 rounded-full`} />
+        <div className={`${skeletonStyles.block} ${skeletonStyles.soft} h-3.5 w-1/2 rounded-full`} />
+        <div className={`${skeletonStyles.block} ${skeletonStyles.soft} h-3.5 w-full rounded-full`} />
+        <div className={`${skeletonStyles.block} h-10 w-full rounded-[0.8rem]`} />
       </div>
     </div>
   );

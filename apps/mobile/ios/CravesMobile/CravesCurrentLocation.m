@@ -12,6 +12,14 @@
 RCT_EXPORT_MODULE(CravesCurrentLocation)
 + (BOOL)requiresMainQueueSetup { return YES; }
 
+RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(isLocationDeniedE2EEnabled) {
+#if DEBUG
+  return @([[NSUserDefaults standardUserDefaults] boolForKey:@"CRAVES_E2E_LOCATION_DENIED"]);
+#else
+  return @NO;
+#endif
+}
+
 - (CLLocationManager *)locationManager {
   if (_manager == nil) {
     _manager = [CLLocationManager new];

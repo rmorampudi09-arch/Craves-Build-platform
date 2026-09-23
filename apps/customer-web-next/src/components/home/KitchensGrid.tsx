@@ -10,6 +10,7 @@ import {
 
 import { formatDistance, type NearbyKitchen } from "@/lib/discovery-contract";
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
+import skeletonStyles from "@/components/loading/CustomerPageSkeleton.module.css";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
@@ -30,11 +31,11 @@ function KitchenSkeleton() {
       className="overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white"
       aria-hidden="true"
     >
-      <div className="aspect-[16/10] animate-pulse bg-[#F1F3F5]" />
+      <div className={`${skeletonStyles.block} aspect-[16/10]`} />
       <div className="p-4">
-        <div className="h-5 w-2/3 animate-pulse rounded-full bg-[#F1F3F5]" />
-        <div className="mt-3 h-3.5 w-1/2 animate-pulse rounded-full bg-[#F1F3F5]" />
-        <div className="mt-5 h-10 w-full animate-pulse rounded-full bg-[#F1F3F5]" />
+        <div className={`${skeletonStyles.block} h-5 w-2/3 rounded-full`} />
+        <div className={`${skeletonStyles.block} ${skeletonStyles.soft} mt-3 h-3.5 w-1/2 rounded-full`} />
+        <div className={`${skeletonStyles.block} mt-5 h-10 w-full rounded-[0.8rem]`} />
       </div>
     </div>
   );

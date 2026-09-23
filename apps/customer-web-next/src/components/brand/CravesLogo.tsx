@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import type { KeyboardEvent, MouseEvent } from "react";
 
 type LogoSize = "sm" | "md" | "lg";
@@ -32,19 +31,23 @@ export function CravesLogo({
   priority = false,
 }: CravesLogoProps) {
   const dimension = dimensions[size];
-  const router = useRouter();
+  const openHome = () => {
+    if (window.location.pathname === "/home") return;
+    window.location.assign("/home");
+  };
 
   const goHome = (event: MouseEvent<HTMLImageElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    router.push("/home");
+    openHome();
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLImageElement>) => {
     if (decorative) return;
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    router.push("/home");
+    event.stopPropagation();
+    openHome();
   };
 
   return (

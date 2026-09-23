@@ -36,7 +36,6 @@ export function PaymentProviderUnavailableE2EScreen() {
             ? String(error.code)
             : 'UNKNOWN';
         if (__DEV__) {
-          // eslint-disable-next-line no-console
           console.info(
             `E2E_PAYMENT_PROVIDER_UNAVAILABLE_VISIBLE:${errorCode}`,
           );

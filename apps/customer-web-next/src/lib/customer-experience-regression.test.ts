@@ -70,10 +70,10 @@ test("profile edit stays focused on name, phone and optional OTP email verificat
   assert.doesNotMatch(account, /Phone[\s\S]{0,120}Verified/);
 });
 
-test("reviewed checkout restores its server snapshot before returning to the cart", () => {
+test("reviewed checkout never traps the customer while restoring the cart", () => {
   const checkout = source("../screens/Checkout/Checkout.tsx");
 
-  assert.match(checkout, /ensureCheckoutCart\(checkout\.orders\)/);
+  assert.match(checkout, /ensureCheckoutCart\(currentCheckout\.orders\)/);
   assert.match(checkout, /handleBackToCart/);
   assert.match(checkout, /removeItem\(CHECKOUT_ID_KEY\)/);
   assert.match(checkout, /Step 1/);
@@ -81,6 +81,8 @@ test("reviewed checkout restores its server snapshot before returning to the car
   assert.match(checkout, /Step 3/);
   assert.match(checkout, /CART_NOTICE_KEY/);
   assert.match(checkout, /navigate\(\{ to: "\/cart" \}\)/);
+  assert.match(checkout, /Promise\.race/);
+  assert.match(checkout, /Your cart is open/);
   assert.doesNotMatch(checkout, /Your reviewed order could not be restored to the cart/);
 });
 
@@ -90,10 +92,13 @@ test("access-token expiry preserves refresh login instead of bouncing customers 
   const sessionFetch = source("../services/auth/sessionFetch.ts");
 
   assert.doesNotMatch(authMe, /clearSessionCookies/);
-  assert.match(authClient, /if \(response\.status === 401\)/);
-  assert.match(authClient, /fetch\("\/api\/auth\/refresh"/);
+  assert.match(authClient, /sessionFetch\("\/api\/auth\/me"/);
+  assert.match(authClient, /refreshSessionCookies/);
+  assert.doesNotMatch(authClient, /fetch\("\/api\/auth\/refresh"/);
   assert.match(sessionFetch, /refreshSession\(\)/);
+  assert.match(sessionFetch, /refreshSessionCookies/);
   assert.match(sessionFetch, /response\.status !== 401/);
+  assert.match(sessionFetch, /status: 503/);
 });
 
 test("profile destinations preserve contextual back navigation", () => {

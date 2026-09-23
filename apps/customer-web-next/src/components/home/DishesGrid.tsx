@@ -117,10 +117,11 @@ export function DishesGrid({
     [dishes, visibleCount],
   );
   const hasMoreDishes = visibleCount < dishes.length;
+  const initialVisibleCount = Math.min(INITIAL_DISH_COUNT, dishes.length);
 
   useEffect(() => {
-    setVisibleCount(Math.min(INITIAL_DISH_COUNT, dishes.length));
-  }, [dishViewKey]);
+    setVisibleCount(initialVisibleCount);
+  }, [dishViewKey, initialVisibleCount]);
 
   useEffect(() => {
     if (

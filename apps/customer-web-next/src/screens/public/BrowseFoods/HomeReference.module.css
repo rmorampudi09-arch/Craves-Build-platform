@@ -564,6 +564,13 @@
   overflow: hidden;
   aspect-ratio: 16 / 10;
   background: #f1f3f5;
+  touch-action: pan-y;
+  user-select: none;
+  cursor: grab;
+}
+
+.kitchenPreviewViewport:active {
+  cursor: grabbing;
 }
 
 .kitchenPreviewImage {

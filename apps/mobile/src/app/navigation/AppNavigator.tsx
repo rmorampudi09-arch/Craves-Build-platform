@@ -424,10 +424,6 @@ export function AppNavigator() {
     trackScreen(routeName, {
       role: productRoleFromAuth(authRef.current) ?? 'AUTH',
     });
-    if (__DEV__) {
-      // CI consumes this stable marker to prove that a real navigation screen rendered.
-      console.info(`CRAVES_SIMULATOR_SMOKE_READY:${routeName}`);
-    }
   }, [flushPendingInboundRoute, flushPendingRestoration, persistCurrentRestoration]);
 
   React.useEffect(() => {

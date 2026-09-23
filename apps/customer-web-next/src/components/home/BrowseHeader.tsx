@@ -97,22 +97,42 @@ export function BrowseHeader({
   const chefDestination = isChef ? "/chef" : "/chef/application";
   const chefActionLabel = isChef ? "Switch to chef mode" : "Open chef application";
   const lastMobileScrollYRef = useRef(0);
+  const mobileDirectionAnchorRef = useRef(0);
+  const mobileDirectionRef = useRef<"up" | "down" | null>(null);
   const [mobileCompact, setMobileCompact] = useState(false);
 
   useEffect(() => {
     let frame = 0;
-    lastMobileScrollYRef.current = Math.max(window.scrollY, 0);
+    const initialY = Math.max(window.scrollY, 0);
+    lastMobileScrollYRef.current = initialY;
+    mobileDirectionAnchorRef.current = initialY;
+    mobileDirectionRef.current = null;
 
     const update = () => {
       const currentY = Math.max(window.scrollY, 0);
       const delta = currentY - lastMobileScrollYRef.current;
+      const direction: "up" | "down" | null =
+        delta > 1 ? "down" : delta < -1 ? "up" : null;
 
-      if (currentY <= 84) {
+      if (currentY <= 76) {
         setMobileCompact(false);
-      } else if (delta < -6) {
-        setMobileCompact(true);
-      } else if (delta > 5) {
-        setMobileCompact(false);
+        mobileDirectionAnchorRef.current = currentY;
+        mobileDirectionRef.current = direction;
+      } else if (direction) {
+        if (mobileDirectionRef.current !== direction) {
+          mobileDirectionRef.current = direction;
+          mobileDirectionAnchorRef.current = currentY;
+        }
+
+        const travel = Math.abs(currentY - mobileDirectionAnchorRef.current);
+
+        // Require meaningful travel before toggling. This prevents the compact
+        // search/filter row from fluttering on tiny touch/trackpad movements.
+        if (direction === "up" && travel >= 26) {
+          setMobileCompact(true);
+        } else if (direction === "down" && travel >= 20) {
+          setMobileCompact(false);
+        }
       }
 
       lastMobileScrollYRef.current = currentY;
@@ -135,7 +155,7 @@ export function BrowseHeader({
     const root = document.documentElement;
     root.style.setProperty(
       "--craves-mobile-search-offset",
-      mobileCompact ? "3.7rem" : "0px",
+      mobileCompact ? "3.65rem" : "0px",
     );
     return () => {
       root.style.removeProperty("--craves-mobile-search-offset");
@@ -349,7 +369,7 @@ export function BrowseHeader({
       <div
         aria-hidden={!mobileCompact}
         className={[
-          "fixed inset-x-0 top-0 z-50 border-b border-[#ECEEF0] bg-white/96 px-3 py-2 shadow-[0_7px_22px_rgba(26,26,26,0.065)] backdrop-blur-xl will-change-transform transition-[transform,opacity,box-shadow] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden",
+          "fixed inset-x-0 top-0 z-50 border-b border-[#ECEEF0] bg-white/96 px-3 py-2 shadow-[0_7px_22px_rgba(26,26,26,0.065)] backdrop-blur-xl will-change-transform transition-[transform,opacity,box-shadow] duration-[500ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden",
           mobileCompact
             ? "translate-y-0 opacity-100"
             : "pointer-events-none -translate-y-[115%] opacity-0 shadow-none",

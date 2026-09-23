@@ -388,6 +388,62 @@ jobs:
             "payment could not start" \
             "secure payment checkout is not available"
 
+          customer_shell_launch_output="$(xcrun simctl launch --terminate-running-process \
+            "${SIMULATOR_UDID}" \
+            "${built_bundle_id}" \
+            -CRAVES_E2E_CUSTOMER_SHELL YES)"
+          echo "${customer_shell_launch_output}"
+          app_pid="${customer_shell_launch_output##*: }"
+          if [[ ! "${app_pid}" =~ ^[0-9]+$ ]]; then
+            echo "Unable to determine the customer-shell CravesMobile process id." >&2
+            exit 1
+          fi
+          sleep 12
+          if ! kill -0 "${app_pid}" 2>/dev/null; then
+            echo "CravesMobile exited during customer-shell smoke." >&2
+            exit 1
+          fi
+          collect_evidence
+          if grep -Eiq 'com\.facebook\.react\.log:javascript.*\[(TypeError|ReferenceError|SyntaxError|Invariant Violation|Error:)' "$RUNNER_TEMP/CravesMobile-simulator.log"; then
+            echo "CravesMobile emitted a fatal JavaScript runtime error during customer-shell smoke." >&2
+            exit 1
+          fi
+          xcrun simctl io "${SIMULATOR_UDID}" screenshot "$RUNNER_TEMP/CravesMobile-simulator-customer-shell.png"
+          swift "$RUNNER_TEMP/verify-auth-shell.swift" \
+            "$RUNNER_TEMP/CravesMobile-simulator-customer-shell.png" \
+            "home" \
+            "chefs"
+
+          chef_shell_launch_output="$(xcrun simctl launch --terminate-running-process \
+            "${SIMULATOR_UDID}" \
+            "${built_bundle_id}" \
+            -CRAVES_E2E_CHEF_SHELL YES)"
+          echo "${chef_shell_launch_output}"
+          app_pid="${chef_shell_launch_output##*: }"
+          if [[ ! "${app_pid}" =~ ^[0-9]+$ ]]; then
+            echo "Unable to determine the chef-shell CravesMobile process id." >&2
+            exit 1
+          fi
+          sleep 12
+          if ! kill -0 "${app_pid}" 2>/dev/null; then
+            echo "CravesMobile exited during chef-shell smoke." >&2
+            exit 1
+          fi
+          collect_evidence
+          if grep -Eiq 'com\.facebook\.react\.log:javascript.*\[(TypeError|ReferenceError|SyntaxError|Invariant Violation|Error:)' "$RUNNER_TEMP/CravesMobile-simulator.log"; then
+            echo "CravesMobile emitted a fatal JavaScript runtime error during chef-shell smoke." >&2
+            exit 1
+          fi
+          if grep -Eiq 'rzp_live_|key_id[=:]' "$RUNNER_TEMP/CravesMobile-simulator.log"; then
+            echo "Shell smoke exposed a live-key pattern." >&2
+            exit 1
+          fi
+          xcrun simctl io "${SIMULATOR_UDID}" screenshot "$RUNNER_TEMP/CravesMobile-simulator-chef-shell.png"
+          swift "$RUNNER_TEMP/verify-auth-shell.swift" \
+            "$RUNNER_TEMP/CravesMobile-simulator-chef-shell.png" \
+            "dashboard" \
+            "menu"
+
           xcrun simctl openurl "${SIMULATOR_UDID}" "craves://"
           sleep 5
           if ! kill -0 "${app_pid}" 2>/dev/null; then

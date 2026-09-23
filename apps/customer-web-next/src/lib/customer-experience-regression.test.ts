@@ -35,7 +35,7 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(kitchens, /kitchenImagePreloads/);
   assert.match(kitchens, /transition-\[opacity,transform\]/);
   assert.doesNotMatch(kitchens, /View chef/);
-  assert.match(cravings, /top-\[var\(--craves-mobile-search-offset,0px\)\]/);
+  assert.match(cravings, /translate-y-\[var\(--craves-mobile-search-offset,0px\)\]/);
   assert.match(cravings, /md:top-\[4\.25rem\]/);
   assert.match(cravings, /lg:top-\[4\.65rem\]/);
   assert.match(cravings, /shadow-\[0_3px_10px_rgba\(26,26,26,0\.09\)\]/);

@@ -11,7 +11,7 @@ import {
   parseCustomerProfile,
   type CustomerProfile,
 } from "@/lib/profile-contract";
-import { sessionFetch } from "@/services/auth/sessionFetch";
+import { refreshSessionCookies, sessionFetch } from "@/services/auth/sessionFetch";
 
 export type CravesUser = {
   id: string;
@@ -209,14 +209,19 @@ export async function synchronizeSessionRoles(): Promise<CravesUser | null> {
   const context = captureSessionContext();
   const sequence = ++identityRequestSequence;
   const pending = (async () => {
-    const response = await fetch("/api/auth/refresh", {
-      method: "POST", credentials: "same-origin",
-    }).catch(() => null);
+    const refreshed = await refreshSessionCookies();
     if (!isSessionContextCurrent(context)) return session;
-    if (!response?.ok) return null;
-    const body = (await response.json().catch(() => null)) as { identity?: CravesIdentity } | null;
-    if (!body?.identity?.id || !isSessionContextCurrent(context)) return session;
-    const current = applyIdentityLookup(body.identity, context, sequence);
+    if (!refreshed) return session;
+
+    const response = await sessionFetch("/api/auth/me", {
+      cache: "no-store",
+      credentials: "same-origin",
+    }).catch(() => null);
+    if (!response?.ok || !isSessionContextCurrent(context)) return session;
+
+    const identity = (await response.json().catch(() => null)) as CravesIdentity | null;
+    if (!identity?.id || !isSessionContextCurrent(context)) return session;
+    const current = applyIdentityLookup(identity, context, sequence);
     return current ? hydrateCustomerProfile(current) : null;
   })();
   roleSynchronization = pending;

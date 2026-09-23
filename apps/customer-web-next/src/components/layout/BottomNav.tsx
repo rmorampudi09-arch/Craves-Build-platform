@@ -105,13 +105,15 @@ export function BottomNav() {
       const currentY = Math.max(window.scrollY, 0);
       const delta = currentY - lastScrollY.current;
 
-      // Mobile food apps preserve the screen for browsing while the user moves
-      // deeper into the feed, then return navigation immediately when they
-      // reverse direction.
-      if (currentY <= 52 || delta < -6) {
+      // Keep the lower navigation out of the way while the customer scrolls
+      // back up to search/filter content. Bring it back while moving deeper
+      // into the feed, and always show it near the top of a page.
+      if (currentY <= 52) {
         setHiddenByScroll(false);
-      } else if (currentY > 112 && delta > 6) {
+      } else if (delta < -6) {
         setHiddenByScroll(true);
+      } else if (delta > 6) {
+        setHiddenByScroll(false);
       }
 
       lastScrollY.current = currentY;
@@ -156,7 +158,7 @@ export function BottomNav() {
           ease: [0.22, 1, 0.36, 1],
         }}
         className={[
-          "fixed inset-x-0 bottom-0 z-40 border-t border-[#E5E7EB] bg-white/94 shadow-[0_-8px_26px_rgba(26,26,26,0.07)] backdrop-blur-xl md:hidden",
+          "fixed inset-x-0 bottom-0 z-40 rounded-t-[1.15rem] border-t border-[#ECEEF0] bg-white/96 shadow-[0_-8px_24px_rgba(26,26,26,0.065)] backdrop-blur-xl md:hidden",
           hiddenByScroll ? "pointer-events-none" : "",
         ].join(" ")}
         aria-hidden={hiddenByScroll || undefined}
@@ -170,10 +172,10 @@ export function BottomNav() {
                 <Link
                   href={href}
                   className={[
-                    "flex min-h-[3.45rem] flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 text-center text-[0.61rem] font-extrabold leading-[0.72rem] transition-[color,background-color] duration-200",
+                    "flex min-h-[3.45rem] flex-col items-center justify-center gap-1 rounded-xl px-0.5 text-center text-[0.61rem] font-extrabold leading-[0.72rem] transition-colors duration-200",
                     active
-                      ? "bg-[#FFF5F3] text-[#F62E18]"
-                      : "text-[#6B6B6B] hover:bg-[#F8F9FA] hover:text-[#1A1A1A]",
+                      ? "text-[#F62E18]"
+                      : "text-[#777777] hover:text-[#1A1A1A]",
                   ].join(" ")}
                   aria-current={active ? "page" : undefined}
                 >
@@ -191,10 +193,10 @@ export function BottomNav() {
             <Link
               href="/cart"
               className={[
-                "flex min-h-[3.45rem] flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 text-center text-[0.61rem] font-extrabold leading-[0.72rem] transition-[color,background-color] duration-200",
+                "flex min-h-[3.45rem] flex-col items-center justify-center gap-1 rounded-xl px-0.5 text-center text-[0.61rem] font-extrabold leading-[0.72rem] transition-colors duration-200",
                 activeKey === "cart"
-                  ? "bg-[#FFF5F3] text-[#F62E18]"
-                  : "text-[#6B6B6B] hover:bg-[#F8F9FA] hover:text-[#1A1A1A]",
+                  ? "text-[#F62E18]"
+                  : "text-[#777777] hover:text-[#1A1A1A]",
               ].join(" ")}
               aria-current={activeKey === "cart" ? "page" : undefined}
               aria-label={

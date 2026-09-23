@@ -52,12 +52,19 @@ function KitchenDishPreview({
   const viewportRef = useRef<HTMLDivElement>(null);
   const swipeStartXRef = useRef<number | null>(null);
   const suppressClickRef = useRef(false);
+  const loadedSourcesRef = useRef<Set<string>>(new Set());
+  const preloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
   const [activeIndex, setActiveIndex] = useState(0);
+  const [loadedRevision, setLoadedRevision] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
+  const imageKey = usable.join("|");
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [images]);
+    loadedSourcesRef.current = new Set(usable[0] ? [usable[0]] : []);
+    preloadPromisesRef.current.clear();
+    setLoadedRevision((current) => current + 1);
+  }, [imageKey]);
 
   useEffect(() => {
     const target = viewportRef.current;
@@ -68,24 +75,75 @@ function KitchenDishPreview({
 
     const observer = new IntersectionObserver(
       ([entry]) => setIsVisible(Boolean(entry?.isIntersecting)),
-      { rootMargin: "160px 0px" },
+      { rootMargin: "220px 0px" },
     );
     observer.observe(target);
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (usable.length <= 1 || !isVisible) return;
+  const preload = (index: number): Promise<void> => {
+    if (!usable.length) return Promise.resolve();
+    const normalizedIndex = (index + usable.length) % usable.length;
+    const src = usable[normalizedIndex];
+    if (!src || loadedSourcesRef.current.has(src)) return Promise.resolve();
 
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (reducedMotion.matches) return;
+    const existing = preloadPromisesRef.current.get(src);
+    if (existing) return existing;
+
+    const pending = new Promise<void>((resolve) => {
+      const nextImage = new window.Image();
+      nextImage.decoding = "async";
+      nextImage.src = src;
+
+      const ready = () => {
+        loadedSourcesRef.current.add(src);
+        preloadPromisesRef.current.delete(src);
+        setLoadedRevision((current) => current + 1);
+        resolve();
+      };
+
+      if (nextImage.complete && nextImage.naturalWidth > 0) {
+        void nextImage.decode().catch(() => undefined).finally(ready);
+        return;
+      }
+
+      nextImage.onload = () => {
+        void nextImage.decode().catch(() => undefined).finally(ready);
+      };
+      nextImage.onerror = () => {
+        preloadPromisesRef.current.delete(src);
+        resolve();
+      };
+    });
+
+    preloadPromisesRef.current.set(src, pending);
+    return pending;
+  };
+
+  const showIndex = (index: number) => {
+    if (!usable.length) return;
+    const normalizedIndex = (index + usable.length) % usable.length;
+    void preload(normalizedIndex).then(() => {
+      if (loadedSourcesRef.current.has(usable[normalizedIndex])) {
+        setActiveIndex(normalizedIndex);
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (!isVisible || usable.length <= 1) return;
+
+    void preload(activeIndex + 1);
+    if (usable.length > 2) void preload(activeIndex + 2);
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     const timer = window.setTimeout(() => {
-      setActiveIndex((current) => (current + 1) % usable.length);
+      showIndex(activeIndex + 1);
     }, 3000);
 
     return () => window.clearTimeout(timer);
-  }, [activeIndex, isVisible, usable.length]);
+  }, [activeIndex, isVisible, imageKey]);
 
   if (!usable.length) {
     return (
@@ -96,6 +154,7 @@ function KitchenDishPreview({
   }
 
   const safeIndex = activeIndex % usable.length;
+  void loadedRevision;
 
   const beginSwipe = (clientX: number) => {
     swipeStartXRef.current = clientX;
@@ -111,13 +170,8 @@ function KitchenDishPreview({
     if (Math.abs(delta) < 34) return;
 
     suppressClickRef.current = true;
-    setActiveIndex((current) =>
-      delta < 0
-        ? (current + 1) % usable.length
-        : (current - 1 + usable.length) % usable.length,
-    );
+    showIndex(delta < 0 ? safeIndex + 1 : safeIndex - 1);
   };
-
 
   return (
     <div
@@ -142,18 +196,37 @@ function KitchenDishPreview({
         event.stopPropagation();
       }}
     >
-      <img
-        key={usable[safeIndex]}
-        src={usable[safeIndex]}
-        alt={`${name} dish preview ${safeIndex + 1} of ${usable.length}`}
-        loading="lazy"
-        decoding="async"
-        className={styles.kitchenPreviewImage}
-      />
+      {usable.map((src, index) => {
+        const loaded = index === safeIndex || loadedSourcesRef.current.has(src);
+        if (!loaded) return null;
+
+        return (
+          <img
+            key={src}
+            src={src}
+            alt={
+              index === safeIndex
+                ? `${name} dish preview ${index + 1} of ${usable.length}`
+                : ""
+            }
+            aria-hidden={index === safeIndex ? undefined : true}
+            loading={index === 0 ? "eager" : "lazy"}
+            decoding="async"
+            draggable={false}
+            className={[
+              styles.kitchenPreviewImage,
+              "transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
+              index === safeIndex
+                ? "z-[1] scale-100 opacity-100"
+                : "z-0 scale-[1.015] opacity-0",
+            ].join(" ")}
+          />
+        );
+      })}
 
       {usable.length > 1 ? (
         <div
-          className="pointer-events-none absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-full bg-black/25 px-2 py-1 backdrop-blur-sm"
+          className="pointer-events-none absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-full bg-black/24 px-2 py-1 backdrop-blur-sm"
           aria-hidden="true"
         >
           {usable.map((src, index) => (

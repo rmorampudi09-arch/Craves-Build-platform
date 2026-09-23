@@ -24,6 +24,14 @@ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(isLocationDeniedE2EEnabled) {
   return @([self locationDeniedE2EEnabled]);
 }
 
+RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(isPaymentUnavailableE2EEnabled) {
+#if DEBUG
+  return @([[NSUserDefaults standardUserDefaults] boolForKey:@"CRAVES_E2E_PAYMENT_UNAVAILABLE"]);
+#else
+  return @NO;
+#endif
+}
+
 - (CLLocationManager *)locationManager {
   if (_manager == nil) {
     _manager = [CLLocationManager new];

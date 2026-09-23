@@ -288,10 +288,12 @@ jobs:
           import Foundation
           import Vision
 
-          guard CommandLine.arguments.count == 2 else {
+          guard CommandLine.arguments.count == 4 else {
             exit(2)
           }
           let screenshotPath = CommandLine.arguments[1]
+          let expectedPrimary = CommandLine.arguments[2].lowercased()
+          let expectedSecondary = CommandLine.arguments[3].lowercased()
           guard let image = NSImage(contentsOfFile: screenshotPath) else {
             fputs("Unable to read Simulator screenshot.\n", stderr)
             exit(2)
@@ -319,13 +321,33 @@ jobs:
             .split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
 
-          guard normalizedText.contains("how would you like to use craves"),
-                normalizedText.contains("continue as customer") else {
-            fputs("Expected anonymous Craves auth shell text was not visible.\n", stderr)
+          guard normalizedText.contains(expectedPrimary),
+                normalizedText.contains(expectedSecondary) else {
+            fputs("Expected Craves screen text was not visible.\n", stderr)
             exit(1)
           }
           SWIFT
-          swift "$RUNNER_TEMP/verify-auth-shell.swift" "$RUNNER_TEMP/CravesMobile-simulator-launched.png"
+          swift "$RUNNER_TEMP/verify-auth-shell.swift" \
+            "$RUNNER_TEMP/CravesMobile-simulator-launched.png" \
+            "how would you like to use craves" \
+            "continue as customer"
+
+          xcrun simctl openurl "${SIMULATOR_UDID}" "craves://e2e/location-denied"
+          sleep 10
+          if ! kill -0 "${app_pid}" 2>/dev/null; then
+            echo "CravesMobile exited during denied-location fallback smoke." >&2
+            exit 1
+          fi
+          collect_evidence
+          if grep -Eiq 'com\\.facebook\\.react\\.log:javascript.*\\[(TypeError|ReferenceError|SyntaxError|Invariant Violation|Error:)' "$RUNNER_TEMP/CravesMobile-simulator.log"; then
+            echo "CravesMobile emitted a fatal JavaScript runtime error during denied-location fallback smoke." >&2
+            exit 1
+          fi
+          xcrun simctl io "${SIMULATOR_UDID}" screenshot "$RUNNER_TEMP/CravesMobile-simulator-location-denied.png"
+          swift "$RUNNER_TEMP/verify-auth-shell.swift" \
+            "$RUNNER_TEMP/CravesMobile-simulator-location-denied.png" \
+            "allow location access to fill and map this delivery address" \
+            "recipient name"
 
           xcrun simctl openurl "${SIMULATOR_UDID}" "craves://"
           sleep 5

@@ -44,6 +44,7 @@ import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerA
 import {ChefRegistrationScreen} from '../../features/auth/screens/ChefRegistrationScreen';
 import {ChefAccountStatusScreen} from '../../features/auth/screens/ChefAccountStatusScreen';
 import {StartupErrorScreen} from '../../features/auth/screens/StartupErrorScreen';
+import {CustomerAddressEditorModal} from '../../features/customerAddresses/screens/CustomerAddressEditorModal';
 import {AccountRouterScreen} from '../../features/auth/screens/AccountRouterScreen';
 import type {
   AccountResolution,
@@ -298,6 +299,7 @@ function dispatchInboundDestination(destination: InboundRouteDestination) {
 
 export function AppNavigator() {
   const status = useBootstrap();
+  const [locationDeniedE2E, setLocationDeniedE2E] = React.useState(false);
   useSessionLifecycle();
   const auth = useAppSelector(state => state.auth);
   const authRef = React.useRef(auth);
@@ -471,6 +473,10 @@ export function AppNavigator() {
     let active = true;
 
     const handleUrl = (url: string, initial: boolean) => {
+      if (__DEV__ && url === 'craves://e2e/location-denied') {
+        setLocationDeniedE2E(true);
+        return;
+      }
       const candidate = parseInboundUrl(url);
       trackAction('inbound_link_received', {initial, recognized: Boolean(candidate)});
       if (!candidate) return;
@@ -501,6 +507,17 @@ export function AppNavigator() {
       subscription.remove();
     };
   }, [attemptInboundRoute, flushPendingRestoration]);
+
+  if (__DEV__ && locationDeniedE2E) {
+    return (
+      <CustomerAddressEditorModal
+        addresses={[]}
+        autoRequestLocation
+        mode="add"
+        onClose={() => setLocationDeniedE2E(false)}
+      />
+    );
+  }
 
   if (status === 'idle' || status === 'restoring') {
     return <SplashScreen />;

@@ -31,15 +31,18 @@ test("cart checkout stays above mobile chrome and customer nav is absent on cart
   assert.match(checkout, /bottom-0 z-50/);
 });
 
-test("only the craving rail remains sticky on mobile home", () => {
+test("mobile discovery keeps search, veg and cravings accessible while scrolling", () => {
   const header = source("../components/home/BrowseHeader.tsx");
   const autoHide = source("../components/navigation/AutoHideCustomerHeader.tsx");
   const cravings = source("../components/home/HomeCategoryRail.tsx");
 
   assert.match(header, /<AutoHideCustomerHeader mobileStatic/);
   assert.match(autoHide, /static md:sticky md:top-0/);
-  assert.match(cravings, /sticky top-0 z-30/);
-  assert.match(cravings, /md:static/);
+  assert.match(header, /mobileCompact/);
+  assert.match(header, /fixed inset-x-0 top-0 z-50/);
+  assert.match(cravings, /sticky top-\[4\.35rem\] z-30/);
+  assert.match(cravings, /md:top-0/);
+  assert.doesNotMatch(cravings, /md:static/);
 });
 
 test("profile treats meal subscription as its own destination", () => {

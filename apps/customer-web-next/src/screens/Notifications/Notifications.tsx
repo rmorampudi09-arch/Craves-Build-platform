@@ -72,7 +72,6 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState<NotificationFilter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [busyAction, setBusyAction] = useState(false);
   const [identityId, setIdentityId] = useState("");
   const shownUnreadIds = useRef<Set<string>>(new Set());
 
@@ -172,7 +171,7 @@ export default function NotificationsPage() {
   }
 
   function clearNotices(ids: string[]) {
-    if (busyAction || ids.length === 0) return;
+    if (ids.length === 0) return;
     persistCleared(ids);
     setNotices((current) =>
       current.filter((notice) => !ids.includes(notice.id)),
@@ -242,7 +241,6 @@ export default function NotificationsPage() {
               {readCount > 0 ? (
                 <button
                   type="button"
-                  disabled={busyAction}
                   onClick={() =>
                     clearNotices(
                       notices
@@ -250,7 +248,7 @@ export default function NotificationsPage() {
                         .map((notice) => notice.id),
                     )
                   }
-                  className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#1A1A1A] transition hover:border-[#F62E18]/25 hover:text-[#F62E18] disabled:opacity-50"
+                  className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#1A1A1A] transition hover:border-[#F62E18]/25 hover:text-[#F62E18]"
                 >
                   <FaTrashCan aria-hidden="true" />
                   Clear read
@@ -258,9 +256,8 @@ export default function NotificationsPage() {
               ) : null}
               <button
                 type="button"
-                disabled={busyAction}
                 onClick={() => clearNotices(notices.map((notice) => notice.id))}
-                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#6B6B6B] transition hover:border-[#F62E18]/25 hover:text-[#F62E18] disabled:opacity-50"
+                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#6B6B6B] transition hover:border-[#F62E18]/25 hover:text-[#F62E18]"
               >
                 <FaTrashCan aria-hidden="true" />
                 Clear all

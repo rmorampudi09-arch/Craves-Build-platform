@@ -391,8 +391,18 @@ function BrowseFoodsPage() {
     };
 
     void (async () => {
-      const current = await loadSession();
+      let current = await loadSession();
       if (!active) return;
+
+      // A refresh race or brief BFF interruption must not throw an already
+      // signed-in customer back to the landing page. Confirm once more before
+      // treating the session as genuinely gone.
+      if (!current) {
+        await new Promise((resolve) => window.setTimeout(resolve, 450));
+        current = await loadSession();
+        if (!active) return;
+      }
+
       if (!current) {
         navigate({ to: "/", replace: true });
         return;

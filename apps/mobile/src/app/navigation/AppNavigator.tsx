@@ -1,5 +1,5 @@
 import React from 'react';
-import {Linking} from 'react-native';
+import {Linking, NativeModules} from 'react-native';
 import {
   CommonActions,
   NavigationContainer,
@@ -299,7 +299,20 @@ function dispatchInboundDestination(destination: InboundRouteDestination) {
 
 export function AppNavigator() {
   const status = useBootstrap();
-  const [locationDeniedE2E, setLocationDeniedE2E] = React.useState(false);
+  const [locationDeniedE2E, setLocationDeniedE2E] = React.useState(() => {
+    const setting = (
+      NativeModules.SettingsManager as
+        | {settings?: Record<string, unknown>}
+        | undefined
+    )?.settings?.CRAVES_E2E_LOCATION_DENIED;
+    return (
+      __DEV__ &&
+      (setting === true ||
+        setting === 1 ||
+        setting === '1' ||
+        setting === 'YES')
+    );
+  });
   useSessionLifecycle();
   const auth = useAppSelector(state => state.auth);
   const authRef = React.useRef(auth);

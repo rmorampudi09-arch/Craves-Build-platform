@@ -242,27 +242,32 @@ export async function loadSession(): Promise<CravesUser | null> {
     fetch("/api/auth/me", {
       cache: "no-store",
       credentials: "same-origin",
-    }).catch(() => null);
+    });
 
-  let response = await lookup();
-  if (!isSessionContextCurrent(context)) return session;
-
-  if (!response) {
+  let response: Response;
+  try {
+    response = await lookup();
+  } catch (error) {
+    if (!isSessionContextCurrent(context)) throw error;
     return recoverSessionSnapshot();
   }
+  if (!isSessionContextCurrent(context)) return session;
 
   if (response.status === 401) {
     const refreshed = await refreshSessionForGeneration(context.generation);
     if (!isSessionContextCurrent(context)) return session;
-    if (refreshed?.ok) response = await lookup();
+    if (refreshed?.ok) {
+      try {
+        response = await lookup();
+      } catch (error) {
+        if (!isSessionContextCurrent(context)) throw error;
+        return recoverSessionSnapshot();
+      }
+    }
   }
 
   if (!isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) {
     return session;
-  }
-
-  if (!response) {
-    return recoverSessionSnapshot();
   }
 
   if (!response.ok) {

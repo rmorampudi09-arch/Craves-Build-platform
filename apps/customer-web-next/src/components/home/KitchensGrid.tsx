@@ -106,7 +106,7 @@ function KitchenDishPreview({
 
     const observer = new IntersectionObserver(
       ([entry]) => setIsVisible(Boolean(entry?.isIntersecting)),
-      { rootMargin: "220px 0px" },
+      { rootMargin: "520px 0px" },
     );
     observer.observe(target);
     return () => observer.disconnect();
@@ -116,22 +116,25 @@ function KitchenDishPreview({
     if (!isVisible || usable.length <= 1) return;
 
     let active = true;
-    const candidates = [
-      usable[(activeIndex + 1) % usable.length],
-      usable[(activeIndex - 1 + usable.length) % usable.length],
-    ].filter(Boolean);
 
-    for (const src of candidates) {
-      void preloadKitchenImage(src).then((loaded) => {
-        if (!active || !loaded) return;
-        setLoadedSources((current) => {
-          if (current.has(src)) return current;
-          const next = new Set(current);
-          next.add(src);
-          return next;
-        });
+    // Preload the full small carousel once the card approaches the viewport.
+    // Slides then cross-fade from memory instead of starting a new image request
+    // at the exact moment the customer sees the next photo.
+    void Promise.all(
+      usable.map(async (src) => ({
+        src,
+        loaded: await preloadKitchenImage(src),
+      })),
+    ).then((results) => {
+      if (!active) return;
+      const loaded = results.filter((result) => result.loaded).map((result) => result.src);
+      if (!loaded.length) return;
+      setLoadedSources((current) => {
+        const next = new Set(current);
+        for (const src of loaded) next.add(src);
+        return next;
       });
-    }
+    });
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       return () => {

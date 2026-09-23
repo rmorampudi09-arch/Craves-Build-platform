@@ -38,7 +38,7 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(cravings, /top-\[var\(--craves-mobile-search-offset,0px\)\]/);
   assert.match(cravings, /md:top-\[4\.25rem\]/);
   assert.match(cravings, /lg:top-\[4\.65rem\]/);
-  assert.match(cravings, /shadow-\[0_3px_11px_rgba\(26,26,26,0\.08\)\]/);
+  assert.match(cravings, /shadow-\[0_3px_10px_rgba\(26,26,26,0\.09\)\]/);
   assert.match(cravings, /lg:top-\[4\.65rem\]/);
   assert.doesNotMatch(cravings, /md:static/);
   assert.match(cravings, /duration-\[1200ms\]/);

@@ -33,7 +33,8 @@ export function CravesLogo({
   const dimension = dimensions[size];
   const openHome = () => {
     if (window.location.pathname === "/home") return;
-    window.location.assign("/home");
+    window.history.pushState(window.history.state, "", "/home");
+    window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
   const goHome = (event: MouseEvent<HTMLImageElement>) => {

@@ -384,9 +384,9 @@ export function CustomerMealPlansScreen() {
           );
         }
         return latest;
-      } catch (error) {
+      } catch (requestError) {
         if (announce) {
-          Alert.alert('Payment status unavailable', toAppApiError(error).message);
+          Alert.alert('Payment status unavailable', toAppApiError(requestError).message);
         }
         return null;
       } finally {
@@ -491,7 +491,7 @@ export function CustomerMealPlansScreen() {
             'Razorpay returned successfully, but Craves is still confirming the invoice. Use Refresh status before trying again.',
           );
         }
-      } catch (error) {
+      } catch (paymentError) {
         let recovered: SubscriptionPayment | null = null;
         try {
           const pending = await pendingSubscriptionPaymentStore.load();
@@ -523,7 +523,7 @@ export function CustomerMealPlansScreen() {
 
         Alert.alert(
           'Payment not completed',
-          `${toAppApiError(error).message} Craves kept the invoice reference so you can refresh the status or continue the same payment safely.`,
+          `${toAppApiError(paymentError).message} Craves kept the invoice reference so you can refresh the status or continue the same payment safely.`,
         );
       } finally {
         setPaymentBusy(false);

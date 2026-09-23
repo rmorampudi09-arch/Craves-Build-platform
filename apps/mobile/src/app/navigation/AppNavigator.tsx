@@ -300,18 +300,10 @@ function dispatchInboundDestination(destination: InboundRouteDestination) {
 export function AppNavigator() {
   const status = useBootstrap();
   const [locationDeniedE2E, setLocationDeniedE2E] = React.useState(() => {
-    const setting = (
-      NativeModules.SettingsManager as
-        | {settings?: Record<string, unknown>}
-        | undefined
-    )?.settings?.CRAVES_E2E_LOCATION_DENIED;
-    return (
-      __DEV__ &&
-      (setting === true ||
-        setting === 1 ||
-        setting === '1' ||
-        setting === 'YES')
-    );
+    const nativeLocation = NativeModules.CravesCurrentLocation as
+      | {isLocationDeniedE2EEnabled?: () => boolean}
+      | undefined;
+    return __DEV__ && nativeLocation?.isLocationDeniedE2EEnabled?.() === true;
   });
   useSessionLifecycle();
   const auth = useAppSelector(state => state.auth);

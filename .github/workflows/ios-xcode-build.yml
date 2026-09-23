@@ -442,7 +442,7 @@ jobs:
           swift "$RUNNER_TEMP/verify-auth-shell.swift" \
             "$RUNNER_TEMP/CravesMobile-simulator-chef-shell.png" \
             "dashboard" \
-            "menu"
+            "orders overview"
 
           xcrun simctl openurl "${SIMULATOR_UDID}" "craves://"
           sleep 5

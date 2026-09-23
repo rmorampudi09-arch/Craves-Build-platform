@@ -310,7 +310,7 @@ export function BottomNav() {
                     aria-hidden="true"
                     className="pointer-events-none absolute inset-0 bg-[linear-gradient(112deg,rgba(255,255,255,0.24),rgba(255,255,255,0.06)_52%,rgba(255,255,255,0.18))]"
                   />
-                  <span className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/78 text-[#F62E18] shadow-[0_4px_14px_rgba(26,26,26,0.08)] backdrop-blur-[4px]">
+                  <span className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.78] text-[#F62E18] shadow-[0_4px_14px_rgba(26,26,26,0.08)] backdrop-blur-[4px]">
                     <CravesCartIcon className="h-4.5 w-4.5" />
                   </span>
                   <span className="relative z-10 min-w-0 flex-1">

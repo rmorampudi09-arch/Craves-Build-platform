@@ -2,8 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ChefHat,
-  ChevronLeft,
-  ChevronRight,
   MapPin,
   RefreshCw,
   SearchX,
@@ -157,7 +155,7 @@ function KitchenDishPreview({
         });
         setActiveIndex(nextIndex);
       });
-    }, 1800);
+    }, 3000);
 
     return () => {
       active = false;
@@ -258,34 +256,6 @@ function KitchenDishPreview({
         );
       })}
 
-      {usable.length > 1 ? (
-        <>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              showIndex(safeIndex - 1);
-            }}
-            className="absolute left-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-black/28 text-white shadow-[0_4px_14px_rgba(0,0,0,0.18)] backdrop-blur-sm transition-[background-color,transform,opacity] hover:bg-black/42 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
-            aria-label={`Show previous photo from ${name}`}
-          >
-            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              showIndex(safeIndex + 1);
-            }}
-            className="absolute right-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-black/28 text-white shadow-[0_4px_14px_rgba(0,0,0,0.18)] backdrop-blur-sm transition-[background-color,transform,opacity] hover:bg-black/42 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
-            aria-label={`Show next photo from ${name}`}
-          >
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </>
-      ) : null}
 
       {usable.length > 1 ? (
         <div

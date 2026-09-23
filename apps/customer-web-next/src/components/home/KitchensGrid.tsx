@@ -14,27 +14,30 @@ import skeletonStyles from "@/components/loading/CustomerPageSkeleton.module.css
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
-const kitchenImagePreloads = new Map<string, Promise<void>>();
+const kitchenImagePreloads = new Map<string, Promise<boolean>>();
 
-function preloadKitchenImage(src: string): Promise<void> {
+function preloadKitchenImage(src: string): Promise<boolean> {
   const existing = kitchenImagePreloads.get(src);
   if (existing) return existing;
 
-  const pending = new Promise<void>((resolve) => {
+  const pending = new Promise<boolean>((resolve) => {
     const image = new window.Image();
     image.decoding = "async";
     image.src = src;
 
-    const finish = () => resolve();
+    const success = () => resolve(true);
     if (image.complete && image.naturalWidth > 0) {
-      void image.decode().catch(() => undefined).finally(finish);
+      void image.decode().catch(() => undefined).finally(success);
       return;
     }
 
     image.onload = () => {
-      void image.decode().catch(() => undefined).finally(finish);
+      void image.decode().catch(() => undefined).finally(success);
     };
-    image.onerror = finish;
+    image.onerror = () => {
+      kitchenImagePreloads.delete(src);
+      resolve(false);
+    };
   });
 
   kitchenImagePreloads.set(src, pending);
@@ -119,8 +122,8 @@ function KitchenDishPreview({
     ].filter(Boolean);
 
     for (const src of candidates) {
-      void preloadKitchenImage(src).then(() => {
-        if (!active) return;
+      void preloadKitchenImage(src).then((loaded) => {
+        if (!active || !loaded) return;
         setLoadedSources((current) => {
           if (current.has(src)) return current;
           const next = new Set(current);
@@ -139,8 +142,8 @@ function KitchenDishPreview({
     const timer = window.setTimeout(() => {
       const nextIndex = (activeIndex + 1) % usable.length;
       const src = usable[nextIndex];
-      void preloadKitchenImage(src).then(() => {
-        if (!active) return;
+      void preloadKitchenImage(src).then((loaded) => {
+        if (!active || !loaded) return;
         setLoadedSources((current) => {
           if (current.has(src)) return current;
           const next = new Set(current);
@@ -170,7 +173,8 @@ function KitchenDishPreview({
   const showIndex = (index: number) => {
     const normalizedIndex = (index + usable.length) % usable.length;
     const src = usable[normalizedIndex];
-    void preloadKitchenImage(src).then(() => {
+    void preloadKitchenImage(src).then((loaded) => {
+      if (!loaded) return;
       setLoadedSources((current) => {
         if (current.has(src)) return current;
         const next = new Set(current);

@@ -63,9 +63,39 @@ function money(amount: number, currency = "INR") {
 }
 
 function checkoutMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "Checkout could not be prepared. Please try again.";
+  if (!(error instanceof Error)) {
+    return "We couldn’t prepare checkout right now. Your cart is safe — please try again.";
+  }
+
+  const message = error.message.trim();
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("failed to fetch") ||
+    normalized.includes("network") ||
+    normalized.includes("timeout")
+  ) {
+    return "Craves is having trouble connecting right now. Your cart is safe — check your connection and try again.";
+  }
+
+  if (
+    normalized.includes("invalid checkout") ||
+    normalized.includes("invalid address response") ||
+    normalized.includes("checkout attempt") ||
+    normalized.includes("could not be loaded")
+  ) {
+    return "We couldn’t refresh your checkout details right now. Your cart is safe — please try again.";
+  }
+
+  if (
+    normalized.includes("authentication") ||
+    normalized.includes("session_expired") ||
+    normalized.includes("session expired")
+  ) {
+    return "We’re reconnecting your Craves session. Please try again in a moment.";
+  }
+
+  return message || "We couldn’t prepare checkout right now. Your cart is safe — please try again.";
 }
 
 function responseMessage(body: unknown, fallback: string): string {

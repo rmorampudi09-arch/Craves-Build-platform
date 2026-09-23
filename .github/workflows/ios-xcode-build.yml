@@ -411,8 +411,8 @@ jobs:
           xcrun simctl io "${SIMULATOR_UDID}" screenshot "$RUNNER_TEMP/CravesMobile-simulator-customer-shell.png"
           swift "$RUNNER_TEMP/verify-auth-shell.swift" \
             "$RUNNER_TEMP/CravesMobile-simulator-customer-shell.png" \
-            "home" \
-            "chefs"
+            "choose where to deliver" \
+            "select a saved address"
 
           chef_shell_launch_output="$(xcrun simctl launch --terminate-running-process \
             "${SIMULATOR_UDID}" \

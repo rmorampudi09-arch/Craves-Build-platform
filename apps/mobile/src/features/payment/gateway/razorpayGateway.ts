@@ -1,3 +1,4 @@
+import {NativeModules} from 'react-native';
 import {AppApiError} from '../../../core/http/apiError';
 import type {
   RazorpayHostedHandoff,
@@ -87,10 +88,24 @@ function providerFailureMessage(error: unknown): string {
   return 'Razorpay checkout did not complete. No payment has been marked successful.';
 }
 
+function paymentUnavailableE2EEnabled(): boolean {
+  if (!__DEV__) return false;
+  const nativeControl = NativeModules.CravesCurrentLocation as
+    | {isPaymentUnavailableE2EEnabled?: () => boolean}
+    | undefined;
+  try {
+    return nativeControl?.isPaymentUnavailableE2EEnabled?.() === true;
+  } catch {
+    return false;
+  }
+}
+
 async function nativeRazorpayOpen(): Promise<
   | ((options: RazorpayCheckoutOptions) => Promise<unknown>)
   | null
 > {
+  if (paymentUnavailableE2EEnabled()) return null;
+
   let module: {default?: unknown; open?: unknown} | null;
   try {
     module = require('react-native-razorpay') as {

@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   FaArrowLeft,
@@ -73,21 +67,6 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [identityId, setIdentityId] = useState("");
-  const shownUnreadIds = useRef<Set<string>>(new Set());
-
-  const markShownUnreadAsRead = useCallback(() => {
-    const ids = Array.from(shownUnreadIds.current);
-    if (!ids.length) return;
-
-    shownUnreadIds.current.clear();
-    ids.forEach((noticeId) => {
-      void fetch(`/api/notifications/in-app/${noticeId}/read`, {
-        method: "PATCH",
-        credentials: "same-origin",
-        keepalive: true,
-      }).catch(() => undefined);
-    });
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -126,9 +105,6 @@ export default function NotificationsPage() {
         (notice) => !dismissed.has(notice.id),
       );
       setNotices(loadedNotices);
-      shownUnreadIds.current = new Set(
-        loadedNotices.filter((notice) => !notice.readAt).map((notice) => notice.id),
-      );
       setLoading(false);
     })().catch((caught) => {
       if (!active) return;
@@ -142,15 +118,8 @@ export default function NotificationsPage() {
 
     return () => {
       active = false;
-      markShownUnreadAsRead();
     };
-  }, [markShownUnreadAsRead, navigate]);
-
-  useEffect(() => {
-    const handlePageHide = () => markShownUnreadAsRead();
-    window.addEventListener("pagehide", handlePageHide);
-    return () => window.removeEventListener("pagehide", handlePageHide);
-  }, [markShownUnreadAsRead]);
+  }, [navigate]);
 
   function persistCleared(ids: string[]) {
     if (!identityId || ids.length === 0) return;
@@ -176,7 +145,6 @@ export default function NotificationsPage() {
     setNotices((current) =>
       current.filter((notice) => !ids.includes(notice.id)),
     );
-    ids.forEach((id) => shownUnreadIds.current.delete(id));
   }
 
   const unreadCount = notices.filter((notice) => !notice.readAt).length;
@@ -210,7 +178,6 @@ export default function NotificationsPage() {
         <div className="relative mx-auto flex max-w-4xl items-start justify-center px-4 pb-5 pt-6 md:px-6 md:pb-6 md:pt-8">
           <Link
             to="/home"
-            onClick={markShownUnreadAsRead}
             className="absolute left-4 top-6 flex h-11 w-11 items-center justify-center rounded-full !bg-white !text-[#1A1A1A] transition-colors hover:!bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 md:left-6 md:top-8"
             aria-label="Back to home"
           >
@@ -219,7 +186,6 @@ export default function NotificationsPage() {
 
           <Link
             to="/home"
-            onClick={markShownUnreadAsRead}
             className="flex flex-col items-center rounded-xl text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
             aria-label="Craves home"
           >

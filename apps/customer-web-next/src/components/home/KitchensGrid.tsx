@@ -80,12 +80,12 @@ function KitchenDishPreview({
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (reducedMotion.matches) return;
 
-    const timer = window.setInterval(() => {
+    const timer = window.setTimeout(() => {
       setActiveIndex((current) => (current + 1) % usable.length);
     }, 3000);
 
-    return () => window.clearInterval(timer);
-  }, [isVisible, usable.length]);
+    return () => window.clearTimeout(timer);
+  }, [activeIndex, isVisible, usable.length]);
 
   if (!usable.length) {
     return (
@@ -125,9 +125,13 @@ function KitchenDishPreview({
       className={styles.kitchenPreviewViewport}
       onPointerDown={(event) => {
         if (event.pointerType === "mouse" && event.button !== 0) return;
+        event.currentTarget.setPointerCapture?.(event.pointerId);
         beginSwipe(event.clientX);
       }}
-      onPointerUp={(event) => finishSwipe(event.clientX)}
+      onPointerUp={(event) => {
+        finishSwipe(event.clientX);
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+      }}
       onPointerCancel={() => {
         swipeStartXRef.current = null;
       }}

@@ -56,11 +56,11 @@ interface DishesGridProps {
 function DishSkeleton() {
   return (
     <div
-      className="overflow-hidden rounded-[1.65rem] border border-[#E5E7EB] bg-white"
+      className="overflow-hidden rounded-[1.25rem] border border-[#E5E7EB] bg-white sm:rounded-[1.45rem] lg:rounded-[1.55rem]"
       aria-hidden="true"
     >
-      <div className={`${skeletonStyles.block} aspect-[4/3]`} />
-      <div className="space-y-3 p-5">
+      <div className={`${skeletonStyles.block} aspect-[16/9] sm:aspect-[16/10]`} />
+      <div className="space-y-2.5 p-3 sm:space-y-3 sm:p-3.5 lg:p-4">
         <div className={`${skeletonStyles.block} h-5 w-3/4 rounded-full`} />
         <div className={`${skeletonStyles.block} ${skeletonStyles.soft} h-3.5 w-1/2 rounded-full`} />
         <div className={`${skeletonStyles.block} ${skeletonStyles.soft} h-3.5 w-full rounded-full`} />

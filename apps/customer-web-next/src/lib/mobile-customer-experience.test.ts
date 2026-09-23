@@ -60,12 +60,15 @@ test("mobile discovery keeps search, veg and cravings accessible while scrolling
 
 test("mobile browse proportions and cart glass stay aligned with the compact reference", () => {
   const card = source("../components/home/DishCard.tsx");
+  const grid = source("../components/home/DishesGrid.tsx");
   const cravings = source("../components/home/HomeCategoryRail.tsx");
   const nav = source("../components/layout/BottomNav.tsx");
   const homeStyles = source("../screens/public/BrowseFoods/HomeReference.module.css");
 
   assert.match(card, /aspect-\[16\/9\] sm:aspect-\[16\/10\]/);
   assert.doesNotMatch(card, /aspect-\[4\/3\]/);
+  assert.match(grid, /aspect-\[16\/9\] sm:aspect-\[16\/10\]/);
+  assert.doesNotMatch(grid, /aspect-\[4\/3\]/);
   assert.match(cravings, /h-\[3\.4rem\] w-\[3\.4rem\]/);
   assert.match(nav, /backdrop-blur-\[8px\]/);
   assert.match(homeStyles, /backdrop-filter: blur\(8px\) saturate\(145%\)/);

@@ -43,7 +43,7 @@ import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmpt
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
-import {checkoutApi} from '../../checkout/api/checkoutApi';
+import {checkoutSessionCoordinator} from '../../checkout/domain/checkoutSessionCoordinator';
 import type {CheckoutSession} from '../../checkout/domain/checkoutTypes';
 import {paymentHandoffCoordinator} from '../../payment/domain/paymentHandoffCoordinator';
 import {
@@ -53,7 +53,7 @@ import {
 import {paymentRecoveryCoordinator} from '../../payment/domain/paymentRecoveryCoordinator';
 import {razorpayGateway} from '../../payment/gateway/razorpayGateway';
 import {pendingPaymentAttemptStore} from '../../payment/storage/pendingPaymentAttemptStore';
-import {cartApi} from '../api/cartApi';
+import {buildCartSnapshotRequest, cartApi} from '../api/cartApi';
 import {
   CART_PREFLIGHT_AVAILABLE,
   cartPreflightApi,
@@ -67,6 +67,7 @@ import {
   getCartCheckoutActionLabel,
   isCartLineInteractionDisabled,
 } from '../cartInteractionPolicy';
+import {cartSnapshotsRequireQuoteRefresh} from '../domain/cartDeliveryQuote';
 import type {
   CartScreenAmountField,
   CartScreenItem,
@@ -98,18 +99,23 @@ type ServiceabilityState =
   | 'UNSERVICEABLE'
   | 'ERROR';
 
-function formatAmountField(field: CartScreenAmountField): string {
-  return field.amount ? formatCartMoney(field.amount) : '₹0';
+function formatAmountField(
+  field: CartScreenAmountField,
+  pendingLabel = 'Calculated at checkout',
+): string {
+  return field.amount ? formatCartMoney(field.amount) : pendingLabel;
 }
 
 function CartAmountRow({
   label,
   field,
   emphasized = false,
+  pendingLabel,
 }: {
   label: string;
   field: CartScreenAmountField;
   emphasized?: boolean;
+  pendingLabel?: string;
 }) {
   return (
     <View style={styles.amountRow}>
@@ -117,7 +123,7 @@ function CartAmountRow({
         {label}
       </Text>
       <Text style={[styles.amountValue, emphasized && styles.amountValueStrong]}>
-        {formatAmountField(field)}
+        {formatAmountField(field, pendingLabel)}
       </Text>
     </View>
   );
@@ -303,17 +309,50 @@ function DeliveryCard({
   );
 }
 
-function BillSummary({model}: {model: CartScreenModel}) {
+function checkoutAmountField(
+  amount: CheckoutSession['foodSubtotal'],
+): CartScreenAmountField {
+  return {amount, source: 'CHECKOUT_RESPONSE'};
+}
+
+function BillSummary({
+  model,
+  checkout,
+}: {
+  model: CartScreenModel;
+  checkout: CheckoutSession | null;
+}) {
+  const foodSubtotal = checkout
+    ? checkoutAmountField(checkout.foodSubtotal)
+    : model.billSummary.foodSubtotal;
+  const platformFee = checkout
+    ? checkoutAmountField(checkout.platformFee)
+    : model.billSummary.platformFee;
+  const deliveryFee = checkout
+    ? checkoutAmountField(checkout.deliveryFee)
+    : model.billSummary.deliveryFee;
+  const taxAmount = checkout
+    ? checkoutAmountField(checkout.taxAmount)
+    : model.billSummary.taxAmount;
+  const grandTotal = checkout
+    ? checkoutAmountField(checkout.grandTotal)
+    : model.billSummary.grandTotal;
+
   return (
     <View style={styles.billCard}>
       <Text style={styles.cardTitle}>Bill Details</Text>
       <View style={styles.billRows}>
-        <CartAmountRow label="Food subtotal" field={model.billSummary.foodSubtotal} />
-        <CartAmountRow label="Delivery fee" field={model.billSummary.deliveryFee} />
-        <CartAmountRow label="Taxes" field={model.billSummary.taxAmount} />
-        <CartAmountRow label="Coupon discount" field={model.billSummary.couponDiscount} />
+        <CartAmountRow label="Food subtotal" field={foodSubtotal} />
+        <CartAmountRow label="Platform fee" field={platformFee} />
+        <CartAmountRow label="Delivery fee" field={deliveryFee} />
+        <CartAmountRow label="Taxes & GST" field={taxAmount} />
+        <CartAmountRow
+          label="Coupon discount"
+          field={model.billSummary.couponDiscount}
+          pendingLabel="Not applied"
+        />
         <View style={styles.billDivider} />
-        <CartAmountRow emphasized label="To Pay" field={model.billSummary.grandTotal} />
+        <CartAmountRow emphasized label="To Pay" field={grandTotal} />
       </View>
     </View>
   );
@@ -328,6 +367,7 @@ export function CustomerCartScreen() {
   const snapshotErrorCode = useAppSelector(state => state.cart.snapshotErrorCode);
   const mutations = useAppSelector(state => state.cart.mutations);
   const cartSnapshot = useAppSelector(state => state.cart.snapshot);
+  const cartClientRevision = useAppSelector(state => state.cart.clientRevision);
   const authPhone = useAppSelector(state => state.auth.identity?.phoneNumber ?? null);
   const header = useCustomerHeaderState();
   const bottomNavScroll = useCustomerBottomNavScroll();
@@ -343,6 +383,7 @@ export function CustomerCartScreen() {
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [clearBusy, setClearBusy] = useState(false);
   const [paymentRecoveryActive, setPaymentRecoveryActive] = useState(false);
+  const [checkoutReview, setCheckoutReview] = useState<CheckoutSession | null>(null);
   const activeCheckoutRef = useRef<CheckoutSession | null>(null);
   const persistedRecoveryRef = useRef<
     ReturnType<typeof recoverPersistedPaymentAttempt> | null
@@ -390,6 +431,7 @@ export function CustomerCartScreen() {
           const recovery = await recoverPersistedPaymentAttempt();
           if (!recovery) {
             setPaymentRecoveryActive(false);
+            setCheckoutReview(null);
             activeCheckoutRef.current = null;
             setPaymentNotice(null);
             return null;
@@ -398,11 +440,13 @@ export function CustomerCartScreen() {
           const active =
             recovery.outcome === 'PENDING' || recovery.outcome === 'RECONCILING';
           setPaymentRecoveryActive(active);
+          setCheckoutReview(active ? recovery.checkout : null);
           activeCheckoutRef.current =
             recovery.outcome === 'PENDING' ? recovery.checkout : null;
 
           if (recovery.outcome === 'SUCCEEDED') {
             setPaymentNotice(null);
+            setCheckoutReview(null);
             await refreshCart();
             const opened = openOrderConfirmation(recovery.checkout);
             if (showSuccessAlert && !opened) {
@@ -420,6 +464,7 @@ export function CustomerCartScreen() {
               'A previous payment is still pending. You can check its status or continue the same payment.',
             );
           } else {
+            setCheckoutReview(null);
             setPaymentNotice(
               'Your previous payment did not complete. You can safely update your cart or try checkout again.',
             );
@@ -619,14 +664,12 @@ export function CustomerCartScreen() {
       }
 
       if (!checkout || checkout.status !== 'PAYMENT_PENDING') {
-        if (CART_PREFLIGHT_AVAILABLE) {
-          if (!cartSnapshot) {
-            setInteractionError(
-              'Refresh your cart before starting checkout.',
-            );
-            return;
-          }
+        if (!cartSnapshot) {
+          setInteractionError('Refresh your cart before starting checkout.');
+          return;
+        }
 
+        if (CART_PREFLIGHT_AVAILABLE) {
           const preflight = await cartPreflightApi.inspect();
           if (!cartPreflightMatchesSnapshot(preflight, cartSnapshot)) {
             await refreshCart();
@@ -642,21 +685,36 @@ export function CustomerCartScreen() {
             );
             return;
           }
-
-          if (preflight.hasReviewChanges) {
-            const reconciled = await cartApi.validate();
-            dispatch(cartActions.snapshotAccepted(reconciled));
-            setInteractionError(
-              'Some cart details changed since you added them. We refreshed the latest item and price details—review them before checkout.',
-            );
-            return;
-          }
         }
 
-        checkout = await checkoutApi.createSession({deliveryAddressId: addressId});
+        // Always refresh server-owned catalog pricing immediately before
+        // checkout. If it changed, stop before creating a checkout/payment.
+        const validatedCart = await cartApi.validate();
+        const cartChanged = cartSnapshotsRequireQuoteRefresh(
+          cartSnapshot,
+          validatedCart,
+        );
+        dispatch(cartActions.snapshotAccepted(validatedCart));
+
+        if (cartChanged) {
+          setCheckoutReview(null);
+          activeCheckoutRef.current = null;
+          setInteractionError(
+            'A price or cart detail changed. We refreshed the latest total—review it before continuing to payment.',
+          );
+          return;
+        }
+
+        checkout = await checkoutSessionCoordinator.create({
+          cartId: validatedCart.cartId,
+          cartClientRevision: cartClientRevision + 1,
+          deliveryAddressId: addressId,
+          expectedCart: buildCartSnapshotRequest(validatedCart),
+        });
         activeCheckoutRef.current = checkout;
       }
 
+      setCheckoutReview(checkout);
       const handoff = await paymentHandoffCoordinator.prepare(checkout);
       await pendingPaymentAttemptStore.save(handoff);
       setPaymentRecoveryActive(true);
@@ -676,6 +734,7 @@ export function CustomerCartScreen() {
 
         if (recovery.outcome === 'SUCCEEDED') {
           setPaymentNotice(null);
+          setCheckoutReview(null);
           await refreshCart();
           if (!openOrderConfirmation(recovery.checkout)) {
             Alert.alert('Payment successful', 'Your payment was verified by Craves.');
@@ -695,6 +754,7 @@ export function CustomerCartScreen() {
           return;
         }
         setPaymentNotice(null);
+        setCheckoutReview(null);
         setInteractionError('Payment did not complete. You can safely try checkout again.');
       } catch (paymentError) {
         const recovery = await paymentRecoveryCoordinator
@@ -710,6 +770,7 @@ export function CustomerCartScreen() {
           setPaymentRecoveryActive(recoveryActive);
           if (recovery.outcome === 'SUCCEEDED') {
             setPaymentNotice(null);
+            setCheckoutReview(null);
             await refreshCart();
             if (!openOrderConfirmation(recovery.checkout)) {
               Alert.alert('Payment successful', 'Your payment was verified by Craves.');
@@ -732,6 +793,7 @@ export function CustomerCartScreen() {
             return;
           }
           setPaymentNotice(null);
+          setCheckoutReview(null);
         } else {
           setPaymentRecoveryActive(true);
           setPaymentNotice(
@@ -750,6 +812,7 @@ export function CustomerCartScreen() {
     }
   }, [
     authPhone,
+    cartClientRevision,
     cartSnapshot,
     checkoutBusy,
     dispatch,
@@ -846,7 +909,7 @@ export function CustomerCartScreen() {
             Offers will appear here when coupon verification is enabled.
           </Text>
         </View>
-        <BillSummary model={model} />
+        <BillSummary model={model} checkout={checkoutReview} />
       </View>
     ) : null;
 
@@ -951,7 +1014,9 @@ export function CustomerCartScreen() {
           ]}>
           <View style={styles.checkoutCopy}>
             <Text style={styles.checkoutTotal}>
-              {formatAmountField(model.billSummary.grandTotal)}
+              {checkoutReview
+                ? formatCartMoney(checkoutReview.grandTotal)
+                : `${formatAmountField(model.billSummary.foodSubtotal)} + fees`}
             </Text>
             <Text style={styles.checkoutLink}>View Bill Details</Text>
           </View>

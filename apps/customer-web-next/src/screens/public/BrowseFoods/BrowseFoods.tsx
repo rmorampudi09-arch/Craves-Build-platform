@@ -727,7 +727,7 @@ function BrowseFoodsPage() {
           onManageAddress={openAddressManager}
           hasMoreRemote={hasMoreDiscoveredDishes()}
           loadingMoreRemote={dishLoadMoreBusy}
-          onLoadMore={() => void loadMoreNearbyDishes()}
+          onLoadMore={loadMoreNearbyDishes}
         />
 
         <HomeBottomSections />

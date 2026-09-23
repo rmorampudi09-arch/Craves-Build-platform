@@ -104,8 +104,12 @@ export function DishesGrid({
   const [visibleCount, setVisibleCount] = useState(INITIAL_DISH_COUNT);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const normalizedSearch = searchTerm.trim();
-  const dishListKey = useMemo(
-    () => dishes.map((dish) => dish.id).join("|"),
+  const dishViewKey = useMemo(
+    () =>
+      dishes
+        .slice(0, INITIAL_DISH_COUNT)
+        .map((dish) => dish.id)
+        .join("|"),
     [dishes],
   );
   const visibleDishes = useMemo(
@@ -116,7 +120,7 @@ export function DishesGrid({
 
   useEffect(() => {
     setVisibleCount(Math.min(INITIAL_DISH_COUNT, dishes.length));
-  }, [dishListKey, dishes.length]);
+  }, [dishViewKey]);
 
   useEffect(() => {
     if (
@@ -379,7 +383,7 @@ export function DishesGrid({
         </div>
       ) : null}
 
-      {state === "ready" && dishes.length === 0 ? (
+      {state === "ready" && dishes.length === 0 && !hasMoreRemote ? (
         <div className="rounded-[2rem] border border-dashed border-[#E5E7EB] bg-[#F1F3F5] p-8 text-center md:p-10">
           <SearchX className="mx-auto h-9 w-9 text-[#6B6B6B]" aria-hidden="true" />
           <h3 className="mt-4 font-display text-lg font-black text-[#1A1A1A]">
@@ -405,6 +409,20 @@ export function DishesGrid({
               Refresh live catalog
             </button>
           ) : null}
+        </div>
+      ) : null}
+
+      {state === "ready" && dishes.length === 0 && hasMoreRemote ? (
+        <div
+          ref={loadMoreRef}
+          className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-[2rem] border border-dashed border-[#E5E7EB] bg-[#F8F9FA] px-6 text-center"
+          role="status"
+          aria-label="Looking for more nearby dishes"
+        >
+          <span className="h-7 w-7 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-[#F62E18]" />
+          <p className="text-sm font-semibold text-[#6B6B6B]">
+            Looking through more nearby dishes…
+          </p>
         </div>
       ) : null}
 

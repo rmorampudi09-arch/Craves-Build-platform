@@ -13,6 +13,8 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
+import {BlurView} from 'expo-blur';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
@@ -76,7 +78,6 @@ import {
   filterHomeDishes,
   flattenNearbyDishPages,
   formatDishPrice,
-  formatDistance,
 } from '../homePresentation';
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
 
@@ -134,7 +135,6 @@ function DishCard({
   onOpen,
 }: DishCardProps) {
   const kitchenName = dish.kitchenDisplayName?.trim() || dish.kitchenName;
-  const location = [dish.areaName, dish.city].filter(Boolean).join(', ');
   const quantity = cartLine?.quantity ?? 0;
   const availableCount = getDisplayAvailabilityCount(dish.id);
   const foodTypeLabel =
@@ -146,7 +146,7 @@ function DishCard({
         ? colors.warning
         : colors.error;
   const spiceLabel = dish.spiceLevel
-    ? `${dish.spiceLevel.charAt(0)}${dish.spiceLevel.slice(1).toLowerCase()} spice`
+    ? `${dish.spiceLevel.charAt(0)}${dish.spiceLevel.slice(1).toLowerCase()}`
     : null;
 
   return (
@@ -171,18 +171,43 @@ function DishCard({
             </View>
           )}
         </Pressable>
-        <CustomerFavoriteHeartButton
-          favorite={favorite}
-          pending={favoritePending}
-          disabled={favoriteDisabled}
-          itemLabel={dish.itemName}
-          onToggle={() => onFavoriteToggle(dish.id, favorite)}
-          style={styles.favoriteButton}
-        />
-        <View pointerEvents="none" style={styles.foodTypePill}>
-          <View style={[styles.foodTypeDot, {backgroundColor: foodTypeColor}]} />
-          <Text style={styles.foodTypeText}>{foodTypeLabel}</Text>
+        <BlurView
+          experimentalBlurMethod="dimezisBlurView"
+          intensity={62}
+          pointerEvents="none"
+          tint="light"
+          style={styles.availabilityPill}>
+          <View style={styles.availabilityDot} />
+          <Text style={styles.glassPillText}>Available - {availableCount}</Text>
+        </BlurView>
+
+        <View style={styles.favoriteGlass}>
+          <BlurView
+            experimentalBlurMethod="dimezisBlurView"
+            intensity={66}
+            pointerEvents="none"
+            tint="light"
+            style={StyleSheet.absoluteFill}
+          />
+          <CustomerFavoriteHeartButton
+            favorite={favorite}
+            pending={favoritePending}
+            disabled={favoriteDisabled}
+            itemLabel={dish.itemName}
+            onToggle={() => onFavoriteToggle(dish.id, favorite)}
+            style={styles.favoriteButton}
+          />
         </View>
+
+        <BlurView
+          experimentalBlurMethod="dimezisBlurView"
+          intensity={62}
+          pointerEvents="none"
+          tint="light"
+          style={styles.foodTypePill}>
+          <View style={[styles.foodTypeDot, {backgroundColor: foodTypeColor}]} />
+          <Text style={styles.glassPillText}>{foodTypeLabel}</Text>
+        </BlurView>
       </View>
 
       <View style={styles.dishBody}>
@@ -197,35 +222,44 @@ function DishCard({
             </Text>
             <Text style={styles.price}>{formatDishPrice(dish.price, dish.currency)}</Text>
           </View>
-          <View style={styles.availabilityRow}>
-            <Icon name="check" size={16} color={colors.success} surface={false} />
-            <Text style={styles.availabilityText}>Available - {availableCount}</Text>
-          </View>
-          <Text numberOfLines={1} style={styles.kitchenName}>
-            From {kitchenName}
-          </Text>
         </Pressable>
 
-        <View style={styles.metadataRow}>
-          <Icon name="location" size={16} color={colors.textSecondary} surface={false} />
-          <Text numberOfLines={1} style={styles.metadata}>
-            {[formatDistance(dish.distanceMeters), location].filter(Boolean).join(' · ')}
-          </Text>
-        </View>
+        <View style={styles.infoPurchaseRow}>
+          <Pressable
+            accessibilityLabel={`Open ${dish.itemName}`}
+            accessibilityRole="button"
+            onPress={() => onOpen(dish.id)}
+            style={({pressed}) => [
+              styles.dishInfoColumn,
+              pressed && styles.dishOpenPressed,
+            ]}>
+            <Text numberOfLines={1} style={styles.kitchenName}>
+              From {kitchenName}
+            </Text>
 
-        <View style={styles.purchaseRow}>
-          <View style={styles.detailRow}>
-            {dish.preparationTimeMinutes ? (
-              <View style={styles.detailItem}>
-                <Icon name="clock" size={15} color={colors.textSecondary} surface={false} />
-                <Text style={styles.detailText}>{dish.preparationTimeMinutes} min</Text>
-              </View>
-            ) : null}
-            {dish.servesCount ? (
-              <Text style={styles.detailText}>Serves {dish.servesCount}</Text>
-            ) : null}
-            {spiceLabel ? <Text style={styles.detailText}>{spiceLabel}</Text> : null}
-          </View>
+            <View style={styles.detailRow}>
+              {dish.preparationTimeMinutes ? (
+                <View style={styles.detailItem}>
+                  <Icon name="clock" size={16} color={colors.textSecondary} surface={false} />
+                  <Text style={styles.detailText}>{dish.preparationTimeMinutes} min</Text>
+                </View>
+              ) : null}
+              {dish.preparationTimeMinutes && spiceLabel ? (
+                <View style={styles.detailDivider} />
+              ) : null}
+              {spiceLabel ? (
+                <View style={styles.detailItem}>
+                  <MaterialDesignIcons
+                    accessibilityElementsHidden
+                    color={colors.flameRed}
+                    name="chili-hot"
+                    size={17}
+                  />
+                  <Text style={styles.detailText}>{spiceLabel}</Text>
+                </View>
+              ) : null}
+            </View>
+          </Pressable>
 
           {cartLine && quantity > 0 ? (
             <View
@@ -954,12 +988,12 @@ const styles = StyleSheet.create({
   },
   dishImage: {
     width: '100%',
-    aspectRatio: 1.75,
+    aspectRatio: 1.5,
     backgroundColor: colors.surfaceMuted,
   },
   imageFallback: {
     width: '100%',
-    aspectRatio: 1.75,
+    aspectRatio: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceMuted,
@@ -969,36 +1003,73 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: fontWeight.semibold,
   },
-  favoriteButton: {
+  favoriteGlass: {
     position: 'absolute',
     top: spacing.sm,
     right: spacing.sm,
     zIndex: 4,
+    width: touchTarget.minimum,
+    height: touchTarget.minimum,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.64)',
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    overflow: 'hidden',
+  },
+  favoriteButton: {
+    width: '100%',
+    height: '100%',
     backgroundColor: 'transparent',
+  },
+  availabilityPill: {
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.sm,
+    zIndex: 3,
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.64)',
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    overflow: 'hidden',
+  },
+  availabilityDot: {
+    width: 10,
+    height: 10,
+    borderRadius: radius.pill,
+    backgroundColor: colors.success,
   },
   foodTypePill: {
     position: 'absolute',
     left: spacing.sm,
     bottom: spacing.sm,
+    zIndex: 3,
+    minHeight: 38,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xxs,
+    gap: spacing.xs,
     borderRadius: radius.pill,
-    backgroundColor: 'transparent',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.78)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xxs,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.64)',
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    overflow: 'hidden',
   },
   foodTypeDot: {
-    width: 8,
-    height: 8,
+    width: 10,
+    height: 10,
     borderRadius: radius.pill,
   },
-  foodTypeText: {
-    color: colors.textPrimary,
+  glassPillText: {
+    color: colors.white,
     fontSize: typography.small,
-    fontWeight: fontWeight.medium,
+    fontWeight: fontWeight.semibold,
   },
   dishBody: {
     paddingHorizontal: spacing.md,
@@ -1024,56 +1095,39 @@ const styles = StyleSheet.create({
     fontSize: typography.heading,
     fontWeight: fontWeight.extrabold,
   },
-  availabilityRow: {
+  infoPurchaseRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xxs,
-    marginTop: spacing.xxs,
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
   },
-  availabilityText: {
-    color: colors.success,
-    fontSize: typography.small,
-    fontWeight: fontWeight.medium,
+  dishInfoColumn: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.xxs,
   },
   kitchenName: {
     color: colors.textSecondary,
     fontSize: typography.small,
     fontWeight: fontWeight.medium,
-    marginTop: spacing.xxs,
-  },
-  metadataRow: {
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xxs,
-    marginTop: spacing.xs,
-  },
-  metadata: {
-    minWidth: 0,
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  purchaseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
   },
   detailRow: {
-    flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'nowrap',
     gap: spacing.xs,
-    paddingBottom: 0,
   },
   detailItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xxs,
+  },
+  detailDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 18,
+    backgroundColor: colors.borderStrong,
   },
   detailText: {
     color: colors.textSecondary,
@@ -1084,12 +1138,13 @@ const styles = StyleSheet.create({
     width: 132,
     minWidth: 132,
     maxWidth: 132,
-    minHeight: touchTarget.minimum,
+    minHeight: 48,
     flexShrink: 0,
+    alignSelf: 'center',
     paddingHorizontal: spacing.sm,
   },
   quantitySelector: {
-    minHeight: touchTarget.minimum,
+    minHeight: 48,
     minWidth: 120,
     flexDirection: 'row',
     alignItems: 'center',

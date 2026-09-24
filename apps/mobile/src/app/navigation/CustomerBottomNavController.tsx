@@ -12,6 +12,7 @@ import {
   Animated,
   Easing,
   Keyboard,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -24,6 +25,12 @@ import {
   BottomTabBar,
   type BottomTabBarProps,
 } from '@react-navigation/bottom-tabs';
+import {BlurView} from 'expo-blur';
+import {
+  GlassView,
+  isGlassEffectAPIAvailable,
+  isLiquidGlassAvailable,
+} from 'expo-glass-effect';
 import {
   CommonActions,
   getFocusedRouteNameFromRoute,
@@ -64,6 +71,11 @@ interface CustomerBottomNavVisibilityContextValue {
 
 const CustomerBottomNavVisibilityContext =
   createContext<CustomerBottomNavVisibilityContextValue | null>(null);
+
+const USE_NATIVE_LIQUID_GLASS =
+  Platform.OS === 'ios' &&
+  isGlassEffectAPIAvailable() &&
+  isLiquidGlassAvailable();
 
 function useCustomerBottomNavVisibilityContext(): CustomerBottomNavVisibilityContextValue {
   const value = useContext(CustomerBottomNavVisibilityContext);
@@ -232,7 +244,26 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
       ]}>
       <View style={styles.shellShadow}>
         <View style={styles.shell}>
-          <View pointerEvents="none" style={styles.glassTint} />
+          {USE_NATIVE_LIQUID_GLASS ? (
+            <GlassView
+              pointerEvents="none"
+              colorScheme="light"
+              glassEffectStyle="regular"
+              isInteractive={false}
+              tintColor="rgba(255,255,255,0.10)"
+              style={styles.nativeGlass}
+            />
+          ) : Platform.OS === 'ios' ? (
+            <BlurView
+              pointerEvents="none"
+              intensity={78}
+              tint="systemUltraThinMaterialLight"
+              style={styles.nativeGlass}
+            />
+          ) : (
+            <View pointerEvents="none" style={styles.glassFallback} />
+          )}
+          <View pointerEvents="none" style={styles.glassWash} />
           <View pointerEvents="none" style={styles.glassHighlight} />
           <View pointerEvents="none" style={styles.glassRim} />
 
@@ -290,15 +321,22 @@ const styles = StyleSheet.create({
     height: '100%',
     flexDirection: 'row',
     alignItems: 'stretch',
-    backgroundColor: 'rgba(255,255,255,0.68)',
+    backgroundColor: 'rgba(255,255,255,0.10)',
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.92)',
     overflow: 'hidden',
   },
-  glassTint: {
+  nativeGlass: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  glassFallback: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+  },
+  glassWash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   glassHighlight: {
     position: 'absolute',

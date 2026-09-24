@@ -35,7 +35,6 @@ import {resolveMotion} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {
   colors,
-  elevation,
   fontWeight,
   radius,
   spacing,

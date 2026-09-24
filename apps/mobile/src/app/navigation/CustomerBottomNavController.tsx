@@ -231,33 +231,39 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
           transform: [{translateY}],
         },
       ]}>
-      <View style={styles.shell}>
-        <View style={styles.tabsArea}>
-          <BottomTabBar {...props} insets={{...props.insets, bottom: 0}} />
-        </View>
+      <View style={styles.shellShadow}>
+        <View style={styles.shell}>
+          <View pointerEvents="none" style={styles.glassTint} />
+          <View pointerEvents="none" style={styles.glassHighlight} />
+          <View pointerEvents="none" style={styles.glassRim} />
 
-        {cartVisible ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`View Cart, ${itemCount} ${
-              itemCount === 1 ? 'item' : 'items'
-            }, ${totalLabel}`}
-            onPress={handleOpenCart}
-            style={({pressed}) => [
-              styles.cartAction,
-              pressed && styles.cartActionPressed,
-            ]}>
-            <Icon name="cart" color={colors.white} size={20} />
-            <View style={styles.cartCopy}>
-              <Text numberOfLines={1} style={styles.cartTitle}>
-                Cart · {itemCount}
-              </Text>
-              <Text numberOfLines={1} style={styles.cartTotal}>
-                {totalLabel}
-              </Text>
-            </View>
-          </Pressable>
-        ) : null}
+          <View style={styles.tabsArea}>
+            <BottomTabBar {...props} insets={{...props.insets, bottom: 0}} />
+          </View>
+
+          {cartVisible ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`View Cart, ${itemCount} ${
+                itemCount === 1 ? 'item' : 'items'
+              }, ${totalLabel}`}
+              onPress={handleOpenCart}
+              style={({pressed}) => [
+                styles.cartAction,
+                pressed && styles.cartActionPressed,
+              ]}>
+              <Icon name="cart" color={colors.white} size={20} />
+              <View style={styles.cartCopy}>
+                <Text numberOfLines={1} style={styles.cartTitle}>
+                  Cart · {itemCount}
+                </Text>
+                <Text numberOfLines={1} style={styles.cartTotal}>
+                  {totalLabel}
+                </Text>
+              </View>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
     </Animated.View>
   );
@@ -269,27 +275,59 @@ const styles = StyleSheet.create({
     left: spacing.md,
     right: spacing.md,
     zIndex: 50,
-    borderRadius: radius.xl,
+    borderRadius: radius.pill,
+  },
+  shellShadow: {
+    height: 80,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    shadowColor: colors.espressoBrown,
+    shadowOpacity: 0.14,
+    shadowRadius: 20,
+    shadowOffset: {width: 0, height: 9},
+    elevation: 9,
   },
   shell: {
-    height: 72,
+    height: '100%',
     flexDirection: 'row',
     alignItems: 'stretch',
-    backgroundColor: colors.white,
-    borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.68)',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.92)',
     overflow: 'hidden',
-    ...elevation.card,
+  },
+  glassTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  glassHighlight: {
+    position: 'absolute',
+    top: 8,
+    left: 18,
+    width: 44,
+    height: 5,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    opacity: 0.82,
+    transform: [{rotate: '-7deg'}],
+  },
+  glassRim: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.72)',
   },
   tabsArea: {
     flex: 1,
     minWidth: 0,
     height: '100%',
     justifyContent: 'center',
+    zIndex: 1,
   },
   cartAction: {
     width: 120,
+    zIndex: 1,
     minHeight: touchTarget.minimum,
     height: 52,
     flexShrink: 0,

@@ -1,4 +1,4 @@
-import React, {useCallback, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import * as Location from 'expo-location';
 import {toAppApiError} from '../../../core/http/apiError';
@@ -41,6 +41,7 @@ interface Props {
   mode: 'add' | 'edit';
   address?: CustomerAddress;
   addresses: CustomerAddress[];
+  autoRequestLocation?: boolean;
   onClose: () => void;
 }
 
@@ -50,7 +51,13 @@ const LABELS: Array<{value: CustomerAddressLabel; label: string}> = [
   {value: 'OTHER', label: 'Other'},
 ];
 
-export function CustomerAddressEditorModal({mode, address, addresses, onClose}: Props) {
+export function CustomerAddressEditorModal({
+  mode,
+  address,
+  addresses,
+  autoRequestLocation = false,
+  onClose,
+}: Props) {
   const editingAddressId = mode === 'edit' ? address?.id ?? null : null;
   const initialDraft = createCustomerAddressDraft(address);
   const [original] = useState<CustomerAddressDraft>(initialDraft);
@@ -59,6 +66,7 @@ export function CustomerAddressEditorModal({mode, address, addresses, onClose}: 
   const [formError, setFormError] = useState<string | null>(null);
   const [locationMessage, setLocationMessage] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
+  const autoLocationRequestedRef = useRef(false);
   const createMutation = useCreateCustomerAddressMutation();
   const updateMutation = useUpdateCustomerAddressMutation();
   const reducedMotion = useReducedMotionPreference();
@@ -121,6 +129,12 @@ export function CustomerAddressEditorModal({mode, address, addresses, onClose}: 
       setLocating(false);
     }
   }, [locating]);
+
+  useEffect(() => {
+    if (!autoRequestLocation || autoLocationRequestedRef.current) return;
+    autoLocationRequestedRef.current = true;
+    handleUseCurrentLocation().catch(() => undefined);
+  }, [autoRequestLocation, handleUseCurrentLocation]);
 
   const save = useCallback(async () => {
     if (saving) return;

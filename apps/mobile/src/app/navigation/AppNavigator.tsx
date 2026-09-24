@@ -1,5 +1,5 @@
 import React from 'react';
-import {Linking} from 'react-native';
+import {Linking, NativeModules} from 'react-native';
 import {
   CommonActions,
   NavigationContainer,
@@ -44,6 +44,8 @@ import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerA
 import {ChefRegistrationScreen} from '../../features/auth/screens/ChefRegistrationScreen';
 import {ChefAccountStatusScreen} from '../../features/auth/screens/ChefAccountStatusScreen';
 import {StartupErrorScreen} from '../../features/auth/screens/StartupErrorScreen';
+import {CustomerAddressEditorModal} from '../../features/customerAddresses/screens/CustomerAddressEditorModal';
+import {PaymentProviderUnavailableE2EScreen} from '../../features/payment/screens/PaymentProviderUnavailableE2EScreen';
 import {AccountRouterScreen} from '../../features/auth/screens/AccountRouterScreen';
 import type {
   AccountResolution,
@@ -298,6 +300,34 @@ function dispatchInboundDestination(destination: InboundRouteDestination) {
 
 export function AppNavigator() {
   const status = useBootstrap();
+  const [locationDeniedE2E, setLocationDeniedE2E] = React.useState(() => {
+    const nativeLocation = NativeModules.CravesCurrentLocation as
+      | {isLocationDeniedE2EEnabled?: () => boolean}
+      | undefined;
+    return __DEV__ && nativeLocation?.isLocationDeniedE2EEnabled?.() === true;
+  });
+  const [paymentUnavailableE2E, setPaymentUnavailableE2E] = React.useState(() => {
+    const nativeControl = NativeModules.CravesCurrentLocation as
+      | {isPaymentUnavailableE2EEnabled?: () => boolean}
+      | undefined;
+    return (
+      __DEV__ && nativeControl?.isPaymentUnavailableE2EEnabled?.() === true
+    );
+  });
+  const [shellRoleE2E, setShellRoleE2E] = React.useState<
+    'customer' | 'chef' | null
+  >(() => {
+    const nativeControl = NativeModules.CravesCurrentLocation as
+      | {
+          isCustomerShellE2EEnabled?: () => boolean;
+          isChefShellE2EEnabled?: () => boolean;
+        }
+      | undefined;
+    if (!__DEV__) return null;
+    if (nativeControl?.isCustomerShellE2EEnabled?.() === true) return 'customer';
+    if (nativeControl?.isChefShellE2EEnabled?.() === true) return 'chef';
+    return null;
+  });
   useSessionLifecycle();
   const auth = useAppSelector(state => state.auth);
   const authRef = React.useRef(auth);
@@ -471,6 +501,22 @@ export function AppNavigator() {
     let active = true;
 
     const handleUrl = (url: string, initial: boolean) => {
+      if (__DEV__ && url === 'craves://e2e/location-denied') {
+        setLocationDeniedE2E(true);
+        return;
+      }
+      if (__DEV__ && url === 'craves://e2e/payment-unavailable') {
+        setPaymentUnavailableE2E(true);
+        return;
+      }
+      if (__DEV__ && url === 'craves://e2e/shell/customer') {
+        setShellRoleE2E('customer');
+        return;
+      }
+      if (__DEV__ && url === 'craves://e2e/shell/chef') {
+        setShellRoleE2E('chef');
+        return;
+      }
       const candidate = parseInboundUrl(url);
       trackAction('inbound_link_received', {initial, recognized: Boolean(candidate)});
       if (!candidate) return;
@@ -501,6 +547,37 @@ export function AppNavigator() {
       subscription.remove();
     };
   }, [attemptInboundRoute, flushPendingRestoration]);
+
+  if (__DEV__ && locationDeniedE2E) {
+    return (
+      <CustomerAddressEditorModal
+        addresses={[]}
+        autoRequestLocation
+        mode="add"
+        onClose={() => setLocationDeniedE2E(false)}
+      />
+    );
+  }
+
+  if (__DEV__ && paymentUnavailableE2E) {
+    return <PaymentProviderUnavailableE2EScreen />;
+  }
+
+  if (__DEV__ && shellRoleE2E === 'customer') {
+    return (
+      <NavigationContainer>
+        <CustomerRootNavigator />
+      </NavigationContainer>
+    );
+  }
+
+  if (__DEV__ && shellRoleE2E === 'chef') {
+    return (
+      <NavigationContainer>
+        <ChefRootNavigator />
+      </NavigationContainer>
+    );
+  }
 
   if (status === 'idle' || status === 'restoring') {
     return <SplashScreen />;

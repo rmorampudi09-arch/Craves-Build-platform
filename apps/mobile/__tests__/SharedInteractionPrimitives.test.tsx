@@ -3,7 +3,8 @@
  */
 
 import React from 'react';
-import {Button, SegmentedControl} from '../src/shared/components';
+import {KeyboardAvoidingView, Platform, ScrollView, Text} from 'react-native';
+import {ScreenShell, Button, SegmentedControl} from '../src/shared/components';
 
 jest.mock('../src/design/reducedMotion', () => ({
   useReducedMotionPreference: () => false,
@@ -20,6 +21,16 @@ type InteractionElementProps = {
   children?: React.ReactNode;
   disabled?: boolean;
   onPress?: () => void;
+};
+
+type KeyboardAvoiderElementProps = {
+  behavior?: 'height' | 'position' | 'padding';
+  children?: React.ReactNode;
+};
+
+type ScreenShellScrollElementProps = {
+  automaticallyAdjustKeyboardInsets?: boolean;
+  contentInsetAdjustmentBehavior?: 'automatic' | 'scrollableAxes' | 'never' | 'always';
 };
 
 describe('shared interaction primitives', () => {
@@ -113,5 +124,35 @@ describe('shared interaction primitives', () => {
       checked: false,
     });
     expect(options.every(option => option.props.disabled)).toBe(true);
+  });
+
+  test('uses iOS-aware keyboard and safe-area scroll behavior in screen shells', () => {
+    const shell = ScreenShell({
+      scroll: true,
+      children: <Text>Scrollable form</Text>,
+    }) as React.ReactElement<InteractionElementProps>;
+    const safeAreaChildren = React.Children.toArray(
+      shell.props.children,
+    ) as React.ReactElement[];
+    const keyboardAvoider = safeAreaChildren.find(
+      child => child.type === KeyboardAvoidingView,
+    ) as React.ReactElement<KeyboardAvoiderElementProps> | undefined;
+
+    expect(keyboardAvoider).toBeTruthy();
+    expect(keyboardAvoider?.props.behavior).toBe(
+      Platform.OS === 'ios' ? 'padding' : undefined,
+    );
+
+    const scrollView = keyboardAvoider?.props.children as React.ReactElement;
+    const scrollViewProps =
+      scrollView.props as ScreenShellScrollElementProps;
+
+    expect(scrollView.type).toBe(ScrollView);
+    expect(scrollViewProps.automaticallyAdjustKeyboardInsets).toBe(
+      Platform.OS === 'ios',
+    );
+    expect(scrollViewProps.contentInsetAdjustmentBehavior).toBe(
+      Platform.OS === 'ios' ? 'automatic' : undefined,
+    );
   });
 });

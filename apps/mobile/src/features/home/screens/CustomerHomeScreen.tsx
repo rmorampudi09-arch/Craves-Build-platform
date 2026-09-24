@@ -33,10 +33,6 @@ import {
 import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
 import {HomeCategoryRail} from '../components/HomeCategoryRail';
-import {
-  HomeFoodTypeSelector,
-  type HomeFoodType,
-} from '../components/HomeFoodTypeSelector';
 import {HomePromoAndKitchens} from '../components/HomePromoAndKitchens';
 import {
   OfflineNotice,
@@ -383,10 +379,6 @@ export function CustomerHomeScreen() {
     return items;
   }, [feed.locationRequired, visibleDishes]);
   const activeDiscoveryFilterCount = getActiveDiscoveryFilterCount(appliedFilters);
-  const selectedFoodType = useMemo<HomeFoodType>(() => {
-    const [diet] = appliedFilters.diets;
-    return appliedFilters.diets.length === 1 && diet ? diet : 'ALL';
-  }, [appliedFilters.diets]);
   const cartLinesByMenuItemId = useMemo(() => {
     const lines = new Map<string, CartLine>();
     for (const line of cartSnapshot?.lines ?? []) {
@@ -562,29 +554,6 @@ export function CustomerHomeScreen() {
     navigation.navigate('CustomerFilterSort', {origin: 'HOME'});
   };
 
-  const handleFoodTypeChange = useCallback(
-    (foodType: HomeFoodType) => {
-      dispatch(
-        discoveryFilterActions.filterDraftUpdated({
-          surface: 'HOME',
-          scopeKey: searchScopeKey,
-          selection: {
-            ...appliedFilters,
-            diets: foodType === 'ALL' ? [] : [foodType],
-          },
-        }),
-      );
-      dispatch(
-        discoveryFilterActions.filtersApplied({
-          surface: 'HOME',
-          scopeKey: searchScopeKey,
-        }),
-      );
-      resetSearchPosition();
-    },
-    [appliedFilters, dispatch, resetSearchPosition, searchScopeKey],
-  );
-
   const clearFilters = () => {
     handleClearSearch();
     setSelectedCategory(null);
@@ -726,10 +695,6 @@ export function CustomerHomeScreen() {
                 surface={false}
               />
             </Pressable>
-            <HomeFoodTypeSelector
-              value={selectedFoodType}
-              onChange={handleFoodTypeChange}
-            />
           </View>
 
           <HomePromoAndKitchens />

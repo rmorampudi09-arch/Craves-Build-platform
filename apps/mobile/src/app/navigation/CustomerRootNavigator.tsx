@@ -1,6 +1,7 @@
 import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {useQueryClient} from '@tanstack/react-query';
 import * as Location from 'expo-location';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
@@ -55,7 +56,6 @@ import {
   customerShellActions,
   type CustomerBrowsingLocation,
 } from '../../features/customerShell/state/customerShellSlice';
-import {Icon} from '../../shared/components/Icon';
 import {
   CustomerBottomNavVisibilityProvider,
   CustomerBottomTabBar,
@@ -94,17 +94,47 @@ interface TabIconProps {
   size: number;
 }
 
-function HomeTabIcon({color, size}: TabIconProps) {
-  return <Icon name={homeTab.icon} color={color} size={size} surface={false} />;
+const CUSTOMER_TAB_ICON_SIZE = 30;
+
+function HomeTabIcon({color}: TabIconProps) {
+  return (
+    <MaterialDesignIcons
+      accessibilityElementsHidden
+      color={color}
+      name={'home-outline' as never}
+      size={CUSTOMER_TAB_ICON_SIZE}
+    />
+  );
 }
-function ChefsTabIcon({color, size}: TabIconProps) {
-  return <Icon name={chefsTab.icon} color={color} size={size} surface={false} />;
+function ChefsTabIcon({color}: TabIconProps) {
+  return (
+    <MaterialDesignIcons
+      accessibilityElementsHidden
+      color={color}
+      name={'chef-hat' as never}
+      size={CUSTOMER_TAB_ICON_SIZE}
+    />
+  );
 }
-function OrdersTabIcon({color, size}: TabIconProps) {
-  return <Icon name={ordersTab.icon} color={color} size={size} surface={false} />;
+function OrdersTabIcon({color}: TabIconProps) {
+  return (
+    <MaterialDesignIcons
+      accessibilityElementsHidden
+      color={color}
+      name={'clipboard-text-outline' as never}
+      size={CUSTOMER_TAB_ICON_SIZE}
+    />
+  );
 }
-function ProfileTabIcon({color, size}: TabIconProps) {
-  return <Icon name={profileTab.icon} color={color} size={size} surface={false} />;
+function ProfileTabIcon({color}: TabIconProps) {
+  return (
+    <MaterialDesignIcons
+      accessibilityElementsHidden
+      color={color}
+      name={'account-outline' as never}
+      size={CUSTOMER_TAB_ICON_SIZE}
+    />
+  );
 }
 
 const tabScreenOptions = {
@@ -118,18 +148,18 @@ const tabScreenOptions = {
     marginBottom: 0,
   },
   tabBarLabelStyle: {
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.semibold,
-    marginTop: 1,
+    fontSize: typography.small,
+    fontWeight: fontWeight.regular,
+    marginTop: 2,
     marginBottom: 0,
   },
   tabBarItemStyle: {
-    height: 72,
+    height: 80,
     paddingVertical: 0,
     justifyContent: 'center',
   },
   tabBarStyle: {
-    height: 72,
+    height: 80,
     backgroundColor: 'transparent',
     borderTopWidth: 0,
     paddingTop: 0,

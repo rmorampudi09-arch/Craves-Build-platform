@@ -1,0 +1,117 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: action
+    displayName: Action
+    type: string
+    default: what-if
+    values:
+      - what-if
+      - deploy
+  - name: confirmDeploy
+    displayName: Type REBUILD_RMORAMPUDI09 when action is deploy
+    type: string
+    default: DO_NOT_DEPLOY
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+  location: centralindia
+  resourceGroupName: rg-craves-prodlow-centralindia
+  environmentName: prodlow
+  projectName: craves
+  monthlyBudgetAmount: 12500
+  budgetContactEmail: rmorampudi09@gmail.com
+
+steps:
+  - checkout: self
+
+  - task: AzureCLI@2
+    displayName: Rebuild Craves prodlow Azure foundation
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+
+        ACTION='${{ parameters.action }}'
+        CONFIRM='${{ parameters.confirmDeploy }}'
+
+        if [[ -z "${ACR_NAME:-}" ]]; then
+          echo "ACR_NAME variable is required and must be globally unique." >&2
+          exit 1
+        fi
+
+        if [[ -z "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
+          echo "POSTGRES_ADMIN_PASSWORD secret variable is required." >&2
+          exit 1
+        fi
+
+        az extension add --name containerapp --upgrade --yes --only-show-errors >/dev/null
+        az extension add --name cdn --upgrade --yes --only-show-errors >/dev/null
+
+        TEMPLATE="infra/prodlow-rebuild/subscription.bicep"
+        DEPLOYMENT_NAME="craves-prodlow-rebuild-$(Build.BuildId)"
+
+        PARAMS=(
+          "location=$(location)"
+          "resourceGroupName=$(resourceGroupName)"
+          "environmentName=$(environmentName)"
+          "projectName=$(projectName)"
+          "acrName=$ACR_NAME"
+          "postgresAdminPassword=$POSTGRES_ADMIN_PASSWORD"
+          "monthlyBudgetAmount=$(monthlyBudgetAmount)"
+          "budgetContactEmails=[\"$(budgetContactEmail)\"]"
+        )
+
+        if [[ "$ACTION" == "what-if" ]]; then
+          az deployment sub what-if \
+            --name "$DEPLOYMENT_NAME" \
+            --location "$(location)" \
+            --template-file "$TEMPLATE" \
+            --parameters "${PARAMS[@]}"
+          exit 0
+        fi
+
+        if [[ "$CONFIRM" != "REBUILD_RMORAMPUDI09" ]]; then
+          echo "Deployment blocked. Set confirmDeploy=REBUILD_RMORAMPUDI09 to create billable Azure resources." >&2
+          exit 1
+        fi
+
+        az deployment sub create \
+          --name "$DEPLOYMENT_NAME" \
+          --location "$(location)" \
+          --template-file "$TEMPLATE" \
+          --parameters "${PARAMS[@]}" \
+          --output json > "$(Build.ArtifactStagingDirectory)/craves-rebuild-output.json"
+
+        FRONT_DOOR_HOST=$(jq -r '.properties.outputs.frontDoorHostName.value // empty' "$(Build.ArtifactStagingDirectory)/craves-rebuild-output.json")
+        WEB_FQDN=$(jq -r '.properties.outputs.webContainerAppFqdn.value // empty' "$(Build.ArtifactStagingDirectory)/craves-rebuild-output.json")
+
+        {
+          echo "# Craves rmorampudi09 rebuild output"
+          echo
+          echo "- Resource group: $(resourceGroupName)"
+          echo "- Front Door SKU: Standard_AzureFrontDoor"
+          echo "- Front Door host: https://$FRONT_DOOR_HOST"
+          echo "- Web Container App origin: https://$WEB_FQDN"
+          echo "- Monthly budget cap: INR $(monthlyBudgetAmount)"
+        } > "$(Build.ArtifactStagingDirectory)/craves-rebuild-summary.md"
+
+        echo "Front Door host: https://$FRONT_DOOR_HOST"
+        echo "Web origin: https://$WEB_FQDN"
+    env:
+      ACR_NAME: $(ACR_NAME)
+      POSTGRES_ADMIN_PASSWORD: $(POSTGRES_ADMIN_PASSWORD)
+
+  - task: PublishPipelineArtifact@1
+    displayName: Publish rebuild outputs
+    condition: always()
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)
+      artifact: craves-rmorampudi09-rebuild

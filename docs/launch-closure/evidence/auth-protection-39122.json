@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "evidenceType": "summary of inspected Azure protected receipt and separate owner confirmation",
+  "azureRun": 39122,
+  "sourceUrl": "https://dev.azure.com/ravitejamorampudi7777/ac93a324-7998-45b3-9ab4-e0b590996fcb/_apis/build/builds/39122/logs/7",
+  "checkerSource": "07828018bf73ed051495a5c3fc0a28c802f59582",
+  "imageSource": "2ab2e36d30276a039121529656b8c24e6fecdd64",
+  "observedAt": "2026-09-16T18:35:21.514064+00:00",
+  "app": "ca-craves-auth-service-prodlow",
+  "revision": "ca-craves-auth-service-prodlow--0000046",
+  "image": "cravesprodlowacr82121.azurecr.io/craves/auth-service@sha256:58406225368594ac39a606e3fc38d01fc60be53100cef1721c2416b7e2b620e7",
+  "unrelatedSettingsPreserved": true,
+  "gatewayPolicyChanged": false,
+  "syntheticRequests": 13,
+  "results": {
+    "malformedExchange": {"status": 400, "code": "AUTH_REQUEST_INVALID", "private": true},
+    "malformedRefresh": {"status": 400, "code": "AUTH_REQUEST_INVALID", "private": true},
+    "sameImpossibleRefreshAttempts1To10": {"status": 401, "code": "INVALID_REFRESH_TOKEN", "private": true},
+    "sameImpossibleRefreshAttempt11": {"status": 429, "code": "AUTH_RATE_LIMITED", "private": true, "retryAfterSeconds": 44}
+  },
+  "realSignInAcceptedByAutomatedRun": false,
+  "separateOwnerReport": "Yes, sign-in and Profile work",
+  "ownerReportTiming": "after Azure39122, 17 September 2026 India time",
+  "noRealCredentialsUsedByProbes": true,
+  "publicLaunchAccepted": false,
+  "priorFailedRunRetained": 39117
+}

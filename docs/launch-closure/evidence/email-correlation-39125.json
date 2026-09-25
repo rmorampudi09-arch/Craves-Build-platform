@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "sourceSha": "a91149d4be4f952ba98e24003be98947e8a73a57",
+  "diagnosticPullRequest": 373,
+  "azureRun": 39125,
+  "result": "succeeded",
+  "startedAt": "2026-09-16T18:58:12.998727+00:00",
+  "finishedAt": "2026-09-16T18:58:30.959130+00:00",
+  "readOnly": true,
+  "passesPerService": 2,
+  "maxRowsPerService": 10000,
+  "comparison": {
+    "canonicalCount": 2,
+    "projectionCount": 2,
+    "exercised": true,
+    "observedRowsMatch": true,
+    "missingProjections": 0,
+    "orphanedProjections": 0,
+    "emailVersionOrVerificationMismatches": 0,
+    "customerProfileMismatches": 0,
+    "chefApplicationMismatches": 0,
+    "unverifiedCanonicalRows": 0
+  },
+  "runtimeRevisions": {
+    "auth": "ca-craves-auth-service-prodlow--0000046",
+    "userChef": "ca-craves-user-chef-service-prod--0000050"
+  },
+  "crossDatabaseAtomicSnapshot": false,
+  "mailboxAcceptedByThisDiagnostic": false,
+  "publicLaunchAccepted": false,
+  "limitations": [
+    "Two stable observations are not a distributed atomic snapshot.",
+    "No zero-row success, auto-repair, identity digests or row data are exported.",
+    "Revocation, replacement and mailbox acceptance are separate journeys."
+  ]
+}

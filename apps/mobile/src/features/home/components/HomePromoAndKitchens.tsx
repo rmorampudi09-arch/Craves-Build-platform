@@ -40,7 +40,10 @@ import {
   useFavoriteKitchensQuery,
   useToggleFavoriteKitchen,
 } from '../../favorites/query/homeFavoriteQueries';
-import {\n  PUBLIC_KITCHEN_REVIEWS_AVAILABLE,\n  publicKitchenReviewApi,\n} from '../../kitchenProfile/api/publicKitchenReviewApi';
+import {
+  PUBLIC_KITCHEN_REVIEWS_AVAILABLE,
+  publicKitchenReviewApi,
+} from '../../kitchenProfile/api/publicKitchenReviewApi';
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
 import type {NearbyDish} from '../api/homeFeedApi';
 import {formatDishPrice} from '../homePresentation';

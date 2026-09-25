@@ -1,21 +1,19 @@
 # Subscription payments APIM package
 
-This package exposes the customer-authorized subscription payment flow, including Razorpay verification, and the Cashfree payment webhook through the existing Craves APIM instance.
+This package exposes the customer-authorized subscription payment flow and Cashfree payment webhook through the existing Craves APIM instance.
 
 ## Routes
 
 Authenticated customer routes:
 
-- `GET /api/v1/subscription-payments/subscriptions/{subscriptionId}`
 - `GET /api/v1/subscription-payments/invoices/{invoiceId}`
 - `POST /api/v1/subscription-payments/invoices/{invoiceId}/orders`
-- `POST /api/v1/subscription-payments/invoices/{invoiceId}/verify`
 
 Provider callback route:
 
 - `POST /api/v1/payments/webhooks/cashfree`
 
-The customer routes require a Bearer access token at APIM and are re-authorized by Integration Service ownership logic. The order route is provider-neutral; when Razorpay is selected it returns the provider order ID and public checkout key. The verify route accepts only the Razorpay checkout proof and verification remains server-side. The Cashfree webhook is intentionally not Bearer-authenticated because Cashfree authenticates with webhook timestamp/signature headers; Integration Service validates those headers against the exact raw body.
+The customer routes require a Bearer access token at APIM and are re-authorized by Integration Service ownership logic. The Cashfree webhook is intentionally not Bearer-authenticated because Cashfree authenticates with webhook timestamp/signature headers; Integration Service validates those headers against the exact raw body.
 
 ## Files
 
@@ -23,7 +21,7 @@ The customer routes require a Bearer access token at APIM and are re-authorized 
 - `cashfree-webhook-policy.xml` — provider-public raw-body pass-through, Integration backend, no-store/nosniff response headers.
 - `scripts/apim/configure-subscription-payments-apim.sh` — guarded idempotent apply; adopts an existing operation when method + URL template already exists.
 - `scripts/apim/status-subscription-payments-apim.sh` — read-only route/policy validation.
-- `scripts/apim/rollback-subscription-payments-apim.sh` — removes only the five named method/template routes and retains API containers.
+- `scripts/apim/rollback-subscription-payments-apim.sh` — removes only the three named method/template routes and retains API containers.
 
 ## Pipelines
 

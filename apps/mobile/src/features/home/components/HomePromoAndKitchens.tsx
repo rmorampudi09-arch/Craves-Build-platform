@@ -40,7 +40,7 @@ import {
   useFavoriteKitchensQuery,
   useToggleFavoriteKitchen,
 } from '../../favorites/query/homeFavoriteQueries';
-import {publicKitchenReviewApi} from '../../kitchenProfile/api/publicKitchenReviewApi';
+import {\n  PUBLIC_KITCHEN_REVIEWS_AVAILABLE,\n  publicKitchenReviewApi,\n} from '../../kitchenProfile/api/publicKitchenReviewApi';
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
 import type {NearbyDish} from '../api/homeFeedApi';
 import {formatDishPrice} from '../homePresentation';
@@ -503,21 +503,20 @@ export function HomePromoAndKitchens() {
   const favoriteKitchens = useFavoriteKitchensQuery();
   const toggleFavoriteKitchen = useToggleFavoriteKitchen();
 
-  const nearbyKitchens =
-    kitchenDiscovery.data?.pages.flatMap(page => page.kitchens) ?? [];
-  const nearbyDishes =
-    menuDiscovery.data?.pages.flatMap(page => page.menuItems) ?? [];
-
-  const topKitchens = useMemo(
-    () => buildTopKitchenCards(nearbyKitchens, nearbyDishes),
-    [nearbyDishes, nearbyKitchens],
-  );
+  const topKitchens = useMemo(() => {
+    const nearbyKitchens =
+      kitchenDiscovery.data?.pages.flatMap(page => page.kitchens) ?? [];
+    const nearbyDishes =
+      menuDiscovery.data?.pages.flatMap(page => page.menuItems) ?? [];
+    return buildTopKitchenCards(nearbyKitchens, nearbyDishes);
+  }, [kitchenDiscovery.data?.pages, menuDiscovery.data?.pages]);
 
   const reviewQueries = useQueries({
     queries: topKitchens.map(kitchen => ({
       queryKey: ['public-kitchen-review-summary', kitchen.kitchenId] as const,
       queryFn: ({signal}: {signal: AbortSignal}) =>
         publicKitchenReviewApi.getSummary(kitchen.kitchenId, signal),
+      enabled: PUBLIC_KITCHEN_REVIEWS_AVAILABLE,
       staleTime: 60_000,
       retry: 1,
     })),

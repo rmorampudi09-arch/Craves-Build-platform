@@ -83,6 +83,22 @@ jest.mock('expo-image-picker', () => ({
   })),
 }));
 
+// Blur/glass are native visual boundaries. App-level Jest only needs stable
+// host components and capability fallbacks, not expo-modules-core emitters.
+jest.mock('expo-blur', () => {
+  const {View} = require('react-native');
+  return {BlurView: View};
+});
+
+jest.mock('expo-glass-effect', () => {
+  const {View} = require('react-native');
+  return {
+    GlassView: View,
+    isGlassEffectAPIAvailable: jest.fn(() => false),
+    isLiquidGlassAvailable: jest.fn(() => false),
+  };
+});
+
 jest.mock('@react-native-firebase/auth', () => ({
   getAuth: jest.fn(() => ({})),
   getIdToken: jest.fn(),

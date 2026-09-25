@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe('getRuntimeConfig', () => {
-  it('pins the production gateway to the current Craves custom domain', () => {
+  it('pins the production gateway to the rebuilt APIM endpoint', () => {
     expect(CRAVES_PRODUCTION_API_ORIGIN).toBe('https://apim-craves-prodlow-kmqgfy.azure-api.net');
   });
 

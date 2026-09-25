@@ -6,7 +6,7 @@ RG="rg-craves-prodlow-centralindia"
 ACR="cravesrm09prodlow6bf632"
 PG_SERVER="pg-craves-prodlow-kmqgfy"
 PG_ADMIN="cravesadmin"
-TAG="activate-${BUILD_BUILDID:-manual-$(date +%Y%m%d%H%M%S)}"
+TAG="${TAG:-activate-${BUILD_BUILDID:-manual-$(date +%Y%m%d%H%M%S)}}"
 SRC="${PIPELINE_WORKSPACE:-$PWD}/craves-source"
 FRONT_DOOR_URL="https://craves-prodlow-kmqgfy-fyfpa3duefevcvdf.z02.azurefd.net"
 
@@ -20,6 +20,26 @@ require_secret() {
 }
 
 require_secret POSTGRES_ADMIN_PASSWORD
+
+containerapp_retry() {
+  local label="$1"
+  shift
+  local attempt
+  local delay=20
+  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    if "$@"; then
+      return 0
+    fi
+    local rc=$?
+    if [[ "$attempt" == "12" ]]; then
+      echo "${label} failed after ${attempt} attempts." >&2
+      return "$rc"
+    fi
+    echo "${label} is waiting for Azure to finish the previous Container App operation; retry ${attempt}/12 in ${delay}s."
+    sleep "$delay"
+    delay=$((delay + 20))
+  done
+}
 
 echo "Starting Craves activation run ${BUILD_BUILDID:-manual}."
 echo "Checking Azure CLI extension readiness without allowing extension install to stall the deployment."
@@ -83,7 +103,7 @@ ensure_acr_pull() {
     --scope "$ACR_ID" \
     --only-show-errors \
     --output none || true
-  az containerapp registry set \
+  containerapp_retry "registry set ${app}" az containerapp registry set \
     -g "$RG" \
     -n "$app" \
     --server "$ACR_LOGIN_SERVER" \
@@ -94,7 +114,7 @@ ensure_acr_pull() {
 
 configure_common_secrets() {
   local app="$1"
-  az containerapp secret set \
+  containerapp_retry "common secrets ${app}" az containerapp secret set \
     -g "$RG" \
     -n "$app" \
     --secrets "pg-pass=${POSTGRES_ADMIN_PASSWORD}" "svc-secret=${INTERNAL_SERVICE_SECRET}" \
@@ -104,7 +124,7 @@ configure_common_secrets() {
 
 set_health_probe() {
   local app="$1"
-  az containerapp update \
+  containerapp_retry "health probe ${app}" az containerapp update \
     -g "$RG" \
     -n "$app" \
     --min-replicas 1 \
@@ -159,13 +179,13 @@ update_backend() {
   local service_path="$4"
   ensure_acr_pull "$app"
   configure_common_secrets "$app"
-  az containerapp secret set \
+  containerapp_retry "jwt public ${app}" az containerapp secret set \
     -g "$RG" \
     -n "$app" \
     --secrets "jwt-public=${JWT_PUBLIC_B64}" \
     --only-show-errors \
     --output none
-  az containerapp ingress update \
+  containerapp_retry "ingress ${app}" az containerapp ingress update \
     -g "$RG" \
     -n "$app" \
     --type external \
@@ -174,7 +194,7 @@ update_backend() {
     --allow-insecure false \
     --only-show-errors \
     --output none
-  az containerapp update \
+  containerapp_retry "update ${app}" az containerapp update \
     -g "$RG" \
     -n "$app" \
     --image "$ACR_LOGIN_SERVER/$image" \
@@ -210,14 +230,14 @@ fi
 APIM_GATEWAY_HOST="${APIM_NAME}.azure-api.net"
 
 ensure_acr_pull "$AUTH_APP"
-az containerapp secret set \
+containerapp_retry "auth secrets ${AUTH_APP}" az containerapp secret set \
   -g "$RG" \
   -n "$AUTH_APP" \
   --secrets "pg-pass=${POSTGRES_ADMIN_PASSWORD}" "svc-secret=${INTERNAL_SERVICE_SECRET}" "jwt-private=${JWT_PRIVATE_B64}" "jwt-public=${JWT_PUBLIC_B64}" "firebase-json=${FIREBASE_JSON_B64}" \
   --only-show-errors \
   --output none
-az containerapp ingress update -g "$RG" -n "$AUTH_APP" --type external --target-port 8080 --transport auto --allow-insecure false --only-show-errors --output none
-az containerapp update \
+containerapp_retry "auth ingress ${AUTH_APP}" az containerapp ingress update -g "$RG" -n "$AUTH_APP" --type external --target-port 8080 --transport auto --allow-insecure false --only-show-errors --output none
+containerapp_retry "auth update ${AUTH_APP}" az containerapp update \
   -g "$RG" \
   -n "$AUTH_APP" \
   --image "$ACR_LOGIN_SERVER/craves/auth-service:$TAG" \
@@ -337,8 +357,8 @@ az acr build \
   --only-show-errors
 
 ensure_acr_pull "$WEB_APP"
-az containerapp ingress update -g "$RG" -n "$WEB_APP" --type external --target-port 3000 --transport auto --allow-insecure false --only-show-errors --output none
-az containerapp update \
+containerapp_retry "web ingress ${WEB_APP}" az containerapp ingress update -g "$RG" -n "$WEB_APP" --type external --target-port 3000 --transport auto --allow-insecure false --only-show-errors --output none
+containerapp_retry "web update ${WEB_APP}" az containerapp update \
   -g "$RG" \
   -n "$WEB_APP" \
   --image "$ACR_LOGIN_SERVER/craves/customer-web-next:$TAG" \

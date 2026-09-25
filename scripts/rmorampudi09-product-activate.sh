@@ -287,32 +287,45 @@ configure_api() {
   local display="$2"
   local path="$3"
   local service_url="$4"
-  az apim api create \
+  local existing_api_id
+  local effective_api_id
+
+  existing_api_id=$(az apim api list \
     -g "$RG" \
     --service-name "$APIM_NAME" \
-    --api-id "$api_id" \
-    --display-name "$display" \
-    --path "$path" \
-    --api-type http \
-    --protocols https \
-    --service-url "$service_url" \
-    --subscription-required false \
-    --only-show-errors \
-    --output none || \
+    --query "[?path=='${path}'].name | [0]" \
+    -o tsv)
+  effective_api_id="${existing_api_id:-$api_id}"
+
+  if [[ -z "$existing_api_id" ]]; then
+    az apim api create \
+      -g "$RG" \
+      --service-name "$APIM_NAME" \
+      --api-id "$effective_api_id" \
+      --display-name "$display" \
+      --path "$path" \
+      --api-type http \
+      --protocols https \
+      --service-url "$service_url" \
+      --subscription-required false \
+      --only-show-errors \
+      --output none || true
+  fi
+
   az apim api update \
     -g "$RG" \
     --service-name "$APIM_NAME" \
-    --api-id "$api_id" \
-    --set "serviceUrl=$service_url" "path=$path" "subscriptionRequired=false" \
+    --api-id "$effective_api_id" \
+    --set "displayName=$display" "serviceUrl=$service_url" "path=$path" "subscriptionRequired=false" \
     --only-show-errors \
     --output none
 
   for method in GET POST PUT PATCH DELETE OPTIONS HEAD; do
-    local op_id="${api_id}-${method,,}-wildcard"
+    local op_id="${effective_api_id}-${method,,}-wildcard"
     az apim api operation create \
       -g "$RG" \
       --service-name "$APIM_NAME" \
-      --api-id "$api_id" \
+      --api-id "$effective_api_id" \
       --operation-id "$op_id" \
       --display-name "${display} ${method}" \
       --method "$method" \

@@ -70,10 +70,18 @@ jobs:
           set -euo pipefail
           git fetch --no-tags origin main:refs/remotes/origin/main
           merge_base="$(git merge-base HEAD refs/remotes/origin/main)"
-          protected="$(git diff --name-only "$merge_base"...HEAD -- services/ openapi/ infra/ apps/api/)"
-          if [[ -n "$protected" ]]; then
-            printf '%s\n' "$protected"
-            echo 'Mobile branch contains changes to protected backend/APIM/infrastructure paths.' >&2
+          touched="$(git diff --name-only "$merge_base"...HEAD -- services/ openapi/ infra/ apps/api/)"
+          violations=""
+          while IFS= read -r path; do
+            [[ -z "$path" ]] && continue
+            if ! git diff --quiet refs/remotes/origin/main -- "$path"; then
+              violations+="$path"
+\n'
+            fi
+          done <<< "$touched"
+          if [[ -n "$violations" ]]; then
+            printf '%s' "$violations"
+            echo 'Mobile branch still differs from main in protected backend/APIM/infrastructure paths.' >&2
             exit 1
           fi
-          echo 'Mobile branch has not changed protected backend/APIM/infrastructure paths.'
+          echo 'Protected backend/APIM/infrastructure paths are unchanged or restored to current main.'

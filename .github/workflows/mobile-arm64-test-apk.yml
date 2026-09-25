@@ -47,11 +47,7 @@ jobs:
 
       - name: Configure production APIM runtime
         working-directory: apps/mobile
-        run: |
-          cat > .env <<'EOF'
-          CRAVES_ENVIRONMENT=production
-          CRAVES_API_BASE_URL=https://api.craves.in
-          EOF
+        run: cp .env.example .env
 
       - name: Validate Firebase Android config
         working-directory: apps/mobile
@@ -133,7 +129,7 @@ jobs:
             printf 'build_type=release-style-internal-test\n'
             printf 'javascript_bundle=embedded\n'
             printf 'firebase_config=repository-google-services-json\n'
-            printf 'api_base_url=https://api.craves.in\n'
+            printf 'api_base_url=from-.env.example\n'
             printf 'signing=existing-debug-key-for-internal-installation\n'
           } > build/arm64-test/build-metadata.txt
 

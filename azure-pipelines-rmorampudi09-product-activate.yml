@@ -1,0 +1,39 @@
+trigger: none
+pr: none
+
+pool:
+  vmImage: ubuntu-22.04
+
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+
+steps:
+  - checkout: self
+
+  - script: |
+      set -euo pipefail
+      echo "Runner preflight OK on $(uname -a)"
+      ls -l scripts/rmorampudi09-product-activate.sh
+    displayName: Runner preflight
+
+  - task: AzureCLI@2
+    displayName: Activate Craves product containers and gateway
+    timeoutInMinutes: 180
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        chmod +x scripts/rmorampudi09-product-activate.sh
+        scripts/rmorampudi09-product-activate.sh
+    env:
+      POSTGRES_ADMIN_PASSWORD: $(POSTGRES_ADMIN_PASSWORD)
+      GITHUB_PAT: $(GITHUB_PAT)
+
+  - task: PublishPipelineArtifact@1
+    displayName: Publish activation summary
+    condition: always()
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)
+      artifact: craves-product-activation

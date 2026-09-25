@@ -75,12 +75,11 @@ jobs:
           while IFS= read -r path; do
             [[ -z "$path" ]] && continue
             if ! git diff --quiet refs/remotes/origin/main -- "$path"; then
-              violations+="$path"
-\n'
+              violations="${violations}${path}\\n"
             fi
           done <<< "$touched"
           if [[ -n "$violations" ]]; then
-            printf '%s' "$violations"
+            printf '%b' "$violations"
             echo 'Mobile branch still differs from main in protected backend/APIM/infrastructure paths.' >&2
             exit 1
           fi

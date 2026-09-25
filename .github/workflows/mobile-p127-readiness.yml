@@ -86,13 +86,14 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags origin main:refs/remotes/origin/main
-          protected="$(git diff --name-only refs/remotes/origin/main -- services/ openapi/ infra/ apps/api/)"
+          merge_base="$(git merge-base HEAD refs/remotes/origin/main)"
+          protected="$(git diff --name-only "$merge_base"...HEAD -- services/ openapi/ infra/ apps/api/)"
           if [[ -n "$protected" ]]; then
             printf '%s\n' "$protected"
-            echo 'Backend/APIM/infrastructure source differs from current main. Mobile branch must not modify protected backend paths.' >&2
+            echo 'Mobile branch contains changes to protected backend/APIM/infrastructure paths.' >&2
             exit 1
           fi
-          echo 'Backend/APIM/infrastructure source matches current main.'
+          echo 'Mobile branch has not changed protected backend/APIM/infrastructure paths.'
 
       - name: Razorpay production runtime static gate
         id: paymentruntime

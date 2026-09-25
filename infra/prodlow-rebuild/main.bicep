@@ -25,7 +25,7 @@ param apimPublisherName string = 'Craves'
 
 var env = toLower(environmentName)
 var project = toLower(projectName)
-var shortHash = take(uniqueString(subscription().id, resourceGroup().name), 6)
+var shortHash = 'kmqgfy'
 var cleanProject = replace(project, '-', '')
 var cleanEnv = replace(env, '-', '')
 var suffix = '${project}-${env}'
@@ -501,6 +501,9 @@ resource frontDoorOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2023-05-01
 resource frontDoorAppRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2023-05-01' = {
   name: 'craves-web-route'
   parent: frontDoorEndpoint
+  dependsOn: [
+    frontDoorOrigin
+  ]
   properties: {
     originGroup: {
       id: frontDoorOriginGroup.id
@@ -522,6 +525,9 @@ resource frontDoorAppRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2023-05-0
 resource frontDoorStaticRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2023-05-01' = {
   name: 'craves-static-route'
   parent: frontDoorEndpoint
+  dependsOn: [
+    frontDoorOrigin
+  ]
   properties: {
     originGroup: {
       id: frontDoorOriginGroup.id

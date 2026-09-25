@@ -25,6 +25,7 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
+        sed -i 's/\r$//' scripts/rmorampudi09-product-activate.sh
         chmod +x scripts/rmorampudi09-product-activate.sh
         scripts/rmorampudi09-product-activate.sh
     env:

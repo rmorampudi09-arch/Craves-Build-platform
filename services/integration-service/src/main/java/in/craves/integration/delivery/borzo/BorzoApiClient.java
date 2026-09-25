@@ -219,7 +219,7 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
 
     private ObjectNode buildOrderRequest(QuoteRequest request, String clientReference) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("type", "standard");
+        root.put("type", "hyperlocal");
         root.put("matter", request.matter());
         root.put("vehicle_type_id", MOTORBIKE_VEHICLE_TYPE_ID);
         root.put("total_weight_kg", toBorzoWeightKg(request.totalWeightGrams()));

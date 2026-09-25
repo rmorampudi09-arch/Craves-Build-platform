@@ -55,7 +55,7 @@ class BorzoApiClientTest {
             .andExpect(header(BorzoApiClient.AUTH_HEADER, "sandbox-token"))
             .andExpect(content().json("""
                 {
-                  "type": "standard",
+                  "type": "hyperlocal",
                   "matter": "Freshly prepared packaged food",
                   "vehicle_type_id": 8,
                   "total_weight_kg": 2,
@@ -89,6 +89,7 @@ class BorzoApiClientTest {
             .andExpect(method(HttpMethod.POST))
             .andExpect(content().json("""
                 {
+                  "type": "hyperlocal",
                   "points": [
                     {},
                     {"client_order_id": "CRV-SUBORDER-123"}

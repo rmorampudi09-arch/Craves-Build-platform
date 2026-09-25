@@ -101,6 +101,10 @@ done
 ensure_acr_pull() {
   local app="$1"
   local principal
+  if [[ "${SKIP_ACR_PULL_BINDING:-false}" == "true" ]]; then
+    echo "Skipping ACR pull binding refresh for ${app}; existing Container App registry configuration is being reused."
+    return 0
+  fi
   principal=$(az containerapp show -g "$RG" -n "$app" --query identity.principalId -o tsv)
   az role assignment create \
     --assignee "$principal" \

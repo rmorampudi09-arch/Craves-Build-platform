@@ -6,6 +6,9 @@ pool:
 
 variables:
   azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+  RESUME_FROM: full
+  SKIP_ACR_PULL_BINDING: false
+  TAG: ''
 
 steps:
   - checkout: self
@@ -31,6 +34,9 @@ steps:
     env:
       POSTGRES_ADMIN_PASSWORD: $(POSTGRES_ADMIN_PASSWORD)
       GITHUB_PAT: $(GITHUB_PAT)
+      RESUME_FROM: $(RESUME_FROM)
+      SKIP_ACR_PULL_BINDING: $(SKIP_ACR_PULL_BINDING)
+      TAG: $(TAG)
 
   - task: PublishPipelineArtifact@1
     displayName: Publish activation summary

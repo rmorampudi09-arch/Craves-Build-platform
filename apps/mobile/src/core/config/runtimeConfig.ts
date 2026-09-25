@@ -7,11 +7,13 @@ export interface RuntimeConfig {
   environment: RuntimeEnvironment;
 }
 
-export const CRAVES_PRODUCTION_API_ORIGIN = 'https://api.craves.in';
+export const CRAVES_PRODUCTION_API_ORIGIN =
+  'https://apim-craves-prodlow-kmqgfy.azure-api.net';
 
 const API_VERSION_PREFIX = '/api/v1';
 const LEGACY_PRODUCTION_API_ORIGINS = new Set([
   'https://api.example.invalid',
+  'https://api.craves.in',
   'https://apim-craves-prodlow-l3ing6.azure-api.net',
 ]);
 

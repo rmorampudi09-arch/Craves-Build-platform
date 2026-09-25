@@ -6,7 +6,7 @@ pool:
 
 variables:
   azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
-  RESUME_FROM: apim-web
+  RESUME_FROM: full
   SKIP_ACR_PULL_BINDING: true
   TAG: ''
 

@@ -9,6 +9,7 @@ PG_ADMIN="cravesadmin"
 TAG="${TAG:-activate-${BUILD_BUILDID:-manual-$(date +%Y%m%d%H%M%S)}}"
 SRC="${PIPELINE_WORKSPACE:-$PWD}/craves-source"
 FRONT_DOOR_URL="https://craves-prodlow-kmqgfy-fyfpa3duefevcvdf.z02.azurefd.net"
+RESUME_FROM="${RESUME_FROM:-full}"
 
 require_secret() {
   local name="$1"
@@ -19,7 +20,9 @@ require_secret() {
   fi
 }
 
-require_secret POSTGRES_ADMIN_PASSWORD
+if [[ "$RESUME_FROM" != "apim-web" ]]; then
+  require_secret POSTGRES_ADMIN_PASSWORD
+fi
 
 containerapp_retry() {
   local label="$1"
@@ -59,22 +62,24 @@ ACR_LOGIN_SERVER=$(az acr show -n "$ACR" --query loginServer -o tsv)
 ACR_ID=$(az acr show -n "$ACR" --query id -o tsv)
 PG_FQDN="${PG_SERVER}.postgres.database.azure.com"
 
-echo "Resetting PostgreSQL admin password to the pipeline secret so runtime apps use the current credential."
-az postgres flexible-server update \
-  --resource-group "$RG" \
-  --name "$PG_SERVER" \
-  --admin-password "$POSTGRES_ADMIN_PASSWORD" \
-  --only-show-errors \
-  --output none
-
-for db in craves_auth_db craves_business_db craves_integration_db; do
-  az postgres flexible-server db create \
+if [[ "$RESUME_FROM" != "apim-web" ]]; then
+  echo "Resetting PostgreSQL admin password to the pipeline secret so runtime apps use the current credential."
+  az postgres flexible-server update \
     --resource-group "$RG" \
-    --server-name "$PG_SERVER" \
-    --database-name "$db" \
+    --name "$PG_SERVER" \
+    --admin-password "$POSTGRES_ADMIN_PASSWORD" \
     --only-show-errors \
-    --output none || true
-done
+    --output none
+
+  for db in craves_auth_db craves_business_db craves_integration_db; do
+    az postgres flexible-server db create \
+      --resource-group "$RG" \
+      --server-name "$PG_SERVER" \
+      --database-name "$db" \
+      --only-show-errors \
+      --output none || true
+  done
+fi
 
 WEB_APP=$(az containerapp list -g "$RG" --query "[?starts_with(name, 'ca-craves-web-')].name | [0]" -o tsv)
 AUTH_APP=$(az containerapp list -g "$RG" --query "[?starts_with(name, 'ca-craves-auth-service')].name | [0]" -o tsv)
@@ -133,6 +138,14 @@ set_health_probe() {
     --output none
 }
 
+APIM_NAME=$(az apim list -g "$RG" --query "[?starts_with(name, 'apim-craves-prodlow-')].name | [0]" -o tsv)
+if [[ -z "$APIM_NAME" ]]; then
+  echo "Could not resolve API Management service." >&2
+  exit 1
+fi
+APIM_GATEWAY_HOST="${APIM_NAME}.azure-api.net"
+
+if [[ "$RESUME_FROM" != "apim-web" ]]; then
 JWT_DIR="${PIPELINE_WORKSPACE:-$PWD}/jwt"
 mkdir -p "$JWT_DIR"
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$JWT_DIR/private.pem" >/dev/null 2>&1
@@ -222,13 +235,6 @@ update_backend() {
   set_health_probe "$app"
 }
 
-APIM_NAME=$(az apim list -g "$RG" --query "[?starts_with(name, 'apim-craves-prodlow-')].name | [0]" -o tsv)
-if [[ -z "$APIM_NAME" ]]; then
-  echo "Could not resolve API Management service." >&2
-  exit 1
-fi
-APIM_GATEWAY_HOST="${APIM_NAME}.azure-api.net"
-
 ensure_acr_pull "$AUTH_APP"
 containerapp_retry "auth secrets ${AUTH_APP}" az containerapp secret set \
   -g "$RG" \
@@ -268,6 +274,9 @@ update_backend "$ORDER_APP" "craves/order-service:$TAG" "craves_business_db" "or
 update_backend "$SUBSCRIPTION_APP" "craves/subscription-service:$TAG" "craves_business_db" "subscriptions"
 update_backend "$INTEGRATION_APP" "craves/integration-service:$TAG" "craves_integration_db" "integration"
 update_backend "$NOTIFICATION_APP" "craves/notification-service:$TAG" "craves_business_db" "notifications"
+else
+  echo "Resuming from APIM and web deployment; backend build and update steps are skipped."
+fi
 
 app_fqdn() {
   az containerapp show -g "$RG" -n "$1" --query properties.configuration.ingress.fqdn -o tsv

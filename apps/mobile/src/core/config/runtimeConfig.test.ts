@@ -21,7 +21,7 @@ afterEach(() => {
 
 describe('getRuntimeConfig', () => {
   it('pins the production gateway to the current Craves custom domain', () => {
-    expect(CRAVES_PRODUCTION_API_ORIGIN).toBe('https://api.craves.in');
+    expect(CRAVES_PRODUCTION_API_ORIGIN).toBe('https://apim-craves-prodlow-kmqgfy.azure-api.net');
   });
 
   it('normalizes the API base URL and resolves an explicit environment', () => {
@@ -62,7 +62,18 @@ describe('getRuntimeConfig', () => {
     });
   });
 
-  it('replaces the retired Azure APIM hostname with the current custom domain', () => {
+
+  it('replaces the previous custom domain with the rebuilt gateway', () => {
+    mutableConfig.CRAVES_ENVIRONMENT = 'production';
+    mutableConfig.CRAVES_API_BASE_URL = 'https://api.craves.in';
+
+    expect(getRuntimeConfig()).toEqual({
+      apiBaseUrl: CRAVES_PRODUCTION_API_ORIGIN,
+      environment: 'production',
+    });
+  });
+
+  it('replaces the retired Azure APIM hostname with the rebuilt gateway', () => {
     mutableConfig.CRAVES_ENVIRONMENT = 'production';
     mutableConfig.CRAVES_API_BASE_URL =
       'https://apim-craves-prodlow-l3ing6.azure-api.net';

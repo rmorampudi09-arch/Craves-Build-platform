@@ -216,6 +216,7 @@ if [[ -z "$APIM_NAME" ]]; then
   exit 1
 fi
 APIM_GATEWAY_HOST="${APIM_NAME}.azure-api.net"
+STORAGE_ACCOUNT=$(az storage account list -g "$RG" --query "[?starts_with(name, 'stcraves')].name | [0]" -o tsv)
 
 if [[ "$RESUME_FROM" != "apim-web" ]]; then
 JWT_DIR="${PIPELINE_WORKSPACE:-$PWD}/jwt"
@@ -366,6 +367,20 @@ SUBSCRIPTION_FQDN=$(app_fqdn "$SUBSCRIPTION_APP")
 INTEGRATION_FQDN=$(app_fqdn "$INTEGRATION_APP")
 NOTIFICATION_FQDN=$(app_fqdn "$NOTIFICATION_APP")
 
+if [[ -n "$STORAGE_ACCOUNT" ]]; then
+  NOTIFICATION_PRINCIPAL_ID=$(az containerapp show -g "$RG" -n "$NOTIFICATION_APP" --query identity.principalId -o tsv)
+  STORAGE_SCOPE=$(az storage account show -g "$RG" -n "$STORAGE_ACCOUNT" --query id -o tsv)
+  if [[ -n "$NOTIFICATION_PRINCIPAL_ID" && -n "$STORAGE_SCOPE" ]]; then
+    az role assignment create \
+      --assignee-object-id "$NOTIFICATION_PRINCIPAL_ID" \
+      --assignee-principal-type ServicePrincipal \
+      --role "Storage Blob Data Contributor" \
+      --scope "$STORAGE_SCOPE" \
+      --only-show-errors \
+      --output none || true
+  fi
+fi
+
 echo "Configuring API Management routes."
 configure_api() {
   local api_id="$1"
@@ -439,6 +454,25 @@ configure_api "craves-chef-onboarding" "Craves Chef Onboarding" "api/v1/chef-onb
 configure_api "craves-notification" "Craves Notification" "api/v1/notifications" "https://${NOTIFICATION_FQDN}/api/v1/notifications"
 configure_api "craves-documents" "Craves Documents" "api/v1/documents" "https://${NOTIFICATION_FQDN}/api/v1/documents"
 
+if [[ -n "$STORAGE_ACCOUNT" ]]; then
+  containerapp_retry "document settings ${NOTIFICATION_APP}" az containerapp update \
+    -g "$RG" \
+    -n "$NOTIFICATION_APP" \
+    --set-env-vars \
+      "CRAVES_DOCUMENTS_ENABLED=true" \
+      "CRAVES_DOCUMENTS_WORKER_ENABLED=true" \
+      "CRAVES_DOCUMENTS_EMAIL_ENABLED=true" \
+      "CRAVES_NOTIFICATION_EMAIL_ENABLED=true" \
+      "CRAVES_DOCUMENTS_ORDER_BASE_URL=https://${ORDER_FQDN}" \
+      "CRAVES_DOCUMENTS_INTEGRATION_BASE_URL=https://${INTEGRATION_FQDN}" \
+      "CRAVES_DOCUMENTS_SUBSCRIPTION_BASE_URL=https://${SUBSCRIPTION_FQDN}" \
+      "CRAVES_DOCUMENTS_BLOB_ENDPOINT=https://${STORAGE_ACCOUNT}.blob.core.windows.net" \
+      "CRAVES_DOCUMENTS_BLOB_CONTAINER=documents" \
+      "CRAVES_RUNTIME_REVISION_TOKEN=$(date +%s)" \
+    --only-show-errors \
+    --output none
+fi
+
 echo "Building customer web image."
 az acr build \
   -r "$ACR" \
@@ -482,6 +516,7 @@ containerapp_retry "web update ${WEB_APP}" az containerapp update \
     "HOSTNAME=0.0.0.0" \
     "CRAVES_ENVIRONMENT=prodlow" \
     "CRAVES_API_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1" \
+    "CRAVES_DOCUMENTS_WEB_ENABLED=true" \
     "NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=true" \
     "NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}" \
     "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}" \
@@ -504,6 +539,7 @@ containerapp_retry "admin web update ${ADMIN_WEB_APP}" az containerapp update \
     "HOSTNAME=0.0.0.0" \
     "CRAVES_ENVIRONMENT=prodlow" \
     "CRAVES_API_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1" \
+    "CRAVES_DOCUMENTS_WEB_ENABLED=true" \
     "NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=true" \
     "NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}" \
     "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}" \

@@ -173,6 +173,39 @@ if ! az afd custom-domain show \
     --output none
 fi
 
+VALIDATION_TOKEN="$(az afd custom-domain show \
+  -g "$RG" \
+  --profile-name "$PROFILE" \
+  --custom-domain-name "$API_DOMAIN_RESOURCE" \
+  --query "validationProperties.validationToken" \
+  -o tsv \
+  --only-show-errors 2>/dev/null || true)"
+if [[ -n "$VALIDATION_TOKEN" && "$VALIDATION_TOKEN" != "None" ]]; then
+  DNS_AUTH_RECORD="_dnsauth.${RECORD_NAME}"
+  info "Publishing Front Door validation TXT ${DNS_AUTH_RECORD}.${DNS_ZONE_NAME}."
+  az network dns record-set txt delete \
+    -g "$DNS_ZONE_RG" \
+    -z "$DNS_ZONE_NAME" \
+    -n "$DNS_AUTH_RECORD" \
+    --yes \
+    --only-show-errors \
+    --output none >/dev/null 2>&1 || true
+  az network dns record-set txt create \
+    -g "$DNS_ZONE_RG" \
+    -z "$DNS_ZONE_NAME" \
+    -n "$DNS_AUTH_RECORD" \
+    --ttl 300 \
+    --only-show-errors \
+    --output none
+  az network dns record-set txt add-record \
+    -g "$DNS_ZONE_RG" \
+    -z "$DNS_ZONE_NAME" \
+    -n "$DNS_AUTH_RECORD" \
+    -v "$VALIDATION_TOKEN" \
+    --only-show-errors \
+    --output none
+fi
+
 domain_state=""
 validation_state=""
 for _ in $(seq 1 80); do

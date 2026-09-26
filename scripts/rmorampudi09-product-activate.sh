@@ -422,7 +422,7 @@ configure_api() {
 
 configure_api "craves-auth" "Craves Auth" "api/v1/auth" "https://${AUTH_FQDN}/api/v1/auth"
 configure_api "craves-catalog" "Craves Catalog" "api/v1/catalog" "https://${CATALOG_FQDN}/api/v1/catalog"
-configure_api "craves-kitchens" "Craves Kitchens" "api/v1/kitchens" "https://${USER_CHEF_FQDN}/api/v1/kitchens"
+configure_api "craves-kitchens" "Craves Kitchens" "api/v1/kitchens" "https://${CATALOG_FQDN}/api/v1/kitchens"
 configure_api "craves-chef-profile" "Craves Chef Profile" "api/v1/chef/application" "https://${USER_CHEF_FQDN}/api/v1/chef/application"
 configure_api "craves-chef-menu" "Craves Chef Menu" "api/v1/chef/menu" "https://${USER_CHEF_FQDN}/api/v1/chef/menu"
 configure_api "craves-chef-orders" "Craves Chef Orders" "api/v1/chef/orders" "https://${ORDER_FQDN}/api/v1/chef/orders"

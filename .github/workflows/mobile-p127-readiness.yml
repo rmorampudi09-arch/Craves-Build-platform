@@ -9,6 +9,10 @@ on:
       - .github/scripts/mobile-p127-readiness-check.mjs
       - .github/scripts/mobile-p127-dependency-audit-check.mjs
       - apps/mobile/tsconfig.json
+      - apps/mobile/.env.example
+      - apps/mobile/src/core/config/**
+      - apps/mobile/src/core/http/**
+      - apps/mobile/src/features/auth/**
       - apps/mobile/android/**
       - apps/mobile/ios/CravesMobile/Info.plist
       - apps/mobile/jest.setup.js
@@ -101,6 +105,16 @@ jobs:
             exit 1
           fi
           echo 'Protected backend/APIM/infrastructure paths are unchanged or restored to current main.'
+
+      - name: Production APIM runtime static gate
+        id: apimruntime
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          grep -qx 'CRAVES_ENVIRONMENT=production' apps/mobile/.env.example
+          grep -qx 'CRAVES_API_BASE_URL=https://api.craves.in' apps/mobile/.env.example
+          grep -q "CRAVES_PRODUCTION_API_ORIGIN = 'https://api.craves.in'" apps/mobile/src/core/config/runtimeConfig.ts
+          echo 'Production mobile runtime is pinned to the current main APIM gateway.'
 
       - name: Razorpay production runtime static gate
         id: paymentruntime
@@ -272,6 +286,7 @@ jobs:
           P119: ${{ steps.p119.outcome }}
           P120: ${{ steps.p120.outcome }}
           P127_STATIC: ${{ steps.p127static.outcome }}
+          APIM_RUNTIME: ${{ steps.apimruntime.outcome }}
           PAYMENT_RUNTIME: ${{ steps.paymentruntime.outcome }}
           IOS_RAZORPAY: ${{ steps.iosrazorpay.outcome }}
           BUNDLE: ${{ steps.bundle.outcome }}
@@ -283,7 +298,7 @@ jobs:
         run: |
           set -euo pipefail
           failures=0
-          for gate in TYPECHECK LINT JEST INTEGRATION E2E P119 P120 P127_STATIC PAYMENT_RUNTIME IOS_RAZORPAY BUNDLE ANDROID_CONFIG ANDROID_NATIVE BACKEND_GUARD DEPENDENCY_AUDIT_CLASSIFICATION; do
+          for gate in TYPECHECK LINT JEST INTEGRATION E2E P119 P120 P127_STATIC APIM_RUNTIME PAYMENT_RUNTIME IOS_RAZORPAY BUNDLE ANDROID_CONFIG ANDROID_NATIVE BACKEND_GUARD DEPENDENCY_AUDIT_CLASSIFICATION; do
             result="${!gate}"
             printf '%-32s %s\n' "$gate" "$result"
             if [ "$result" != 'success' ]; then

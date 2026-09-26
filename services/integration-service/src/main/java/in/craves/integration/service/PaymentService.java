@@ -156,8 +156,10 @@ public class PaymentService {
         VerifyPaymentRequest request
     ) {
         if (request == null
+            || !StringUtils.hasText(request.providerPaymentId())
+            || !StringUtils.hasText(request.providerSignature())
             || !existing.providerOrderId().equals(request.providerOrderId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay verification details are required");
+            return recoverCapturedRazorpayPayment(existing);
         }
         RazorpayPaymentClient.VerifiedPayment verified = razorpayClient.verifyCheckout(
             existing.providerOrderId(),
@@ -166,6 +168,40 @@ public class PaymentService {
             existing.amount(),
             existing.currency()
         );
+        int transitioned = jdbcTemplate.update(
+            "UPDATE payment_schema.payment_order SET status = ?, provider_status = ?, provider_payment_id = ?, response_payload = ?::jsonb, updated_at = now() WHERE id = ? AND status <> ?",
+            PaymentOrderStatus.PAID.name(), verified.providerStatus(), verified.paymentId(),
+            json(verified.response()), existing.paymentOrderId(), PaymentOrderStatus.PAID.name()
+        );
+        if (transitioned > 0) {
+            notifyOrderPaid(existing.checkoutId(), existing, verified.paymentId());
+        }
+        return new VerifyPaymentResponse(
+            existing.paymentOrderId(), PaymentOrderStatus.PAID, verified.providerStatus(), verified.paymentId()
+        );
+    }
+
+    private VerifyPaymentResponse recoverCapturedRazorpayPayment(PaymentOrderResponse existing) {
+        if (existing.status() == PaymentOrderStatus.PAID) {
+            return new VerifyPaymentResponse(
+                existing.paymentOrderId(), existing.status(), existing.providerStatus(), existing.providerPaymentId()
+            );
+        }
+        String checkoutKeyId = loadCheckoutKeyId(existing.paymentOrderId());
+        if (!StringUtils.hasText(checkoutKeyId)) {
+            return new VerifyPaymentResponse(
+                existing.paymentOrderId(), existing.status(), existing.providerStatus(), existing.providerPaymentId()
+            );
+        }
+        Optional<RazorpayPaymentClient.VerifiedPayment> captured = razorpayClient.findCapturedOrderPayment(
+            existing.providerOrderId(), existing.amount(), existing.currency(), checkoutKeyId
+        );
+        if (captured.isEmpty()) {
+            return new VerifyPaymentResponse(
+                existing.paymentOrderId(), existing.status(), existing.providerStatus(), existing.providerPaymentId()
+            );
+        }
+        RazorpayPaymentClient.VerifiedPayment verified = captured.get();
         int transitioned = jdbcTemplate.update(
             "UPDATE payment_schema.payment_order SET status = ?, provider_status = ?, provider_payment_id = ?, response_payload = ?::jsonb, updated_at = now() WHERE id = ? AND status <> ?",
             PaymentOrderStatus.PAID.name(), verified.providerStatus(), verified.paymentId(),
@@ -520,15 +556,19 @@ public class PaymentService {
         return findByProviderOrderId("CASHFREE", orderId);
     }
 
+    private String loadCheckoutKeyId(UUID paymentOrderId) {
+        return jdbcTemplate.query(
+            "SELECT checkout_key_id FROM payment_schema.payment_order WHERE id = ?",
+            (rs, rowNum) -> rs.getString("checkout_key_id"), paymentOrderId
+        ).stream().filter(StringUtils::hasText).findFirst().orElse(null);
+    }
+
     private CreatePaymentOrderResponse toCreateResponse(PaymentOrderResponse existing) {
         String paymentSessionId = jdbcTemplate.query(
             "SELECT payment_session_id FROM payment_schema.payment_order WHERE id = ?",
             (rs, rowNum) -> rs.getString("payment_session_id"), existing.paymentOrderId()
         ).stream().filter(java.util.Objects::nonNull).findFirst().orElse(null);
-        String checkoutKeyId = jdbcTemplate.query(
-            "SELECT checkout_key_id FROM payment_schema.payment_order WHERE id = ?",
-            (rs, rowNum) -> rs.getString("checkout_key_id"), existing.paymentOrderId()
-        ).stream().filter(java.util.Objects::nonNull).findFirst().orElse(null);
+        String checkoutKeyId = loadCheckoutKeyId(existing.paymentOrderId());
         return new CreatePaymentOrderResponse(
             existing.paymentOrderId(), existing.checkoutId(), existing.cravesPaymentOrderRef(),
             existing.provider(), existing.providerOrderId(), existing.providerPaymentId(), checkoutKeyId,

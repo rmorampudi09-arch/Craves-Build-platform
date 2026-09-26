@@ -275,6 +275,26 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
     setBusy(true);
     setError("");
     try {
+      const verificationResponse = await fetch(
+        `/api/payments/orders/${encodeURIComponent(payment.paymentOrderId)}/verify`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        },
+      );
+      const verificationRaw = await verificationResponse.json().catch(() => null);
+      if (verificationResponse.ok) {
+        const verification = parsePaymentVerification(verificationRaw);
+        if (verification) {
+          setStatus(verification.status);
+          if (verification.status === "PAID") {
+            setMessage("Payment verified. Your order is now available in My Orders.");
+            return;
+          }
+        }
+      }
       const response = await fetch(
         `/api/payments/orders/${encodeURIComponent(payment.paymentOrderId)}`,
         { cache: "no-store", credentials: "same-origin" },

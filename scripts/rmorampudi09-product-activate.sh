@@ -294,6 +294,7 @@ fi
 APIM_GATEWAY_HOST="${APIM_NAME}.azure-api.net"
 STORAGE_ACCOUNT=$(az storage account list -g "$RG" --query "[?starts_with(name, 'stcraves')].name | [0]" -o tsv)
 USER_CHEF_FQDN=$(az containerapp show -g "$RG" -n "$USER_CHEF_APP" --query properties.configuration.ingress.fqdn -o tsv)
+ORDER_FQDN=$(az containerapp show -g "$RG" -n "$ORDER_APP" --query properties.configuration.ingress.fqdn -o tsv)
 
 if [[ "$RESUME_FROM" == "admin-web-update" ]]; then
   if [[ -z "$TAG" ]]; then
@@ -398,6 +399,8 @@ update_backend() {
       "MANAGEMENT_HEALTH_REDIS_ENABLED=false" \
       "CRAVES_CATALOG_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1/catalog" \
       "CRAVES_USER_CHEF_INTERNAL_BASE_URL=https://${USER_CHEF_FQDN}" \
+      "CRAVES_ORDER_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1" \
+      "CRAVES_ORDER_INTERNAL_BASE_URL=https://${ORDER_FQDN}/internal/v1" \
       "CRAVES_AUTH_INTERNAL_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1/auth" \
       "CRAVES_NOTIFICATION_INTERNAL_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1/notifications" \
       "CRAVES_SUBSCRIPTION_INTERNAL_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1/subscriptions" \

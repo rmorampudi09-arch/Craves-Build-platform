@@ -20,7 +20,7 @@ require_secret() {
   fi
 }
 
-if [[ "$RESUME_FROM" != "apim-web" ]]; then
+if [[ "$RESUME_FROM" != "apim-web" && "$RESUME_FROM" != "inventory" ]]; then
   require_secret POSTGRES_ADMIN_PASSWORD
 fi
 
@@ -48,6 +48,38 @@ echo "Starting Craves activation run ${BUILD_BUILDID:-manual}."
 echo "Checking Azure CLI extension readiness without allowing extension install to stall the deployment."
 timeout 120 az extension add --name containerapp --upgrade --yes --only-show-errors >/dev/null || true
 timeout 60 az extension add --name apim --upgrade --yes --only-show-errors >/dev/null || true
+
+if [[ "$RESUME_FROM" == "inventory" ]]; then
+  echo "Inventory-only mode: no resources will be created, updated, or deleted."
+  echo "Azure account context:"
+  az account show --query "{subscriptionName:name,subscriptionId:id,tenantId:tenantId,user:user.name}" -o json
+
+  echo "Craves resources in ${RG}:"
+  az resource list -g "$RG" --query "[?contains(name, 'craves') || contains(name, 'Craves')].{name:name,type:type,location:location}" -o table
+
+  echo "Craves Container Apps in ${RG}:"
+  az containerapp list -g "$RG" --query "[].{name:name,location:location,latestRevision:properties.latestRevisionName}" -o table
+
+  echo "Duplicate check for expected Container App prefixes:"
+  for prefix in \
+    ca-craves-web- \
+    ca-craves-auth-service \
+    ca-craves-user-chef-service \
+    ca-craves-catalog-service \
+    ca-craves-order-service \
+    ca-craves-subscription-service \
+    ca-craves-integration-service \
+    ca-craves-notification-service; do
+    matches=$(az containerapp list -g "$RG" --query "[?starts_with(name, '${prefix}')].name" -o tsv)
+    count=$(printf '%s\n' "$matches" | sed '/^$/d' | wc -l | tr -d ' ')
+    echo "${prefix}: ${count}"
+    if [[ "$count" != "1" ]]; then
+      printf '%s\n' "$matches" | sed 's/^/  - /'
+    fi
+  done
+
+  exit 0
+fi
 
 rm -rf "$SRC"
 echo "Cloning Craves product source from GitHub."

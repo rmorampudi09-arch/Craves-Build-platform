@@ -293,6 +293,42 @@ if [[ -z "$APIM_NAME" ]]; then
 fi
 APIM_GATEWAY_HOST="${APIM_NAME}.azure-api.net"
 STORAGE_ACCOUNT=$(az storage account list -g "$RG" --query "[?starts_with(name, 'stcraves')].name | [0]" -o tsv)
+USER_CHEF_FQDN=$(az containerapp show -g "$RG" -n "$USER_CHEF_APP" --query properties.configuration.ingress.fqdn -o tsv)
+
+if [[ "$RESUME_FROM" == "admin-web-update" ]]; then
+  if [[ -z "$TAG" ]]; then
+    echo "TAG is required when RESUME_FROM=admin-web-update." >&2
+    exit 1
+  fi
+  echo "Dispatching admin web update only with image tag ${TAG}."
+  configure_acr_registry "$ADMIN_WEB_APP"
+  containerapp_retry "admin web update ${ADMIN_WEB_APP}" az containerapp update \
+    -g "$RG" \
+    -n "$ADMIN_WEB_APP" \
+    --image "$ACR_LOGIN_SERVER/craves/admin-web:$TAG" \
+    --min-replicas 1 \
+    --set-env-vars \
+      "PORT=3000" \
+      "HOSTNAME=0.0.0.0" \
+      "CRAVES_ENVIRONMENT=prodlow" \
+      "CRAVES_API_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1" \
+      "CRAVES_DOCUMENTS_WEB_ENABLED=true" \
+      "NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=true" \
+      "NEXT_PUBLIC_RAZORPAY_MODE=${NEXT_PUBLIC_RAZORPAY_MODE}" \
+      "CRAVES_PUBLIC_SUPPORT_PHONE=${CRAVES_PUBLIC_SUPPORT_PHONE}" \
+      "CRAVES_REGISTERED_BUSINESS_NAME=${CRAVES_REGISTERED_BUSINESS_NAME}" \
+      "NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}" \
+      "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}" \
+      "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID}" \
+      "NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}" \
+      "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}" \
+      "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}" \
+    --no-wait \
+    --only-show-errors \
+    --output none
+  echo "Admin web update request submitted."
+  exit 0
+fi
 
 if [[ "$RESUME_FROM" != "apim-web" ]]; then
 JWT_DIR="${PIPELINE_WORKSPACE:-$PWD}/jwt"
@@ -314,7 +350,10 @@ az acr build -r "$ACR" -t "craves/subscription-service:$TAG" "$SRC/services/subs
 az acr build -r "$ACR" -t "craves/integration-service:$TAG" "$SRC/services/integration-service" --only-show-errors
 az acr build -r "$ACR" -t "craves/notification-service:$TAG" "$SRC/services/notification-service" --only-show-errors
 az acr build -r "$ACR" -t "craves/referral-service:$TAG" "$SRC/services/referral-service" --only-show-errors
-az acr build -r "$ACR" -t "craves/delivery-intelligence-admin:$TAG" --file apps/delivery-intelligence-admin/Dockerfile "$SRC" --only-show-errors
+(
+  cd "$SRC"
+  az acr build -r "$ACR" -t "craves/delivery-intelligence-admin:$TAG" --file apps/delivery-intelligence-admin/Dockerfile . --only-show-errors
+)
 
 echo "Updating backend Container Apps."
 update_backend() {
@@ -358,6 +397,7 @@ update_backend() {
       "CRAVES_REDIS_HEALTH_ENABLED=false" \
       "MANAGEMENT_HEALTH_REDIS_ENABLED=false" \
       "CRAVES_CATALOG_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1/catalog" \
+      "CRAVES_USER_CHEF_INTERNAL_BASE_URL=https://${USER_CHEF_FQDN}" \
       "CRAVES_AUTH_INTERNAL_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1/auth" \
       "CRAVES_NOTIFICATION_INTERNAL_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1/notifications" \
       "CRAVES_SUBSCRIPTION_INTERNAL_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1/subscriptions" \
@@ -569,7 +609,7 @@ echo "Building admin web image."
 az acr build \
   -r "$ACR" \
   -t "craves/admin-web:$TAG" \
-  --file Dockerfile.admin \
+  --file "$SRC/apps/customer-web-next/Dockerfile.admin" \
   --build-arg "NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}" \
   --build-arg "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}" \
   --build-arg "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID}" \

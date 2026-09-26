@@ -23,7 +23,10 @@ test("cart validates with the backend before address selection", () => {
 });
 
 test("checkout uses parsed active saved addresses and backend checkout", () => {
+  const checkoutRoute = source("../app/checkout/page.tsx");
   const page = source("../screens/Checkout/Checkout.tsx");
+  assert.match(checkoutRoute, /CustomerCheckoutForm/);
+  assert.doesNotMatch(checkoutRoute, /CheckoutScreen/);
   assert.match(page, /parseCustomerAddresses\(raw\)/);
   assert.match(page, /filter\(\(address\) => address\.active\)/);
   assert.match(page, /fetch\("\/api\/checkout"/);

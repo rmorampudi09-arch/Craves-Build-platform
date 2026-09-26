@@ -121,8 +121,11 @@ ORDER_APP=$(az containerapp list -g "$RG" --query "[?starts_with(name, 'ca-crave
 SUBSCRIPTION_APP=$(az containerapp list -g "$RG" --query "[?starts_with(name, 'ca-craves-subscription-service')].name | [0]" -o tsv)
 INTEGRATION_APP=$(az containerapp list -g "$RG" --query "[?starts_with(name, 'ca-craves-integration-service')].name | [0]" -o tsv)
 NOTIFICATION_APP=$(az containerapp list -g "$RG" --query "[?starts_with(name, 'ca-craves-notification-service')].name | [0]" -o tsv)
+REFERRAL_APP=$(az containerapp list -g "$RG" --query "[?starts_with(name, 'ca-craves-referral')].name | [0]" -o tsv)
+DELIVERY_INTEL_APP=$(az containerapp list -g "$RG" --query "[?starts_with(name, 'ca-craves-delivery-intel')].name | [0]" -o tsv)
+ADMIN_WEB_APP=$(az containerapp list -g "$RG" --query "[?starts_with(name, 'ca-craves-admin-web')].name | [0]" -o tsv)
 
-for item in WEB_APP AUTH_APP USER_CHEF_APP CATALOG_APP ORDER_APP SUBSCRIPTION_APP INTEGRATION_APP NOTIFICATION_APP; do
+for item in WEB_APP AUTH_APP USER_CHEF_APP CATALOG_APP ORDER_APP SUBSCRIPTION_APP INTEGRATION_APP NOTIFICATION_APP REFERRAL_APP DELIVERY_INTEL_APP ADMIN_WEB_APP; do
   if [[ -z "${!item}" ]]; then
     echo "Could not resolve required Container App $item." >&2
     az containerapp list -g "$RG" --query "[].name" -o table
@@ -149,6 +152,26 @@ ensure_acr_pull() {
     -n "$app" \
     --server "$ACR_LOGIN_SERVER" \
     --identity system \
+    --only-show-errors \
+    --output none
+}
+
+configure_acr_registry() {
+  local app="$1"
+  local enabled
+  enabled=$(az acr show -n "$ACR" --query adminUserEnabled -o tsv)
+  if [[ "$enabled" != "true" ]]; then
+    az acr update -n "$ACR" --admin-enabled true --only-show-errors --output none
+  fi
+  local username password
+  username=$(az acr credential show -n "$ACR" --query username -o tsv)
+  password=$(az acr credential show -n "$ACR" --query passwords[0].value -o tsv)
+  containerapp_retry "registry credentials ${app}" az containerapp registry set \
+    -g "$RG" \
+    -n "$app" \
+    --server "$ACR_LOGIN_SERVER" \
+    --username "$username" \
+    --password "$password" \
     --only-show-errors \
     --output none
 }
@@ -219,6 +242,8 @@ az acr build -r "$ACR" -t "craves/order-service:$TAG" "$SRC/services/order-servi
 az acr build -r "$ACR" -t "craves/subscription-service:$TAG" "$SRC/services/subscription-service" --only-show-errors
 az acr build -r "$ACR" -t "craves/integration-service:$TAG" "$SRC/services/integration-service" --only-show-errors
 az acr build -r "$ACR" -t "craves/notification-service:$TAG" "$SRC/services/notification-service" --only-show-errors
+az acr build -r "$ACR" -t "craves/referral-service:$TAG" "$SRC/services/referral-service" --only-show-errors
+az acr build -r "$ACR" -t "craves/delivery-intelligence-admin:$TAG" --file apps/delivery-intelligence-admin/Dockerfile "$SRC" --only-show-errors
 
 echo "Updating backend Container Apps."
 update_backend() {
@@ -310,6 +335,25 @@ update_backend "$ORDER_APP" "craves/order-service:$TAG" "craves_business_db" "or
 update_backend "$SUBSCRIPTION_APP" "craves/subscription-service:$TAG" "craves_business_db" "subscriptions"
 update_backend "$INTEGRATION_APP" "craves/integration-service:$TAG" "craves_integration_db" "integration"
 update_backend "$NOTIFICATION_APP" "craves/notification-service:$TAG" "craves_business_db" "notifications"
+
+configure_acr_registry "$REFERRAL_APP"
+containerapp_retry "referral update ${REFERRAL_APP}" az containerapp update \
+  -g "$RG" \
+  -n "$REFERRAL_APP" \
+  --image "$ACR_LOGIN_SERVER/craves/referral-service:$TAG" \
+  --min-replicas 1 \
+  --only-show-errors \
+  --output none
+
+configure_acr_registry "$DELIVERY_INTEL_APP"
+containerapp_retry "delivery intelligence ingress ${DELIVERY_INTEL_APP}" az containerapp ingress update -g "$RG" -n "$DELIVERY_INTEL_APP" --type external --target-port 3000 --transport auto --allow-insecure false --only-show-errors --output none
+containerapp_retry "delivery intelligence update ${DELIVERY_INTEL_APP}" az containerapp update \
+  -g "$RG" \
+  -n "$DELIVERY_INTEL_APP" \
+  --image "$ACR_LOGIN_SERVER/craves/delivery-intelligence-admin:$TAG" \
+  --min-replicas 1 \
+  --only-show-errors \
+  --output none
 else
   echo "Resuming from APIM and web deployment; backend build and update steps are skipped."
 fi
@@ -414,12 +458,50 @@ az acr build \
   "$SRC/apps/customer-web-next" \
   --only-show-errors
 
-ensure_acr_pull "$WEB_APP"
+echo "Building admin web image."
+az acr build \
+  -r "$ACR" \
+  -t "craves/admin-web:$TAG" \
+  --file Dockerfile.admin \
+  --build-arg NEXT_PUBLIC_FIREBASE_API_KEY=placeholder \
+  --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=craves-placeholder.firebaseapp.com \
+  --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID=craves-placeholder \
+  --build-arg NEXT_PUBLIC_FIREBASE_APP_ID=1:000000000000:web:placeholder \
+  --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=000000000000 \
+  --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=craves-placeholder.appspot.com \
+  --build-arg NEXT_PUBLIC_RAZORPAY_MODE=sandbox \
+  --build-arg NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=true \
+  "$SRC/apps/customer-web-next" \
+  --only-show-errors
+
+configure_acr_registry "$WEB_APP"
 containerapp_retry "web ingress ${WEB_APP}" az containerapp ingress update -g "$RG" -n "$WEB_APP" --type external --target-port 3000 --transport auto --allow-insecure false --only-show-errors --output none
 containerapp_retry "web update ${WEB_APP}" az containerapp update \
   -g "$RG" \
   -n "$WEB_APP" \
   --image "$ACR_LOGIN_SERVER/craves/customer-web-next:$TAG" \
+  --min-replicas 1 \
+  --set-env-vars \
+    "PORT=3000" \
+    "HOSTNAME=0.0.0.0" \
+    "CRAVES_ENVIRONMENT=prodlow" \
+    "CRAVES_API_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1" \
+    "NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=true" \
+    "NEXT_PUBLIC_FIREBASE_API_KEY=placeholder" \
+    "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=craves-placeholder.firebaseapp.com" \
+    "NEXT_PUBLIC_FIREBASE_PROJECT_ID=craves-placeholder" \
+    "NEXT_PUBLIC_FIREBASE_APP_ID=1:000000000000:web:placeholder" \
+    "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=000000000000" \
+    "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=craves-placeholder.appspot.com" \
+  --only-show-errors \
+  --output none
+
+configure_acr_registry "$ADMIN_WEB_APP"
+containerapp_retry "admin web ingress ${ADMIN_WEB_APP}" az containerapp ingress update -g "$RG" -n "$ADMIN_WEB_APP" --type external --target-port 3000 --transport auto --allow-insecure false --only-show-errors --output none
+containerapp_retry "admin web update ${ADMIN_WEB_APP}" az containerapp update \
+  -g "$RG" \
+  -n "$ADMIN_WEB_APP" \
+  --image "$ACR_LOGIN_SERVER/craves/admin-web:$TAG" \
   --min-replicas 1 \
   --set-env-vars \
     "PORT=3000" \

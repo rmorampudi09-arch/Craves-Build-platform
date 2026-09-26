@@ -18,7 +18,7 @@ test("cart has no demo or local mutation fallback", () => {
 test("cart validates with the backend before address selection", () => {
   const page = source("../screens/Cart/Cart.tsx");
   assert.match(page, /await validateCart\(\)/);
-  assert.match(page, /navigate\(\{ to: "\/payment" \}\)/);
+  assert.match(page, /navigate\(\{ to: "\/checkout" \}\)/);
   assert.match(page, /cartCurrency\(\)/);
 });
 

@@ -121,7 +121,7 @@ function CartPage() {
     setMessage("");
     try {
       await validateCart();
-      navigate({ to: "/payment" });
+      navigate({ to: "/checkout" });
     } catch (error) {
       setMessage(
         error instanceof Error

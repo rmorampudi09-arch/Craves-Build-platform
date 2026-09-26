@@ -205,7 +205,7 @@ set_health_probe() {
     -g "$RG" \
     -n "$app" \
     --min-replicas 1 \
-    --set-env-vars "MANAGEMENT_HEALTH_REDIS_ENABLED=false" "CRAVES_REDIS_HEALTH_ENABLED=false" \
+    --set-env-vars "MANAGEMENT_HEALTH_REDIS_ENABLED=false" "CRAVES_REDIS_HEALTH_ENABLED=false" "MANAGEMENT_ENDPOINT_HEALTH_VALIDATE_GROUP_MEMBERSHIP=false" \
     --only-show-errors \
     --output none
 }
@@ -285,6 +285,7 @@ update_backend() {
       "CRAVES_NOTIFICATION_INTERNAL_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1/notifications" \
       "CRAVES_SUBSCRIPTION_INTERNAL_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1/subscriptions" \
       "CRAVES_INTEGRATION_SERVICE_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1" \
+      "MANAGEMENT_ENDPOINT_HEALTH_VALIDATE_GROUP_MEMBERSHIP=false" \
     --only-show-errors \
     --output none
   set_health_probe "$app"
@@ -319,6 +320,7 @@ containerapp_retry "auth update ${AUTH_APP}" az containerapp update \
     "FIREBASE_CHECK_REVOKED=false" \
     "CRAVES_REDIS_HEALTH_ENABLED=false" \
     "MANAGEMENT_HEALTH_REDIS_ENABLED=false" \
+    "MANAGEMENT_ENDPOINT_HEALTH_VALIDATE_GROUP_MEMBERSHIP=false" \
   --only-show-errors \
   --output none
 set_health_probe "$AUTH_APP"

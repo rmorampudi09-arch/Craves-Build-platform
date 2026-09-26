@@ -23,6 +23,19 @@ require_secret() {
 if [[ "$RESUME_FROM" != "apim-web" && "$RESUME_FROM" != "inventory" ]]; then
   require_secret POSTGRES_ADMIN_PASSWORD
 fi
+if [[ "$RESUME_FROM" != "inventory" ]]; then
+  for name in \
+    NEXT_PUBLIC_FIREBASE_API_KEY \
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN \
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID \
+    NEXT_PUBLIC_FIREBASE_APP_ID \
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID \
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET \
+    FIREBASE_PROJECT_ID \
+    FIREBASE_SERVICE_ACCOUNT_JSON_BASE64; do
+    require_secret "$name"
+  done
+fi
 
 containerapp_retry() {
   local label="$1"
@@ -213,26 +226,7 @@ JWT_PRIVATE_B64=$(base64 -w0 "$JWT_DIR/private.pem")
 JWT_PUBLIC_B64=$(base64 -w0 "$JWT_DIR/public.pem")
 INTERNAL_SERVICE_SECRET=$(openssl rand -base64 36 | tr -d '\n')
 
-FIREBASE_DIR="${PIPELINE_WORKSPACE:-$PWD}/firebase"
-mkdir -p "$FIREBASE_DIR"
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$FIREBASE_DIR/private.pem" >/dev/null 2>&1
-FIREBASE_PRIVATE_ESCAPED=$(awk '{printf "%s\\n", $0}' "$FIREBASE_DIR/private.pem")
-cat > "$FIREBASE_DIR/service-account.json" <<JSON
-{
-  "type": "service_account",
-  "project_id": "craves-placeholder",
-  "private_key_id": "placeholder",
-  "private_key": "${FIREBASE_PRIVATE_ESCAPED}",
-  "client_email": "placeholder@craves-placeholder.iam.gserviceaccount.com",
-  "client_id": "000000000000000000000",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/placeholder%40craves-placeholder.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-}
-JSON
-FIREBASE_JSON_B64=$(base64 -w0 "$FIREBASE_DIR/service-account.json")
+FIREBASE_JSON_B64="${FIREBASE_SERVICE_ACCOUNT_JSON_BASE64}"
 
 echo "Building backend service images in ACR."
 az acr build -r "$ACR" -t "craves/auth-service:$TAG" "$SRC/services/auth-service" --only-show-errors
@@ -320,7 +314,7 @@ containerapp_retry "auth update ${AUTH_APP}" az containerapp update \
     "CRAVES_JWT_PRIVATE_KEY_PEM_BASE64=secretref:jwt-private" \
     "CRAVES_JWT_PUBLIC_KEY_PEM_BASE64=secretref:jwt-public" \
     "CRAVES_INTERNAL_SERVICE_SECRET=secretref:svc-secret" \
-    "FIREBASE_PROJECT_ID=craves-placeholder" \
+    "FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}" \
     "FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=secretref:firebase-json" \
     "FIREBASE_CHECK_REVOKED=false" \
     "CRAVES_REDIS_HEALTH_ENABLED=false" \
@@ -447,12 +441,12 @@ echo "Building customer web image."
 az acr build \
   -r "$ACR" \
   -t "craves/customer-web-next:$TAG" \
-  --build-arg NEXT_PUBLIC_FIREBASE_API_KEY=placeholder \
-  --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=craves-placeholder.firebaseapp.com \
-  --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID=craves-placeholder \
-  --build-arg NEXT_PUBLIC_FIREBASE_APP_ID=1:000000000000:web:placeholder \
-  --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=000000000000 \
-  --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=craves-placeholder.appspot.com \
+  --build-arg "NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}" \
+  --build-arg "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}" \
+  --build-arg "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID}" \
+  --build-arg "NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}" \
+  --build-arg "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}" \
+  --build-arg "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}" \
   --build-arg NEXT_PUBLIC_RAZORPAY_MODE=sandbox \
   --build-arg NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=true \
   "$SRC/apps/customer-web-next" \
@@ -463,12 +457,12 @@ az acr build \
   -r "$ACR" \
   -t "craves/admin-web:$TAG" \
   --file Dockerfile.admin \
-  --build-arg NEXT_PUBLIC_FIREBASE_API_KEY=placeholder \
-  --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=craves-placeholder.firebaseapp.com \
-  --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID=craves-placeholder \
-  --build-arg NEXT_PUBLIC_FIREBASE_APP_ID=1:000000000000:web:placeholder \
-  --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=000000000000 \
-  --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=craves-placeholder.appspot.com \
+  --build-arg "NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}" \
+  --build-arg "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}" \
+  --build-arg "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID}" \
+  --build-arg "NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}" \
+  --build-arg "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}" \
+  --build-arg "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}" \
   --build-arg NEXT_PUBLIC_RAZORPAY_MODE=sandbox \
   --build-arg NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=true \
   "$SRC/apps/customer-web-next" \
@@ -487,12 +481,12 @@ containerapp_retry "web update ${WEB_APP}" az containerapp update \
     "CRAVES_ENVIRONMENT=prodlow" \
     "CRAVES_API_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1" \
     "NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=true" \
-    "NEXT_PUBLIC_FIREBASE_API_KEY=placeholder" \
-    "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=craves-placeholder.firebaseapp.com" \
-    "NEXT_PUBLIC_FIREBASE_PROJECT_ID=craves-placeholder" \
-    "NEXT_PUBLIC_FIREBASE_APP_ID=1:000000000000:web:placeholder" \
-    "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=000000000000" \
-    "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=craves-placeholder.appspot.com" \
+    "NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}" \
+    "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}" \
+    "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID}" \
+    "NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}" \
+    "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}" \
+    "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}" \
   --only-show-errors \
   --output none
 
@@ -509,12 +503,12 @@ containerapp_retry "admin web update ${ADMIN_WEB_APP}" az containerapp update \
     "CRAVES_ENVIRONMENT=prodlow" \
     "CRAVES_API_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1" \
     "NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=true" \
-    "NEXT_PUBLIC_FIREBASE_API_KEY=placeholder" \
-    "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=craves-placeholder.firebaseapp.com" \
-    "NEXT_PUBLIC_FIREBASE_PROJECT_ID=craves-placeholder" \
-    "NEXT_PUBLIC_FIREBASE_APP_ID=1:000000000000:web:placeholder" \
-    "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=000000000000" \
-    "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=craves-placeholder.appspot.com" \
+    "NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}" \
+    "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}" \
+    "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID}" \
+    "NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}" \
+    "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}" \
+    "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}" \
   --only-show-errors \
   --output none
 
@@ -538,5 +532,5 @@ mkdir -p "${BUILD_ARTIFACTSTAGINGDIRECTORY:-$PWD}"
   echo "- Integration app: $INTEGRATION_APP"
   echo "- Notification app: $NOTIFICATION_APP"
   echo
-  echo "Firebase production credentials are still placeholders until the real Firebase project values are added."
+  echo "Firebase credentials are wired from Azure DevOps variables for ${FIREBASE_PROJECT_ID}."
 } > "${BUILD_ARTIFACTSTAGINGDIRECTORY:-$PWD}/craves-product-activation-summary.md"

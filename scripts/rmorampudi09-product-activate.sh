@@ -10,6 +10,9 @@ TAG="${TAG:-activate-${BUILD_BUILDID:-manual-$(date +%Y%m%d%H%M%S)}}"
 SRC="${PIPELINE_WORKSPACE:-$PWD}/craves-source"
 FRONT_DOOR_URL="https://craves.in"
 RESUME_FROM="${RESUME_FROM:-full}"
+NEXT_PUBLIC_RAZORPAY_MODE="${NEXT_PUBLIC_RAZORPAY_MODE:-sandbox}"
+CRAVES_PUBLIC_SUPPORT_PHONE="${CRAVES_PUBLIC_SUPPORT_PHONE:-}"
+CRAVES_REGISTERED_BUSINESS_NAME="${CRAVES_REGISTERED_BUSINESS_NAME:-}"
 
 require_secret() {
   local name="$1"
@@ -210,6 +213,79 @@ set_health_probe() {
     --output none
 }
 
+configure_integration_provider_runtime() {
+  local provider_env=()
+  local provider_secrets=()
+
+  if [[ -n "${RAZORPAY_KEY_ID:-}" && -n "${RAZORPAY_KEY_SECRET:-}" && -n "${RAZORPAY_WEBHOOK_SECRET:-}" ]]; then
+    echo "Binding Razorpay live runtime secrets to ${INTEGRATION_APP}."
+    provider_secrets+=(
+      "razorpay-key-id=${RAZORPAY_KEY_ID}"
+      "razorpay-key-secret=${RAZORPAY_KEY_SECRET}"
+      "razorpay-webhook-secret=${RAZORPAY_WEBHOOK_SECRET}"
+    )
+    provider_env+=(
+      "CRAVES_PAYMENT_PROVIDER=RAZORPAY"
+      "CRAVES_PAYMENT_ORDER_EXECUTION_ENABLED=true"
+      "CRAVES_RAZORPAY_WEBHOOK_INGRESS_ENABLED=true"
+      "RAZORPAY_API_ENABLED=true"
+      "RAZORPAY_ENVIRONMENT=PRODUCTION"
+      "RAZORPAY_PRODUCTION_ACTIVATION_APPROVED=true"
+      "RAZORPAY_PRODUCTION_PAYMENT_EXECUTION_ENABLED=true"
+      "RAZORPAY_KEY_ID=secretref:razorpay-key-id"
+      "RAZORPAY_KEY_SECRET=secretref:razorpay-key-secret"
+      "RAZORPAY_WEBHOOK_SECRET=secretref:razorpay-webhook-secret"
+      "RAZORPAY_BASE_URL=https://api.razorpay.com"
+      "RAZORPAY_WEBHOOK_URL=https://api.craves.in/api/v1/payments/webhooks/razorpay"
+      "RAZORPAY_AUTO_CAPTURE=true"
+    )
+  else
+    echo "Razorpay live secrets are not all present; retaining existing payment runtime configuration."
+  fi
+
+  if [[ -n "${PIDGE_API_AUTH_TOKEN:-}" && -n "${PIDGE_WEBHOOK_TOKEN:-}" ]]; then
+    echo "Binding Pidge live runtime secrets to ${INTEGRATION_APP}."
+    provider_secrets+=(
+      "pidge-api-auth-token=${PIDGE_API_AUTH_TOKEN}"
+      "pidge-webhook-token=${PIDGE_WEBHOOK_TOKEN}"
+    )
+    provider_env+=(
+      "PIDGE_API_ENABLED=true"
+      "PIDGE_CREATE_ENABLED=true"
+      "PIDGE_PRODUCTION_ACTIVATION_APPROVED=true"
+      "PIDGE_MANUAL_ALLOCATION_VERIFIED=true"
+      "PIDGE_WEBHOOK_VERIFIED=true"
+      "PIDGE_API_ENVIRONMENT=PRODUCTION"
+      "PIDGE_API_BASE_URL=https://api.pidge.in"
+      "PIDGE_API_AUTH_TOKEN=secretref:pidge-api-auth-token"
+      "PIDGE_CHANNEL=Craves Hyperlocal"
+      "PIDGE_WEBHOOK_TOKEN=secretref:pidge-webhook-token"
+      "PIDGE_CALLBACK_URL=https://api.craves.in/api/v1/webhooks/delivery/pidge"
+      "PIDGE_DEFAULT_VOLUMETRIC_WEIGHT_GRAMS=900"
+    )
+  else
+    echo "Pidge live secrets are not all present; retaining existing delivery runtime configuration."
+  fi
+
+  if (( ${#provider_secrets[@]} > 0 )); then
+    containerapp_retry "provider secrets ${INTEGRATION_APP}" az containerapp secret set \
+      -g "$RG" \
+      -n "$INTEGRATION_APP" \
+      --secrets "${provider_secrets[@]}" \
+      --only-show-errors \
+      --output none
+  fi
+
+  if (( ${#provider_env[@]} > 0 )); then
+    containerapp_retry "provider env ${INTEGRATION_APP}" az containerapp update \
+      -g "$RG" \
+      -n "$INTEGRATION_APP" \
+      --set-env-vars "${provider_env[@]}" \
+      --only-show-errors \
+      --output none
+  fi
+}
+
 APIM_NAME=$(az apim list -g "$RG" --query "[?starts_with(name, 'apim-craves-prodlow-')].name | [0]" -o tsv)
 if [[ -z "$APIM_NAME" ]]; then
   echo "Could not resolve API Management service." >&2
@@ -331,6 +407,7 @@ update_backend "$CATALOG_APP" "craves/catalog-service:$TAG" "craves_business_db"
 update_backend "$ORDER_APP" "craves/order-service:$TAG" "craves_business_db" "order"
 update_backend "$SUBSCRIPTION_APP" "craves/subscription-service:$TAG" "craves_business_db" "subscriptions"
 update_backend "$INTEGRATION_APP" "craves/integration-service:$TAG" "craves_integration_db" "integration"
+configure_integration_provider_runtime
 update_backend "$NOTIFICATION_APP" "craves/notification-service:$TAG" "craves_business_db" "notifications"
 
 configure_acr_registry "$REFERRAL_APP"
@@ -483,7 +560,7 @@ az acr build \
   --build-arg "NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}" \
   --build-arg "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}" \
   --build-arg "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}" \
-  --build-arg NEXT_PUBLIC_RAZORPAY_MODE=sandbox \
+  --build-arg "NEXT_PUBLIC_RAZORPAY_MODE=${NEXT_PUBLIC_RAZORPAY_MODE}" \
   --build-arg NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=true \
   "$SRC/apps/customer-web-next" \
   --only-show-errors
@@ -499,7 +576,7 @@ az acr build \
   --build-arg "NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}" \
   --build-arg "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}" \
   --build-arg "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}" \
-  --build-arg NEXT_PUBLIC_RAZORPAY_MODE=sandbox \
+  --build-arg "NEXT_PUBLIC_RAZORPAY_MODE=${NEXT_PUBLIC_RAZORPAY_MODE}" \
   --build-arg NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=true \
   "$SRC/apps/customer-web-next" \
   --only-show-errors
@@ -518,6 +595,9 @@ containerapp_retry "web update ${WEB_APP}" az containerapp update \
     "CRAVES_API_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1" \
     "CRAVES_DOCUMENTS_WEB_ENABLED=true" \
     "NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=true" \
+    "NEXT_PUBLIC_RAZORPAY_MODE=${NEXT_PUBLIC_RAZORPAY_MODE}" \
+    "CRAVES_PUBLIC_SUPPORT_PHONE=${CRAVES_PUBLIC_SUPPORT_PHONE}" \
+    "CRAVES_REGISTERED_BUSINESS_NAME=${CRAVES_REGISTERED_BUSINESS_NAME}" \
     "NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}" \
     "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}" \
     "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID}" \
@@ -541,6 +621,9 @@ containerapp_retry "admin web update ${ADMIN_WEB_APP}" az containerapp update \
     "CRAVES_API_BASE_URL=https://${APIM_GATEWAY_HOST}/api/v1" \
     "CRAVES_DOCUMENTS_WEB_ENABLED=true" \
     "NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=true" \
+    "NEXT_PUBLIC_RAZORPAY_MODE=${NEXT_PUBLIC_RAZORPAY_MODE}" \
+    "CRAVES_PUBLIC_SUPPORT_PHONE=${CRAVES_PUBLIC_SUPPORT_PHONE}" \
+    "CRAVES_REGISTERED_BUSINESS_NAME=${CRAVES_REGISTERED_BUSINESS_NAME}" \
     "NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}" \
     "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}" \
     "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID}" \
@@ -571,4 +654,11 @@ mkdir -p "${BUILD_ARTIFACTSTAGINGDIRECTORY:-$PWD}"
   echo "- Notification app: $NOTIFICATION_APP"
   echo
   echo "Firebase credentials are wired from Azure DevOps variables for ${FIREBASE_PROJECT_ID}."
+  echo "Razorpay web mode: ${NEXT_PUBLIC_RAZORPAY_MODE}."
+  if [[ -n "${RAZORPAY_KEY_ID:-}" && -n "${RAZORPAY_KEY_SECRET:-}" && -n "${RAZORPAY_WEBHOOK_SECRET:-}" ]]; then
+    echo "Razorpay live runtime variables were bound to Integration Service."
+  fi
+  if [[ -n "${PIDGE_API_AUTH_TOKEN:-}" && -n "${PIDGE_WEBHOOK_TOKEN:-}" ]]; then
+    echo "Pidge live runtime variables were bound to Integration Service."
+  fi
 } > "${BUILD_ARTIFACTSTAGINGDIRECTORY:-$PWD}/craves-product-activation-summary.md"

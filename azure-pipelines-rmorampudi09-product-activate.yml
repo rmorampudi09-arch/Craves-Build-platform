@@ -29,8 +29,14 @@ steps:
       inlineScript: |
         set -euo pipefail
         sed -i 's/\r$//' scripts/rmorampudi09-product-activate.sh
+        sed -i 's/\r$//' scripts/frontdoor/configure-api-frontdoor.sh
         chmod +x scripts/rmorampudi09-product-activate.sh
-        scripts/rmorampudi09-product-activate.sh
+        chmod +x scripts/frontdoor/configure-api-frontdoor.sh
+        if [[ "$(RESUME_FROM)" == "api-frontdoor" ]]; then
+          scripts/frontdoor/configure-api-frontdoor.sh
+        else
+          scripts/rmorampudi09-product-activate.sh
+        fi
     env:
       POSTGRES_ADMIN_PASSWORD: $(POSTGRES_ADMIN_PASSWORD)
       GITHUB_PAT: $(GITHUB_PAT)
@@ -45,6 +51,14 @@ steps:
       NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: $(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)
       FIREBASE_PROJECT_ID: $(FIREBASE_PROJECT_ID)
       FIREBASE_SERVICE_ACCOUNT_JSON_BASE64: $(FIREBASE_SERVICE_ACCOUNT_JSON_BASE64)
+      NEXT_PUBLIC_RAZORPAY_MODE: $(NEXT_PUBLIC_RAZORPAY_MODE)
+      CRAVES_PUBLIC_SUPPORT_PHONE: $(CRAVES_PUBLIC_SUPPORT_PHONE)
+      CRAVES_REGISTERED_BUSINESS_NAME: $(CRAVES_REGISTERED_BUSINESS_NAME)
+      RAZORPAY_KEY_ID: $(RAZORPAY_KEY_ID)
+      RAZORPAY_KEY_SECRET: $(RAZORPAY_KEY_SECRET)
+      RAZORPAY_WEBHOOK_SECRET: $(RAZORPAY_WEBHOOK_SECRET)
+      PIDGE_API_AUTH_TOKEN: $(PIDGE_API_AUTH_TOKEN)
+      PIDGE_WEBHOOK_TOKEN: $(PIDGE_WEBHOOK_TOKEN)
 
   - task: PublishPipelineArtifact@1
     displayName: Publish activation summary

@@ -226,6 +226,8 @@ configure_integration_provider_runtime() {
     )
     provider_env+=(
       "CRAVES_PAYMENT_PROVIDER=RAZORPAY"
+      "PAYMENT_PROVIDER_NAME=RAZORPAY"
+      "CRAVES_PAYMENT_ORDER_API_ENABLED=true"
       "CRAVES_PAYMENT_ORDER_EXECUTION_ENABLED=true"
       "CRAVES_RAZORPAY_WEBHOOK_INGRESS_ENABLED=true"
       "RAZORPAY_API_ENABLED=true"

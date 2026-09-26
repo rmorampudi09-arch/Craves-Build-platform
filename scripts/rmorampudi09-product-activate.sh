@@ -8,7 +8,7 @@ PG_SERVER="pg-craves-prodlow-kmqgfy"
 PG_ADMIN="cravesadmin"
 TAG="${TAG:-activate-${BUILD_BUILDID:-manual-$(date +%Y%m%d%H%M%S)}}"
 SRC="${PIPELINE_WORKSPACE:-$PWD}/craves-source"
-FRONT_DOOR_URL="https://craves-prodlow-kmqgfy-fyfpa3ddefevcvdf.z02.azurefd.net"
+FRONT_DOOR_URL="https://craves.in"
 RESUME_FROM="${RESUME_FROM:-full}"
 
 require_secret() {

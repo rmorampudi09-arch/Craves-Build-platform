@@ -67,6 +67,7 @@ import {
   loadSelectedAddress,
   loadSession,
   recoverSessionSnapshotForNavigation,
+  subscribeSession,
   type CravesAddress,
   type CravesUser,
 } from "@/services/auth/cravesAuth";
@@ -513,9 +514,15 @@ function BrowseFoodsPage() {
     })();
 
     const unsubscribeCart = subscribeCart(syncCartSummary);
+    const unsubscribeSession = subscribeSession(() => {
+      if (!active) return;
+      const current = getSession();
+      if (current) setUser(current);
+    });
     return () => {
       active = false;
       unsubscribeCart();
+      unsubscribeSession();
     };
   }, [navigate, refreshDiscovery, sessionRetryNonce]);
 

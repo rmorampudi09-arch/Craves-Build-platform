@@ -124,7 +124,8 @@ test("welcome banner uses the approved responsive full-art asset while discovery
   assert.match(welcome, /height=\{793\}/);
   assert.match(welcome, /unoptimized/);
   assert.match(welcome, /className="block h-auto w-full"/);
-  assert.match(welcome, /aria-label=\{\`Welcome Taste Rebel home food banner for \$\{firstName\}\`\}/);
+  assert.match(welcome, /aria-label=\{\`Hello \$\{greetingName\} home food banner`\}/);
+  assert.match(welcome, /Hello \{greetingName\}/);
   assert.match(welcome, /data-live-dish-count=\{dishCount\}/);
   assert.doesNotMatch(welcome, /styles\.heroArtwork/);
   assert.doesNotMatch(welcome, /import \{ Heart \} from "lucide-react"/);

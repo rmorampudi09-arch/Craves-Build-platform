@@ -53,6 +53,8 @@ test("signed-in discovery keeps the rebuilt paper reference surface", () => {
   assert.match(browse, /failFastUnauthenticated: true/);
   assert.match(browse, /hydrateCustomerProfile: "background"/);
   assert.match(browse, /setUser\(current\);\s*setDefaultAddressResolved\(true\);/);
+  assert.match(browse, /subscribeSession/);
+  assert.match(browse, /const current = getSession\(\);\s*if \(current\) setUser\(current\);/);
   assert.match(browse, /const cartLoad = loadCart\(\)/);
   assert.match(browse, /await refreshDiscovery\(defaultAddress, false, false\)/);
   assert.match(browse, /AuthenticationRequiredError/);

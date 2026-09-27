@@ -45,6 +45,8 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(header, /hover:-translate-y-0\.5/);
   assert.match(header, /focus-within:bg-white/);
   assert.match(header, /mobileCompact/);
+  assert.match(header, /<CravesLogo size="md" \/>/);
+  assert.doesNotMatch(header, /Food From Home/);
   assert.match(cravings, /md:duration-\[300ms\]/);
   assert.match(header, /fixed inset-x-0 top-0 z-50/);
   assert.match(skeleton, /CustomerPageSkeleton\.module\.css/);

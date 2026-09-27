@@ -38,7 +38,7 @@ export function WelcomeBanner({
           className="block h-auto w-full"
         />
         <div
-          className="absolute left-[4.25%] top-[13.8%] min-w-[17rem] bg-[#fdfcfb] pb-[0.35%] pr-[1.2%] pt-[0.2%] sm:min-w-[19rem] md:min-w-[21rem]"
+          className="absolute left-[4.95%] top-[13.8%] min-w-[17rem] bg-[#fdfcfb] pb-[0.35%] pr-[1.2%] pt-[0.2%] sm:min-w-[19rem] md:min-w-[21rem]"
           aria-hidden="true"
         >
           <p className="truncate text-[0.52rem] font-black uppercase leading-none tracking-[0.32em] text-[#111111] sm:text-[0.68rem] md:text-[0.8rem] lg:text-[0.92rem] xl:text-[1.04rem]">

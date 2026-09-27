@@ -58,6 +58,13 @@ test("landing v20 auth bridge never blocks sign-in on stylesheet load events", (
   assert.doesNotMatch(landingAuthBridge, /new Promise<void>\(\(resolve, reject\)/);
 });
 
+test("isolated landing auth build shims process for browser-only execution", () => {
+  const builder = source("../../scripts/build-landing-auth.mjs");
+  assert.match(builder, /globalThis\.process = globalThis\.process \|\| \{ env: \{\} \}/);
+  assert.match(builder, /globalThis\.process\.env = Object\.assign/);
+  assert.match(builder, /NODE_ENV: 'production'/);
+});
+
 test("general auth clearly identifies and switches between customer and home chef", () => {
   assert.match(authModal, /Choose your Craves role/);
   assert.match(authModal, /Customer sign in/);

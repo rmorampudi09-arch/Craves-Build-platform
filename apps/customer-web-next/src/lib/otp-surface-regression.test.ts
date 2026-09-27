@@ -63,3 +63,12 @@ test("signed-in discovery keeps the rebuilt paper reference surface", () => {
   );
   assert.doesNotMatch(browse, /text-\[#261A15\]/i);
 });
+
+test("static landing keeps the approved sign-in bridge wired", () => {
+  const landing = source("../../public/landing-v20/index.html");
+
+  assert.match(landing, /id="craves-landing-auth-bridge"/);
+  assert.match(landing, /a\[href="#sign-in"\]/);
+  assert.match(landing, /\/landing-auth\/manifest\.json/);
+  assert.match(landing, /openLandingAuth/);
+});

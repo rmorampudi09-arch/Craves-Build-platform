@@ -151,6 +151,61 @@
 </div>
 </div>
 
-    <div id="root"></div>
+    <div id="root"></div>
+
+    <script id="craves-landing-auth-bridge">
+      (function () {
+        var loading = null;
+        function loadAuth() {
+          if (!loading) {
+            loading = fetch('/landing-auth/manifest.json', { cache: 'no-store' })
+              .then(function (response) {
+                if (!response.ok) throw new Error('Sign-in is temporarily unavailable.');
+                return response.json();
+              })
+              .then(function (manifest) {
+                if (!/^\/landing-auth\/auth-[\w-]+\.js$/.test(manifest.script || '') ||
+                    !/^\/landing-auth\/auth-[\w-]+\.css$/.test(manifest.style || '')) {
+                  throw new Error('Sign-in could not be loaded.');
+                }
+                if (!document.querySelector('link[href="' + manifest.style + '"]')) {
+                  var style = document.createElement('link');
+                  style.rel = 'stylesheet';
+                  style.href = manifest.style;
+                  document.head.appendChild(style);
+                }
+                return import(manifest.script);
+              })
+              .catch(function (error) {
+                loading = null;
+                throw error;
+              });
+          }
+          return loading;
+        }
+        document.addEventListener('click', function (event) {
+          if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          var target = event.target && event.target.closest ? event.target.closest('a[href="#sign-in"]') : null;
+          if (!target) return;
+          event.preventDefault();
+          if (target.getAttribute('aria-busy') === 'true') return;
+          var label = target.textContent;
+          target.setAttribute('aria-busy', 'true');
+          target.textContent = 'Opening...';
+          loadAuth()
+            .then(function (module) {
+              if (typeof module.openLandingAuth !== 'function') throw new Error('Sign-in could not be loaded.');
+              return module.openLandingAuth();
+            })
+            .catch(function (error) {
+              console.warn('Craves landing auth failed', error);
+            })
+            .finally(function () {
+              target.removeAttribute('aria-busy');
+              target.textContent = label;
+            });
+        }, true);
+      })();
+    </script>
   </body>
 </html>

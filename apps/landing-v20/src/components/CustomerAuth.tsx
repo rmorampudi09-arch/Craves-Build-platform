@@ -39,7 +39,10 @@ export default function CustomerAuth() {
       anchor.setAttribute('aria-busy', 'true');
       const label = anchor.textContent;
       anchor.textContent = 'Opening…';
-      void loadCustomerAuth().then((entry) => entry.openLandingAuth()).catch(() => setError('We couldn’t open sign-in. Please check your connection and try again.')).finally(() => {
+      void loadCustomerAuth().then((entry) => entry.openLandingAuth()).catch((reason) => {
+        console.warn('Craves landing auth failed', reason);
+        setError('We couldn’t open sign-in. Please check your connection and try again.');
+      }).finally(() => {
         anchor.removeAttribute('aria-busy'); anchor.textContent = label;
       });
     };

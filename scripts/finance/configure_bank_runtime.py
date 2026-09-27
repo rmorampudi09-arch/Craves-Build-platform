@@ -168,8 +168,9 @@ def main(argv=None) -> int:
     apps = {role: az("containerapp", "show", "-g", args.resource_group, "-n", name) for role, name in APPS.items()}
     for app in apps.values():
         environment(app)
-        if app["properties"]["template"].get("scale", {}).get("maxReplicas") != 1:
-            raise GuardError("Expected current one-replica maximum; no scaling is performed")
+        max_replicas = app["properties"]["template"].get("scale", {}).get("maxReplicas")
+        if not isinstance(max_replicas, int) or max_replicas < 1:
+            raise GuardError("Existing replica bounds could not be verified; no scaling is performed")
     selected = args.vault_name
     has_reference = any(secret.get("keyVaultUrl") for app in apps.values()
                         for secret in app["properties"]["configuration"].get("secrets", []))

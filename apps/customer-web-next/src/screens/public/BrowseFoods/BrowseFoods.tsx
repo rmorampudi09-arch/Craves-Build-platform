@@ -146,7 +146,9 @@ function BrowseFoodsPage() {
   const [cartRepairBusy, setCartRepairBusy] = useState(false);
   const [cartRepairError, setCartRepairError] = useState<string | null>(null);
   const [kitchens, setKitchens] = useState<NearbyKitchen[]>(initialCache.kitchens);
-  const [defaultAddressResolved, setDefaultAddressResolved] = useState(false);
+  const [defaultAddressResolved, setDefaultAddressResolved] = useState(() =>
+    Boolean(initialCache.address),
+  );
   const [kitchenDiscoveryVerified, setKitchenDiscoveryVerified] = useState(hasInitialCatalog);
   const [nearbyDishes, setNearbyDishes] = useState<Dish[]>(initialCache.dishes);
   const [dishLoadMoreBusy, setDishLoadMoreBusy] = useState(false);
@@ -468,6 +470,18 @@ function BrowseFoodsPage() {
 
       setSessionUnavailable(false);
       setUser(current);
+      setDefaultAddressResolved(true);
+
+      const cartLoad = loadCart()
+        .then(() => {
+          if (active) syncCartSummary();
+        })
+        .catch(() => {
+          if (active) {
+            setCartItemCount(0);
+            setCartItems([]);
+          }
+        });
 
       try {
         const defaultAddress = await loadSelectedAddress();
@@ -478,7 +492,6 @@ function BrowseFoodsPage() {
             ? "Loading food near your default delivery address…"
             : "Choose a default delivery address to see nearby food.",
         );
-        setDefaultAddressResolved(true);
         await refreshDiscovery(defaultAddress, false, false);
       } catch (error) {
         if (!active) return;
@@ -496,15 +509,7 @@ function BrowseFoodsPage() {
         );
       }
 
-      try {
-        await loadCart();
-        syncCartSummary();
-      } catch {
-        if (active) {
-          setCartItemCount(0);
-          setCartItems([]);
-        }
-      }
+      void cartLoad;
     })();
 
     const unsubscribeCart = subscribeCart(syncCartSummary);

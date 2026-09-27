@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import test from "node:test";
 
 function source(relativePath: string): string {
@@ -21,6 +22,33 @@ test("landing keeps dedicated CTAs locked while general auth can switch roles", 
   assert.match(landing, /onOrderFood=\{\(\) => openAuth\("login", "customer", true\)\}/);
   assert.match(landing, /onBecomeChef=\{\(\) => openAuth\("register", "chef", true\)\}/);
   assert.match(landing, /lockAccountMode=\{authAccountLocked\}/);
+});
+
+test("committed landing v20 bundle includes the shared customer auth bridge", () => {
+  const index = source("../../public/landing-v20/index.html");
+  const scripts = Array.from(
+    index.matchAll(/src="\/landing-v20\/assets\/([^"]+\.js)"/g),
+    (match) => match[1],
+  );
+  assert.ok(scripts.length > 0, "landing v20 must load a compiled script");
+  const bundle = scripts
+    .map((filename) => source(`../../public/landing-v20/assets/${filename}`))
+    .join("\n");
+  assert.match(bundle, /\/landing-auth\/manifest\.json/);
+  assert.match(bundle, /a\[href="#sign-in"\]/);
+  assert.match(bundle, /aria-busy/);
+
+  const builtScripts = readdirSync(
+    new URL("../../public/landing-v20/assets/", import.meta.url),
+  ).filter((filename) => filename.endsWith(".js"));
+  assert.ok(
+    builtScripts.some((filename) =>
+      source(`../../public/landing-v20/assets/${filename}`).includes(
+        "/landing-auth/manifest.json",
+      ),
+    ),
+    "at least one committed landing bundle must contain the auth bridge",
+  );
 });
 
 test("general auth clearly identifies and switches between customer and home chef", () => {

@@ -12,6 +12,7 @@ const hero = source(
 );
 const landing = source("../screens/public/LandingPage/LandingPage.tsx");
 const authModal = source("../components/auth/AuthModal.tsx");
+const landingAuthBridge = source("../../../landing-v20/src/components/CustomerAuth.tsx");
 
 test("landing keeps dedicated CTAs locked while general auth can switch roles", () => {
   assert.match(hero, /Sign up \/ Sign in/);
@@ -49,6 +50,12 @@ test("committed landing v20 bundle includes the shared customer auth bridge", ()
     ),
     "at least one committed landing bundle must contain the auth bridge",
   );
+});
+
+test("landing v20 auth bridge never blocks sign-in on stylesheet load events", () => {
+  assert.match(landingAuthBridge, /\/landing-auth\/manifest\.json/);
+  assert.match(landingAuthBridge, /style\.onerror = \(\) => \{ clearTimeout\(timer\); style\.remove\(\); resolve\(\); \}/);
+  assert.doesNotMatch(landingAuthBridge, /new Promise<void>\(\(resolve, reject\)/);
 });
 
 test("general auth clearly identifies and switches between customer and home chef", () => {

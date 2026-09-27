@@ -1,4 +1,5 @@
 import './RiderSection.css';
+import ResponsiveImage from '../ResponsiveImage';
 
 const RiderSection = () => {
   return (
@@ -21,9 +22,12 @@ const RiderSection = () => {
 
           <div className="rider__media">
             <div className="rider__image-card">
-              <img
+              <ResponsiveImage
                 className="rider__image"
                 src="/images/rider-delivery.png"
+                sizes="(max-width: 900px) 90vw, 50vw"
+                width={1303}
+                height={1086}
                 alt="Craves delivery rider on a motorcycle carrying an insulated delivery box"
               />
             </div>

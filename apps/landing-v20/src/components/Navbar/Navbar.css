@@ -180,14 +180,14 @@
   padding: 0 18px 0 20px;
   border-radius: 15px;
   color: #fff;
-  background: #F62E18;
-  border: 1px solid #F62E18;
+  background: #c52312;
+  border: 1px solid #c52312;
 }
 
 .navbar__app:hover,
 .navbar__app:focus-visible {
-  background: #FF3B25;
-  border-color: #FF3B25;
+  background: #a91d10;
+  border-color: #a91d10;
   box-shadow: 0 6px 16px rgba(246, 46, 24, 0.16);
 }
 

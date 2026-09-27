@@ -1,9 +1,11 @@
+import { publicMetadata } from "@/lib/public-seo";
 import { PolicyList, PolicySection, PublicPolicyPage } from "@/components/legal/PublicPolicyPage";
 
-export const metadata = {
-  title: "Security | Craves",
-  description: "Security guidance for Craves customers and payment users.",
-};
+export const metadata = publicMetadata(
+  "Security",
+  "Learn about account and payment security when using Craves and how to report a security concern.",
+  "/security",
+);
 
 export default function SecurityPage() {
   return (

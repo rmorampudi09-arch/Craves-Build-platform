@@ -1,9 +1,11 @@
+import { publicMetadata } from "@/lib/public-seo";
 import { PolicyList, PolicySection, PublicPolicyPage } from "@/components/legal/PublicPolicyPage";
 
-export const metadata = {
-  title: "Refunds & Cancellations | Craves",
-  description: "Craves refund and cancellation policy for paid home-chef orders.",
-};
+export const metadata = publicMetadata(
+  "Refunds & Cancellations",
+  "Read the Craves refund and cancellation policy for homemade food orders, payments and support.",
+  "/refunds-cancellations",
+);
 
 export default function RefundsCancellationsPage() {
   return (

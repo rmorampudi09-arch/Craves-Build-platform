@@ -1,4 +1,5 @@
 import './StoryVideo.css';
+import ResponsiveImage from '../ResponsiveImage';
 
 const STORY_CARDS = [
   {
@@ -42,7 +43,7 @@ const StoryVideo = () => {
             {STORY_CARDS.map((card) => (
               <article className="story-video__card" key={card.title}>
                 <div className="story-video__image-wrap">
-                  <img className="story-video__image" src={card.src} alt={card.alt} loading="lazy" decoding="async" />
+                  <ResponsiveImage className="story-video__image" src={card.src} alt={card.alt} sizes="(max-width: 640px) 90vw, (max-width: 1200px) 45vw, 510px" />
                 </div>
                 <div className="story-video__copy">
                   <h3>{card.title}</h3>

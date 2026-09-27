@@ -1,4 +1,7 @@
 User-agent: *
 Allow: /
-Disallow: /orders/
 Disallow: /api/
+
+# Account pages use X-Robots-Tag: noindex so crawlers can see the directive.
+# robots.txt is not an access-control mechanism.
+Sitemap: https://craves.in/sitemap.xml

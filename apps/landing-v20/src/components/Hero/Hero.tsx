@@ -6,6 +6,8 @@ const Hero = () => {
       <div className="hero__media">
         <video
           className="hero__video"
+          aria-hidden="true"
+          tabIndex={-1}
           autoPlay
           muted
           loop

@@ -11,7 +11,7 @@
 }
 
 .why__eyebrow {
-  color: var(--color-red);
+  color: #c52312;
   font-weight: 700;
   font-size: 0.95rem;
   letter-spacing: 0.02em;
@@ -44,7 +44,7 @@
   font-weight: 400;
   font-synthesis: none;
   letter-spacing: 0;
-  color: var(--color-red);
+  color: #c52312;
   text-wrap: balance;
 }
 

@@ -73,7 +73,10 @@ PageSpeed mobile lab run: performance 82, accessibility 93, best practices 100,
 basic SEO 100; FCP/LCP 2.7s, TBT 0ms, CLS 0.075, Speed Index 9.6s.
 It reported about 7,711 KiB potential image savings. Outstanding accessibility
 items included contrast, heading order and video captions. Footer heading order
-is corrected here; the exact captions require an accurate source transcript.
+and the three flagged contrast elements are corrected here. The existing muted,
+non-interactive hero background video is marked decorative for assistive
+technology; its visual headline remains real accessible text. Future informative
+or audible videos need accurate captions rather than decorative semantics.
 The 100 basic SEO score is not a ranking or completeness guarantee.
 
 Google Business Profile requires verified eligibility and accurate physical

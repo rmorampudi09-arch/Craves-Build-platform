@@ -11,6 +11,14 @@ const nextConfig: NextConfig = {
     disableStaticImages: true,
     remotePatterns: [{ protocol: "https", hostname: "**" }],
   },
+  async redirects() {
+    return [{
+      source: "/:path*",
+      has: [{ type: "host", value: "www.craves.in" }],
+      destination: "https://craves.in/:path*",
+      permanent: true,
+    }];
+  },
   async rewrites() {
     return {
       beforeFiles: [{ source: "/", destination: "/landing-v20/index.html" }],
@@ -20,10 +28,19 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      ...[
+        "addresses", "admin", "cart", "checkout", "chef", "confirmation",
+        "discover", "dish", "home", "kitchens", "notifications", "orders",
+        "payment", "profile", "sign-in", "subscriptions", "tracking", "wishlist",
+      ].map((route) => ({
+        source: `/${route}/:path*`,
+        headers: [{ key: "X-Robots-Tag", value: "noindex, follow" }],
+      })),
       { source: "/landing-auth/manifest.json", headers: [{ key: "Cache-Control", value: "no-store, max-age=0" }] },
       {
         source: "/api/:path*",
         headers: [
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
           { key: "Cache-Control", value: "private, no-store, max-age=0" },
           { key: "Pragma", value: "no-cache" },
         ],

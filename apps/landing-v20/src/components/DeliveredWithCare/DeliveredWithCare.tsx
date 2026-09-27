@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import ResponsiveImage from '../ResponsiveImage';
 import './DeliveredWithCare.css';
 
 type Feature = {
@@ -7,7 +8,7 @@ type Feature = {
 };
 
 const ChefIcon = () => (
-  <img
+  <ResponsiveImage sizes="64px"
     className="specials__icon-image specials__icon-image--chef"
     src="/images/icons/home-chef-user.png"
     alt=""
@@ -47,7 +48,7 @@ const PinIcon = () => (
 );
 
 const DeliveryIcon = () => (
-  <img
+  <ResponsiveImage sizes="64px"
     className="specials__icon-image specials__icon-image--delivery"
     src="/images/icons/delivery-scooter-user.png"
     alt=""
@@ -115,7 +116,7 @@ const DeliveredWithCare = () => {
               <div className="specials__notch" aria-hidden="true" />
               <div className="specials__screen">
                 <div className="specials__topbar">
-                  <img className="specials__brand-logo" src="/images/craves-logo.png" alt="Craves" />
+                  <ResponsiveImage sizes="44px" className="specials__brand-logo" src="/images/craves-logo.png" alt="Craves" />
                   <span className="specials__city">Hyderabad ▾</span>
                 </div>
 
@@ -130,7 +131,7 @@ const DeliveredWithCare = () => {
 
                 <div className="specials__panel">
                   <div className="specials__meal-image">
-                    <img src="/images/hero-poster.jpg" alt="Featured homemade meal in the Craves app" />
+                    <ResponsiveImage sizes="260px" src="/images/hero-poster.jpg" alt="Featured homemade meal in the Craves app" />
                   </div>
                   <div className="specials__meal-copy">
                     <div>

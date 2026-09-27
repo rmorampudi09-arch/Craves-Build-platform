@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import type { ReactNode } from "react";
+import { SITE_URL, SITE_DESCRIPTION } from "@/lib/public-seo";
 import "../styles.css";
 import "../craves-theme.css";
 import "../otp-overrides.css";
@@ -21,12 +22,13 @@ const bodyFont = Inter({
 const canonicalLogo = "/brand/craves-logo-20260805.png";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "Craves — Homemade Meals from Trusted Home Chefs",
-    template: "%s – Craves",
+    default: "Craves | Homemade Food in Hyderabad",
+    template: "%s | Craves",
   },
   description:
-    "Discover fresh homemade meals from trusted home chefs near you, delivered through Craves.",
+    SITE_DESCRIPTION,
   authors: [{ name: "Craves" }],
   robots: { index: true, follow: true },
   icons: {

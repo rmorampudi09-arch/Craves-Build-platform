@@ -1,9 +1,11 @@
+import { publicMetadata } from "@/lib/public-seo";
 import { PolicyList, PolicySection, PublicPolicyPage } from "@/components/legal/PublicPolicyPage";
 
-export const metadata = {
-  title: "Terms of Service | Craves",
-  description: "Terms governing customer use of the Craves homemade food marketplace.",
-};
+export const metadata = publicMetadata(
+  "Terms of Service",
+  "Read the terms for using Craves, the Hyderabad homemade food marketplace for customers and home chefs.",
+  "/terms",
+);
 
 export default function TermsPage() {
   return (

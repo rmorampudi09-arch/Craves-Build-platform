@@ -6,6 +6,8 @@ on:
     paths:
       - 'services/**'
       - 'apps/customer-web-next/**'
+      - 'apps/landing-v20/**'
+      - 'scripts/seo/**'
       - 'scripts/launch/**'
       - 'scripts/release/**'
       - 'scripts/finance/**'
@@ -207,6 +209,8 @@ jobs:
         run: python3 scripts/launch/launch-regression.py web --expected-sha "$EXPECTED_RELEASE_SHA" --output target/launch-web
       - name: Require build to preserve reviewed tracked source
         run: git diff --exit-code HEAD --
+      - name: Verify public indexing, canonicals, sitemap and redirects
+        run: python3 scripts/seo/verify-built-seo.py > target/launch-web/public-seo.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

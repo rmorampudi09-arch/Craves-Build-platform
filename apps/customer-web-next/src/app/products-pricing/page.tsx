@@ -1,13 +1,15 @@
+import { publicMetadata } from "@/lib/public-seo";
 import Link from "next/link";
 
 import { publicApiFetch } from "@/lib/public-api";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Products & Pricing | Craves",
-  description: "Live Craves home-chef dishes and pricing in Indian rupees.",
-};
+export const metadata = publicMetadata(
+  "Homemade Meals & Prices in Hyderabad",
+  "Browse current homemade dishes from Hyderabad home chefs on Craves. See listed prices in INR and check the final payable amount at checkout.",
+  "/products-pricing",
+);
 
 type Kitchen = {
   id: string;

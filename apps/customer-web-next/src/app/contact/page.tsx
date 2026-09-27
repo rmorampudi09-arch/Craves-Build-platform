@@ -1,11 +1,13 @@
+import { publicMetadata } from "@/lib/public-seo";
 import { PolicySection, PublicPolicyPage } from "@/components/legal/PublicPolicyPage";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Contact Us | Craves",
-  description: "Contact Craves for customer support, order help, and business enquiries.",
-};
+export const metadata = publicMetadata(
+  "Contact & Support in Hyderabad",
+  "Contact Craves for homemade food orders, customer support, home-chef onboarding and business enquiries in Hyderabad.",
+  "/contact",
+);
 
 function publicSupportPhone(): string | null {
   const value = process.env.CRAVES_PUBLIC_SUPPORT_PHONE?.trim() ?? "";

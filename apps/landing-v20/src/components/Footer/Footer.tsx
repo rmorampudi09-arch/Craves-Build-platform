@@ -1,10 +1,11 @@
 import './Footer.css';
+import ResponsiveImage from '../ResponsiveImage';
 
 const FOOTER_COLUMNS = [
   {
     title: 'Craves',
     className: 'footer__col--craves',
-    links: [{ label: 'About us', href: '#why-craves' }, { label: 'Contact us', href: '/contact' }],
+    links: [{ label: 'About us', href: '#why-craves' }, { label: 'Home food in Hyderabad', href: '/homemade-food-hyderabad' }, { label: 'Meals & pricing', href: '/products-pricing' }, { label: 'Contact us', href: '/contact' }],
   },
   {
     title: 'Legal',
@@ -14,14 +15,14 @@ const FOOTER_COLUMNS = [
   {
     title: 'For chefs',
     className: 'footer__col--chefs',
-    links: [{ label: 'Become a chef', href: '/chef/application' }, { label: 'Chef resources', href: '/chef' }, { label: 'Guidelines', href: '#chef-guidelines' }, { label: 'Earnings', href: '/chef/earnings' }, { label: 'Help center', href: '/contact' }],
+    links: [{ label: 'Become a chef', href: '/chef/application' }, { label: 'Chef resources', href: '/home-chefs-hyderabad' }, { label: 'Guidelines', href: '#chef-guidelines' }, { label: 'Earnings', href: '/chef/earnings' }, { label: 'Help center', href: '/contact' }],
   },
 ];
 
 const socialLinks = [
   {
     label: 'LinkedIn',
-    href: '#social',
+    href: 'https://www.linkedin.com/company/craves-technologies-private-limited/',
     icon: (
       <svg
         className="footer__icon-linkedin"
@@ -38,7 +39,7 @@ const socialLinks = [
 
   {
     label: 'Instagram',
-    href: '#social',
+    href: 'https://www.instagram.com/craves.in_/',
     icon: (
       <svg
         className="footer__icon-instagram"
@@ -79,7 +80,7 @@ const socialLinks = [
 
   {
     label: 'Facebook',
-    href: '#social',
+    href: 'https://www.facebook.com/profile.php?id=61594485405454',
     icon: (
       <svg
         className="footer__icon-facebook"
@@ -96,7 +97,7 @@ const socialLinks = [
   label: 'X',
   href: '#social',
   icon: (
-    <img
+    <ResponsiveImage sizes="24px"
       className="footer__icon-x"
       src="/images/twitter.png"
       alt=""
@@ -111,9 +112,9 @@ const Footer = () => {
     <footer id="contact" className="footer">
       <div className="container footer__top">
         <div className="footer__brand">
-          <img className="footer__logo" src="/images/craves-logo.png" alt="Craves" />
+          <ResponsiveImage sizes="88px" className="footer__logo" src="/images/craves-logo.png" alt="Craves" />
           <p>Good food. Real impact. Homemade meals from real people.</p>
-          <img
+          <ResponsiveImage sizes="180px"
             className="footer__sticker footer__sticker--brand"
             src="/images/made-with-love-sticker.png"
             alt="Made with love"
@@ -126,7 +127,7 @@ const Footer = () => {
 
         {FOOTER_COLUMNS.map((col) => (
           <div className={`footer__col ${col.className}`} key={col.title}>
-            <h4>{col.title.toUpperCase()}</h4>
+            <h2>{col.title.toUpperCase()}</h2>
             <ul>
               {col.links.map((link) => (
                 <li key={link.label}>
@@ -138,7 +139,7 @@ const Footer = () => {
         ))}
 
         <div className="footer__col footer__social-col">
-          <h4>SOCIAL</h4>
+          <h2>SOCIAL</h2>
           <div className="footer__socials" aria-label="Social links">
             {socialLinks.map((item) => (
               <a
@@ -153,7 +154,7 @@ const Footer = () => {
               </a>
             ))}
           </div>
-          <img
+          <ResponsiveImage sizes="180px"
             className="footer__sticker footer__sticker--social"
             src="/images/feel-like-home-sticker.png"
             alt="Feels like home"

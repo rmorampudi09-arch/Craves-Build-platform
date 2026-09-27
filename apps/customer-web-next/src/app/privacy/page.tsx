@@ -1,9 +1,11 @@
+import { publicMetadata } from "@/lib/public-seo";
 import { PolicyList, PolicySection, PublicPolicyPage } from "@/components/legal/PublicPolicyPage";
 
-export const metadata = {
-  title: "Privacy Policy | Craves",
-  description: "How Craves handles customer account, order, delivery, and payment-reference data.",
-};
+export const metadata = publicMetadata(
+  "Privacy Policy",
+  "Read how Craves handles personal information for customers and home chefs using its homemade food marketplace.",
+  "/privacy",
+);
 
 export default function PrivacyPage() {
   return (

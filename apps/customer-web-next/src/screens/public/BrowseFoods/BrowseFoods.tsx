@@ -399,7 +399,10 @@ function BrowseFoodsPage() {
       let current: CravesUser | null = null;
 
       try {
-        current = await loadSession({ failFastUnauthenticated: true });
+        current = await loadSession({
+          failFastUnauthenticated: true,
+          hydrateCustomerProfile: "background",
+        });
       } catch (error) {
         if (error instanceof AuthenticationRequiredError) {
           navigate({ to: "/", replace: true });
@@ -410,7 +413,10 @@ function BrowseFoodsPage() {
         await new Promise((resolve) => window.setTimeout(resolve, 450));
         if (!active) return;
         try {
-          current = await loadSession({ failFastUnauthenticated: true });
+          current = await loadSession({
+            failFastUnauthenticated: true,
+            hydrateCustomerProfile: "background",
+          });
         } catch (retryError) {
           if (retryError instanceof AuthenticationRequiredError) {
             navigate({ to: "/", replace: true });
@@ -432,7 +438,10 @@ function BrowseFoodsPage() {
         await new Promise((resolve) => window.setTimeout(resolve, 450));
         if (!active) return;
         try {
-          current = await loadSession({ failFastUnauthenticated: true });
+          current = await loadSession({
+            failFastUnauthenticated: true,
+            hydrateCustomerProfile: "background",
+          });
         } catch (error) {
           if (error instanceof AuthenticationRequiredError) {
             navigate({ to: "/", replace: true });
@@ -469,8 +478,8 @@ function BrowseFoodsPage() {
             ? "Loading food near your default delivery address…"
             : "Choose a default delivery address to see nearby food.",
         );
+        setDefaultAddressResolved(true);
         await refreshDiscovery(defaultAddress, false, false);
-        if (active) setDefaultAddressResolved(true);
       } catch (error) {
         if (!active) return;
         setAddress(null);

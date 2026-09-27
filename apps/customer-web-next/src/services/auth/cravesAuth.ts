@@ -241,7 +241,9 @@ function applyIdentityLookup(identity: CravesIdentity, context: SessionContext, 
   return session;
 }
 
-export async function loadSession(options: { failFastUnauthenticated?: boolean } = {}): Promise<CravesUser | null> {
+export async function loadSession(
+  options: { failFastUnauthenticated?: boolean; hydrateCustomerProfile?: "await" | "background" } = {},
+): Promise<CravesUser | null> {
   if (sessionEnding) return null;
   const context = captureSessionContext();
   const sequence = ++identityRequestSequence;
@@ -283,7 +285,12 @@ export async function loadSession(options: { failFastUnauthenticated?: boolean }
   const identity = (await response.json().catch(() => null)) as CravesIdentity | null;
   if (!identity?.id || !isSessionContextCurrent(context)) return session;
   const current = applyIdentityLookup(identity, context, sequence);
-  return current ? hydrateCustomerProfile(current) : null;
+  if (!current) return null;
+  if (options.hydrateCustomerProfile === "background") {
+    void hydrateCustomerProfile(current, captureSessionContext()).catch(() => null);
+    return current;
+  }
+  return hydrateCustomerProfile(current);
 }
 
 export async function synchronizeSessionRoles(): Promise<CravesUser | null> {

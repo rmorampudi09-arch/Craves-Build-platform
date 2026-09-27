@@ -20,7 +20,7 @@ parameters:
   - name: apiBaseUrl
     type: string
     default: https://api.craves.in/api/v1
-  - name: cashfreeMode
+  - name: razorpayMode
     type: string
     default: sandbox
     values:
@@ -67,9 +67,9 @@ steps:
         fi
       done
 
-      case "$NEXT_PUBLIC_CASHFREE_MODE" in
+      case "$NEXT_PUBLIC_RAZORPAY_MODE" in
         sandbox|production) ;;
-        *) echo 'ERROR: Cashfree mode must be sandbox or production.' >&2; exit 1 ;;
+        *) echo 'ERROR: Razorpay mode must be sandbox or production.' >&2; exit 1 ;;
       esac
     displayName: Confirm replacement and public web configuration
     env:
@@ -79,7 +79,7 @@ steps:
       NEXT_PUBLIC_FIREBASE_APP_ID: $(NEXT_PUBLIC_FIREBASE_APP_ID)
       NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: $(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)
       NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: $(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)
-      NEXT_PUBLIC_CASHFREE_MODE: ${{ parameters.cashfreeMode }}
+      NEXT_PUBLIC_RAZORPAY_MODE: ${{ parameters.razorpayMode }}
 
   - script: |
       set -euo pipefail
@@ -98,7 +98,7 @@ steps:
       NEXT_PUBLIC_FIREBASE_APP_ID: $(NEXT_PUBLIC_FIREBASE_APP_ID)
       NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: $(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)
       NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: $(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)
-      NEXT_PUBLIC_CASHFREE_MODE: ${{ parameters.cashfreeMode }}
+      NEXT_PUBLIC_RAZORPAY_MODE: ${{ parameters.razorpayMode }}
       NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK: 'false'
 
   - task: AzureCLI@2
@@ -235,7 +235,7 @@ steps:
           --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="$NEXT_PUBLIC_FIREBASE_APP_ID" \
           --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID" \
           --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" \
-          --build-arg NEXT_PUBLIC_CASHFREE_MODE="$NEXT_PUBLIC_CASHFREE_MODE" \
+          --build-arg NEXT_PUBLIC_RAZORPAY_MODE="$NEXT_PUBLIC_RAZORPAY_MODE" \
           --build-arg NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=false \
           --label org.opencontainers.image.revision="$(Build.SourceVersion)" \
           -t "$IMAGE" \
@@ -249,7 +249,7 @@ steps:
       NEXT_PUBLIC_FIREBASE_APP_ID: $(NEXT_PUBLIC_FIREBASE_APP_ID)
       NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: $(NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID)
       NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: $(NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET)
-      NEXT_PUBLIC_CASHFREE_MODE: ${{ parameters.cashfreeMode }}
+      NEXT_PUBLIC_RAZORPAY_MODE: ${{ parameters.razorpayMode }}
 
   - task: AzureCLI@2
     displayName: Deploy exact commit, shift traffic, verify and automatically roll back
@@ -414,6 +414,7 @@ steps:
             CRAVES_BUILD_SHA="$EXPECTED_SHA" \
             NODE_ENV=production \
             PORT=3000 \
+            NEXT_PUBLIC_RAZORPAY_MODE='${{ parameters.razorpayMode }}' \
             NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK=false
 
         NEW_REVISION=''

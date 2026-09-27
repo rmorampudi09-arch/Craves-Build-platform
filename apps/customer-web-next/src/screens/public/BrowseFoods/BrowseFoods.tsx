@@ -63,6 +63,7 @@ import {
   clearSession,
   getAddress,
   getSession,
+  AuthenticationRequiredError,
   loadSelectedAddress,
   loadSession,
   recoverSessionSnapshotForNavigation,
@@ -398,15 +399,23 @@ function BrowseFoodsPage() {
       let current: CravesUser | null = null;
 
       try {
-        current = await loadSession();
-      } catch {
+        current = await loadSession({ failFastUnauthenticated: true });
+      } catch (error) {
+        if (error instanceof AuthenticationRequiredError) {
+          navigate({ to: "/", replace: true });
+          return;
+        }
         // Keep the customer on the signed-in surface during a network/BFF
         // interruption. One retry handles short mobile hand-offs cleanly.
         await new Promise((resolve) => window.setTimeout(resolve, 450));
         if (!active) return;
         try {
-          current = await loadSession();
-        } catch {
+          current = await loadSession({ failFastUnauthenticated: true });
+        } catch (retryError) {
+          if (retryError instanceof AuthenticationRequiredError) {
+            navigate({ to: "/", replace: true });
+            return;
+          }
           current = getSession() ?? recoverSessionSnapshotForNavigation();
           if (!current && active) {
             setSessionUnavailable(true);
@@ -423,8 +432,12 @@ function BrowseFoodsPage() {
         await new Promise((resolve) => window.setTimeout(resolve, 450));
         if (!active) return;
         try {
-          current = await loadSession();
-        } catch {
+          current = await loadSession({ failFastUnauthenticated: true });
+        } catch (error) {
+          if (error instanceof AuthenticationRequiredError) {
+            navigate({ to: "/", replace: true });
+            return;
+          }
           current = getSession() ?? recoverSessionSnapshotForNavigation();
           if (!current) {
             setSessionUnavailable(true);

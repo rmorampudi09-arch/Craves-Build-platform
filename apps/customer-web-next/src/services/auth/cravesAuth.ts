@@ -206,6 +206,13 @@ export function getSession(): CravesUser | null {
   return session;
 }
 
+export class AuthenticationRequiredError extends Error {
+  constructor() {
+    super("Craves authentication is required.");
+    this.name = "AuthenticationRequiredError";
+  }
+}
+
 /** Accept only the current owner's validated Auth response; a stale profile projection never changes this field. */
 export function setSessionEmailVerification(identityId: string, value: EmailVerificationState, context = captureSessionContext()): CravesUser | null {
   const parsed = emailVerificationStateSchema.safeParse(value);
@@ -234,7 +241,7 @@ function applyIdentityLookup(identity: CravesIdentity, context: SessionContext, 
   return session;
 }
 
-export async function loadSession(): Promise<CravesUser | null> {
+export async function loadSession(options: { failFastUnauthenticated?: boolean } = {}): Promise<CravesUser | null> {
   if (sessionEnding) return null;
   const context = captureSessionContext();
   const sequence = ++identityRequestSequence;
@@ -248,6 +255,15 @@ export async function loadSession(): Promise<CravesUser | null> {
   if (!isSessionContextCurrent(context)) return session;
 
   if (response.status === 401) {
+    const failure = await response.clone().json().catch(() => null) as { code?: unknown } | null;
+    if (
+      options.failFastUnauthenticated === true &&
+      failure?.code === "AUTHENTICATION_REQUIRED" &&
+      !session &&
+      !readSessionSnapshot()
+    ) {
+      throw new AuthenticationRequiredError();
+    }
     const refreshed = await refreshSessionForGeneration(context.generation);
     if (!isSessionContextCurrent(context)) return session;
     if (refreshed?.ok) response = await lookup();

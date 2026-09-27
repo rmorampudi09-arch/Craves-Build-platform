@@ -50,6 +50,8 @@ test("signed-in discovery keeps the rebuilt paper reference surface", () => {
     browse,
     /return <CustomerPageSkeleton label="Loading your Craves home" \/>/,
   );
+  assert.match(browse, /loadSession\(\{ failFastUnauthenticated: true \}\)/);
+  assert.match(browse, /AuthenticationRequiredError/);
   assert.match(skeleton, /CustomerPageSkeleton\.module\.css/);
   assert.match(skeleton, /SkeletonBlock/);
   assert.doesNotMatch(skeleton, /animate-pulse/);

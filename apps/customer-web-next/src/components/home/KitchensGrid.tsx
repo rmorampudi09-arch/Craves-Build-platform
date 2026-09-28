@@ -74,9 +74,11 @@ function KitchenSkeleton() {
 function KitchenDishPreview({
   name,
   images,
+  priority = false,
 }: {
   name: string;
   images: string[];
+  priority?: boolean;
 }) {
   const usable = useMemo(
     () => Array.from(new Set(images.filter(Boolean))).slice(0, 5),
@@ -244,6 +246,7 @@ function KitchenDishPreview({
             aria-hidden={index === safeIndex ? undefined : true}
             loading={index === 0 ? "eager" : "lazy"}
             decoding="async"
+            fetchPriority={priority && index === 0 ? "high" : "auto"}
             draggable={false}
             className={[
               styles.kitchenPreviewImage,
@@ -367,7 +370,7 @@ export function KitchensGrid({
 
       {state === "ready" && kitchens.length > 0 ? (
         <div className={styles.kitchenGrid}>
-          {kitchens.map((kitchen) => {
+          {kitchens.map((kitchen, index) => {
             const name = kitchen.displayName || kitchen.kitchenName;
             const location = [kitchen.areaName, kitchen.city].filter(Boolean).join(", ");
             const previews = dishImagesByKitchen[kitchen.id] ?? [];
@@ -387,7 +390,7 @@ export function KitchensGrid({
                 className="group cursor-pointer overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-white text-left text-[#1A1A1A] shadow-[0_7px_22px_rgba(26,26,26,0.065)] transition-[border-color,box-shadow] duration-300 hover:border-[#F62E18]/20 hover:shadow-[0_14px_32px_rgba(26,26,26,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
                 aria-label={`Open ${name}`}
               >
-                  <KitchenDishPreview name={name} images={previews} />
+                  <KitchenDishPreview name={name} images={previews} priority={index < 4} />
                   <div className="px-3.5 pb-2.5 pt-2.5 sm:px-4 sm:pb-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">

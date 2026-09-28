@@ -12,6 +12,8 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   const chefs = source("../screens/public/AllChefs/AllChefs.tsx");
   const kitchens = source("../components/home/KitchensGrid.tsx");
   const cravings = source("../components/home/HomeCategoryRail.tsx");
+  const dishes = source("../components/home/DishesGrid.tsx");
+  const progressiveImage = source("../components/media/ProgressiveImage.tsx");
   const header = source("../components/home/BrowseHeader.tsx");
   const skeleton = source("../components/loading/CustomerPageSkeleton.tsx");
 
@@ -33,9 +35,14 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(kitchens, /onPointerDown/);
   assert.match(kitchens, /new window\.Image\(\)/);
   assert.match(kitchens, /kitchenImagePreloads/);
+  assert.match(kitchens, /priority=\{index < 4\}/);
+  assert.match(kitchens, /fetchPriority=\{priority && index === 0 \? "high" : "auto"\}/);
   assert.match(kitchens, /transition-\[opacity,transform\]/);
   assert.doesNotMatch(kitchens, /View chef/);
+  assert.match(dishes, /priorityImage=\{index < 4\}/);
+  assert.match(progressiveImage, /unoptimized = true/);
   assert.match(cravings, /translate-y-\[var\(--craves-mobile-search-offset,0px\)\]/);
+  assert.match(cravings, /fetchPriority=\{priorityImage \? "high" : "auto"\}/);
   assert.match(cravings, /md:top-\[var\(--craves-desktop-header-offset-md,4\.25rem\)\]/);
   assert.match(cravings, /lg:top-\[var\(--craves-desktop-header-offset-lg,4\.65rem\)\]/);
   assert.match(cravings, /shadow-\[0_3px_10px_rgba\(26,26,26,0\.09\)\]/);

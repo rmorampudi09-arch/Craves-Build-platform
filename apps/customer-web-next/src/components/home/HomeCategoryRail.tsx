@@ -196,9 +196,10 @@ export function HomeCategoryRail({
             className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto bg-transparent px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-3 md:gap-3.5 md:pb-2.5 lg:gap-4"
             aria-label="Craving filters"
           >
-            {categories.map(({ label, value, fallbackImage, icon: Icon }) => {
+            {categories.map(({ label, value, fallbackImage, icon: Icon }, index) => {
               const active = selected === value;
               const image = fallbackImage || images[value];
+              const priorityImage = index < 6;
 
               return (
                 <button
@@ -220,8 +221,9 @@ export function HomeCategoryRail({
                       <img
                         src={image}
                         alt=""
-                        loading="lazy"
+                        loading={priorityImage ? "eager" : "lazy"}
                         decoding="async"
+                        fetchPriority={priorityImage ? "high" : "auto"}
                         className="pointer-events-none h-full w-full select-none rounded-full object-cover transition-transform duration-[1200ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.085] group-focus-visible:scale-[1.055] motion-reduce:transform-none motion-reduce:transition-none"
                       />
                     ) : (

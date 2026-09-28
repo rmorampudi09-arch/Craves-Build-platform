@@ -141,12 +141,13 @@ function forceInstantWindowScroll(top: number): void {
 function BrowseFoodsPage() {
   const navigate = useNavigate();
   const [initialCache] = useState(() => ({
-    user: getSession(),
+    user: getSession() ?? recoverSessionSnapshotForNavigation(),
     address: getAddress(),
-    dishes: [] as Dish[],
-    kitchens: [] as NearbyKitchen[],
+    dishes: allDishes(),
+    kitchens: allKitchens(),
   }));
-  const hasInitialCatalog = false;
+  const hasInitialCatalog =
+    initialCache.dishes.length > 0 || initialCache.kitchens.length > 0;
 
   const [user, setUser] = useState<CravesUser | null>(initialCache.user);
   const [address, setAddress] = useState<CravesAddress | null>(initialCache.address);
@@ -508,7 +509,9 @@ function BrowseFoodsPage() {
             ? "Loading food near your default delivery address…"
             : "Choose a default delivery address to see nearby food.",
         );
-        await refreshDiscovery(defaultAddress, false, false);
+        const shouldPreserveCatalog =
+          allDishes().length > 0 || allKitchens().length > 0;
+        await refreshDiscovery(defaultAddress, false, shouldPreserveCatalog);
       } catch (error) {
         if (!active) return;
         setAddress(null);

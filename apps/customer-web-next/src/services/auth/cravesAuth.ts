@@ -42,6 +42,7 @@ export type CravesAddress = {
 };
 
 const SESSION_SNAPSHOT_KEY = "craves.customer.session.snapshot.v1";
+const ADDRESS_SNAPSHOT_KEY = "craves.customer.selected-address.snapshot.v1";
 
 function readSessionSnapshot(): CravesUser | null {
   if (typeof window === "undefined") return null;
@@ -77,6 +78,44 @@ function persistSessionSnapshot(value: CravesUser | null): void {
   }
 }
 
+function isAddressSnapshot(value: unknown): value is CravesAddress {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<CravesAddress>;
+  return (
+    typeof candidate.hno === "string" &&
+    typeof candidate.city === "string" &&
+    typeof candidate.mandal === "string" &&
+    typeof candidate.district === "string" &&
+    (typeof candidate.lat === "undefined" || typeof candidate.lat === "number") &&
+    (typeof candidate.lng === "undefined" || typeof candidate.lng === "number")
+  );
+}
+
+function readAddressSnapshot(): CravesAddress | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(ADDRESS_SNAPSHOT_KEY);
+    if (!raw) return null;
+    const candidate = JSON.parse(raw);
+    return isAddressSnapshot(candidate) ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistAddressSnapshot(value: CravesAddress | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (!value) {
+      window.sessionStorage.removeItem(ADDRESS_SNAPSHOT_KEY);
+      return;
+    }
+    window.sessionStorage.setItem(ADDRESS_SNAPSHOT_KEY, JSON.stringify(value));
+  } catch {
+    // Storage is only a speed hint; the backend remains authoritative.
+  }
+}
+
 export function recoverSessionSnapshotForNavigation(): CravesUser | null {
   if (session) return session;
   const cached = readSessionSnapshot();
@@ -102,7 +141,7 @@ export function isSessionReady(): boolean { return !sessionEnding && session?.st
 function invalidatePendingSessionWork() { sessionGeneration += 1; roleSynchronization = null; }
 export function invalidateSession(context: SessionContext): void { if (isSessionContextCurrent(context)) forgetSession(); }
 function forgetSession() {
-  invalidatePendingSessionWork(); sessionEnding = false; session = null; sessionEmailRevision = -1; selectedLocation = null; persistSessionSnapshot(null); notify();
+  invalidatePendingSessionWork(); sessionEnding = false; session = null; sessionEmailRevision = -1; selectedLocation = null; persistSessionSnapshot(null); persistAddressSnapshot(null); notify();
 }
 let selectedLocation: CravesAddress | null = null;
 let roleSynchronization: Promise<CravesUser | null> | null = null;
@@ -353,14 +392,18 @@ export function subscribeSession(listener: () => void): () => void {
 
 export function saveAddress(address: CravesAddress) {
   selectedLocation = address;
+  persistAddressSnapshot(address);
 }
 
 export function getAddress(): CravesAddress | null {
+  if (selectedLocation) return selectedLocation;
+  selectedLocation = readAddressSnapshot();
   return selectedLocation;
 }
 
 export function invalidateSelectedAddress(): void {
   selectedLocation = null;
+  persistAddressSnapshot(null);
 }
 
 function fromCustomerAddress(address: DeliveryReadyAddress): CravesAddress {
@@ -391,5 +434,6 @@ export async function loadSelectedAddress(): Promise<CravesAddress | null> {
   if (!Array.isArray(addresses)) throw new Error("Saved delivery addresses returned an invalid response.");
   const selected = selectDefaultDeliveryAddress(addresses);
   selectedLocation = selected ? fromCustomerAddress(selected) : null;
+  persistAddressSnapshot(selectedLocation);
   return selectedLocation;
 }

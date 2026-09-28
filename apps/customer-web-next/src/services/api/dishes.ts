@@ -42,6 +42,7 @@ export type Dish = {
 
 const PLACEHOLDER_IMAGE = "/brand/craves-logo.svg";
 const DISCOVERY_PAGE_SIZE = 50;
+const DISCOVERY_SNAPSHOT_KEY = "craves.customer.dish-discovery.snapshot.v1";
 
 type DishDiscoveryCursor = {
   latitude: number;
@@ -55,6 +56,71 @@ let discoveredDishes: Dish[] = [];
 let discoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;
 let discoveryCursor: DishDiscoveryCursor | null = null;
 let discoveryGeneration = 0;
+
+function isDishSnapshot(value: unknown): value is {
+  dishes: Dish[];
+  radiusMeters: number;
+  cursor: DishDiscoveryCursor | null;
+} {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as {
+    dishes?: unknown;
+    radiusMeters?: unknown;
+    cursor?: unknown;
+  };
+  return (
+    Array.isArray(candidate.dishes) &&
+    typeof candidate.radiusMeters === "number" &&
+    (candidate.cursor === null ||
+      (typeof candidate.cursor === "object" &&
+        typeof (candidate.cursor as DishDiscoveryCursor).latitude === "number" &&
+        typeof (candidate.cursor as DishDiscoveryCursor).longitude === "number" &&
+        typeof (candidate.cursor as DishDiscoveryCursor).radiusMeters === "number" &&
+        typeof (candidate.cursor as DishDiscoveryCursor).nextPage === "number" &&
+        typeof (candidate.cursor as DishDiscoveryCursor).hasNext === "boolean"))
+  );
+}
+
+function rememberDiscoverySnapshot(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      DISCOVERY_SNAPSHOT_KEY,
+      JSON.stringify({
+        dishes: discoveredDishes.slice(0, DISCOVERY_PAGE_SIZE),
+        radiusMeters: discoveryRadiusMeters,
+        cursor: discoveryCursor,
+      }),
+    );
+  } catch {
+    // Discovery cache is a speed hint only.
+  }
+}
+
+function hydrateDiscoverySnapshot(): void {
+  if (
+    typeof window === "undefined" ||
+    discoveredDishes.length > 0
+  ) {
+    return;
+  }
+  try {
+    const raw = window.sessionStorage.getItem(DISCOVERY_SNAPSHOT_KEY);
+    if (!raw) return;
+    const candidate = JSON.parse(raw);
+    if (!isDishSnapshot(candidate)) return;
+    discoveredDishes = candidate.dishes.filter(
+      (dish) =>
+        typeof dish.id === "string" &&
+        typeof dish.name === "string" &&
+        typeof dish.price === "number",
+    );
+    discoveryRadiusMeters = candidate.radiusMeters;
+    discoveryCursor = candidate.cursor;
+  } catch {
+    // Ignore stale or malformed client cache.
+  }
+}
 
 function spiceLabel(
   value: NearbyMenuItem["spiceLevel"] | PublicMenuItemDetail["spiceLevel"],
@@ -223,15 +289,18 @@ export async function discoverDishes(
         nextPage: payload.page.page + 1,
         hasNext: payload.page.hasNext,
       };
+      rememberDiscoverySnapshot();
       return [...discoveredDishes];
     }
   }
 
   discoveryCursor = null;
+  rememberDiscoverySnapshot();
   return [];
 }
 
 export function hasMoreDiscoveredDishes(): boolean {
+  hydrateDiscoverySnapshot();
   return Boolean(discoveryCursor?.hasNext);
 }
 
@@ -283,6 +352,7 @@ export async function loadMoreDiscoveredDishes(): Promise<Dish[]> {
     nextPage: payload.page.page + 1,
     hasNext: payload.page.hasNext,
   };
+  rememberDiscoverySnapshot();
 
   return [...discoveredDishes];
 }
@@ -318,6 +388,7 @@ export async function loadKitchenMenu(kitchenId: string): Promise<Dish[]> {
     ...loaded,
     ...discoveredDishes.filter((existing) => !loadedIds.has(existing.id)),
   ];
+  rememberDiscoverySnapshot();
   return loaded;
 }
 
@@ -349,6 +420,7 @@ export function getDiscoveryRadiusMeters(): number {
 }
 
 export function allDishes(): Dish[] {
+  hydrateDiscoverySnapshot();
   return discoveredDishes.filter(
     (dish) =>
       typeof dish.distanceMeters !== "number" ||
@@ -361,9 +433,17 @@ export function clearDishDiscoveryCache(): void {
   discoveredDishes = [];
   discoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;
   discoveryCursor = null;
+  if (typeof window !== "undefined") {
+    try {
+      window.sessionStorage.removeItem(DISCOVERY_SNAPSHOT_KEY);
+    } catch {
+      // Nothing to clear.
+    }
+  }
 }
 
 export function getDish(id: string): Dish | undefined {
+  hydrateDiscoverySnapshot();
   return discoveredDishes.find((dish) => dish.id === id);
 }
 

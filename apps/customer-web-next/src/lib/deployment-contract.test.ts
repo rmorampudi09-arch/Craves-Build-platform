@@ -36,3 +36,12 @@ test("customer and chef pages are not edge cached across web releases", () => {
   assert.match(config, /profile\|subscriptions\|tracking\|wishlist\|sign-in/);
   assert.match(config, /private, no-store, no-cache, max-age=0, must-revalidate/);
 });
+
+test("seo sitemap is published and advertised to crawlers", () => {
+  const sitemapRoute = source("../app/sitemap.ts");
+  const robots = source("../../public/robots.txt");
+
+  assert.match(sitemapRoute, /https:\/\/craves\.in/);
+  assert.match(sitemapRoute, /\/subscriptions\/plans/);
+  assert.match(robots, /Sitemap: https:\/\/craves\.in\/sitemap\.xml/);
+});

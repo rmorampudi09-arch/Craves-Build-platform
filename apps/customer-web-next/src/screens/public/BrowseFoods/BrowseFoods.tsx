@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import dynamic from "next/dynamic";
 import {
   useCallback,
   useEffect,
@@ -14,12 +15,10 @@ import { CartAddressAvailabilityDialog } from "@/components/home/CartAddressAvai
 import { CustomerSignOutDialog } from "@/components/home/CustomerSignOutDialog";
 import { DishesGrid } from "@/components/home/DishesGrid";
 import { CustomerFloatingCart } from "@/components/cart/CustomerFloatingCart";
-import { HomeBottomSections } from "@/components/home/HomeBottomSections";
 import {
   HomeCategoryRail,
   type CravingCategory,
 } from "@/components/home/HomeCategoryRail";
-import { HomeSearchOverlay } from "@/components/home/HomeSearchOverlay";
 import { KitchensGrid } from "@/components/home/KitchensGrid";
 import { WelcomeBanner } from "@/components/home/WelcomeBanner";
 import { ALL_DISHES_CATEGORY } from "@/constants/dishCategories";
@@ -72,6 +71,22 @@ import {
   type CravesUser,
 } from "@/services/auth/cravesAuth";
 import styles from "./HomeReference.module.css";
+
+const HomeBottomSections = dynamic(
+  () =>
+    import("@/components/home/HomeBottomSections").then(
+      (module) => module.HomeBottomSections,
+    ),
+  { ssr: false, loading: () => null },
+);
+
+const HomeSearchOverlay = dynamic(
+  () =>
+    import("@/components/home/HomeSearchOverlay").then(
+      (module) => module.HomeSearchOverlay,
+    ),
+  { ssr: false, loading: () => null },
+);
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 

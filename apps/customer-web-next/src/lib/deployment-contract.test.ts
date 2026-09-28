@@ -45,3 +45,15 @@ test("seo sitemap is published and advertised to crawlers", () => {
   assert.match(sitemapRoute, /\/subscriptions\/plans/);
   assert.match(robots, /Sitemap: https:\/\/craves\.in\/sitemap\.xml/);
 });
+
+test("home first load keeps non-critical sections out of the initial bundle", () => {
+  const home = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
+
+  assert.match(home, /from "next\/dynamic"/);
+  assert.match(home, /const HomeBottomSections = dynamic/);
+  assert.match(home, /const HomeSearchOverlay = dynamic/);
+  assert.doesNotMatch(
+    home,
+    /import \{ HomeBottomSections \} from "@\/components\/home\/HomeBottomSections"/,
+  );
+});

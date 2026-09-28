@@ -229,8 +229,8 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
                 alt=""
                 fill
                 sizes="96px"
-                loading="lazy"
-                fetchPriority="low"
+                loading={index === safeIndex ? "eager" : "lazy"}
+                fetchPriority={index === safeIndex ? "high" : "low"}
                 className="object-cover"
                 aria-hidden="true"
                 fallbackLabel="Photo unavailable"

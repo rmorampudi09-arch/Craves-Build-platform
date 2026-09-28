@@ -208,7 +208,7 @@ function WishlistPage() {
             ) : null}
 
             <ul className="space-y-3">
-              {items.map((item) => (
+              {items.map((item, index) => (
                 <li
                   key={item.id}
                   className="group flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-3 shadow-[0_4px_16px_rgba(26,26,26,0.04)] transition-[border-color,box-shadow] duration-200 hover:border-[#F62E18]/25 hover:shadow-[0_9px_24px_rgba(26,26,26,0.08)]"
@@ -223,6 +223,9 @@ function WishlistPage() {
                       alt={item.name}
                       width={82}
                       height={82}
+                      loading={index < 4 ? "eager" : "lazy"}
+                      decoding="async"
+                      fetchPriority={index < 4 ? "high" : "auto"}
                       className="h-[82px] w-[82px] object-cover transition-transform duration-300 group-hover:scale-[1.035]"
                     />
                   </Link>

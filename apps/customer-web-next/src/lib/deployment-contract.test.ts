@@ -28,3 +28,11 @@ test("deployment shifts Container Apps traffic and verifies the public commit", 
   assert.match(pipeline, /Secure Craves access/);
   assert.match(pipeline, /ROLLBACK_TRAFFIC_B64/);
 });
+
+test("customer and chef pages are not edge cached across web releases", () => {
+  const config = source("../../next.config.ts");
+
+  assert.match(config, /chef\|chefs\|home\|discover\|cart\|checkout\|orders/);
+  assert.match(config, /profile\|subscriptions\|tracking\|wishlist\|sign-in/);
+  assert.match(config, /private, no-store, no-cache, max-age=0, must-revalidate/);
+});

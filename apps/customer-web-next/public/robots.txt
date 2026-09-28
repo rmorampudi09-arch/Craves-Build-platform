@@ -2,3 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /orders/
 Disallow: /api/
+Sitemap: https://craves.in/sitemap.xml

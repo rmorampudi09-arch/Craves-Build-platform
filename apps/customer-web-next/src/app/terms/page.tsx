@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { PolicyList, PolicySection, PublicPolicyPage } from "@/components/legal/PublicPolicyPage";
 
 export const metadata = {
@@ -57,9 +59,9 @@ export default function TermsPage() {
       <PolicySection title="6. Cancellations and refunds">
         <p>
           Refund eligibility and processing for the currently implemented order cases are described on the{" "}
-          <a className="font-semibold text-[#F62E18] underline" href="/refunds-cancellations">
+          <Link className="font-semibold text-[#F62E18] underline" href="/refunds-cancellations">
             Refunds & Cancellations
-          </a>{" "}
+          </Link>{" "}
           page. For an unlisted case, contact support rather than assuming that an automatic refund is available.
         </p>
       </PolicySection>

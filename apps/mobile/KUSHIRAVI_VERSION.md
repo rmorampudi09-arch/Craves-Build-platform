@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.4
+# KUSHIRAVI App Build - Version 1.5
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,16 +9,28 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Current Android versionCode: `5`
-- Current Android versionName: `1.4`
+- Current Android versionCode: `6`
+- Current Android versionName: `1.5`
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
+### Version 1.5 - Match CRAVES logo size across launch handoff
+
+- Tag: `KUSHIRAVI-app-v1.5`
+- Android versionCode: `6`
+- Android versionName: `1.5`
+- APK path: `apps/mobile/android/app/build/outputs/apk/release/app-release-signed.apk`
+- Change summary:
+  - Removed the React splash logo's initial scale-down so the CRAVES word stays the same apparent size when Android hands off to React.
+  - Reduced the final fade-out scale change so the splash does not visibly shrink before navigation continues.
+  - Preserved the existing native splash asset and post-splash navigation behavior.
+
 ### Version 1.4 - Keep CRAVES visible during native-to-React handoff
 
 - Tag: `KUSHIRAVI-app-v1.4`
+- Commit: `807692c31d79b7edaaf5b77f247b4d16b7590f90`
 - Android versionCode: `5`
 - Android versionName: `1.4`
 - APK path: `apps/mobile/android/app/build/outputs/apk/release/app-release-signed.apk`

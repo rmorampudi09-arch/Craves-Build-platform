@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.5
+# KUSHIRAVI App Build - Version 1.7
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,16 +9,29 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Current Android versionCode: `6`
-- Current Android versionName: `1.5`
+- Current Android versionCode: `8`
+- Current Android versionName: `1.7`
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
+### Version 1.7 - Checkout bill details and stale payment recovery
+
+- Tag: `KUSHIRAVI-app-v1.7`
+- Android versionCode: `8`
+- Android versionName: `1.7`
+- APK path: `apps/mobile/android/app/build/outputs/apk/release/app-release-signed.apk`
+- Change summary:
+  - Separated checkout bill preparation from payment order creation so delivery fee, platform fee, taxes, and final total appear before opening payment.
+  - Prevented the app from creating a new pending payment order just to show Bill Details.
+  - Cleared stale locally persisted pending-payment attempts when they belong to an older cart or delivery address, so users can start a fresh checkout.
+  - Preserved existing backend APIs, payment provider logic, cart calculations, and order flows.
+
 ### Version 1.5 - Match CRAVES logo size across launch handoff
 
 - Tag: `KUSHIRAVI-app-v1.5`
+- Commit: `d54b03f14dccf34ef7bbc40eadd999790eabf0eb`
 - Android versionCode: `6`
 - Android versionName: `1.5`
 - APK path: `apps/mobile/android/app/build/outputs/apk/release/app-release-signed.apk`

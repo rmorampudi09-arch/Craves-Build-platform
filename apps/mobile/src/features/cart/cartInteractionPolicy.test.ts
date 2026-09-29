@@ -80,6 +80,9 @@ describe('cartInteractionPolicy', () => {
 
   it('uses an explicit continuation label for a recovered pending payment', () => {
     expect(getCartCheckoutActionLabel(false, false)).toBe('Proceed to Checkout');
+    expect(getCartCheckoutActionLabel(false, false, false, true)).toBe(
+      'Continue to Payment',
+    );
     expect(getCartCheckoutActionLabel(false, true)).toBe('Continue payment');
     expect(getCartCheckoutActionLabel(false, true, true)).toBe(
       'Check previous payment',

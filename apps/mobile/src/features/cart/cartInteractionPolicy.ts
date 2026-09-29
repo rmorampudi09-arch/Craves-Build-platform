@@ -58,9 +58,11 @@ export function getCartCheckoutActionLabel(
   checkoutBusy: boolean,
   paymentRecoveryActive: boolean,
   staleRecoveredCheckout = false,
+  finalBillReady = false,
 ): string {
   if (checkoutBusy) return 'Please wait…';
   if (staleRecoveredCheckout) return 'Check previous payment';
   if (paymentRecoveryActive) return 'Continue payment';
+  if (finalBillReady) return 'Continue to Payment';
   return 'Proceed to Checkout';
 }

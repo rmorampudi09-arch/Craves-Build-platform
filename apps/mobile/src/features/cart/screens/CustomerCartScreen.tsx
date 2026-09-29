@@ -653,29 +653,38 @@ export function CustomerCartScreen() {
         );
         return;
       }
-      if (
-        interrupted?.outcome === 'PENDING' &&
-        !recoveredCheckoutMatchesCurrentCart(interrupted.checkout, cartSnapshot)
-      ) {
-        activeCheckoutRef.current = null;
-        setPaymentNotice(
-          'A previous payment belongs to an older cart. Craves will not reuse that amount for this cart. Check its payment status before starting a new payment.',
-        );
-        return;
+
+      let recoveredPendingCheckout: CheckoutSession | null = null;
+      if (interrupted?.outcome === 'PENDING') {
+        const recoveredCheckoutStillMatches =
+          recoveredCheckoutMatchesCurrentCart(interrupted.checkout, cartSnapshot) &&
+          interrupted.checkout.deliveryAddressId === addressId;
+
+        if (recoveredCheckoutStillMatches) {
+          recoveredPendingCheckout = interrupted.checkout;
+        } else {
+          await pendingPaymentAttemptStore.clear().catch(() => undefined);
+          activeCheckoutRef.current = null;
+          setCheckoutReview(null);
+          setPaymentRecoveryActive(false);
+          setPaymentNotice(
+            'A previous pending payment was for an older cart or delivery address. This checkout will use a fresh bill.',
+          );
+        }
       }
 
-      let checkout =
-        interrupted?.outcome === 'PENDING'
-          ? interrupted.checkout
-          : activeCheckoutRef.current;
+      let checkout = recoveredPendingCheckout ?? activeCheckoutRef.current;
       if (
         checkout?.status === 'PAYMENT_PENDING' &&
         checkout.deliveryAddressId !== addressId
       ) {
-        setInteractionError(
-          'A payment is still pending for your previous delivery address. Keep that address until the payment finishes or fails.',
+        checkout = null;
+        activeCheckoutRef.current = null;
+        setCheckoutReview(null);
+        setPaymentRecoveryActive(false);
+        setPaymentNotice(
+          'Delivery address changed, so Craves will prepare a fresh bill before payment.',
         );
-        return;
       }
 
       const serviceable = await verifyServiceability();
@@ -740,17 +749,17 @@ export function CustomerCartScreen() {
       }
 
       setCheckoutReview(checkout);
-      const handoff = await paymentHandoffCoordinator.prepare(checkout);
-      await pendingPaymentAttemptStore.save(handoff);
-      setPaymentRecoveryActive(true);
 
       if (preparedForReview) {
-        skipNextAutomaticPaymentRecoveryRef.current = true;
         setPaymentNotice(
           'Final total is ready. Review Bill Details, then continue payment.',
         );
         return;
       }
+
+      const handoff = await paymentHandoffCoordinator.prepare(checkout);
+      await pendingPaymentAttemptStore.save(handoff);
+      setPaymentRecoveryActive(true);
 
       try {
         const proof = await razorpayGateway.open(handoff, {phone: authPhone});
@@ -1063,6 +1072,7 @@ export function CustomerCartScreen() {
               checkoutBusy,
               paymentRecoveryActive,
               staleRecoveredCheckout,
+              Boolean(visibleCheckoutReview),
             )}
             disabled={!checkoutEnabled}
             onPress={

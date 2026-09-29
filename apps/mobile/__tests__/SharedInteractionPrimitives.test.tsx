@@ -3,6 +3,7 @@
  */
 
 import React from 'react';
+import {Vibration} from 'react-native';
 import {Button, SegmentedControl} from '../src/shared/components';
 
 jest.mock('../src/design/reducedMotion', () => ({
@@ -23,6 +24,14 @@ type InteractionElementProps = {
 };
 
 describe('shared interaction primitives', () => {
+  beforeEach(() => {
+    jest.spyOn(Vibration, 'vibrate').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   test('blocks duplicate mutation presses while a button is loading', () => {
     const onPress = jest.fn();
     const button = Button({
@@ -54,6 +63,20 @@ describe('shared interaction primitives', () => {
     });
   });
 
+  test('fires haptic feedback before shared button actions', () => {
+    const onPress = jest.fn();
+    const button = Button({
+      testID: 'save-button',
+      label: 'Save',
+      onPress,
+    }) as React.ReactElement<InteractionElementProps>;
+
+    button.props.onPress?.();
+
+    expect(Vibration.vibrate).toHaveBeenCalledWith(10);
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
   test('exposes selected tab state and forwards only the chosen option value', () => {
     const onChange = jest.fn();
     const group = SegmentedControl({
@@ -82,6 +105,7 @@ describe('shared interaction primitives', () => {
 
     options[1].props.onPress?.();
 
+    expect(Vibration.vibrate).toHaveBeenCalledWith(10);
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledWith('ready');
   });

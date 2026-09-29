@@ -76,7 +76,9 @@ test("mobile browse proportions and cart glass stay aligned with the compact ref
   assert.match(nav, /bg-white\/50/);
   assert.match(nav, /backdrop-blur-\[8px\]/);
   assert.match(nav, /backdrop-saturate-\[145%\]/);
-  assert.match(homeStyles, /backdrop-filter: blur\(8px\) saturate\(145%\)/);
+  assert.match(homeStyles, /backdrop-filter: blur\(10px\)/);
+  assert.match(homeStyles, /\.floatingCartGlass::before/);
+  assert.match(homeStyles, /\.floatingCartGlass::after/);
   assert.doesNotMatch(homeStyles, /blur\(48px\)/);
 });
 

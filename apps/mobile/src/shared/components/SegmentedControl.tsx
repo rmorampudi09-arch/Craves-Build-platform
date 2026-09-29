@@ -10,6 +10,7 @@ import {
   touchTarget,
   typography,
 } from '../../design/tokens';
+import {triggerSelectionHaptic} from '../interaction/haptics';
 
 export interface SegmentedControlOption<T extends string> {
   value: T;
@@ -39,6 +40,10 @@ export function SegmentedControl<T extends string>({
   testID,
 }: SegmentedControlProps<T>) {
   const groupRole = accessibilityOptionRole === 'radio' ? 'radiogroup' : 'tablist';
+  const handleChange = (nextValue: T) => {
+    triggerSelectionHaptic();
+    onChange(nextValue);
+  };
 
   return (
     <View
@@ -60,7 +65,7 @@ export function SegmentedControl<T extends string>({
                 : {disabled, selected}
             }
             disabled={disabled}
-            onPress={() => onChange(option.value)}
+            onPress={() => handleChange(option.value)}
             style={({pressed}) => [
               styles.segment,
               selected && styles.selected,

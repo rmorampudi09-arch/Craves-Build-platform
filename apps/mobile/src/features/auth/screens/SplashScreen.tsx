@@ -206,7 +206,7 @@ export function SplashScreen({
 const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: CRAVES_RED,
     bottom: 0,
     justifyContent: 'center',
     left: 0,

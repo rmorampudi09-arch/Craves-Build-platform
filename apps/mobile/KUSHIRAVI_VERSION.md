@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.1
+# KUSHIRAVI App Build - Version 1.2
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,16 +9,28 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Current Android versionCode: `2`
-- Current Android versionName: `1.1`
+- Current Android versionCode: `3`
+- Current Android versionName: `1.2`
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
+### Version 1.2 - Streamlined Android startup handoff
+
+- Tag: `KUSHIRAVI-app-v1.2`
+- Android versionCode: `3`
+- Android versionName: `1.2`
+- APK path: `apps/mobile/android/app/build/outputs/apk/release/app-release-signed.apk`
+- Change summary:
+  - Changed the native Android launch splash from the default Android launcher icon to the Craves launcher icon.
+  - Aligned the native launch background, status bar, navigation bar, and React splash background to Craves red to remove the visible white transition before the animated splash.
+  - Preserved the existing post-splash navigation behavior: unauthenticated users continue to signin/signup and authenticated users continue to home.
+
 ### Version 1.1 - Splash screen integration
 
 - Tag: `KUSHIRAVI-app-v1.1`
+- Commit: `6778ffb2ccdb877f2a4b3d9d595b9be92b41c54b`
 - Android versionCode: `2`
 - Android versionName: `1.1`
 - APK path: `apps/mobile/android/app/build/outputs/apk/release/app-release-signed.apk`

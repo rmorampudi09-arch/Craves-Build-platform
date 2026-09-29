@@ -5,6 +5,7 @@ import type {
 } from '../domain/paymentTypes';
 
 const STORAGE_KEY = '@craves/payment/pending-attempt/v1';
+export const PENDING_PAYMENT_ATTEMPT_MAX_AGE_MS = 30 * 60 * 1000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
 const DECIMAL_PATTERN = /^\d+(?:\.\d+)?$/;
@@ -89,6 +90,9 @@ export const pendingPaymentAttemptStore = {
     try {
       const stored = parseStoredAttempt(JSON.parse(raw));
       if (!stored) return clearInvalidStoredAttempt();
+      if (Date.now() - Date.parse(stored.savedAt) > PENDING_PAYMENT_ATTEMPT_MAX_AGE_MS) {
+        return clearInvalidStoredAttempt();
+      }
       return {
         paymentOrderId: stored.paymentOrderId,
         checkoutId: stored.checkoutId,

@@ -15,6 +15,7 @@ describe('pending payment attempt store', () => {
   const storage = AsyncStorage as jest.Mocked<typeof AsyncStorage>;
 
   beforeEach(() => {
+    jest.restoreAllMocks();
     storage.getItem.mockReset();
     storage.setItem.mockReset();
     storage.removeItem.mockReset();
@@ -42,6 +43,7 @@ describe('pending payment attempt store', () => {
   });
 
   it('loads a valid interrupted payment reference', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-08-16T09:00:00.000Z'));
     storage.getItem.mockResolvedValue(
       JSON.stringify({
         version: 1,
@@ -59,6 +61,23 @@ describe('pending payment attempt store', () => {
       providerOrderId: handoff.providerOrderId,
       amount: handoff.amount,
     });
+  });
+
+  it('clears a stale pending payment so old attempts do not block checkout', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-08-16T10:00:01.000Z'));
+    storage.getItem.mockResolvedValue(
+      JSON.stringify({
+        version: 1,
+        paymentOrderId: handoff.paymentOrderId,
+        checkoutId: handoff.checkoutId,
+        providerOrderId: handoff.providerOrderId,
+        amount: handoff.amount,
+        savedAt: '2026-08-16T09:29:59.000Z',
+      }),
+    );
+
+    await expect(pendingPaymentAttemptStore.load()).resolves.toBeNull();
+    expect(storage.removeItem).toHaveBeenCalledTimes(1);
   });
 
   it('fails closed and removes malformed local state', async () => {

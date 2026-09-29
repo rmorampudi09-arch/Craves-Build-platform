@@ -1,6 +1,7 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Pressable,
@@ -48,6 +49,7 @@ import {
   addCartItem,
   removeCartItem,
   setCartItemQuantity,
+  switchCartKitchen,
   type CartMutationOutcome,
 } from '../../cart/state/cartMutations';
 import {
@@ -229,9 +231,50 @@ export function CustomerDishDetailScreen() {
         return;
       }
 
-      const decision = evaluateDishCartRevalidation(dish, refreshed.data);
+      const latestDish = refreshed.data;
+      const decision = evaluateDishCartRevalidation(dish, latestDish);
       if (decision.status !== 'READY') {
         setPurchaseMessage(decision.message);
+        return;
+      }
+
+      const otherKitchen =
+        cartLine == null
+          ? cartSnapshot?.lines.find(
+              line => line.kitchenId !== latestDish.kitchen.id,
+            ) ?? null
+          : null;
+      if (otherKitchen && cartSnapshot) {
+        const expectedSnapshot = cartSnapshot;
+        Alert.alert(
+          'Replace current cart?',
+          `Your cart has food from ${otherKitchen.kitchenName}. To add ${latestDish.itemName}, Craves must replace the cart you are reviewing now.`,
+          [
+            {text: 'Keep cart', style: 'cancel'},
+            {
+              text: 'Replace & add',
+              style: 'destructive',
+              onPress: () => {
+                dispatch(
+                  switchCartKitchen({
+                    expectedSnapshot,
+                    menuItemId: latestDish.id,
+                    quantity: 1,
+                    expectedKitchenId: latestDish.kitchen.id,
+                  }),
+                )
+                  .then(outcome =>
+                    handleCartOutcome(outcome, latestDish.price.amount),
+                  )
+                  .catch(() =>
+                    setPurchaseMessage(
+                      'We couldn’t confirm the cart change. Check your cart before trying again.',
+                    ),
+                  );
+              },
+            },
+          ],
+        );
         return;
       }
 
@@ -243,9 +286,9 @@ export function CustomerDishDetailScreen() {
             }),
           )
         : await dispatch(
-            addCartItem({menuItemId: refreshed.data.id, quantity: 1}),
+            addCartItem({menuItemId: latestDish.id, quantity: 1}),
           );
-      handleCartOutcome(outcome, refreshed.data.price.amount);
+      handleCartOutcome(outcome, latestDish.price.amount);
     } finally {
       setRevalidating(false);
     }

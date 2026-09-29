@@ -1,5 +1,6 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -40,6 +41,7 @@ import {
   addCartItem,
   removeCartItem,
   setCartItemQuantity,
+  switchCartKitchen,
   type CartMutationOutcome,
 } from '../../cart/state/cartMutations';
 import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
@@ -243,6 +245,43 @@ export function CustomerKitchenProfileScreen() {
 
       const currentLine =
         cartSnapshot?.lines.find(line => line.menuItemId === item.id) ?? null;
+      const otherKitchen =
+        currentLine == null
+          ? cartSnapshot?.lines.find(
+              line => line.kitchenId !== route.params.kitchenId,
+            ) ?? null
+          : null;
+      if (otherKitchen && cartSnapshot) {
+        const expectedSnapshot = cartSnapshot;
+        Alert.alert(
+          'Replace current cart?',
+          `Your cart has food from ${otherKitchen.kitchenName}. To add ${latest.itemName}, Craves must replace the cart you are reviewing now.`,
+          [
+            {text: 'Keep cart', style: 'cancel'},
+            {
+              text: 'Replace & add',
+              style: 'destructive',
+              onPress: () => {
+                dispatch(
+                  switchCartKitchen({
+                    expectedSnapshot,
+                    menuItemId: latest.id,
+                    quantity: 1,
+                    expectedKitchenId: route.params.kitchenId,
+                  }),
+                )
+                  .then(handleCartOutcome)
+                  .catch(() =>
+                    setInteractionNotice(
+                      'We couldn’t confirm the cart change. Check your cart before trying again.',
+                    ),
+                  );
+              },
+            },
+          ],
+        );
+        return;
+      }
       const outcome = currentLine
         ? await dispatch(
             setCartItemQuantity({

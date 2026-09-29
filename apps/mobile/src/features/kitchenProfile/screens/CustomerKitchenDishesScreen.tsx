@@ -1,5 +1,6 @@
 import React, {useCallback, useMemo, useRef, useState} from 'react';
 import {
+  Alert,
   FlatList,
   Pressable,
   ScrollView,
@@ -41,6 +42,7 @@ import {
   addCartItem,
   removeCartItem,
   setCartItemQuantity,
+  switchCartKitchen,
   type CartMutationOutcome,
 } from '../../cart/state/cartMutations';
 import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
@@ -211,6 +213,41 @@ export function CustomerKitchenDishesScreen() {
 
         const currentLine =
           cartSnapshot?.lines.find(line => line.menuItemId === item.id) ?? null;
+        const otherKitchen =
+          currentLine == null
+            ? cartSnapshot?.lines.find(line => line.kitchenId !== refreshed.data.id) ?? null
+            : null;
+        if (otherKitchen && cartSnapshot) {
+          const expectedSnapshot = cartSnapshot;
+          Alert.alert(
+            'Replace current cart?',
+            `Your cart has food from ${otherKitchen.kitchenName}. To add ${latest.itemName}, Craves must replace the cart you are reviewing now.`,
+            [
+              {text: 'Keep cart', style: 'cancel'},
+              {
+                text: 'Replace & add',
+                style: 'destructive',
+                onPress: () => {
+                  dispatch(
+                    switchCartKitchen({
+                      expectedSnapshot,
+                      menuItemId: latest.id,
+                      quantity: 1,
+                      expectedKitchenId: refreshed.data.id,
+                    }),
+                  )
+                    .then(handleCartOutcome)
+                    .catch(() =>
+                      setInteractionNotice(
+                        'We couldn’t confirm the cart change. Check your cart before trying again.',
+                      ),
+                    );
+                },
+              },
+            ],
+          );
+          return;
+        }
         const outcome = currentLine
           ? await dispatch(
               setCartItemQuantity({
@@ -225,7 +262,7 @@ export function CustomerKitchenDishesScreen() {
       }
     },
     [
-      cartSnapshot?.lines,
+      cartSnapshot,
       dispatch,
       handleCartOutcome,
       profileQuery,

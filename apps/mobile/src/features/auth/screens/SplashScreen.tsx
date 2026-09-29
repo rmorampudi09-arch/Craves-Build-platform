@@ -9,7 +9,7 @@ import {
   View,
   type ImageSourcePropType,
 } from 'react-native';
-import cravesLogo from '../../../assets/brand/craves-approved-logo.png';
+import cravesLogo from '../../../assets/brand/craves-splash-logo.png';
 
 type SplashScreenProps = {
   logoSource?: ImageSourcePropType;
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     width: ICON_SIZE,
   },
   logo: {
-    height: 188,
-    width: 192,
+    height: 240,
+    width: 240,
   },
 });

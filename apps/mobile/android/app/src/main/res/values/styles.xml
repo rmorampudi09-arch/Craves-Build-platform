@@ -6,7 +6,7 @@
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
         <item name="android:windowBackground">#ff1707</item>
         <item name="android:windowSplashScreenBackground">#ff1707</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/craves_launcher</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/craves_splash_logo</item>
         <item name="android:windowSplashScreenIconBackgroundColor">#ff1707</item>
         <item name="android:statusBarColor">#ff1707</item>
         <item name="android:navigationBarColor">#ff1707</item>

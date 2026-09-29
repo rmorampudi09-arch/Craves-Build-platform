@@ -9,7 +9,6 @@ import {
   touchTarget,
 } from '../../design/tokens';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
-import {triggerSelectionHaptic} from '../interaction/haptics';
 
 export interface PressableCardProps {
   children: ReactNode;
@@ -35,10 +34,6 @@ export function PressableCard({
   const reduceMotion = useReducedMotionPreference();
   const selectable = selected !== undefined;
   const isSelected = selected ?? false;
-  const handlePress = () => {
-    triggerSelectionHaptic();
-    onPress();
-  };
 
   return (
     <Pressable
@@ -49,7 +44,7 @@ export function PressableCard({
         selectable ? {disabled, selected: isSelected} : {disabled}
       }
       disabled={disabled}
-      onPress={handlePress}
+      onPress={onPress}
       testID={testID}
       style={({pressed}) => [
         styles.base,

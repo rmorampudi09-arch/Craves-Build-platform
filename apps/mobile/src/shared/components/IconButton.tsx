@@ -8,7 +8,6 @@ import {
   touchTarget,
 } from '../../design/tokens';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
-import {triggerSelectionHaptic} from '../interaction/haptics';
 import {Icon, IconName} from './Icon';
 import {LoadingIndicator} from './LoadingIndicator';
 
@@ -36,10 +35,6 @@ export function IconButton({
   const reduceMotion = useReducedMotionPreference();
   const blocked = disabled || loading;
   const foreground = variant === 'primary' ? colors.white : colors.espressoBrown;
-  const handlePress = () => {
-    triggerSelectionHaptic();
-    onPress();
-  };
 
   return (
     <Pressable
@@ -47,7 +42,7 @@ export function IconButton({
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{disabled: blocked, busy: loading}}
       disabled={blocked}
-      onPress={handlePress}
+      onPress={onPress}
       testID={testID}
       style={({pressed}) => [
         styles.base,

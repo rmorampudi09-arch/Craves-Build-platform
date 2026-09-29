@@ -20,7 +20,6 @@ import {
   typography,
 } from '../../design/tokens';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
-import {triggerSelectionHaptic} from '../interaction/haptics';
 import {Icon, IconName} from './Icon';
 import {LoadingIndicator} from './LoadingIndicator';
 
@@ -57,10 +56,6 @@ export function Button({
   const blocked = disabled || loading;
   const foreground =
     variant === 'primary' ? colors.white : colors.flameRedAccessible;
-  const handlePress = () => {
-    triggerSelectionHaptic();
-    onPress();
-  };
 
   return (
     <Pressable
@@ -70,7 +65,7 @@ export function Button({
       accessibilityState={{disabled: blocked, busy: loading}}
       disabled={blocked}
       testID={testID}
-      onPress={handlePress}
+      onPress={onPress}
       style={({pressed}) => [
         styles.base,
         variant === 'primary' && styles.primary,

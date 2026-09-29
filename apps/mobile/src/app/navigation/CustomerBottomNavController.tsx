@@ -48,7 +48,6 @@ import {
 } from '../../features/cart/state/cartSelectors';
 import {formatCartMoney} from '../../features/cart/viewCartOverlayModel';
 import {Icon} from '../../shared/components/Icon';
-import {triggerSelectionHaptic} from '../../shared/interaction/haptics';
 import {
   createCustomerBottomNavScrollState,
   reduceCustomerBottomNavScroll,
@@ -243,10 +242,7 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
             accessibilityLabel={`View Cart, ${itemCount} ${
               itemCount === 1 ? 'item' : 'items'
             }, ${totalLabel}`}
-            onPress={() => {
-              triggerSelectionHaptic();
-              handleOpenCart();
-            }}
+            onPress={handleOpenCart}
             style={({pressed}) => [
               styles.cartAction,
               pressed && styles.cartActionPressed,

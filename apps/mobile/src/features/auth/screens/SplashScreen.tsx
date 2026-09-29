@@ -29,8 +29,8 @@ export function SplashScreen({
   const expand = React.useRef(new Animated.Value(0)).current;
   const finishOpacity = React.useRef(new Animated.Value(1)).current;
   const introCompleteRef = React.useRef(false);
-  const logoOpacity = React.useRef(new Animated.Value(0)).current;
-  const logoScale = React.useRef(new Animated.Value(0.72)).current;
+  const logoOpacity = React.useRef(new Animated.Value(1)).current;
+  const logoScale = React.useRef(new Animated.Value(0.92)).current;
   const shake = React.useRef(new Animated.Value(0)).current;
   const exitStartedRef = React.useRef(false);
 
@@ -74,23 +74,6 @@ export function SplashScreen({
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
-        Animated.sequence([
-          Animated.delay(220),
-          Animated.parallel([
-            Animated.timing(logoOpacity, {
-              toValue: 1,
-              duration: 240,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }),
-            Animated.spring(logoScale, {
-              toValue: 0.92,
-              friction: 7,
-              tension: 90,
-              useNativeDriver: true,
-            }),
-          ]),
-        ]),
       ]),
       Animated.sequence([
         Animated.timing(shake, {

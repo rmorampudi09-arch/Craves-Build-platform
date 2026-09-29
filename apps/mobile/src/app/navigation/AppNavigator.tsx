@@ -1,5 +1,5 @@
 import React from 'react';
-import {Linking} from 'react-native';
+import {Linking, StyleSheet, View} from 'react-native';
 import {
   CommonActions,
   NavigationContainer,
@@ -300,6 +300,7 @@ export function AppNavigator() {
   const status = useBootstrap();
   useSessionLifecycle();
   const auth = useAppSelector(state => state.auth);
+  const [splashDismissed, setSplashDismissed] = React.useState(false);
   const authRef = React.useRef(auth);
   const pendingInboundRef = React.useRef<InboundRouteCandidate | null>(null);
   const pendingRestorationRef = React.useRef<ProcessRestorationSnapshot | null>(null);
@@ -502,24 +503,36 @@ export function AppNavigator() {
     };
   }, [attemptInboundRoute, flushPendingRestoration]);
 
-  if (status === 'idle' || status === 'restoring') {
-    return <SplashScreen />;
-  }
-
-  if (status === 'error') {
-    return <StartupErrorScreen />;
-  }
+  const bootstrapReady = status !== 'idle' && status !== 'restoring';
+  const canRenderNavigator = bootstrapReady && status !== 'error';
 
   return (
-    <NavigationContainer
-      ref={navigationRef}
-      onReady={handleNavigationReadyOrChange}
-      onStateChange={handleNavigationReadyOrChange}>
-      {auth.bootstrapStatus === 'authenticated' ? (
-        <AuthenticatedNavigator resolution={auth.accountResolution} />
-      ) : (
-        <AuthNavigator />
-      )}
-    </NavigationContainer>
+    <View style={styles.root}>
+      {status === 'error' ? <StartupErrorScreen /> : null}
+      {canRenderNavigator ? (
+        <NavigationContainer
+          ref={navigationRef}
+          onReady={handleNavigationReadyOrChange}
+          onStateChange={handleNavigationReadyOrChange}>
+          {auth.bootstrapStatus === 'authenticated' ? (
+            <AuthenticatedNavigator resolution={auth.accountResolution} />
+          ) : (
+            <AuthNavigator />
+          )}
+        </NavigationContainer>
+      ) : null}
+      {!splashDismissed ? (
+        <SplashScreen
+          readyToLeave={bootstrapReady}
+          onFinish={() => setSplashDismissed(true)}
+        />
+      ) : null}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+});

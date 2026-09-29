@@ -1,6 +1,6 @@
-# KUSHIRAVI App Build - Version 1
+# KUSHIRAVI App Build - Version 1.1
 
-This branch is the local baseline for the APK installed on the connected phone on 2026-09-29.
+This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
 ## Identity
 
@@ -9,10 +9,31 @@ This branch is the local baseline for the APK installed on the connected phone o
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Android versionCode: `1`
-- Android versionName: `1.0`
+- Current Android versionCode: `2`
+- Current Android versionName: `1.1`
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
+
+## Version Checkpoints
+
+### Version 1.1 - Splash screen integration
+
+- Tag: `KUSHIRAVI-app-v1.1`
+- Android versionCode: `2`
+- Android versionName: `1.1`
+- APK path: `apps/mobile/android/app/build/outputs/apk/release/app-release-signed.apk`
+- Change summary:
+  - Wired the approved Craves splash animation from the supplied ZIP into the existing React Native startup flow.
+  - Reused only the ZIP splash animation and logo asset; did not import the ZIP sample login/home placeholder screens.
+  - Preserved the existing app navigation decision after startup: unauthenticated users continue to the signin/signup flow, authenticated users continue to their home flow.
+
+### Version 1 - Phone-installed baseline
+
+- Tag: `KUSHIRAVI-app-v1`
+- Commit: `679dd039f8ab1d6791083d39fdf43ae983ee5f5d`
+- Android versionCode: `1`
+- Android versionName: `1.0`
+- APK source branch: `KUSHIRAVI-app-build`
 
 ## Installed APK
 

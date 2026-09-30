@@ -53,11 +53,6 @@ export function LiquidGlassSurface({
     size.width / 2,
     size.height / 2,
   );
-  const innerGlowDepth = Math.min(
-    homeLiquidGlass.innerGlowDepth,
-    size.width / 2,
-    size.height / 2,
-  );
 
   return (
     <View
@@ -81,15 +76,12 @@ export function LiquidGlassSurface({
           isInteractive={false}
           tintColor={
             home
-              ? homeLiquidGlass.tintColor
+              ? 'rgba(255,255,255,0.06)'
               : navigation
               ? 'rgba(255,255,255,0.16)'
               : 'rgba(80,80,80,0.12)'
           }
-          style={[
-            StyleSheet.absoluteFill,
-            home && { borderRadius: cornerRadius },
-          ]}
+          style={[StyleSheet.absoluteFill, home && { borderRadius: cornerRadius }]}
         />
       ) : (
         <BlurView
@@ -101,9 +93,7 @@ export function LiquidGlassSurface({
             home ? homeLiquidGlass.blurIntensity : navigation ? 66 : 38
           }
           tint={
-            home
-              ? 'light'
-              : navigation
+            navigation
               ? 'systemUltraThinMaterialLight'
               : 'systemUltraThinMaterial'
           }
@@ -116,17 +106,15 @@ export function LiquidGlassSurface({
           style={[
             StyleSheet.absoluteFill,
             home
-              ? styles.homeWash
+              ? navigation
+                ? styles.homeNavigationWash
+                : styles.homeImageWash
               : navigation
               ? styles.navigationWash
               : styles.imageWash,
             Platform.OS === 'android' &&
               !hasAndroidBlur &&
-              (home
-                ? styles.homeFallback
-                : navigation
-                ? styles.navigationFallback
-                : styles.imageFallback),
+              (navigation ? styles.navigationFallback : styles.imageFallback),
           ]}
         />
       ) : null}
@@ -198,51 +186,45 @@ export function LiquidGlassSurface({
                   />
                   <Stop offset="1" stopColor="white" stopOpacity="0" />
                 </LinearGradient>
-                {[
-                  { name: 'edge', depth: edgeDepth },
-                  { name: 'glow', depth: innerGlowDepth },
-                ].map(({ name, depth }) => (
-                  <Mask
-                    key={name}
-                    id={`${gradientId}${name}Mask`}
-                    x={0}
-                    y={0}
+                <Mask
+                  id={`${gradientId}edgeMask`}
+                  x={0}
+                  y={0}
+                  width={size.width}
+                  height={size.height}
+                  maskUnits="userSpaceOnUse"
+                >
+                  <Rect
                     width={size.width}
                     height={size.height}
-                    maskUnits="userSpaceOnUse"
-                  >
-                    <Rect
-                      width={size.width}
-                      height={size.height}
-                      rx={roundedCorner}
-                      fill="white"
-                    />
-                    <Rect
-                      x={depth / 4}
-                      y={depth / 4}
-                      width={Math.max(0, size.width - depth / 2)}
-                      height={Math.max(0, size.height - depth / 2)}
-                      rx={Math.max(0, roundedCorner - depth / 4)}
-                      fill="#b0b0b0"
-                    />
-                    <Rect
-                      x={depth / 2}
-                      y={depth / 2}
-                      width={Math.max(0, size.width - depth)}
-                      height={Math.max(0, size.height - depth)}
-                      rx={Math.max(0, roundedCorner - depth / 2)}
-                      fill="#606060"
-                    />
-                    <Rect
-                      x={depth}
-                      y={depth}
-                      width={Math.max(0, size.width - depth * 2)}
-                      height={Math.max(0, size.height - depth * 2)}
-                      rx={Math.max(0, roundedCorner - depth)}
-                      fill="black"
-                    />
-                  </Mask>
-                ))}
+                    rx={roundedCorner}
+                    fill="white"
+                  />
+                  <Rect
+                    x={edgeDepth / 4}
+                    y={edgeDepth / 4}
+                    width={Math.max(0, size.width - edgeDepth / 2)}
+                    height={Math.max(0, size.height - edgeDepth / 2)}
+                    rx={Math.max(0, roundedCorner - edgeDepth / 4)}
+                    fill="#b0b0b0"
+                  />
+                  <Rect
+                    x={edgeDepth / 2}
+                    y={edgeDepth / 2}
+                    width={Math.max(0, size.width - edgeDepth)}
+                    height={Math.max(0, size.height - edgeDepth)}
+                    rx={Math.max(0, roundedCorner - edgeDepth / 2)}
+                    fill="#606060"
+                  />
+                  <Rect
+                    x={edgeDepth}
+                    y={edgeDepth}
+                    width={Math.max(0, size.width - edgeDepth * 2)}
+                    height={Math.max(0, size.height - edgeDepth * 2)}
+                    rx={Math.max(0, roundedCorner - edgeDepth)}
+                    fill="black"
+                  />
+                </Mask>
               </>
             ) : (
               <LinearGradient
@@ -273,25 +255,14 @@ export function LiquidGlassSurface({
             fill={`url(#${gradientId}wash)`}
           />
           {home ? (
-            <>
-              <Rect
-                testID="home-glass-inner-glow"
-                width={size.width}
-                height={size.height}
-                rx={roundedCorner}
-                fill="white"
-                fillOpacity={homeLiquidGlass.innerGlowOpacity}
-                mask={`url(#${gradientId}glowMask)`}
-              />
-              <Rect
-                testID="home-glass-edge-light"
-                width={size.width}
-                height={size.height}
-                rx={roundedCorner}
-                fill={`url(#${gradientId}edgeLight)`}
-                mask={`url(#${gradientId}edgeMask)`}
-              />
-            </>
+            <Rect
+              testID="home-glass-edge-light"
+              width={size.width}
+              height={size.height}
+              rx={roundedCorner}
+              fill={`url(#${gradientId}edgeLight)`}
+              mask={`url(#${gradientId}edgeMask)`}
+            />
           ) : (
             <Rect
               x={rimWidth / 2}
@@ -315,8 +286,8 @@ const styles = StyleSheet.create({
   surface: { overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.04)' },
   imageWash: { backgroundColor: 'rgba(24,24,24,0.18)' },
   navigationWash: { backgroundColor: 'rgba(255,255,255,0.16)' },
-  homeWash: { backgroundColor: homeLiquidGlass.tintColor },
-  homeFallback: { backgroundColor: homeLiquidGlass.fallbackTintColor },
+  homeImageWash: { backgroundColor: 'rgba(24,24,24,0.16)' },
+  homeNavigationWash: { backgroundColor: 'rgba(255,255,255,0.12)' },
   imageFallback: { backgroundColor: 'rgba(40,40,40,0.28)' },
   navigationFallback: { backgroundColor: 'rgba(255,255,255,0.62)' },
 });

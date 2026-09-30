@@ -13,7 +13,6 @@ export const colors = {
   cream: '#FFF5E9',
   creamDeep: '#FBEBDD',
   white: '#FFFFFF',
-  black: '#000000',
   ink: '#1F1B19',
   textPrimary: '#261A15',
   textSecondary: '#706864',
@@ -66,17 +65,13 @@ export const radius = {
 
 /** Shared home optics; native iOS glass manages its own refraction and blur. */
 export const homeLiquidGlass = {
-  blurIntensity: 10,
+  blurIntensity: 22,
   blurReductionFactor: 2.5,
   edgeDepth: 4,
-  highlightOpacity: 0.5,
-  edgeShadowOpacity: 0.06,
-  topLightOpacity: 0.26,
-  bottomLightOpacity: 0.12,
-  innerGlowDepth: 12,
-  innerGlowOpacity: 0.2,
-  tintColor: 'rgba(255,255,255,0.08)',
-  fallbackTintColor: 'rgba(255,255,255,0.18)',
+  highlightOpacity: 0.62,
+  edgeShadowOpacity: 0.24,
+  topLightOpacity: 0.18,
+  bottomLightOpacity: 0.08,
 } as const;
 
 export const borderWidth = {

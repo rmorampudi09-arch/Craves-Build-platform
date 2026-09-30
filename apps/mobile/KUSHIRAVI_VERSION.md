@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.14
+# KUSHIRAVI App Build - Version 1.13 Restored (Prepared)
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,33 +9,36 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Android versionCode: `15`
-- Android versionName: `1.14`
+- Prepared Android versionCode: `16`
+- Prepared Android versionName: `1.13`
 - Last verified installed version: `1.14` / versionCode `15`, source commit `0a9f5bb5e4ccbbb331ca89d1a3bf83b64a8d9e79`, tag `KUSHIRAVI-app-v1.14`
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.14 - Light glowing Home glass and clear black menu text
+### Version 1.13 Restored - Preserve-data rollback from v1.14
 
-- Status: precise UI-only checkpoint built, tagged, installed and visually checked on the connected phone.
-- APK source commit: `0a9f5bb5e4ccbbb331ca89d1a3bf83b64a8d9e79`. Later evidence-only commits do not change the APK source/tag.
-- Installable tag: `KUSHIRAVI-app-v1.14`; earlier tags remain untouched.
-- Android versionCode: `15`; versionName: `1.14`.
-- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.14.apk`.
-- APK SHA-256: `407BFEE869775E0CBE96E7B0B649B199B3CF23EBD37EAF6CC78E12203A2A05D1`.
-- Buildable mobile source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.14-source.zip`; SHA-256 `426D238C39B35DEA445D5ADC990EAFD84758737E5BB4EAA0377FAE84B234C7D3`.
-- Changes: reduce shared Home blur from 22 to 10, replace the dark capsule wash with white at 0.08 opacity and use light native blur tint. Add a feathered 12 dp / 0.2 opacity inner glow; reduce edge shade from 0.24 to 0.06. Keep the removed uniform outlines absent.
-- Customer menu: Home, Chefs, Orders and Profile icons/labels are black, labels bold at their existing size. A soft white selected-tab highlight preserves selection visibility. Existing red Cart shortcut and its white text remain unchanged.
-- CSS reference: adapt the supplied white tint, inset glow and soft lighting to existing native components. CSS pixel dimensions, browser filters and an unspecified `#lg-filter` are not imported; exact saturation/brightness or Apple optical shader equivalence is not claimed.
-- Scope: Home food/kitchen glass and Home root menu glass; customer-menu icon/label styling is shared across its four tabs. Shapes, spacing, safe areas, navigation handlers, favorite behavior, backend, finance, auth, cart/order/payment logic and splash unchanged. No new dependencies or GitHub push.
-- Verification and exact changed paths: `C:\mscratch\apps\mobile\docs\HOME_LIGHT_GLASS_V1_14.md`.
-- Verification: TypeScript, scoped ESLint and all 182 suites / 929 tests passed.
-- Android release: successful in 4m 38s, 823 tasks, arm64-v8a. AAPT package/version and v2/v3 APK signatures verified; existing Firebase-registered signing certificate retained.
-- Installed device: `RS7PB6VOY9ZLLFYD` / RMX5003. Replace-install succeeded without clearing app data; phone reports code 15 / name 1.14, last update `2026-09-30 12:26:59`. Installed base APK SHA-256 matches the local release above; cold launch succeeded in 722 ms.
-- Phone visuals: all six Home kitchen/food capsule types checked, lighter tint and inset glow visible; black/bold menu checked over light/category and food-image backgrounds. Chefs tab and return to Home worked; no crash-buffer entries since installation. No cart, favorite, checkout or payment mutation performed.
-- Evidence: `C:\mscratch\artifacts\home-glass-v1.14-evidence`. Native iOS and older-Android hardware were not tested; light fallback is covered by unit tests. No Azure/APIM deployment or GitHub push.
+- Status: requested rollback prepared; new release and phone verification pending.
+- Restored baseline: `KUSHIRAVI-app-v1.13`, commit `2e91f049976686ea082babe9b66e3923c65ec994`.
+- Source commit: the commit containing this entry; final evidence records its exact SHA.
+- Planned installable tag: `KUSHIRAVI-app-v1.13-restored`. Existing v1.13 and v1.14 tags are not moved or deleted.
+- Android versionCode: `16`; versionName: `1.13`.
+- Reason for the internal build number: the exact original v1.13 APK (code 14) was rejected with `INSTALL_FAILED_VERSION_DOWNGRADE` while code 15 is installed. Code 16 permits a normal replace-install without uninstalling or clearing app data. This is v1.13 UI/functionality, not v1.14 styling.
+- Planned APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.13-restored.apk`; original APK and source ZIP are untouched.
+- App source restored exactly to v1.13, except Android versionCode and version/evidence documentation. Restores blur 22, prior capsule tint/edge lighting, red active menu tab, muted inactive tabs and regular menu-label weight; removes the v1.14 glow and selected-tab capsule.
+- No backend, API, auth, finance, cart/order/payment, chef or splash change. No GitHub push or Azure deployment.
+- Evidence and manual checks: `C:\mscratch\apps\mobile\docs\ROLLBACK_TO_V1_13.md`.
+- Verification: runtime source/assets/configuration diff against the original v1.13 tag is empty, excluding Android versionCode and documentation. TypeScript, scoped ESLint and 182 suites / 925 tests passed; release/device verification pending.
+
+### Version 1.14 - Archived checkpoint after requested rollback
+
+- Source commit: `0a9f5bb5e4ccbbb331ca89d1a3bf83b64a8d9e79`; installable tag `KUSHIRAVI-app-v1.14` retained unchanged.
+- Android versionCode `15`, versionName `1.14`; previously installed on `RS7PB6VOY9ZLLFYD` at `2026-09-30 12:26:59`.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.14.apk`; SHA-256 `407BFEE869775E0CBE96E7B0B649B199B3CF23EBD37EAF6CC78E12203A2A05D1`.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.14-source.zip`; SHA-256 `426D238C39B35DEA445D5ADC990EAFD84758737E5BB4EAA0377FAE84B234C7D3`.
+- Changes in this archived version: lighter blur-10 Home glass with white tint and inner glow; black customer-menu icons/labels, bold labels and a white selected-tab highlight. These styling changes are removed from the active app by the v1.13 restoration above.
+- Evidence: `C:\mscratch\artifacts\home-glass-v1.14-evidence`; full installation documentation remains in Git commit `b10f8539d802c4943abe6451987c8ec2aaaadfa8`. Release build, TypeScript, scoped lint and 182 suites / 929 tests passed.
 
 ### Version 1.13 - Home glass without drawn capsule outlines
 

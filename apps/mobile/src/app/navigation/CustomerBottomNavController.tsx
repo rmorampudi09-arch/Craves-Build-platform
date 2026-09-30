@@ -183,16 +183,7 @@ export function CustomerBottomNavScene({routeKey, children}: PropsWithChildren<{
 }
 
 export function CustomerBottomTabButton(props: BottomTabBarButtonProps) {
-  return (
-    <PlatformPressable
-      {...props}
-      style={[
-        props.style,
-        styles.centeredTabButton,
-        props['aria-selected'] && styles.selectedTabButton,
-      ]}
-    />
-  );
+  return <PlatformPressable {...props} style={[props.style, styles.centeredTabButton]} />;
 }
 
 export function CustomerBottomTabBar(props: BottomTabBarProps) {
@@ -317,10 +308,6 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
 const styles = StyleSheet.create({
   scene: {flex: 1},
   centeredTabButton: {justifyContent: 'center', paddingVertical: 8},
-  selectedTabButton: {
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.28)',
-  },
   positioner: {
     position: 'absolute',
     left: spacing.md,

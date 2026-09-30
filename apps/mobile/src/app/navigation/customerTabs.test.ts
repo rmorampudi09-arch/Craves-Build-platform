@@ -1,9 +1,7 @@
-import {colors, fontWeight, typography} from '../../design/tokens';
+import {colors} from '../../design/tokens';
 import {
   CUSTOMER_PROFILE_TAB_STATE_OPTIONS,
   CUSTOMER_TAB_ACTIVE_COLOR,
-  CUSTOMER_TAB_INACTIVE_COLOR,
-  CUSTOMER_TAB_LABEL_STYLE,
   CUSTOMER_TAB_STATE_OPTIONS,
   CUSTOMER_TABS,
   getCustomerTabDefinition,
@@ -25,18 +23,8 @@ describe('customerTabs', () => {
     ]);
   });
 
-  it('keeps every customer menu icon and label black', () => {
-    expect(CUSTOMER_TAB_ACTIVE_COLOR).toBe(colors.black);
-    expect(CUSTOMER_TAB_INACTIVE_COLOR).toBe(colors.black);
-  });
-
-  it('uses bold menu labels without changing their size or spacing', () => {
-    expect(CUSTOMER_TAB_LABEL_STYLE).toEqual({
-      fontSize: typography.small,
-      fontWeight: fontWeight.bold,
-      marginTop: 2,
-      marginBottom: 0,
-    });
+  it('uses Flame Red for the active customer tab', () => {
+    expect(CUSTOMER_TAB_ACTIVE_COLOR).toBe(colors.flameRed);
   });
 
   it('keeps each tab navigator mounted instead of popping its stack on blur', () => {

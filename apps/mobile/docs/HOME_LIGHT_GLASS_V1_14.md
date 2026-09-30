@@ -62,8 +62,33 @@ No backend, API, finance, auth, chef, cart, order, payment or splash files chang
 
 ## Checkpoint
 
-Prepared Android package `com.cravesapp`, name `1.14`, code `15`, branch
-`KUSHIRAVI-app-build`. Release source SHA, tag, APK, source ZIP, test/build and
-installation evidence are recorded after verification. Current phone: v1.13.
-Earlier rollback tags remain untouched; no GitHub push or Azure deployment.
-TypeScript, scoped ESLint and all 182 suites / 929 tests passed before release.
+- Branch: `KUSHIRAVI-app-build`.
+- Installed Android package: `com.cravesapp`, name `1.14`, code `15`.
+- APK source commit: `0a9f5bb5e4ccbbb331ca89d1a3bf83b64a8d9e79`.
+- Installable tag: `KUSHIRAVI-app-v1.14`; earlier rollback tags untouched.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.14.apk`.
+- APK SHA-256: `407BFEE869775E0CBE96E7B0B649B199B3CF23EBD37EAF6CC78E12203A2A05D1`.
+- Exact-tag mobile source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.14-source.zip`.
+- ZIP SHA-256: `426D238C39B35DEA445D5ADC990EAFD84758737E5BB4EAA0377FAE84B234C7D3`.
+- TypeScript, scoped ESLint and all 182 suites / 929 tests passed. Focused glass
+  and navigation checks: 2 suites / 15 tests passed.
+- Android release succeeded in 4m 38s, 823 tasks (41 executed / 782 up-to-date),
+  arm64-v8a. AAPT package/version and v2/v3 signatures verified; existing
+  Firebase-registered certificate retained.
+- Replace-install succeeded on `RS7PB6VOY9ZLLFYD` / RMX5003 without clearing
+  app data. Phone reports code 15 / name 1.14, update `2026-09-30 12:26:59`.
+  Installed base APK hash matches the local release. Cold launch succeeded,
+  722 ms; no crash-buffer entries since installation.
+- Evidence folder: `C:\mscratch\artifacts\home-glass-v1.14-evidence`.
+  `phone-before.png` records v1.13. `phone-home.png` shows lighter kitchen
+  capsules and black/bold menu over a light/category background.
+  `phone-food-full.png` shows all three food capsule types.
+  `phone-menu-food.png` shows the menu over a food image.
+  `phone-chefs-menu.png` and `phone-home-return.png` verify Chefs/Home switching.
+- Device checks were visual/navigation-only. No favorite, cart, checkout or
+  payment mutation was performed. Native iOS and older Android hardware were
+  not tested; older-Android white fallback is unit-tested.
+- No backend/APIM changes, new dependencies, Azure deployment or GitHub push.
+
+Final evidence is committed separately from the APK source. The source ZIP/tag
+remain the exact source commit above, not the later documentation-only commit.

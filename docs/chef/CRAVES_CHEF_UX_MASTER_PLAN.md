@@ -47,14 +47,14 @@ Rejected state must expose the reason and the exact repair path. Approved state 
 
 ### Module D — Chef Home / Dashboard
 Hero: chef identity, verification, rating.
-Primary control: large Accepting orders switch.
+Primary control: large Accepting orders switch, driven by the authoritative kitchen availability/schedule state.
 Stats: today's orders, revenue/earnings, rating, active menu items.
 Secondary quick actions: orders, menu, earnings, kitchen/profile.
 No internal workflow jargon.
 
 ### Module E — Kitchen Management
-Screens: kitchen overview, edit kitchen, location update, operating status.
-Current integration: GET/PUT /api/chef/kitchen backed by Catalog kitchen ownership rules.
+Screens: kitchen overview, edit kitchen, location update, operating status, weekly schedule and date overrides.
+Current integration: GET/PUT /api/chef/kitchen plus the existing Catalog kitchen schedule contract (`/api/v1/kitchens/me/schedule` and date overrides), backed by Catalog kitchen ownership rules.
 
 ### Module F — Orders
 Screens: New, Preparing, Ready, Completed, order detail, confirmation sheets.
@@ -152,6 +152,7 @@ Supported today in the web branch:
 - Chef application read/write
 - Secure chef application document uploads and individual document review states
 - Approved-chef kitchen profile
+- Kitchen weekly schedule, accepting-orders state and date overrides
 - Menu CRUD, availability and image management
 - Chef orders, order detail and legal workflow actions
 - Earnings and finance/statement surfaces
@@ -163,6 +164,7 @@ Supported today in the web branch:
 Explicit integration gaps to keep visible rather than fake:
 - FSSAI number/certificate/three-branch workflow has no dedicated current API in the web branch.
 - Kitchen-photo onboarding persistence is not represented by a dedicated current application API.
+- The existing kitchen schedule backend is not yet surfaced by the current Chef web workspace; wire the existing contract rather than creating a duplicate schedule model.
 - The current application backend evidence contract is centered on applicant photo, government ID front/back and tax ID; voter-ID/address-proof-specific storage is not currently represented.
 - Chef Profile is currently composed from existing application, kitchen, bank and notification APIs rather than one dedicated profile endpoint.
 

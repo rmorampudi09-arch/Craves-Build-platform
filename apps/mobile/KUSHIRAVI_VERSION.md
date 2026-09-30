@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.15.3 Prepared / 1.15.2 Installed
+# KUSHIRAVI App Build - Version 1.15.3 Installed
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,24 +9,26 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `19`
-- Installed Android versionName: `1.15.2`
-- Installed APK source commit: `9bcd1eda070ad6b99a832caec4f0475720c4ba99`, tag `KUSHIRAVI-app-v1.15.2`. Later evidence-only commits do not change that APK/tag.
-- Last installation: `2026-09-30 17:18:32`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed Android versionCode: `20`
+- Installed Android versionName: `1.15.3`
+- Installed APK source commit: `a77b95c8ebc2b5089d72a93413e1e306ca7925e0`, tag `KUSHIRAVI-app-v1.15.3`. Later evidence-only commits do not change that APK/tag.
+- Last installation: `2026-09-30 18:09:31`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.15.3 Prepared - Live scrolling backdrop at glass rims
+### Version 1.15.3 Installed - Live scrolling backdrop at glass rims
 
 - Source baseline: installed `KUSHIRAVI-app-v1.15.2`, source
   `9bcd1eda070ad6b99a832caec4f0475720c4ba99`, plus its evidence-only commit.
-- Source commit: the commit containing this entry; final evidence records its SHA.
-- Planned tag: `KUSHIRAVI-app-v1.15.3`; previous tags remain untouched.
+- Source commit: `a77b95c8ebc2b5089d72a93413e1e306ca7925e0`.
+- Tag: `KUSHIRAVI-app-v1.15.3`; previous tags remain untouched.
 - Android versionCode `20`, versionName `1.15.3`.
-- Planned APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.3.apk`.
-- Planned source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.3-source.zip`.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.3.apk`.
+- APK SHA-256: `F603B3DF07BE11F865F897CE1FD687E476E1D9D2B288E357EEE93E1E13049B27`.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.3-source.zip`.
+- Source ZIP SHA-256: `50C415468515D1E14C570AAB8C4E023FE42214048FDC885E601EC7689047434B`.
 - Precise correction: the existing glass edge now samples actual live background
   pixels and bends them along the rounded rim on supported Android API 33+.
   A separate near-sharp Expo Blur capture uses the same existing blurTarget;
@@ -39,8 +41,16 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   or CI changes. No GitHub push.
 - Verification and file list: `C:\mscratch\apps\mobile\docs\LIVE_GLASS_REFLECTION_V1_15_3.md`.
 - Verification: TypeScript and scoped ESLint passed; 187 suites / 952 tests
-  passed. Native Android release Kotlin compilation succeeded. Build, tag and
-  phone verification pending. Phone remains on 1.15.2 until verified.
+  passed. Signed ARM64 release succeeded in 13m 54s, 823 tasks (34 executed).
+  APK code 20 / name 1.15.3, v2/v3 signatures and unchanged registered certificate verified.
+- Replace-install succeeded at `2026-09-30 18:09:31`. Live native rim active on
+  photo capsules and Customer/Chef menus without fallback or shader errors.
+  Scrolling photo details/colors changed along the fixed menu rim, confirmed
+  by screenshots and pixel comparison. Center blur/foregrounds unchanged;
+  tab navigation and native selection tick verified. Both sides survived
+  force-stop/reopen. Post-install crash log clear; phone returned to Customer Home.
+- No live order/payment/cart/menu mutation performed. iOS and older Android
+  hardware unverified; their capability/fallback cases covered by component tests.
 
 ### Version 1.15.2 Installed - Precise glass edge optics
 

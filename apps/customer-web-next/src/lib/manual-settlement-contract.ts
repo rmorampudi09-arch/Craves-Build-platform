@@ -21,7 +21,7 @@ export const manualInstructionSchema = z.object({
   version: z.number().int().nonnegative(), destinationReference: ref.nullable(), bankReference: z.string().max(160).nullable(),
   authorizedAt: z.string().datetime({offset: true}).nullable(), paidAt: z.string().datetime({offset: true}).nullable(), createdAt: z.string().datetime({offset: true}),
 });
-export const manualBalanceSchema = z.object({chefIdentityId: id, available: moneySchema, onHold: z.boolean(), enabled: z.boolean(), manualRequestUsedToday: z.boolean(), recent: z.array(manualInstructionSchema).max(100), accounting: chefAccountingSchema.optional()});
+export const manualBalanceSchema = z.object({chefIdentityId: id, available: moneySchema, onHold: z.boolean(), enabled: z.boolean(), manualRequestUsedToday: z.boolean(), recent: z.array(manualInstructionSchema).max(100), accounting: chefAccountingSchema.optional(), blockers: z.array(z.string().max(100)).max(20).optional()});
 export type ManualInstruction = z.infer<typeof manualInstructionSchema>;
 export type ManualAction = z.infer<typeof manualActionSchema>;
 export type ManualBalance = z.infer<typeof manualBalanceSchema>;

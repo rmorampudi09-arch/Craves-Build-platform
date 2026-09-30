@@ -5,6 +5,7 @@ import in.craves.integration.finance.FinancePolicyService;
 import in.craves.integration.ledger.LedgerPostingService;
 import in.craves.integration.payout.ChefPayoutService;
 import in.craves.integration.payout.ManualChefSettlementService;
+import in.craves.integration.payout.ManualSettlementException;
 import in.craves.integration.payout.ManualChefSettlementService.Action;
 import in.craves.integration.payout.ManualChefSettlementService.Change;
 import in.craves.integration.payout.ManualChefSettlementService.Instruction;
@@ -215,5 +216,65 @@ class ManualChefSettlementDatabaseTest {
         var submitted=authorize();Instant from=Instant.now();var confirmed=act(submitted,Action.CONFIRM_PAID);
         String body=new ChefDocumentSourceController(f.jdbc,true).settlements(chef(),from,Instant.now().plusSeconds(30),"INR","Asia/Kolkata").getBody().toString();
         assertTrue(body.contains(confirmed.id().toString()));assertTrue(body.contains(confirmed.bankReference()));
+    }
+    ManualChefSettlementService journalPaused() {
+        return new ManualChefSettlementService(f.jdbc,f.json,f.policies,new LedgerPostingService(f.jdbc,f.json,false),true);
+    }
+    @Test void journalPauseIsVisibleAndCannotReserveMoneyOrConsumeDailyQuota() {
+        var paused=journalPaused();var balance=paused.balance(f.admin,f.chef);
+        assertFalse(balance.enabled());assertEquals("338.52",balance.available());
+        assertEquals(List.of("JOURNAL_POSTING_DISABLED"),balance.blockers());
+        var error=assertThrows(ManualSettlementException.class,()->f.tx.execute(s->paused.reserveAdmin(f.admin,f.chef,new Reservation(UUID.randomUUID(),"338.52","TEST journal paused"))));
+        assertEquals(ManualSettlementException.Reason.JOURNAL_POSTING_DISABLED,error.operationReason());
+        assertEquals(0,f.count("finance_payout_instruction"));assertEquals(0,f.count("finance_payout_allocation"));
+        assertEquals(0,f.count("finance_manual_withdrawal_day"));assertEquals(2,f.count("ledger_transaction"));
+        verifyNoInteractions(provider);
+    }
+    @Test void journalPauseBlocksNewAuthorizationButAllowsUnsentCancellation() {
+        var reserved=reserve();var paused=journalPaused();
+        var error=assertThrows(ManualSettlementException.class,()->f.tx.execute(s->paused.change(f.admin,reserved.id(),change(reserved,Action.AUTHORIZE_TRANSFER))));
+        assertEquals(ManualSettlementException.Reason.JOURNAL_POSTING_DISABLED,error.operationReason());
+        assertEquals("RESERVED",manual.list(f.admin).getFirst().status());assertEquals(0,f.count("finance_manual_settlement_action"));
+        var cancelled=f.tx.execute(s->paused.change(f.admin,reserved.id(),change(reserved,Action.CANCEL_RESERVATION)));
+        assertEquals("CANCELLED",cancelled.status());assertEquals("338.52",paused.balance(f.admin,f.chef).available());
+        assertTrue(paused.balance(f.admin,f.chef).manualRequestUsedToday());
+    }
+    @Test void pausedJournalPreservesSentReservationAndAllowsUnknownNoDebitEvidence() {
+        var submitted=authorize();var paused=journalPaused();
+        var error=assertThrows(ManualSettlementException.class,()->f.tx.execute(s->paused.change(f.admin,submitted.id(),change(submitted,Action.CONFIRM_PAID))));
+        assertEquals(ManualSettlementException.Reason.JOURNAL_POSTING_DISABLED,error.operationReason());
+        assertEquals("SUBMITTING",manual.list(f.admin).getFirst().status());assertEquals(2,f.count("ledger_transaction"));
+        assertEquals(1,f.jdbc.queryForObject("SELECT count(*) FROM payment_schema.finance_payout_allocation WHERE active",Integer.class));
+        var unknown=f.tx.execute(s->paused.change(f.admin,submitted.id(),change(submitted,Action.MARK_UNKNOWN)));
+        var failed=f.tx.execute(s->paused.change(f.admin,unknown.id(),change(unknown,Action.CONFIRM_NOT_SENT)));
+        assertEquals("FAILED",failed.status());assertTrue(paused.held(f.chef));assertEquals(2,f.count("ledger_transaction"));
+        assertEquals(0,f.jdbc.queryForObject("SELECT count(*) FROM payment_schema.finance_payout_allocation WHERE active",Integer.class));
+    }
+    @Test void returnedFundsWaitForJournalAndRetainOriginalPaidEvidence() {
+        var confirmed=paid();var paused=journalPaused();var request=change(confirmed,Action.CONFIRM_REVERSED);
+        var error=assertThrows(ManualSettlementException.class,()->f.tx.execute(s->paused.change(f.admin,confirmed.id(),request)));
+        assertEquals(ManualSettlementException.Reason.JOURNAL_POSTING_DISABLED,error.operationReason());
+        assertEquals("PAID",manual.list(f.admin).getFirst().status());assertEquals(3,f.count("ledger_transaction"));
+        assertEquals(confirmed.bankReference(),manual.list(f.admin).getFirst().bankReference());
+        assertEquals("REVERSED",apply(confirmed,request).status());assertEquals(4,f.count("ledger_transaction"));
+    }
+    @Test void journalPauseStillReplaysRecordedReservationAndPaidActionWithoutNewMoney() {
+        var reservation=new Reservation(UUID.randomUUID(),"338.52","TEST stable request");
+        var reserved=f.tx.execute(s->manual.reserveAdmin(f.admin,f.chef,reservation));
+        var submitted=act(reserved,Action.AUTHORIZE_TRANSFER);var action=change(submitted,Action.CONFIRM_PAID);var confirmed=apply(submitted,action);
+        var paused=journalPaused();
+        assertEquals(confirmed.id(),f.tx.execute(s->paused.reserveAdmin(f.admin,f.chef,reservation)).id());
+        assertEquals("PAID",f.tx.execute(s->paused.change(f.admin,confirmed.id(),action)).status());
+        assertEquals(1,f.count("finance_payout_instruction"));assertEquals(2,f.count("finance_manual_settlement_action"));assertEquals(3,f.count("ledger_transaction"));
+    }
+    @Test void balanceExplainsIndependentHoldDailyQuotaAndMissingAvailableEarnings() {
+        UUID newChef=UUID.randomUUID();var missing=manual.balance(f.admin,newChef);assertTrue(missing.onHold());
+        assertEquals(List.of("CHEF_FINANCE_NOT_INITIALIZED"),missing.blockers());
+        f.jdbc.update("INSERT INTO payment_schema.finance_chef_payout_control(chef_identity_id,on_hold,hold_reason) VALUES (?,false,NULL)",newChef);
+        var empty=manual.balance(f.admin,newChef);assertEquals(List.of("NO_AVAILABLE_EARNINGS"),empty.blockers());
+        var reserved=reserve();assertEquals(List.of("DAILY_MANUAL_REQUEST_ALREADY_USED","NO_AVAILABLE_EARNINGS"),manual.balance(f.admin,f.chef).blockers());
+        f.tx.execute(s->{balances.hold(f.admin,f.chef,new ChefPayoutService.Hold(true,"TEST operational review"));return null;});
+        assertEquals(List.of("CHEF_PAYMENT_HELD","DAILY_MANUAL_REQUEST_ALREADY_USED"),manual.balance(f.admin,f.chef).blockers());
+        assertEquals("RESERVED",reserved.status());verifyNoInteractions(provider);
     }
 }

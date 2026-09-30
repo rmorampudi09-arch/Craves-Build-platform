@@ -56,6 +56,16 @@ describe("Craves manual bank settlement boundary",()=>{
     upstream.mockResolvedValue(Response.json({detail:"TEST_PRIVATE_BANK_NUMBER"},{status:409}));const response=await manualSettlementProxy(request(),route);
     expect(response.status).toBe(409);expect(JSON.stringify(await response.json())).not.toContain("PRIVATE");
   });
+  it("preserves a known actionable rejection code without exposing upstream detail", async()=>{
+    upstream.mockResolvedValue(Response.json({code:"JOURNAL_POSTING_DISABLED",detail:"TEST_PRIVATE_BANK_NUMBER"},{status:409}));
+    const response=await manualSettlementProxy(request(),route);
+    expect(response.status).toBe(409);expect(await response.json()).toEqual({code:"JOURNAL_POSTING_DISABLED"});
+  });
+  it("preserves authorization status when upstream sends a non-JSON error", async()=>{
+    upstream.mockResolvedValue(new Response("TEST_PRIVATE",{status:403}));
+    const response=await manualSettlementProxy(request(),route);
+    expect(response.status).toBe(403);expect(await response.json()).toEqual({code:"MANUAL_SETTLEMENT_REJECTED"});
+  });
   it("does not accept oversized response bodies",async()=>{
     upstream.mockResolvedValue(Response.json({...row,extra:"x".repeat(131073)}));expect((await manualSettlementProxy(request(),route)).status).toBe(503);
   });

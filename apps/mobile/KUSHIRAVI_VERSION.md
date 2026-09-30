@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.9
+# KUSHIRAVI App Build - Version 1.10
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,12 +9,24 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Current Android versionCode: `10`
-- Current Android versionName: `1.9`
+- Current Android versionCode: `11`
+- Current Android versionName: `1.10`
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.10 - Resume pending Razorpay orders from Order Details
+
+- Tag: `KUSHIRAVI-app-v1.10`
+- Commit: resolve from the local `KUSHIRAVI-app-v1.10` tag
+- Android versionCode: `11`
+- Android versionName: `1.10`
+- APK path: `apps/mobile/android/app/build/outputs/apk/release/app-release-signed.apk`
+- Change summary:
+  - Reuse the existing primary action on payment-pending order details to continue its backend-issued Razorpay payment after leaving Cart or reopening the app.
+  - Recheck checkout ownership and any persisted payment state before reopening the provider; retain unresolved attempts for backend verification.
+  - Do not alter backend, pricing, orders, auth, or the completed-order UI.
 
 ### Version 1.9 - Preserve checkout review through cart clearing
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,7 @@ import type {
   CustomerOrdersStackParamList,
   CustomerTabParamList,
 } from '../../../app/navigation/types';
+import {useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
 import {
   borderWidth,
@@ -36,7 +37,17 @@ import {
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {checkoutApi} from '../../checkout/api/checkoutApi';
 import {CustomerChefAvatar} from '../../customerShell/components/CustomerChefAvatar';
+import {paymentHandoffCoordinator} from '../../payment/domain/paymentHandoffCoordinator';
+import {
+  clearPersistedPaymentIfTerminal,
+  recoverPersistedPaymentAttempt,
+} from '../../payment/domain/persistedPaymentRecovery';
+import {paymentRecoveryCoordinator} from '../../payment/domain/paymentRecoveryCoordinator';
+import type {RazorpayVerificationProof} from '../../payment/domain/paymentTypes';
+import {razorpayGateway} from '../../payment/gateway/razorpayGateway';
+import {pendingPaymentAttemptStore} from '../../payment/storage/pendingPaymentAttemptStore';
 import {CUSTOMER_REVIEWS_AVAILABLE} from '../../reviews/api/customerReviewsApi';
 import {CustomerOrderMenuItemImage} from '../components/CustomerOrderMenuItemImage';
 import {getProductionCustomerOrderMutationDecision} from '../domain/customerOrderActionEligibility';
@@ -204,6 +215,9 @@ export function CustomerOrderDetailScreen() {
   const route = useRoute<DetailRoute>();
   const detail = useCustomerOrderDetailQuery(route.params.orderId);
   const order = detail.data;
+  const authPhone = useAppSelector(state => state.auth.identity?.phoneNumber ?? null);
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const queryError = detail.error ? toAppApiError(detail.error) : null;
   const offline = queryError?.code === 'NETWORK_ERROR';
 
@@ -316,6 +330,67 @@ export function CustomerOrderDetailScreen() {
     navigation.navigate('CustomerOrderReview', {orderId: order.id});
   };
 
+  const continuePendingPayment = async () => {
+    if (paymentBusy || order.status !== 'PAYMENT_PENDING') return;
+    setPaymentBusy(true);
+    setPaymentError(null);
+    try {
+      const checkout = await checkoutApi.getSession(order.checkoutId);
+      if (!checkout.orders.some(reference => reference.orderId === order.id)) {
+        throw new Error('This order does not belong to the checkout returned by Craves.');
+      }
+      if (checkout.status !== 'PAYMENT_PENDING') {
+        await detail.refetch();
+        return;
+      }
+
+      const stored = await pendingPaymentAttemptStore.load();
+      if (stored?.checkoutId === checkout.checkoutId) {
+        const previous = await recoverPersistedPaymentAttempt();
+        if (previous?.outcome === 'SUCCEEDED') {
+          await detail.refetch();
+          return;
+        }
+        if (previous?.outcome === 'RECONCILING') {
+          setPaymentError('Craves is confirming this payment. Check its status before paying again.');
+          return;
+        }
+      }
+
+      const handoff = await paymentHandoffCoordinator.prepare(checkout);
+      await pendingPaymentAttemptStore.save(handoff);
+
+      let proof: RazorpayVerificationProof | null = null;
+      try {
+        proof = await razorpayGateway.open(handoff, {phone: authPhone});
+      } catch {
+        // A closed gateway is not proof of failure; ask Craves for the order status.
+      }
+      const recovery = await paymentRecoveryCoordinator.recover(
+        handoff,
+        proof ? {kind: 'RAZORPAY_SUCCESS', proof} : {kind: 'PROVIDER_ERROR'},
+      );
+
+      await clearPersistedPaymentIfTerminal(recovery);
+      await detail.refetch();
+      if (recovery.outcome === 'RECONCILING') {
+        setPaymentError('Craves is confirming this payment. Check its status before paying again.');
+      } else if (recovery.outcome === 'PENDING') {
+        setPaymentError('Payment is still pending. You can continue this payment later.');
+      } else if (recovery.outcome === 'FAILED' || recovery.outcome === 'CANCELLED') {
+        setPaymentError('Payment did not complete. This order remains unpaid.');
+      }
+    } catch (error) {
+      setPaymentError(
+        error instanceof Error
+          ? error.message
+          : 'Payment status could not be confirmed. Check it before trying again.',
+      );
+    } finally {
+      setPaymentBusy(false);
+    }
+  };
+
   return (
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-order-detail">
       <View style={styles.screen}>
@@ -365,6 +440,14 @@ export function CustomerOrderDetailScreen() {
                 style={styles.notice}
               />
             )
+          ) : null}
+          {paymentError ? (
+            <RecoverableErrorBanner
+              message={paymentError}
+              onRetry={() => detail.refetch()}
+              retryLabel="Refresh order"
+              style={styles.notice}
+            />
           ) : null}
 
           <View style={styles.summaryCard}>
@@ -536,14 +619,33 @@ export function CustomerOrderDetailScreen() {
               <Icon name="phone" size={20} color={colors.flameRed} surface={false} />
               <Text style={styles.secondaryActionText}>Contact Chef</Text>
             </Pressable>
-            <Pressable
-              accessibilityLabel="Cancel order"
-              accessibilityRole="button"
-              onPress={showCancelUnavailable}
-              style={({pressed}) => [styles.primaryAction, pressed && styles.pressed]}>
-              <Icon name="trash" size={20} color={colors.white} surface={false} />
-              <Text style={styles.primaryActionText}>Cancel Order</Text>
-            </Pressable>
+            {order.status === 'PAYMENT_PENDING' ? (
+              <Pressable
+                accessibilityLabel="Continue payment"
+                accessibilityRole="button"
+                accessibilityState={{disabled: paymentBusy}}
+                disabled={paymentBusy}
+                onPress={() => void continuePendingPayment()}
+                style={({pressed}) => [styles.primaryAction, pressed && styles.pressed]}>
+                {paymentBusy ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Icon name="wallet" size={20} color={colors.white} surface={false} />
+                )}
+                <Text numberOfLines={2} style={styles.primaryActionText}>
+                  {paymentBusy ? 'Please wait...' : 'Continue Payment'}
+                </Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                accessibilityLabel="Cancel order"
+                accessibilityRole="button"
+                onPress={showCancelUnavailable}
+                style={({pressed}) => [styles.primaryAction, pressed && styles.pressed]}>
+                <Icon name="trash" size={20} color={colors.white} surface={false} />
+                <Text style={styles.primaryActionText}>Cancel Order</Text>
+              </Pressable>
+            )}
           </View>
         </ScrollView>
       </View>

@@ -1,17 +1,18 @@
-import React, {type RefObject} from 'react';
+import React, {useEffect, useState, type RefObject} from 'react';
 import {
   Platform,
   StyleSheet,
   UIManager,
   View,
   requireNativeComponent,
+  findNodeHandle,
   type HostComponent,
   type ViewProps,
 } from 'react-native';
-import {BlurView} from 'expo-blur';
 import {homeLiquidGlass} from '../../design/tokens';
 
 interface NativeReflectionProps extends ViewProps {
+  blurTargetTag: number;
   glassRadius: number;
   edgeWidth: number;
   captureInset: number;
@@ -36,6 +37,14 @@ export function LiquidGlassReflection({blurTarget, cornerRadius}: {
   cornerRadius: number;
 }) {
   const NativeReflection = blurTarget ? getNativeView() : null;
+  const [targetTag, setTargetTag] = useState<number | null>(null);
+  useEffect(() => {
+    try {
+      setTargetTag(NativeReflection && blurTarget?.current ? findNodeHandle(blurTarget.current) : null);
+    } catch {
+      setTargetTag(null);
+    }
+  }, [NativeReflection, blurTarget]);
   if (!NativeReflection) return null;
 
   return (
@@ -44,21 +53,13 @@ export function LiquidGlassReflection({blurTarget, cornerRadius}: {
       pointerEvents="none"
       accessible={false}
       importantForAccessibility="no-hide-descendants"
+      blurTargetTag={targetTag ?? -1}
       glassRadius={cornerRadius}
       edgeWidth={homeLiquidGlass.edgeDepth}
       captureInset={homeLiquidGlass.reflectionCaptureInset}
       bendDistance={homeLiquidGlass.reflectionBendDistance}
-      style={styles.capture}>
-      <BlurView
-        pointerEvents="none"
-        blurTarget={blurTarget}
-        blurMethod="dimezisBlurViewSdk31Plus"
-        intensity={1}
-        blurReductionFactor={homeLiquidGlass.blurReductionFactor}
-        tint="default"
-        style={StyleSheet.absoluteFill}
-      />
-    </NativeReflection>
+      style={styles.capture}
+    />
   );
 }
 

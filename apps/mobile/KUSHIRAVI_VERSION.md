@@ -18,6 +18,29 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.15.4 Prepared - Bounded live glass and Home scrolling performance
+
+- Baseline: installed `KUSHIRAVI-app-v1.15.3`, source
+  `a77b95c8ebc2b5089d72a93413e1e306ca7925e0`, plus its evidence-only commit.
+- Android versionCode `21`, versionName `1.15.4`.
+- Intended tag: `KUSHIRAVI-app-v1.15.4`; previous tags remain untouched.
+- Intended APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.4.apk`.
+- Intended source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.4-source.zip`.
+- Remove the additional near-sharp Expo BlurView from every live rim. Capture the
+  existing backdrop directly into a capsule-sized native RenderNode instead of
+  another full-photo/full-scene blur buffer. Cache native drawing until its source,
+  relative position or geometry changes; keep actual background refraction.
+- Bound the Home feed's render window and initial/batch card count. Preserve
+  existing sticky rail, offsets, pagination, shapes, blur 22 / reduction 2.5,
+  glass rim width/bend, foregrounds, haptics and all functional flows.
+- Baseline six-swipe phone profile: 111 frames, 110 janky (99.10%), median frame
+  latency 89 ms, p90 101 ms; scratch render targets 421.58 MB, 2443 attached views.
+- TypeScript, scoped ESLint and 187 suites / 954 tests passed. Build, new phone
+  profile and exact source/tag/install evidence pending verification below.
+- No new dependencies, backend/API, auth, cart, payment, order, chef business
+  logic, splash, remote or CI changes. No GitHub push.
+- Details and manual checks: `C:\mscratch\apps\mobile\docs\SCROLL_PERFORMANCE_V1_15_4.md`.
+
 ### Version 1.15.3 Installed - Live scrolling backdrop at glass rims
 
 - Source baseline: installed `KUSHIRAVI-app-v1.15.2`, source

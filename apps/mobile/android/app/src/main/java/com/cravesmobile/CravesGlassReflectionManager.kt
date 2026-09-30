@@ -17,6 +17,11 @@ class CravesGlassReflectionManager : ReactViewManager() {
   override fun createViewInstance(context: ThemedReactContext): ReactViewGroup =
     CravesGlassReflectionView(context)
 
+  @ReactProp(name = "blurTargetTag", defaultInt = -1)
+  fun setBlurTargetTag(view: ReactViewGroup, value: Int) {
+    (view as CravesGlassReflectionView).setCaptureTarget(value)
+  }
+
   @ReactProp(name = "glassRadius", defaultFloat = 999f)
   fun setGlassRadius(view: ReactViewGroup, value: Float) {
     (view as CravesGlassReflectionView).radiusDp = value

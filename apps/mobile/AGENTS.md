@@ -11,6 +11,9 @@
   `1.15.1`, versionCode `22`. Resolve its exact source with `git rev-parse
   KUSHIRAVI-app-v1.15.1-restored^{}`. See `KUSHIRAVI_VERSION.md` for verified
   installation evidence, not historical chat assumptions.
+- Consult the latest installed entry in `KUSHIRAVI_VERSION.md` for subsequent
+  requested updates. v1.15.1 is the rollback origin, not an instruction to discard
+  later explicitly requested changes.
 
 ## Withdrawn Changes
 

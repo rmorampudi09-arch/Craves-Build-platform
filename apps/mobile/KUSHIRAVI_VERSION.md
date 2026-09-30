@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.16 Prepared
+# KUSHIRAVI App Build - Version 1.16 Built and Installed
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,17 +9,17 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `22`
-- Installed Android versionName: `1.15.1`
-- Active approved app baseline: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed restoration source: `cc551b94a96f3f8d033bc685a085cee1e83ff964`, tag `KUSHIRAVI-app-v1.15.1-restored`. Later evidence-only commits do not change this APK/tag.
-- Last installation: `2026-09-30 19:49:46`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed Android versionCode: `23`
+- Installed Android versionName: `1.16`
+- Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
+- Installed source: `a035229b22d4399e8eb23ee1a46bc6770a9c0092`, tag `KUSHIRAVI-app-v1.16`. Later evidence-only commits do not change this APK/tag.
+- Last installation: `2026-09-30 22:24:55`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.16 - Precise menu and Home scrolling changes
+### Version 1.16 Built and Installed - Precise menu and Home scrolling changes
 
 - Starts from the approved v1.15.1 restoration, not withdrawn v1.15.2+ changes.
 - Android versionCode `23`, versionName `1.16`; fresh tag `KUSHIRAVI-app-v1.16`.
@@ -33,9 +33,24 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   background/reduced-motion pauses and the existing two-second timing.
 - Existing glass optics, layout, haptics, splash and all business flows untouched.
   No backend/API, auth, finance, cart/order, payment, remote or CI changes; no push.
-- APK target: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.16.apk`.
-- Source ZIP target: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.16-source.zip`.
-- Exact source commit, build and phone checks will be recorded after verification.
+- Source: `a035229b22d4399e8eb23ee1a46bc6770a9c0092`. Implementation commit
+  `efc38f501f27dec04c310e9e91093559082de1bf`; final source adds only isolation
+  of the current AppState listener in the new carousel regression test.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.16.apk`.
+- APK SHA-256: `B3C953B7C4F8A1AD3DF39E658FD68463399D20D539C9F8111363004D4F45FD3D`.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.16-source.zip`, archived
+  from the immutable tag; 911 entries, wrapper/build script/lockfile included.
+  No local environment files, node_modules or generated build directories.
+- ZIP SHA-256: `9EEBBD2D36F252792D7AE87B98D48D5FA5BCD798014B6B54593D12EECCC765BD`.
+- Verification: TypeScript and scoped ESLint passed; 188 suites / 950 tests
+  passed. Signed ARM64 release passed in 26m 5s; 823 tasks, 41 executed.
+  Package, versionCode 23 / versionName 1.16, v2/v3 signatures and existing
+  Firebase-registered certificate verified. No signing-key change.
+- Replace-install succeeded; phone reports code 23 / name 1.16 at
+  `2026-09-30 22:24:55`. Live touch/visual checks currently waiting for the user
+  to unlock the phone; not claimed verified from unit-test props alone.
+- Changed file paths, manual steps and exact evidence:
+  `C:\mscratch\apps\mobile\docs\PRECISE_HOME_MENU_V1_16.md`.
 
 ### Version 1.15.1 Restored and Installed - Return to the approved baseline
 

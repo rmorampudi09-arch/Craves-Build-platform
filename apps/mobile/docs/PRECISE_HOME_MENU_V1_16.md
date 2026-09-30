@@ -15,7 +15,10 @@ logic, splash, glass optics, remote or CI changes. No GitHub push.
 - New version: code 23 / name 1.16; tag `KUSHIRAVI-app-v1.16`.
 - New APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.16.apk`.
 - Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.16-source.zip`.
-- Exact source/build/install evidence will be added after verification.
+- Source commit: `a035229b22d4399e8eb23ee1a46bc6770a9c0092`.
+- Implementation commit: `efc38f501f27dec04c310e9e91093559082de1bf`.
+  The final source adds only a regression-test callback-isolation correction.
+  Android application implementation is identical in both commits.
 
 ## Files Changed
 
@@ -96,4 +99,37 @@ and [Gesture Handler native wrapping](https://docs.swmansion.com/react-native-ge
 
 ## Verification
 
-Pending final automated checks, signed release build and live phone checks.
+- TypeScript: `--noEmit` passed, including the final source.
+- Scoped ESLint passed, including a final check of the corrected carousel test.
+- Full Jest: 188 suites / 950 tests passed in 418.745 seconds. An initial run
+  had one newly-added background test invoking an old mocked listener. Clear the
+  mock history and use the current mounted listener; no application change needed.
+- Established release script with `-SkipNpmCi -PhoneOnly`: success, 26m 5s,
+  823 tasks (41 executed, 782 up-to-date). Bundle and 35 assets generated.
+- APK metadata: com.cravesapp, code 23 / name 1.16, arm64-v8a.
+- V2/V3 signatures verify; unchanged registered certificate:
+  SHA-1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`;
+  SHA-256 `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`.
+- APK SHA-256: `B3C953B7C4F8A1AD3DF39E658FD68463399D20D539C9F8111363004D4F45FD3D`.
+- Source ZIP SHA-256: `9EEBBD2D36F252792D7AE87B98D48D5FA5BCD798014B6B54593D12EECCC765BD`.
+  911 entries from the tag; wrapper, lockfile and build script verified. Local
+  environment files, node_modules and generated builds excluded.
+- Phone RS7PB6VOY9ZLLFYD / RMX5003: replace-install success without clearing data.
+  dumpsys confirms code 23 / name 1.16, lastUpdateTime 2026-09-30 22:24:55.
+- Live visual/touch checks: awaiting the user's phone unlock. NotificationShade
+  has focus over Craves and screenshots are black. Window policy confirms secure
+  keyguard showing and the display off/dozing; no attempt to bypass it.
+  This is not a verified app
+  rendering failure or a claim that the scrolling fix was tested physically.
+- No ReactNativeJS, AndroidRuntime or fatal-native errors since installation;
+  log filtered from 2026-09-30 22:24:55 saved as v1.16-installed-errors.log.
+- Before-change reproduction: horizontal swipe works just after pinning but is
+  ignored deeper in the feed. Evidence: v1.16-before-horizontal.png and
+  v1.16-before-deep-horizontal.png in C:\mscratch\artifacts.
+
+Build/test logs: `C:\mscratch\artifacts\v1.16-release-build.log`,
+`v1.16-full-tests-final.log`, `v1.16-typescript-final.log`, `v1.16-eslint.log`
+and `v1.16-final-test-eslint.log` in the same artifacts directory.
+
+The tag and source ZIP retain the exact build checkpoint. Later documentation
+commits record build/install results only and do not replace the tagged source.

@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.13 Prepared
+# KUSHIRAVI App Build - Version 1.13
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,21 +9,23 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Prepared Android versionCode: `14`
-- Prepared Android versionName: `1.13`
-- Last verified installed version: `1.12` / versionCode `13`, source commit `5f424b7cd22cf5e71684a3a28f5c01187bda1311`, tag `KUSHIRAVI-app-v1.12`
+- Android versionCode: `14`
+- Android versionName: `1.13`
+- Last verified installed version: `1.13` / versionCode `14`, source commit `2e91f049976686ea082babe9b66e3923c65ec994`, tag `KUSHIRAVI-app-v1.13`
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.13 Prepared - Home glass without drawn capsule outlines
+### Version 1.13 - Home glass without drawn capsule outlines
 
-- Status: local UI-only checkpoint; build, tag and installation pending verification.
-- Source commit: the commit containing this entry; later evidence records the exact SHA.
-- Planned tag: `KUSHIRAVI-app-v1.13`; previous tags remain untouched.
+- Status: UI-only checkpoint built, tagged, installed and visually checked on the connected phone.
+- APK source commit: `2e91f049976686ea082babe9b66e3923c65ec994`. Later evidence-only commits do not change the APK source/tag.
+- Installable tag: `KUSHIRAVI-app-v1.13`; previous tags remain untouched.
 - Android versionCode: `14`; versionName: `1.13`.
-- Planned APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.13.apk`.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.13.apk`.
+- APK SHA-256: `269EDE6F4AB3F5350FA260C07F392F46AF1131FAFAEDB1DBCF10B0D2F78213EB`.
+- Buildable mobile source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.13-source.zip`; SHA-256 `7C6171525A6F857DD53BD3009D6A7319621402E49FB2DFA14BC02CB0D748D4E3`.
 - Changes: remove the uniform white SVG stroke on every Home food/kitchen capsule;
   use one shared blur intensity 22 (previously capsules 38, menu 66), with soft
   directional edge highlights/shading instead of a drawn outline. Native supported
@@ -33,10 +35,11 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   screen layouts, branding, splash, backend, finance, cart, auth and payment logic
   are unchanged. White unselected favorite icons and red selected icons retained.
 - Verification and exact files: `C:\mscratch\apps\mobile\docs\HOME_LIQUID_GLASS_V1_13.md`.
-- Verification: TypeScript, scoped ESLint and 182 suites / 925 tests passed;
-  release build and visual phone inspection pending. No new dependencies.
-- Phone remains on v1.12 until a new installation is verified. The prior unpaid
-  test checkout is not modified by this UI update.
+- Verification: TypeScript, scoped ESLint and 182 suites / 925 tests passed; six focused glass tests passed again after the final native corner-radius adjustment. No new dependencies.
+- Android release: successful in 4m 19s, 823 tasks, arm64-v8a. APK package/version verified; v2/v3 signatures verified with the existing Firebase-registered signing certificate.
+- Installed device: `RS7PB6VOY9ZLLFYD` / RMX5003. Replace-install succeeded without clearing app data; Android reports code 14 / name 1.13, last update `2026-09-30 11:51:00`. Installed base APK SHA-256 matches the local APK above; cold launch succeeded.
+- Phone visuals: Home kitchen time/heart/rating and food availability/heart/food-type capsules have soft directional edges instead of a uniform drawn outline. Home menu checked over image backgrounds. No cart, favorite, checkout or payment interaction was performed for this UI verification; the prior unpaid test checkout is not modified.
+- Evidence: `C:\mscratch\artifacts\home-glass-v1.13-evidence`. Native iOS hardware was not tested; exact Apple shader/refraction equivalence is not claimed. No Azure/APIM deployment or GitHub push.
 
 ### Version 1.12 - Read-only cart bill and precise capsule adjustments
 

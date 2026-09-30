@@ -49,7 +49,27 @@ types were checked for the supported clear style.
 
 ## Checkpoint
 
-Prepared version: Android 1.13 / code 14 on KUSHIRAVI-app-build. Build and
-installation evidence are recorded after verification. Current phone is v1.12.
-No Azure/APIM deployment or GitHub push is required for this change.
-TypeScript, scoped ESLint and all 182 suites / 925 mobile tests passed.
+- Branch: `KUSHIRAVI-app-build`.
+- Installed Android version: `com.cravesapp`, name `1.13`, code `14`.
+- APK source commit: `2e91f049976686ea082babe9b66e3923c65ec994`.
+- Installable tag: `KUSHIRAVI-app-v1.13`. Previous tags remain untouched.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.13.apk`.
+- APK SHA-256: `269EDE6F4AB3F5350FA260C07F392F46AF1131FAFAEDB1DBCF10B0D2F78213EB`.
+- Exact-tag mobile source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.13-source.zip`.
+- ZIP SHA-256: `7C6171525A6F857DD53BD3009D6A7319621402E49FB2DFA14BC02CB0D748D4E3`.
+- Release build succeeded in 4m 19s, 823 tasks, arm64-v8a; package/version and
+  v2/v3 signatures verified. Existing Firebase-registered certificate retained.
+- Installed on `RS7PB6VOY9ZLLFYD` / RMX5003 without clearing app data;
+  phone update time `2026-09-30 11:51:00`. Installed APK hash matches the local
+  release. Cold launch succeeded.
+- TypeScript, scoped ESLint and all 182 suites / 925 mobile tests passed.
+  Six focused glass tests passed again after the final native radius adjustment.
+- Evidence folder: `C:\mscratch\artifacts\home-glass-v1.13-evidence`.
+  `phone-kitchens-menu.png` shows kitchen capsules/menu; `phone-current.png`
+  shows food availability/heart/food-type capsules and the menu over an image.
+- Phone verification was visual/read-only. Favorite, cart, checkout and payment
+  actions were not exercised. Native iOS hardware was not tested.
+- No backend/APIM changes, new dependencies, new Azure resources or GitHub push.
+
+This document's final evidence is committed separately from the APK source.
+The source ZIP and installable tag remain the exact release source commit above.

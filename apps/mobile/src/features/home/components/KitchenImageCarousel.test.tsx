@@ -101,9 +101,10 @@ describe('kitchen photo scrolling', () => {
 
   it('pauses automatic paging when the app goes into the background', () => {
     const listener = jest.spyOn(AppState, 'addEventListener');
+    listener.mockClear();
     const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo');
     render();
-    const onAppState = listener.mock.calls[0][1];
+    const onAppState = listener.mock.calls[listener.mock.calls.length - 1][1];
     scrollTo.mockClear();
     act(() => onAppState('background'));
     act(() => jest.advanceTimersByTime(4_000));

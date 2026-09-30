@@ -68,9 +68,11 @@ export const radius = {
 export const homeLiquidGlass = {
   blurIntensity: 22,
   blurReductionFactor: 2.5,
-  edgeDepth: 4,
-  highlightOpacity: 0.62,
-  edgeShadowOpacity: 0.24,
+  edgeDepth: 5,
+  highlightOpacity: 0.9,
+  edgeShadowOpacity: 0.32,
+  innerHighlightOpacity: 0.56,
+  innerShadowOpacity: 0.24,
   topLightOpacity: 0.18,
   bottomLightOpacity: 0.08,
 } as const;

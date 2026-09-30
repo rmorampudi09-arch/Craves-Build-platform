@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.15.1 Installed
+# KUSHIRAVI App Build - Version 1.15.2 Prepared
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -17,6 +17,28 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.15.2 Prepared - Precise glass edge optics
+
+- Source baseline: installed `KUSHIRAVI-app-v1.15.1`, commit `5dece0e8cae9208aeccdcf12f231e336ad830bec`, plus its evidence-only commit.
+- Source commit: the commit containing this entry; exact build SHA follows in delivery evidence.
+- Planned tag: `KUSHIRAVI-app-v1.15.2`; previous version tags remain untouched.
+- Android versionCode `19`, versionName `1.15.2`.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.2.apk`.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.2-source.zip`.
+- Only edge optics change: stronger directional rounded highlights, slightly deeper
+  edge band and a paired inner light/shadow band on the shared existing glass
+  capsules and Customer/Chef menus. No uniform white stroke is added.
+- Approved blur remains 22, reduction factor 2.5; center tint/wash, top/bottom
+  lighting, sizes, layouts, black menu foregrounds and interactions remain unchanged.
+- Android uses bounded edge-lighting bands to approximate lens depth, not actual
+  refractive background displacement or Apple's proprietary rendering. Supported
+  iOS retains its existing native clear GlassView without the Android overlay.
+- Verification: TypeScript, scoped ESLint and 186 suites / 942 tests passed.
+  Build and live visual verification pending.
+- No new dependencies, backend/API, auth/role, cart, payment, order, splash, remote
+  or CI changes. No GitHub push.
+- Changed files, checks and build evidence: `C:\mscratch\apps\mobile\docs\GLASS_EDGE_OPTICS_V1_15_2.md`.
 
 ### Version 1.15.1 Installed - Seven precise changes and Chef menu lifecycle correction
 

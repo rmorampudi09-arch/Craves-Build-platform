@@ -171,7 +171,7 @@ export function LiquidGlassSurface({
                     stopColor="white"
                     stopOpacity={homeLiquidGlass.highlightOpacity}
                   />
-                  <Stop offset="0.2" stopColor="white" stopOpacity="0.16" />
+                  <Stop offset="0.2" stopColor="white" stopOpacity="0.34" />
                   <Stop offset="0.38" stopColor="white" stopOpacity="0" />
                   <Stop
                     offset="0.55"
@@ -186,6 +186,27 @@ export function LiquidGlassSurface({
                   />
                   <Stop offset="1" stopColor="white" stopOpacity="0" />
                 </LinearGradient>
+                <LinearGradient
+                  id={`${gradientId}innerEdgeLight`}
+                  x1="0%"
+                  y1="0%"
+                  x2="100%"
+                  y2="100%"
+                >
+                  <Stop
+                    offset="0"
+                    stopColor="#181818"
+                    stopOpacity={homeLiquidGlass.innerShadowOpacity}
+                  />
+                  <Stop offset="0.28" stopColor="#181818" stopOpacity="0.08" />
+                  <Stop offset="0.48" stopColor="white" stopOpacity="0" />
+                  <Stop
+                    offset="0.76"
+                    stopColor="white"
+                    stopOpacity={homeLiquidGlass.innerHighlightOpacity}
+                  />
+                  <Stop offset="1" stopColor="white" stopOpacity="0.08" />
+                </LinearGradient>
                 <Mask
                   id={`${gradientId}edgeMask`}
                   x={0}
@@ -193,6 +214,7 @@ export function LiquidGlassSurface({
                   width={size.width}
                   height={size.height}
                   maskUnits="userSpaceOnUse"
+                  maskType="luminance"
                 >
                   <Rect
                     width={size.width}
@@ -214,6 +236,40 @@ export function LiquidGlassSurface({
                     width={Math.max(0, size.width - edgeDepth)}
                     height={Math.max(0, size.height - edgeDepth)}
                     rx={Math.max(0, roundedCorner - edgeDepth / 2)}
+                    fill="#606060"
+                  />
+                  <Rect
+                    x={edgeDepth}
+                    y={edgeDepth}
+                    width={Math.max(0, size.width - edgeDepth * 2)}
+                    height={Math.max(0, size.height - edgeDepth * 2)}
+                    rx={Math.max(0, roundedCorner - edgeDepth)}
+                    fill="black"
+                  />
+                </Mask>
+                <Mask
+                  id={`${gradientId}innerEdgeMask`}
+                  x={0}
+                  y={0}
+                  width={size.width}
+                  height={size.height}
+                  maskUnits="userSpaceOnUse"
+                  maskType="luminance"
+                >
+                  <Rect
+                    x={edgeDepth * 0.3}
+                    y={edgeDepth * 0.3}
+                    width={Math.max(0, size.width - edgeDepth * 0.6)}
+                    height={Math.max(0, size.height - edgeDepth * 0.6)}
+                    rx={Math.max(0, roundedCorner - edgeDepth * 0.3)}
+                    fill="white"
+                  />
+                  <Rect
+                    x={edgeDepth * 0.6}
+                    y={edgeDepth * 0.6}
+                    width={Math.max(0, size.width - edgeDepth * 1.2)}
+                    height={Math.max(0, size.height - edgeDepth * 1.2)}
+                    rx={Math.max(0, roundedCorner - edgeDepth * 0.6)}
                     fill="#606060"
                   />
                   <Rect
@@ -255,14 +311,24 @@ export function LiquidGlassSurface({
             fill={`url(#${gradientId}wash)`}
           />
           {home ? (
-            <Rect
-              testID="home-glass-edge-light"
-              width={size.width}
-              height={size.height}
-              rx={roundedCorner}
-              fill={`url(#${gradientId}edgeLight)`}
-              mask={`url(#${gradientId}edgeMask)`}
-            />
+            <>
+              <Rect
+                testID="home-glass-edge-light"
+                width={size.width}
+                height={size.height}
+                rx={roundedCorner}
+                fill={`url(#${gradientId}edgeLight)`}
+                mask={`url(#${gradientId}edgeMask)`}
+              />
+              <Rect
+                testID="home-glass-inner-edge-light"
+                width={size.width}
+                height={size.height}
+                rx={roundedCorner}
+                fill={`url(#${gradientId}innerEdgeLight)`}
+                mask={`url(#${gradientId}innerEdgeMask)`}
+              />
+            </>
           ) : (
             <Rect
               x={rimWidth / 2}

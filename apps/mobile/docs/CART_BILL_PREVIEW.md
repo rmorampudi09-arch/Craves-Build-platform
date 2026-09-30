@@ -10,13 +10,46 @@ Backend and Azure/APIM deployment were explicitly approved in this chat.
 The production subscription supplied by the user is
 `721906c9-4a72-4606-830b-d3e7ace093ff` (Azure subscription 1). The open Azure
 portal confirms directory `1e7e43ac-c7f5-4d47-a74f-289a7cc21508`.
-Deployment-tool authentication is pending for that account. Its previously
-cached account only saw a different subscription's empty APIM and placeholder
-containers; those resources were not modified. Never share credentials in chat.
+Deployment-tool browser authentication completed with the Azure Portal account.
+Device-code sign-in was blocked by Security Defaults (530035); no tenant security
+settings were changed. The previously cached account's unrelated resources were
+not modified. Never share credentials in chat.
 
-`CART_BILL_PREVIEW_AVAILABLE` remains false until the real backend and APIM
-publication are verified. This checkpoint must not be described as a live bill
-fix. The phone remains on v1.11 until installation is verified separately.
+`CART_BILL_PREVIEW_AVAILABLE` is enabled after real backend and APIM publication.
+The phone remains on v1.11 until installation is verified separately. A signed
+synthetic policy probe is not a substitute for actual customer-cart verification.
+
+## Production Deployment Evidence
+
+- Deployed backend baseline: `92320c9f1d20ffd291b14d5ed6a5c04e7febd445`, the source
+  branch used by the existing product activation pipeline. Its backend is identical
+  to `70b1196de10cdcda485e409e71ef705b4964bb4c`; the additional commit is web-only.
+- Applied only eight preview source/test files from prepared checkpoint
+  `3f8265d2329d38fed6462725986cfa18455159e2`. Existing finance helper files and
+  production POM files were retained, not replaced from the older mobile tree.
+- Build runs: Integration `cu4k`, Order `cu4m`, both succeeded.
+- Integration image digest: `sha256:4bb276f4bb733455b58587d2e1c33a5a1cf257ab1c00481859612b6ba868b367`.
+- Order image digest: `sha256:0314c09d17699db325d3f6b61e60deb3dd08abfb8424f84232cdd20c35aa1a01`.
+- Existing apps: `ca-craves-integration-service-pr`, `ca-craves-order-service-prodlow`.
+  Both new revisions end in `--cart-preview-v112`, are healthy and ready. Environment
+  and full app configuration hashes remained identical across the image updates.
+- APIM: only `cart-bill-preview` was added to existing `craves-cart-v1` in
+  `apim-craves-prodlow-kmqgfy`. Its policy reuses the existing customer-cart bearer
+  guard and no-store headers, changing only the rewrite to `/bill-preview`.
+- Live private unsigned preview: 403. Signed synthetic read-only preview: 200,
+  active policy revision 2, INR 100.00 food + 0.00 platform + 40.00 delivery +
+  12.20 tax = 152.20 total. These are test inputs, not customer order charges.
+- Public `api.craves.in` and APIM gateway: no token 401, invalid token 403.
+- Production-baseline tests: Order 146 executed / 104 skipped; Integration 384
+  executed / 284 skipped; no failures or errors. Database tests were not run
+  against production and require an isolated PostgreSQL test database.
+- Source ZIP: `C:\mscratch\artifacts\cart-preview-production-source-v1.12.zip`.
+  It contains the production baseline plus the preview overlay, excluding targets.
+  Regeneration inputs are the baseline and overlay ZIPs alongside it.
+- Safe evidence (no keys): `C:\mscratch\artifacts\cart-preview-production-evidence`.
+- Rollback images remain `craves/order-service:checkout-hotfix-125` and
+  `craves/integration-service:checkout-hotfix-125`; previous revisions are recorded
+  in `before-deployment.json`. No prior image or app tag was overwritten.
 
 ## Contract
 
@@ -96,8 +129,8 @@ dependency for the same configured distance calculation. Backend regression
 tests are `services/order-service/src/test/java/in/craves/order/service/CartBillPreviewServiceTest.java`,
 `services/integration-service/src/test/java/in/craves/integration/finance/CartBillPreviewFinanceServiceTest.java`,
 and `services/integration-service/src/test/java/in/craves/integration/web/InternalCartBillPreviewControllerTest.java`.
-`api/apim-api/contracts/mobile-main-source-only.v1.json` records the new route as
-source-only until publication; it is not added to the published contract yet.
+`api/apim-api/contracts/mobile-production.v1.json` records the published preview
+route. It was removed from `mobile-main-source-only.v1.json` only after deployment.
 
 ## Manual Deployment Steps
 

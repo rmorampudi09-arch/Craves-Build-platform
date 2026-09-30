@@ -8,6 +8,17 @@
   },
   "actions": [
     {
+      "id": "cart.billPreview",
+      "source": "src/features/cart/api/cartBillPreviewApi.ts",
+      "method": "POST",
+      "path": "/api/v1/cart/bill-preview",
+      "auth": "bearer",
+      "requestModel": "{ deliveryAddressId, expectedCart: { cartId, items: [{ id, quantity, updatedAt }] } }",
+      "responseModel": "CartBillPreviewService.Response",
+      "requestValidator": "buildCartSnapshotRequest",
+      "responseValidator": "parseCartBillPreview: exact cart/address, policy, expiry and paise reconciliation"
+    },
+    {
       "id": "auth.exchangeFirebaseToken",
       "source": "src/features/auth/api/authApi.ts",
       "method": "POST",

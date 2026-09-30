@@ -3,7 +3,7 @@ import {httpClient} from '../../../core/http/httpClient';
 import {buildCartSnapshotRequest} from './cartApi';
 import type {CartMoney, CartSnapshot} from '../domain/cartTypes';
 
-export const CART_BILL_PREVIEW_AVAILABLE = false;
+export const CART_BILL_PREVIEW_AVAILABLE = true;
 
 export interface CartBillPreview {
   deliveryAddressId: string;

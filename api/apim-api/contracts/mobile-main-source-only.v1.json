@@ -5,19 +5,6 @@
   "actions": [],
   "sourceOnly": [
     {
-      "id": "cart.billPreview",
-      "source": "src/features/cart/api/cartBillPreviewApi.ts",
-      "method": "POST",
-      "path": "/api/v1/cart/bill-preview",
-      "auth": "bearer",
-      "requestModel": "{ deliveryAddressId, expectedCart: { cartId, items: [{ id, quantity, updatedAt }] } }",
-      "responseModel": "CartBillPreviewService.Response",
-      "requestValidator": "buildCartSnapshotRequest",
-      "responseValidator": "parseCartBillPreview: exact cart/address, policy, expiry and paise reconciliation",
-      "availabilityFlag": "CART_BILL_PREVIEW_AVAILABLE",
-      "reason": "New local bill-preview backend additions require deployment and authenticated APIM publication before enabling mobile requests."
-    },
-    {
       "id": "cart.preflight",
       "source": "src/features/cart/api/cartPreflightApi.ts",
       "method": "GET",

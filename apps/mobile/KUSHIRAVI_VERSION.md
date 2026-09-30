@@ -19,9 +19,9 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ### Version 1.12 Prepared - Read-only cart bill and precise capsule adjustments
 
-- Status: local source checkpoint; not yet published, built, tagged or installed.
+- Status: backend/APIM published and healthy; mobile integration enabled. APK build and phone verification pending.
 - Commit: the local commit containing this entry; resolve with `git log -1 -- apps/mobile/KUSHIRAVI_VERSION.md`.
-- Installable tag: pending verified backend/APIM publication and APK build. No existing tag is changed.
+- Installable tag: `KUSHIRAVI-app-v1.12`, to be created after APK verification. No existing tag is changed.
 - Android versionCode: `13` (prepared)
 - Android versionName: `1.12` (prepared)
 - APK path: none for this checkpoint. The phone remains on `KUSHIRAVI-app-v1.11`.
@@ -30,11 +30,15 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   - Refresh the bill after confirmed cart/address changes, without creating checkout orders, payments or clearing the cart. Checkout retains its authoritative final bill and existing Razorpay behavior.
   - Change only the Popular Near You unselected favorite outline to white; selected hearts remain red.
   - Reduce image-capsule blur from 48 to 38 and strengthen its rounded reflective rim. Bottom menu blur and all other screen layouts remain unchanged.
-- Safety: `CART_BILL_PREVIEW_AVAILABLE` remains false until the production route is verified. Do not describe the prepared cart work as a live fix.
-- Approved deployment target: subscription `721906c9-4a72-4606-830b-d3e7ace093ff`; directory `1e7e43ac-c7f5-4d47-a74f-289a7cc21508`. The open Azure portal confirms both; deployment-tool authentication is still required.
-- Verification: TypeScript and scoped ESLint passed; 62 mobile tests across ten suites passed; Order Service 55 tests and Integration Service 76 tests passed. The eleven focused preview backend tests also pass when applied to newer main source `13710384`, with both modules' complete sources and test sources compiling.
+- Safety: `CART_BILL_PREVIEW_AVAILABLE` enabled only after healthy service deployment and authenticated APIM publication. The phone still runs v1.11 until a new installation is confirmed.
+- Approved deployment target: subscription `721906c9-4a72-4606-830b-d3e7ace093ff`; directory `1e7e43ac-c7f5-4d47-a74f-289a7cc21508`. Browser sign-in completed with the Azure Portal account; Security Defaults were not changed.
+- Production baseline: `92320c9f1d20ffd291b14d5ed6a5c04e7febd445`, from the existing activation pipeline's source branch. Only the eight-file preview overlay from `3f8265d2329d38fed6462725986cfa18455159e2` was applied; current Razorpay fixes retained.
+- Backend build runs: Integration `cu4k`, Order `cu4m`, both succeeded. Both service revisions are `--cart-preview-v112` and healthy. Environment and configuration hashes match the pre-deployment snapshot.
+- APIM: added only `POST /bill-preview`, operation `cart-bill-preview`, to `craves-cart-v1` in `apim-craves-prodlow-kmqgfy`; existing operations untouched. Private finance route was not published.
+- Verification: enabled mobile integration full suite passed (182 suites / 921 tests), TypeScript and scoped ESLint passed. Published-route contract audit passed (121 published / 44 source-only routes). Production-baseline backend suites executed 146 Order and 384 Integration tests with no failures; 104 and 284 database-dependent tests were skipped without an isolated test database. Signed read-only live finance preview returned 200 and reconciled amounts; unsigned private preview returned 403; public no-token/invalid-token checks returned 401/403.
+- Buildable backend source: `C:\mscratch\artifacts\cart-preview-production-source-v1.12.zip`. Deployment evidence: `C:\mscratch\artifacts\cart-preview-production-evidence`.
 - Changed files, contract, security checks, deployment precautions and manual test steps: `C:\mscratch\apps\mobile\docs\CART_BILL_PREVIEW.md`.
-- No Azure resources were modified, no live payments were made, and nothing was pushed to GitHub.
+- Only existing backend images and the new cart APIM operation were updated. No new Azure resources, security-policy changes, live payments or GitHub pushes.
 
 ### Version 1.11 - Changes document card surfaces and order visibility
 

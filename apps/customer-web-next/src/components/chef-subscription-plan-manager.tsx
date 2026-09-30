@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   AlertTriangle,
   CalendarDays,
@@ -215,13 +216,7 @@ function StatusPill({ status }: { status: ChefMealPlan["status"] }) {
   );
 }
 
-function StepIndicator({
-  current,
-  editable,
-}: {
-  current: number;
-  editable: boolean;
-}) {
+function StepIndicator({ current }: { current: number }) {
   const steps = [
     ["1", "Plan details"],
     ["2", "Meal schedule"],
@@ -305,11 +300,6 @@ export function ChefSubscriptionPlanManager() {
 
   const editable =
     selected?.status === "DRAFT" || selected?.status === "REJECTED";
-
-  const selectedMenuIds = useMemo(
-    () => new Set(rows.map((row) => row.menuItemId).filter(Boolean)),
-    [rows],
-  );
 
   const selectedScheduleRows = useMemo(
     () =>
@@ -1020,7 +1010,7 @@ export function ChefSubscriptionPlanManager() {
       </div>
 
       <section className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[var(--shadow-card)] md:p-5">
-        <StepIndicator current={currentStep} editable={Boolean(editable)} />
+        <StepIndicator current={currentStep} />
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[0.78fr_1.22fr]">
@@ -1137,13 +1127,13 @@ export function ChefSubscriptionPlanManager() {
             <p className="mt-2 text-xs leading-5 text-[#6B6B6B]">
               Your plan defines the recurring meals. Capacity protects your kitchen from taking more subscription commitments than you can serve.
             </p>
-            <a
+            <Link
               href="/chef/capacity"
               className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[#147A4B] underline-offset-4 hover:underline"
             >
               Open advanced capacity
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </a>
+            </Link>
           </section>
         </aside>
 
@@ -1465,13 +1455,13 @@ export function ChefSubscriptionPlanManager() {
                             <p className="mt-1 text-sm leading-6 text-[#4B5563]">
                               Add or activate at least one available dish in Menu before submitting this meal plan.
                             </p>
-                            <a
+                            <Link
                               href="/chef/menu"
                               className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[#147A4B] underline-offset-4 hover:underline"
                             >
                               Manage menu
                               <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                            </a>
+                            </Link>
                           </div>
                         </div>
                       </div>
@@ -1760,13 +1750,13 @@ export function ChefSubscriptionPlanManager() {
                       </p>
                     </div>
                   </div>
-                  <a
+                  <Link
                     href="/chef/capacity"
                     className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#D8DEE3] bg-white px-4 text-sm font-bold text-[#147A4B] hover:border-[#147A4B] hover:bg-[#F1FAF5]"
                   >
                     Advanced capacity
                     <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                  </a>
+                  </Link>
                 </div>
 
                 {capacity?.adminSalesFrozen ? (

@@ -165,13 +165,14 @@ public class CustomerProfileService {
 
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
-            "INSERT INTO customer_address (id, identity_id, address_label, recipient_name, contact_phone_number, " +
+            "INSERT INTO customer_address (id, identity_id, address_label, address_name, recipient_name, contact_phone_number, " +
                 "address_line1, address_line2, landmark, area_name, district_name, city, state, postal_code, latitude, longitude, " +
                 "is_default, is_active, created_at, updated_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, now(), now())",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, now(), now())",
             id,
             user.identityId(),
             labelOrDefault(request.addressLabel()).name(),
+            normalizedAddressName(request),
             request.recipientName().trim(),
             request.contactPhoneNumber().trim(),
             request.addressLine1().trim(),
@@ -198,11 +199,12 @@ public class CustomerProfileService {
             clearDefaultAddress(user.identityId());
         }
         jdbcTemplate.update(
-            "UPDATE customer_address SET address_label = ?, recipient_name = ?, contact_phone_number = ?, " +
+            "UPDATE customer_address SET address_label = ?, address_name = ?, recipient_name = ?, contact_phone_number = ?, " +
                 "address_line1 = ?, address_line2 = ?, landmark = ?, area_name = ?, district_name = ?, city = ?, state = ?, " +
                 "postal_code = ?, latitude = ?, longitude = ?, is_default = ?, updated_at = now() " +
                 "WHERE id = ? AND identity_id = ? AND is_active = true",
             labelOrDefault(request.addressLabel()).name(),
+            normalizedAddressName(request),
             request.recipientName().trim(),
             request.contactPhoneNumber().trim(),
             request.addressLine1().trim(),
@@ -318,6 +320,7 @@ public class CustomerProfileService {
             rs.getObject("id", UUID.class),
             rs.getObject("identity_id", UUID.class),
             AddressLabel.valueOf(rs.getString("address_label")),
+            rs.getString("address_name"),
             rs.getString("recipient_name"),
             rs.getString("contact_phone_number"),
             rs.getString("address_line1"),
@@ -341,6 +344,10 @@ public class CustomerProfileService {
         if (request == null) {
             throw ApiException.badRequest("CUSTOMER_ADDRESS_REQUIRED", "Customer address is required");
         }
+        if (labelOrDefault(request.addressLabel()) == AddressLabel.OTHER
+            && !StringUtils.hasText(request.addressName())) {
+            throw ApiException.badRequest("ADDRESS_NAME_REQUIRED", "Name this address before saving");
+        }
         if (!StringUtils.hasText(request.recipientName())) {
             throw ApiException.badRequest("RECIPIENT_NAME_REQUIRED", "Recipient name is required");
         }
@@ -351,6 +358,12 @@ public class CustomerProfileService {
             throw ApiException.badRequest("POSTAL_CODE_REQUIRED", "Postal code is required");
         }
         validateCoordinates(request.latitude(), request.longitude());
+    }
+
+    private static String normalizedAddressName(CustomerAddressRequest request) {
+        return labelOrDefault(request.addressLabel()) == AddressLabel.OTHER
+            ? blankToNull(request.addressName())
+            : null;
     }
 
     private static void validateCoordinates(BigDecimal latitude, BigDecimal longitude) {

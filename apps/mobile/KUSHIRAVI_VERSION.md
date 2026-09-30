@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.15.1 Restoration Prepared
+# KUSHIRAVI App Build - Version 1.15.1 Restored and Installed
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,16 +9,17 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Prepared Android versionCode: `22`
-- Prepared Android versionName: `1.15.1`
+- Installed Android versionCode: `22`
+- Installed Android versionName: `1.15.1`
 - Active approved app baseline: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Phone restoration is pending build/install verification; version details below will record the delivered checkpoint.
+- Installed restoration source: `cc551b94a96f3f8d033bc685a085cee1e83ff964`, tag `KUSHIRAVI-app-v1.15.1-restored`. Later evidence-only commits do not change this APK/tag.
+- Last installation: `2026-09-30 19:49:46`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.15.1 Restoration Prepared - Return to the approved baseline
+### Version 1.15.1 Restored and Installed - Return to the approved baseline
 
 - User requested the exact v1.15.1 UI and behavior, withdrawing every app change
   after that checkpoint. Restore tracked mobile source from the original tag;
@@ -28,20 +29,31 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Phone-safe restoration: versionCode `22`, versionName `1.15.1`. The only
   difference in app implementation from the original is the internal build
   number required by Android to replace-install without clearing app data.
-- Planned restoration tag: `KUSHIRAVI-app-v1.15.1-restored`; original tag untouched.
-- Intended APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.1-restored.apk`.
-- Intended source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.1-restored-source.zip`.
+- Restoration source: `cc551b94a96f3f8d033bc685a085cee1e83ff964`.
+- Restoration tag: `KUSHIRAVI-app-v1.15.1-restored`; original tag untouched.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.1-restored.apk`.
+- APK SHA-256: `E94A60B65326DD332901EBDA15A604CBD67098CB982680990C8DE1E37FC081E5`.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.1-restored-source.zip`.
+- ZIP SHA-256: `685C8A04E48DE3EFBF41A78F4380B4730A5418B5D1F1FE7DAC6F3D88EA4042E4`.
 - Durable baseline instructions: `C:\mscratch\apps\mobile\AGENTS.md`.
   Later app changes are withdrawn, not guidance for future work. This does not
   claim deletion of historical chat messages or Git rollback checkpoints.
 - No backend/API, auth, cart, Razorpay, order, chef flow, splash, remote or CI
   changes beyond restoring the exact approved source. No GitHub push.
+- Verification: source comparison confirms only build number and documentation
+  differ from the original v1.15.1 tag. TypeScript, scoped ESLint and 186 suites /
+  939 tests passed. Signed ARM64 release passed in 10m 36s, 823 tasks (41 executed).
+  APK code 22 / name 1.15.1, v2/v3 signatures and registered certificate verified.
+- Phone reports code 22 / name 1.15.1 at `2026-09-30 19:49:46`. Cold Customer
+  launch passed. Three downward swipes, a pause and a small reverse swipe retained
+  the food-list position without a jump to top in that check. Crash/JS error
+  buffers empty. Phone left on Customer Home; no real order/payment mutation.
 - Checks and exact build/install evidence: `C:\mscratch\apps\mobile\docs\RESTORE_V1_15_1.md`.
 
-### Version 1.15.1 Prepared - Chef menu lifecycle correction
+### Original Version 1.15.1 - Chef menu lifecycle correction
 
-- Source commit: the commit containing this entry; exact SHA follows in delivery evidence.
-- Planned tag: `KUSHIRAVI-app-v1.15.1`; earlier tags remain untouched.
+- Original source commit: `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
+- Original tag: `KUSHIRAVI-app-v1.15.1`; earlier tags remain untouched.
 - Android versionCode `18`, versionName `1.15.1`.
 - APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.1.apk`.
 - Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.1-source.zip`.

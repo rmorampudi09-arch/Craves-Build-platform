@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.15.1 Prepared
+# KUSHIRAVI App Build - Version 1.15.1 Installed
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,28 +9,42 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Prepared Android versionCode: `18`
-- Prepared Android versionName: `1.15.1`
-- Last installed test version: `1.15` / versionCode `17`, source commit `4f5c545c08f7d690d77f4b2a631d25748d8e042c`, tag `KUSHIRAVI-app-v1.15`; not accepted because live Chef switching exposed a menu-renderer crash.
+- Installed Android versionCode: `18`
+- Installed Android versionName: `1.15.1`
+- Installed APK source commit: `5dece0e8cae9208aeccdcf12f231e336ad830bec`, tag `KUSHIRAVI-app-v1.15.1`. Later evidence-only commits do not change that APK/tag.
+- Last installation: `2026-09-30 14:45:23`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.15.1 Prepared - Chef menu lifecycle correction
+### Version 1.15.1 Installed - Seven precise changes and Chef menu lifecycle correction
 
-- Source commit: the commit containing this entry; exact SHA follows in delivery evidence.
-- Planned tag: `KUSHIRAVI-app-v1.15.1`; earlier tags remain untouched.
+- Source commit: `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
+- Tag: `KUSHIRAVI-app-v1.15.1`; earlier tags remain untouched, including original v1 and v1.13.
 - Android versionCode `18`, versionName `1.15.1`.
 - APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.1.apk`.
+- APK SHA-256: `F881C6A510ACD08BC4669EB586360D69B14B68315EDB0C5360195BCF8DF9BA1D`.
 - Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.1-source.zip`.
+- Source ZIP SHA-256: `2F38E94A763483FC98EFC919DAAA48051EB97215B795E46F2B86C90003C56A24`; archived from the exact tagged source, without dependencies or private runtime logs.
 - Retains the seven precise changes above the exact v1.13 baseline. Fixes only
   Chef tabBar's callback: return a React component instead of directly invoking a
   hook-bearing component. Regression test invokes that callback outside React.
 - v1.15 test APK was installed preserving data, with black customer menu and a
   recorded successful native haptic tick. Live Chef switch then exposed an invalid
   hook-call crash; that trial is not the accepted delivery. No payment submitted.
-- Final build/live verification and exact evidence: `docs\PRECISE_JOURNEY_CHANGES_V1_15.md`.
+- Verification: TypeScript, scoped ESLint and all 186 suites / 939 tests passed.
+  Signed ARM64 Android release succeeded in 4m 21s, 823 tasks (41 executed).
+  APK v2/v3 signatures and the registered Firebase signing certificate verified.
+- Phone: package `com.cravesapp` reports code 18 / name 1.15.1 and update time
+  `2026-09-30 14:45:23`. Both Chef and Customer survived force-stop/reopen on the
+  selected side. All five Chef tabs were checked; Customer menu and removed Chefs
+  descriptions checked. Native selection ticks were recorded. Slow/fast Home
+  scrolling and reversed scrolling showed one continuously pinned/unpinned rail.
+- Payment handoff, changed-bill review, duplicate-tap protection and missing-preview
+  blocking passed automated screen tests. No live cart/order mutation or actual
+  payment was performed in this update. iOS hardware was not available for testing.
+- Final delivery evidence and manual steps: `C:\mscratch\apps\mobile\docs\PRECISE_JOURNEY_CHANGES_V1_15.md`.
 
 ### Version 1.15 Trial - Seven precise menu and journey changes
 

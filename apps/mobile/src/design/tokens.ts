@@ -73,6 +73,8 @@ export const homeLiquidGlass = {
   edgeShadowOpacity: 0.32,
   innerHighlightOpacity: 0.56,
   innerShadowOpacity: 0.24,
+  reflectionCaptureInset: 16,
+  reflectionBendDistance: 10,
   topLightOpacity: 0.18,
   bottomLightOpacity: 0.08,
 } as const;

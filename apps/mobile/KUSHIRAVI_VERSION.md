@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.15.2 Installed
+# KUSHIRAVI App Build - Version 1.15.3 Prepared / 1.15.2 Installed
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -17,6 +17,30 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.15.3 Prepared - Live scrolling backdrop at glass rims
+
+- Source baseline: installed `KUSHIRAVI-app-v1.15.2`, source
+  `9bcd1eda070ad6b99a832caec4f0475720c4ba99`, plus its evidence-only commit.
+- Source commit: the commit containing this entry; final evidence records its SHA.
+- Planned tag: `KUSHIRAVI-app-v1.15.3`; previous tags remain untouched.
+- Android versionCode `20`, versionName `1.15.3`.
+- Planned APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.3.apk`.
+- Planned source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.3-source.zip`.
+- Precise correction: the existing glass edge now samples actual live background
+  pixels and bends them along the rounded rim on supported Android API 33+.
+  A separate near-sharp Expo Blur capture uses the same existing blurTarget;
+  Android's native RuntimeShader masks the center and displaces only rim samples.
+- Approved center blur 22 / reduction 2.5, center lighting/tint, shapes, layouts,
+  black menu text/icons, haptics and foreground interactions remain unchanged.
+- Unsupported Android, unavailable native manager or shader failure safely retain
+  the existing glass. Supported iOS keeps its native clear system GlassView.
+- No new dependencies or backend/API, auth, cart, payment, order, splash, remote
+  or CI changes. No GitHub push.
+- Verification and file list: `C:\mscratch\apps\mobile\docs\LIVE_GLASS_REFLECTION_V1_15_3.md`.
+- Verification: TypeScript and scoped ESLint passed; 187 suites / 952 tests
+  passed. Native Android release Kotlin compilation succeeded. Build, tag and
+  phone verification pending. Phone remains on 1.15.2 until verified.
 
 ### Version 1.15.2 Installed - Precise glass edge optics
 

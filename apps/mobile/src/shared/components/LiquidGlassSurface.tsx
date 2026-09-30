@@ -8,6 +8,7 @@ import {
 } from 'expo-glass-effect';
 import Svg, { Defs, LinearGradient, Mask, Rect, Stop } from 'react-native-svg';
 import { homeLiquidGlass, radius } from '../../design/tokens';
+import { LiquidGlassReflection } from './LiquidGlassReflection';
 
 interface LiquidGlassSurfaceProps extends ViewProps {
   blurTarget?: RefObject<View | null>;
@@ -342,6 +343,9 @@ export function LiquidGlassSurface({
             />
           )}
         </Svg>
+      ) : null}
+      {home && !nativeGlassAvailable && size.width > 0 && size.height > 0 ? (
+        <LiquidGlassReflection blurTarget={blurTarget} cornerRadius={cornerRadius} />
       ) : null}
       {children}
     </View>

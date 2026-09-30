@@ -264,6 +264,12 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
       ]}>
       <View style={styles.shellShadow}>
         <LiquidGlassSurface
+          appearance={
+            activeTabRoute.name === 'Home' &&
+            (!focusedChildRouteName || focusedChildRouteName === 'CustomerHomeRoot')
+              ? 'home'
+              : 'default'
+          }
           blurTarget={blurTargets[activeTabRoute.key]}
           variant="navigation"
           style={styles.shell}>

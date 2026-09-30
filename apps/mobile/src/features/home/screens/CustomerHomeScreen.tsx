@@ -176,6 +176,7 @@ function DishCard({
           </Pressable>
         </BlurTargetView>
         <LiquidGlassSurface
+          appearance="home"
           blurTarget={imageTarget}
           pointerEvents="none"
           style={styles.availabilityPill}>
@@ -183,7 +184,10 @@ function DishCard({
           <Text style={styles.glassPillText}>Available - {availableCount}</Text>
         </LiquidGlassSurface>
 
-        <LiquidGlassSurface blurTarget={imageTarget} style={styles.favoriteGlass}>
+        <LiquidGlassSurface
+          appearance="home"
+          blurTarget={imageTarget}
+          style={styles.favoriteGlass}>
           <CustomerFavoriteHeartButton
             favorite={favorite}
             pending={favoritePending}
@@ -196,6 +200,7 @@ function DishCard({
         </LiquidGlassSurface>
 
         <LiquidGlassSurface
+          appearance="home"
           blurTarget={imageTarget}
           pointerEvents="none"
           style={styles.foodTypePill}>

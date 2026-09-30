@@ -63,6 +63,17 @@ export const radius = {
   pill: 999,
 } as const;
 
+/** Shared home optics; native iOS glass manages its own refraction and blur. */
+export const homeLiquidGlass = {
+  blurIntensity: 22,
+  blurReductionFactor: 2.5,
+  edgeDepth: 4,
+  highlightOpacity: 0.62,
+  edgeShadowOpacity: 0.24,
+  topLightOpacity: 0.18,
+  bottomLightOpacity: 0.08,
+} as const;
+
 export const borderWidth = {
   standard: 1,
   focus: 1.4,

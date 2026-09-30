@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.12
+# KUSHIRAVI App Build - Version 1.13 Prepared
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,13 +9,34 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Android versionCode: `13`
-- Android versionName: `1.12`
+- Prepared Android versionCode: `14`
+- Prepared Android versionName: `1.13`
 - Last verified installed version: `1.12` / versionCode `13`, source commit `5f424b7cd22cf5e71684a3a28f5c01187bda1311`, tag `KUSHIRAVI-app-v1.12`
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.13 Prepared - Home glass without drawn capsule outlines
+
+- Status: local UI-only checkpoint; build, tag and installation pending verification.
+- Source commit: the commit containing this entry; later evidence records the exact SHA.
+- Planned tag: `KUSHIRAVI-app-v1.13`; previous tags remain untouched.
+- Android versionCode: `14`; versionName: `1.13`.
+- Planned APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.13.apk`.
+- Changes: remove the uniform white SVG stroke on every Home food/kitchen capsule;
+  use one shared blur intensity 22 (previously capsules 38, menu 66), with soft
+  directional edge highlights/shading instead of a drawn outline. Native supported
+  iOS uses clear system glass; Android approximates the edge optics, not Apple's
+  proprietary shader or undocumented numeric refraction settings.
+- Scope: Home root menu and existing Home food/kitchen capsules only. Other tabs,
+  screen layouts, branding, splash, backend, finance, cart, auth and payment logic
+  are unchanged. White unselected favorite icons and red selected icons retained.
+- Verification and exact files: `C:\mscratch\apps\mobile\docs\HOME_LIQUID_GLASS_V1_13.md`.
+- Verification: TypeScript, scoped ESLint and 182 suites / 925 tests passed;
+  release build and visual phone inspection pending. No new dependencies.
+- Phone remains on v1.12 until a new installation is verified. The prior unpaid
+  test checkout is not modified by this UI update.
 
 ### Version 1.12 - Read-only cart bill and precise capsule adjustments
 

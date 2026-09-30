@@ -289,6 +289,7 @@ function TopKitchenCard({
 
         {kitchen.preparationTimeLabel ? (
           <LiquidGlassSurface
+            appearance="home"
             blurTarget={imageTarget}
             pointerEvents="none"
             style={styles.timeGlass}>
@@ -304,7 +305,10 @@ function TopKitchenCard({
           </LiquidGlassSurface>
         ) : null}
 
-        <LiquidGlassSurface blurTarget={imageTarget} style={styles.favoriteGlass}>
+        <LiquidGlassSurface
+          appearance="home"
+          blurTarget={imageTarget}
+          style={styles.favoriteGlass}>
           <CustomerFavoriteHeartButton
             favorite={favorite}
             pending={favoritePending}
@@ -316,6 +320,7 @@ function TopKitchenCard({
         </LiquidGlassSurface>
 
         <LiquidGlassSurface
+          appearance="home"
           blurTarget={imageTarget}
           pointerEvents="none"
           style={styles.ratingGlass}>

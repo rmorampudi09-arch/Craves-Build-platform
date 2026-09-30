@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.15 Prepared
+# KUSHIRAVI App Build - Version 1.15.1 Prepared
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,19 +9,34 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Prepared Android versionCode: `17`
-- Prepared Android versionName: `1.15`
-- Last verified installed version: `1.13` / versionCode `16`, source commit `28c67965c044a78ac305a66a4349fb12a2cb24e5`, tag `KUSHIRAVI-app-v1.13-restored`
+- Prepared Android versionCode: `18`
+- Prepared Android versionName: `1.15.1`
+- Last installed test version: `1.15` / versionCode `17`, source commit `4f5c545c08f7d690d77f4b2a631d25748d8e042c`, tag `KUSHIRAVI-app-v1.15`; not accepted because live Chef switching exposed a menu-renderer crash.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.15 Prepared - Seven precise menu and journey changes
+### Version 1.15.1 Prepared - Chef menu lifecycle correction
+
+- Source commit: the commit containing this entry; exact SHA follows in delivery evidence.
+- Planned tag: `KUSHIRAVI-app-v1.15.1`; earlier tags remain untouched.
+- Android versionCode `18`, versionName `1.15.1`.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.1.apk`.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.1-source.zip`.
+- Retains the seven precise changes above the exact v1.13 baseline. Fixes only
+  Chef tabBar's callback: return a React component instead of directly invoking a
+  hook-bearing component. Regression test invokes that callback outside React.
+- v1.15 test APK was installed preserving data, with black customer menu and a
+  recorded successful native haptic tick. Live Chef switch then exposed an invalid
+  hook-call crash; that trial is not the accepted delivery. No payment submitted.
+- Final build/live verification and exact evidence: `docs\PRECISE_JOURNEY_CHANGES_V1_15.md`.
+
+### Version 1.15 Trial - Seven precise menu and journey changes
 
 - Source baseline: exact `KUSHIRAVI-app-v1.13`, `2e91f049976686ea082babe9b66e3923c65ec994`.
-- Source commit: the commit containing this entry; exact SHA and build/install evidence recorded after verification.
-- Planned tag: `KUSHIRAVI-app-v1.15`. Version 1.14 and the restored 1.13 tag already exist and remain untouched.
+- Source commit: `4f5c545c08f7d690d77f4b2a631d25748d8e042c`.
+- Tag: `KUSHIRAVI-app-v1.15`. Version 1.14 and the restored 1.13 tag already exist and remain untouched.
 - Android versionCode: `17`; versionName: `1.15`. Build 17 can update the phone's build 16 without clearing app data.
 - APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.apk`.
 - Buildable source: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15-source.zip`.

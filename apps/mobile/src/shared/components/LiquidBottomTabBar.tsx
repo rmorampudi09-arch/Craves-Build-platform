@@ -71,6 +71,11 @@ export function LiquidBottomTabBar(props: BottomTabBarProps) {
   );
 }
 
+// Navigation invokes tabBar as a callback, not as a React component.
+export function renderLiquidBottomTabBar(props: BottomTabBarProps) {
+  return <LiquidBottomTabBar {...props} />;
+}
+
 const styles = StyleSheet.create({
   scene: {flex: 1},
   button: {justifyContent: 'center', paddingVertical: 8},

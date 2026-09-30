@@ -1,11 +1,17 @@
 import React from 'react';
 import renderer, {act} from 'react-test-renderer';
 import {PlatformPressable} from '@react-navigation/elements';
-import {LiquidTabButton} from './LiquidBottomTabBar';
+import type {BottomTabBarProps} from '@react-navigation/bottom-tabs';
+import {LiquidBottomTabBar, LiquidTabButton, renderLiquidBottomTabBar} from './LiquidBottomTabBar';
 import {customerHaptics} from '../haptics/customerHaptics';
 
 jest.mock('@react-navigation/elements', () => ({PlatformPressable: 'PlatformPressable'}));
 jest.mock('../haptics/customerHaptics', () => ({customerHaptics: {selection: jest.fn(async () => undefined)}}));
+
+it('returns a component from the navigation callback without invoking hooks outside React', () => {
+  const element = renderLiquidBottomTabBar({} as BottomTabBarProps);
+  expect(element.type).toBe(LiquidBottomTabBar);
+});
 
 it('removes the Android ripple while preserving navigation, long press and selection accessibility', () => {
   const press = jest.fn();

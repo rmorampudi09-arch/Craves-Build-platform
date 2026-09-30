@@ -1,4 +1,4 @@
-# Precise Menu and Journey Changes - Version 1.15
+# Precise Menu and Journey Changes - Version 1.15.1
 
 ## Scope
 
@@ -25,7 +25,7 @@ Screens intentionally hiding the menu (including payment/detail flows) keep that
 - `src/features/home/screens/CustomerHomeScreen.tsx`: native stickyHeaderIndices instead of delayed JS-mounted duplicate rail.
 - `src/features/chefDiscovery/screens/DiscoverHomeChefsScreen.tsx`: remove only the two specified descriptions.
 - `package.json`, `package-lock.json`, `jest.setup.js`: compatible haptics dependency and native boundary test mock.
-- `android/app/build.gradle`: versionCode 17, versionName 1.15.
+- `android/app/build.gradle`: versionCode 18, versionName 1.15.1.
 - `KUSHIRAVI_VERSION.md`: checkpoint and rollback record.
 
 Tests added/updated:
@@ -64,7 +64,10 @@ Tests mock payment calls; no real payment is needed to verify the orchestration.
 
 ## Verification and Delivery
 
-- TypeScript and 186 suites / 938 tests passed before release build.
+- Initial v1.15 TypeScript and 186 suites / 938 tests passed before release build.
+- Live v1.15 Chef switching exposed a hook-call crash: navigation invokes its tabBar
+  callback as a regular function. The v1.15.1 renderer returns a React component,
+  so all menu hooks run under React. Added an explicit callback regression test.
 - Build/install SHA, APK hash, signing and live checks will be recorded below after verification.
 - Use `scripts\build-kushiravi-release-apk.ps1` to rebuild from the branch/source ZIP.
 - No Azure/DevOps/GitHub work or paid infrastructure changes are required.

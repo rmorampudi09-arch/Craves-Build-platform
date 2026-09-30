@@ -45,7 +45,7 @@ import {
 import {ChefSubscriptionPlanScreen} from '../../features/chefSubscription/screens/ChefSubscriptionPlanScreen';
 import {ChefSupportScreen} from '../../features/chefSupport/screens/ChefSupportScreen';
 import {Icon} from '../../shared/components/Icon';
-import {LiquidBottomTabBar, LiquidTabButton, LiquidTabScene, LiquidTabScenesProvider} from '../../shared/components/LiquidBottomTabBar';
+import {renderLiquidBottomTabBar, LiquidTabButton, LiquidTabScene, LiquidTabScenesProvider} from '../../shared/components/LiquidBottomTabBar';
 import {
   CHEF_TAB_ACTIVE_COLOR,
   CHEF_TAB_INACTIVE_COLOR,
@@ -249,7 +249,7 @@ function ChefTabsNavigator() {
     <Tab.Navigator
       initialRouteName="Dashboard"
       screenOptions={tabScreenOptions}
-      tabBar={LiquidBottomTabBar}
+      tabBar={renderLiquidBottomTabBar}
       screenLayout={renderChefTabScene}>
       <Tab.Screen
         name="Dashboard"

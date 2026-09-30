@@ -16,8 +16,32 @@ settings were changed. The previously cached account's unrelated resources were
 not modified. Never share credentials in chat.
 
 `CART_BILL_PREVIEW_AVAILABLE` is enabled after real backend and APIM publication.
-The phone remains on v1.11 until installation is verified separately. A signed
-synthetic policy probe is not a substitute for actual customer-cart verification.
+The connected phone now runs v1.12 / code 13 from source commit
+`5f424b7cd22cf5e71684a3a28f5c01187bda1311`, tag `KUSHIRAVI-app-v1.12`.
+Actual customer-cart bill display was verified before checkout.
+
+## Phone Verification And Artifacts
+
+- Installed device: `RS7PB6VOY9ZLLFYD`, RMX5003. Replace-install succeeded without
+  clearing app data; package reports name 1.12 / code 13, updated 2026-09-30 10:34:03.
+- Cold launch passed. Popular Near You unselected favorite outline is white.
+- Added one Chicken curry through the existing Home card. The existing Cart
+  shortcut appeared; opening it showed numeric finance-policy amounts before
+  checkout: INR 80.00 food + 0.00 platform + 40.00 delivery + 11.20 tax = 131.20.
+- Proceed to Checkout was enabled, and the preview total matched its final bill.
+- During the following quantity test, the phone rotated; the next tap opened
+  checkout rather than the quantity control. No payment was made. Cleanup of the
+  unpaid test checkout/item awaits user approval. Live quantity refresh is not
+  claimed as passed; quantity/address isolation is covered by automated tests.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.12.apk`.
+  SHA-256: `80FECF73E6E05EA04006AB87528452A1E045524D2BC24BB77B2662190EEFDB91`.
+- Mobile source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.12-source.zip`.
+  SHA-256: `39BA6980146103F9F4ADB025A7CFDE2F6FF04A18D690338960FE8A90FD16573A`.
+- Full release build passed in 11m 8s; arm64-v8a package and existing Firebase
+  signing certificate verified. Mobile full suite: 182 suites / 921 tests passed.
+- Full evidence and screenshots: `C:\mscratch\artifacts\cart-preview-production-evidence`.
+- Remaining manual verification: quantity changes, another saved address,
+  offline/retry, cross-customer rejection and real Razorpay payment completion.
 
 ## Production Deployment Evidence
 
@@ -102,8 +126,8 @@ Precise visual changes and regression tests:
 - `src/shared/components/LiquidGlassSurface.tsx`: reduced image-capsule blur and stronger reflective rim; navigation blur unchanged.
 - `src/shared/components/LiquidGlassSurface.test.tsx`
 - `src/features/favorites/components/CustomerFavoriteHeartButton.test.tsx`
-- `android/app/build.gradle`: prepared Android 1.12 / versionCode 13.
-- `KUSHIRAVI_VERSION.md`: prepared checkpoint, explicitly not installed.
+- `android/app/build.gradle`: Android 1.12 / versionCode 13.
+- `KUSHIRAVI_VERSION.md`: exact installed source/tag, build artifacts and limitations.
 
 Backend additions, relative to repository root:
 - `services/order-service/src/main/java/in/craves/order/service/CartBillPreviewService.java`
@@ -179,5 +203,7 @@ After deployment and activation:
 6. Check Popular Near You: unselected heart outline white; selected heart red;
    capsule blur reduced and rounded highlights stronger. Bottom menu unchanged.
 
-No live payment, production database mutation, or iOS hardware test was performed
-for this checkpoint. Local tests are not a substitute for deployment verification.
+No money transfer or iOS hardware test was performed. The phone test added one
+cart item and inadvertently opened one unpaid checkout after the phone rotated.
+The first cart bill was verified before that checkout. Other live-flow checks
+listed above remain pending; automated tests are not proof of payment completion.

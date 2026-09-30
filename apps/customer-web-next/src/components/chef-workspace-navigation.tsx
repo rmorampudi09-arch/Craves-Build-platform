@@ -3,34 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import {
-  BadgeIndianRupee,
-  CalendarDays,
-  ClipboardCheck,
-  ClipboardList,
-  Gauge,
-  Home,
-  ShieldCheck,
-  Store,
-  Utensils,
-} from "lucide-react";
-import {
-  getSession,
-  subscribeSession,
-  type CravesUser,
-} from "@/services/auth/cravesAuth";
+import { BadgeIndianRupee, CalendarDays, ClipboardCheck, ClipboardList, Gauge, Home, ShieldCheck, Store, Utensils } from "lucide-react";
+import { getSession, subscribeSession, type CravesUser } from "@/services/auth/cravesAuth";
 
-const coreLinks = [
+const primaryLinks = [
   { href: "/chef", label: "Home", icon: Home },
-  { href: "/chef/kitchen", label: "My kitchen", icon: Store },
-  { href: "/chef/menu", label: "My menu", icon: Utensils },
   { href: "/chef/orders", label: "Orders", icon: ClipboardList },
-  { href: "/chef/earnings", label: "What I've earned", icon: BadgeIndianRupee },
+  { href: "/chef/menu", label: "Menu", icon: Utensils },
+  { href: "/chef/earnings", label: "Earnings", icon: BadgeIndianRupee },
+  { href: "/chef/profile", label: "Profile", icon: Store },
 ] as const;
 
-// These routes stay available for approved chefs and direct links, but they are
-// intentionally not presented as equal-weight choices to a new chef.
-const extraLinks = [
+const contextualLinks = [
+  { href: "/chef/kitchen", label: "My kitchen", icon: Store },
   { href: "/chef/application", label: "Your details", icon: ClipboardCheck },
   { href: "/chef/meal-plans", label: "Meal Plans", icon: CalendarDays },
   { href: "/chef/capacity", label: "Capacity", icon: Gauge },
@@ -40,61 +25,41 @@ const extraLinks = [
 function isActive(pathname: string, href: string) {
   return pathname === href || (href !== "/chef" && pathname.startsWith(`${href}/`));
 }
-
-function hasChefRole(user: CravesUser | null): boolean {
+function hasChefRole(user: CravesUser | null) {
   return Boolean(user?.roles.some((role) => role.toUpperCase() === "CHEF"));
 }
 
 export function ChefWorkspaceNavigation() {
   const pathname = usePathname();
-  const [canUseChefWorkspace, setCanUseChefWorkspace] = useState(() =>
-    hasChefRole(getSession()),
-  );
+  const [canUseChefWorkspace, setCanUseChefWorkspace] = useState(() => hasChefRole(getSession()));
 
   useEffect(() => {
-    const syncAccess = () => setCanUseChefWorkspace(hasChefRole(getSession()));
-    syncAccess();
-    return subscribeSession(syncAccess);
+    const sync = () => setCanUseChefWorkspace(hasChefRole(getSession()));
+    sync();
+    return subscribeSession(sync);
   }, []);
 
-  // Application onboarding is intentionally linear: no tabs, no competing
-  // destinations, and no dashboard navigation while a chef is applying.
-  if (
-    pathname === "/chef/application" ||
-    pathname.startsWith("/chef/application/") ||
-    !canUseChefWorkspace
-  ) {
-    return null;
-  }
-
-  const currentExtra = extraLinks.find((link) => isActive(pathname, link.href));
-  const visibleLinks = currentExtra ? [...coreLinks, currentExtra] : coreLinks;
+  if (pathname.startsWith("/chef/application") || !canUseChefWorkspace) return null;
+  const currentContextual = contextualLinks.find((link) => isActive(pathname, link.href));
 
   return (
-    <nav
-      className="chef-panel-navigation mt-1 border-t border-[#E5E7EB] pt-2"
-      aria-label="Chef mode navigation"
-    >
-      {visibleLinks.map((link) => {
-        const active = isActive(pathname, link.href);
-        return (
-          <Link
-            key={link.href}
-            href={link.href}
-            aria-current={active ? "page" : undefined}
-            className={`chef-panel-nav-link inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold transition ${
-              active
-                ? "!bg-[#F62E18] !text-white"
-                : "!bg-white !text-[#1A1A1A] hover:!bg-[#F1F3F5]"
-            }`}
-          >
-            <link.icon className="h-4 w-4" aria-hidden="true" />
-            {link.label}
-          </Link>
-        );
-      })}
-    </nav>
+    <>
+      <nav className="chef-desktop-nav" aria-label="Chef workspace">
+        <div className="chef-desktop-nav-primary">
+          {primaryLinks.map((link) => {
+            const active = isActive(pathname, link.href);
+            return <Link key={link.href} href={link.href} aria-current={active ? "page" : undefined} className={`chef-desktop-nav-link ${active ? "is-active" : ""}`}><link.icon className="h-4 w-4" aria-hidden="true" /><span>{link.label}</span></Link>;
+          })}
+        </div>
+        {currentContextual ? <Link href={currentContextual.href} aria-current="page" className="chef-context-link"><currentContextual.icon className="h-4 w-4" aria-hidden="true" /><span>{currentContextual.label}</span></Link> : null}
+      </nav>
+      <nav className="chef-mobile-nav" aria-label="Chef primary navigation">
+        {primaryLinks.map((link) => {
+          const active = isActive(pathname, link.href);
+          return <Link key={link.href} href={link.href} aria-current={active ? "page" : undefined} className={`chef-mobile-nav-link ${active ? "is-active" : ""}`}><span className="chef-mobile-nav-icon"><link.icon className="h-5 w-5" aria-hidden="true" /></span><span>{link.label}</span></Link>;
+        })}
+      </nav>
+    </>
   );
 }
-
 export default ChefWorkspaceNavigation;

@@ -2,11 +2,11 @@ import React from 'react';
 import {
   Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   type ImageSourcePropType,
 } from 'react-native';
+import {ScrollView} from 'react-native-gesture-handler';
 import {
   CUSTOMER_MENU_CATEGORIES,
   type CustomerMenuCategory,
@@ -38,6 +38,7 @@ export function HomeCategoryRail({
 }: HomeCategoryRailProps) {
   return (
     <ScrollView
+      testID="home-category-scroll"
       horizontal
       nestedScrollEnabled
       directionalLockEnabled

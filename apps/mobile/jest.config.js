@@ -2,6 +2,8 @@ module.exports = {
   preset: '@react-native/jest-preset',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   moduleNameMapper: {
+    '^lucide-react-native/icons/(.*)$':
+      '<rootDir>/node_modules/lucide-react-native/dist/cjs/icons/$1.js',
     '^expo-location$':
       '<rootDir>/src/features/customerAddresses/location/currentLocation.ts',
   },

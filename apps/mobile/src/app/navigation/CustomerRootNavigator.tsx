@@ -1,7 +1,7 @@
 import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
+import {BottomMenuIcon} from '../../shared/components/BottomMenuIcon';
 import {useQueryClient} from '@tanstack/react-query';
 import * as Location from 'expo-location';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
@@ -101,40 +101,36 @@ const CUSTOMER_TAB_ICON_SIZE = 30;
 
 function HomeTabIcon({color}: TabIconProps) {
   return (
-    <MaterialDesignIcons
-      accessibilityElementsHidden
+    <BottomMenuIcon
       color={color}
-      name={'home-outline' as never}
+      name="home"
       size={CUSTOMER_TAB_ICON_SIZE}
     />
   );
 }
 function ChefsTabIcon({color}: TabIconProps) {
   return (
-    <MaterialDesignIcons
-      accessibilityElementsHidden
+    <BottomMenuIcon
       color={color}
-      name={'chef-hat' as never}
+      name="chef"
       size={CUSTOMER_TAB_ICON_SIZE}
     />
   );
 }
 function OrdersTabIcon({color}: TabIconProps) {
   return (
-    <MaterialDesignIcons
-      accessibilityElementsHidden
+    <BottomMenuIcon
       color={color}
-      name={'clipboard-text-outline' as never}
+      name="orders"
       size={CUSTOMER_TAB_ICON_SIZE}
     />
   );
 }
 function ProfileTabIcon({color}: TabIconProps) {
   return (
-    <MaterialDesignIcons
-      accessibilityElementsHidden
+    <BottomMenuIcon
       color={color}
-      name={'account-outline' as never}
+      name="account"
       size={CUSTOMER_TAB_ICON_SIZE}
     />
   );

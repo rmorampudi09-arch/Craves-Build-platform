@@ -17,7 +17,8 @@
 The user explicitly withdrew changes starting with v1.15.2. Do not use those
 changes, design decisions, performance claims or implementation approaches as
 the active baseline, and do not reintroduce them unless explicitly requested.
-Future work starts from the restored v1.15.1 code and the user's latest request.
+Future work starts from the restored v1.15.1 code plus subsequent explicitly
+requested changes recorded in `KUSHIRAVI_VERSION.md`, and the user's latest request.
 Historical tags are rollback records, not approval to reuse withdrawn changes.
 
 ## Change Discipline

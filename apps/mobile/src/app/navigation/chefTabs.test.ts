@@ -1,4 +1,4 @@
-import {colors} from '../../design/tokens';
+import {bottomMenu, colors} from '../../design/tokens';
 import {
   CHEF_TAB_ACTIVE_COLOR,
   CHEF_TAB_INACTIVE_COLOR,
@@ -30,9 +30,10 @@ describe('chefTabs', () => {
     expect(CHEF_TABS.some(tab => tab.icon === 'cart')).toBe(false);
   });
 
-  it('uses black for all Chef menu icons and labels', () => {
-    expect(CHEF_TAB_ACTIVE_COLOR).toBe(colors.black);
-    expect(CHEF_TAB_INACTIVE_COLOR).toBe(colors.black);
+  it('uses the same red active and softer inactive menu foreground as Customer tabs', () => {
+    expect(CHEF_TAB_ACTIVE_COLOR).toBe(colors.flameRedAccessible);
+    expect(CHEF_TAB_INACTIVE_COLOR).toBe(bottomMenu.inactiveColor);
+    expect(CHEF_TAB_INACTIVE_COLOR).not.toBe(colors.black);
   });
 
   it('preserves each Chef tab instead of popping it on blur', () => {

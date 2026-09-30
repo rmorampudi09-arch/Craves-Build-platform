@@ -44,7 +44,7 @@ import {
 } from '../../features/chefShell/state/ChefOperationalProvider';
 import {ChefSubscriptionPlanScreen} from '../../features/chefSubscription/screens/ChefSubscriptionPlanScreen';
 import {ChefSupportScreen} from '../../features/chefSupport/screens/ChefSupportScreen';
-import {Icon} from '../../shared/components/Icon';
+import {BottomMenuIcon} from '../../shared/components/BottomMenuIcon';
 import {renderLiquidBottomTabBar, LiquidTabButton, LiquidTabScene, LiquidTabScenesProvider} from '../../shared/components/LiquidBottomTabBar';
 import {
   CHEF_TAB_ACTIVE_COLOR,
@@ -76,23 +76,23 @@ interface TabIconProps {
 }
 
 function DashboardTabIcon({color, size}: TabIconProps) {
-  return <Icon name={dashboardTab.icon} color={color} size={size} surface={false} />;
+  return <BottomMenuIcon name="home" color={color} size={size} />;
 }
 
 function OrdersTabIcon({color, size}: TabIconProps) {
-  return <Icon name={ordersTab.icon} color={color} size={size} surface={false} />;
+  return <BottomMenuIcon name="orders" color={color} size={size} />;
 }
 
 function MenuTabIcon({color, size}: TabIconProps) {
-  return <Icon name={menuTab.icon} color={color} size={size} surface={false} />;
+  return <BottomMenuIcon name="chef" color={color} size={size} />;
 }
 
 function AnalyticsTabIcon({color, size}: TabIconProps) {
-  return <Icon name={analyticsTab.icon} color={color} size={size} surface={false} />;
+  return <BottomMenuIcon name="analytics" color={color} size={size} />;
 }
 
 function ProfileTabIcon({color, size}: TabIconProps) {
-  return <Icon name={profileTab.icon} color={color} size={size} surface={false} />;
+  return <BottomMenuIcon name="account" color={color} size={size} />;
 }
 
 function useChefTabScreenOptions() {

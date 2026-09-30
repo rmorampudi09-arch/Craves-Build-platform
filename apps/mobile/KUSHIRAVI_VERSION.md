@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.15.1 Restored and Installed
+# KUSHIRAVI App Build - Version 1.16 Prepared
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -18,6 +18,24 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.16 - Precise menu and Home scrolling changes
+
+- Starts from the approved v1.15.1 restoration, not withdrawn v1.15.2+ changes.
+- Android versionCode `23`, versionName `1.16`; fresh tag `KUSHIRAVI-app-v1.16`.
+- Menu-only outline Home, Chef hat, clipboard and Profile icons matching the
+  supplied reference. Softer gray inactive icons/labels and Craves red active tab.
+  The same foreground styling applies to Chef menus without changing destinations.
+- Home category rail uses the existing native gesture-handler ScrollView so
+  horizontal swipes remain usable deep in the pinned feed. One rail, unchanged
+  native vertical pinning, no duplicate overlay or feed-window tuning.
+- Nearby kitchen photos advance automatically only. Preserve card taps, dots,
+  background/reduced-motion pauses and the existing two-second timing.
+- Existing glass optics, layout, haptics, splash and all business flows untouched.
+  No backend/API, auth, finance, cart/order, payment, remote or CI changes; no push.
+- APK target: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.16.apk`.
+- Source ZIP target: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.16-source.zip`.
+- Exact source commit, build and phone checks will be recorded after verification.
 
 ### Version 1.15.1 Restored and Installed - Return to the approved baseline
 

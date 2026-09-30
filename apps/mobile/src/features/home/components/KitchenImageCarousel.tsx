@@ -36,7 +36,6 @@ export function KitchenImageCarousel({
   );
   const listRef = useRef<ScrollView>(null);
   const activeIndexRef = useRef(0);
-  const isDraggingRef = useRef(false);
   const isMomentumRef = useRef(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [appActive, setAppActive] = useState(
@@ -53,7 +52,6 @@ export function KitchenImageCarousel({
 
   useEffect(() => {
     activeIndexRef.current = 0;
-    isDraggingRef.current = false;
     isMomentumRef.current = false;
     setActiveIndex(0);
     listRef.current?.scrollTo({ x: 0, animated: false });
@@ -69,7 +67,7 @@ export function KitchenImageCarousel({
     )
       return undefined;
     const interval = setInterval(() => {
-      if (isDraggingRef.current || isMomentumRef.current) return;
+      if (isMomentumRef.current) return;
       listRef.current?.scrollTo({
         x: ((activeIndexRef.current + 1) % slides.length) * width,
         animated: true,
@@ -102,18 +100,11 @@ export function KitchenImageCarousel({
         nestedScrollEnabled
         directionalLockEnabled
         removeClippedSubviews={false}
-        scrollEnabled={slides.length > 1}
+        scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
         style={{ width, height }}
         onScroll={syncPosition}
         scrollEventThrottle={16}
-        onScrollBeginDrag={() => {
-          isDraggingRef.current = true;
-        }}
-        onScrollEndDrag={event => {
-          isDraggingRef.current = false;
-          syncPosition(event);
-        }}
         onMomentumScrollBegin={() => {
           isMomentumRef.current = true;
         }}

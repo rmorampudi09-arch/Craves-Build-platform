@@ -40,6 +40,13 @@ export const colors = {
   overlay: 'rgba(38,26,21,0.08)',
 } as const;
 
+/** Foreground colors shared only by the bottom menus. */
+export const bottomMenu = {
+  activeColor: colors.flameRedAccessible,
+  inactiveColor: '#666666',
+  iconStrokeWidth: 1.8,
+} as const;
+
 /**
  * CRAVES uses a 4 dp spacing rhythm. Existing names are retained so current
  * screens can migrate without introducing a parallel theme API.

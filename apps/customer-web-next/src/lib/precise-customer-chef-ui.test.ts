@@ -18,12 +18,16 @@ const referenceCrop = source(
   "../components/sections/landing-reference/ReferenceImageCrop.tsx",
 );
 const landing = source("../screens/public/LandingPage/LandingPage.tsx");
+const home = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
 const welcome = source("../components/home/WelcomeBanner.tsx");
+const floatingCart = source("../components/home/FloatingCartBar.module.css");
+const cartAddressDialog = source("../components/home/CartAddressAvailabilityDialog.tsx");
+const addresses = source("../screens/Profile/Addresses.tsx");
 const checkout = source("../screens/Checkout/Checkout.tsx");
 const orders = source("../screens/OrderHistory/OrderHistory.tsx");
 const cart = source("../screens/Cart/Cart.tsx");
 const notifications = source("../screens/Notifications/Notifications.tsx");
-const addressDialog = source("../components/checkout/CheckoutAddressDialog.tsx");
+const addressEditor = source("../components/profile/AddressEditorFlow.tsx");
 const chefActions = source("../components/chef-order-actions.tsx");
 const mealPlans = source("../components/subscription-plan-browser.tsx");
 const mealPlanPage = source("../app/subscriptions/plans/page.tsx");
@@ -37,18 +41,15 @@ test("shared customer and chef palette removes espresso brown", () => {
   assert.match(theme, /--color-black:\s*#000000/i);
 });
 
-test("buttons use white surfaces without logo-colored borders and keep the requested hover state", () => {
+test("buttons use neutral tactile hover while primary actions keep the Craves accent", () => {
   assert.match(theme, /button, \[role="tab"\]/);
-  assert.match(theme, /border:\s*1px solid transparent\s*!important/);
-  assert.doesNotMatch(
-    theme,
-    /border:\s*1px solid var\(--color-flame-red\)\s*!important/,
-  );
-  assert.match(theme, /background:\s*var\(--color-white\)\s*!important/);
-  assert.match(theme, /color:\s*var\(--color-black\)\s*!important/);
-  assert.match(theme, /background:\s*var\(--color-flame-red\)\s*!important/);
-  assert.match(theme, /color:\s*var\(--color-white\)\s*!important/);
-  assert.match(theme, /font-weight:\s*700\s*!important/);
+  assert.match(theme, /border:\s*1px solid var\(--color-grey-200\)/);
+  assert.match(theme, /background:\s*var\(--color-white\)/);
+  assert.match(theme, /border-color:\s*#d7dadf/);
+  assert.match(theme, /box-shadow:\s*0 4px 12px rgba\(0, 0, 0, 0\.08\)/);
+  assert.match(theme, /\.btn-primary \{/);
+  assert.match(theme, /background:\s*var\(--color-contrast-red\)/);
+  assert.match(theme, /\.btn-primary:not\(:disabled\):hover/);
 });
 
 test("landing hero uses semantic HTML, canonical logo, approved rider artwork and wired controls", () => {
@@ -117,12 +118,81 @@ test("public landing keeps the approved semantic reference experience and wired 
   assert.doesNotMatch(landing, /min-h-screen bg-cream text-ink/);
 });
 
-test("welcome banner is solid contrast red with white copy", () => {
-  assert.match(welcome, /bg-\[#C92716\]/);
-  assert.match(welcome, /Welcome back, \{firstName\}/);
-  assert.match(welcome, /Fresh dishes available around your delivery address\./);
-  assert.match(welcome, /text-white/);
-  assert.doesNotMatch(welcome, /blur-|gradient|bg-primary\/25/);
+test("welcome banner uses the approved responsive full-art asset while discovery uses the saved default address", () => {
+  assert.match(welcome, /src="\/home\/cravings\/craves-home-banner\.webp"/);
+  assert.match(welcome, /width=\{1983\}/);
+  assert.match(welcome, /height=\{793\}/);
+  assert.match(welcome, /unoptimized/);
+  assert.match(welcome, /className="block h-auto w-full"/);
+  assert.match(welcome, /aria-label=\{\`Welcome Taste Rebel home food banner for \$\{firstName\}\`\}/);
+  assert.match(welcome, /data-live-dish-count=\{dishCount\}/);
+  assert.doesNotMatch(welcome, /styles\.heroArtwork/);
+  assert.doesNotMatch(welcome, /import \{ Heart \} from "lucide-react"/);
+  assert.doesNotMatch(welcome, /backdrop-blur-sm/);
+  assert.match(welcome, /Eat for Health\./);
+  assert.match(welcome, /Taste the[\s\S]*Comfort of[\s\S]*Home\./);
+  assert.match(welcome, /dishCount/);
+  assert.doesNotMatch(welcome, /<button/);
+  assert.doesNotMatch(welcome, /Default address/);
+  assert.doesNotMatch(welcome, /Choose default address/);
+  assert.doesNotMatch(welcome, /Use current delivery location/);
+  assert.doesNotMatch(welcome, /Current Location/);
+
+  assert.match(home, /loadSelectedAddress/);
+  assert.match(home, /default delivery address/);
+  assert.doesNotMatch(home, /navigator\.geolocation/);
+  assert.doesNotMatch(home, /resolveLiveBrowsingLocation/);
+});
+
+test("address manager owns default selection and the shared location-first editor", () => {
+  assert.match(addresses, /Add New Address/);
+  assert.match(addresses, /Choose your default delivery address here/);
+  assert.match(addresses, /Set as default/);
+  assert.match(addresses, /Default address/);
+  assert.match(addresses, /async function selectDefault/);
+  assert.match(addresses, /invalidateHomeDeliveryContext/);
+  assert.match(addresses, /invalidateSelectedAddress/);
+  assert.match(addresses, /clearDishDiscoveryCache/);
+  assert.match(addresses, /clearKitchenDiscoveryCache/);
+  assert.match(addresses, /<AddressEditorFlow/);
+  assert.match(addresses, /initialLoadState/);
+  assert.match(addresses, /aria-label="Loading saved addresses"/);
+  assert.match(
+    addresses,
+    /initialLoadState === "ready" && addresses\.length === 0/,
+  );
+  assert.match(addresses, /initialLoadState === "error"/);
+
+  assert.match(addressEditor, /<Dialog\.Root/);
+  assert.match(addressEditor, /<AddressMapPicker/);
+  assert.doesNotMatch(addressEditor, /Search for area, street name/);
+  assert.doesNotMatch(addressEditor, /Saved Addresses/);
+  assert.match(addressEditor, /Use current location/);
+  assert.match(addressEditor, /Add address details/);
+  assert.match(addressEditor, /Name this address/);
+  assert.match(addressEditor, /Please complete the highlighted fields/);
+  assert.match(addressEditor, /Flat \/ house \/ floor/);
+  assert.match(addressEditor, /Receiver&apos;s phone/);
+  assert.match(addressEditor, /Save and use this address/);
+  assert.doesNotMatch(addressEditor, /Skip/);
+  assert.doesNotMatch(addressEditor, /Add later/);
+});
+
+test("home rechecks cart availability after default-address changes", () => {
+  assert.match(home, /CartAddressAvailabilityDialog/);
+  assert.match(home, /loadKitchenMenu/);
+  assert.match(home, /unavailableCartItems/);
+  assert.match(home, /removeFromCart/);
+  assert.match(home, /clearCart/);
+  assert.match(cartAddressDialog, /Choose another address/);
+  assert.match(cartAddressDialog, /Remove unavailable items/);
+  assert.match(cartAddressDialog, /Clear cart & browse here/);
+});
+
+test("home cart bar uses a balanced true frosted-glass blur", () => {
+  assert.match(floatingCart, /background:\s*rgba\(255, 255, 255, 0\.5\)/);
+  assert.match(floatingCart, /backdrop-filter:\s*blur\(8px\) saturate\(145%\)/);
+  assert.match(floatingCart, /@supports not/);
 });
 
 test("meal plans keep their previous card layout and navigation flow", () => {
@@ -133,20 +203,35 @@ test("meal plans keep their previous card layout and navigation flow", () => {
   assert.match(mealPlanPage, /bg-\[#0B1426\]/);
 });
 
-test("checkout shows only the current address and manages all addresses in a dialog", () => {
-  assert.match(checkout, /CheckoutAddressDialog/);
-  assert.match(checkout, /Only the address selected for this checkout is shown here/);
-  assert.match(checkout, /Manage address/);
-  assert.match(checkout, /onAddressesChange=\{setAddresses\}/);
-  assert.doesNotMatch(checkout, /<fieldset/);
-  assert.doesNotMatch(checkout, /addresses\.map/);
+test("checkout is one page with saved addresses, ASAP delivery and the shared address sheet", () => {
+  assert.match(checkout, /Delivery address/);
+  assert.match(checkout, /visibleAddresses\.map/);
+  assert.match(checkout, /addresses\.slice\(0, 3\)/);
+  assert.match(checkout, /Show all/);
+  assert.match(checkout, /Earliest delivery/);
+  assert.match(checkout, /As soon as possible/);
+  assert.match(checkout, /Bill details/);
+  assert.match(checkout, /<CheckoutPaymentButton/);
+  assert.match(checkout, /<AddressEditorFlow/);
+  assert.match(checkout, /\/api\/checkout\/operations\//);
+  assert.match(checkout, /checkoutCartSnapshot\(validatedCart\)/);
+  assert.match(checkout, /parseCheckoutOperationResponse/);
+  assert.match(checkout, /CHECKOUT_OPERATION_ID_KEY/);
+  assert.match(checkout, /createAuthoritativeCheckout/);
+  assert.match(checkout, /deliveryAddressId,/);
+  assert.match(checkout, /window\.sessionStorage\.setItem\(CHECKOUT_ID_KEY, prepared\.id\)/);
+  assert.match(checkout, /ensureCheckoutCart\(checkout\.orders\)/);
+  assert.match(checkout, /handleBackToCart/);
+  assert.match(checkout, /autoReviewKeyRef/);
+  assert.match(checkout, /Calculating delivery fee, tax and your final total/);
+  assert.match(checkout, /Your final total is calculated automatically for the selected address/);
+  assert.doesNotMatch(checkout, /CheckoutAddressDialog/);
+  assert.doesNotMatch(checkout, /Pick a time/);
+  assert.doesNotMatch(checkout, /schedule\/capability/);
 
-  assert.match(addressDialog, /role="dialog"/);
-  assert.match(addressDialog, /fetch\("\/api\/customer\/addresses"/);
-  assert.match(addressDialog, /method:\s*"POST"/);
-  assert.match(addressDialog, /parseCustomerAddresses/);
-  assert.match(addressDialog, /Add new address/);
-  assert.match(addressDialog, /Save and use this address/);
+  assert.match(addressEditor, /sessionFetch\(\s*targetAddressId/);
+  assert.match(addressEditor, /method:\s*targetAddressId \? "PUT" : "POST"/);
+  assert.match(addressEditor, /Save and use this address/);
 });
 
 test("customer orders page uses a white page surface", () => {
@@ -154,13 +239,15 @@ test("customer orders page uses a white page surface", () => {
   assert.doesNotMatch(orders, /min-h-screen bg-cream pb-20 text-ink/);
 });
 
-test("customer cart and finalized notifications use white page surfaces", () => {
-  assert.match(cart, /min-h-screen bg-white pb-32 text-ink/);
-  assert.doesNotMatch(cart, /min-h-screen bg-cream pb-32 text-ink/);
+test("customer cart and notifications use white page surfaces", () => {
+  assert.match(cart, /min-h-screen bg-white pb-36 text-\[#1A1A1A\]/);
+  assert.match(cart, /Cooking instructions/);
+  assert.match(cart, /Add more from this kitchen/);
+  assert.match(cart, /Undo/);
+  assert.match(cart, /navigate\(\{ to: "\/checkout" \}\)/);
+  assert.doesNotMatch(cart, /min-h-screen bg-cream/);
   assert.match(notifications, /min-h-screen bg-white pb-12/);
-  assert.match(notifications, /border-b border-\[#E5E7EB\] bg-white/);
-  assert.match(notifications, /notification-back-button/);
-  assert.match(notifications, /<CravesLogo size="lg" priority \/>/);
+  assert.match(notifications, /border-b border-border bg-white\/95/);
   assert.doesNotMatch(notifications, /min-h-screen bg-cream pb-12/);
   assert.doesNotMatch(notifications, /border-b border-border bg-cream\/95/);
 });

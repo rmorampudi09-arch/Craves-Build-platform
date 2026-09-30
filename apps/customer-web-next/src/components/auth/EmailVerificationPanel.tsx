@@ -8,14 +8,15 @@ import { captureSessionContext, getSession, getSessionEmailRevision, isSessionCo
 type Props = {
   initialEmail?: string;
   required?: boolean;
+  compact?: boolean;
   onStateChange?: (state: EmailVerificationState | null) => void;
   onVerified?: (state: EmailVerificationState) => void;
 };
 
-const inputClass = "mt-2 min-h-12 w-full rounded-lg border border-border bg-white px-3 text-base text-ink focus:border-primary disabled:opacity-50";
-const buttonClass = "min-h-11 rounded-lg border border-border bg-white px-4 text-sm font-semibold text-ink hover:bg-secondary disabled:opacity-50";
+const inputClass = "mt-2 min-h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10 disabled:opacity-50";
+const buttonClass = "min-h-10 rounded-xl border border-[#E5E7EB] bg-[#F1F3F5] px-4 text-xs font-black text-[#1A1A1A] hover:bg-white disabled:opacity-50";
 
-export function EmailVerificationPanel({ initialEmail = "", required = false, onStateChange, onVerified }: Props) {
+export function EmailVerificationPanel({ initialEmail = "", required = false, compact = false, onStateChange, onVerified }: Props) {
   const id = useId();
   const [state, setState] = useState<EmailVerificationState | null>(null);
   const [email, setEmail] = useState(initialEmail);
@@ -184,14 +185,152 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, on
   const pending = state?.pending;
   const disabled = busy || sessionExpired || !state;
 
+  if (compact) {
+    const sameVerifiedEmail =
+      verified &&
+      Boolean(state?.email) &&
+      email.trim().toLocaleLowerCase("en-IN") ===
+        state?.email?.trim().toLocaleLowerCase("en-IN");
+    const canSend =
+      !pending &&
+      Boolean(email.trim()) &&
+      verificationEmail.safeParse(email).success;
+
+    return (
+      <section
+        aria-label="Email"
+        aria-busy={busy}
+        className="rounded-2xl border border-[#E5E7EB] bg-[#FAFAFA] p-4"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <label
+            htmlFor={`${id}-email`}
+            className="text-sm font-semibold text-[#1A1A1A]"
+          >
+            Email <span className="font-medium text-[#6B6B6B]">(optional)</span>
+          </label>
+          {sameVerifiedEmail ? (
+            <span className="rounded-full bg-[#EDF7EE] px-2.5 py-1 text-[0.68rem] font-bold text-[#2E7D32]">
+              Verified
+            </span>
+          ) : null}
+        </div>
+
+        <div className="mt-2 flex gap-2">
+          <input
+            id={`${id}-email`}
+            aria-label="Email address"
+            type="email"
+            autoComplete="email"
+            maxLength={EMAIL_VERIFICATION_MAX_LENGTH}
+            value={email}
+            disabled={busy || sessionExpired}
+            className="min-h-12 min-w-0 flex-1 rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10 disabled:opacity-50"
+            placeholder="you@example.com"
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setError("");
+            }}
+          />
+          {!sameVerifiedEmail && canSend ? (
+            <button
+              type="button"
+              aria-label="Send email code"
+              disabled={disabled || !!retrySend}
+              className="min-h-12 shrink-0 rounded-xl bg-[#F62E18] px-4 text-xs font-black text-white disabled:opacity-50"
+              onClick={() =>
+                void send(createEmailSendAttempt("challenges", email))
+              }
+            >
+              Verify
+            </button>
+          ) : null}
+        </div>
+
+        {pending ? (
+          <div className="mt-3 rounded-xl border border-[#E5E7EB] bg-white p-3">
+            <label
+              htmlFor={`${id}-code`}
+              className="text-xs font-semibold text-[#1A1A1A]"
+            >
+              Enter the 6-digit code
+            </label>
+            <div className="mt-2 flex gap-2">
+              <input
+                id={`${id}-code`}
+                aria-label="Six-digit email code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                value={code}
+                disabled={disabled || timing.expiresIn === 0}
+                className="min-h-11 min-w-0 flex-1 rounded-xl border border-[#E5E7EB] bg-white px-3 text-center text-base font-bold tracking-[0.24em] text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10"
+                onChange={(event) =>
+                  setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                }
+              />
+              <button
+                type="button"
+                className="min-h-11 rounded-xl bg-[#F62E18] px-4 text-xs font-black text-white disabled:opacity-50"
+                disabled={
+                  disabled ||
+                  timing.expiresIn === 0 ||
+                  !/^\d{6}$/.test(code)
+                }
+                onClick={() => void verify()}
+              >
+                Verify email
+              </button>
+            </div>
+            <button
+              type="button"
+              className="mt-2 text-xs font-bold text-[#F62E18] disabled:text-[#9CA3AF]"
+              disabled={disabled || timing.resendIn > 0 || !!retrySend}
+              onClick={() =>
+                void send(createEmailSendAttempt("resend", pending.challengeId))
+              }
+            >
+              {timing.resendIn > 0
+                ? `Resend in ${timing.resendIn}s`
+                : "Resend email code"}
+            </button>
+          </div>
+        ) : null}
+
+        {error ? (
+          <p role="alert" className="mt-2 text-xs font-semibold text-[#C92716]">
+            {error}
+          </p>
+        ) : null}
+        {notice && sameVerifiedEmail ? (
+          <p role="status" className="mt-2 text-xs font-semibold text-[#2E7D32]">
+            {notice}
+          </p>
+        ) : null}
+
+        <button
+          type="button"
+          aria-label="Refresh verification status"
+          className="sr-only"
+          disabled={busy}
+          onClick={() => void refresh(true)}
+        >
+          Refresh verification status
+        </button>
+      </section>
+    );
+  }
+
   return (
-    <section aria-labelledby={`${id}-title`} aria-busy={busy} className="rounded-xl border border-border bg-white p-5 text-ink">
-      <h3 id={`${id}-title`} className="font-display text-lg font-semibold">Email verification{required ? " (required)" : " (optional)"}</h3>
-      <p className="mt-2 text-sm text-muted-foreground">
+    <section aria-labelledby={`${id}-title`} aria-busy={busy} className="rounded-2xl border border-[#E5E7EB] bg-white p-4 text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.04)] sm:p-5">
+      <h3 id={`${id}-title`} className="font-display text-base font-black sm:text-lg">Email verification{required ? " (required)" : " (optional)"}</h3>
+      <p className="mt-2 text-sm text-[#6B6B6B]">
         {required ? "Verify an email before completing your chef application. Chef approval is a separate step." : "Verify an email for account updates. You can continue as a customer and verify it later."}
       </p>
       {state && <p className="mt-3 text-sm break-words">{verified ? `Verified email: ${state.email}` : state.email ? `Email not verified: ${state.email}` : "No verified email yet."}</p>}
-      {verified && pending && <p className="mt-2 text-sm text-muted-foreground">Your current verified email stays active until you confirm the replacement.</p>}
+      {verified && pending && <p className="mt-2 text-sm text-[#6B6B6B]">Your current verified email stays active until you confirm the replacement.</p>}
       <div className="mt-4">
         <label htmlFor={`${id}-email`} className="text-sm font-semibold">{verified ? "Change email" : "Email address"}</label>
         <input id={`${id}-email`} type="email" autoComplete="email" maxLength={EMAIL_VERIFICATION_MAX_LENGTH} value={email} disabled={busy || sessionExpired} className={inputClass} onChange={(event) => { setEmail(event.target.value); setError(""); }} />
@@ -199,9 +338,9 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, on
           {verified && email.trim() === state?.email ? "Keep verified email" : pending ? "Send code to this address" : "Send email code"}
         </button>
       </div>
-      {pending && <div className="mt-4 space-y-3 rounded-lg border border-border bg-white p-4">
+      {pending && <div className="mt-4 space-y-3 rounded-lg border border-[#E5E7EB] bg-white p-4">
         <p className="text-sm break-words">Verification address: <strong>{pending.maskedEmail}</strong></p>
-        <p className="text-sm text-muted-foreground">{pending.deliveryStatus === "ACCEPTED" ? "The email service accepted the message. Check your inbox and spam folder." : pending.deliveryStatus === "PENDING" ? "Your email is queued. Refresh status if it has not arrived." : pending.deliveryStatus === "UNKNOWN" ? "Sending could not be confirmed. Check your inbox before requesting another code." : "The email service could not send the message. Try again when resend is available."}</p>
+        <p className="text-sm text-[#6B6B6B]">{pending.deliveryStatus === "ACCEPTED" ? "The email service accepted the message. Check your inbox and spam folder." : pending.deliveryStatus === "PENDING" ? "Your email is queued. Refresh status if it has not arrived." : pending.deliveryStatus === "UNKNOWN" ? "Sending could not be confirmed. Check your inbox before requesting another code." : "The email service could not send the message. Try again when resend is available."}</p>
         <p className="text-sm">{timing.expiresIn > 0 ? `Code expires in ${Math.floor(timing.expiresIn / 60)}m ${timing.expiresIn % 60}s.` : "This code has expired. Request a new code."}</p>
         <div>
           <label htmlFor={`${id}-code`} className="text-sm font-semibold">Six-digit email code</label>
@@ -214,7 +353,7 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, on
       </div>}
       {error && <p role="alert" className="mt-3 text-sm text-contrast-red">{error}</p>}
       {notice && <p role="status" className="mt-3 text-sm">{notice}</p>}
-      {busy && <p role="status" className="mt-3 text-sm text-muted-foreground">Checking email verification…</p>}
+      {busy && <p role="status" className="mt-3 text-sm text-[#6B6B6B]">Checking email verification…</p>}
       <div className="mt-3 flex flex-wrap gap-3">
         {retrySend && <button type="button" className={buttonClass} disabled={busy || sessionExpired} onClick={() => void send(retrySend)}>Retry send request</button>}
         <button type="button" className={buttonClass} disabled={busy} onClick={() => void refresh(true)}>Refresh verification status</button>

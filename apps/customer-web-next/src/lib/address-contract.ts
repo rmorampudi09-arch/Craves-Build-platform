@@ -3,6 +3,7 @@ export type AddressLabel = "HOME" | "WORK" | "OTHER";
 export type CustomerAddress = {
   id: string;
   addressLabel: AddressLabel;
+  addressName?: string | null;
   recipientName: string | null;
   contactPhoneNumber: string;
   addressLine1: string;
@@ -23,7 +24,9 @@ export type CustomerAddress = {
 
 export type DeliveryReadyAddress = CustomerAddress & {
   recipientName: string;
+  landmark: string;
   areaName: string;
+  districtName: string;
   postalCode: string;
   latitude: number;
   longitude: number;
@@ -32,6 +35,7 @@ export type DeliveryReadyAddress = CustomerAddress & {
 
 export type CustomerAddressInput = {
   addressLabel: AddressLabel;
+  addressName?: string | null;
   recipientName: string;
   contactPhoneNumber: string;
   addressLine1: string;
@@ -125,9 +129,11 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
   if (!raw) return null;
 
   const addressLabel = text(raw.addressLabel, 10);
+  const addressName = optionalText(raw.addressName, 80);
   const recipientName = text(raw.recipientName, 160);
   const contactPhoneNumber = text(raw.contactPhoneNumber, 16);
   const addressLine1 = text(raw.addressLine1, 250);
+  const landmark = text(raw.landmark, 160);
   const areaName = text(raw.areaName, 120);
   const districtName = text(raw.districtName, 120);
   const city = text(raw.city, 120);
@@ -139,10 +145,12 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
   if (
     !addressLabel
     || !LABELS.has(addressLabel)
+    || (addressLabel === "OTHER" && !addressName)
     || !recipientName
     || !contactPhoneNumber
     || !PHONE.test(contactPhoneNumber)
     || !addressLine1
+    || !landmark
     || !areaName
     || !districtName
     || !city
@@ -157,11 +165,12 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
 
   return {
     addressLabel: addressLabel as AddressLabel,
+    ...(addressName ? { addressName } : {}),
     recipientName,
     contactPhoneNumber,
     addressLine1,
     addressLine2: optionalText(raw.addressLine2, 250),
-    landmark: optionalText(raw.landmark, 160),
+    landmark,
     areaName,
     districtName,
     city,
@@ -184,6 +193,7 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
 
   const id = text(raw.id, 64);
   const addressLabel = text(raw.addressLabel, 10);
+  const addressName = optionalText(raw.addressName, 80);
   const recipientName = optionalText(raw.recipientName, 160);
   const contactPhoneNumber = text(raw.contactPhoneNumber, 16);
   const addressLine1 = text(raw.addressLine1, 250);
@@ -222,7 +232,9 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
 
   const deliveryReady = Boolean(
     recipientName
+    && landmark
     && areaName
+    && districtName
     && postalCode
     && latitude !== null
     && longitude !== null
@@ -231,6 +243,7 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
   return {
     id,
     addressLabel: addressLabel as AddressLabel,
+    ...(addressName ? { addressName } : {}),
     recipientName,
     contactPhoneNumber,
     addressLine1,
@@ -264,7 +277,9 @@ export function isDeliveryReadyAddress(
 ): address is DeliveryReadyAddress {
   return address.active
     && Boolean(address.recipientName)
+    && Boolean(address.landmark)
     && Boolean(address.areaName)
+    && Boolean(address.districtName)
     && Boolean(address.postalCode)
     && address.latitude !== null
     && address.longitude !== null;

@@ -1,11 +1,15 @@
 "use client";
 
 import type { CustomerCart, ServerCartItem } from "@/lib/cart-contract";
-import { getDish } from "./dishes";
+import { requestCartKitchenReplacement } from "@/lib/cart-kitchen-replacement";
+import type { CustomerOrder } from "@/lib/order-contract";
+import { sessionFetch } from "@/services/auth/sessionFetch";
+import { getDish, loadDish } from "./dishes";
 
 export type CartItem = {
   id: string;
   menuItemId: string;
+  kitchenId: string;
   name: string;
   chef: string;
   price: number;
@@ -14,6 +18,25 @@ export type CartItem = {
   qty: number;
   currency: string;
   lineTotal: number;
+};
+
+type CheckoutCartItem = {
+  menuItemId: string;
+  quantity: number;
+};
+
+type AddCartItem = {
+  id: string;
+  name: string;
+  chef: string;
+  price: number;
+  img: string;
+  kitchenId?: string;
+};
+
+type KitchenReference = {
+  id: string | null;
+  name: string;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -27,6 +50,7 @@ function mapItem(item: ServerCartItem): CartItem {
   return {
     id: item.id,
     menuItemId: item.menuItemId,
+    kitchenId: item.kitchenId,
     name: item.itemName,
     chef: item.kitchenName,
     price: item.unitPrice,
@@ -54,8 +78,35 @@ function reset() {
   notify();
 }
 
+function checkoutCartItems(orders: CustomerOrder[]): CheckoutCartItem[] {
+  const quantities = new Map<string, number>();
+  for (const order of orders) {
+    for (const item of order.items) {
+      const quantity = (quantities.get(item.menuItemId) ?? 0) + item.quantity;
+      if (!UUID.test(item.menuItemId) || quantity < 1 || quantity > 50) {
+        throw new Error("Checkout items could not be restored to the active cart.");
+      }
+      quantities.set(item.menuItemId, quantity);
+    }
+  }
+  return Array.from(quantities, ([menuItemId, quantity]) => ({
+    menuItemId,
+    quantity,
+  }));
+}
+
+function cartMatchesCheckout(items: CheckoutCartItem[]): boolean {
+  if (visualItems.length !== items.length) return false;
+  const current = new Map(
+    visualItems.map((item) => [item.menuItemId, item.qty] as const),
+  );
+  return items.every(
+    (item) => current.get(item.menuItemId) === item.quantity,
+  );
+}
+
 async function cartRequest(path: string, init?: RequestInit): Promise<CustomerCart> {
-  const response = await fetch(path, {
+  const response = await sessionFetch(path, {
     ...init,
     credentials: "same-origin",
     headers: {
@@ -76,6 +127,45 @@ async function cartRequest(path: string, init?: RequestInit): Promise<CustomerCa
   }
   update(body);
   return body;
+}
+
+function normalizeKitchenName(value: string): string {
+  return value.trim().toLocaleLowerCase("en-IN");
+}
+
+async function resolveKitchen(item: AddCartItem): Promise<KitchenReference> {
+  if (item.kitchenId && UUID.test(item.kitchenId)) {
+    return { id: item.kitchenId, name: item.chef };
+  }
+
+  const cached = getDish(item.id);
+  if (cached?.kitchenId && UUID.test(cached.kitchenId)) {
+    return { id: cached.kitchenId, name: cached.chef };
+  }
+
+  try {
+    const resolved = await loadDish(item.id);
+    if (resolved.kitchenId && UUID.test(resolved.kitchenId)) {
+      return { id: resolved.kitchenId, name: resolved.chef };
+    }
+  } catch {
+    // The add request remains the source of truth if catalog lookup is unavailable.
+  }
+
+  return { id: null, name: item.chef };
+}
+
+function differentKitchen(target: KitchenReference): boolean {
+  if (!cart?.items.length) return false;
+
+  if (target.id) {
+    return cart.items.some((item) => item.kitchenId !== target.id);
+  }
+
+  const targetName = normalizeKitchenName(target.name);
+  return cart.items.some(
+    (item) => normalizeKitchenName(item.kitchenName) !== targetName,
+  );
 }
 
 export async function loadCart(): Promise<CartItem[]> {
@@ -108,7 +198,7 @@ export function cartCurrency(): string {
 }
 
 export async function addToCart(
-  item: { id: string; name: string; chef: string; price: number; img: string },
+  item: AddCartItem,
   quantity = 1,
 ): Promise<void> {
   if (!UUID.test(item.id)) {
@@ -117,6 +207,24 @@ export async function addToCart(
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 50) {
     throw new Error("Choose a quantity between 1 and 50.");
   }
+
+  if (cart === null) {
+    await cartRequest("/api/cart", { cache: "no-store" });
+  }
+
+  const targetKitchen = await resolveKitchen(item);
+  if (differentKitchen(targetKitchen)) {
+    const currentKitchen = cart?.items[0]?.kitchenName ?? "your current kitchen";
+    const replaceCart = await requestCartKitchenReplacement(
+      currentKitchen,
+      targetKitchen.name,
+    );
+    if (!replaceCart) {
+      throw new Error("Your current cart is unchanged.");
+    }
+    await cartRequest("/api/cart", { method: "DELETE" });
+  }
+
   await cartRequest("/api/cart/items", {
     method: "POST",
     body: JSON.stringify({ menuItemId: item.id, quantity }),
@@ -144,6 +252,33 @@ export async function removeFromCart(id: string): Promise<void> {
 
 export async function clearCart(): Promise<void> {
   await cartRequest("/api/cart", { method: "DELETE" });
+}
+
+export async function ensureCheckoutCart(
+  orders: CustomerOrder[],
+): Promise<boolean> {
+  const expected = checkoutCartItems(orders);
+  await cartRequest("/api/cart", { cache: "no-store" });
+
+  if (cartMatchesCheckout(expected)) return true;
+
+  // Checkout creation may consume or mutate the server cart. Rebuild the cart
+  // from the checkout snapshot instead of blocking navigation when any stale
+  // cart rows remain.
+  await cartRequest("/api/cart", { method: "DELETE" });
+
+  for (const item of expected) {
+    await cartRequest("/api/cart/items", {
+      method: "POST",
+      body: JSON.stringify({
+        menuItemId: item.menuItemId,
+        quantity: item.quantity,
+      }),
+    });
+  }
+
+  await cartRequest("/api/cart", { cache: "no-store" });
+  return cartMatchesCheckout(expected);
 }
 
 export async function validateCart(): Promise<CustomerCart> {

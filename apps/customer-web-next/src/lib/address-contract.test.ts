@@ -35,6 +35,7 @@ const metadata = {
 test("validates customer-owned address input", () => {
   assert.deepEqual(parseAddressInput(input), input);
   assert.equal(parseAddressInput({ ...input, districtName: "" }), null);
+  assert.equal(parseAddressInput({ ...input, landmark: null }), null);
   assert.equal(parseAddressInput({ ...input, latitude: 100 }), null);
   assert.equal(parseAddressInput({ ...input, contactPhoneNumber: "123" }), null);
   assert.equal(parseAddressInput({ ...input, latitude: "" }), null);
@@ -73,7 +74,7 @@ test("keeps pre-location-migration addresses visible but not checkout eligible",
   assert.equal(isDeliveryReadyAddress(parsed), false);
 });
 
-test("accepts legacy saved addresses without district until edited", () => {
+test("keeps legacy saved addresses without district visible but update-required", () => {
   const parsed = parseCustomerAddress({
     ...metadata,
     ...input,
@@ -81,7 +82,18 @@ test("accepts legacy saved addresses without district until edited", () => {
   });
   assert.ok(parsed);
   assert.equal(parsed.districtName, null);
-  assert.equal(isDeliveryReadyAddress(parsed), true);
+  assert.equal(isDeliveryReadyAddress(parsed), false);
+});
+
+test("requires a custom name for Other address input", () => {
+  assert.equal(parseAddressInput({ ...input, addressLabel: "OTHER" }), null);
+  const parsed = parseAddressInput({
+    ...input,
+    addressLabel: "OTHER",
+    addressName: "Mom's home",
+  });
+  assert.ok(parsed);
+  assert.equal(parsed.addressName, "Mom's home");
 });
 
 test("rejects a legacy address with only one coordinate", () => {

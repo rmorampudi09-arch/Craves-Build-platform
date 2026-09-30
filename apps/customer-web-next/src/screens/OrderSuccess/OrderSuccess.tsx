@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { CheckCircle2, ClipboardList, MapPin } from "lucide-react";
-import { PersistentCustomerServiceNav } from "@/components/navigation/PersistentCustomerServiceNav";
+import { CravesLogo } from "@/components/brand/CravesLogo";
+import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 import type { CustomerOrder } from "@/lib/order-contract";
 import { formatOrderStatus } from "@/lib/order-contract";
 import { loadSession } from "@/services/auth/cravesAuth";
@@ -72,11 +73,14 @@ export default function ConfirmationPage() {
 
   return (
     <div className="min-h-screen bg-cream">
-      <header className="border-b border-border bg-white">
-        <div className="mx-auto max-w-5xl px-4 py-3 md:px-6">
-          <PersistentCustomerServiceNav />
+      <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
+        <div className="mx-auto flex min-h-[64px] max-w-5xl items-center px-4 py-2.5 md:px-6">
+          <Link to="/home" className="flex items-center gap-3 rounded-xl" aria-label="Craves home">
+            <CravesLogo size="sm" />
+            <span className="text-sm font-black text-[#1A1A1A]">Order update</span>
+          </Link>
         </div>
-      </header>
+      </AutoHideCustomerHeader>
       <main className="flex min-h-[calc(100vh-5rem)] items-center justify-center px-4 py-12">
         <div className="w-full max-w-md rounded-3xl border border-border bg-card p-8 text-center shadow-lg">
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">

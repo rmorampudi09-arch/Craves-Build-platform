@@ -18,6 +18,11 @@ const item = {
   status: "ACTIVE",
   images: [
     {
+      publicUrl: "https://cdn.example.test/item-secondary.jpg",
+      primary: false,
+      sortOrder: 1,
+    },
+    {
       publicUrl: "https://cdn.example.test/item.jpg",
       primary: true,
       sortOrder: 0,
@@ -30,6 +35,7 @@ const kitchen = {
   identityId: "31111111-2222-4333-8444-555555555555",
   kitchenName: "Backend Kitchen",
   displayName: "Public Kitchen",
+  description: "Family recipes prepared from our home kitchen.",
   phoneNumber: "+919999999999",
   email: "private@example.test",
   addressLine1: "Private pickup address",
@@ -41,7 +47,15 @@ const kitchen = {
 test("returns only public menu and kitchen fields", () => {
   const parsed = parsePublicMenuItemDetail(item, kitchen);
   assert.equal(parsed?.kitchenDisplayName, "Public Kitchen");
+  assert.equal(
+    parsed?.kitchenDescription,
+    "Family recipes prepared from our home kitchen.",
+  );
   assert.equal(parsed?.primaryImageUrl, "https://cdn.example.test/item.jpg");
+  assert.deepEqual(parsed?.imageUrls, [
+    "https://cdn.example.test/item.jpg",
+    "https://cdn.example.test/item-secondary.jpg",
+  ]);
   assert.equal("phoneNumber" in (parsed ?? {}), false);
   assert.equal("email" in (parsed ?? {}), false);
   assert.equal("addressLine1" in (parsed ?? {}), false);
@@ -66,4 +80,5 @@ test("rejects non-https catalog images without failing the item", () => {
     kitchen,
   );
   assert.equal(parsed?.primaryImageUrl, null);
+  assert.deepEqual(parsed?.imageUrls, []);
 });

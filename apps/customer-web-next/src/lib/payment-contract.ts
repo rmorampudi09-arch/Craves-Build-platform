@@ -9,12 +9,13 @@ export type CustomerPaymentSession = {
   checkoutKeyId: string | null;
   paymentSessionId: string | null;
   amount: number;
+  amountPaise: number | null;
   currency: string;
   status: PaymentStatus;
   createdAt: string;
 };
 
-export type CustomerPaymentStatus = Omit<CustomerPaymentSession, "paymentSessionId" | "checkoutKeyId"> & {
+export type CustomerPaymentStatus = Omit<CustomerPaymentSession, "paymentSessionId" | "checkoutKeyId" | "amountPaise"> & {
   updatedAt: string;
 };
 
@@ -36,6 +37,10 @@ function money(value: unknown): number | null {
   const result = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   return Number.isFinite(result) && result >= 0 && result <= 10_000_000 ? result : null;
 }
+function paise(value: unknown): number | null {
+  const result = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isSafeInteger(result) && result >= 0 && result <= 1_000_000_000_000 ? result : null;
+}
 function instant(value: unknown): string | null { return typeof value === "string" && !Number.isNaN(Date.parse(value)) ? value : null; }
 function status(value: unknown): PaymentStatus | null {
   const result = text(value, 30) as PaymentStatus | null;
@@ -50,6 +55,7 @@ export function parsePaymentSession(value: unknown): CustomerPaymentSession | nu
   const providerPaymentId = text(raw.providerPaymentId, 500);
   const checkoutKeyId = text(raw.checkoutKeyId, 500);
   const paymentSessionId = text(raw.paymentSessionId, 5_000); const amount = money(raw.amount);
+  const amountPaise = raw.amountPaise == null ? null : paise(raw.amountPaise);
   const currency = text(raw.currency, 3); const nextStatus = status(raw.status); const createdAt = instant(raw.createdAt);
   const validProvider = provider === "CASHFREE" || provider === "RAZORPAY";
   const checkoutReady = provider === "RAZORPAY"
@@ -58,7 +64,7 @@ export function parsePaymentSession(value: unknown): CustomerPaymentSession | nu
   return paymentOrderId && checkoutId && validProvider && checkoutReady && providerOrderId
       && amount !== null && currency && nextStatus && createdAt
     ? { paymentOrderId, checkoutId, provider, providerOrderId, providerPaymentId, checkoutKeyId,
-        paymentSessionId, amount, currency: currency.toUpperCase(), status: nextStatus, createdAt }
+        paymentSessionId, amount, amountPaise, currency: currency.toUpperCase(), status: nextStatus, createdAt }
     : null;
 }
 

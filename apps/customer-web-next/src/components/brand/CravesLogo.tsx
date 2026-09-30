@@ -1,4 +1,7 @@
+"use client";
+
 import Image from "next/image";
+import type { KeyboardEvent, MouseEvent } from "react";
 
 type LogoSize = "sm" | "md" | "lg";
 
@@ -18,9 +21,8 @@ const dimensions: Record<LogoSize, number> = {
 /**
  * Single canonical Craves logo for customer and chef web experiences.
  *
- * The versioned path prevents browsers and edge caches from retaining an older
- * logo after deployment. The PNG is deterministically extracted from the
- * approved cropped source during development and production builds.
+ * Every rendered logo is a home affordance. Existing wrappers may still link
+ * to /home; direct clicks on an unwrapped logo use the same client-side route.
  */
 export function CravesLogo({
   size = "md",
@@ -29,6 +31,25 @@ export function CravesLogo({
   priority = false,
 }: CravesLogoProps) {
   const dimension = dimensions[size];
+  const openHome = () => {
+    if (window.location.pathname === "/home") return;
+    window.history.pushState(window.history.state, "", "/home");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  const goHome = (event: MouseEvent<HTMLImageElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openHome();
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLImageElement>) => {
+    if (decorative) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    event.stopPropagation();
+    openHome();
+  };
 
   return (
     <Image
@@ -39,7 +60,11 @@ export function CravesLogo({
       aria-hidden={decorative || undefined}
       priority={priority}
       unoptimized
-      className={`shrink-0 object-contain ${className}`.trim()}
+      onClick={goHome}
+      onKeyDown={onKeyDown}
+      role={decorative ? undefined : "link"}
+      tabIndex={decorative ? -1 : 0}
+      className={`shrink-0 cursor-pointer object-contain ${className}`.trim()}
     />
   );
 }

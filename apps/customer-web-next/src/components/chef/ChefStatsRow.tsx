@@ -21,17 +21,17 @@ export function ChefStatsRow({ chef }: { chef: Chef }) {
   ];
 
   return (
-    <dl className="mt-4 grid grid-cols-3 gap-2.5">
+    <dl className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
       {stats.map((stat) => (
         <div
           key={stat.label}
-          className="rounded-xl border border-border bg-white px-3 py-3 text-center shadow-[var(--shadow-card)]"
+          className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4 text-center"
         >
-          <dt className="text-[0.68rem] leading-4 text-muted-foreground">
-            <stat.icon className="mx-auto mb-1 h-5 w-5 text-primary" aria-hidden="true" />
+          <dt className="text-[0.68rem] font-semibold leading-4 text-[#6B6B6B]">
+            <stat.icon className="mx-auto mb-1.5 h-5 w-5 text-[#F62E18]" aria-hidden="true" />
             {stat.label}
           </dt>
-          <dd className="order-first font-display text-lg font-bold text-ink">
+          <dd className="order-first font-display text-lg font-black text-[#1A1A1A]">
             {stat.value}
           </dd>
         </div>

@@ -1,43 +1,95 @@
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, MapPin, Utensils } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 
 import { BrowseHeader } from "@/components/home/BrowseHeader";
-import { WelcomeBanner } from "@/components/home/WelcomeBanner";
-import { CategoryFilterChips } from "@/components/home/CategoryFilterChips";
+import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
+import { CartAddressAvailabilityDialog } from "@/components/home/CartAddressAvailabilityDialog";
+import { CustomerSignOutDialog } from "@/components/home/CustomerSignOutDialog";
 import { DishesGrid } from "@/components/home/DishesGrid";
+import { CustomerFloatingCart } from "@/components/cart/CustomerFloatingCart";
+import { HomeBottomSections } from "@/components/home/HomeBottomSections";
+import {
+  HomeCategoryRail,
+  type CravingCategory,
+} from "@/components/home/HomeCategoryRail";
+import { HomeSearchOverlay } from "@/components/home/HomeSearchOverlay";
 import { KitchensGrid } from "@/components/home/KitchensGrid";
-import { FloatingCartBar } from "@/components/home/FloatingCartBar";
+import { WelcomeBanner } from "@/components/home/WelcomeBanner";
+import { ALL_DISHES_CATEGORY } from "@/constants/dishCategories";
 import {
-  ALL_DISHES_CATEGORY,
-  type DishCategory,
-} from "@/constants/dishCategories";
+  DEFAULT_DISCOVERY_RADIUS_METERS,
+  formatDiscoveryRadius,
+} from "@/lib/catalog-discovery-policy";
+import { type NearbyKitchen } from "@/lib/discovery-contract";
 import {
+  clearHomeReturnState,
+  readHomeReturnState,
+  saveHomeReturnState,
+  type HomeDishSort,
+  type HomeFoodPreference,
+} from "@/lib/home-return-state";
+import { rememberReturnRoute } from "@/lib/return-navigation";
+import {
+  cartCount,
+  clearCart,
+  getCart,
+  loadCart,
+  removeFromCart,
+  subscribeCart,
+  type CartItem,
+} from "@/services/api/cravesCart";
+import {
+  allDishes,
+  discoverDishes,
+  getDiscoveryRadiusMeters,
+  hasMoreDiscoveredDishes,
   loadKitchenMenu,
+  loadMoreDiscoveredDishes,
   type Dish,
 } from "@/services/api/dishes";
-import { discoverKitchens } from "@/services/api/kitchens";
-import { formatDiscoveryRadius } from "@/lib/catalog-discovery-policy";
 import {
-  type NearbyKitchen,
-} from "@/lib/discovery-contract";
-import {
-  parseLocationRecommendation,
-  type CustomerAddress,
-} from "@/lib/address-contract";
+  allKitchens,
+  discoverKitchens,
+  getKitchenDiscoveryRadiusMeters,
+} from "@/services/api/kitchens";
 import {
   clearSession,
+  getAddress,
+  getSession,
   loadSelectedAddress,
   loadSession,
-  saveAddress,
+  recoverSessionSnapshotForNavigation,
   type CravesAddress,
   type CravesUser,
 } from "@/services/auth/cravesAuth";
-import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
-import { cartCount, loadCart, subscribeCart } from "@/services/api/cravesCart";
+import styles from "./HomeReference.module.css";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
-const SAVED_ADDRESS_MATCH_RADIUS_METERS = 100;
+
+const HOME_CATEGORY_KEYWORDS: Record<CravingCategory, readonly string[]> = {
+  Biryani: ["biryani"],
+  Tiffins: ["tiffin", "dosa", "idli", "pongal", "upma", "breakfast"],
+  Curry: ["curry", "kura", "gravy"],
+  Pickles: ["pickle", "pachadi", "chutney"],
+  Meals: ["meal", "thali", "lunch", "dinner"],
+  Snacks: ["snack", "pakoda", "pakora", "samosa", "chaat", "vada"],
+  Sweets: ["sweet", "dessert", "halwa", "kheer", "laddu", "ladoo"],
+  Desserts: ["dessert", "pudding", "custard", "mousse"],
+  Cake: ["cake", "pastry", "cupcake"],
+  "Fast Food": ["fast food", "burger", "pizza", "sandwich", "noodles", "fries"],
+  "Ice Cream": ["ice cream", "kulfi", "gelato"],
+};
+
+const CRAVING_CATEGORIES = new Set<CravingCategory>(
+  Object.keys(HOME_CATEGORY_KEYWORDS) as CravingCategory[],
+);
 
 export const routeMeta = {
   head: () => ({
@@ -45,426 +97,757 @@ export const routeMeta = {
       { title: "Discover Homemade Food – Craves" },
       {
         name: "description",
-        content: "Discover nearby Craves home kitchens and open a kitchen to browse its live menu.",
+        content: "Discover nearby Craves home kitchens and live homemade dishes.",
       },
       { name: "robots", content: "noindex" },
     ],
   }),
 };
 
-function savedAddressToBrowsingLocation(address: CustomerAddress): CravesAddress | null {
-  if (address.latitude == null || address.longitude == null || !address.areaName) return null;
-  return {
-    id: address.id,
-    label: address.addressLabel,
-    hno: address.addressLine1,
-    street: address.addressLine2 ?? address.landmark ?? undefined,
-    city: address.city,
-    mandal: address.areaName,
-    district: address.districtName ?? address.city,
-    pincode: address.postalCode ?? undefined,
-    lat: address.latitude,
-    lng: address.longitude,
-  };
+function isCravingCategory(value: string | null): value is CravingCategory {
+  return value !== null && CRAVING_CATEGORIES.has(value as CravingCategory);
 }
 
-function readCurrentPosition(): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      reject(new Error("Location access is unavailable."));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true,
-      timeout: 12_000,
-      maximumAge: 30_000,
-    });
-  });
-}
+function forceInstantWindowScroll(top: number): void {
+  const root = document.documentElement;
+  const body = document.body;
+  const previousRootBehavior = root.style.scrollBehavior;
+  const previousBodyBehavior = body.style.scrollBehavior;
 
-async function resolveLiveBrowsingLocation(
-  fallback: CravesAddress | null,
-): Promise<CravesAddress | null> {
-  let position: GeolocationPosition;
-  try {
-    position = await readCurrentPosition();
-  } catch {
-    return fallback;
-  }
-
-  const latitude = Number(position.coords.latitude.toFixed(7));
-  const longitude = Number(position.coords.longitude.toFixed(7));
-  const query = new URLSearchParams({
-    latitude: String(latitude),
-    longitude: String(longitude),
-    matchRadiusMeters: String(SAVED_ADDRESS_MATCH_RADIUS_METERS),
-  });
-
-  try {
-    const recommendationResponse = await fetch(
-      `/api/customer/addresses/recommendation?${query}`,
-      { cache: "no-store", credentials: "same-origin" },
-    );
-    if (recommendationResponse.ok) {
-      const recommendation = parseLocationRecommendation(
-        await recommendationResponse.json().catch(() => null),
-      );
-      if (recommendation?.selectedSavedAddress) {
-        const matched = savedAddressToBrowsingLocation(recommendation.selectedSavedAddress);
-        if (matched) {
-          saveAddress(matched);
-          return matched;
-        }
-      }
-    }
-  } catch {
-    // A saved-address recommendation is an optimization. Once GPS succeeded,
-    // discovery must continue from the live point even if this lookup fails.
-  }
-
-  try {
-    const detected = await reverseGeocodeCurrentLocation(latitude, longitude);
-    const live: CravesAddress = {
-      label: "CURRENT LOCATION",
-      hno: detected.houseNumber || detected.formattedAddress,
-      street: detected.street ?? undefined,
-      city: detected.city || "",
-      mandal: detected.area || detected.city || "Current location",
-      district: detected.district || detected.city || "",
-      pincode: detected.postalCode ?? undefined,
-      lat: latitude,
-      lng: longitude,
-    };
-    saveAddress(live);
-    return live;
-  } catch {
-    const liveWithoutAddress: CravesAddress = {
-      label: "CURRENT LOCATION",
-      hno: "Current location",
-      city: "",
-      mandal: "Current location",
-      district: "",
-      pincode: undefined,
-      lat: latitude,
-      lng: longitude,
-    };
-    saveAddress(liveWithoutAddress);
-    return liveWithoutAddress;
-  }
+  root.style.scrollBehavior = "auto";
+  body.style.scrollBehavior = "auto";
+  window.scrollTo({ top, left: 0, behavior: "auto" });
+  root.style.scrollBehavior = previousRootBehavior;
+  body.style.scrollBehavior = previousBodyBehavior;
 }
 
 function BrowseFoodsPage() {
-  const router = useRouter();
-  const [user, setUser] = useState<CravesUser | null>(null);
-  const [address, setAddress] = useState<CravesAddress | null>(null);
-  const [category, setCategory] = useState<DishCategory>(ALL_DISHES_CATEGORY);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [cartItemCount, setCartItemCount] = useState(0);
-  const [kitchens, setKitchens] = useState<NearbyKitchen[]>([]);
-  const [selectedKitchen, setSelectedKitchen] = useState<NearbyKitchen | null>(null);
-  const [dishes, setDishes] = useState<Dish[]>([]);
-  const [discoveryState, setDiscoveryState] = useState<DiscoveryState>("loading");
-  const [catalogMessage, setCatalogMessage] = useState("Detecting your current delivery location…");
-  const [radiusLabel, setRadiusLabel] = useState<string | null>(null);
-  const [logoutBusy, setLogoutBusy] = useState(false);
-  const [logoutError, setLogoutError] = useState("");
+  const navigate = useNavigate();
+  const [initialCache] = useState(() => ({
+    user: getSession(),
+    address: getAddress(),
+    dishes: [] as Dish[],
+    kitchens: [] as NearbyKitchen[],
+  }));
+  const hasInitialCatalog = false;
 
-  const refreshDiscovery = useCallback(async (activeAddress: CravesAddress | null) => {
-    setSelectedKitchen(null);
-    setDishes([]);
-    setCategory(ALL_DISHES_CATEGORY);
-    setSearchTerm("");
+  const [user, setUser] = useState<CravesUser | null>(initialCache.user);
+  const [address, setAddress] = useState<CravesAddress | null>(initialCache.address);
+  const [homeCategory, setHomeCategory] = useState<CravingCategory | null>(null);
+  const [dishSort, setDishSort] = useState<HomeDishSort>("recommended");
+  const [foodPreference, setFoodPreference] = useState<HomeFoodPreference>("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [cartItemCount, setCartItemCount] = useState(() => cartCount());
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => getCart());
+  const [unavailableCartItems, setUnavailableCartItems] = useState<CartItem[]>([]);
+  const [dismissedCartAvailabilityKey, setDismissedCartAvailabilityKey] = useState<string | null>(null);
+  const [cartRepairBusy, setCartRepairBusy] = useState(false);
+  const [cartRepairError, setCartRepairError] = useState<string | null>(null);
+  const [kitchens, setKitchens] = useState<NearbyKitchen[]>(initialCache.kitchens);
+  const [defaultAddressResolved, setDefaultAddressResolved] = useState(false);
+  const [kitchenDiscoveryVerified, setKitchenDiscoveryVerified] = useState(hasInitialCatalog);
+  const [nearbyDishes, setNearbyDishes] = useState<Dish[]>(initialCache.dishes);
+  const [dishLoadMoreBusy, setDishLoadMoreBusy] = useState(false);
+  const [discoveryState, setDiscoveryState] = useState<DiscoveryState>(
+    hasInitialCatalog ? "ready" : "loading",
+  );
+  const [catalogMessage, setCatalogMessage] = useState(
+    hasInitialCatalog
+      ? "Fresh homemade food available near your default delivery address."
+      : "Loading your default delivery address…",
+  );
+  const [radiusLabel, setRadiusLabel] = useState<string | null>(() => {
+    if (initialCache.kitchens.length > 0) {
+      return formatDiscoveryRadius(getKitchenDiscoveryRadiusMeters());
+    }
+    if (initialCache.dishes.length > 0) {
+      return formatDiscoveryRadius(getDiscoveryRadiusMeters());
+    }
+    return null;
+  });
+  const [signOutOpen, setSignOutOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [sessionUnavailable, setSessionUnavailable] = useState(false);
+  const [sessionRetryNonce, setSessionRetryNonce] = useState(0);
+  const pendingHomeScrollYRef = useRef<number | null>(null);
+
+  const refreshDiscovery = useCallback(async (
+    activeAddress: CravesAddress | null,
+    resetFilters = true,
+    preserveExistingCatalog = false,
+  ) => {
+    setDishLoadMoreBusy(false);
+    if (resetFilters) {
+      setHomeCategory(null);
+      setDishSort("recommended");
+      setFoodPreference("all");
+      setSearchTerm("");
+      setSearchOpen(false);
+    }
 
     if (
       typeof activeAddress?.lat !== "number" ||
       typeof activeAddress.lng !== "number"
     ) {
       setKitchens([]);
+      setKitchenDiscoveryVerified(false);
+      setNearbyDishes([]);
       setRadiusLabel(null);
       setDiscoveryState("address-required");
       setCatalogMessage(
-        "Choose or save a delivery location so Craves can show nearby home kitchens.",
+        "Choose a default delivery address so Craves can show nearby home kitchens.",
       );
       return;
     }
 
-    setDiscoveryState("loading");
-    setCatalogMessage("Loading nearby active home kitchens…");
-    try {
-      const result = await discoverKitchens(activeAddress.lat, activeAddress.lng, 5_000);
-      setKitchens(result.kitchens);
-      setRadiusLabel(formatDiscoveryRadius(result.radiusMeters));
-      setDiscoveryState("ready");
-      setCatalogMessage(
-        result.kitchens.length === 0
-          ? `No active home kitchens were returned within ${formatDiscoveryRadius(result.radiusMeters)} of this location.`
-          : `Choose one of the nearby home kitchens within ${formatDiscoveryRadius(result.radiusMeters)} to view its menu.`,
-      );
-    } catch (error) {
+    const preserveExisting =
+      preserveExistingCatalog && (allDishes().length > 0 || allKitchens().length > 0);
+    if (!preserveExisting) {
       setKitchens([]);
+      setKitchenDiscoveryVerified(false);
+      setNearbyDishes([]);
       setRadiusLabel(null);
+      setDiscoveryState("loading");
+      setCatalogMessage("Loading food near your default delivery address…");
+    }
+
+    const [kitchenResult, dishResult] = await Promise.allSettled([
+      discoverKitchens(
+        activeAddress.lat,
+        activeAddress.lng,
+        DEFAULT_DISCOVERY_RADIUS_METERS,
+      ),
+      discoverDishes(
+        activeAddress.lat,
+        activeAddress.lng,
+        DEFAULT_DISCOVERY_RADIUS_METERS,
+      ),
+    ]);
+
+    const loadedKitchens = kitchenResult.status === "fulfilled" ? kitchenResult.value.kitchens : [];
+    const loadedDishes = dishResult.status === "fulfilled" ? dishResult.value : [];
+
+    if (kitchenResult.status === "fulfilled") {
+      setKitchens(loadedKitchens);
+      setKitchenDiscoveryVerified(true);
+    } else {
+      setKitchenDiscoveryVerified(false);
+      if (!preserveExisting) setKitchens([]);
+    }
+    if (dishResult.status === "fulfilled") {
+      setNearbyDishes(loadedDishes);
+    } else if (!preserveExisting) {
+      setNearbyDishes([]);
+    }
+
+    if (kitchenResult.status === "fulfilled") {
+      setRadiusLabel(formatDiscoveryRadius(kitchenResult.value.radiusMeters));
+    } else if (dishResult.status === "fulfilled") {
+      setRadiusLabel(formatDiscoveryRadius(getDiscoveryRadiusMeters()));
+    } else if (!preserveExisting) {
+      setRadiusLabel(null);
+    }
+
+    if (kitchenResult.status === "rejected" && dishResult.status === "rejected") {
+      if (preserveExisting) {
+        setDiscoveryState("ready");
+        setCatalogMessage("Showing your recent default-address results while Craves refreshes in the background.");
+        return;
+      }
       setDiscoveryState("error");
+      const reason = kitchenResult.reason ?? dishResult.reason;
       setCatalogMessage(
-        error instanceof Error
-          ? error.message
-          : "Nearby kitchens are temporarily unavailable.",
+        reason instanceof Error ? reason.message : "Nearby food is temporarily unavailable.",
       );
+      return;
+    }
+
+    setDiscoveryState("ready");
+    if (loadedKitchens.length === 0 && loadedDishes.length === 0) {
+      setCatalogMessage("No active home kitchens or dishes are available within 10 km of your default address.");
+    } else if (kitchenResult.status === "rejected" || dishResult.status === "rejected") {
+      setCatalogMessage("Some nearby results are temporarily unavailable. Showing the live results we could load.");
+    } else {
+      setCatalogMessage("Fresh homemade food available near your default delivery address.");
     }
   }, []);
 
-  const openKitchen = useCallback(async (kitchen: NearbyKitchen) => {
-    const kitchenName = kitchen.displayName || kitchen.kitchenName;
-    setSelectedKitchen(kitchen);
-    setDishes([]);
-    setCategory(ALL_DISHES_CATEGORY);
-    setSearchTerm("");
-    setDiscoveryState("loading");
-    setCatalogMessage(`Loading ${kitchenName}'s live menu…`);
+  const loadMoreNearbyDishes = useCallback(async () => {
+    if (dishLoadMoreBusy || !hasMoreDiscoveredDishes()) return;
 
+    setDishLoadMoreBusy(true);
     try {
-      const menu = await loadKitchenMenu(kitchen.id);
-      const locatedMenu = menu.map((dish) => ({
-        ...dish,
-        distanceMeters: kitchen.distanceMeters,
-        areaName: dish.areaName ?? kitchen.areaName ?? undefined,
-        city: dish.city ?? kitchen.city,
-        state: dish.state ?? kitchen.state,
-      }));
-      setDishes(locatedMenu);
-      setDiscoveryState("ready");
-      setCatalogMessage(
-        locatedMenu.length === 0
-          ? `${kitchenName} does not have any active dishes right now.`
-          : `Showing ${kitchenName}'s live menu.`,
-      );
-    } catch (error) {
-      setDishes([]);
-      setDiscoveryState("error");
-      setCatalogMessage(
-        error instanceof Error
-          ? error.message
-          : "This kitchen's menu is temporarily unavailable.",
-      );
+      const next = await loadMoreDiscoveredDishes();
+      setNearbyDishes(next);
+    } catch {
+      // Keep the already-rendered catalog stable. The next scroll can retry.
+    } finally {
+      setDishLoadMoreBusy(false);
     }
+  }, [dishLoadMoreBusy]);
+
+  const restoreHomeView = useCallback(() => {
+    const restored = readHomeReturnState();
+    if (!restored) return;
+
+    window.history.scrollRestoration = "manual";
+    pendingHomeScrollYRef.current = Math.max(0, restored.scrollY);
+
+    setHomeCategory(
+      isCravingCategory(restored.homeCategory) ? restored.homeCategory : null,
+    );
+    setDishSort(restored.dishSort);
+    setFoodPreference(restored.foodPreference === "veg" ? "veg" : "all");
+    setSearchTerm("");
+    setSearchOpen(false);
+  }, []);
+
+  const rememberHomeView = useCallback(() => {
+    window.history.scrollRestoration = "manual";
+    saveHomeReturnState({
+      scrollY: window.scrollY,
+      searchTerm: "",
+      searchOpen: false,
+      homeCategory,
+      dishSort,
+      foodPreference,
+    });
+  }, [dishSort, foodPreference, homeCategory]);
+
+  const scrollToDishes = useCallback(() => {
+    const heading = document.getElementById("available-dishes-heading");
+    const section = heading?.closest("section");
+    if (!section) return;
+
+    section.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+      block: "start",
+    });
+  }, []);
+
+  const handleDetailNavigationCapture = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const anchor = target.closest("a[href]");
+    const href = anchor?.getAttribute("href");
+    if (
+      href?.startsWith("/dish/") ||
+      href?.startsWith("/kitchen/") ||
+      href?.startsWith("/chef/")
+    ) {
+      rememberHomeView();
+    }
+  }, [rememberHomeView]);
+
+  useEffect(() => {
+    restoreHomeView();
+  }, [restoreHomeView]);
+
+  useEffect(() => {
+    const targetScrollY = pendingHomeScrollYRef.current;
+    if (
+      targetScrollY === null ||
+      !defaultAddressResolved ||
+      discoveryState === "loading"
+    ) {
+      return;
+    }
+
+    let firstFrame = 0;
+    let secondFrame = 0;
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        forceInstantWindowScroll(targetScrollY);
+        pendingHomeScrollYRef.current = null;
+        clearHomeReturnState();
+        window.history.scrollRestoration = "auto";
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [
+    defaultAddressResolved,
+    discoveryState,
+    kitchens.length,
+    nearbyDishes.length,
+  ]);
+
+  useEffect(() => {
+    if (window.sessionStorage.getItem("craves-home-open-search") !== "1") return;
+    window.sessionStorage.removeItem("craves-home-open-search");
+    setSearchOpen(true);
   }, []);
 
   useEffect(() => {
     let active = true;
 
-    void (async () => {
-      const current = await loadSession();
+    const syncCartSummary = () => {
       if (!active) return;
+      setCartItemCount(cartCount());
+      setCartItems(getCart());
+    };
+
+    void (async () => {
+      setSessionUnavailable(false);
+      let current: CravesUser | null = null;
+
+      try {
+        current = await loadSession();
+      } catch {
+        // Keep the customer on the signed-in surface during a network/BFF
+        // interruption. One retry handles short mobile hand-offs cleanly.
+        await new Promise((resolve) => window.setTimeout(resolve, 450));
+        if (!active) return;
+        try {
+          current = await loadSession();
+        } catch {
+          current = getSession() ?? recoverSessionSnapshotForNavigation();
+          if (!current && active) {
+            setSessionUnavailable(true);
+            setDefaultAddressResolved(true);
+            return;
+          }
+        }
+      }
+      if (!active) return;
+
+      // A confirmed missing session gets one final check before we show the
+      // public landing page. Transient failures above never clear the screen.
       if (!current) {
-        router.replace("/");
+        await new Promise((resolve) => window.setTimeout(resolve, 450));
+        if (!active) return;
+        try {
+          current = await loadSession();
+        } catch {
+          current = getSession() ?? recoverSessionSnapshotForNavigation();
+          if (!current) {
+            setSessionUnavailable(true);
+            setDefaultAddressResolved(true);
+            return;
+          }
+        }
+        if (!active) return;
+      }
+
+      if (!current) {
+        current = getSession() ?? recoverSessionSnapshotForNavigation();
+      }
+
+      if (!current) {
+        navigate({ to: "/", replace: true });
         return;
       }
+
+      setSessionUnavailable(false);
       setUser(current);
 
       try {
-        const savedFallback = await loadSelectedAddress();
+        const defaultAddress = await loadSelectedAddress();
         if (!active) return;
-        setAddress(savedFallback);
+        setAddress(defaultAddress);
         setCatalogMessage(
-          savedFallback
-            ? "Checking whether you are still near your saved address…"
-            : "Detecting your current delivery location…",
+          defaultAddress
+            ? "Loading food near your default delivery address…"
+            : "Choose a default delivery address to see nearby food.",
         );
-        const activeLocation = await resolveLiveBrowsingLocation(savedFallback);
-        if (!active) return;
-        setAddress(activeLocation);
-        await refreshDiscovery(activeLocation);
+        await refreshDiscovery(defaultAddress, false, false);
+        if (active) setDefaultAddressResolved(true);
       } catch (error) {
         if (!active) return;
         setAddress(null);
         setKitchens([]);
-        setSelectedKitchen(null);
-        setDishes([]);
+        setKitchenDiscoveryVerified(false);
+        setNearbyDishes([]);
+        setRadiusLabel(null);
         setDiscoveryState("error");
+        setDefaultAddressResolved(true);
         setCatalogMessage(
           error instanceof Error
             ? error.message
-            : "Your delivery location could not be loaded.",
+            : "Your default delivery address could not be loaded.",
         );
       }
 
       try {
         await loadCart();
-        if (active) setCartItemCount(cartCount());
+        syncCartSummary();
       } catch {
-        if (active) setCartItemCount(0);
+        if (active) {
+          setCartItemCount(0);
+          setCartItems([]);
+        }
       }
     })();
 
-    const unsubscribeCart = subscribeCart(() => setCartItemCount(cartCount()));
+    const unsubscribeCart = subscribeCart(syncCartSummary);
     return () => {
       active = false;
       unsubscribeCart();
     };
-  }, [router, refreshDiscovery]);
-
-  const categories = useMemo<readonly DishCategory[]>(() => {
-    const live = Array.from(
-      new Set(dishes.map((dish) => dish.category.trim()).filter(Boolean)),
-    ).sort((left, right) => left.localeCompare(right));
-    return [ALL_DISHES_CATEGORY, ...live];
-  }, [dishes]);
+  }, [navigate, refreshDiscovery, sessionRetryNonce]);
 
   useEffect(() => {
-    if (!categories.includes(category)) setCategory(ALL_DISHES_CATEGORY);
-  }, [categories, category]);
+    let active = true;
 
-  const filteredKitchens = useMemo(() => {
-    const term = searchTerm.trim().toLocaleLowerCase("en-IN");
-    if (!term) return kitchens;
-    return kitchens.filter((kitchen) =>
-      [
-        kitchen.displayName,
-        kitchen.kitchenName,
-        kitchen.description,
-        kitchen.areaName,
-        kitchen.city,
-        kitchen.state,
-      ].some((value) => value?.toLocaleLowerCase("en-IN").includes(term)),
-    );
-  }, [searchTerm, kitchens]);
+    void (async () => {
+      setCartRepairError(null);
+      if (
+        !defaultAddressResolved ||
+        discoveryState !== "ready" ||
+        !kitchenDiscoveryVerified ||
+        cartItems.length === 0 ||
+        typeof address?.lat !== "number" ||
+        typeof address.lng !== "number"
+      ) {
+        setUnavailableCartItems([]);
+        return;
+      }
+
+      const nearbyKitchenIds = new Set(kitchens.map((kitchen) => kitchen.id));
+      const outOfRangeItems = cartItems.filter(
+        (item) => !nearbyKitchenIds.has(item.kitchenId),
+      );
+      if (outOfRangeItems.length > 0) {
+        setUnavailableCartItems(outOfRangeItems);
+        return;
+      }
+
+      const nearbyDishIds = new Set(nearbyDishes.map((dish) => dish.id));
+      const unresolvedItems = cartItems.filter(
+        (item) => !nearbyDishIds.has(item.menuItemId),
+      );
+      if (unresolvedItems.length === 0) {
+        setUnavailableCartItems([]);
+        return;
+      }
+
+      const kitchenIds = Array.from(new Set(unresolvedItems.map((item) => item.kitchenId)));
+      const menuResults = await Promise.all(
+        kitchenIds.map(async (kitchenId) => {
+          try {
+            const menu = await loadKitchenMenu(kitchenId);
+            return [kitchenId, new Set(menu.map((dish) => dish.id))] as const;
+          } catch {
+            return [kitchenId, null] as const;
+          }
+        }),
+      );
+      if (!active) return;
+
+      const menuIdsByKitchen = new Map(menuResults);
+      setUnavailableCartItems(
+        unresolvedItems.filter((item) => {
+          const menuIds = menuIdsByKitchen.get(item.kitchenId);
+          return menuIds instanceof Set && !menuIds.has(item.menuItemId);
+        }),
+      );
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    address?.lat,
+    address?.lng,
+    cartItems,
+    defaultAddressResolved,
+    discoveryState,
+    kitchenDiscoveryVerified,
+    kitchens,
+    nearbyDishes,
+  ]);
+
+  const categoryImages = useMemo<Partial<Record<CravingCategory, string>>>(() => {
+    const result: Partial<Record<CravingCategory, string>> = {};
+    for (const nextCategory of Object.keys(HOME_CATEGORY_KEYWORDS) as CravingCategory[]) {
+      const keywords = HOME_CATEGORY_KEYWORDS[nextCategory];
+      const matchingDish = nearbyDishes.find((dish) => {
+        if (dish.imageIsPlaceholder) return false;
+        const searchable = `${dish.name} ${dish.category} ${dish.desc}`.toLocaleLowerCase("en-IN");
+        return keywords.some((keyword) => searchable.includes(keyword));
+      });
+      if (matchingDish) result[nextCategory] = matchingDish.img;
+    }
+    return result;
+  }, [nearbyDishes]);
+
+  const kitchenDishImages = useMemo<Record<string, string[]>>(() => {
+    const grouped: Record<string, string[]> = {};
+    for (const dish of nearbyDishes) {
+      if (!dish.kitchenId || dish.imageIsPlaceholder || !dish.img) continue;
+      const current = grouped[dish.kitchenId] ?? [];
+      if (!current.includes(dish.img) && current.length < 5) {
+        grouped[dish.kitchenId] = [...current, dish.img];
+      }
+    }
+    return grouped;
+  }, [nearbyDishes]);
+
+  const filteredKitchens = kitchens;
 
   const filteredDishes = useMemo(() => {
-    const term = searchTerm.trim().toLocaleLowerCase("en-IN");
-    return dishes.filter((dish) => {
-      const categoryMatches =
-        category === ALL_DISHES_CATEGORY || dish.category === category;
-      const searchMatches =
-        !term ||
-        dish.name.toLocaleLowerCase("en-IN").includes(term) ||
-        dish.chef.toLocaleLowerCase("en-IN").includes(term) ||
-        dish.category.toLocaleLowerCase("en-IN").includes(term) ||
-        dish.desc.toLocaleLowerCase("en-IN").includes(term);
-      return categoryMatches && searchMatches;
-    });
-  }, [category, searchTerm, dishes]);
+    const homeKeywords = homeCategory ? HOME_CATEGORY_KEYWORDS[homeCategory] : null;
 
-  const handleLogout = async () => {
-    if (logoutBusy) return;
-    setLogoutBusy(true); setLogoutError("");
-    try { await clearSession(); router.push("/"); }
-    catch { setLogoutError("Sign-out could not be confirmed. You are still signed in. Please try again."); }
-    finally { setLogoutBusy(false); }
-  };
+    const matchingDishes = nearbyDishes.filter((dish) => {
+      const searchable = `${dish.name} ${dish.category} ${dish.desc}`.toLocaleLowerCase("en-IN");
+      const categoryMatches =
+        !homeKeywords || homeKeywords.some((keyword) => searchable.includes(keyword));
+      const foodType = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
+      const foodTypeMatches = foodPreference !== "veg" || foodType === "VEG";
+      return categoryMatches && foodTypeMatches;
+    });
+
+    if (dishSort === "rating") {
+      return [...matchingDishes].sort((left, right) => right.rating - left.rating);
+    }
+    if (dishSort === "price-low-high") {
+      return [...matchingDishes].sort((left, right) => left.price - right.price);
+    }
+    if (dishSort === "price-high-low") {
+      return [...matchingDishes].sort((left, right) => right.price - left.price);
+    }
+    return matchingDishes;
+  }, [dishSort, foodPreference, homeCategory, nearbyDishes]);
 
   const locationLabel = address
-    ? [address.mandal, address.city].filter(Boolean).join(", ")
-    : "Set delivery location";
+    ? Array.from(
+        new Set(
+          [address.hno, address.street, address.mandal, address.city]
+            .map((part) => part?.trim())
+            .filter((part): part is string => Boolean(part)),
+        ),
+      ).join(", ")
+    : "Choose delivery location";
+  const rawLocationType = address?.label?.trim();
+  const normalizedLocationType = rawLocationType?.toUpperCase();
+  const locationTypeLabel =
+    normalizedLocationType === "HOME"
+      ? "Home"
+      : normalizedLocationType === "WORK"
+        ? "Work"
+        : normalizedLocationType === "OTHER"
+          ? "Other"
+          : rawLocationType || "Location";
 
-  const visibleDishCount = selectedKitchen
-    ? dishes.length
-    : kitchens.reduce((total, kitchen) => total + kitchen.activeMenuItemCount, 0);
+  const searchDishes = useMemo(
+    () =>
+      foodPreference === "veg"
+        ? nearbyDishes.filter((dish) => {
+            const foodType = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
+            return foodType === "VEG";
+          })
+        : nearbyDishes,
+    [foodPreference, nearbyDishes],
+  );
 
-  if (!user) {
+  const cartAvailabilityKey = unavailableCartItems.length > 0
+    ? `${address?.id ?? `${address?.lat ?? ""}:${address?.lng ?? ""}`}|${unavailableCartItems
+        .map((item) => item.id)
+        .sort()
+        .join(",")}`
+    : null;
+
+  const cartAvailabilityOpen = Boolean(
+    cartAvailabilityKey && cartAvailabilityKey !== dismissedCartAvailabilityKey,
+  );
+
+  const resolveUnavailableCartItems = useCallback(async () => {
+    if (unavailableCartItems.length === 0 || cartRepairBusy) return;
+    setCartRepairBusy(true);
+    setCartRepairError(null);
+    try {
+      if (unavailableCartItems.length === cartItems.length) {
+        await clearCart();
+      } else {
+        for (const item of unavailableCartItems) {
+          await removeFromCart(item.id);
+        }
+      }
+      setUnavailableCartItems([]);
+      setDismissedCartAvailabilityKey(null);
+    } catch (error) {
+      setCartRepairError(
+        error instanceof Error
+          ? error.message
+          : "Your cart could not be updated. Please try again.",
+      );
+    } finally {
+      setCartRepairBusy(false);
+    }
+  }, [cartItems.length, cartRepairBusy, unavailableCartItems]);
+
+  const openAddressManager = useCallback(() => {
+    rememberReturnRoute("/addresses", "/home");
+    navigate({ to: "/addresses" });
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await clearSession();
+      setSignOutOpen(false);
+      navigate({ to: "/" });
+    } finally {
+      setSigningOut(false);
+    }
+  };
+
+  if (sessionUnavailable) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-sm font-medium text-muted-foreground" role="status">
-          Loading your Craves session…
-        </p>
+      <main className="flex min-h-screen items-center justify-center bg-white px-5 text-[#1A1A1A]">
+        <section className="w-full max-w-md rounded-[1.5rem] border border-[#E5E7EB] bg-white p-6 text-center shadow-[0_14px_42px_rgba(26,26,26,0.08)]">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FFF1EF] text-xl font-black text-[#F62E18]">
+            C
+          </div>
+          <h1 className="mt-4 text-xl font-black tracking-[-0.02em]">
+            Reconnecting to Craves
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">
+            Your sign-in has not been cleared. We just couldn’t reach the session service for a moment.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setSessionUnavailable(false);
+              setDefaultAddressResolved(false);
+              setSessionRetryNonce((current) => current + 1);
+            }}
+            className="mt-5 min-h-11 rounded-xl bg-[#F62E18] px-5 text-sm font-bold text-white shadow-[0_6px_18px_rgba(246,46,24,0.18)]"
+          >
+            Try again
+          </button>
+        </section>
       </main>
     );
   }
 
+  if (!user || !defaultAddressResolved) {
+    return <CustomerPageSkeleton label="Loading your Craves home" />;
+  }
+
   return (
-    <div className="min-h-screen bg-white pb-24 text-ink">
+    <div
+      className={`${styles.paperSurface} min-h-screen pb-24 text-[#1A1A1A]`}
+      onClickCapture={handleDetailNavigationCapture}
+    >
       <BrowseHeader
         user={user}
         locationLabel={locationLabel}
-        onOpenLocation={() => router.push("/addresses")}
+        locationTypeLabel={locationTypeLabel}
+        onOpenLocation={openAddressManager}
         cartCount={cartItemCount}
-        onOpenCart={() => router.push("/cart")}
-        onLogout={handleLogout}
+        onOpenCart={() => navigate({ to: "/cart" })}
+        onLogout={() => setSignOutOpen(true)}
         searchTerm={searchTerm}
         onSearchTermChange={setSearchTerm}
+        onSearchFocus={() => setSearchOpen(true)}
+        foodPreference={foodPreference}
+        onFoodPreferenceChange={setFoodPreference}
       />
+
       <main>
-        {logoutError && <div role="alert" className="mx-auto max-w-6xl px-4 py-3 text-sm text-red-800">
-          {logoutError} <button type="button" disabled={logoutBusy} onClick={() => void handleLogout()} className="font-semibold underline">Retry sign out</button>
-        </div>}
         <WelcomeBanner
           firstName={user.firstName || user.username.split(" ")[0] || "there"}
-          dishCount={visibleDishCount}
+          dishCount={nearbyDishes.length}
           radiusLabel={radiusLabel}
-          hasAddress={Boolean(address?.lat != null && address?.lng != null)}
+          defaultAddressLabel={locationLabel}
+          hasDefaultAddress={Boolean(address?.lat != null && address?.lng != null)}
+          onManageDefaultAddress={openAddressManager}
         />
 
-        {selectedKitchen ? (
-          <>
-            <section className="mx-auto max-w-7xl px-4 pt-6 md:px-6" aria-label="Selected kitchen">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedKitchen(null);
-                  setDishes([]);
-                  setCategory(ALL_DISHES_CATEGORY);
-                  setSearchTerm("");
-                  setDiscoveryState("ready");
-                  setCatalogMessage(
-                    radiusLabel
-                      ? `Choose one of the nearby home kitchens within ${radiusLabel} to view its menu.`
-                      : "Choose a nearby home kitchen to view its menu.",
-                  );
-                }}
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-primary px-4 text-sm font-semibold text-contrast-red hover:bg-secondary"
-              >
-                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                Nearby kitchens
-              </button>
+        <HomeCategoryRail
+          selected={homeCategory}
+          images={categoryImages}
+          onSelect={(nextCategory) => {
+            setHomeCategory(nextCategory);
+            setSearchTerm("");
+            window.requestAnimationFrame(scrollToDishes);
+          }}
+        />
 
-              <div className="mt-4 rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] md:flex md:items-center md:justify-between md:gap-6">
-                <div>
-                  <p className="craves-overline text-primary">Selected home kitchen</p>
-                  <h2 className="mt-1 font-display text-2xl font-bold tracking-[-0.035em] text-ink">
-                    {selectedKitchen.displayName || selectedKitchen.kitchenName}
-                  </h2>
-                  <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <MapPin className="h-4 w-4 text-primary" aria-hidden="true" />
-                    {[selectedKitchen.areaName, selectedKitchen.city]
-                      .filter(Boolean)
-                      .join(", ")}
-                  </p>
-                </div>
-                <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-2 text-sm font-semibold text-ink md:mt-0">
-                  <Utensils className="h-4 w-4 text-primary" aria-hidden="true" />
-                  {selectedKitchen.activeMenuItemCount} active {selectedKitchen.activeMenuItemCount === 1 ? "dish" : "dishes"}
-                </div>
-              </div>
-            </section>
+        <KitchensGrid
+          kitchens={filteredKitchens}
+          searchTerm=""
+          state={discoveryState}
+          message={catalogMessage}
+          onSelectKitchen={(kitchen) => {
+            rememberHomeView();
+            navigate({ to: "/kitchen/$id", params: { id: kitchen.id } });
+          }}
+          onRetry={() => void refreshDiscovery(address, false, false)}
+          onManageAddress={openAddressManager}
+          dishImagesByKitchen={kitchenDishImages}
+        />
 
-            <CategoryFilterChips
-              categories={categories}
-              selected={category}
-              onSelect={setCategory}
-            />
-            <DishesGrid
-              dishes={filteredDishes}
-              selectedCategory={category}
-              searchTerm={searchTerm}
-              state={discoveryState}
-              message={catalogMessage}
-              onRetry={() => void openKitchen(selectedKitchen)}
-              onManageAddress={() => router.push("/addresses")}
-            />
-          </>
-        ) : (
-          <KitchensGrid
-            kitchens={filteredKitchens}
-            searchTerm={searchTerm}
-            state={discoveryState}
-            message={catalogMessage}
-            onSelectKitchen={(kitchen) => void openKitchen(kitchen)}
-            onRetry={() => void refreshDiscovery(address)}
-            onManageAddress={() => router.push("/addresses")}
-          />
-        )}
+        <DishesGrid
+          dishes={filteredDishes}
+          selectedCategory={homeCategory ?? ALL_DISHES_CATEGORY}
+          searchTerm=""
+          state={discoveryState}
+          message={catalogMessage}
+          sort={dishSort}
+          foodPreference={foodPreference}
+          onSortChange={setDishSort}
+          onFoodPreferenceChange={setFoodPreference}
+          onRemoveFilters={() => {
+            setHomeCategory(null);
+            setDishSort("recommended");
+          }}
+          onRetry={() => void refreshDiscovery(address, false, false)}
+          onManageAddress={openAddressManager}
+          hasMoreRemote={hasMoreDiscoveredDishes()}
+          loadingMoreRemote={dishLoadMoreBusy}
+          onLoadMore={loadMoreNearbyDishes}
+        />
+
+        <HomeBottomSections />
       </main>
-      <FloatingCartBar
-        itemCount={cartItemCount}
-        onViewCart={() => router.push("/cart")}
+
+      <CustomerFloatingCart />
+
+      <CartAddressAvailabilityDialog
+        open={cartAvailabilityOpen}
+        addressLabel={locationLabel}
+        unavailableItems={unavailableCartItems}
+        totalCartItems={cartItems.length}
+        busy={cartRepairBusy}
+        error={cartRepairError}
+        onResolve={() => void resolveUnavailableCartItems()}
+        onChooseAddress={openAddressManager}
+        onClose={() => {
+          if (cartAvailabilityKey) {
+            setDismissedCartAvailabilityKey(cartAvailabilityKey);
+          }
+        }}
+      />
+
+      {searchOpen ? (
+        <HomeSearchOverlay
+          dishes={searchDishes}
+          kitchens={kitchens}
+          searchTerm={searchTerm}
+          vegOnly={foodPreference === "veg"}
+          onSearchTermChange={setSearchTerm}
+          onDisableVeg={() => setFoodPreference("all")}
+          onClose={() => {
+            setSearchTerm("");
+            setSearchOpen(false);
+          }}
+        />
+      ) : null}
+
+      <CustomerSignOutDialog
+        open={signOutOpen}
+        busy={signingOut}
+        onCancel={() => setSignOutOpen(false)}
+        onConfirm={() => void handleLogout()}
       />
     </div>
   );

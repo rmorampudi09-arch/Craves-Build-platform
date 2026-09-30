@@ -10,23 +10,76 @@ const navigation = readFileSync(
   new URL("../components/chef-workspace-navigation.tsx", import.meta.url),
   "utf8",
 );
+const dashboard = readFileSync(
+  new URL("../components/chef-mode-dashboard.tsx", import.meta.url),
+  "utf8",
+);
+const applicationPage = readFileSync(
+  new URL("../app/chef/application/page.tsx", import.meta.url),
+  "utf8",
+);
+const kitchenPage = readFileSync(
+  new URL("../app/chef/kitchen/page.tsx", import.meta.url),
+  "utf8",
+);
 const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 
+const workspaceRoutes = [
+  "/chef/application",
+  "/chef/kitchen",
+  "/chef/menu",
+  "/chef/meal-plans",
+  "/chef/capacity",
+  "/chef/orders",
+  "/chef/earnings",
+  "/chef/operations",
+] as const;
+
+const dailyDashboardRoutes = [
+  "/chef/application",
+  "/chef/kitchen",
+  "/chef/menu",
+  "/chef/orders",
+  "/chef/earnings",
+] as const;
+
+const deferredDashboardRoutes = [
+  "/chef/meal-plans",
+  "/chef/capacity",
+  "/chef/operations",
+] as const;
+
 test("every chef route inherits the responsive Craves workspace shell", () => {
-  assert.match(layout, /className="chef-panel-theme"/);
+  assert.match(layout, /className="chef-panel-theme[^"]*bg-white/);
   assert.match(layout, /ChefWorkspaceNavigation/);
-  assert.match(layout, /Customer mode/);
-  for (const route of [
-    "/chef/application",
-    "/chef/kitchen",
-    "/chef/menu",
-    "/chef/orders",
-    "/chef/earnings",
-    "/chef/operations",
-  ]) {
+  assert.match(layout, /href="\/home"/);
+  assert.match(layout, /Back to Craves/);
+  assert.match(layout, /max-w-7xl/);
+  for (const route of workspaceRoutes) {
     assert.match(navigation, new RegExp(route.replaceAll("/", "\\/")));
   }
   assert.match(navigation, /aria-current=\{active \? "page" : undefined\}/);
+});
+
+test("chef dashboard keeps daily actions visible and defers advanced areas", () => {
+  for (const route of dailyDashboardRoutes) {
+    assert.match(dashboard, new RegExp(route.replaceAll("/", "\\/")));
+  }
+  for (const route of deferredDashboardRoutes) {
+    assert.doesNotMatch(
+      dashboard,
+      new RegExp(route.replaceAll("/", "\\/")),
+      `${route} should stay out of the simplified daily dashboard`,
+    );
+  }
+});
+
+test("chef workspace shell is wide while focused setup flows stay readable", () => {
+  assert.match(layout, /max-w-7xl/);
+  assert.match(applicationPage, /max-w-3xl/);
+  assert.match(kitchenPage, /max-w-3xl/);
+  assert.doesNotMatch(applicationPage, /max-w-7xl/);
+  assert.doesNotMatch(kitchenPage, /max-w-7xl/);
 });
 
 test("chef theme still maps legacy form classes to canonical customer tokens", () => {

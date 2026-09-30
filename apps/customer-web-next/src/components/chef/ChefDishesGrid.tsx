@@ -1,10 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
 import { DishCard } from "@/components/home/DishCard";
-import {
-  loadCustomerFavoriteIds,
-  removeCustomerFavorite,
-  saveCustomerFavorite,
-} from "@/services/api/customerFavorites";
 import type { Dish } from "@/services/api/dishes";
 
 interface ChefDishesGridProps {
@@ -12,59 +6,37 @@ interface ChefDishesGridProps {
   dishes: Dish[];
 }
 
-/** "Dishes by {chef}" heading + grid, reusing the same DishCard as the browse page. */
 export function ChefDishesGrid({ chefName, dishes }: ChefDishesGridProps) {
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
-  const [favoritesReady, setFavoritesReady] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    setFavoritesReady(false);
-
-    void loadCustomerFavoriteIds()
-      .then((ids) => {
-        if (!active) return;
-        setFavoriteIds(ids);
-        setFavoritesReady(true);
-      })
-      .catch(() => {
-        if (!active) return;
-        setFavoriteIds(new Set());
-        setFavoritesReady(true);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const toggleFavorite = useCallback(async (dish: Dish, nextFavorite: boolean) => {
-    if (nextFavorite) {
-      await saveCustomerFavorite(dish.id);
-    } else {
-      await removeCustomerFavorite(dish.id);
-    }
-
-    setFavoriteIds((current) => {
-      const next = new Set(current);
-      if (nextFavorite) next.add(dish.id);
-      else next.delete(dish.id);
-      return next;
-    });
-  }, []);
-
   if (dishes.length === 0) return null;
+
   return (
-    <section className="mt-6">
-      <h2 className="font-display text-lg font-bold text-ink">Dishes by {chefName}</h2>
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {dishes.map((dish) => (
+    <section className="mt-9" aria-labelledby="home-kitchen-menu-heading">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#F62E18]">
+            Today&apos;s menu
+          </p>
+          <h2
+            id="home-kitchen-menu-heading"
+            className="mt-1.5 font-display text-2xl font-black tracking-[-0.04em] text-[#261A15] md:text-3xl"
+          >
+            Dishes from {chefName}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">
+            Home-cooked dishes currently available from this kitchen.
+          </p>
+        </div>
+        <span className="inline-flex w-fit rounded-full bg-[#F1F3F5] px-3 py-1.5 text-xs font-black text-[#1A1A1A]">
+          {dishes.length} {dishes.length === 1 ? "dish" : "dishes"}
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {dishes.map((dish, index) => (
           <DishCard
             key={dish.id}
             dish={dish}
-            favorite={favoriteIds.has(dish.id)}
-            favoritesReady={favoritesReady}
-            onToggleFavorite={toggleFavorite}
+            priorityImage={index < 2}
           />
         ))}
       </div>

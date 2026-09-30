@@ -1,48 +1,110 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangle,
-  LoaderCircle,
+  Clock3,
   MapPin,
   Plus,
+  ReceiptText,
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
 import {
+  isDeliveryReadyAddress,
   parseCustomerAddresses,
   type CustomerAddress,
 } from "@/lib/address-contract";
-import { parseCheckout } from "@/lib/checkout-contract";
+import {
+  parseCheckout,
+  type CustomerCheckout,
+} from "@/lib/checkout-contract";
+import {
+  checkoutCartSnapshot,
+  parseCheckoutOperationResponse,
+} from "@/lib/checkout-operation-contract";
 import { loadSession } from "@/services/auth/cravesAuth";
+import { sessionFetch } from "@/services/auth/sessionFetch";
 import {
   cartCurrency,
   cartTotal,
+  ensureCheckoutCart,
   getCart,
   loadCart,
   validateCart,
   type CartItem,
 } from "@/services/api/cravesCart";
+import { loadDish } from "@/services/api/dishes";
 import { CheckoutHeader } from "@/components/checkout/CheckoutHeader";
-import { CheckoutAddressDialog } from "@/components/checkout/CheckoutAddressDialog";
+import {
+  CheckoutPaymentButton,
+  type CheckoutPaymentFailure,
+} from "@/components/checkout/CheckoutPaymentButton";
+import { AddressEditorFlow } from "@/components/profile/AddressEditorFlow";
+import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
+
+const ADDRESS_KEY = "craves.checkout.addressId";
+const CHECKOUT_ID_KEY = "craves.checkout.id";
+const CHECKOUT_OPERATION_ID_KEY = "craves.checkout.operationId";
+const INSTRUCTIONS_KEY = "craves.checkout.instructions";
+const CART_NOTICE_KEY = "craves.cart.notice";
 
 function money(amount: number, currency = "INR") {
   try {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency,
-      maximumFractionDigits: 2,
+      maximumFractionDigits: 0,
     }).format(amount);
   } catch {
-    return `${currency} ${amount.toFixed(2)}`;
+    return `₹${Math.round(amount)}`;
   }
 }
 
 function checkoutMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "Checkout could not be prepared. Please try again.";
+  if (!(error instanceof Error)) {
+    return "We couldn’t prepare checkout right now. Your cart is safe — please try again.";
+  }
+
+  const message = error.message.trim();
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("failed to fetch") ||
+    normalized.includes("network") ||
+    normalized.includes("timeout")
+  ) {
+    return "Craves is having trouble connecting right now. Your cart is safe — check your connection and try again.";
+  }
+
+  if (
+    normalized.includes("invalid checkout") ||
+    normalized.includes("invalid address response") ||
+    normalized.includes("checkout attempt") ||
+    normalized.includes("could not be loaded")
+  ) {
+    return "We couldn’t refresh your checkout details right now. Your cart is safe — please try again.";
+  }
+
+  if (
+    normalized.includes("authentication") ||
+    normalized.includes("session_expired") ||
+    normalized.includes("session expired")
+  ) {
+    return "We’re reconnecting your Craves session. Please try again in a moment.";
+  }
+
+  return message || "We couldn’t prepare checkout right now. Your cart is safe — please try again.";
+}
+
+function responseMessage(body: unknown, fallback: string): string {
+  return body &&
+    typeof body === "object" &&
+    "message" in body &&
+    typeof body.message === "string"
+    ? body.message
+    : fallback;
 }
 
 function fullAddress(address: CustomerAddress): string {
@@ -59,15 +121,121 @@ function fullAddress(address: CustomerAddress): string {
     .join(", ");
 }
 
+async function fetchAddresses(): Promise<CustomerAddress[]> {
+  const response = await sessionFetch("/api/customer/addresses", {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  const raw = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(responseMessage(raw, "Saved addresses could not be loaded."));
+  }
+  const parsed = parseCustomerAddresses(raw);
+  if (!parsed) throw new Error("Craves returned an invalid address response.");
+  return parsed;
+}
+
+async function fetchCheckout(
+  checkoutId: string,
+): Promise<CustomerCheckout | null> {
+  const response = await sessionFetch(
+    `/api/checkout/${encodeURIComponent(checkoutId)}`,
+    {
+      cache: "no-store",
+      credentials: "same-origin",
+    },
+  );
+  const raw = await response.json().catch(() => null);
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(responseMessage(raw, "Checkout could not be restored."));
+  }
+  const parsed = parseCheckout(raw);
+  if (!parsed) throw new Error("Craves returned an invalid checkout response.");
+  return parsed;
+}
+
+async function fetchCheckoutOperation(
+  operationId: string,
+) {
+  const response = await sessionFetch(
+    `/api/checkout/operations/${encodeURIComponent(operationId)}`,
+    {
+      cache: "no-store",
+      credentials: "same-origin",
+    },
+  );
+  const raw = await response.json().catch(() => null);
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(
+      responseMessage(raw, "Checkout attempt could not be restored."),
+    );
+  }
+  const parsed = parseCheckoutOperationResponse(raw);
+  if (!parsed) {
+    throw new Error("Craves returned an invalid checkout attempt response.");
+  }
+  return parsed;
+}
+
+async function createAuthoritativeCheckout(
+  operationId: string,
+  deliveryAddressId: string,
+  note: string,
+): Promise<CustomerCheckout> {
+  const validatedCart = await validateCart();
+  const response = await sessionFetch(
+    `/api/checkout/operations/${encodeURIComponent(operationId)}`,
+    {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deliveryAddressId,
+        note: note.trim() || null,
+        expectedCart: checkoutCartSnapshot(validatedCart),
+      }),
+    },
+  );
+  const raw = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(responseMessage(raw, "Checkout could not be created."));
+  }
+
+  const operation = parseCheckoutOperationResponse(raw);
+  if (!operation) {
+    throw new Error("Craves returned an invalid checkout attempt response.");
+  }
+
+  const checkout = await fetchCheckout(operation.checkoutId);
+  if (!checkout) {
+    throw new Error("Checkout was created but could not be loaded.");
+  }
+  return checkout;
+}
+
 export default function CheckoutPage() {
   const navigate = useNavigate();
+  const prepareStartedRef = useRef(false);
+  const autoReviewKeyRef = useRef("");
   const [items, setItems] = useState<CartItem[]>([]);
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [selectedId, setSelectedId] = useState("");
-  const [addressDialogOpen, setAddressDialogOpen] = useState(false);
-  const [note, setNote] = useState("");
+  const [showAllAddresses, setShowAllAddresses] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [profileDefaults, setProfileDefaults] = useState({
+    recipientName: "",
+    contactPhoneNumber: "",
+  });
+  const [leadMinutes, setLeadMinutes] = useState<number | null>(null);
+  const [instructions, setInstructions] = useState("");
+  const [checkout, setCheckout] = useState<CustomerCheckout | null>(null);
+  const [paymentFailure, setPaymentFailure] =
+    useState<CheckoutPaymentFailure>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [addressChangeBusy, setAddressChangeBusy] = useState(false);
   const [error, setError] = useState("");
 
   const prepareCheckout = useCallback(async () => {
@@ -80,6 +248,71 @@ export default function CheckoutPage() {
         return;
       }
 
+      setProfileDefaults({
+        recipientName:
+          [session.firstName, session.lastName].filter(Boolean).join(" ").trim() ||
+          session.username ||
+          "",
+        contactPhoneNumber: session.phoneNumber || session.phone || "",
+      });
+
+      const savedInstructions =
+        window.sessionStorage.getItem(INSTRUCTIONS_KEY) ?? "";
+      setInstructions(savedInstructions);
+
+      const parsedAddresses = await fetchAddresses();
+      const activeAddresses = parsedAddresses.filter(isDeliveryReadyAddress);
+      setAddresses(activeAddresses);
+
+      const lastUsedId = window.sessionStorage.getItem(ADDRESS_KEY);
+      const preferred =
+        activeAddresses.find((address) => address.isDefault) ??
+        activeAddresses.find((address) => address.id === lastUsedId) ??
+        activeAddresses[0];
+
+      const storedCheckoutId = window.sessionStorage.getItem(CHECKOUT_ID_KEY);
+      if (storedCheckoutId) {
+        try {
+          const restored = await fetchCheckout(storedCheckoutId);
+          if (restored?.status === "PAYMENT_PENDING") {
+            setCheckout(restored);
+            setSelectedId(restored.deliveryAddressId ?? preferred?.id ?? "");
+            setItems([]);
+            setLeadMinutes(null);
+            return;
+          }
+          window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
+          window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
+        } catch {
+          window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
+        }
+      }
+
+      const storedOperationId =
+        window.sessionStorage.getItem(CHECKOUT_OPERATION_ID_KEY);
+      if (storedOperationId) {
+        try {
+          const operation = await fetchCheckoutOperation(storedOperationId);
+          if (operation) {
+            const restored = await fetchCheckout(operation.checkoutId);
+            if (restored?.status === "PAYMENT_PENDING") {
+              window.sessionStorage.setItem(
+                CHECKOUT_ID_KEY,
+                operation.checkoutId,
+              );
+              setCheckout(restored);
+              setSelectedId(restored.deliveryAddressId ?? preferred?.id ?? "");
+              setItems([]);
+              setLeadMinutes(null);
+              return;
+            }
+          }
+          window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
+        } catch {
+          window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
+        }
+      }
+
       await loadCart();
       const nextItems = getCart();
       if (!nextItems.length) {
@@ -88,34 +321,26 @@ export default function CheckoutPage() {
       }
       await validateCart();
 
-      const response = await fetch("/api/customer/addresses", {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const raw = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message =
-          raw &&
-          typeof raw === "object" &&
-          "message" in raw &&
-          typeof raw.message === "string"
-            ? raw.message
-            : "Saved addresses could not be loaded.";
-        throw new Error(message);
-      }
-      const parsed = parseCustomerAddresses(raw);
-      if (!parsed) throw new Error("Craves returned an invalid address response.");
-      const activeAddresses = parsed.filter((address) => address.active);
-      const preferred =
-        activeAddresses.find((address) => address.isDefault) ?? activeAddresses[0];
+      const dishResults = await Promise.allSettled(
+        nextItems.map((item) => loadDish(item.menuItemId)),
+      );
+      const minutes = dishResults
+        .flatMap((result) => {
+          if (result.status !== "fulfilled") return [];
+          const match = /^(\d+)\s*min$/i.exec(result.value.time);
+          return match ? [Number(match[1])] : [];
+        })
+        .filter((value) => Number.isFinite(value) && value > 0);
 
       setItems(nextItems);
-      setAddresses(activeAddresses);
       setSelectedId(preferred?.id ?? "");
+      setLeadMinutes(minutes.length ? Math.max(...minutes) : null);
+      setCheckout(null);
     } catch (caught) {
       setItems([]);
       setAddresses([]);
       setSelectedId("");
+      setLeadMinutes(null);
       setError(checkoutMessage(caught));
     } finally {
       setLoading(false);
@@ -123,257 +348,519 @@ export default function CheckoutPage() {
   }, [navigate]);
 
   useEffect(() => {
+    if (prepareStartedRef.current) return;
+    prepareStartedRef.current = true;
     void prepareCheckout();
   }, [prepareCheckout]);
 
-  async function createCheckout() {
-    if (!selectedId || busy) return;
-    setBusy(true);
-    setError("");
+  async function resetCheckoutForAddressChange(): Promise<boolean> {
+    if (!checkout) return true;
+
     try {
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          deliveryAddressId: selectedId,
-          note: note.trim() || null,
-        }),
-      });
-      const raw = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message =
-          raw &&
-          typeof raw === "object" &&
-          "message" in raw &&
-          typeof raw.message === "string"
-            ? raw.message
-            : "Checkout could not be created.";
-        throw new Error(message);
-      }
-      const checkout = parseCheckout(raw);
-      if (!checkout) throw new Error("Craves returned an invalid checkout response.");
-      navigate({
-        to: "/checkout/$checkoutId/payment",
-        params: { checkoutId: checkout.id },
-      });
-    } catch (caught) {
-      setError(checkoutMessage(caught));
-      setBusy(false);
+      const restored = await ensureCheckoutCart(checkout.orders);
+      if (!restored) return false;
+
+      setItems(getCart());
+      window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
+      window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
+      setCheckout(null);
+      return true;
+    } catch {
+      // Keep the existing checkout untouched if the cart cannot be rebuilt.
+      // The customer can still pay with the current address or go back.
+      return false;
     }
   }
 
-  const subtotal = cartTotal();
-  const currency = cartCurrency();
+  async function selectAddress(id: string) {
+    if (addressChangeBusy || (id === selectedId && checkout)) return;
+
+    setAddressChangeBusy(true);
+    setError("");
+    try {
+      const readyForAddressChange = await resetCheckoutForAddressChange();
+      if (!readyForAddressChange) {
+        setError(
+          "We couldn’t refresh delivery for that address just now. Your current checkout is unchanged — you can try again or return to your cart.",
+        );
+        return;
+      }
+
+      autoReviewKeyRef.current = "";
+      setSelectedId(id);
+      window.sessionStorage.setItem(ADDRESS_KEY, id);
+      window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
+      setPaymentFailure(null);
+    } catch (caught) {
+      setError(checkoutMessage(caught));
+    } finally {
+      setAddressChangeBusy(false);
+    }
+  }
+
+  function openAddressEditor() {
+    if (addressChangeBusy) return;
+
+    // Opening the editor is safe and should never be blocked by a checkout
+    // restoration attempt. We only rebuild the cart if the customer actually
+    // selects a different saved address.
+    setError("");
+    setEditorOpen(true);
+  }
+
+  const ensureCheckout = useCallback(async (): Promise<CustomerCheckout> => {
+    if (checkout) return checkout;
+    if (!selectedId) {
+      throw new Error("Choose a delivery address before continuing.");
+    }
+
+    const operationId =
+      window.sessionStorage.getItem(CHECKOUT_OPERATION_ID_KEY) ??
+      crypto.randomUUID();
+    window.sessionStorage.setItem(CHECKOUT_OPERATION_ID_KEY, operationId);
+
+    const prepared = await createAuthoritativeCheckout(
+      operationId,
+      selectedId,
+      instructions,
+    );
+    window.sessionStorage.setItem(CHECKOUT_ID_KEY, prepared.id);
+    setCheckout(prepared);
+    setPaymentFailure(null);
+    return prepared;
+  }, [checkout, instructions, selectedId]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      reviewing ||
+      addressChangeBusy ||
+      checkout ||
+      !selectedId ||
+      items.length === 0 ||
+      paymentFailure
+    ) {
+      return;
+    }
+
+    const reviewKey = `${selectedId}:${instructions.trim()}`;
+    if (autoReviewKeyRef.current === reviewKey) return;
+    autoReviewKeyRef.current = reviewKey;
+
+    setReviewing(true);
+    void ensureCheckout()
+      .catch((caught) => {
+        setPaymentFailure({
+          message: checkoutMessage(caught),
+          retryAllowed: true,
+        });
+      })
+      .finally(() => setReviewing(false));
+  }, [
+    addressChangeBusy,
+    checkout,
+    ensureCheckout,
+    instructions,
+    items.length,
+    loading,
+    paymentFailure,
+    reviewing,
+    selectedId,
+  ]);
+
+  async function handleBackToCart() {
+    setError("");
+
+    const currentCheckout = checkout;
+    window.sessionStorage.removeItem(CHECKOUT_ID_KEY);
+    window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
+    setCheckout(null);
+
+    if (!currentCheckout) {
+      navigate({ to: "/cart" });
+      return;
+    }
+
+    // Never trap the customer on checkout. Give cart restoration a short head
+    // start, then return to the cart even if the network is slow. The shared
+    // cart store keeps updating if restoration finishes after navigation.
+    let finished = false;
+    const restoration = ensureCheckoutCart(currentCheckout.orders)
+      .then((restored) => {
+        finished = true;
+        if (!restored) {
+          window.sessionStorage.setItem(
+            CART_NOTICE_KEY,
+            "Your cart is open. Please check the items before continuing to checkout again.",
+          );
+        }
+      })
+      .catch(() => {
+        finished = true;
+        window.sessionStorage.setItem(
+          CART_NOTICE_KEY,
+          "Your cart is open. We couldn’t refresh every item automatically, so please check it before continuing.",
+        );
+      });
+
+    await Promise.race([
+      restoration,
+      new Promise<void>((resolve) => window.setTimeout(resolve, 900)),
+    ]);
+
+    navigate({ to: "/cart" });
+
+    if (!finished) {
+      void restoration;
+    }
+  }
+
+  async function handleAddressSaved(saved: CustomerAddress | null) {
+    const next = (await fetchAddresses()).filter(isDeliveryReadyAddress);
+    setAddresses(next);
+    setEditorOpen(false);
+
+    const selected =
+      saved && isDeliveryReadyAddress(saved)
+        ? next.find((address) => address.id === saved.id)
+        : null;
+    if (selected) {
+      await selectAddress(selected.id);
+    } else if (!selectedId && next[0]) {
+      await selectAddress(next[0].id);
+    }
+  }
+
+  const subtotal = checkout?.foodSubtotal ?? cartTotal();
+  const currency = checkout?.currency ?? cartCurrency();
   const selectedAddress = addresses.find((address) => address.id === selectedId);
+  const visibleAddresses = showAllAddresses ? addresses : addresses.slice(0, 3);
+  const hasCheckoutContext = items.length > 0 || checkout !== null;
+
+  if (loading) {
+    return <CustomerPageSkeleton label="Preparing your checkout" />;
+  }
 
   return (
-    <div className="min-h-screen bg-white pb-32 text-ink">
+    <div className="min-h-screen bg-[#F7F7F7] pb-36 text-[#1A1A1A] lg:pb-12">
       <CheckoutHeader
-        onBack={() => navigate({ to: "/cart" })}
-        title="Delivery and checkout"
-        subtitle="Final charges come from the Order Service"
+        onBack={() => void handleBackToCart()}
+        title="Checkout"
+        subtitle="Choose delivery, then pay securely"
       />
 
-      <main className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
+      <main className="mx-auto max-w-[1180px] px-4 py-5 md:px-6 md:py-8 lg:px-8 lg:py-9">
         {loading ? (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]" aria-hidden="true">
-            <div className="space-y-5">
-              <div className="h-64 animate-pulse rounded-2xl bg-grey-200" />
-              <div className="h-40 animate-pulse rounded-2xl bg-grey-200" />
-            </div>
-            <div className="h-72 animate-pulse rounded-2xl bg-grey-200" />
+          <div className="space-y-4" aria-hidden="true">
+            <div className="h-64 animate-pulse rounded-[1.25rem] bg-[#F1F3F5]" />
+            <div className="h-28 animate-pulse rounded-[1.25rem] bg-[#F1F3F5]" />
+            <div className="h-52 animate-pulse rounded-[1.25rem] bg-[#F1F3F5]" />
           </div>
-        ) : error && items.length === 0 ? (
-          <section className="rounded-2xl border border-error/20 bg-white p-8 text-center shadow-[var(--shadow-card)] md:p-12">
-            <AlertTriangle className="mx-auto h-10 w-10 text-error" aria-hidden="true" />
-            <h1 className="mt-4 font-display text-2xl font-bold text-ink">
-              Checkout could not be prepared
-            </h1>
-            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-              {error}
-            </p>
-            <button type="button" onClick={() => void prepareCheckout()} className="btn-primary mt-6">
-              <RefreshCw className="h-4 w-4" aria-hidden="true" /> Retry
+        ) : error && !hasCheckoutContext ? (
+          <section className="rounded-[1.25rem] border border-[#F62E18]/20 bg-white p-8 text-center shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
+            <AlertTriangle className="mx-auto h-9 w-9 text-[#F62E18]" aria-hidden="true" />
+            <h1 className="mt-4 text-xl font-semibold">Checkout could not be prepared</h1>
+            <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{error}</p>
+            <button
+              type="button"
+              onClick={() => void prepareCheckout()}
+              className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#F62E18] px-5 text-sm font-semibold text-white"
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden="true" /> Try again
             </button>
           </section>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-            <div className="space-y-5">
-              <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="craves-overline text-primary">Step 1</p>
-                    <h1 className="mt-1 font-display text-2xl font-bold tracking-[-0.035em] text-ink">
-                      Delivery address
-                    </h1>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      Only the address selected for this checkout is shown here. Manage addresses to choose another saved address or add a new one.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAddressDialogOpen(true)}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-lg border px-4 text-sm"
-                  >
-                    <Plus className="h-4 w-4" aria-hidden="true" /> Manage address
-                  </button>
+          <div>
+            <div className="mb-6 hidden lg:block">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#F62E18]">
+                Secure checkout
+              </p>
+              <div className="mt-1 flex items-end justify-between gap-6">
+                <div>
+                  <h1 className="text-3xl font-black tracking-[-0.04em] text-[#1A1A1A]">
+                    Delivery & payment
+                  </h1>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6B6B6B]">
+                    Choose where to deliver. Craves calculates the final total automatically before payment.
+                  </p>
                 </div>
+                <span className="rounded-full border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#6B6B6B] shadow-[0_2px_8px_rgba(26,26,26,0.04)]">
+                  {items.length} {items.length === 1 ? "item" : "items"} in this order
+                </span>
+              </div>
+            </div>
 
-                {!selectedAddress ? (
-                  <div className="mt-5 rounded-2xl border border-dashed border-border bg-white p-6 text-center">
-                    <MapPin className="mx-auto h-9 w-9 text-primary" aria-hidden="true" />
-                    <h2 className="mt-3 font-display text-lg font-bold text-ink">
-                      No current delivery address
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start lg:gap-7 xl:grid-cols-[minmax(0,1fr)_420px]">
+              <div className="space-y-4">
+                {paymentFailure ? (
+                  <section
+                    role="alert"
+                    className="rounded-[1.25rem] border border-[#C92716]/20 bg-[#FFF2F0] p-4"
+                  >
+                    <h2 className="text-sm font-semibold text-[#9F2114]">
+                      {checkout
+                        ? "Payment didn't go through"
+                        : "Order could not be prepared"}
                     </h2>
-                    <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                      Add or select a mapped address before Craves can calculate serviceability and delivery charges.
+                    <p className="mt-1 text-xs leading-5 text-[#7A2C22]">
+                      {paymentFailure.message}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => setAddressDialogOpen(true)}
-                      className="btn-primary mt-5"
-                    >
-                      <Plus className="h-4 w-4" aria-hidden="true" /> Add or select address
-                    </button>
-                  </div>
-                ) : (
-                  <article className="mt-5 rounded-2xl border border-[#F62E18] bg-white p-5">
-                    <div className="flex items-start gap-3">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#C92716] text-black">
+                  </section>
+                ) : null}
+
+                <section className="overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white shadow-[0_8px_28px_rgba(26,26,26,0.055)]">
+                  <div className="flex items-center justify-between gap-3 border-b border-[#F1F3F5] px-4 py-4 sm:px-5">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FFF1EF] text-[#F62E18]">
                         <MapPin className="h-5 w-5" aria-hidden="true" />
                       </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="font-display text-lg font-bold text-ink">
-                            {selectedAddress.addressLabel}
-                          </h2>
-                          {selectedAddress.isDefault && (
-                            <span className="rounded-full border border-border bg-white px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-[0.06em] text-ink">
-                              Default
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-2 text-sm font-semibold text-ink">
-                          {selectedAddress.recipientName} · {selectedAddress.contactPhoneNumber}
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.13em] text-[#F62E18]">
+                          Step 1
                         </p>
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                          {fullAddress(selectedAddress)}
-                        </p>
+                        <h2 className="text-base font-bold">Delivery address</h2>
                       </div>
                     </div>
-                  </article>
-                )}
-              </section>
+                    <button
+                      type="button"
+                      onClick={openAddressEditor}
+                      disabled={addressChangeBusy}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-[10px] border border-[#D7DADF] bg-white px-3 text-xs font-bold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:border-[#F62E18]/25 hover:bg-[#FFF8F6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/25 disabled:pointer-events-none disabled:opacity-45"
+                    >
+                      <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                      Add new
+                    </button>
+                  </div>
 
-              <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
-                <label htmlFor="checkout-note" className="block">
-                  <span className="craves-overline text-primary">Optional</span>
-                  <span className="mt-1 block font-display text-xl font-bold text-ink">
-                    Note for the kitchen
-                  </span>
-                  <span className="mt-2 block text-sm leading-6 text-muted-foreground">
-                    Enter preparation information only. Do not include payment credentials or sensitive personal data.
-                  </span>
-                </label>
-                <textarea
-                  id="checkout-note"
-                  maxLength={500}
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  className="mt-4 min-h-28 w-full resize-y rounded-xl border border-border bg-white p-3 text-base text-ink outline-none placeholder:text-[#9A9A95] focus:border-[#F62E18] focus:ring-0"
-                  placeholder="For example: please pack the gravy separately"
-                />
-                <p className="mt-2 text-right text-xs text-muted-foreground">
-                  {note.length}/500
-                </p>
-              </section>
-            </div>
+                  {visibleAddresses.length ? (
+                    <div className="grid gap-2.5 p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-1 xl:grid-cols-2">
+                      {visibleAddresses.map((address) => {
+                        const checked = address.id === selectedId;
+                        return (
+                          <label
+                            key={address.id}
+                            className={[
+                              "relative flex min-h-[116px] cursor-pointer items-start gap-3 rounded-[1rem] border p-3.5 transition-[border-color,background-color,box-shadow] focus-within:ring-2 focus-within:ring-[#F62E18]/20",
+                              checked
+                                ? "border-[#F62E18]/40 bg-[#FFF8F6] shadow-[0_5px_16px_rgba(246,46,24,0.08)]"
+                                : "border-[#E5E7EB] bg-white hover:border-[#C8CDD2] hover:bg-[#FAFAFA]",
+                            ].join(" ")}
+                          >
+                            <input
+                              type="radio"
+                              name="delivery-address"
+                              value={address.id}
+                              checked={checked}
+                              disabled={addressChangeBusy}
+                              onChange={() => void selectAddress(address.id)}
+                              className="mt-1 h-4 w-4 shrink-0 accent-[#F62E18] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-55"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-bold capitalize">
+                                  {address.addressLabel.toLowerCase()}
+                                </span>
+                                {address.isDefault ? (
+                                  <span className="rounded-full bg-[#F62E18]/10 px-2 py-0.5 text-[10px] font-bold text-[#F62E18]">
+                                    Default
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span className="mt-1.5 block text-xs leading-5 text-[#6B6B6B]">
+                                {fullAddress(address)}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
 
-            <aside className="space-y-4 lg:sticky lg:top-24">
-              <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)]">
-                <p className="craves-overline text-primary">Order summary</p>
-                <h2 className="mt-1 font-display text-xl font-bold text-ink">
-                  {items.reduce((total, item) => total + item.qty, 0)} items
-                </h2>
-                <ul className="mt-4 divide-y divide-border">
-                  {items.map((item) => (
-                    <li key={item.id} className="flex gap-3 py-3 text-sm">
-                      <span className="min-w-0 flex-1 text-ink">
-                        <span className="block truncate font-semibold">{item.name}</span>
-                        <span className="text-xs text-muted-foreground">Quantity {item.qty}</span>
-                      </span>
-                      <span className="shrink-0 font-semibold text-ink">
-                        {money(item.lineTotal, item.currency)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-3 flex items-center justify-between border-t border-border pt-4">
-                  <span className="text-sm text-muted-foreground">Food subtotal</span>
-                  <strong className="font-display text-xl text-ink">
-                    {money(subtotal, currency)}
-                  </strong>
-                </div>
-                <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                  Platform fee, tax, delivery fee and grand total are returned by the Order Service after checkout creation.
-                </p>
-              </section>
-
-              {selectedAddress && (
-                <section className="rounded-2xl border border-border bg-white p-4 text-sm shadow-[var(--shadow-card)]">
-                  <p className="font-semibold text-ink">Delivering to {selectedAddress.recipientName}</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    {selectedAddress.areaName}, {selectedAddress.city} {selectedAddress.postalCode}
-                  </p>
+                      {addresses.length > 3 ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllAddresses((current) => !current)}
+                          className="min-h-11 rounded-[1rem] border border-dashed border-[#D7DADF] bg-[#FAFAFA] px-4 text-sm font-bold text-[#1A1A1A] transition hover:border-[#F62E18]/30 hover:bg-[#FFF8F6] sm:col-span-2 lg:col-span-1 xl:col-span-2"
+                        >
+                          {showAllAddresses
+                            ? "Show fewer addresses"
+                            : `Show all ${addresses.length} addresses`}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="px-5 py-8 text-center">
+                      <p className="text-sm font-bold">No delivery address yet</p>
+                      <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[#6B6B6B]">
+                        Add a mapped address so Craves can check delivery serviceability and calculate your final total.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={openAddressEditor}
+                        disabled={addressChangeBusy}
+                        className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#F62E18] px-4 text-sm font-semibold text-white disabled:pointer-events-none disabled:opacity-45"
+                      >
+                        <Plus className="h-4 w-4" aria-hidden="true" />
+                        Add a new address
+                      </button>
+                    </div>
+                  )}
                 </section>
-              )}
 
-              <p className="flex items-start gap-2 rounded-xl border border-border bg-white p-4 text-xs leading-5 text-muted-foreground">
-                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
-                Payment details are collected only inside Razorpay hosted checkout. Craves never asks for a card number, CVV or UPI PIN.
-              </p>
-            </aside>
+                <section className="rounded-[1.45rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_8px_28px_rgba(26,26,26,0.05)] sm:p-5">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FFF8EC] text-[#B86E00]">
+                      <Clock3 className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.13em] text-[#F62E18]">
+                        Step 2
+                      </p>
+                      <h2 className="text-base font-bold">Delivery timing</h2>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-start gap-3 rounded-[1rem] border border-[#F6B545]/35 bg-[#FFF8EC] p-4">
+                    <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#F6B545]" />
+                    <div>
+                      <p className="text-xs font-semibold text-[#7B5A1A]">Earliest delivery</p>
+                      <p className="mt-0.5 text-base font-black text-[#1A1A1A]">As soon as possible</p>
+                      <p className="mt-1 text-xs leading-5 text-[#6B6B6B]">
+                        {leadMinutes
+                          ? `Your chef usually needs about ${leadMinutes} min to prepare this order. Craves arranges delivery at the earliest available time.`
+                          : "This kitchen cooks to order. Craves arranges delivery at the earliest available time."}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                {instructions.trim() ? (
+                  <section className="rounded-[1.25rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_5px_18px_rgba(26,26,26,0.04)]">
+                    <p className="text-xs font-bold text-[#6B6B6B]">Cooking instructions</p>
+                    <p className="mt-1.5 text-sm leading-6 text-[#1A1A1A]">{instructions.trim()}</p>
+                  </section>
+                ) : null}
+              </div>
+
+              <aside className="lg:sticky lg:top-24">
+                <section className="overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white shadow-[0_12px_36px_rgba(26,26,26,0.07)]">
+                  <div className="border-b border-[#F1F3F5] px-4 py-4 sm:px-5">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EDF8F0] text-[#16803D]">
+                        <ReceiptText className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.13em] text-[#F62E18]">
+                          Step 3
+                        </p>
+                        <h2 className="text-base font-bold">Bill details</h2>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
+                    <div className="mb-4 rounded-[1rem] bg-[#F8F9FA] px-3.5 py-3">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-[#6B6B6B]">
+                        Order summary
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-[#1A1A1A]">
+                        {items.length} {items.length === 1 ? "item" : "items"} from your selected home kitchen
+                      </p>
+                    </div>
+
+                    <dl className="space-y-3 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <dt className="text-[#6B6B6B]">Item total</dt>
+                        <dd className="font-semibold tabular-nums">
+                          {money(subtotal, currency)}
+                        </dd>
+                      </div>
+
+                      {checkout ? (
+                        <>
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-[#6B6B6B]">Platform fee</dt>
+                            <dd className="font-medium tabular-nums">
+                              {money(checkout.platformFee, checkout.currency)}
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-[#6B6B6B]">Delivery fee</dt>
+                            <dd className="font-medium tabular-nums">
+                              {money(checkout.deliveryFee, checkout.currency)}
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <dt className="text-[#6B6B6B]">GST / tax</dt>
+                            <dd className="font-medium tabular-nums">
+                              {money(checkout.taxAmount, checkout.currency)}
+                            </dd>
+                          </div>
+                          <div className="mt-3 flex items-end justify-between gap-4 border-t border-[#E5E7EB] pt-4">
+                            <div>
+                              <dt className="text-sm font-black">To pay</dt>
+                              <p className="mt-0.5 text-[10px] text-[#6B6B6B]">Inclusive of applicable taxes</p>
+                            </div>
+                            <dd className="text-xl font-black tabular-nums text-[#1A1A1A]">
+                              {money(checkout.grandTotal, checkout.currency)}
+                            </dd>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="mt-3 flex items-start gap-2 border-t border-[#E5E7EB] pt-4">
+                          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#16A34A]" aria-hidden="true" />
+                          <p className="text-xs leading-5 text-[#6B6B6B]">
+                            {reviewing
+                              ? "Calculating delivery fee, tax and your final total…"
+                              : "Your final total is calculated automatically for the selected address."}
+                          </p>
+                        </div>
+                      )}
+                    </dl>
+
+                    <div className="mt-4 flex items-start gap-2.5 rounded-[0.9rem] bg-[#EDF8F0] px-3 py-2.5 text-[#176B38]">
+                      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <p className="text-[11px] font-semibold leading-5">
+                        Secure payment. Your order is placed only after Craves confirms payment.
+                      </p>
+                    </div>
+
+                    {hasCheckoutContext ? (
+                      <CheckoutPaymentButton
+                        checkout={checkout}
+                        previewAmount={subtotal}
+                        currency={currency}
+                        disabled={
+                          reviewing ||
+                          addressChangeBusy ||
+                          (!checkout && !selectedAddress)
+                        }
+                        failure={paymentFailure}
+                        ensureCheckout={ensureCheckout}
+                        onFailure={setPaymentFailure}
+                      />
+                    ) : null}
+                  </div>
+                </section>
+              </aside>
+            </div>
           </div>
         )}
 
-        {error && items.length > 0 && (
-          <p role="alert" className="mt-5 rounded-xl border border-error/20 bg-white p-3 text-sm font-medium text-error">
-            {error}
-          </p>
-        )}
+        {error && hasCheckoutContext ? (
+          <div
+            role="status"
+            className="mt-4 flex items-start gap-2.5 rounded-xl border border-[#F6B545]/40 bg-[#FFF8EC] p-3 text-sm font-medium text-[#6B5526]"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#B86E00]" aria-hidden="true" />
+            <p>{error}</p>
+          </div>
+        ) : null}
       </main>
 
-      {!loading && items.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 p-3 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] backdrop-blur-xl">
-          <div className="mx-auto flex max-w-5xl items-center gap-4 px-1 md:px-3">
-            <div className="min-w-0">
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Food subtotal
-              </p>
-              <p className="font-display text-xl font-bold text-ink">
-                {money(subtotal, currency)}
-              </p>
-            </div>
-            <button
-              type="button"
-              disabled={busy || !selectedId}
-              onClick={() => void createCheckout()}
-              className="btn-primary ml-auto min-h-12 flex-1 sm:flex-none sm:px-8 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {busy && <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              {busy ? "Creating checkout…" : "Continue to secure payment"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <CheckoutAddressDialog
-        open={addressDialogOpen}
-        selectedId={selectedId}
-        onClose={() => setAddressDialogOpen(false)}
-        onSelect={setSelectedId}
-        onAddressesChange={setAddresses}
+      <AddressEditorFlow
+        open={editorOpen}
+        initialAddress={null}
+        profileDefaults={profileDefaults}
+        onClose={() => setEditorOpen(false)}
+        onSaved={handleAddressSaved}
       />
     </div>
   );

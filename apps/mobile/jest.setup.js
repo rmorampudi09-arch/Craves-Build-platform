@@ -105,6 +105,29 @@ jest.mock('expo-haptics', () => ({
   selectionAsync: jest.fn(async () => undefined),
 }));
 
+jest.mock('expo-video', () => {
+  const React = require('react');
+  const {View} = require('react-native');
+  return {
+    VideoView: View,
+    useVideoPlayer: jest.fn((source, setup) => {
+      const setupRef = React.useRef(setup);
+      setupRef.current = setup;
+      const player = React.useMemo(() => {
+        const instance = {
+          source,
+          play: jest.fn(), pause: jest.fn(), release: jest.fn(),
+          addListener: jest.fn(() => ({remove: jest.fn()})),
+        };
+        setupRef.current?.(instance);
+        return instance;
+      }, [source]);
+      React.useEffect(() => () => player.release(), [player]);
+      return player;
+    }),
+  };
+});
+
 jest.mock('@react-native-firebase/auth', () => ({
   getAuth: jest.fn(() => ({})),
   getIdToken: jest.fn(),

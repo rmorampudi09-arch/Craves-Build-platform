@@ -163,6 +163,9 @@ export function ChefRegistrationScreen({navigation}: Props) {
           {isRejectedApplication ? 'Update your chef application' : 'Set up your chef application'}
         </Text>
         <Text style={styles.description}>
+          {accountResolution?.flow === 'CHEF_ONBOARDING' && accountResolution.onboardingStatus === 'NOT_SUBMITTED'
+            ? 'No Chef account is linked to this number yet. Create your Chef account below. '
+            : ''}
           Your details are reviewed before Chef mode is enabled. Chef email is required.
         </Text>
         {loadingExisting ? (

@@ -1,16 +1,18 @@
-import React, {useEffect, useRef, useState} from 'react';
-import {AccessibilityInfo, Pressable, StyleSheet, Text} from 'react-native';
-import type {NativeStackScreenProps} from '@react-navigation/native-stack';
-import type {RootStackParamList} from '../../../app/navigation/types';
-import {useAppDispatch} from '../../../app/store/hooks';
-import {toAppApiError} from '../../../core/http/apiError';
-import {colors, spacing} from '../../../design/tokens';
-import {AuthCard} from '../components/AuthCard';
-import {AuthShell} from '../components/AuthShell';
-import {InputField} from '../components/InputField';
-import {PrimaryButton} from '../components/PrimaryButton';
-import {ScreenHeader} from '../components/ScreenHeader';
-import {SecurityNote} from '../components/SecurityNote';
+import React, { useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../../app/navigation/types';
+import { useAppDispatch } from '../../../app/store/hooks';
+import { toAppApiError } from '../../../core/http/apiError';
+import { VideoAuthLayout } from '../components/VideoAuthLayout';
+import { AuthOtpInput } from '../components/AuthOtpInput';
+import { AuthActionButton } from '../components/AuthActionButton';
+import { AuthRoleCards } from '../components/AuthRoleCards';
+import { loginStyles as styles } from '../components/loginStyles';
+import {
+  formatLoginCountdown,
+  maskLoginPhone,
+} from '../components/loginPresentation';
 import {
   createOtpCooldownDeadline,
   createOtpRequestGate,
@@ -21,16 +23,16 @@ import {
   remainingOtpCooldownSeconds,
   sanitizeOtpCode,
 } from '../domain/otpVerificationPolicy';
-import {useAuthAttemptRole} from '../hooks/useAuthAttemptRole';
-import {authService} from '../state/authService';
-import {authActions} from '../state/authSlice';
-import {authTransitionMemory} from '../state/authTransitionMemory';
+import { useAuthAttemptRole } from '../hooks/useAuthAttemptRole';
+import { authService } from '../state/authService';
+import { authActions } from '../state/authSlice';
+import { authTransitionMemory } from '../state/authTransitionMemory';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OtpVerification'>;
 
-export function OtpVerificationScreen({navigation, route}: Props) {
+export function OtpVerificationScreen({ navigation, route }: Props) {
   const dispatch = useAppDispatch();
-  const {role} = useAuthAttemptRole(route.params.role);
+  const { role } = useAuthAttemptRole(route.params.role);
   const phone = authTransitionMemory.getPendingPhone();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,8 +50,13 @@ export function OtpVerificationScreen({navigation, route}: Props) {
   const rateLimitSeconds = remainingOtpCooldownSeconds(rateLimitUntil, clockMs);
   const rateLimited = rateLimitSeconds > 0;
   const canVerify =
-    Boolean(phone) && isOtpCodeComplete(code) && !busy && !requiresResend && !rateLimited;
-  const canResend = Boolean(phone) && resendSeconds === 0 && !busy && !rateLimited;
+    Boolean(phone) &&
+    isOtpCodeComplete(code) &&
+    !busy &&
+    !requiresResend &&
+    !rateLimited;
+  const canResend =
+    Boolean(phone) && resendSeconds === 0 && !busy && !rateLimited;
 
   useEffect(() => {
     const id = setInterval(() => setClockMs(Date.now()), 1000);
@@ -127,7 +134,9 @@ export function OtpVerificationScreen({navigation, route}: Props) {
       setResendAvailableAt(
         createOtpCooldownDeadline(OTP_RESEND_COOLDOWN_SECONDS, now),
       );
-      AccessibilityInfo.announceForAccessibility('A new verification code was sent.');
+      AccessibilityInfo.announceForAccessibility(
+        'A new verification code was sent.',
+      );
     } catch (caught) {
       applyFailureRecovery(caught);
     } finally {
@@ -146,73 +155,73 @@ export function OtpVerificationScreen({navigation, route}: Props) {
   const resendLabel = !phone
     ? 'Start phone verification again'
     : rateLimited
-      ? `Try again in ${rateLimitSeconds}s`
-      : resendSeconds > 0
-        ? `Resend code in ${resendSeconds}s`
-        : 'Resend verification code';
+    ? `Try again in ${rateLimitSeconds}s`
+    : resendSeconds > 0
+    ? `Resend code in ${formatLoginCountdown(resendSeconds)}`
+    : 'Resend code';
 
   return (
-    <AuthShell>
-      <ScreenHeader title="Verify OTP" onBack={() => navigation.goBack()} />
-      <AuthCard>
-        <Text style={styles.title}>Enter verification code</Text>
-        <Text style={styles.desc}>
+    <VideoAuthLayout onBack={() => navigation.goBack()} backDisabled={busy}>
+      <AuthRoleCards value={role} descriptions={false} />
+      <View style={styles.heading}>
+        <Text style={styles.title}>Verify your number</Text>
+        <Text style={styles.description}>
           {phone
-            ? `We sent a 6-digit code to ${phone}.`
+            ? 'Enter the 6-digit code sent to'
             : 'Your phone verification session expired. Go back and request a new code.'}
         </Text>
-        <InputField
-          value={code}
-          onChangeText={updateCode}
-          placeholder="6-digit OTP"
-          keyboardType="number-pad"
-          returnKeyType="done"
-          textContentType="oneTimeCode"
-          autoFocus={Boolean(phone)}
-          selectTextOnFocus
-          maxLength={OTP_CODE_LENGTH}
-          disabled={busy || requiresResend || rateLimited || !phone}
-          accessibilityLabel="Verification code"
-          accessibilityHint="Enter the six digit code sent to your phone"
-          error={error ?? undefined}
-          onSubmitEditing={finish}
-        />
-        <PrimaryButton
-          label="Verify & Continue"
-          loading={busy}
-          disabled={!canVerify}
-          accessibilityHint="Verifies this phone code and continues sign in"
-          onPress={finish}
-        />
-        <Pressable
-          disabled={!canResend}
-          onPress={resend}
-          accessibilityRole="button"
-          accessibilityState={{disabled: !canResend}}
-          accessibilityHint="Requests a new verification code for this phone number">
-          <Text style={[styles.resend, !canResend && styles.muted]}>{resendLabel}</Text>
-        </Pressable>
-        <SecurityNote />
-      </AuthCard>
-    </AuthShell>
+        {phone ? (
+          <View style={styles.destinationRow}>
+            <Text style={styles.description}>{maskLoginPhone(phone)}</Text>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              disabled={busy}
+              accessibilityRole="link"
+              accessibilityLabel="Edit phone number"
+              style={styles.linkTouch}
+            >
+              <Text style={styles.link}>Edit</Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </View>
+      <AuthOtpInput
+        value={code}
+        onChangeText={updateCode}
+        keyboardType="number-pad"
+        returnKeyType="done"
+        textContentType="oneTimeCode"
+        autoFocus={Boolean(phone)}
+        selectTextOnFocus
+        maxLength={OTP_CODE_LENGTH}
+        disabled={busy || requiresResend || rateLimited || !phone}
+        accessibilityLabel="Verification code"
+        accessibilityHint="Enter the six digit code sent to your phone"
+        error={error ?? undefined}
+        onSubmitEditing={finish}
+      />
+      <Pressable
+        disabled={!canResend}
+        onPress={resend}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: !canResend }}
+        accessibilityHint="Requests a new verification code for this phone number"
+        style={styles.linkTouch}
+      >
+        <Text style={[styles.link, !canResend && styles.disabled]}>
+          {resendLabel}
+        </Text>
+      </Pressable>
+      <AuthActionButton
+        label="Verify & continue"
+        loading={busy}
+        disabled={!canVerify}
+        accessibilityHint="Verifies this phone code and continues sign in"
+        onPress={finish}
+      />
+      <Text style={styles.description}>
+        Signing in as {role === 'CHEF' ? 'Chef' : 'Customer'}
+      </Text>
+    </VideoAuthLayout>
   );
 }
-
-const styles = StyleSheet.create({
-  title: {fontSize: 20, fontWeight: '700', color: colors.espressoBrown},
-  desc: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: colors.mutedText,
-    marginTop: 7,
-    marginBottom: spacing.lg,
-  },
-  resend: {
-    textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.flameRed,
-    marginTop: spacing.sm,
-  },
-  muted: {color: colors.mutedText},
-});

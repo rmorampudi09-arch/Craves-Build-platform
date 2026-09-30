@@ -45,6 +45,7 @@ import {ChefRegistrationScreen} from '../../features/auth/screens/ChefRegistrati
 import {ChefAccountStatusScreen} from '../../features/auth/screens/ChefAccountStatusScreen';
 import {StartupErrorScreen} from '../../features/auth/screens/StartupErrorScreen';
 import {AccountRouterScreen} from '../../features/auth/screens/AccountRouterScreen';
+import {AuthVideoBackground} from '../../features/auth/components/AuthVideoBackground';
 import type {
   AccountResolution,
   ChefApplicationStatus,
@@ -56,6 +57,8 @@ const ResolutionStack = createNativeStackNavigator<RootStackParamList>();
 const CustomerStack = createNativeStackNavigator<RootStackParamList>();
 const ChefStack = createNativeStackNavigator<RootStackParamList>();
 const navigationRef = createNavigationContainerRef<ParamListBase>();
+const authCanvasStyles = StyleSheet.create({root: {flex: 1}});
+const authVideoOptions = {contentStyle: {backgroundColor: 'transparent'}};
 
 function useAuthStackScreenOptions() {
   const reduceMotionEnabled = useReducedMotionPreference();
@@ -73,15 +76,26 @@ function useAuthStackScreenOptions() {
 
 function AuthNavigator() {
   const screenOptions = useAuthStackScreenOptions();
+  const [videoEnabled, setVideoEnabled] = React.useState(true);
   return (
-    <AuthStack.Navigator screenOptions={screenOptions} initialRouteName="RoleSelection">
-      <AuthStack.Screen name="RoleSelection" component={RoleSelectionScreen} />
-      <AuthStack.Screen name="PhoneSignIn" component={PhoneSignInScreen} />
-      <AuthStack.Screen name="EmailSignIn" component={EmailSignInScreen} />
-      <AuthStack.Screen name="OtpVerification" component={OtpVerificationScreen} />
-      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-      <AuthStack.Screen name="PasswordResetSent" component={PasswordResetSentScreen} />
-    </AuthStack.Navigator>
+    <View style={authCanvasStyles.root}>
+      <AuthVideoBackground enabled={videoEnabled} />
+      <AuthStack.Navigator
+        screenOptions={screenOptions}
+        initialRouteName="RoleSelection"
+        screenListeners={({route}) => ({
+          focus: () => setVideoEnabled(
+            route.name !== 'ForgotPassword' && route.name !== 'PasswordResetSent',
+          ),
+        })}>
+        <AuthStack.Screen name="RoleSelection" component={RoleSelectionScreen} options={authVideoOptions} />
+        <AuthStack.Screen name="PhoneSignIn" component={PhoneSignInScreen} options={authVideoOptions} />
+        <AuthStack.Screen name="EmailSignIn" component={EmailSignInScreen} options={authVideoOptions} />
+        <AuthStack.Screen name="OtpVerification" component={OtpVerificationScreen} options={authVideoOptions} />
+        <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        <AuthStack.Screen name="PasswordResetSent" component={PasswordResetSentScreen} />
+      </AuthStack.Navigator>
+    </View>
   );
 }
 

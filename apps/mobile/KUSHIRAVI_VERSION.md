@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.16 Built and Installed
+# KUSHIRAVI App Build - Version 1.17 Login Update Prepared
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -18,6 +18,36 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.17 Prepared - Local video login reference
+
+- Starts from installed v1.16 / `a035229b22d4399e8eb23ee1a46bc6770a9c0092`
+  and clean branch HEAD `d3f193204243f733b409bd0aa8a6bf573bc54382`.
+- Android versionCode `24`, versionName `1.17`; new installable tag will be
+  `KUSHIRAVI-app-v1.17` after verification. Previous checkpoints untouched.
+- Implements the five login states in `Change the style of login page.docx`:
+  welcome, Customer phone, Chef phone, OTP and email/password. Written 75% video /
+  25% white-panel split takes priority over the welcome screenshot's ratio.
+  White curved panels, role cards and glossy Craves-red actions; no login footer.
+- Original MP4 copied unchanged to
+  `src/assets/auth/craves-login-background.mp4`; bundled local first-frame poster.
+  Video SHA-256 `49BF276910E0E956815E3EF6A4394CDC442DC722EF6DE9025DFD21A95A8942D7`.
+  No CDN/download request, one shared muted/looping Expo SDK 56 player, foreground
+  playback only, still-image fallback for reduced motion or decoder failure.
+- Existing approved Craves logo only. No Home/menu/glass/splash redesign.
+- Keep Firebase/API auth handlers, India-only +91 validation, request gates,
+  cooldowns, autofill, password recovery and backend Chef approval unchanged.
+  Chef sign-up uses the existing phone-OTP path; the authenticated missing-Chef
+  message uses the existing NOT_SUBMITTED onboarding state. Later onboarding
+  screen redesigns are outside this request.
+- Email/password remains email-only; no unsupported phone/password promise.
+  Terms/Privacy links omitted pending real approved destinations, not fake links.
+- No backend, API, finance, cart/order, Razorpay, remote or CI changes; no push.
+- Planned APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.apk`.
+- Planned source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17-source.zip`.
+- Exact source SHA, build/test and artifact evidence will be recorded after
+  verification. Phone still installed with v1.16, code 23; not signed out or reset.
+- Change paths and manual checks: `docs\LOGIN_VIDEO_V1_17.md`.
 
 ### Version 1.16 Built and Installed - Precise menu and Home scrolling changes
 

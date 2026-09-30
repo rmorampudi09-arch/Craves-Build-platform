@@ -17,8 +17,8 @@ export const CHEF_TABS: readonly ChefTabDefinition[] = [
   {routeName: 'Profile', label: 'Profile', icon: 'account'},
 ] as const;
 
-export const CHEF_TAB_ACTIVE_COLOR = colors.flameRed;
-export const CHEF_TAB_INACTIVE_COLOR = colors.mutedText;
+export const CHEF_TAB_ACTIVE_COLOR = colors.black;
+export const CHEF_TAB_INACTIVE_COLOR = colors.black;
 
 /** Keep each Chef tab mounted so its local navigation/UI state survives tab changes. */
 export const CHEF_TAB_STATE_OPTIONS = {

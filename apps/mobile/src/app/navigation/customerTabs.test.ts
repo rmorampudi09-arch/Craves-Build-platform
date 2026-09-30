@@ -2,6 +2,7 @@ import {colors} from '../../design/tokens';
 import {
   CUSTOMER_PROFILE_TAB_STATE_OPTIONS,
   CUSTOMER_TAB_ACTIVE_COLOR,
+  CUSTOMER_TAB_INACTIVE_COLOR,
   CUSTOMER_TAB_STATE_OPTIONS,
   CUSTOMER_TABS,
   getCustomerTabDefinition,
@@ -23,8 +24,9 @@ describe('customerTabs', () => {
     ]);
   });
 
-  it('uses Flame Red for the active customer tab', () => {
-    expect(CUSTOMER_TAB_ACTIVE_COLOR).toBe(colors.flameRed);
+  it('uses black for all customer menu icons and labels', () => {
+    expect(CUSTOMER_TAB_ACTIVE_COLOR).toBe(colors.black);
+    expect(CUSTOMER_TAB_INACTIVE_COLOR).toBe(colors.black);
   });
 
   it('keeps each tab navigator mounted instead of popping its stack on blur', () => {

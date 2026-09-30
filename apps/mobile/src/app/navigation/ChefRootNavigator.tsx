@@ -12,10 +12,10 @@ import {
   createNativeStackNavigator,
   type NativeStackNavigationProp,
 } from '@react-navigation/native-stack';
-import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+import {SafeAreaView} from 'react-native-safe-area-context';
 import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
-import {colors, fontWeight, spacing, touchTarget, typography} from '../../design/tokens';
+import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
 import {ChefAnalyticsScreen} from '../../features/chefAnalytics/screens/ChefAnalyticsScreen';
 import {ChefBusinessInformationScreen} from '../../features/chefBusinessInformation/screens/ChefBusinessInformationScreen';
@@ -45,6 +45,7 @@ import {
 import {ChefSubscriptionPlanScreen} from '../../features/chefSubscription/screens/ChefSubscriptionPlanScreen';
 import {ChefSupportScreen} from '../../features/chefSupport/screens/ChefSupportScreen';
 import {Icon} from '../../shared/components/Icon';
+import {LiquidBottomTabBar, LiquidTabButton, LiquidTabScene, LiquidTabScenesProvider} from '../../shared/components/LiquidBottomTabBar';
 import {
   CHEF_TAB_ACTIVE_COLOR,
   CHEF_TAB_INACTIVE_COLOR,
@@ -95,8 +96,6 @@ function ProfileTabIcon({color, size}: TabIconProps) {
 }
 
 function useChefTabScreenOptions() {
-  const insets = useSafeAreaInsets();
-
   return React.useMemo(
     () =>
       ({
@@ -105,20 +104,22 @@ function useChefTabScreenOptions() {
         tabBarActiveTintColor: CHEF_TAB_ACTIVE_COLOR,
         tabBarInactiveTintColor: CHEF_TAB_INACTIVE_COLOR,
         tabBarHideOnKeyboard: true,
+        tabBarButton: LiquidTabButton,
+        tabBarLabelPosition: 'below-icon',
         tabBarLabelStyle: {
           fontSize: typography.tiny,
           fontWeight: fontWeight.semibold,
         },
         tabBarStyle: {
-          height: touchTarget.comfortable + spacing.xs + insets.bottom,
-          backgroundColor: colors.white,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
-          paddingTop: spacing.xs,
-          paddingBottom: Math.max(insets.bottom, spacing.xs),
+          height: 80,
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          elevation: 0,
+          paddingTop: 0,
+          paddingBottom: 0,
         },
       }) as const,
-    [insets.bottom],
+    [],
   );
 }
 
@@ -229,6 +230,10 @@ function ChefProfileNavigator() {
   );
 }
 
+function renderChefTabScene({route, children}: {route: {key: string}; children: React.ReactNode}) {
+  return <LiquidTabScene routeKey={route.key}>{children}</LiquidTabScene>;
+}
+
 function ChefTabsNavigator() {
   const tabScreenOptions = useChefTabScreenOptions();
   const {counters} = useChefOperationalState();
@@ -240,7 +245,12 @@ function ChefTabsNavigator() {
         : undefined;
 
   return (
-    <Tab.Navigator initialRouteName="Dashboard" screenOptions={tabScreenOptions}>
+    <LiquidTabScenesProvider>
+    <Tab.Navigator
+      initialRouteName="Dashboard"
+      screenOptions={tabScreenOptions}
+      tabBar={LiquidBottomTabBar}
+      screenLayout={renderChefTabScene}>
       <Tab.Screen
         name="Dashboard"
         component={ChefDashboardScreen}
@@ -292,6 +302,7 @@ function ChefTabsNavigator() {
         }}
       />
     </Tab.Navigator>
+    </LiquidTabScenesProvider>
   );
 }
 

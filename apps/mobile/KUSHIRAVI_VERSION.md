@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.13 Prepared
+# KUSHIRAVI App Build - Version 1.15 Prepared
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,13 +9,44 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Prepared Android versionCode: `14`
-- Prepared Android versionName: `1.13`
-- Last verified installed version: `1.12` / versionCode `13`, source commit `5f424b7cd22cf5e71684a3a28f5c01187bda1311`, tag `KUSHIRAVI-app-v1.12`
+- Prepared Android versionCode: `17`
+- Prepared Android versionName: `1.15`
+- Last verified installed version: `1.13` / versionCode `16`, source commit `28c67965c044a78ac305a66a4349fb12a2cb24e5`, tag `KUSHIRAVI-app-v1.13-restored`
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.15 Prepared - Seven precise menu and journey changes
+
+- Source baseline: exact `KUSHIRAVI-app-v1.13`, `2e91f049976686ea082babe9b66e3923c65ec994`.
+- Source commit: the commit containing this entry; exact SHA and build/install evidence recorded after verification.
+- Planned tag: `KUSHIRAVI-app-v1.15`. Version 1.14 and the restored 1.13 tag already exist and remain untouched.
+- Android versionCode: `17`; versionName: `1.15`. Build 17 can update the phone's build 16 without clearing app data.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.apk`.
+- Buildable source: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15-source.zip`.
+- Changes: black Customer/Chef menu labels and icons; remove the Android press ripple;
+  silent-failure selection haptics; existing v1.13 menu glass on all menu-bearing
+  Customer/Chef screens; remember authenticated Customer/Chef workspace by identity;
+  one Cart Continue to Payment action for unchanged bills; native sticky category
+  scrolling with one rail; remove only the two requested Chefs discovery descriptions.
+- Safety: preserve backend role authorization, final catalog/finance validation,
+  Razorpay proof verification and interrupted-payment recovery. A changed bill still
+  requires review; rapid taps cannot create concurrent checkout attempts. No backend,
+  API route, splash, card-glass profile, remote or CI changes. No GitHub push.
+- Dependency: Expo SDK 56-compatible `expo-haptics ~56.0.3`; Android native ticks and
+  iOS selection feedback, with optional native loading and silent fallback.
+- Verification: TypeScript and 186 suites / 938 tests passed; final lint/build/live
+  verification recorded in `docs\PRECISE_JOURNEY_CHANGES_V1_15.md`.
+
+### Verified rollback checkpoint - Version 1.13
+
+- Original tag: `KUSHIRAVI-app-v1.13`; source `2e91f049976686ea082babe9b66e3923c65ec994`.
+- Original Android version: name `1.13`, code `14`; existing APK and source ZIP preserved.
+- Phone-safe restoration: `KUSHIRAVI-app-v1.13-restored`, source
+  `28c67965c044a78ac305a66a4349fb12a2cb24e5`, name `1.13`, code `16`.
+- The restore changes only internal Android versionCode and documentation; the
+  v1.15 update starts from the exact original source, not the reverted v1.14 styling.
 
 ### Version 1.13 Prepared - Home glass without drawn capsule outlines
 

@@ -65,6 +65,7 @@ import {
 } from '../api/cartServiceabilityApi';
 import {
   getCartCheckoutActionLabel,
+  checkoutMatchesDisplayedBill,
   isCartLineInteractionDisabled,
   recoveredCheckoutMatchesCurrentCart,
 } from '../cartInteractionPolicy';
@@ -395,6 +396,7 @@ export function CustomerCartScreen() {
   const [checkoutReview, setCheckoutReview] = useState<CheckoutSession | null>(null);
   const [reviewCartModel, setReviewCartModel] = useState<CartScreenModel | null>(null);
   const activeCheckoutRef = useRef<CheckoutSession | null>(null);
+  const checkoutInFlightRef = useRef(false);
   const persistedRecoveryRef = useRef<
     ReturnType<typeof recoverPersistedPaymentAttempt> | null
   >(null);
@@ -653,7 +655,9 @@ export function CustomerCartScreen() {
 
   const handleCheckout = useCallback(async () => {
     const addressId = header.selectedLocation?.addressId;
-    if (!model || !addressId || checkoutBusy) return;
+    if (!model || !addressId || checkoutInFlightRef.current) return;
+    checkoutInFlightRef.current = true;
+    const displayedBill = billPreview.preview;
     setInteractionError(null);
     setCheckoutBusy(true);
     try {
@@ -767,9 +771,9 @@ export function CustomerCartScreen() {
 
       setCheckoutReview(checkout);
 
-      if (preparedForReview) {
+      if (preparedForReview && !checkoutMatchesDisplayedBill(checkout, displayedBill)) {
         setPaymentNotice(
-          'Final total is ready. Review Bill Details, then continue payment.',
+          'The final bill changed. Review the updated Bill Details before continuing to payment.',
         );
         return;
       }
@@ -867,13 +871,14 @@ export function CustomerCartScreen() {
         error instanceof Error ? error.message : 'Checkout could not be started.';
       setInteractionError(message);
     } finally {
+      checkoutInFlightRef.current = false;
       setCheckoutBusy(false);
     }
   }, [
     authPhone,
+    billPreview.preview,
     cartClientRevision,
     cartSnapshot,
-    checkoutBusy,
     dispatch,
     header.selectedLocation,
     model,
@@ -941,7 +946,7 @@ export function CustomerCartScreen() {
           serviceability={serviceability}
           estimatedMinutes={estimatedMinutes}
           onChange={() => {
-            if (paymentRecoveryActive) {
+            if (checkoutInFlightRef.current || paymentRecoveryActive) {
               setInteractionError(
                 'Finish or resolve the current payment before changing the delivery address.',
               );
@@ -1065,7 +1070,9 @@ export function CustomerCartScreen() {
         model?.items.length &&
           header.selectedLocation?.addressId &&
           serviceability === 'SERVICEABLE' &&
-          !checkoutBusy,
+          !checkoutBusy &&
+          Boolean(billPreview.preview) &&
+          !Object.values(mutations).some(entry => entry.status === 'PENDING'),
       );
 
   return (
@@ -1073,7 +1080,7 @@ export function CustomerCartScreen() {
       <CustomerHeader
         variant="compact"
         onPressLocation={() => {
-          if (paymentRecoveryActive) {
+          if (checkoutInFlightRef.current || paymentRecoveryActive) {
             setInteractionError(
               'Finish or resolve the current payment before changing the delivery address.',
             );
@@ -1106,7 +1113,6 @@ export function CustomerCartScreen() {
               checkoutBusy,
               paymentRecoveryActive,
               staleRecoveredCheckout,
-              Boolean(visibleCheckoutReview),
             )}
             disabled={!checkoutEnabled}
             onPress={

@@ -79,8 +79,8 @@ describe('cartInteractionPolicy', () => {
   });
 
   it('uses an explicit continuation label for a recovered pending payment', () => {
-    expect(getCartCheckoutActionLabel(false, false)).toBe('Proceed to Checkout');
-    expect(getCartCheckoutActionLabel(false, false, false, true)).toBe(
+    expect(getCartCheckoutActionLabel(false, false)).toBe('Continue to Payment');
+    expect(getCartCheckoutActionLabel(false, false, false)).toBe(
       'Continue to Payment',
     );
     expect(getCartCheckoutActionLabel(false, true)).toBe('Continue payment');

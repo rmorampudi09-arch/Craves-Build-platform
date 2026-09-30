@@ -1,4 +1,5 @@
 export const colors = {
+  black: '#000000',
   flameRed: '#F62E18',
   /**
    * Text-safe red for normal-sized action copy and text-bearing red surfaces.

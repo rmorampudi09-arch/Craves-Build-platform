@@ -336,9 +336,6 @@ export function DiscoverHomeChefsScreen() {
       <View style={styles.heroCopy}>
         <Text style={styles.eyebrow}>HOME CHEFS NEAR YOU</Text>
         <Text style={styles.heading}>Discover home chefs</Text>
-        <Text style={styles.subheading}>
-          Find active kitchens serving homemade food around your selected location.
-        </Text>
       </View>
 
       <View onLayout={handleSearchRowLayout} style={styles.searchRow}>
@@ -365,9 +362,6 @@ export function DiscoverHomeChefsScreen() {
       <View style={styles.sectionHeadingRow}>
         <View style={styles.sectionHeadingCopy}>
           <Text style={styles.sectionTitle}>Nearby chefs</Text>
-          <Text style={styles.sectionCaption}>
-            Active kitchens ordered by distance from your saved location
-          </Text>
         </View>
         <View style={styles.radiusPill}>
           <Text style={styles.radiusPillText}>Within 10 km</Text>

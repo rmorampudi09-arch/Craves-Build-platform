@@ -9,7 +9,6 @@ import {
   Text,
   useWindowDimensions,
   View,
-  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
@@ -334,10 +333,7 @@ export function CustomerHomeScreen() {
   );
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [categoryPinned, setCategoryPinned] = useState(false);
-  const [homeHeaderHeight, setHomeHeaderHeight] = useState(0);
   const [mutationError, setMutationError] = useState<string | null>(null);
-  const categoryPinnedRef = useRef(false);
   const listRef = useRef<FlatList<HomeFeedListItem>>(null);
 
   const searchScopeKey =
@@ -486,27 +482,6 @@ export function CustomerHomeScreen() {
       search.saveScrollOffset(event.nativeEvent.contentOffset.y);
     },
     [search],
-  );
-
-  const handleHeaderLayout = useCallback((event: LayoutChangeEvent) => {
-    setHomeHeaderHeight(event.nativeEvent.layout.height);
-  }, []);
-
-  const handleHomeScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      bottomNavScroll.onScroll(event);
-
-      const nextPinned =
-        !feed.locationRequired &&
-        homeHeaderHeight > 0 &&
-        event.nativeEvent.contentOffset.y >= homeHeaderHeight;
-
-      if (categoryPinnedRef.current !== nextPinned) {
-        categoryPinnedRef.current = nextPinned;
-        setCategoryPinned(nextPinned);
-      }
-    },
-    [bottomNavScroll, feed.locationRequired, homeHeaderHeight],
   );
 
   const restoreListOffset = useCallback(() => {
@@ -695,7 +670,7 @@ export function CustomerHomeScreen() {
   })();
 
   const headerContent = (
-    <View onLayout={handleHeaderLayout}>
+    <View>
       {selectedLocation ? (
         <>
           <View style={[styles.searchRow, compactLayout && styles.searchRowCompact]}>
@@ -774,7 +749,8 @@ export function CustomerHomeScreen() {
           onEndReached={loadNextPage}
           onEndReachedThreshold={0.6}
           onMomentumScrollEnd={saveListOffset}
-          onScroll={handleHomeScroll}
+          onScroll={bottomNavScroll.onScroll}
+          stickyHeaderIndices={feed.locationRequired ? undefined : [1]}
           onScrollEndDrag={saveListOffset}
           refreshControl={
             <RefreshControl
@@ -867,14 +843,6 @@ export function CustomerHomeScreen() {
             {paddingBottom: listBottomPadding},
           ]}
         />
-        {categoryPinned && !feed.locationRequired ? (
-          <View pointerEvents="box-none" style={styles.pinnedCategoryWrap}>
-            <HomeCategoryRail
-              selectedCategory={selectedCategory}
-              onSelect={setSelectedCategory}
-            />
-          </View>
-        ) : null}
       </View>
       <CustomerLocationSelector
         visible={locationSelectorVisible}
@@ -937,14 +905,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxs,
   },
   stickyCategoryWrap: {
-    backgroundColor: colors.surfaceBase,
-  },
-  pinnedCategoryWrap: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 30,
     backgroundColor: colors.surfaceBase,
   },
   emptyResultSpace: {

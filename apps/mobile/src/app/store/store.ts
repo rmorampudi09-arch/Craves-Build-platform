@@ -1,5 +1,6 @@
 import {configureStore} from '@reduxjs/toolkit';
 import {authReducer} from '../../features/auth/state/authSlice';
+import {activeRolePersistence} from '../../features/auth/state/activeRolePersistence';
 import {cartReducer} from '../../features/cart/state/cartSlice';
 import {customerShellReducer} from '../../features/customerShell/state/customerShellSlice';
 import {discoveryFilterReducer} from '../../features/discoveryFilters/state/discoveryFilterSlice';
@@ -16,7 +17,7 @@ export const store = configureStore({
     paymentMethods: paymentMethodReducer,
   },
   middleware: getDefaultMiddleware =>
-    getDefaultMiddleware({serializableCheck: true, immutableCheck: __DEV__}),
+    getDefaultMiddleware({serializableCheck: true, immutableCheck: __DEV__}).concat(activeRolePersistence),
 });
 
 export type RootState = ReturnType<typeof store.getState>;

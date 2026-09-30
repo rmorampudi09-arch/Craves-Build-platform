@@ -99,6 +99,12 @@ jest.mock('expo-glass-effect', () => {
   };
 });
 
+jest.mock('expo-haptics', () => ({
+  AndroidHaptics: {Segment_Tick: 'segment-tick'},
+  performAndroidHapticsAsync: jest.fn(async () => undefined),
+  selectionAsync: jest.fn(async () => undefined),
+}));
+
 jest.mock('@react-native-firebase/auth', () => ({
   getAuth: jest.fn(() => ({})),
   getIdToken: jest.fn(),

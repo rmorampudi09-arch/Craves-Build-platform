@@ -1,6 +1,7 @@
 import {colors} from '../../design/tokens';
 import {
   CHEF_TAB_ACTIVE_COLOR,
+  CHEF_TAB_INACTIVE_COLOR,
   CHEF_TAB_STATE_OPTIONS,
   CHEF_TABS,
   getChefTabDefinition,
@@ -29,8 +30,9 @@ describe('chefTabs', () => {
     expect(CHEF_TABS.some(tab => tab.icon === 'cart')).toBe(false);
   });
 
-  it('uses Flame Red for the active Chef tab', () => {
-    expect(CHEF_TAB_ACTIVE_COLOR).toBe(colors.flameRed);
+  it('uses black for all Chef menu icons and labels', () => {
+    expect(CHEF_TAB_ACTIVE_COLOR).toBe(colors.black);
+    expect(CHEF_TAB_INACTIVE_COLOR).toBe(colors.black);
   });
 
   it('preserves each Chef tab instead of popping it on blur', () => {

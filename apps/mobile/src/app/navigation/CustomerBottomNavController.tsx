@@ -26,7 +26,6 @@ import {
   type BottomTabBarProps,
   type BottomTabBarButtonProps,
 } from '@react-navigation/bottom-tabs';
-import {PlatformPressable} from '@react-navigation/elements';
 import {BlurTargetView} from 'expo-blur';
 import {
   CommonActions,
@@ -52,6 +51,8 @@ import {
 import {formatCartMoney} from '../../features/cart/viewCartOverlayModel';
 import {Icon} from '../../shared/components/Icon';
 import {LiquidGlassSurface} from '../../shared/components/LiquidGlassSurface';
+import {LiquidTabButton} from '../../shared/components/LiquidBottomTabBar';
+import {customerHaptics} from '../../shared/haptics/customerHaptics';
 import {
   createCustomerBottomNavScrollState,
   reduceCustomerBottomNavScroll,
@@ -183,7 +184,7 @@ export function CustomerBottomNavScene({routeKey, children}: PropsWithChildren<{
 }
 
 export function CustomerBottomTabButton(props: BottomTabBarButtonProps) {
-  return <PlatformPressable {...props} style={[props.style, styles.centeredTabButton]} />;
+  return <LiquidTabButton {...props} />;
 }
 
 export function CustomerBottomTabBar(props: BottomTabBarProps) {
@@ -223,6 +224,7 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
   }, []);
 
   const handleOpenCart = useCallback(() => {
+    void customerHaptics.selection();
     props.navigation.dispatch(
       CommonActions.navigate({
         name: activeTabRoute.name,
@@ -264,12 +266,7 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
       ]}>
       <View style={styles.shellShadow}>
         <LiquidGlassSurface
-          appearance={
-            activeTabRoute.name === 'Home' &&
-            (!focusedChildRouteName || focusedChildRouteName === 'CustomerHomeRoot')
-              ? 'home'
-              : 'default'
-          }
+          appearance="home"
           blurTarget={blurTargets[activeTabRoute.key]}
           variant="navigation"
           style={styles.shell}>
@@ -288,7 +285,7 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
                 styles.cartAction,
                 pressed && styles.cartActionPressed,
               ]}>
-              <Icon name="cart" color={colors.white} size={20} />
+              <Icon name="cart" color={colors.black} size={20} />
               <View style={styles.cartCopy}>
                 <Text numberOfLines={1} style={styles.cartTitle}>
                   Cart · {itemCount}
@@ -307,7 +304,6 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
 
 const styles = StyleSheet.create({
   scene: {flex: 1},
-  centeredTabButton: {justifyContent: 'center', paddingVertical: 8},
   positioner: {
     position: 'absolute',
     left: spacing.md,
@@ -365,13 +361,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   cartTitle: {
-    color: colors.white,
+    color: colors.black,
     fontSize: typography.small,
     fontWeight: fontWeight.bold,
   },
   cartTotal: {
     marginTop: spacing.xxs,
-    color: colors.white,
+    color: colors.black,
     fontSize: typography.tiny,
     fontWeight: fontWeight.semibold,
   },

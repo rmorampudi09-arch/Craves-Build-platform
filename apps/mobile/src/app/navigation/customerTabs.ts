@@ -16,8 +16,8 @@ export const CUSTOMER_TABS: readonly CustomerTabDefinition[] = [
   {routeName: 'Profile', label: 'Profile', icon: 'account'},
 ] as const;
 
-export const CUSTOMER_TAB_ACTIVE_COLOR = colors.flameRed;
-export const CUSTOMER_TAB_INACTIVE_COLOR = colors.mutedText;
+export const CUSTOMER_TAB_ACTIVE_COLOR = colors.black;
+export const CUSTOMER_TAB_INACTIVE_COLOR = colors.black;
 
 /**
  * Preserve each tab stack while P26 independently controls only the visual

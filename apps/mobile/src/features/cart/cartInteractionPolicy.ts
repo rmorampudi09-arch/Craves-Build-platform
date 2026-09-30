@@ -1,5 +1,6 @@
 import type {CheckoutSession} from '../checkout/domain/checkoutTypes';
 import type {CartSnapshot} from './domain/cartTypes';
+import type {CartBillPreview} from './api/cartBillPreviewApi';
 
 export interface CartLineInteractionState {
   checkoutBusy: boolean;
@@ -58,11 +59,21 @@ export function getCartCheckoutActionLabel(
   checkoutBusy: boolean,
   paymentRecoveryActive: boolean,
   staleRecoveredCheckout = false,
-  finalBillReady = false,
 ): string {
   if (checkoutBusy) return 'Please wait…';
   if (staleRecoveredCheckout) return 'Check previous payment';
   if (paymentRecoveryActive) return 'Continue payment';
-  if (finalBillReady) return 'Continue to Payment';
-  return 'Proceed to Checkout';
+  return 'Continue to Payment';
+}
+
+/** Skip repeat review only when every amount and the delivery address agree. */
+export function checkoutMatchesDisplayedBill(
+  checkout: CheckoutSession,
+  preview: CartBillPreview | null,
+): boolean {
+  if (!preview || checkout.deliveryAddressId !== preview.deliveryAddressId) return false;
+  return (['foodSubtotal', 'platformFee', 'deliveryFee', 'taxAmount', 'grandTotal'] as const)
+    .every(field => checkout[field].currency === preview[field].currency &&
+      canonicalDecimal(checkout[field].amount) !== null &&
+      canonicalDecimal(checkout[field].amount) === canonicalDecimal(preview[field].amount));
 }

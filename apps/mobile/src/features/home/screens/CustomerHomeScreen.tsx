@@ -14,7 +14,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {BlurView} from 'expo-blur';
+import {BlurTargetView} from 'expo-blur';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
@@ -34,6 +34,7 @@ import {
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
+import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface';
 import {HomeCategoryRail} from '../components/HomeCategoryRail';
 import {HomePromoAndKitchens} from '../components/HomePromoAndKitchens';
 import {
@@ -135,6 +136,7 @@ function DishCard({
   onOpen,
 }: DishCardProps) {
   const kitchenName = dish.kitchenDisplayName?.trim() || dish.kitchenName;
+  const imageTarget = useRef<View | null>(null);
   const quantity = cartLine?.quantity ?? 0;
   const availableCount = getDisplayAvailabilityCount(dish.id);
   const foodTypeLabel =
@@ -152,43 +154,36 @@ function DishCard({
   return (
     <View style={styles.dishCard}>
       <View style={styles.mediaWrap}>
-        <Pressable
-          accessibilityHint="Opens full dish information and purchase actions"
-          accessibilityLabel={`View details for ${dish.itemName}`}
-          accessibilityRole="button"
-          onPress={() => onOpen(dish.id)}
-          style={({pressed}) => pressed && styles.dishOpenPressed}>
-          {dish.primaryImageUrl ? (
-            <Image
-              accessibilityIgnoresInvertColors
-              source={{uri: dish.primaryImageUrl}}
-              resizeMode="cover"
-              style={styles.dishImage}
-            />
-          ) : (
-            <View style={styles.imageFallback}>
-              <Text style={styles.imageFallbackText}>{dish.category}</Text>
-            </View>
-          )}
-        </Pressable>
-        <BlurView
-          experimentalBlurMethod="dimezisBlurView"
-          intensity={62}
+        <BlurTargetView ref={imageTarget}>
+          <Pressable
+            accessibilityHint="Opens full dish information and purchase actions"
+            accessibilityLabel={`View details for ${dish.itemName}`}
+            accessibilityRole="button"
+            onPress={() => onOpen(dish.id)}
+            style={({pressed}) => pressed && styles.dishOpenPressed}>
+            {dish.primaryImageUrl ? (
+              <Image
+                accessibilityIgnoresInvertColors
+                source={{uri: dish.primaryImageUrl}}
+                resizeMode="cover"
+                style={styles.dishImage}
+              />
+            ) : (
+              <View style={styles.imageFallback}>
+                <Text style={styles.imageFallbackText}>{dish.category}</Text>
+              </View>
+            )}
+          </Pressable>
+        </BlurTargetView>
+        <LiquidGlassSurface
+          blurTarget={imageTarget}
           pointerEvents="none"
-          tint="light"
           style={styles.availabilityPill}>
           <View style={styles.availabilityDot} />
           <Text style={styles.glassPillText}>Available - {availableCount}</Text>
-        </BlurView>
+        </LiquidGlassSurface>
 
-        <View style={styles.favoriteGlass}>
-          <BlurView
-            experimentalBlurMethod="dimezisBlurView"
-            intensity={66}
-            pointerEvents="none"
-            tint="light"
-            style={StyleSheet.absoluteFill}
-          />
+        <LiquidGlassSurface blurTarget={imageTarget} style={styles.favoriteGlass}>
           <CustomerFavoriteHeartButton
             favorite={favorite}
             pending={favoritePending}
@@ -197,17 +192,15 @@ function DishCard({
             onToggle={() => onFavoriteToggle(dish.id, favorite)}
             style={styles.favoriteButton}
           />
-        </View>
+        </LiquidGlassSurface>
 
-        <BlurView
-          experimentalBlurMethod="dimezisBlurView"
-          intensity={62}
+        <LiquidGlassSurface
+          blurTarget={imageTarget}
           pointerEvents="none"
-          tint="light"
           style={styles.foodTypePill}>
           <View style={[styles.foodTypeDot, {backgroundColor: foodTypeColor}]} />
           <Text style={styles.glassPillText}>{foodTypeLabel}</Text>
-        </BlurView>
+        </LiquidGlassSurface>
       </View>
 
       <View style={styles.dishBody}>
@@ -1011,9 +1004,6 @@ const styles = StyleSheet.create({
     width: touchTarget.minimum,
     height: touchTarget.minimum,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.64)',
-    backgroundColor: 'rgba(255,255,255,0.10)',
     overflow: 'hidden',
   },
   favoriteButton: {
@@ -1031,9 +1021,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.64)',
-    backgroundColor: 'rgba(255,255,255,0.10)',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     overflow: 'hidden',
@@ -1054,9 +1041,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.64)',
-    backgroundColor: 'rgba(255,255,255,0.10)',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     overflow: 'hidden',

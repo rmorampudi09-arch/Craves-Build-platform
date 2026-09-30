@@ -52,6 +52,7 @@ import {
   CUSTOMER_ORDERS_TABS,
   isCustomerOrdersTabAuthoritative,
   selectCustomerOrdersTab,
+  getPendingOrderVisibilityExpiry,
   type CustomerOrdersTabKey,
 } from '../presentation/customerOrdersPresentation';
 import {useCustomerOrdersQuery} from '../query/customerOrdersQueries';
@@ -125,9 +126,26 @@ export function CustomerOrdersScreen() {
   const offsetsRef = useRef<Record<CustomerOrdersTabKey, number>>({...initialOffsets});
 
   const snapshot = ordersQuery.data;
+  const [visibilityNow, setVisibilityNow] = useState(Date.now);
+  useEffect(() => {
+    if (!active) return undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const updateVisibility = () => {
+      const now = Date.now();
+      setVisibilityNow(now);
+      const expiries = snapshot?.orders
+        .map(getPendingOrderVisibilityExpiry)
+        .filter((expiry): expiry is number => expiry !== null && expiry + 1 > now) ?? [];
+      if (expiries.length) {
+        timeout = setTimeout(updateVisibility, Math.min(Math.min(...expiries) + 1 - now, 2_147_483_647));
+      }
+    };
+    updateVisibility();
+    return () => clearTimeout(timeout);
+  }, [active, snapshot]);
   const visibleOrders = useMemo(
-    () => (snapshot ? selectCustomerOrdersTab(snapshot, selectedTab) : []),
-    [selectedTab, snapshot],
+    () => (snapshot ? selectCustomerOrdersTab(snapshot, selectedTab, visibilityNow) : []),
+    [selectedTab, snapshot, visibilityNow],
   );
   const queryError = ordersQuery.error ? toAppApiError(ordersQuery.error) : null;
   const offline = queryError?.code === 'NETWORK_ERROR';

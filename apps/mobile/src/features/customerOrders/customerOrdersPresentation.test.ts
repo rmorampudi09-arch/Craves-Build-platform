@@ -9,6 +9,8 @@ import {
   getCustomerOrderStatusPresentation,
   isCustomerOrdersTabAuthoritative,
   selectCustomerOrdersTab,
+  getPendingOrderVisibilityExpiry,
+  PENDING_ORDER_VISIBILITY_MS,
 } from './presentation/customerOrdersPresentation';
 
 function order(status: CustomerOrder['status'], id = '12345678-1111-4111-8111-111111111111'): CustomerOrder {
@@ -34,6 +36,33 @@ function order(status: CustomerOrder['status'], id = '12345678-1111-4111-8111-11
 }
 
 describe('customer orders lifecycle tabs', () => {
+  it('shows pending payments for ten minutes from the last server update', () => {
+    const pending = order('PAYMENT_PENDING');
+    const snapshot = createCustomerOrdersSnapshot([pending]);
+    const expiresAt = Date.parse(pending.updatedAt) + PENDING_ORDER_VISIBILITY_MS;
+    expect(selectCustomerOrdersTab(snapshot, 'ALL', expiresAt - 1)).toEqual([pending]);
+    expect(selectCustomerOrdersTab(snapshot, 'UPCOMING', expiresAt)).toEqual([pending]);
+    expect(selectCustomerOrdersTab(snapshot, 'ALL', expiresAt + 1)).toEqual([]);
+    expect(selectCustomerOrdersTab(snapshot, 'UPCOMING', expiresAt + 1)).toEqual([]);
+    expect(snapshot.orders).toEqual([pending]);
+  });
+
+  it('uses a newer pending update and retains every non-pending lifecycle state', () => {
+    const pending = {...order('PAYMENT_PENDING'), updatedAt: '2026-08-08T12:20:00Z'};
+    const paid = order('PAID');
+    const delivered = order('DELIVERED');
+    const refunded = order('REFUNDED');
+    const snapshot = createCustomerOrdersSnapshot([pending, paid, delivered, refunded]);
+    expect(selectCustomerOrdersTab(snapshot, 'ALL', Date.parse('2026-08-08T12:25:00Z'))).toEqual([pending, paid, delivered, refunded]);
+    expect(selectCustomerOrdersTab(snapshot, 'ALL', Date.parse('2026-08-08T13:00:00Z'))).toEqual([paid, delivered, refunded]);
+  });
+
+  it('falls back to creation time and keeps orders with an unusable clock visible', () => {
+    const pending = {...order('PAYMENT_PENDING'), updatedAt: 'invalid'};
+    expect(getPendingOrderVisibilityExpiry(pending)).toBe(Date.parse(pending.createdAt) + PENDING_ORDER_VISIBILITY_MS);
+    expect(getPendingOrderVisibilityExpiry({...pending, createdAt: 'invalid'})).toBeNull();
+  });
+
   it('maps exact backend statuses into all four authoritative tabs', () => {
     const preparing = order('PREPARING');
     const delivered = order('DELIVERED', '87654321-1111-4111-8111-111111111111');

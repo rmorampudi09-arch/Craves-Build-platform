@@ -11,9 +11,10 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
-import {BlurView} from 'expo-blur';
+import {BlurTargetView} from 'expo-blur';
 import {
   useNavigation,
+  useIsFocused,
   type NavigationProp,
 } from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -32,6 +33,8 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
+import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface';
+import {KitchenImageCarousel} from './KitchenImageCarousel';
 import {useNearbyChefDiscoveryQuery} from '../../chefDiscovery/query/nearbyChefDiscoveryQueries';
 import type {NearbyKitchen} from '../../chefDiscovery/api/nearbyChefDiscoveryApi';
 import {CustomerChefAvatar} from '../../customerShell/components/CustomerChefAvatar';
@@ -55,7 +58,6 @@ const TOP_KITCHENS_PAGE_SIZE = 12;
 const TOP_KITCHEN_DISH_PAGE_SIZE = 100;
 const MAX_TOP_KITCHENS = 8;
 const PROMO_AUTO_ADVANCE_MS = 5_000;
-const KITCHEN_IMAGE_AUTO_ADVANCE_MS = 2_000;
 
 const HOME_PROMO_BANNERS = [
   {
@@ -188,135 +190,6 @@ function PromoCarousel({
   );
 }
 
-function KitchenImageCarousel({
-  imageUrls,
-  width,
-  height,
-  kitchenName,
-  onPress,
-}: {
-  imageUrls: readonly string[];
-  width: number;
-  height: number;
-  kitchenName: string;
-  onPress: () => void;
-}) {
-  const slides = useMemo(
-    () =>
-      imageUrls.length > 0
-        ? imageUrls.map((url, index) => ({
-            key: `${index}:${url}`,
-            url,
-          }))
-        : [{key: 'placeholder', url: null}],
-    [imageUrls],
-  );
-  const listRef = useRef<FlatList<(typeof slides)[number]>>(null);
-  const activeIndexRef = useRef(0);
-  const isDraggingRef = useRef(false);
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  useEffect(() => {
-    activeIndexRef.current = 0;
-    setActiveIndex(0);
-    listRef.current?.scrollToOffset({offset: 0, animated: false});
-  }, [slides.length, width]);
-
-  useEffect(() => {
-    if (width <= 0 || slides.length < 2) return undefined;
-    const interval = setInterval(() => {
-      if (isDraggingRef.current) return;
-      const nextIndex = (activeIndexRef.current + 1) % slides.length;
-      listRef.current?.scrollToOffset({
-        offset: nextIndex * width,
-        animated: true,
-      });
-      activeIndexRef.current = nextIndex;
-      setActiveIndex(nextIndex);
-    }, KITCHEN_IMAGE_AUTO_ADVANCE_MS);
-    return () => clearInterval(interval);
-  }, [slides.length, width]);
-
-  const handleMomentumScrollEnd = (
-    event: NativeSyntheticEvent<NativeScrollEvent>,
-  ) => {
-    if (width <= 0) return;
-    const nextIndex = Math.max(
-      0,
-      Math.min(
-        slides.length - 1,
-        Math.round(event.nativeEvent.contentOffset.x / width),
-      ),
-    );
-    isDraggingRef.current = false;
-    activeIndexRef.current = nextIndex;
-    setActiveIndex(nextIndex);
-  };
-
-  return (
-    <View style={[styles.kitchenImageCarousel, {width, height}]}>
-      <FlatList
-        ref={listRef}
-        data={slides}
-        horizontal
-        pagingEnabled
-        nestedScrollEnabled
-        scrollEnabled={slides.length > 1}
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={item => item.key}
-        getItemLayout={(_, index) => ({
-          length: width,
-          offset: width * index,
-          index,
-        })}
-        onScrollBeginDrag={() => {
-          isDraggingRef.current = true;
-        }}
-        onMomentumScrollEnd={handleMomentumScrollEnd}
-        renderItem={({item}) => (
-          <Pressable
-            accessibilityLabel={`Open ${kitchenName}`}
-            accessibilityRole="button"
-            onPress={onPress}
-            style={{width, height}}>
-            {item.url ? (
-              <Image
-                accessibilityIgnoresInvertColors
-                source={{uri: item.url}}
-                resizeMode="cover"
-                style={styles.kitchenImage}
-              />
-            ) : (
-              <View style={styles.kitchenImagePlaceholder}>
-                <Icon
-                  name="chef"
-                  size={34}
-                  color={colors.flameRedAccessible}
-                  surface={false}
-                />
-              </View>
-            )}
-          </Pressable>
-        )}
-      />
-
-      <View
-        pointerEvents="none"
-        style={styles.kitchenPagination}>
-        {slides.map((slide, index) => (
-          <View
-            key={slide.key}
-            style={[
-              styles.kitchenPaginationDot,
-              index === activeIndex && styles.kitchenPaginationDotActive,
-            ]}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
 function formatPreparationTime(dishes: readonly NearbyDish[]): string | null {
   const times = dishes
     .map(dish => dish.preparationTimeMinutes)
@@ -383,6 +256,7 @@ function TopKitchenCard({
   favorite,
   favoritePending,
   rating,
+  active,
   onFavorite,
   onPress,
 }: {
@@ -391,68 +265,63 @@ function TopKitchenCard({
   favorite: boolean;
   favoritePending: boolean;
   rating: number | null;
+  active: boolean;
   onFavorite: () => void;
   onPress: () => void;
 }) {
   const imageHeight = Math.round(width * 0.63);
+  const imageTarget = useRef<View | null>(null);
   const ratingLabel = rating === null ? 'New' : rating.toFixed(1);
 
   return (
     <View style={[styles.kitchenCard, {width}]}>
       <View style={styles.kitchenImageWrap}>
-        <KitchenImageCarousel
-          imageUrls={kitchen.imageUrls}
-          width={width}
-          height={imageHeight}
-          kitchenName={kitchen.kitchenName}
-          onPress={onPress}
-        />
+        <BlurTargetView ref={imageTarget} style={{width, height: imageHeight}}>
+          <KitchenImageCarousel
+            imageUrls={kitchen.imageUrls}
+            width={width}
+            height={imageHeight}
+            kitchenName={kitchen.kitchenName}
+            active={active}
+            onPress={onPress}
+          />
+        </BlurTargetView>
 
         {kitchen.preparationTimeLabel ? (
-          <BlurView
-            experimentalBlurMethod="dimezisBlurView"
-            intensity={70}
+          <LiquidGlassSurface
+            blurTarget={imageTarget}
             pointerEvents="none"
-            tint="light"
             style={styles.timeGlass}>
             <Icon
               name="clock"
               size={18}
-              color={colors.espressoBrown}
+              color={colors.white}
               surface={false}
             />
             <Text style={styles.timeGlassText}>
               {kitchen.preparationTimeLabel}
             </Text>
-          </BlurView>
+          </LiquidGlassSurface>
         ) : null}
 
-        <View style={styles.favoriteGlass}>
-          <BlurView
-            experimentalBlurMethod="dimezisBlurView"
-            intensity={72}
-            pointerEvents="none"
-            tint="light"
-            style={StyleSheet.absoluteFill}
-          />
+        <LiquidGlassSurface blurTarget={imageTarget} style={styles.favoriteGlass}>
           <CustomerFavoriteHeartButton
             favorite={favorite}
             pending={favoritePending}
             onToggle={onFavorite}
             itemLabel={kitchen.kitchenName}
+            inactiveColor={colors.white}
             style={styles.favoriteControl}
           />
-        </View>
+        </LiquidGlassSurface>
 
-        <BlurView
-          experimentalBlurMethod="dimezisBlurView"
-          intensity={72}
+        <LiquidGlassSurface
+          blurTarget={imageTarget}
           pointerEvents="none"
-          tint="dark"
           style={styles.ratingGlass}>
           <Icon name="star" size={18} color="#FFC928" surface={false} />
           <Text style={styles.ratingGlassText}>{ratingLabel}</Text>
-        </BlurView>
+        </LiquidGlassSurface>
 
         <View pointerEvents="none" style={styles.chefAvatarShell}>
           <CustomerChefAvatar size={64} />
@@ -491,6 +360,7 @@ function TopKitchenCard({
 
 export function HomePromoAndKitchens() {
   const navigation = useNavigation<HomeNavigation>();
+  const focused = useIsFocused();
   const tabNavigation =
     navigation.getParent<NavigationProp<CustomerTabParamList>>();
   const {width} = useWindowDimensions();
@@ -601,6 +471,7 @@ export function HomePromoAndKitchens() {
                 favorite={favoriteKitchenIds.has(item.kitchenId)}
                 favoritePending={toggleFavoriteKitchen.isPending}
                 rating={ratingByKitchenId.get(item.kitchenId) ?? null}
+                active={focused}
                 onFavorite={() => handleFavorite(item.kitchenId)}
                 onPress={() =>
                   navigation.navigate('CustomerKitchenProfile', {
@@ -699,43 +570,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 1,
   },
-  kitchenImageCarousel: {
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceMuted,
-  },
-  kitchenImage: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: colors.surfaceMuted,
-  },
-  kitchenImagePlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
-  },
-  kitchenPagination: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  kitchenPaginationDot: {
-    width: 7,
-    height: 7,
-    borderRadius: radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.75)',
-    backgroundColor: 'rgba(255,255,255,0.42)',
-  },
-  kitchenPaginationDotActive: {
-    backgroundColor: colors.white,
-  },
-
   timeGlass: {
     position: 'absolute',
     top: spacing.sm,
@@ -746,13 +580,10 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.68)',
-    backgroundColor: 'rgba(255,255,255,0.10)',
     overflow: 'hidden',
   },
   timeGlassText: {
-    color: colors.espressoBrown,
+    color: colors.white,
     fontSize: typography.small,
     fontWeight: fontWeight.semibold,
   },
@@ -764,9 +595,6 @@ const styles = StyleSheet.create({
     width: touchTarget.minimum,
     height: touchTarget.minimum,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.68)',
-    backgroundColor: 'rgba(255,255,255,0.10)',
     overflow: 'hidden',
   },
   favoriteControl: {
@@ -785,9 +613,6 @@ const styles = StyleSheet.create({
     gap: spacing.xxs,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.62)',
-    backgroundColor: 'rgba(30,20,16,0.18)',
     overflow: 'hidden',
   },
   ratingGlassText: {
@@ -832,14 +657,13 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
   },
   kitchenBio: {
-    minHeight: 38,
     marginTop: spacing.xxs,
     color: colors.textSecondary,
     fontSize: typography.small,
     lineHeight: 19,
   },
   kitchenStartingPrice: {
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     color: colors.flameRedAccessible,
     fontSize: typography.small,
     fontWeight: fontWeight.bold,

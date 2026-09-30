@@ -1,4 +1,4 @@
-import {useEffect} from 'react';
+import {useEffect, useMemo} from 'react';
 import {
   useInfiniteQuery,
   useQuery,
@@ -131,11 +131,12 @@ export function useCustomerOrdersQuery() {
     staleTime: 30_000,
   });
 
-  const v2Orders =
-    v2Query.data?.pages.flatMap(page => page.orders) ?? [];
-  const v2Snapshot = v2Query.data
-    ? createCustomerOrdersSnapshot(v2Orders, !v2Query.hasNextPage)
-    : undefined;
+  const v2Snapshot = useMemo(
+    () => v2Query.data
+      ? createCustomerOrdersSnapshot(v2Query.data.pages.flatMap(page => page.orders), !v2Query.hasNextPage)
+      : undefined,
+    [v2Query.data, v2Query.hasNextPage],
+  );
 
   return {
     data: CUSTOMER_ORDER_HISTORY_V2_AVAILABLE

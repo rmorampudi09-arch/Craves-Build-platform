@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.10
+# KUSHIRAVI App Build - Version 1.11
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,12 +9,53 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Current Android versionCode: `11`
-- Current Android versionName: `1.10`
+- Current Android versionCode: `12`
+- Current Android versionName: `1.11`
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.11 - Changes document card surfaces and order visibility
+
+- Requested changes: `C:\Users\saive\Downloads\Changes.docx` (2026-09-30)
+- Tag: `KUSHIRAVI-app-v1.11`
+- Commit: resolve with `git rev-parse KUSHIRAVI-app-v1.11`; the APK build evidence records the full SHA.
+- Android versionCode: `12`
+- Android versionName: `1.11`
+- APK path: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.11.apk`
+- Buildable source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.11-source.zip`
+- Change summary:
+  - Use a shared liquid-style surface for the existing home dish capsules, nearby kitchen capsules, and bottom menu, with connected Android blur targets and rounded reflective rims.
+  - Center the existing bottom menu icons and labels vertically while retaining Home, Chefs, Orders, Profile and the conditional Cart action.
+  - Fix kitchen photo paging; derive the dots from the actual photo offset and show a compact moving dot window for larger galleries.
+  - Remove the reserved second biography line and reduce the gap before the kitchen starting price.
+  - Hide PAYMENT_PENDING orders in All/Upcoming when the last server update is over ten minutes old, with automatic expiry while Orders is open. Use createdAt if updatedAt is invalid; never remove or cancel server orders.
+  - Keep every paid, delivered, cancelled, and refund order visible under its existing lifecycle tab.
+  - Retain the existing Razorpay integration and all other screen layouts and backend contracts.
+- Files changed (relative to `C:\mscratch`):
+  - `apps/mobile/src/shared/components/LiquidGlassSurface.tsx`
+  - `apps/mobile/src/features/home/components/KitchenImageCarousel.tsx`
+  - `apps/mobile/src/features/home/components/KitchenImageCarousel.test.tsx`
+  - `apps/mobile/src/features/home/components/HomePromoAndKitchens.tsx`
+  - `apps/mobile/src/features/home/screens/CustomerHomeScreen.tsx`
+  - `apps/mobile/src/features/favorites/components/CustomerFavoriteHeartButton.tsx`
+  - `apps/mobile/src/app/navigation/CustomerBottomNavController.tsx`
+  - `apps/mobile/src/app/navigation/CustomerRootNavigator.tsx`
+  - `apps/mobile/src/features/customerOrders/presentation/customerOrdersPresentation.ts`
+  - `apps/mobile/src/features/customerOrders/screens/CustomerOrdersScreen.tsx`
+  - `apps/mobile/src/features/customerOrders/query/customerOrdersQueries.ts`
+  - `apps/mobile/src/features/customerOrders/customerOrdersPresentation.test.ts`
+  - `apps/mobile/jest.setup.js`
+  - `apps/mobile/android/app/build.gradle`
+  - `apps/mobile/KUSHIRAVI_VERSION.md`
+- Verification: TypeScript, scoped ESLint, and 51 tests across nine suites passed. Build evidence and phone observations are recorded beside the versioned APK.
+- Manual verification:
+  1. Open Home and inspect the availability, food type, favorite, preparation-time, and rating capsules over food photos.
+  2. Watch and swipe a kitchen with multiple photos; verify the visible photo and selected dot move together. A single photo has no cycling dots.
+  3. Check the reduced biography/price gap and the centered four bottom tabs, including the Cart action when the cart has items.
+  4. Open All Orders and Upcoming: pending payments older than ten minutes are absent; recent pending payments remain visible and still offer Continue Payment.
+  5. Leave Orders open across a pending order's ten-minute boundary, then background/reopen the app and refresh. Verify paid and completed orders remain visible.
 
 ### Version 1.10 - Resume pending Razorpay orders from Order Details
 

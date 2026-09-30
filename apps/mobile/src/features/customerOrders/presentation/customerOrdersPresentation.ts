@@ -72,7 +72,7 @@ const CANCELLED_STATUSES = new Set<CustomerOrderStatus>([
 
 /**
  * Every tab is derived from the exact Order Service lifecycle statuses.
- * No order is dropped: terminal refund/rejection states stay visible under the
+ * Terminal refund/rejection states stay visible under the
  * Cancelled bucket while Delivered is the only Completed state.
  */
 export function isCustomerOrdersTabAuthoritative(
@@ -84,9 +84,14 @@ export function isCustomerOrdersTabAuthoritative(
 export function selectCustomerOrdersTab(
   snapshot: CustomerOrdersSnapshot,
   tab: CustomerOrdersTabKey,
+  nowMs = Date.now(),
 ): readonly CustomerOrder[] {
+  const visible = snapshot.orders.filter(order => {
+    const expiry = getPendingOrderVisibilityExpiry(order);
+    return expiry === null || nowMs <= expiry;
+  });
   if (tab === 'ALL') {
-    return snapshot.orders;
+    return visible;
   }
 
   const allowed =
@@ -95,7 +100,17 @@ export function selectCustomerOrdersTab(
       : tab === 'COMPLETED'
         ? COMPLETED_STATUSES
         : CANCELLED_STATUSES;
-  return snapshot.orders.filter(order => allowed.has(order.status));
+  return visible.filter(order => allowed.has(order.status));
+}
+
+export const PENDING_ORDER_VISIBILITY_MS = 10 * 60 * 1000;
+
+export function getPendingOrderVisibilityExpiry(order: CustomerOrder): number | null {
+  if (order.status !== 'PAYMENT_PENDING') return null;
+  // The order contract has no payment-stopped timestamp; use its last server update.
+  const updatedAt = Date.parse(order.updatedAt);
+  const timestamp = Number.isFinite(updatedAt) ? updatedAt : Date.parse(order.createdAt);
+  return Number.isFinite(timestamp) ? timestamp + PENDING_ORDER_VISIBILITY_MS : null;
 }
 
 export function getCustomerOrderStatusPresentation(

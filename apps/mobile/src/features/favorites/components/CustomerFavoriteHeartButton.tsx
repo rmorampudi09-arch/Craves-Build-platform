@@ -3,6 +3,7 @@ import {
   Pressable,
   StyleSheet,
   type GestureResponderEvent,
+  type ColorValue,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -15,6 +16,7 @@ interface Props {
   disabled?: boolean;
   onToggle: () => void;
   itemLabel?: string;
+  inactiveColor?: ColorValue;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -25,6 +27,7 @@ export function CustomerFavoriteHeartButton({
   disabled = false,
   onToggle,
   itemLabel = 'dish',
+  inactiveColor = colors.espressoBrown,
   style,
 }: Props) {
   const blocked = disabled || pending;
@@ -53,7 +56,7 @@ export function CustomerFavoriteHeartButton({
       <MaterialDesignIcons
         name={favorite ? 'heart' : 'heart-outline'}
         size={24}
-        color={favorite ? colors.flameRed : colors.espressoBrown}
+        color={favorite ? colors.flameRed : inactiveColor}
       />
     </Pressable>
   );

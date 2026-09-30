@@ -59,6 +59,8 @@ import {
 import {
   CustomerBottomNavVisibilityProvider,
   CustomerBottomTabBar,
+  CustomerBottomTabButton,
+  CustomerBottomNavScene,
   useCustomerBottomNavReveal,
 } from './CustomerBottomNavController';
 import {
@@ -143,6 +145,8 @@ const tabScreenOptions = {
   tabBarActiveTintColor: CUSTOMER_TAB_ACTIVE_COLOR,
   tabBarInactiveTintColor: CUSTOMER_TAB_INACTIVE_COLOR,
   tabBarHideOnKeyboard: true,
+  tabBarButton: CustomerBottomTabButton,
+  tabBarLabelPosition: 'below-icon',
   tabBarIconStyle: {
     marginTop: 0,
     marginBottom: 0,
@@ -456,6 +460,10 @@ function CustomerProfileStackNavigator() {
   );
 }
 
+function customerTabSceneLayout({route, children}: {route: {key: string}; children: React.ReactElement}) {
+  return <CustomerBottomNavScene routeKey={route.key}>{children}</CustomerBottomNavScene>;
+}
+
 function CustomerTabsNavigator() {
   const showBottomNav = useCustomerBottomNavReveal();
   const tabScreenListeners = React.useMemo(
@@ -466,6 +474,7 @@ function CustomerTabsNavigator() {
     <Tab.Navigator
       initialRouteName="Home"
       screenOptions={tabScreenOptions}
+      screenLayout={customerTabSceneLayout}
       screenListeners={tabScreenListeners}
       tabBar={CustomerBottomTabBar}>
       <Tab.Screen name="Home" component={CustomerHomeStackNavigator} options={homeTabOptions} />

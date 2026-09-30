@@ -87,7 +87,7 @@ jest.mock('expo-image-picker', () => ({
 // host components and capability fallbacks, not expo-modules-core emitters.
 jest.mock('expo-blur', () => {
   const {View} = require('react-native');
-  return {BlurView: View};
+  return {BlurView: View, BlurTargetView: View};
 });
 
 jest.mock('expo-glass-effect', () => {

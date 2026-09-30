@@ -7,12 +7,12 @@ import React, {
   useRef,
   useState,
   type PropsWithChildren,
+  type RefObject,
 } from 'react';
 import {
   Animated,
   Easing,
   Keyboard,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -24,13 +24,10 @@ import {
 import {
   BottomTabBar,
   type BottomTabBarProps,
+  type BottomTabBarButtonProps,
 } from '@react-navigation/bottom-tabs';
-import {BlurView} from 'expo-blur';
-import {
-  GlassView,
-  isGlassEffectAPIAvailable,
-  isLiquidGlassAvailable,
-} from 'expo-glass-effect';
+import {PlatformPressable} from '@react-navigation/elements';
+import {BlurTargetView} from 'expo-blur';
 import {
   CommonActions,
   getFocusedRouteNameFromRoute,
@@ -54,6 +51,7 @@ import {
 } from '../../features/cart/state/cartSelectors';
 import {formatCartMoney} from '../../features/cart/viewCartOverlayModel';
 import {Icon} from '../../shared/components/Icon';
+import {LiquidGlassSurface} from '../../shared/components/LiquidGlassSurface';
 import {
   createCustomerBottomNavScrollState,
   reduceCustomerBottomNavScroll,
@@ -67,15 +65,12 @@ interface CustomerBottomNavVisibilityContextValue {
   readonly isVisible: boolean;
   readonly handleScrollOffset: (offset: number) => void;
   readonly show: () => void;
+  readonly blurTargets: Readonly<Record<string, RefObject<View | null>>>;
+  readonly registerBlurTarget: (key: string, target: RefObject<View | null> | null) => void;
 }
 
 const CustomerBottomNavVisibilityContext =
   createContext<CustomerBottomNavVisibilityContextValue | null>(null);
-
-const USE_NATIVE_LIQUID_GLASS =
-  Platform.OS === 'ios' &&
-  isGlassEffectAPIAvailable() &&
-  isLiquidGlassAvailable();
 
 function useCustomerBottomNavVisibilityContext(): CustomerBottomNavVisibilityContextValue {
   const value = useContext(CustomerBottomNavVisibilityContext);
@@ -92,6 +87,15 @@ function useCustomerBottomNavVisibilityContext(): CustomerBottomNavVisibilityCon
 export function CustomerBottomNavVisibilityProvider({
   children,
 }: PropsWithChildren) {
+  const [blurTargets, setBlurTargets] = useState<Record<string, RefObject<View | null>>>({});
+  const registerBlurTarget = useCallback((key: string, target: RefObject<View | null> | null) => {
+    setBlurTargets(current => {
+      if (target) return current[key] === target ? current : {...current, [key]: target};
+      const next = {...current};
+      delete next[key];
+      return next;
+    });
+  }, []);
   const reduceMotionEnabled = useReducedMotionPreference();
   const motion = useMemo(
     () => resolveMotion('bottomNavigation', reduceMotionEnabled),
@@ -155,8 +159,10 @@ export function CustomerBottomNavVisibilityProvider({
       isVisible,
       handleScrollOffset,
       show,
+      blurTargets,
+      registerBlurTarget,
     }),
-    [animationProgress, handleScrollOffset, isVisible, show],
+    [animationProgress, handleScrollOffset, isVisible, show, blurTargets, registerBlurTarget],
   );
 
   return (
@@ -166,12 +172,26 @@ export function CustomerBottomNavVisibilityProvider({
   );
 }
 
+export function CustomerBottomNavScene({routeKey, children}: PropsWithChildren<{routeKey: string}>) {
+  const target = useRef<View | null>(null);
+  const {registerBlurTarget} = useCustomerBottomNavVisibilityContext();
+  useEffect(() => {
+    registerBlurTarget(routeKey, target);
+    return () => registerBlurTarget(routeKey, null);
+  }, [registerBlurTarget, routeKey]);
+  return <BlurTargetView ref={target} style={styles.scene}>{children}</BlurTargetView>;
+}
+
+export function CustomerBottomTabButton(props: BottomTabBarButtonProps) {
+  return <PlatformPressable {...props} style={[props.style, styles.centeredTabButton]} />;
+}
+
 export function CustomerBottomTabBar(props: BottomTabBarProps) {
   return <CustomerBottomTabBarContent {...props} />;
 }
 
 function CustomerBottomTabBarContent(props: BottomTabBarProps) {
-  const {animationProgress, isVisible} =
+  const {animationProgress, isVisible, blurTargets} =
     useCustomerBottomNavVisibilityContext();
   const insets = useSafeAreaInsets();
   const itemCount = useAppSelector(selectCartItemCount);
@@ -243,30 +263,10 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
         },
       ]}>
       <View style={styles.shellShadow}>
-        <View style={styles.shell}>
-          {USE_NATIVE_LIQUID_GLASS ? (
-            <GlassView
-              pointerEvents="none"
-              colorScheme="light"
-              glassEffectStyle="regular"
-              isInteractive={false}
-              tintColor="rgba(255,255,255,0.10)"
-              style={styles.nativeGlass}
-            />
-          ) : Platform.OS === 'ios' ? (
-            <BlurView
-              pointerEvents="none"
-              intensity={78}
-              tint="systemUltraThinMaterialLight"
-              style={styles.nativeGlass}
-            />
-          ) : (
-            <View pointerEvents="none" style={styles.glassFallback} />
-          )}
-          <View pointerEvents="none" style={styles.glassWash} />
-          <View pointerEvents="none" style={styles.glassHighlight} />
-          <View pointerEvents="none" style={styles.glassRim} />
-
+        <LiquidGlassSurface
+          blurTarget={blurTargets[activeTabRoute.key]}
+          variant="navigation"
+          style={styles.shell}>
           <View style={styles.tabsArea}>
             <BottomTabBar {...props} insets={{...props.insets, bottom: 0}} />
           </View>
@@ -293,13 +293,15 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
               </View>
             </Pressable>
           ) : null}
-        </View>
+        </LiquidGlassSurface>
       </View>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  scene: {flex: 1},
+  centeredTabButton: {justifyContent: 'center', paddingVertical: 8},
   positioner: {
     position: 'absolute',
     left: spacing.md,
@@ -321,55 +323,8 @@ const styles = StyleSheet.create({
     height: '100%',
     flexDirection: 'row',
     alignItems: 'stretch',
-    backgroundColor: 'rgba(255,255,255,0.10)',
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.92)',
     overflow: 'hidden',
-  },
-  nativeGlass: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  },
-  glassFallback: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: 'rgba(255,255,255,0.72)',
-  },
-  glassWash: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  glassHighlight: {
-    position: 'absolute',
-    top: 8,
-    left: 18,
-    width: 44,
-    height: 5,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.88)',
-    opacity: 0.82,
-    transform: [{rotate: '-7deg'}],
-  },
-  glassRim: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    borderRadius: radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.72)',
   },
   tabsArea: {
     flex: 1,

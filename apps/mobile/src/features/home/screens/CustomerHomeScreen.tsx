@@ -734,9 +734,6 @@ export function CustomerHomeScreen() {
           keyboardShouldPersistTaps="handled"
           nestedScrollEnabled
           removeClippedSubviews={false}
-          initialNumToRender={4}
-          maxToRenderPerBatch={3}
-          windowSize={5}
           style={styles.feedList}
           ListFooterComponent={
             feed.isFetchingNextPage ? (

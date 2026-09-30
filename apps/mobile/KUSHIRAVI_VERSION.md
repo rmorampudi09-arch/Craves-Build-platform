@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.15.4 Installed
+# KUSHIRAVI App Build - Version 1.15.1 Restoration Prepared
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,145 +9,49 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `21`
-- Installed Android versionName: `1.15.4`
-- Installed APK source commit: `f808496eec0a8b983bacb1a391123b3d437c5724`, tag `KUSHIRAVI-app-v1.15.4`. Later evidence-only commits do not change that APK/tag.
-- Last installation: `2026-09-30 18:55:35`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Prepared Android versionCode: `22`
+- Prepared Android versionName: `1.15.1`
+- Active approved app baseline: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
+- Phone restoration is pending build/install verification; version details below will record the delivered checkpoint.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.15.4 Installed - Bounded live glass and Home scrolling performance
+### Version 1.15.1 Restoration Prepared - Return to the approved baseline
 
-- Baseline: installed `KUSHIRAVI-app-v1.15.3`, source
-  `a77b95c8ebc2b5089d72a93413e1e306ca7925e0`, plus its evidence-only commit.
-- Android versionCode `21`, versionName `1.15.4`.
-- Source commit: `f808496eec0a8b983bacb1a391123b3d437c5724`.
-- Tag: `KUSHIRAVI-app-v1.15.4`; previous tags remain untouched.
-- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.4.apk`.
-- APK SHA-256: `A11A4D22B98BF6BA73AB112176418CCB0E8E731113CB8B6F548F97CEAA01BDA7`.
-- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.4-source.zip`.
-- Source ZIP SHA-256: `E378E1E7EC3166AB20522C7E77B83B49A372E5ED1C24223942E3D2104D4B6CB9`.
-- Remove the additional near-sharp Expo BlurView from every live rim. Capture the
-  existing backdrop directly into a capsule-sized native RenderNode instead of
-  another full-photo/full-scene blur buffer. Cache native drawing until its source,
-  relative position or geometry changes; keep actual background refraction.
-- Bound the Home feed's render window and initial/batch card count. Preserve
-  existing sticky rail, offsets, pagination, shapes, blur 22 / reduction 2.5,
-  glass rim width/bend, foregrounds, haptics and all functional flows.
-- Baseline six-swipe phone profile: 111 frames, 110 janky (99.10%), median frame
-  latency 89 ms, p90 101 ms; scratch render targets 421.58 MB, 2443 attached views.
-- TypeScript, scoped ESLint and 187 suites / 954 tests passed. Signed ARM64
-  release succeeded in 5m 17s, 823 tasks (40 executed). APK code 21 / name 1.15.4,
-  v2/v3 signatures and unchanged registered signing certificate verified.
-- Replace-install succeeded at `2026-09-30 18:55:35`. Same six-swipe test: 302
-  frames, 7 janky (2.32%), median latency 25 ms / p90 34 ms; repeat 296 frames,
-  6 janky (2.03%), median 25 ms / p90 32 ms. Scratch targets 94.29 MB, views 841.
-  Android's separate legacy counter and raw evidence are included in the report;
-  these measurements do not claim a constant display FPS or zero stutter.
-- Fast eight-fling stress test: 212 frames, 13 janky (6.13%). Loaded food rows
-  and pinned/unpinned rail checked; live menu/photo rims still change with the
-  backdrop. Customer tab navigation and native haptic ticks verified. Chef
-  Dashboard/Profile scrolling and Chef/Customer force-stop/reopen checked.
-  No shader fallback/errors or post-install app crashes; returned to Customer Home.
-- A separate blank second promo slide was observed. Carousel code and packaged
-  image are unchanged; its cause is not verified or claimed fixed by this patch.
-- No new dependencies, backend/API, auth, cart, payment, order, chef business
-  logic, splash, remote or CI changes. No GitHub push.
-- Details and manual checks: `C:\mscratch\apps\mobile\docs\SCROLL_PERFORMANCE_V1_15_4.md`.
+- User requested the exact v1.15.1 UI and behavior, withdrawing every app change
+  after that checkpoint. Restore tracked mobile source from the original tag;
+  no later glass renderer or feed-window tuning remains in the active source.
+- Approved baseline: `KUSHIRAVI-app-v1.15.1`, original source
+  `5dece0e8cae9208aeccdcf12f231e336ad830bec`, original code `18` / name `1.15.1`.
+- Phone-safe restoration: versionCode `22`, versionName `1.15.1`. The only
+  difference in app implementation from the original is the internal build
+  number required by Android to replace-install without clearing app data.
+- Planned restoration tag: `KUSHIRAVI-app-v1.15.1-restored`; original tag untouched.
+- Intended APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.1-restored.apk`.
+- Intended source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.1-restored-source.zip`.
+- Durable baseline instructions: `C:\mscratch\apps\mobile\AGENTS.md`.
+  Later app changes are withdrawn, not guidance for future work. This does not
+  claim deletion of historical chat messages or Git rollback checkpoints.
+- No backend/API, auth, cart, Razorpay, order, chef flow, splash, remote or CI
+  changes beyond restoring the exact approved source. No GitHub push.
+- Checks and exact build/install evidence: `C:\mscratch\apps\mobile\docs\RESTORE_V1_15_1.md`.
 
-### Version 1.15.3 Installed - Live scrolling backdrop at glass rims
+### Version 1.15.1 Prepared - Chef menu lifecycle correction
 
-- Source baseline: installed `KUSHIRAVI-app-v1.15.2`, source
-  `9bcd1eda070ad6b99a832caec4f0475720c4ba99`, plus its evidence-only commit.
-- Source commit: `a77b95c8ebc2b5089d72a93413e1e306ca7925e0`.
-- Tag: `KUSHIRAVI-app-v1.15.3`; previous tags remain untouched.
-- Android versionCode `20`, versionName `1.15.3`.
-- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.3.apk`.
-- APK SHA-256: `F603B3DF07BE11F865F897CE1FD687E476E1D9D2B288E357EEE93E1E13049B27`.
-- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.3-source.zip`.
-- Source ZIP SHA-256: `50C415468515D1E14C570AAB8C4E023FE42214048FDC885E601EC7689047434B`.
-- Precise correction: the existing glass edge now samples actual live background
-  pixels and bends them along the rounded rim on supported Android API 33+.
-  A separate near-sharp Expo Blur capture uses the same existing blurTarget;
-  Android's native RuntimeShader masks the center and displaces only rim samples.
-- Approved center blur 22 / reduction 2.5, center lighting/tint, shapes, layouts,
-  black menu text/icons, haptics and foreground interactions remain unchanged.
-- Unsupported Android, unavailable native manager or shader failure safely retain
-  the existing glass. Supported iOS keeps its native clear system GlassView.
-- No new dependencies or backend/API, auth, cart, payment, order, splash, remote
-  or CI changes. No GitHub push.
-- Verification and file list: `C:\mscratch\apps\mobile\docs\LIVE_GLASS_REFLECTION_V1_15_3.md`.
-- Verification: TypeScript and scoped ESLint passed; 187 suites / 952 tests
-  passed. Signed ARM64 release succeeded in 13m 54s, 823 tasks (34 executed).
-  APK code 20 / name 1.15.3, v2/v3 signatures and unchanged registered certificate verified.
-- Replace-install succeeded at `2026-09-30 18:09:31`. Live native rim active on
-  photo capsules and Customer/Chef menus without fallback or shader errors.
-  Scrolling photo details/colors changed along the fixed menu rim, confirmed
-  by screenshots and pixel comparison. Center blur/foregrounds unchanged;
-  tab navigation and native selection tick verified. Both sides survived
-  force-stop/reopen. Post-install crash log clear; phone returned to Customer Home.
-- No live order/payment/cart/menu mutation performed. iOS and older Android
-  hardware unverified; their capability/fallback cases covered by component tests.
-
-### Version 1.15.2 Installed - Precise glass edge optics
-
-- Source baseline: installed `KUSHIRAVI-app-v1.15.1`, commit `5dece0e8cae9208aeccdcf12f231e336ad830bec`, plus its evidence-only commit.
-- Source commit: `9bcd1eda070ad6b99a832caec4f0475720c4ba99`.
-- Tag: `KUSHIRAVI-app-v1.15.2`; previous version tags remain untouched.
-- Android versionCode `19`, versionName `1.15.2`.
-- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.2.apk`.
-- APK SHA-256: `532AD12A55ED7B8637204D099327003FACAAABCA5524A5DEFB69C85DFD1FA83A`.
-- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.2-source.zip`.
-- Source ZIP SHA-256: `7A3370B12221282F8F4CE22E00B66F8A2D1F37BD8D710DA2B270E250CF2FF575`.
-- Only edge optics change: stronger directional rounded highlights, slightly deeper
-  edge band and a paired inner light/shadow band on the shared existing glass
-  capsules and Customer/Chef menus. No uniform white stroke is added.
-- Approved blur remains 22, reduction factor 2.5; center tint/wash, top/bottom
-  lighting, sizes, layouts, black menu foregrounds and interactions remain unchanged.
-- Android uses bounded edge-lighting bands to approximate lens depth, not actual
-  refractive background displacement or Apple's proprietary rendering. Supported
-  iOS retains its existing native clear GlassView without the Android overlay.
-- Verification: TypeScript, scoped ESLint and 186 suites / 942 tests passed.
-  Signed ARM64 release succeeded in 9m 36s, 823 tasks (41 executed). APK identity
-  code 19 / name 1.15.2 and v2/v3 signatures verified; registered certificate unchanged.
-- Replace-install succeeded; Android reports code 19 / name 1.15.2 and update time
-  `2026-09-30 17:18:32`. Live food/kitchen capsule and Customer/Chef menu comparisons,
-  tab navigation, native selection ticks and Chef force-stop/reopen passed. No app
-  crashes appeared in the post-install crash buffer. No live business-data mutation
-  or payment was performed; phone returned to its original Chef side. iOS unverified.
-- No new dependencies, backend/API, auth/role, cart, payment, order, splash, remote
-  or CI changes. No GitHub push.
-- Changed files, checks and build evidence: `C:\mscratch\apps\mobile\docs\GLASS_EDGE_OPTICS_V1_15_2.md`.
-
-### Version 1.15.1 Installed - Seven precise changes and Chef menu lifecycle correction
-
-- Source commit: `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Tag: `KUSHIRAVI-app-v1.15.1`; earlier tags remain untouched, including original v1 and v1.13.
+- Source commit: the commit containing this entry; exact SHA follows in delivery evidence.
+- Planned tag: `KUSHIRAVI-app-v1.15.1`; earlier tags remain untouched.
 - Android versionCode `18`, versionName `1.15.1`.
 - APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.1.apk`.
-- APK SHA-256: `F881C6A510ACD08BC4669EB586360D69B14B68315EDB0C5360195BCF8DF9BA1D`.
 - Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.1-source.zip`.
-- Source ZIP SHA-256: `2F38E94A763483FC98EFC919DAAA48051EB97215B795E46F2B86C90003C56A24`; archived from the exact tagged source, without dependencies or private runtime logs.
 - Retains the seven precise changes above the exact v1.13 baseline. Fixes only
   Chef tabBar's callback: return a React component instead of directly invoking a
   hook-bearing component. Regression test invokes that callback outside React.
 - v1.15 test APK was installed preserving data, with black customer menu and a
   recorded successful native haptic tick. Live Chef switch then exposed an invalid
   hook-call crash; that trial is not the accepted delivery. No payment submitted.
-- Verification: TypeScript, scoped ESLint and all 186 suites / 939 tests passed.
-  Signed ARM64 Android release succeeded in 4m 21s, 823 tasks (41 executed).
-  APK v2/v3 signatures and the registered Firebase signing certificate verified.
-- Phone: package `com.cravesapp` reports code 18 / name 1.15.1 and update time
-  `2026-09-30 14:45:23`. Both Chef and Customer survived force-stop/reopen on the
-  selected side. All five Chef tabs were checked; Customer menu and removed Chefs
-  descriptions checked. Native selection ticks were recorded. Slow/fast Home
-  scrolling and reversed scrolling showed one continuously pinned/unpinned rail.
-- Payment handoff, changed-bill review, duplicate-tap protection and missing-preview
-  blocking passed automated screen tests. No live cart/order mutation or actual
-  payment was performed in this update. iOS hardware was not available for testing.
-- Final delivery evidence and manual steps: `C:\mscratch\apps\mobile\docs\PRECISE_JOURNEY_CHANGES_V1_15.md`.
+- Final build/live verification and exact evidence: `docs\PRECISE_JOURNEY_CHANGES_V1_15.md`.
 
 ### Version 1.15 Trial - Seven precise menu and journey changes
 

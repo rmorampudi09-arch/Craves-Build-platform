@@ -385,20 +385,12 @@ export function CustomerCartScreen() {
   const [clearBusy, setClearBusy] = useState(false);
   const [paymentRecoveryActive, setPaymentRecoveryActive] = useState(false);
   const [checkoutReview, setCheckoutReview] = useState<CheckoutSession | null>(null);
+  const [reviewCartModel, setReviewCartModel] = useState<CartScreenModel | null>(null);
   const activeCheckoutRef = useRef<CheckoutSession | null>(null);
   const persistedRecoveryRef = useRef<
     ReturnType<typeof recoverPersistedPaymentAttempt> | null
   >(null);
   const skipNextAutomaticPaymentRecoveryRef = useRef(false);
-
-  const sections = useMemo(
-    () => groupCartItemsByKitchen(model?.items ?? []),
-    [model?.items],
-  );
-  const itemCount = useMemo(
-    () => model?.items.reduce((total, item) => total + item.quantity, 0) ?? 0,
-    [model?.items],
-  );
 
   const staleRecoveredCheckout = Boolean(
     paymentRecoveryActive &&
@@ -406,6 +398,15 @@ export function CustomerCartScreen() {
       !recoveredCheckoutMatchesCurrentCart(checkoutReview, cartSnapshot),
   );
   const visibleCheckoutReview = staleRecoveredCheckout ? null : checkoutReview;
+  const visibleModel = visibleCheckoutReview && reviewCartModel ? reviewCartModel : model;
+  const sections = useMemo(
+    () => groupCartItemsByKitchen(visibleModel?.items ?? []),
+    [visibleModel?.items],
+  );
+  const itemCount = useMemo(
+    () => visibleModel?.items.reduce((total, item) => total + item.quantity, 0) ?? 0,
+    [visibleModel?.items],
+  );
 
   const refreshCart = useCallback(async () => {
     setRefreshError(null);
@@ -440,9 +441,11 @@ export function CustomerCartScreen() {
           const recovery = await recoverPersistedPaymentAttempt();
           if (!recovery) {
             setPaymentRecoveryActive(false);
-            setCheckoutReview(null);
-            activeCheckoutRef.current = null;
-            setPaymentNotice(null);
+            if (!activeCheckoutRef.current) {
+              setCheckoutReview(null);
+              setReviewCartModel(null);
+              setPaymentNotice(null);
+            }
             return null;
           }
 
@@ -452,6 +455,7 @@ export function CustomerCartScreen() {
           setCheckoutReview(active ? recovery.checkout : null);
           activeCheckoutRef.current =
             recovery.outcome === 'PENDING' ? recovery.checkout : null;
+          if (!active) setReviewCartModel(null);
 
           if (recovery.outcome === 'SUCCEEDED') {
             setPaymentNotice(null);
@@ -687,7 +691,11 @@ export function CustomerCartScreen() {
         );
       }
 
-      const serviceable = await verifyServiceability();
+      const serviceable =
+        checkout?.status === 'PAYMENT_PENDING' &&
+        checkout.deliveryAddressId === addressId
+          ? true
+          : await verifyServiceability();
       if (!serviceable) {
         setInteractionError(
           `This address is outside the ${DELIVERY_RADIUS_KM} km delivery area for one or more kitchens. Choose another address.`,
@@ -745,6 +753,7 @@ export function CustomerCartScreen() {
           expectedCart: buildCartSnapshotRequest(validatedCart),
         });
         activeCheckoutRef.current = checkout;
+        setReviewCartModel(model);
         preparedForReview = true;
       }
 
@@ -887,7 +896,7 @@ export function CustomerCartScreen() {
             {sections.length === 1 ? 'kitchen' : 'kitchens'}
           </Text>
         </View>
-        {cartSnapshot?.lines.length ? (
+        {cartSnapshot?.lines.length && !visibleCheckoutReview ? (
           <Button
             label={clearBusy ? 'Clearing…' : 'Clear cart'}
             variant="ghost"
@@ -918,7 +927,7 @@ export function CustomerCartScreen() {
         <RecoverableErrorBanner message={interactionError} style={styles.notice} />
       ) : null}
 
-      {model ? (
+      {visibleModel ? (
         <DeliveryCard
           address={header.selectedLocation?.displayName ?? null}
           serviceability={serviceability}
@@ -938,7 +947,7 @@ export function CustomerCartScreen() {
   );
 
   const renderFooter = () =>
-    model ? (
+    visibleModel ? (
       <View style={styles.listFooter}>
         <View style={styles.offerCard}>
           <View style={styles.offerTitleRow}>
@@ -951,7 +960,7 @@ export function CustomerCartScreen() {
             Offers will appear here when coupon verification is enabled.
           </Text>
         </View>
-        <BillSummary model={model} checkout={visibleCheckoutReview} />
+        <BillSummary model={visibleModel} checkout={visibleCheckoutReview} />
       </View>
     ) : null;
 
@@ -975,7 +984,7 @@ export function CustomerCartScreen() {
 
   const content = (() => {
     if (
-      !model &&
+      !visibleModel &&
       (snapshotStatus === 'UNINITIALIZED' || snapshotStatus === 'LOADING')
     ) {
       return (
@@ -985,7 +994,7 @@ export function CustomerCartScreen() {
         </View>
       );
     }
-    if (!model) {
+    if (!visibleModel) {
       return (
         <TerminalState
           title="Cart could not be loaded"
@@ -1002,13 +1011,15 @@ export function CustomerCartScreen() {
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
         ListEmptyComponent={
-          <CustomerEmptyState
-            model={customerEmptyStateAdapters.emptyCart()}
-            onAction={actionId => {
-              if (actionId === 'BROWSE_MEALS') browseMeals();
-            }}
-            testID="customer-cart-empty"
-          />
+          visibleCheckoutReview ? null : (
+            <CustomerEmptyState
+              model={customerEmptyStateAdapters.emptyCart()}
+              onAction={actionId => {
+                if (actionId === 'BROWSE_MEALS') browseMeals();
+              }}
+              testID="customer-cart-empty"
+            />
+          )
         }
         renderItem={renderItem}
         renderSectionHeader={() => null}
@@ -1029,6 +1040,8 @@ export function CustomerCartScreen() {
 
   const checkoutEnabled = staleRecoveredCheckout
     ? !checkoutBusy
+    : visibleCheckoutReview
+      ? Boolean(header.selectedLocation?.addressId && !checkoutBusy)
     : Boolean(
         model?.items.length &&
           header.selectedLocation?.addressId &&
@@ -1053,7 +1066,7 @@ export function CustomerCartScreen() {
       />
       <View style={styles.content}>{content}</View>
 
-      {model && model.items.length > 0 ? (
+      {visibleModel && (visibleModel.items.length > 0 || visibleCheckoutReview) ? (
         <View
           style={[
             styles.checkoutBar,
@@ -1063,7 +1076,7 @@ export function CustomerCartScreen() {
             <Text style={styles.checkoutTotal}>
               {visibleCheckoutReview
                 ? formatCartMoney(visibleCheckoutReview.grandTotal)
-                : `${formatAmountField(model.billSummary.foodSubtotal)} + fees`}
+                : `${formatAmountField(visibleModel.billSummary.foodSubtotal)} + fees`}
             </Text>
             <Text style={styles.checkoutLink}>View Bill Details</Text>
           </View>

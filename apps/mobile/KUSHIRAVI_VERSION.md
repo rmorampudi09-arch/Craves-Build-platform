@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.8
+# KUSHIRAVI App Build - Version 1.9
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,12 +9,26 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Current Android versionCode: `9`
-- Current Android versionName: `1.8`
+- Current Android versionCode: `10`
+- Current Android versionName: `1.9`
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.9 - Preserve checkout review through cart clearing
+
+- Tag: `KUSHIRAVI-app-v1.9`
+- Commit: resolve from the local `KUSHIRAVI-app-v1.9` tag
+- Android versionCode: `10`
+- Android versionName: `1.9`
+- APK path: `apps/mobile/android/app/build/outputs/apk/release/app-release-signed.apk`
+- Change summary:
+  - Keep the server-confirmed checkout and final bill on screen when the server clears the cart after order creation.
+  - Do not discard a prepared checkout during automatic payment recovery when no provider attempt has started.
+  - Keep the existing cart UI and Razorpay-only customer payment integration unchanged.
+  - Pin Android Studio's Gradle daemon to Java 21 and stop the signing script on build failure.
+  - Allow an ARM64-only phone verification build without changing the default full release build.
 
 ### Version 1.8 - Customer flow backend wiring fixes
 

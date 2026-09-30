@@ -1,5 +1,6 @@
 param(
-  [switch]$SkipNpmCi
+  [switch]$SkipNpmCi,
+  [switch]$PhoneOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -47,7 +48,14 @@ if (-not $SkipNpmCi) {
 
 Push-Location $androidRoot
 try {
-  .\gradlew.bat assembleRelease --no-daemon
+  $gradleArgs = @("assembleRelease", "--no-daemon")
+  if ($PhoneOnly) {
+    $gradleArgs += "-PreactNativeArchitectures=arm64-v8a"
+  }
+  .\gradlew.bat @gradleArgs
+  if ($LASTEXITCODE -ne 0) {
+    throw "Android release build failed with exit code $LASTEXITCODE. Refusing to sign an older APK."
+  }
 } finally {
   Pop-Location
 }

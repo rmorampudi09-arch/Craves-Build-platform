@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.15.3 Installed
+# KUSHIRAVI App Build - Version 1.15.4 Installed
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,23 +9,26 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `20`
-- Installed Android versionName: `1.15.3`
-- Installed APK source commit: `a77b95c8ebc2b5089d72a93413e1e306ca7925e0`, tag `KUSHIRAVI-app-v1.15.3`. Later evidence-only commits do not change that APK/tag.
-- Last installation: `2026-09-30 18:09:31`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed Android versionCode: `21`
+- Installed Android versionName: `1.15.4`
+- Installed APK source commit: `f808496eec0a8b983bacb1a391123b3d437c5724`, tag `KUSHIRAVI-app-v1.15.4`. Later evidence-only commits do not change that APK/tag.
+- Last installation: `2026-09-30 18:55:35`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.15.4 Prepared - Bounded live glass and Home scrolling performance
+### Version 1.15.4 Installed - Bounded live glass and Home scrolling performance
 
 - Baseline: installed `KUSHIRAVI-app-v1.15.3`, source
   `a77b95c8ebc2b5089d72a93413e1e306ca7925e0`, plus its evidence-only commit.
 - Android versionCode `21`, versionName `1.15.4`.
-- Intended tag: `KUSHIRAVI-app-v1.15.4`; previous tags remain untouched.
-- Intended APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.4.apk`.
-- Intended source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.4-source.zip`.
+- Source commit: `f808496eec0a8b983bacb1a391123b3d437c5724`.
+- Tag: `KUSHIRAVI-app-v1.15.4`; previous tags remain untouched.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.4.apk`.
+- APK SHA-256: `A11A4D22B98BF6BA73AB112176418CCB0E8E731113CB8B6F548F97CEAA01BDA7`.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.4-source.zip`.
+- Source ZIP SHA-256: `E378E1E7EC3166AB20522C7E77B83B49A372E5ED1C24223942E3D2104D4B6CB9`.
 - Remove the additional near-sharp Expo BlurView from every live rim. Capture the
   existing backdrop directly into a capsule-sized native RenderNode instead of
   another full-photo/full-scene blur buffer. Cache native drawing until its source,
@@ -35,8 +38,21 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   glass rim width/bend, foregrounds, haptics and all functional flows.
 - Baseline six-swipe phone profile: 111 frames, 110 janky (99.10%), median frame
   latency 89 ms, p90 101 ms; scratch render targets 421.58 MB, 2443 attached views.
-- TypeScript, scoped ESLint and 187 suites / 954 tests passed. Build, new phone
-  profile and exact source/tag/install evidence pending verification below.
+- TypeScript, scoped ESLint and 187 suites / 954 tests passed. Signed ARM64
+  release succeeded in 5m 17s, 823 tasks (40 executed). APK code 21 / name 1.15.4,
+  v2/v3 signatures and unchanged registered signing certificate verified.
+- Replace-install succeeded at `2026-09-30 18:55:35`. Same six-swipe test: 302
+  frames, 7 janky (2.32%), median latency 25 ms / p90 34 ms; repeat 296 frames,
+  6 janky (2.03%), median 25 ms / p90 32 ms. Scratch targets 94.29 MB, views 841.
+  Android's separate legacy counter and raw evidence are included in the report;
+  these measurements do not claim a constant display FPS or zero stutter.
+- Fast eight-fling stress test: 212 frames, 13 janky (6.13%). Loaded food rows
+  and pinned/unpinned rail checked; live menu/photo rims still change with the
+  backdrop. Customer tab navigation and native haptic ticks verified. Chef
+  Dashboard/Profile scrolling and Chef/Customer force-stop/reopen checked.
+  No shader fallback/errors or post-install app crashes; returned to Customer Home.
+- A separate blank second promo slide was observed. Carousel code and packaged
+  image are unchanged; its cause is not verified or claimed fixed by this patch.
 - No new dependencies, backend/API, auth, cart, payment, order, chef business
   logic, splash, remote or CI changes. No GitHub push.
 - Details and manual checks: `C:\mscratch\apps\mobile\docs\SCROLL_PERFORMANCE_V1_15_4.md`.

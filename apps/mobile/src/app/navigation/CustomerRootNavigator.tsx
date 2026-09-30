@@ -7,7 +7,6 @@ import * as Location from 'expo-location';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
 import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
-import {fontWeight, typography} from '../../design/tokens';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
 import {refreshCartSnapshot} from '../../features/cart/state/cartRefresh';
 import {CartBillPreviewSync} from '../../features/cart/query/useCartBillPreview';
@@ -68,6 +67,7 @@ import {
   CUSTOMER_PROFILE_TAB_STATE_OPTIONS,
   CUSTOMER_TAB_ACTIVE_COLOR,
   CUSTOMER_TAB_INACTIVE_COLOR,
+  CUSTOMER_TAB_LABEL_STYLE,
   CUSTOMER_TAB_STATE_OPTIONS,
   getCustomerTabDefinition,
 } from './customerTabs';
@@ -152,12 +152,7 @@ const tabScreenOptions = {
     marginTop: 0,
     marginBottom: 0,
   },
-  tabBarLabelStyle: {
-    fontSize: typography.small,
-    fontWeight: fontWeight.regular,
-    marginTop: 2,
-    marginBottom: 0,
-  },
+  tabBarLabelStyle: CUSTOMER_TAB_LABEL_STYLE,
   tabBarItemStyle: {
     height: 80,
     paddingVertical: 0,

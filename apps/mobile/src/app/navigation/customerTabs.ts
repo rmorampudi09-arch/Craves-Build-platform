@@ -1,5 +1,5 @@
 import type {IconName} from '../../shared/components/Icon';
-import {colors} from '../../design/tokens';
+import {colors, fontWeight, typography} from '../../design/tokens';
 import type {CustomerTabRouteName} from './types';
 
 export interface CustomerTabDefinition {
@@ -16,8 +16,14 @@ export const CUSTOMER_TABS: readonly CustomerTabDefinition[] = [
   {routeName: 'Profile', label: 'Profile', icon: 'account'},
 ] as const;
 
-export const CUSTOMER_TAB_ACTIVE_COLOR = colors.flameRed;
-export const CUSTOMER_TAB_INACTIVE_COLOR = colors.mutedText;
+export const CUSTOMER_TAB_ACTIVE_COLOR = colors.black;
+export const CUSTOMER_TAB_INACTIVE_COLOR = colors.black;
+export const CUSTOMER_TAB_LABEL_STYLE = {
+  fontSize: typography.small,
+  fontWeight: fontWeight.bold,
+  marginTop: 2,
+  marginBottom: 0,
+} as const;
 
 /**
  * Preserve each tab stack while P26 independently controls only the visual

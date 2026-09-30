@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.13
+# KUSHIRAVI App Build - Version 1.14 Prepared
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,13 +9,28 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Android versionCode: `14`
-- Android versionName: `1.13`
+- Prepared Android versionCode: `15`
+- Prepared Android versionName: `1.14`
 - Last verified installed version: `1.13` / versionCode `14`, source commit `2e91f049976686ea082babe9b66e3923c65ec994`, tag `KUSHIRAVI-app-v1.13`
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.14 Prepared - Light glowing Home glass and clear black menu text
+
+- Status: precise UI-only checkpoint; release build, tag and phone verification pending.
+- Source commit: the commit containing this entry; final evidence records the exact SHA.
+- Planned tag: `KUSHIRAVI-app-v1.14`; earlier tags remain untouched.
+- Android versionCode: `15`; versionName: `1.14`.
+- Planned APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.14.apk`.
+- Changes: reduce shared Home blur from 22 to 10, replace the dark capsule wash with white at 0.08 opacity and use light native blur tint. Add a feathered 12 dp / 0.2 opacity inner glow; reduce edge shade from 0.24 to 0.06. Keep the removed uniform outlines absent.
+- Customer menu: Home, Chefs, Orders and Profile icons/labels are black, labels bold at their existing size. A soft white selected-tab highlight preserves selection visibility. Existing red Cart shortcut and its white text remain unchanged.
+- CSS reference: adapt the supplied white tint, inset glow and soft lighting to existing native components. CSS pixel dimensions, browser filters and an unspecified `#lg-filter` are not imported; exact saturation/brightness or Apple optical shader equivalence is not claimed.
+- Scope: Home food/kitchen glass and Home root menu glass; customer-menu icon/label styling is shared across its four tabs. Shapes, spacing, safe areas, navigation handlers, favorite behavior, backend, finance, auth, cart/order/payment logic and splash unchanged. No new dependencies or GitHub push.
+- Verification and exact changed paths: `C:\mscratch\apps\mobile\docs\HOME_LIGHT_GLASS_V1_14.md`.
+- Verification: TypeScript, scoped ESLint and all 182 suites / 929 tests passed; release build and device visuals pending.
+- Phone remains on verified v1.13 until the new APK installation is checked. Visual verification must not create cart, favorite, checkout or payment mutations.
 
 ### Version 1.13 - Home glass without drawn capsule outlines
 

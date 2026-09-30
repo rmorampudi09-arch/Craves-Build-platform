@@ -42,6 +42,7 @@ export function LiquidGlassSurface({
   const [size, setSize] = useState({ width: 0, height: 0 });
   const gradientId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const navigation = variant === 'navigation';
+  const rimWidth = navigation ? 1.5 : 1.8;
   const hasAndroidBlur = Boolean(blurTarget) && Number(Platform.Version) >= 31;
   const roundedCorner = Math.min(cornerRadius, size.width / 2, size.height / 2);
 
@@ -76,7 +77,7 @@ export function LiquidGlassSurface({
           blurTarget={blurTarget}
           blurMethod="dimezisBlurViewSdk31Plus"
           blurReductionFactor={2.5}
-          intensity={navigation ? 66 : 48}
+          intensity={navigation ? 66 : 38}
           tint={
             navigation
               ? 'systemUltraThinMaterialLight'
@@ -113,10 +114,14 @@ export function LiquidGlassSurface({
               <Stop
                 offset="0"
                 stopColor="white"
-                stopOpacity={navigation ? 0.32 : 0.28}
+                stopOpacity={navigation ? 0.32 : 0.34}
               />
               <Stop offset="0.45" stopColor="white" stopOpacity="0.02" />
-              <Stop offset="1" stopColor="white" stopOpacity="0.14" />
+              <Stop
+                offset="1"
+                stopColor="white"
+                stopOpacity={navigation ? 0.14 : 0.2}
+              />
             </LinearGradient>
             <LinearGradient
               id={`${gradientId}rim`}
@@ -126,8 +131,16 @@ export function LiquidGlassSurface({
               y2="100%"
             >
               <Stop offset="0" stopColor="white" stopOpacity="0.94" />
-              <Stop offset="0.48" stopColor="white" stopOpacity="0.24" />
-              <Stop offset="1" stopColor="white" stopOpacity="0.72" />
+              <Stop
+                offset="0.48"
+                stopColor="white"
+                stopOpacity={navigation ? 0.24 : 0.32}
+              />
+              <Stop
+                offset="1"
+                stopColor="white"
+                stopOpacity={navigation ? 0.72 : 0.84}
+              />
             </LinearGradient>
           </Defs>
           <Rect
@@ -137,14 +150,14 @@ export function LiquidGlassSurface({
             fill={`url(#${gradientId}wash)`}
           />
           <Rect
-            x={0.75}
-            y={0.75}
-            width={Math.max(0, size.width - 1.5)}
-            height={Math.max(0, size.height - 1.5)}
-            rx={Math.max(0, roundedCorner - 0.75)}
+            x={rimWidth / 2}
+            y={rimWidth / 2}
+            width={Math.max(0, size.width - rimWidth)}
+            height={Math.max(0, size.height - rimWidth)}
+            rx={Math.max(0, roundedCorner - rimWidth / 2)}
             fill="none"
             stroke={`url(#${gradientId}rim)`}
-            strokeWidth={1.5}
+            strokeWidth={rimWidth}
           />
         </Svg>
       ) : null}

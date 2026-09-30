@@ -10,6 +10,7 @@ import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {fontWeight, typography} from '../../design/tokens';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
 import {refreshCartSnapshot} from '../../features/cart/state/cartRefresh';
+import {CartBillPreviewSync} from '../../features/cart/query/useCartBillPreview';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
 import {customerAddressesApi} from '../../features/customerAddresses/api/customerAddressesApi';
 import {
@@ -501,6 +502,7 @@ export function CustomerRootNavigator() {
     <CustomerBottomNavVisibilityProvider>
       <CustomerLaunchLocationResolver />
       <CustomerLaunchCartResolver />
+      <CartBillPreviewSync />
       <CustomerTabsNavigator />
     </CustomerBottomNavVisibilityProvider>
   );

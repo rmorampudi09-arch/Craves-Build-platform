@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.11
+# KUSHIRAVI App Build - Version 1.12 Prepared
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,12 +9,32 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Current Android versionCode: `12`
-- Current Android versionName: `1.11`
+- Prepared Android versionCode: `13`
+- Prepared Android versionName: `1.12`
+- Last verified installed version: `1.11` / versionCode `12`, commit `97adc82ffd582476d41b1d78070c36e84fb65687`, tag `KUSHIRAVI-app-v1.11`
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.12 Prepared - Read-only cart bill and precise capsule adjustments
+
+- Status: local source checkpoint; not yet published, built, tagged or installed.
+- Commit: the local commit containing this entry; resolve with `git log -1 -- apps/mobile/KUSHIRAVI_VERSION.md`.
+- Installable tag: pending verified backend/APIM publication and APK build. No existing tag is changed.
+- Android versionCode: `13` (prepared)
+- Android versionName: `1.12` (prepared)
+- APK path: none for this checkpoint. The phone remains on `KUSHIRAVI-app-v1.11`.
+- Changes:
+  - Prepare an authenticated read-only cart bill preview using the existing backend finance policy for platform fee, delivery fee, GST and total.
+  - Refresh the bill after confirmed cart/address changes, without creating checkout orders, payments or clearing the cart. Checkout retains its authoritative final bill and existing Razorpay behavior.
+  - Change only the Popular Near You unselected favorite outline to white; selected hearts remain red.
+  - Reduce image-capsule blur from 48 to 38 and strengthen its rounded reflective rim. Bottom menu blur and all other screen layouts remain unchanged.
+- Safety: `CART_BILL_PREVIEW_AVAILABLE` remains false until the production route is verified. Do not describe the prepared cart work as a live fix.
+- Approved deployment target: subscription `721906c9-4a72-4606-830b-d3e7ace093ff`; directory `1e7e43ac-c7f5-4d47-a74f-289a7cc21508`. The open Azure portal confirms both; deployment-tool authentication is still required.
+- Verification: TypeScript and scoped ESLint passed; 62 mobile tests across ten suites passed; Order Service 55 tests and Integration Service 76 tests passed. The eleven focused preview backend tests also pass when applied to newer main source `13710384`, with both modules' complete sources and test sources compiling.
+- Changed files, contract, security checks, deployment precautions and manual test steps: `C:\mscratch\apps\mobile\docs\CART_BILL_PREVIEW.md`.
+- No Azure resources were modified, no live payments were made, and nothing was pushed to GitHub.
 
 ### Version 1.11 - Changes document card surfaces and order visibility
 

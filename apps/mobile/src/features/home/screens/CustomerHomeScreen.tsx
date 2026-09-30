@@ -189,6 +189,7 @@ function DishCard({
             pending={favoritePending}
             disabled={favoriteDisabled}
             itemLabel={dish.itemName}
+            inactiveColor={colors.white}
             onToggle={() => onFavoriteToggle(dish.id, favorite)}
             style={styles.favoriteButton}
           />

@@ -90,6 +90,8 @@ import {isDefinitiveCartRejection} from '../domain/cartWriteRejection';
 import {refreshCartSnapshot} from '../state/cartRefresh';
 import {selectCartScreenModel} from '../state/cartSelectors';
 import {cartActions} from '../state/cartSlice';
+import {useCartBillPreview} from '../query/useCartBillPreview';
+import type {CartBillPreview} from '../api/cartBillPreviewApi';
 import {formatCartMoney} from '../viewCartOverlayModel';
 
 const DELIVERY_RADIUS_KM = 10;
@@ -102,7 +104,7 @@ type ServiceabilityState =
 
 function formatAmountField(
   field: CartScreenAmountField,
-  pendingLabel = 'Calculated at checkout',
+  pendingLabel = 'Calculating...',
 ): string {
   return field.amount ? formatCartMoney(field.amount) : pendingLabel;
 }
@@ -319,24 +321,29 @@ function checkoutAmountField(
 function BillSummary({
   model,
   checkout,
+  preview,
+  pendingLabel,
 }: {
   model: CartScreenModel;
   checkout: CheckoutSession | null;
+  preview: CartBillPreview | null;
+  pendingLabel: string;
 }) {
-  const foodSubtotal = checkout
-    ? checkoutAmountField(checkout.foodSubtotal)
+  const amounts = checkout ?? preview;
+  const foodSubtotal = amounts
+    ? checkoutAmountField(amounts.foodSubtotal)
     : model.billSummary.foodSubtotal;
-  const platformFee = checkout
-    ? checkoutAmountField(checkout.platformFee)
+  const platformFee = amounts
+    ? checkoutAmountField(amounts.platformFee)
     : model.billSummary.platformFee;
-  const deliveryFee = checkout
-    ? checkoutAmountField(checkout.deliveryFee)
+  const deliveryFee = amounts
+    ? checkoutAmountField(amounts.deliveryFee)
     : model.billSummary.deliveryFee;
-  const taxAmount = checkout
-    ? checkoutAmountField(checkout.taxAmount)
+  const taxAmount = amounts
+    ? checkoutAmountField(amounts.taxAmount)
     : model.billSummary.taxAmount;
-  const grandTotal = checkout
-    ? checkoutAmountField(checkout.grandTotal)
+  const grandTotal = amounts
+    ? checkoutAmountField(amounts.grandTotal)
     : model.billSummary.grandTotal;
 
   return (
@@ -344,16 +351,16 @@ function BillSummary({
       <Text style={styles.cardTitle}>Bill Details</Text>
       <View style={styles.billRows}>
         <CartAmountRow label="Food subtotal" field={foodSubtotal} />
-        <CartAmountRow label="Platform fee" field={platformFee} />
-        <CartAmountRow label="Delivery fee" field={deliveryFee} />
-        <CartAmountRow label="Taxes & GST" field={taxAmount} />
+        <CartAmountRow label="Platform fee" field={platformFee} pendingLabel={pendingLabel} />
+        <CartAmountRow label="Delivery fee" field={deliveryFee} pendingLabel={pendingLabel} />
+        <CartAmountRow label="Taxes & GST" field={taxAmount} pendingLabel={pendingLabel} />
         <CartAmountRow
           label="Coupon discount"
           field={model.billSummary.couponDiscount}
           pendingLabel="Not applied"
         />
         <View style={styles.billDivider} />
-        <CartAmountRow emphasized label="To Pay" field={grandTotal} />
+        <CartAmountRow emphasized label="To Pay" field={grandTotal} pendingLabel={pendingLabel} />
       </View>
     </View>
   );
@@ -371,6 +378,7 @@ export function CustomerCartScreen() {
   const cartClientRevision = useAppSelector(state => state.cart.clientRevision);
   const authPhone = useAppSelector(state => state.auth.identity?.phoneNumber ?? null);
   const header = useCustomerHeaderState();
+  const billPreview = useCartBillPreview(true);
   const bottomNavScroll = useCustomerBottomNavScroll();
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [interactionError, setInteractionError] = useState<string | null>(null);
@@ -960,7 +968,18 @@ export function CustomerCartScreen() {
             Offers will appear here when coupon verification is enabled.
           </Text>
         </View>
-        <BillSummary model={visibleModel} checkout={visibleCheckoutReview} />
+        {billPreview.isError && !visibleCheckoutReview ? (
+          <RecoverableErrorBanner
+            message="Bill details are temporarily unavailable. Please retry."
+            onRetry={() => { void billPreview.refetch(); }}
+          />
+        ) : null}
+        <BillSummary
+          model={visibleModel}
+          checkout={visibleCheckoutReview}
+          preview={billPreview.preview}
+          pendingLabel={!billPreview.addressId ? 'Select delivery address' : billPreview.isError || !billPreview.available ? 'Unavailable' : 'Calculating...'}
+        />
       </View>
     ) : null;
 
@@ -1076,7 +1095,9 @@ export function CustomerCartScreen() {
             <Text style={styles.checkoutTotal}>
               {visibleCheckoutReview
                 ? formatCartMoney(visibleCheckoutReview.grandTotal)
-                : `${formatAmountField(visibleModel.billSummary.foodSubtotal)} + fees`}
+                : billPreview.preview
+                  ? formatCartMoney(billPreview.preview.grandTotal)
+                  : `${formatAmountField(visibleModel.billSummary.foodSubtotal)} + fees`}
             </Text>
             <Text style={styles.checkoutLink}>View Bill Details</Text>
           </View>

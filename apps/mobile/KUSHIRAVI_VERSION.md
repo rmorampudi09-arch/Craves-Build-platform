@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.15.2 Prepared
+# KUSHIRAVI App Build - Version 1.15.2 Installed
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,23 +9,25 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `18`
-- Installed Android versionName: `1.15.1`
-- Installed APK source commit: `5dece0e8cae9208aeccdcf12f231e336ad830bec`, tag `KUSHIRAVI-app-v1.15.1`. Later evidence-only commits do not change that APK/tag.
-- Last installation: `2026-09-30 14:45:23`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed Android versionCode: `19`
+- Installed Android versionName: `1.15.2`
+- Installed APK source commit: `9bcd1eda070ad6b99a832caec4f0475720c4ba99`, tag `KUSHIRAVI-app-v1.15.2`. Later evidence-only commits do not change that APK/tag.
+- Last installation: `2026-09-30 17:18:32`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.15.2 Prepared - Precise glass edge optics
+### Version 1.15.2 Installed - Precise glass edge optics
 
 - Source baseline: installed `KUSHIRAVI-app-v1.15.1`, commit `5dece0e8cae9208aeccdcf12f231e336ad830bec`, plus its evidence-only commit.
-- Source commit: the commit containing this entry; exact build SHA follows in delivery evidence.
-- Planned tag: `KUSHIRAVI-app-v1.15.2`; previous version tags remain untouched.
+- Source commit: `9bcd1eda070ad6b99a832caec4f0475720c4ba99`.
+- Tag: `KUSHIRAVI-app-v1.15.2`; previous version tags remain untouched.
 - Android versionCode `19`, versionName `1.15.2`.
 - APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.2.apk`.
+- APK SHA-256: `532AD12A55ED7B8637204D099327003FACAAABCA5524A5DEFB69C85DFD1FA83A`.
 - Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.15.2-source.zip`.
+- Source ZIP SHA-256: `7A3370B12221282F8F4CE22E00B66F8A2D1F37BD8D710DA2B270E250CF2FF575`.
 - Only edge optics change: stronger directional rounded highlights, slightly deeper
   edge band and a paired inner light/shadow band on the shared existing glass
   capsules and Customer/Chef menus. No uniform white stroke is added.
@@ -35,7 +37,13 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   refractive background displacement or Apple's proprietary rendering. Supported
   iOS retains its existing native clear GlassView without the Android overlay.
 - Verification: TypeScript, scoped ESLint and 186 suites / 942 tests passed.
-  Build and live visual verification pending.
+  Signed ARM64 release succeeded in 9m 36s, 823 tasks (41 executed). APK identity
+  code 19 / name 1.15.2 and v2/v3 signatures verified; registered certificate unchanged.
+- Replace-install succeeded; Android reports code 19 / name 1.15.2 and update time
+  `2026-09-30 17:18:32`. Live food/kitchen capsule and Customer/Chef menu comparisons,
+  tab navigation, native selection ticks and Chef force-stop/reopen passed. No app
+  crashes appeared in the post-install crash buffer. No live business-data mutation
+  or payment was performed; phone returned to its original Chef side. iOS unverified.
 - No new dependencies, backend/API, auth/role, cart, payment, order, splash, remote
   or CI changes. No GitHub push.
 - Changed files, checks and build evidence: `C:\mscratch\apps\mobile\docs\GLASS_EDGE_OPTICS_V1_15_2.md`.

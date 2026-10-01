@@ -1,6 +1,6 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
-import { StyleSheet, Text } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text } from 'react-native';
 import { LinearGradient, Stop } from 'react-native-svg';
 import { AuthRoleCards } from './AuthRoleCards';
 import { AuthActionButton } from './AuthActionButton';
@@ -23,6 +23,25 @@ describe('login reference visual structure', () => {
   afterEach(() => {
     act(() => tree?.unmount());
   });
+
+  it.each(['android', 'ios'] as const)(
+    'avoids the keyboard on %s without changing the normal layout',
+    platform => {
+      const replacement = jest.replaceProperty(Platform, 'OS', platform);
+      try {
+        render(
+          <VideoAuthLayout>
+            <Text>Form</Text>
+          </VideoAuthLayout>,
+        );
+        expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBe(
+          platform === 'ios' ? 'padding' : 'height',
+        );
+      } finally {
+        replacement.restore();
+      }
+    },
+  );
 
   it('uses tall welcome tiles and the bundled bold face, not an OEM font weight', () => {
     render(<AuthRoleCards welcome value="CUSTOMER" onChange={jest.fn()} />);

@@ -1,5 +1,24 @@
 # Craves Login Reference Appearance Version 1.17.1
 
+## Keyboard Follow-up Version 1.17.3
+
+Live v1.17.2 checks confirmed the visual correction and top wordmark on welcome
+and both phone role layouts. Chef footer scrolling worked. Its signup link
+focused the phone input, but the Android IME covered the field: the login layout
+previously used no KeyboardAvoidingView behavior on Android. Enable the standard
+`height` behavior there, keep iOS `padding`, and retain normal keyboard-closed
+styling. No auth handler, validation, role authorization or OTP request changes.
+Regression assertions cover the platform behavior. Code 27 / name 1.17.3.
+
+Version 1.17.2 remains immutable: `33eab68d83085e770dd9a095effd1ba7396ed14e` /
+`KUSHIRAVI-app-v1.17.2`, APK SHA-256
+`89186C9864B15031CFC501562B1CA56D5C98424EED123DD23AF264D281404ADD`, source ZIP
+SHA-256 `D194B3E21859329B846D97AC1AF0D03BEF9C37BD9538DAC29D4C3C866E1C9BEE`.
+TypeScript/lint and 20 targeted tests passed (145.86s); release passed in 22m 54s
+(823 tasks, 41 executed). Fourteen packaged source entries matched source.
+Replace-installed at 07:34:54 Asia/Calcutta, 2026-10-01; cold launch passed
+(681ms total, 714ms wait). No phone number entered, OTP sent or user data cleared.
+
 ## Native Follow-up Version 1.17.2
 
 The first actual v1.17.1 phone screenshot verified the bold bundled faces,

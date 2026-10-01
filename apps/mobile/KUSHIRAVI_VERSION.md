@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.17.2 Native Wordmark Correction Prepared
+# KUSHIRAVI App Build - Version 1.17.3 Login Keyboard Correction Prepared
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,17 +9,28 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `25`
-- Installed Android versionName: `1.17.1`
+- Installed Android versionCode: `26`
+- Installed Android versionName: `1.17.2`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed source: `ca4d92ed10bf764029e09fc0d6d5748b712b981b`, tag `KUSHIRAVI-app-v1.17.1`. This verification build exposed a clipped wordmark and is not the final accepted correction.
-- Last installation: `2026-10-01 07:05:27`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed source: `33eab68d83085e770dd9a095effd1ba7396ed14e`, tag `KUSHIRAVI-app-v1.17.2`. Reference styling and wordmark verified; final keyboard follow-up is pending.
+- Last installation: `2026-10-01 07:34:54`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.17.2 Prepared - Native wordmark sizing correction
+### Version 1.17.3 Prepared - Login keyboard avoidance
+
+- Live v1.17.2 checks confirmed the reference-style welcome, Customer/Chef
+  choices and correctly sized top wordmark. The keyboard exposed the existing
+  Android form-avoidance gap: the focused phone field was hidden under the IME.
+- Use KeyboardAvoidingView's Android `height` behavior in the login layout,
+  retaining iOS `padding`. Normal keyboard-closed appearance and auth handlers
+  are unchanged. Regression assertions cover the platform behavior.
+- Code `27` / name `1.17.3`; planned fresh tag `KUSHIRAVI-app-v1.17.3`.
+- APK, source ZIP, source SHA and phone checks will follow verification.
+
+### Version 1.17.2 Verification Build - Native wordmark sizing correction
 
 - Follow up on the live v1.17.1 verification: fonts, role tiles and local video
   render, but React Native retained the PNG's intrinsic height, centering the
@@ -30,6 +41,19 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Add regression assertions for the image's real width/height in all form layouts.
 - Final APK, source ZIP, source SHA and phone evidence will follow verification.
 - Earlier checkpoints remain immutable. Details: `docs\LOGIN_REFERENCE_FIDELITY_V1_17_1.md`.
+- Built source/tag: `33eab68d83085e770dd9a095effd1ba7396ed14e` /
+  `KUSHIRAVI-app-v1.17.2`. APK `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.2.apk`,
+  SHA-256 `89186C9864B15031CFC501562B1CA56D5C98424EED123DD23AF264D281404ADD`.
+- Source ZIP `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.2-source.zip`, SHA-256
+  `D194B3E21859329B846D97AC1AF0D03BEF9C37BD9538DAC29D4C3C866E1C9BEE`.
+- TypeScript/lint and 20 targeted startup/login tests passed (145.86s). Full
+  192/981 passed before this two-dimension correction; dependencies unchanged.
+  Signed ARM64 build passed in 22m 54s: 823 tasks / 41 executed. Existing cert
+  verified; fourteen source-map entries match source.
+- Replace-install succeeded at `2026-10-01 07:34:54`; code 26 / name 1.17.2.
+  Cold launch Status ok / TotalTime 681ms / WaitTime 714ms. Welcome and both
+  phone role layouts inspected; wordmark fully visible at the top. Chef footer
+  reachable by scrolling. Keyboard overlay was found and is fixed in v1.17.3.
 
 ### Version 1.17.1 Verification Build - Match the login reference appearance
 

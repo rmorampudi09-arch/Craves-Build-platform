@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.18 Referral Reference Screens
+# KUSHIRAVI App Build - Version 1.19 Native MSG91 OTP
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,11 +9,11 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `29`
-- Installed Android versionName: `1.18`
+- Installed Android versionCode: `30`
+- Installed Android versionName: `1.19`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed source: `f1d6ad5a3a30e3920dcaa88d628eb4ec24cdde0a`, tag `KUSHIRAVI-app-v1.18`. Four native referral screens, copy confirmation, native share chooser and both workspace restoration checks verified on the phone; a restored Chef referral Back-stack issue remains recorded below.
-- Last installation: `2026-10-01 21:44:04` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed source: `bb6e81d23623b023bf9c8c6ab22d5a9856b8e695`, tag `KUSHIRAVI-app-v1.19`. Native MSG91 integration installed; Customer Home/profile checked. Fresh OTP and Chef restoration remain pending, with MSG91 Mobile Integration still OFF. Historical v1.18 referral/restoration evidence remains recorded below, not represented as rerun on v1.19.
+- Last installation: `2026-10-02 00:31:40` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
@@ -25,8 +25,9 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   `8750c988845c0c3c7fab43d41aa27ddbfe687d6a`. No GitHub push, backend changes,
   payment changes, UI redesign, role grants or account migration.
 - Android package `com.cravesapp`, versionCode `30`, versionName `1.19`.
-  Installable tag `KUSHIRAVI-app-v1.19`; exact source resolves with
-  `git rev-parse KUSHIRAVI-app-v1.19^{}` after the verified source commit.
+  Installable tag `KUSHIRAVI-app-v1.19`; exact source
+  `bb6e81d23623b023bf9c8c6ab22d5a9856b8e695`. Source committed locally and
+  annotated tag created after the successful release build; no tag was moved.
 - Uses the official native MSG91 SDK and the live web configuration/verification
   contract. Firebase SMS methods removed. Backend-issued Firebase custom token
   compatibility remains necessary because the verified live backend still uses
@@ -44,13 +45,35 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   30 seconds/two retries/15 minutes; Mobile Integration was OFF at preflight.
   User action requested to enable only that existing setting. No Firebase SMS
   fallback or bypass while mobile verification is unavailable.
-- Source/build/installation evidence will be recorded after checks, build and
-  phone replace-install. Existing installed checkpoint remains v1.18 until then.
+- Release build succeeded in 6m 7s, 864 tasks (94 executed / 770 up-to-date),
+  using the existing script with `-SkipNpmCi -PhoneOnly`. Official MSG91 Android
+  module autolinked; v2/v3 APK signature verified with the unchanged signing
+  certificate. Package `com.cravesapp`, arm64-v8a, minSdk 24 / targetSdk 36.
+- Replace-install returned Success without clearing app data. Phone readback:
+  code `30`, name `1.19`, last update `2026-10-02 00:31:40` Asia/Calcutta.
+  Customer Home and Profile loaded; cold native activity launch returned ok,
+  603ms total / 639ms wait. Checked process logs had no fatal/JS/native-module
+  error matches; this is not a blanket crash audit.
+- Reported OTP error confirmed on the phone: "Mobile verification is not
+  enabled yet. Please try again shortly." This was on the Send OTP form,
+  before SMS delivery or OTP verification. Read-only provider policy recheck
+  still returned `mobileIntegration: 0`. Existing MSG91 account sign-in and
+  enabling only CravesOTP Mobile Integration are required; no APK rebuild is
+  needed for this remote setting. No OTP/password was read, entered or logged.
+- Fresh SMS/OTP sign-in, resend/wrong-code acceptance and Chef restoration
+  have NOT been verified live. The attempted Chef switch reached its confirmation
+  dialog, but the subsequent visible screen was phone entry, not Chef Dashboard;
+  stopped input to avoid interrupting user authentication. No role was granted
+  or successful Chef check inferred from the earlier v1.18 installation.
 - Pre-build verification: TypeScript passed; changed-source ESLint passed with
   zero warnings; all 197 Jest suites / 1,054 tests passed. Focused auth checks:
   25 suites / 162 tests passed. These are automated checks, not SMS acceptance.
-- Planned immutable APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.19.apk`;
-  source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.19-source.zip`.
+- Immutable APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.19.apk`, 49,007,736 bytes;
+  SHA-256 `C153E6E83274203C94CC38AC4BBA7DFDE8C3B8C4019A4B3B8787D2974583F64B`.
+  Exact tagged source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.19-source.zip`;
+  SHA-256 `4A20C200980E9CB9939AADB5CAED1D1BC4B1CBDEC907D1AEC629AC36767F4F9D`.
+  Prior APKs/tags retained unchanged. Installation receipt and remaining manual
+  checks: `docs\msg91-mobile-installation-20261002.md`.
 - Setup, exact contracts, protected boundaries and manual acceptance steps:
   `src\features\auth\msg91\README.md`.
 

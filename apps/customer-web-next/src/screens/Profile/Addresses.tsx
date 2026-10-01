@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import {
+  displayAddressLabel,
   isDeliveryReadyAddress,
   type CustomerAddress,
 } from "@/lib/address-contract";
@@ -54,9 +55,7 @@ function recipientLine(address: CustomerAddress): string {
 }
 
 function addressDisplayName(address: CustomerAddress): string {
-  return address.addressLabel === "OTHER" && address.addressName
-    ? address.addressName
-    : address.addressLabel.charAt(0) + address.addressLabel.slice(1).toLowerCase();
+  return displayAddressLabel(address.addressLabel);
 }
 
 function invalidateHomeDeliveryContext(): void {
@@ -442,9 +441,7 @@ export default function AddressesPage() {
             <AlertDialog.Description className="mx-auto mt-3 max-w-sm text-center text-sm leading-6 text-[#6B6B6B]">
               {deleteTarget
                 ? "This will remove your " +
-                  (deleteTarget.addressLabel === "OTHER" && deleteTarget.addressName
-                    ? deleteTarget.addressName
-                    : deleteTarget.addressLabel.toLowerCase()) +
+                  displayAddressLabel(deleteTarget.addressLabel) +
                   " address from your saved delivery addresses."
                 : "This address will be removed from your saved delivery addresses."}
             </AlertDialog.Description>

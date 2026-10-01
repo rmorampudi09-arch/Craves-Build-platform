@@ -47,6 +47,10 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   Email/password remains email-only; fixed +91 and no fabricated legal URLs.
 - APK/source ZIP, final commit, build/visual/test evidence will be recorded
   after verification. Details: `docs\LOGIN_REFERENCE_FIDELITY_V1_17_1.md`.
+- The first release bundle exposed missing `expo-asset`; add the installed
+  Expo SDK 56-compatible `~56.0.22` asset support required by the font loader.
+  Metro uses two packaging workers to stay within workstation memory; no
+  runtime feed/scroll performance settings changed.
 
 ### Version 1.17 Built and Installed - Local video login reference
 

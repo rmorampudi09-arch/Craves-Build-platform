@@ -23,7 +23,8 @@ export function AuthSurfaceFinish({ action, selected, radius = 16 }: Props) {
     <View
       style={[
         StyleSheet.absoluteFill,
-        { borderRadius: radius, overflow: 'hidden' },
+        styles.clip,
+        { borderRadius: radius },
       ]}
       pointerEvents="none"
       accessibilityElementsHidden
@@ -110,3 +111,5 @@ export function AuthSurfaceFinish({ action, selected, radius = 16 }: Props) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({ clip: { overflow: 'hidden' } });

@@ -59,6 +59,10 @@ Relative to `C:\mscratch\apps\mobile`:
 - `package.json`, `package-lock.json`: make already SDK-bundled `expo-font
   ~56.0.7` an explicit dependency; same version deduplicated from Expo's nested
   dependency. See [Expo SDK 56 font documentation](https://docs.expo.dev/versions/v56.0.0/sdk/font/).
+  Add SDK-compatible `expo-asset ~56.0.22`, required by the font loader and
+  discovered missing during the first release bundle.
+- `metro.config.js`: cap packaging workers at two for workstation memory.
+  This build-only limit does not change runtime scrolling or glass settings.
 - `android/app/build.gradle`: code 25 / name 1.17.1.
 - `jest.config.js`, `jest.setup.js`, `AuthVisuals.test.tsx`, `AuthVideoBackground.test.tsx`,
   `src/features/auth/screens/LoginScreens.test.tsx`: native-boundary mocks and

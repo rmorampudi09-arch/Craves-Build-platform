@@ -11,6 +11,8 @@ const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
  * @type {import('@react-native/metro-config').MetroConfig}
  */
 const config = {
+  // Keep release bundling within this workstation's available memory.
+  maxWorkers: 2,
   resolver: {
     extraNodeModules: {
       'expo-location': path.resolve(

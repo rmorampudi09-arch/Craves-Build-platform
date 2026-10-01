@@ -5,6 +5,8 @@ on:
       - 'services/user-chef-service/**'
       - 'apps/customer-web-next/**'
       - 'apps/mobile/**'
+      - 'scripts/user-chef/**'
+      - 'scripts/apim/configure-chef-application-apim.sh'
       - '.github/workflows/address-label-contract-ci.yml'
   workflow_dispatch:
 permissions:
@@ -27,11 +29,22 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U address_ci -d craves_email_test"
           --health-interval 5s --health-timeout 5s --health-retries 10
+      explorer-postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: craves_explorer_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d craves_explorer_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       EMAIL_TEST_DB_URL: jdbc:postgresql://localhost:5432/craves_email_test
       EMAIL_TEST_DB_USER: address_ci
       EMAIL_TEST_DB_PASSWORD: disposable-address-ci-only
       EMAIL_TEST_DISPOSABLE: 'true'
+      EXPLORER_TEST_DB_URL: jdbc:postgresql://127.0.0.1:5433/craves_explorer_test
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,8 +57,12 @@ jobs:
           cache-dependency-path: services/user-chef-service/pom.xml
       - name: Verify backend and real PostGIS address migration and persistence
         run: mvn -B -ntp -f services/user-chef-service/pom.xml verify
+      - name: Check Chef application gateway script syntax
+        run: bash -n scripts/apim/configure-chef-application-apim.sh
       - name: Require database tests to run without skips
-        run: python3 scripts/email/require-email-test-evidence.py user-chef-service
+        run: |
+          python3 scripts/email/require-email-test-evidence.py user-chef-service
+          python3 scripts/user-chef/require-release-test-evidence.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

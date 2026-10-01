@@ -110,19 +110,68 @@ class AuthEmailProjectionDbTest {
         jdbc.execute("CREATE SCHEMA email_userchef_test");
         flyway("12").migrate();
         var owner = user(UUID.randomUUID());
+        var home = tx.execute(ignored -> profiles.addAddress(owner, address("HOME", true)));
+        var work = tx.execute(ignored -> profiles.addAddress(owner, address("WORK", false)));
         var old = tx.execute(ignored -> profiles.addAddress(owner, address("OTHER", false)));
         assertEquals(1, flyway(null).migrate().migrationsExecuted);
         flyway(null).validate();
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
-        assertEquals("OTHER", profiles.getAddress(owner, old.id()).addressLabel());
+        assertEquals(home, profiles.getAddress(owner, home.id()));
+        assertEquals(work, profiles.getAddress(owner, work.id()));
+        assertEquals(old, profiles.getAddress(owner, old.id()));
+        assertEquals(3, profiles.listAddresses(owner).size());
         var named = tx.execute(ignored -> profiles.updateAddress(owner, old.id(), address("Mom's House", true)));
         assertEquals("Mom's House", named.addressLabel());
+        assertEquals(named, profiles.getAddress(owner, old.id()));
+        assertEquals(named, profiles.getAddressForInternal(owner.identityId(), old.id()));
+        assertTrue(named.isDefault());
+        assertFalse(profiles.getAddress(owner, home.id()).isDefault());
         assertEquals(80, jdbc.queryForObject("SELECT character_maximum_length FROM information_schema.columns WHERE table_schema='email_userchef_test' AND table_name='customer_address' AND column_name='address_label'", Integer.class));
         assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM information_schema.columns WHERE table_schema='email_userchef_test' AND table_name='customer_address' AND column_name='address_name'", Integer.class));
         for (String invalid : new String[] {"", "   ", " untrimmed ", "x".repeat(81)}) {
             assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
                 () -> jdbc.update("UPDATE customer_address SET address_label=? WHERE id=?", invalid, old.id()));
         }
+    }
+
+    @Test void persistedChefReadinessIsOwnerScopedReadOnlyAndUsesOnlyApprovedModernEvidence() {
+        UUID owner = UUID.randomUUID();
+        UUID app = insertChef(owner, "verified@example.test");
+        when(auth.requireVerifiedEmail(owner, "verified@example.test")).thenReturn("verified@example.test");
+        var readiness = new in.craves.userchef.service.ChefApplicationReadinessService(chefs, auth);
+        for (String legacy : List.of("AADHAAR_CARD", "PAN_CARD")) {
+            insertEvidence(app, owner, legacy, "APPROVED");
+        }
+        assertEquals(0, readiness.getReadiness(user(owner)).uploadedDocumentCount());
+        assertFalse(readiness.getReadiness(user(owner)).approvalReady());
+        for (String type : List.of("APPLICANT_PHOTO", "GOVERNMENT_ID_FRONT", "GOVERNMENT_ID_BACK", "TAX_ID_CARD")) {
+            insertEvidence(app, owner, type, "UPLOADED");
+        }
+        assertEquals(4, readiness.getReadiness(user(owner)).uploadedDocumentCount());
+        assertEquals(0, readiness.getReadiness(user(owner)).approvedDocumentCount());
+        jdbc.update("UPDATE chef_kyc_document SET status='APPROVED' WHERE application_id=?", app);
+        jdbc.update("UPDATE chef_kyc_document SET status='REJECTED', review_reason='Upload a legible copy' WHERE application_id=? AND document_type='TAX_ID_CARD'", app);
+        var rejected = readiness.getReadiness(user(owner));
+        assertFalse(rejected.approvalReady());
+        assertEquals(3, rejected.approvedDocumentCount());
+        assertTrue(rejected.documents().stream().anyMatch(item -> "Upload a legible copy".equals(item.rejectionReason())));
+        jdbc.update("UPDATE chef_kyc_document SET status='APPROVED', review_reason=NULL WHERE application_id=?", app);
+        assertTrue(readiness.getReadiness(user(owner)).approvalReady());
+        var other = readiness.getReadiness(user(UUID.randomUUID()));
+        assertEquals(ApiDtos.ChefApplicationStatus.NOT_SUBMITTED, other.applicationStatus());
+        assertEquals(0, other.uploadedDocumentCount());
+        assertEquals("PENDING", jdbc.queryForObject("SELECT status FROM chef_application WHERE id=?", String.class, app));
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM notification_outbox", Integer.class));
+        verify(auth, never()).grantChefRole(any(), any());
+        verifyNoInteractions(storage, notifications);
+        var outage = new ApiException(503, "EMAIL_AUTHORITY_UNAVAILABLE", "Unavailable");
+        doThrow(outage).when(auth).requireVerifiedEmail(owner, "verified@example.test");
+        assertSame(outage, assertThrows(ApiException.class, () -> readiness.getReadiness(user(owner))));
+    }
+
+    private void insertEvidence(UUID app, UUID owner, String type, String status) {
+        jdbc.update("INSERT INTO chef_kyc_document(id,application_id,identity_id,document_type,original_file_name,blob_container,blob_name,content_type,file_size_bytes,status) VALUES (?,?,?,?,'synthetic.png','documents',?,'image/png',20,?)",
+            UUID.randomUUID(), app, owner, type, "kyc/" + owner + "/" + type, status);
     }
 
     private ApiDtos.CustomerAddressRequest address(String label, boolean isDefault) {

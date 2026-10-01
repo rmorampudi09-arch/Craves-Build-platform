@@ -91,6 +91,14 @@ The broader PDF backlog (complete onboarding workflow, order timeline refinement
 
 ## Validation
 
+Publication follow-up on 1 October 2026: the owner explicitly authorized pushing `codex/custom-address-labels`, opening a PR against current main, and completing all CI. PR #403 is open as a draft: https://github.com/rmorampudi09-arch/Craves-Build-platform/pull/403. Merging and production deployment remain prohibited until separately authorized.
+
+The strengthened User/Chef check runs both disposable databases: PostGIS for full application/address migrations and PostgreSQL for the existing Explorer suites. `scripts/user-chef/require-release-test-evidence.py` rejects missing suites, failures, errors, and any skipped test, and produces `release-test-summary.json` in the uploaded Surefire artifact. The V12 upgrade fixture now preserves HOME, WORK, and historical OTHER together. A persisted readiness case verifies owner scoping, modern evidence states, Auth failure propagation, and absence of approval/role/notification side effects.
+
+Four HTTP tests exercise the real Spring Security filter chain with synthetic signed tokens. Unsigned readiness requests return 401. Invalid, expired, and incorrectly signed access tokens now return a no-store 401 from the shared User/Chef JWT filter instead of escaping MVC error handling. Valid CUSTOMER identities can inspect their own application readiness; a caller cannot choose another owner with query parameters or headers. Auth outages remain 503.
+
+The follow-up local backend run passes 103 tests with 32 database tests skipped (135 discovered); only the remote job's zero-skip report can establish database completion. Full mobile lint and all 153 Jest suites / 718 tests pass locally. Final remote results and the exact delivered SHA are recorded in the publication report after CI completes. The historical mobile-only scope check applies only to its original consolidation branch; all mobile security checks, types, lint, full Jest, and production JavaScript bundle still run for cross-service PRs.
+
 Local verification on 1 October 2026:
 
 - Backend Java 21 Maven verify: successful; 130 tests discovered, 99 executed successfully and 31 database-dependent tests skipped because no local database was running. Eight new readiness cases and 13 address validation cases passed.
@@ -110,7 +118,7 @@ $env:JAVA_HOME = 'C:/Program Files/Java/jdk-21'
 mvn -B -ntp -f services/user-chef-service/pom.xml verify
 ```
 
-For real migration tests, run a disposable `postgis/postgis:16-3.4` container on localhost with database name `craves_email_test`. These tests intentionally drop fixture schemas and must never point at retained data. Set `EMAIL_TEST_DB_URL=jdbc:postgresql://localhost:5432/craves_email_test`, `EMAIL_TEST_DB_USER`, `EMAIL_TEST_DB_PASSWORD`, `EMAIL_TEST_DISPOSABLE=true`, and the existing CI guard `GITHUB_ACTIONS=true` only in that disposable test shell. Then run the Maven command above and `python scripts/email/require-email-test-evidence.py user-chef-service`. The provided workflow configures this disposable environment automatically and needs no production secrets.
+For real migration tests, run a disposable `postgis/postgis:16-3.4` container on localhost with database name `craves_email_test`. These tests intentionally drop fixture schemas and must never point at retained data. Set `EMAIL_TEST_DB_URL=jdbc:postgresql://localhost:5432/craves_email_test`, `EMAIL_TEST_DB_USER`, `EMAIL_TEST_DB_PASSWORD`, `EMAIL_TEST_DISPOSABLE=true`, and the existing CI guard `GITHUB_ACTIONS=true` only in that disposable test shell. Also run a separate disposable `postgres:16` instance on port 5433 with database `craves_explorer_test`, username/password `postgres`, and set `EXPLORER_TEST_DB_URL=jdbc:postgresql://127.0.0.1:5433/craves_explorer_test`. Then run the Maven command above, `python scripts/email/require-email-test-evidence.py user-chef-service`, and `python scripts/user-chef/require-release-test-evidence.py`. The provided workflow configures these disposable environments automatically and needs no production secrets.
 
 Web, from `apps/customer-web-next`: `npm ci --ignore-scripts`, then `npm run verify`. For interactive local use, configure `.env.local` from `.env.example` and run `npm run dev`. Use a test identity and a test backend with V13 and readiness deployed.
 

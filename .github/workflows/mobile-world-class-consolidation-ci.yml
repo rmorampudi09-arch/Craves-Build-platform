@@ -36,6 +36,9 @@ jobs:
           fetch-depth: 0
 
       - name: Verify mobile-only consolidation scope
+        # This scope restriction belongs to the original consolidation branch.
+        # Cross-service feature PRs still run every mobile validation step below.
+        if: github.head_ref == 'feature/mobile-world-class-consolidation-20260910' || github.ref_name == 'feature/mobile-world-class-consolidation-20260910'
         shell: bash
         run: |
           set -euo pipefail

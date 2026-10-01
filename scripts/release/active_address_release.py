@@ -42,6 +42,11 @@ require = inspect.require
 def run(*args, cwd=None, env=None):
     # Capture CLI failures: Azure responses can contain runtime values. Never echo them.
     result = subprocess.run(args, cwd=cwd, env=env, text=True, capture_output=True, timeout=2400)
+    if result.returncode and env and env.get("DEPLOY_PREFLIGHT_ONLY") == "true":
+        # The guard prints fixed diagnostics containing reference names, never values.
+        for line in result.stderr.splitlines():
+            if re.fullmatch(r"ERROR: Active (?:secret reference|Key Vault secret) '[A-Za-z0-9_-]+' (?:is not Key Vault-backed\. Deployment refused\.|has no supported managed-identity reference\.)", line):
+                raise ValueError(line)
     require(result.returncode == 0, "Command failed (details suppressed): " + " ".join(args[:2]))
     return result.stdout.strip()
 

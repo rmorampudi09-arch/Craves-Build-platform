@@ -161,7 +161,8 @@ def capture():
               "blockers": []}
     secret_metadata = az("containerapp", "secret", "list", "-g", RG, "-n", chef["name"])
     report["userChefSecretBindings"] = [{"name": item["name"],
-        "keyVaultBacked": bool(item.get("keyVaultUrl")), "identityConfigured": bool(item.get("identity"))}
+        "keyVaultBacked": bool(item.get("keyVaultUrl")), "identityConfigured": bool(item.get("identity")),
+        "identityKind": "system" if str(item.get("identity", "")).lower() == "system" else "user-assigned" if item.get("identity") else "missing"}
         for item in secret_metadata]
     try:
         report["database"] = inspect_database(az("containerapp", "show", "-g", RG, "-n", chef["name"]),

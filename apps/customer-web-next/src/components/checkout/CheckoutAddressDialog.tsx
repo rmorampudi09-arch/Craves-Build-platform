@@ -10,24 +10,29 @@ import {
   X,
 } from "lucide-react";
 import {
+  addressLabelDraftError,
+  addressLabelFromDraft,
+  createAddressLabelDraft,
+  displayAddressLabel,
   isDeliveryReadyAddress,
   parseAddressInput,
   parseCustomerAddress,
   parseCustomerAddresses,
-  type AddressLabel,
+  type AddressCategory,
+  type AddressLabelDraft,
   type CustomerAddress,
   type CustomerAddressInput,
 } from "@/lib/address-contract";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
 
-type AddressDraft = Omit<CustomerAddressInput, "latitude" | "longitude"> & {
-  latitude: string;
-  longitude: string;
-};
+type AddressDraft = Omit<CustomerAddressInput, "latitude" | "longitude" | "addressLabel"> &
+  AddressLabelDraft & {
+    latitude: string;
+    longitude: string;
+  };
 
 const blankAddress: AddressDraft = {
-  addressLabel: "HOME",
-  addressName: null,
+  ...createAddressLabelDraft("HOME"),
   recipientName: "",
   contactPhoneNumber: "",
   addressLine1: "",
@@ -194,8 +199,14 @@ export function CheckoutAddressDialog({
   }
 
   async function saveAddress() {
+    const labelError = addressLabelDraftError(draft);
+    if (labelError) {
+      setMessage(labelError);
+      return;
+    }
     const input = parseAddressInput({
       ...draft,
+      addressLabel: addressLabelFromDraft(draft),
       addressLine2: draft.addressLine2?.trim() || null,
       landmark: draft.landmark?.trim() || null,
       latitude: draft.latitude.trim(),
@@ -297,9 +308,7 @@ export function CheckoutAddressDialog({
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block font-display text-base font-bold">
-                          {address.addressLabel === "OTHER" && address.addressName
-                            ? address.addressName
-                            : address.addressLabel}{address.isDefault ? " · Default" : ""}
+                          {displayAddressLabel(address.addressLabel)}{address.isDefault ? " · Default" : ""}
                         </span>
                         <span className="mt-1 block text-sm font-semibold">
                           {[address.recipientName, localPhone(address.contactPhoneNumber)].filter(Boolean).join(" · ")}
@@ -344,8 +353,8 @@ export function CheckoutAddressDialog({
             </button>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <label className="text-xs font-semibold text-ink">Label<select value={draft.addressLabel} onChange={(event) => { const label = event.target.value as AddressLabel; update("addressLabel", label); if (label !== "OTHER") update("addressName", null); }} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]"><option value="HOME">Home</option><option value="WORK">Work</option><option value="OTHER">Other</option></select></label>
-              {draft.addressLabel === "OTHER" ? <label className="text-xs font-semibold text-ink">Name this address<input required maxLength={80} value={draft.addressName ?? ""} onChange={(event) => update("addressName", event.target.value || null)} placeholder="e.g. Mom's home" className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label> : null}
+              <label className="text-xs font-semibold text-ink">Label<select value={draft.addressCategory} onChange={(event) => setDraft((current) => ({ ...current, addressCategory: event.target.value as AddressCategory }))} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]"><option value="HOME">Home</option><option value="WORK">Work</option><option value="OTHER">Other</option></select></label>
+              {draft.addressCategory === "OTHER" ? <label className="text-xs font-semibold text-ink">Name this address<input required maxLength={80} value={draft.customLabel} onChange={(event) => update("customLabel", event.target.value)} placeholder="e.g. Mom's home" className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label> : null}
               <label className="text-xs font-semibold text-ink">Recipient<input value={draft.recipientName} onChange={(event) => update("recipientName", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
               <label className="text-xs font-semibold text-ink">Phone<input value={draft.contactPhoneNumber} onChange={(event) => update("contactPhoneNumber", localPhone(event.target.value))} placeholder="+919876543210" className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
               <label className="text-xs font-semibold text-ink">Pincode<input value={draft.postalCode} onChange={(event) => update("postalCode", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>

@@ -36,6 +36,7 @@ def module(name, filename):
 inspect = module("active_preflight", "rmorampudi09_preflight.py")
 evidence = module("web_evidence", "verify-web-release-evidence.py")
 runtime = module("web_runtime", "verify-customer-web-runtime.py")
+bank_binding = module("bank_binding", "preserve_bank_binding.py")
 require = inspect.require
 
 
@@ -240,13 +241,22 @@ def deploy_web(source, sha, run_id, output):
 
 
 def execute(args):
-    require(args.operation in ("preflight", "status") or args.confirm, "Explicit deployment confirmation required")
+    require(args.operation in ("preflight", "binding-plan", "status") or args.confirm, "Explicit deployment confirmation required")
     args.output.mkdir(parents=True, exist_ok=True)
     account = azure("account", "show")
     require(account["id"] == SUBSCRIPTION and account["tenantId"] == inspect.TENANT, "Wrong Azure account")
     proof = source_guard(args.source, args.sha, args.regression_run)
     print(json.dumps({"operation": args.operation, "reviewedSource": proof}), flush=True)
     report = database_report(args.source, args.output / "preflight.json")
+    if args.operation in ("binding-plan", "bindings"):
+        require_database(report)
+        if args.operation == "bindings":
+            plan = bank_binding.apply(azure, RG, CHEF, app, confirmed=args.confirm)
+        else:
+            plan, _ = bank_binding.inspect(azure, RG, CHEF, app(CHEF))
+        (args.output / "bank-binding-plan.json").write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps(plan, indent=2), flush=True)
+        return
     if args.operation == "preflight":
         print(json.dumps(report, indent=2))
         require_database(report)
@@ -290,7 +300,7 @@ def execute(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--operation", choices=("preflight", "backend", "apim", "web", "status"), default="preflight")
+    parser.add_argument("--operation", choices=("preflight", "binding-plan", "bindings", "backend", "apim", "web", "status"), default="preflight")
     parser.add_argument("--confirm", action="store_true")
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--sha", required=True)

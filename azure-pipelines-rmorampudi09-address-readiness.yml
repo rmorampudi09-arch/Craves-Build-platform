@@ -8,7 +8,7 @@ parameters:
   - name: operation
     type: string
     default: preflight
-    values: [preflight, backend, apim, web, status]
+    values: [preflight, binding-plan, bindings, backend, apim, web, status]
   - name: confirmDeploy
     type: boolean
     default: false
@@ -38,9 +38,9 @@ steps:
         set +x
         [[ "$TOOLS_SHA" =~ ^[0-9a-f]{40}$ && "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Select exact reviewed tool and application commits.' >&2; exit 2; }
         [[ "$REGRESSION_RUN_ID" =~ ^[0-9]+$ ]] || exit 2
-        case "$OPERATION" in preflight|backend|apim|web|status) ;; *) exit 2 ;; esac
-        if [[ "$OPERATION" != preflight && "$OPERATION" != status && "${CONFIRM_DEPLOY,,}" != true ]]; then
-          echo 'Select confirmDeploy only for the explicit backend, APIM or web operation.' >&2
+        case "$OPERATION" in preflight|binding-plan|bindings|backend|apim|web|status) ;; *) exit 2 ;; esac
+        if [[ "$OPERATION" != preflight && "$OPERATION" != binding-plan && "$OPERATION" != status && "${CONFIRM_DEPLOY,,}" != true ]]; then
+          echo 'Select confirmDeploy only for the explicit binding repair, backend, APIM or web operation.' >&2
           exit 2
         fi
         SOURCE=$(mktemp -d)
@@ -66,6 +66,7 @@ steps:
         cd "$RELEASE_TOOLS"
         python3 -m unittest discover -s scripts/release/tests -p test_rmorampudi09_preflight.py -v
         python3 -m unittest discover -s scripts/release/tests -p test_active_address_release.py -v
+        python3 -m unittest discover -s scripts/release/tests -p test_preserve_bank_binding.py -v
         confirmation=()
         if [[ "${CONFIRM_DEPLOY,,}" == true ]]; then confirmation+=(--confirm); fi
         python3 scripts/release/active_address_release.py \

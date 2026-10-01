@@ -2,23 +2,28 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
+  addressLabelDraftError,
+  addressLabelFromDraft,
+  createAddressLabelDraft,
+  displayAddressLabel,
   isDeliveryReadyAddress,
   parseAddressInput,
-  type AddressLabel,
+  type AddressCategory,
+  type AddressLabelDraft,
   type CustomerAddress,
   type CustomerAddressInput,
   type LocationRecommendation,
 } from "@/lib/address-contract";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
 
-type AddressForm = Omit<CustomerAddressInput, "latitude" | "longitude"> & {
-  latitude: number | "";
-  longitude: number | "";
-};
+type AddressForm = Omit<CustomerAddressInput, "latitude" | "longitude" | "addressLabel"> &
+  AddressLabelDraft & {
+    latitude: number | "";
+    longitude: number | "";
+  };
 
 const empty: AddressForm = {
-  addressLabel: "HOME",
-  addressName: null,
+  ...createAddressLabelDraft("HOME"),
   recipientName: "",
   contactPhoneNumber: "",
   addressLine1: "",
@@ -43,8 +48,7 @@ function localPhone(value: string | null | undefined): string {
 
 function addressToForm(address: CustomerAddress): AddressForm {
   return {
-    addressLabel: address.addressLabel,
-    addressName: address.addressName ?? null,
+    ...createAddressLabelDraft(address.addressLabel),
     recipientName: address.recipientName ?? "",
     contactPhoneNumber: localPhone(address.contactPhoneNumber),
     addressLine1: address.addressLine1,
@@ -128,7 +132,7 @@ export function CustomerAddresses() {
           setEditingId(saved.id);
           setForm(addressToForm(saved));
           setMessage(
-            `You're near your saved ${saved.addressLabel.toLowerCase()} address. Review it and update only if needed.`,
+            `You're near your saved ${displayAddressLabel(saved.addressLabel)} address. Review it and update only if needed.`,
           );
           return;
         }
@@ -173,7 +177,15 @@ export function CustomerAddresses() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const input = parseAddressInput(form);
+    const labelError = addressLabelDraftError(form);
+    if (labelError) {
+      setMessage(labelError);
+      return;
+    }
+    const input = parseAddressInput({
+      ...form,
+      addressLabel: addressLabelFromDraft(form),
+    });
     if (!input) {
       setMessage("Confirm a complete delivery address and use current location so Craves can map the drop-off point.");
       return;
@@ -248,7 +260,7 @@ export function CustomerAddresses() {
           </span>
         </button>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-semibold">Label<select className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3" value={form.addressLabel} onChange={(event) => { const label = event.target.value as AddressLabel; setField("addressLabel", label); if (label !== "OTHER") setField("addressName", null); }}>{["HOME", "WORK", "OTHER"].map((label) => <option key={label}>{label}</option>)}</select></label>{form.addressLabel === "OTHER" ? <label className="text-sm font-semibold">Name this address<input required maxLength={80} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3" value={form.addressName ?? ""} onChange={(event) => setField("addressName", event.target.value || null)} /></label> : null}
+          <label className="text-sm font-semibold">Label<select className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3" value={form.addressCategory} onChange={(event) => setForm((current) => ({ ...current, addressCategory: event.target.value as AddressCategory }))}>{["HOME", "WORK", "OTHER"].map((label) => <option key={label}>{label}</option>)}</select></label>{form.addressCategory === "OTHER" ? <label className="text-sm font-semibold">Name this address<input required maxLength={80} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3" value={form.customLabel} onChange={(event) => setField("customLabel", event.target.value)} /></label> : null}
           <label className="text-sm font-semibold">Recipient name<input required maxLength={160} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3" value={form.recipientName} onChange={(event) => setField("recipientName", event.target.value)} /></label>
           <label className="text-sm font-semibold">Contact phone<input required inputMode="tel" maxLength={10} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3" value={form.contactPhoneNumber} onChange={(event) => setField("contactPhoneNumber", localPhone(event.target.value))} /></label>
           <label className="text-sm font-semibold sm:col-span-2">Flat / House / Building<input required maxLength={250} className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3" value={form.addressLine1} onChange={(event) => setField("addressLine1", event.target.value)} /></label>
@@ -276,7 +288,7 @@ export function CustomerAddresses() {
           const ready = isDeliveryReadyAddress(address);
           return (
             <article key={address.id} className="rounded-[28px] bg-white p-6 text-slate-950 shadow-xl shadow-black/15">
-              <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-[#6930CA]">{address.addressLabel === "OTHER" && address.addressName ? address.addressName : address.addressLabel}{address.isDefault ? " · DEFAULT" : ""}{ready ? "" : " · UPDATE REQUIRED"}</p><h2 className="mt-2 text-xl font-bold">{address.recipientName ?? "Saved address"}</h2></div><span className="text-sm text-slate-500">{localPhone(address.contactPhoneNumber)}</span></div>
+              <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-[#6930CA]">{displayAddressLabel(address.addressLabel)}{address.isDefault ? " · DEFAULT" : ""}{ready ? "" : " · UPDATE REQUIRED"}</p><h2 className="mt-2 text-xl font-bold">{address.recipientName ?? "Saved address"}</h2></div><span className="text-sm text-slate-500">{localPhone(address.contactPhoneNumber)}</span></div>
               <p className="mt-4 text-sm leading-6 text-slate-700">{[address.addressLine1, address.addressLine2, address.landmark, address.areaName, address.districtName, address.city, address.state, address.postalCode].filter(Boolean).join(", ")}</p>
               {!ready && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Complete this older address before using it at checkout.</p>}
               <div className="mt-5 flex gap-3"><button type="button" onClick={() => edit(address)} className="rounded-full border border-[#6930CA] px-4 py-2 text-sm font-bold text-[#6930CA]">Edit</button><button type="button" onClick={() => void remove(address.id)} disabled={busy} className="rounded-full border border-red-300 px-4 py-2 text-sm font-bold text-red-700 disabled:opacity-50">Delete</button></div>

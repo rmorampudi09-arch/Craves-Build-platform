@@ -119,8 +119,40 @@ All paths below are relative to `C:\mscratch\apps\mobile\`:
 - On the original installed version, confirmed the Chef menu API loads 16
   items. Read-only detail for the ordered test dish showed Preparation:
   "Not provided". This is precisely the requested 15-minute fallback case.
-- Exact tagged source/archive and replace-install evidence are recorded in
-  the subsequent installation receipt. No prior tag or APK is overwritten.
+- Source commit: `0e892a5b3517ddcf4725dce8e7552e12809d1b79`, immutable annotated
+  tag `KUSHIRAVI-app-v1.20`. This receipt was completed in a later documentation
+  commit; the APK/source tag was not moved to that documentation commit.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.20-source.zip`,
+  13,331,726 bytes; SHA-256
+  `5E1FD353877C8A4DAF740106BE4C76F8FA0BA2E388673D02F8A3A4748D07291C`.
+  Created directly with `git archive` from the tag. Checked that the archive
+  contains the lockfile, environment example, existing signing keystore, build
+  script, preparation helper and Android version 31 / 1.20. The ZIP itself was
+  not separately extracted and rebuilt; native build was from the tagged source.
+
+## Phone Verification
+
+- Connected device: `RS7PB6VOY9ZLLFYD`, RMX5003.
+- Replace-install output: `Performing Streamed Install` / `Success`.
+- Phone package inspection: code 31 / name 1.20; lastUpdateTime
+  `2026-10-02 03:11:43` Asia/Calcutta. Original firstInstallTime
+  `2026-09-30 03:39:04` unchanged. No uninstall or app-data clear.
+- Cold start: `Status: ok`, `LaunchState: COLD`, MainActivity,
+  TotalTime 623 ms / WaitTime 652 ms. Authenticated Chef side restored to the
+  existing Chef menu detail route, not Customer Home or a new login.
+- Live menu and Chef order detail reads succeed. New orders shows the revised
+  copy and direct Accept Order button. Detail has zero preparation-time inputs
+  and an enabled Accept order button. Preparing and Ready for pickup lists
+  also load their existing server orders. No order status was changed for testing.
+- App process running; filtered logs contained zero matched fatal exceptions,
+  React Native JS errors or missing native-UUID-generator errors.
+- Visual proof:
+  `C:\mscratch\artifacts\chef-acceptance-v1.20-phone-20261002\order-detail-no-prep-input.png`.
+  The screenshot was inspected. Phone left on Chef Orders -> New.
+- No production accept/reject/ready action, customer payment, provider quote,
+  delivery booking, old dead-letter replay or fabricated success was triggered.
+  Happy-path paid acceptance, ready transition and Pidge delivery handoff remain
+  live acceptance checks, not claimed as completed by the automated tests.
 
 ## Manual Acceptance Checks
 

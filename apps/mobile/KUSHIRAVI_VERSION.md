@@ -9,11 +9,11 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `30`
-- Installed Android versionName: `1.19`
+- Installed Android versionCode: `31`
+- Installed Android versionName: `1.20`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed source: `bb6e81d23623b023bf9c8c6ab22d5a9856b8e695`, tag `KUSHIRAVI-app-v1.19`. Native MSG91 integration installed; Customer Home/profile checked. MSG91 Mobile Integration enabled and read back on 2026-10-02; user subsequently confirmed receiving the OTP and successful phone sign-in. Chef restoration and authentication edge cases still await live acceptance. Historical v1.18 referral/restoration evidence remains recorded below, not represented as rerun on v1.19.
-- Last installation: `2026-10-02 00:31:40` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed source: `0e892a5b3517ddcf4725dce8e7552e12809d1b79`, tag `KUSHIRAVI-app-v1.20`. Chef acceptance uses saved item preparation times with a 15-minute missing-time fallback; request tracing is UUID-compatible. Cold launch restored the authenticated Chef side, and menu/order-detail/New/Preparing/Ready reads were checked. Both preparation-time inputs are removed. Genuine fresh paid acceptance, rejection/ready mutations and delivery handoff remain unperformed in this task; prior MSG91 user-confirmed sign-in evidence is preserved below.
+- Last installation: `2026-10-02 03:11:43` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
@@ -25,7 +25,8 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   `68abc6244358666a49a019f3840af7116ad559e6`. No GitHub push.
 - Android package `com.cravesapp`, versionCode `31`, versionName `1.20`.
   Installable checkpoint: `KUSHIRAVI-app-v1.20`; immutable source SHA and
-  build/install receipt recorded after verification. Previous tags untouched.
+  source `0e892a5b3517ddcf4725dce8e7552e12809d1b79`.
+  Build/install receipt recorded after verification. Previous tags untouched.
 - Removed manual preparation-time entry from New orders and order detail.
   Accept now uses the existing authorized menu metadata for the ordered items:
   longest item preparation time, matching the existing cart rule; only items
@@ -51,7 +52,17 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.20.apk`.
   SHA-256: `AF4D9511673B198BB81631E804AB90BBC2B6F83BBE0B5806E4A448FD81D138E2`.
   Tagged source: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.20-source.zip`.
-  Full verification and installation status will be recorded in
+  ZIP SHA-256: `5E1FD353877C8A4DAF740106BE4C76F8FA0BA2E388673D02F8A3A4748D07291C`.
+- Replace-install succeeded; phone confirms code 31 / name 1.20, update time
+  `2026-10-02 03:11:43` Asia/Calcutta. Original first-install timestamp remains
+  `2026-09-30 03:39:04`. Cold launch OK, authenticated Chef side restored.
+- Live read checks: menu, New orders, order detail, Preparing and Ready lists
+  load. Order detail has zero preparation inputs and an enabled Accept button;
+  New orders has zero preparation inputs. No matched process crash/UUID errors.
+  Left the phone on New orders. No paid accept/reject/ready mutation, delivery
+  booking or old-order replay was triggered; a genuine fresh order is needed
+  for production mutation/handoff verification.
+- Full receipt and precise manual steps:
   `docs\chef-order-acceptance-v1.20-20261002.md`.
 
 ### Delivery Intelligence / Pidge Routing Configuration v1, 2026-10-02

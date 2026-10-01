@@ -19,6 +19,28 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Backend Checkpoint - Pidge Coordinate Routing v1, 2026-10-02
+
+- Requested backend-only correction: use actual latitude/longitude and Pidge's
+  real-time serviceability, not literal city-name equality. No UI/UX changes.
+- The waiting command for checkout `9047d2d6-54e1-4a05-96ad-d10ae6e4164d`
+  failed locally on pickup city `HYD` versus drop city `Hyderabad`; the deployed
+  validator threw before contacting Pidge. Actual kitchen order:
+  `c6c6481c-1b93-4d03-bffd-e1ea79f4f8d4`.
+- Patch source/rebuild/test tools: `backend-patches\pidge-coordinate-routing-v1`.
+  Replaces only the two Pidge adapter/transport classes in the exact immutable
+  live Integration Service image; preserves all other deployed archive entries.
+- Keeps address/contact/coordinate/postcode, prepaid/weight, immediate-partner,
+  price revalidation and duplicate-booking safeguards. Adds safe provider logs.
+  Pidge remains the only active provider; Borzo remains disabled.
+- Backend source checkpoint tag: `KUSHIRAVI-delivery-pidge-coordinates-v1`.
+  Exact source SHA, tested image and live verification are recorded in
+  `docs\delivery-pidge-coordinates-20261002.md` after deployment verification.
+- Mobile remains `KUSHIRAVI-app-v1.21`, source
+  `5fac235a421f9541dfac40f3d82beee7fe6fad93`, code 32 / name 1.21.
+  Existing APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.21.apk`.
+  No APK rebuild/install, GitHub push, APIM, new infrastructure or payment edit.
+
 ### Version 1.21 - Reachable Chef Order Rejection, 2026-10-02
 
 - Clean start on `KUSHIRAVI-app-build` at

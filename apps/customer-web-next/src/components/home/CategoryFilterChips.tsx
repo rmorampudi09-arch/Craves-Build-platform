@@ -22,7 +22,7 @@ export function CategoryFilterChips({
             type="button"
             onClick={() => onSelect(category)}
             aria-pressed={selected === category}
-            className={`min-h-11 shrink-0 rounded-full border px-4 text-sm font-semibold transition-colors ${
+            className={`min-h-12 shrink-0 rounded-full border px-5 text-base font-semibold transition-colors ${
               selected === category
                 ? "border-primary bg-primary text-white"
                 : "border-border bg-white text-ink hover:border-primary"

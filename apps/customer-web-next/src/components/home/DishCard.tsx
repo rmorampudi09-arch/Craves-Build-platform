@@ -320,7 +320,7 @@ export function DishCard({
                 <Minus className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
               <AnimateCount
-                className="min-w-7 text-center text-xs font-black"
+                className="min-w-7 text-center text-sm font-black"
                 aria-live="polite"
               >
                 {quantity}
@@ -340,7 +340,7 @@ export function DishCard({
               type="button"
               onClick={() => void handleAdd()}
               disabled={state === "busy"}
-              className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full !border !border-transparent !bg-[#F1F3F5] px-4 text-xs font-black !text-[#1A1A1A] !shadow-[0_5px_14px_rgba(26,26,26,0.06)] transition-[background-color,box-shadow] hover:!bg-white hover:!shadow-[0_8px_18px_rgba(26,26,26,0.10)] disabled:cursor-wait disabled:opacity-60"
+              className="inline-flex min-h-12 shrink-0 items-center justify-center gap-1.5 rounded-full !border !border-transparent !bg-[#F1F3F5] px-5 text-sm font-black !text-[#1A1A1A] !shadow-[0_5px_14px_rgba(26,26,26,0.06)] transition-[background-color,box-shadow] hover:!bg-white hover:!shadow-[0_8px_18px_rgba(26,26,26,0.10)] disabled:cursor-wait disabled:opacity-60"
               aria-label={`Add ${dish.name} to cart`}
             >
               {state === "busy" ? (

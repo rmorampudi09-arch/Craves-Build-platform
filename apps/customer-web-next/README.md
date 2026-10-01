@@ -30,6 +30,24 @@ Wishlist remains explicitly browser-local because the current backend has no cus
 
 ## Local setup
 
+### Customer control sizes
+
+Cart cards, quantity controls and checkout actions use 8 px corners. Customer
+and Chef action buttons have a 48 px minimum tap area; larger existing actions
+retain their size, including the 56 px cart checkout button. Compact semantic
+switches, checkboxes, radios and comboboxes keep their own sizing.
+
+The craving rail uses 80 px images on phones and 100 px images on large screens,
+with 14–16 px category labels and 48 px navigation arrows. Filter controls wrap
+on desktop and remain in the filter popover on phones.
+
+After changing these styles, run `npm run lint`, `npm run typecheck` and
+`npm test`. Check `/home` and `/cart` at desktop and phone widths: category
+selection, filter apply/reset, quantity changes, disabled controls and checkout
+button visibility. Use a test account and avoid placing an order during a
+visual check. These style changes need no environment, API or database changes;
+publish them through the existing manually started web release process.
+
 ### MSG91 phone verification on the website
 
 The website selects its delivery provider from `/api/auth/otp-config`. With

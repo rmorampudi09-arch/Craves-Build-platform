@@ -59,7 +59,15 @@ Every other existing archive entry must be byte-identical; no new archive
 entry is allowed. Existing nested booking/uncertainty exception classes remain.
 
 Source checkpoint tag: `KUSHIRAVI-delivery-pidge-coordinates-v1`.
-Exact source commit and live image evidence are completed below after verification.
+Exact source commit: `bfc870c2a37bca2fe89da8ab8d2ae5f01b3a43a5`.
+The tag is immutable; this verification receipt is a later documentation commit.
+
+Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-delivery-pidge-coordinates-v1-source.zip`.
+SHA-256: `27DCD137CDAF4D59D5386B6F34DDD150A6C9B19890414A6A3F57701A74DB0256`.
+The ZIP was created directly from the tag and includes source, tests, build/fetch
+scripts, pinned runtime origin, Dockerfile, version notes and checkpoint document.
+The original production JAR was separately downloaded and retained at
+`C:\mscratch\artifacts\pidge-coordinate-routing-v1\input\app\app.jar`.
 
 ## Automated Verification
 
@@ -74,8 +82,53 @@ Exact source commit and live image evidence are completed below after verificati
 
 ## Deployment Verification Receipt
 
-Pending live deployment verification at the source checkpoint. The receipt is
-completed in a separate documentation commit without moving the source tag.
+- Existing subscription: `721906c9-4a72-4606-830b-d3e7ace093ff`.
+- Resource group: `rg-craves-prodlow-centralindia`.
+- Only updated service: `ca-craves-integration-service-pr`.
+- Existing registry build: `cu4w`, successful; no GitHub source push.
+- New image:
+  `cravesrm09prodlow6bf632.azurecr.io/craves/integration-service@sha256:9c0919f6d25f69ffe00cbadc7957f2afd717949b6306ee12e5f7ee385110ca81`.
+- Healthy live revision: `ca-craves-integration-service-pr--pidge-coord-1002`,
+  one replica, 100% traffic. Prior revision has zero traffic and deprovisioned.
+- Startup completed at `2026-10-01T23:51:58.877Z`; latest-ready revision
+  readback verified at `2026-10-01T23:52:42.1945811Z`.
+- Running `/app/app.jar` SHA-256 exactly matches the tested final JAR above.
+- Environment-array SHA-256 before/after is identical:
+  `4BD939543ED4B54E75897FADC9832CB39F7AA8C4E13FE4C5C19A279784551AF4`.
+- Protected readiness: PIDGE / PRODUCTION, productionReady true,
+  catalogActive true, blockers empty. No environment/secret/identity update.
+- Post-deployment registry readback still has Pidge alone active; Borzo false.
+- No database write, order-status override, queue replay, forced worker call,
+  extra diagnostic quote, manual provider booking or fabricated rider occurred.
+  The existing scheduled delivery-command retry performed the normal booking.
+
+### Existing Order Recovery
+
+New-revision logs from the normal retry:
+
+- `2026-10-01T23:53:00.847Z` (05:23:00 IST): `Pidge quote HTTP response status=200`.
+- `2026-10-01T23:53:00.848Z`: `eligibleImmediatePartners=1`.
+- Command is now `COMPLETED`, `last_error=null`; updated
+  `2026-10-01T23:53:02.784011Z`. Stored addresses are still HYD/Hyderabad;
+  the new deployed validator passes the actual request without making an
+  additional provider call.
+- Assignment: `f82bdf7f-96ca-42bb-8746-772b84f8552f`, status `ASSIGNED`,
+  selected provider `pidge`.
+- Delivery job: `f4fdbaab-6a85-48b3-8f6c-ab41cc341707`.
+- Actual Pidge booking/order: `179089878105454L7CGG6`, journal `FULFILLED`.
+- Delivery job status `COURIER_TO_PICKUP`; provider status `OUT_FOR_PICKUP`;
+  `last_tracking_error=null` at the read-only verification.
+- Authenticated Pidge callback applied at `2026-10-01T23:53:10.318Z`; an earlier
+  equal/stale callback was safely ignored. Physical pickup/delivery is not claimed.
+
+Read-only evidence used existing backend container bindings and rolled back its
+database transaction; no temporary database firewall or new permissions were needed.
+Ignored local evidence directory: `C:\mscratch\artifacts\pidge-coordinate-routing-v1`.
+
+The unchanged browser tracking URL was refreshed, but its session returned HTTP
+401. The user was asked to sign in again; authenticated customer-screen readback
+is not claimed until that succeeds. Backend booking/provider status above was
+verified independently from the live database and provider-origin callback logs.
 
 ## Mobile and Manual Checks
 

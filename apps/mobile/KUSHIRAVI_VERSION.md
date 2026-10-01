@@ -34,8 +34,20 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   price revalidation and duplicate-booking safeguards. Adds safe provider logs.
   Pidge remains the only active provider; Borzo remains disabled.
 - Backend source checkpoint tag: `KUSHIRAVI-delivery-pidge-coordinates-v1`.
-  Exact source SHA, tested image and live verification are recorded in
-  `docs\delivery-pidge-coordinates-20261002.md` after deployment verification.
+  Source `bfc870c2a37bca2fe89da8ab8d2ae5f01b3a43a5`. ACR build `cu4w`
+  deployed healthy revision `ca-craves-integration-service-pr--pidge-coord-1002`.
+  New image digest:
+  `sha256:9c0919f6d25f69ffe00cbadc7957f2afd717949b6306ee12e5f7ee385110ca81`.
+- Verification: 26 focused tests pass; broader suite has 396 executed / 284
+  database-dependent skipped, zero failures/errors. Exact runtime archive
+  comparison and unchanged environment hash verified. Normal pending retry
+  received Pidge HTTP 200 / one eligible partner, completed the delivery command
+  and fulfilled Pidge booking `179089878105454L7CGG6`. Live delivery status
+  `COURIER_TO_PICKUP` / `OUT_FOR_PICKUP`; provider callback applied.
+  No manual replay, extra diagnostic quote or forced order transition.
+- Exact source ZIP, tested JAR/image, logs and live database evidence:
+  `docs\delivery-pidge-coordinates-20261002.md`. Customer browser session had
+  expired (401); sign-in was requested before authenticated screen readback.
 - Mobile remains `KUSHIRAVI-app-v1.21`, source
   `5fac235a421f9541dfac40f3d82beee7fe6fad93`, code 32 / name 1.21.
   Existing APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.21.apk`.

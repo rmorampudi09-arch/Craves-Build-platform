@@ -50,6 +50,17 @@ test("signed-in discovery keeps the rebuilt paper reference surface", () => {
     browse,
     /return <CustomerPageSkeleton label="Loading your Craves home" \/>/,
   );
+  assert.match(browse, /failFastUnauthenticated: true/);
+  assert.match(browse, /hydrateCustomerProfile: "background"/);
+  assert.match(browse, /setUser\(current\);\s*setDefaultAddressResolved\(true\);/);
+  assert.match(browse, /subscribeSession/);
+  assert.match(browse, /const current = getSession\(\);\s*if \(current\) setUser\(current\);/);
+  assert.match(browse, /const cartLoad = loadCart\(\)/);
+  assert.match(browse, /recoverSessionSnapshotForNavigation\(\)/);
+  assert.match(browse, /const hasInitialCatalog =/);
+  assert.match(browse, /const shouldPreserveCatalog =/);
+  assert.match(browse, /await refreshDiscovery\(defaultAddress, false, shouldPreserveCatalog\)/);
+  assert.match(browse, /AuthenticationRequiredError/);
   assert.match(skeleton, /CustomerPageSkeleton\.module\.css/);
   assert.match(skeleton, /SkeletonBlock/);
   assert.doesNotMatch(skeleton, /animate-pulse/);
@@ -58,4 +69,13 @@ test("signed-in discovery keeps the rebuilt paper reference surface", () => {
     /\$\{styles\.paperSurface\} min-h-screen pb-24 text-\[#1A1A1A\]/,
   );
   assert.doesNotMatch(browse, /text-\[#261A15\]/i);
+});
+
+test("static landing keeps the approved sign-in bridge wired", () => {
+  const landing = source("../../public/landing-v20/index.html");
+
+  assert.match(landing, /id="craves-landing-auth-bridge"/);
+  assert.match(landing, /a\[href="#sign-in"\]/);
+  assert.match(landing, /\/landing-auth\/manifest\.json/);
+  assert.match(landing, /openLandingAuth/);
 });

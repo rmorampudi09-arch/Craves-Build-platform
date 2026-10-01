@@ -42,6 +42,7 @@ export type CravesAddress = {
 };
 
 const SESSION_SNAPSHOT_KEY = "craves.customer.session.snapshot.v1";
+const ADDRESS_SNAPSHOT_KEY = "craves.customer.selected-address.snapshot.v1";
 
 function readSessionSnapshot(): CravesUser | null {
   if (typeof window === "undefined") return null;
@@ -77,6 +78,45 @@ function persistSessionSnapshot(value: CravesUser | null): void {
   }
 }
 
+function isAddressSnapshot(value: unknown): value is CravesAddress {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<CravesAddress>;
+  return (
+    typeof candidate.hno === "string" &&
+    typeof candidate.city === "string" &&
+    typeof candidate.mandal === "string" &&
+    typeof candidate.district === "string" &&
+    (typeof candidate.lat === "undefined" || typeof candidate.lat === "number") &&
+    (typeof candidate.lng === "undefined" || typeof candidate.lng === "number")
+  );
+}
+
+function readAddressSnapshot(): CravesAddress | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(ADDRESS_SNAPSHOT_KEY);
+    if (!raw) return null;
+    const candidate = JSON.parse(raw);
+    return session && candidate?.ownerId === session.id && isAddressSnapshot(candidate.address)
+      ? candidate.address : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistAddressSnapshot(value: CravesAddress | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (!value || !session) {
+      window.sessionStorage.removeItem(ADDRESS_SNAPSHOT_KEY);
+      return;
+    }
+    window.sessionStorage.setItem(ADDRESS_SNAPSHOT_KEY, JSON.stringify({ ownerId: session.id, address: value }));
+  } catch {
+    // Storage is only a speed hint; the backend remains authoritative.
+  }
+}
+
 export function recoverSessionSnapshotForNavigation(): CravesUser | null {
   if (session) return session;
   const cached = readSessionSnapshot();
@@ -102,7 +142,7 @@ export function isSessionReady(): boolean { return !sessionEnding && session?.st
 function invalidatePendingSessionWork() { sessionGeneration += 1; roleSynchronization = null; }
 export function invalidateSession(context: SessionContext): void { if (isSessionContextCurrent(context)) forgetSession(); }
 function forgetSession() {
-  invalidatePendingSessionWork(); sessionEnding = false; session = null; sessionEmailRevision = -1; selectedLocation = null; persistSessionSnapshot(null); notify();
+  invalidatePendingSessionWork(); sessionEnding = false; session = null; sessionEmailRevision = -1; selectedLocation = null; persistSessionSnapshot(null); persistAddressSnapshot(null); notify();
 }
 let selectedLocation: CravesAddress | null = null;
 let roleSynchronization: Promise<CravesUser | null> | null = null;
@@ -189,6 +229,7 @@ export function setSessionIdentity(identity: CravesIdentity): CravesUser {
   invalidatePendingSessionWork();
   sessionEnding = false;
   sessionEmailRevision = -1;
+  invalidateSelectedAddress();
   session = fromIdentity(identity);
   persistSessionSnapshot(session);
   notify();
@@ -204,6 +245,13 @@ export function setSessionProfile(profile: CustomerProfile, context = captureSes
 
 export function getSession(): CravesUser | null {
   return session;
+}
+
+export class AuthenticationRequiredError extends Error {
+  constructor() {
+    super("Craves authentication is required.");
+    this.name = "AuthenticationRequiredError";
+  }
 }
 
 /** Accept only the current owner's validated Auth response; a stale profile projection never changes this field. */
@@ -223,6 +271,7 @@ function applyIdentityLookup(identity: CravesIdentity, context: SessionContext, 
   acceptedIdentityRequest = sequence;
   const previous = session;
   if (previous?.id !== identity.id) {
+    invalidateSelectedAddress();
     invalidatePendingSessionWork(); sessionEmailRevision = -1;
   } else if (previous.status !== identity.status) invalidatePendingSessionWork();
   session = fromIdentity(identity);
@@ -234,7 +283,9 @@ function applyIdentityLookup(identity: CravesIdentity, context: SessionContext, 
   return session;
 }
 
-export async function loadSession(): Promise<CravesUser | null> {
+export async function loadSession(
+  options: { failFastUnauthenticated?: boolean; hydrateCustomerProfile?: "await" | "background" } = {},
+): Promise<CravesUser | null> {
   if (sessionEnding) return null;
   const context = captureSessionContext();
   const sequence = ++identityRequestSequence;
@@ -248,6 +299,15 @@ export async function loadSession(): Promise<CravesUser | null> {
   if (!isSessionContextCurrent(context)) return session;
 
   if (response.status === 401) {
+    const failure = await response.clone().json().catch(() => null) as { code?: unknown } | null;
+    if (
+      options.failFastUnauthenticated === true &&
+      failure?.code === "AUTHENTICATION_REQUIRED" &&
+      !session &&
+      !readSessionSnapshot()
+    ) {
+      throw new AuthenticationRequiredError();
+    }
     const refreshed = await refreshSessionForGeneration(context.generation);
     if (!isSessionContextCurrent(context)) return session;
     if (refreshed?.ok) response = await lookup();
@@ -267,7 +327,12 @@ export async function loadSession(): Promise<CravesUser | null> {
   const identity = (await response.json().catch(() => null)) as CravesIdentity | null;
   if (!identity?.id || !isSessionContextCurrent(context)) return session;
   const current = applyIdentityLookup(identity, context, sequence);
-  return current ? hydrateCustomerProfile(current) : null;
+  if (!current) return null;
+  if (options.hydrateCustomerProfile === "background") {
+    void hydrateCustomerProfile(current, captureSessionContext()).catch(() => null);
+    return current;
+  }
+  return hydrateCustomerProfile(current);
 }
 
 export async function synchronizeSessionRoles(): Promise<CravesUser | null> {
@@ -330,14 +395,18 @@ export function subscribeSession(listener: () => void): () => void {
 
 export function saveAddress(address: CravesAddress) {
   selectedLocation = address;
+  persistAddressSnapshot(address);
 }
 
 export function getAddress(): CravesAddress | null {
+  if (selectedLocation) return selectedLocation;
+  selectedLocation = readAddressSnapshot();
   return selectedLocation;
 }
 
 export function invalidateSelectedAddress(): void {
   selectedLocation = null;
+  persistAddressSnapshot(null);
 }
 
 function fromCustomerAddress(address: DeliveryReadyAddress): CravesAddress {
@@ -357,14 +426,17 @@ function fromCustomerAddress(address: DeliveryReadyAddress): CravesAddress {
 }
 
 export async function loadSelectedAddress(): Promise<CravesAddress | null> {
+  const context = captureSessionContext();
   const response = await sessionFetch("/api/customer/addresses", {
     cache: "no-store",
     credentials: "same-origin",
   });
   if (!response.ok) throw new Error("Saved delivery addresses could not be loaded.");
   const addresses = (await response.json().catch(() => null)) as CustomerAddress[] | null;
+  if (!isSessionContextCurrent(context)) return null;
   if (!Array.isArray(addresses)) throw new Error("Saved delivery addresses returned an invalid response.");
   const selected = selectDefaultDeliveryAddress(addresses);
   selectedLocation = selected ? fromCustomerAddress(selected) : null;
+  persistAddressSnapshot(selectedLocation);
   return selectedLocation;
 }

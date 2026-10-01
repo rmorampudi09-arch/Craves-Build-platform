@@ -28,6 +28,22 @@ test("cart validates with the backend before address selection", () => {
   assert.match(cartService, /return cartMatchesCheckout\(expected\)/);
 });
 
+test("cart and checkout do not block first render on prep-time enrichment", () => {
+  const cart = source("../screens/Cart/Cart.tsx");
+  const checkout = source("../screens/Checkout/Checkout.tsx");
+
+  assert.match(cart, /async function resolveLeadMinutes/);
+  assert.match(
+    cart,
+    /setItems\(nextItems\)[\s\S]{0,420}setLoading\(false\)[\s\S]{0,220}void resolveLeadMinutes\(nextItems\)/,
+  );
+  assert.match(checkout, /async function resolveLeadMinutes/);
+  assert.match(
+    checkout,
+    /setItems\(nextItems\)[\s\S]{0,260}setLoading\(false\)[\s\S]{0,260}void resolveLeadMinutes\(nextItems\)/,
+  );
+});
+
 test("checkout uses the idempotent backend operation with an exact cart snapshot", () => {
   const page = source("../screens/Checkout/Checkout.tsx");
   const cartPage = source("../screens/Cart/Cart.tsx");

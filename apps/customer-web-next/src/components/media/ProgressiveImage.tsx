@@ -15,6 +15,7 @@ export function ProgressiveImage({
   loading = "lazy",
   decoding = "async",
   fetchPriority = "auto",
+  unoptimized = true,
   fallbackLabel = "Image unavailable",
   ...imageProps
 }: ProgressiveImageProps) {
@@ -53,6 +54,7 @@ export function ProgressiveImage({
         loading={loading}
         decoding={decoding}
         fetchPriority={fetchPriority}
+        unoptimized={unoptimized}
         onLoad={(event) => {
           const image = event.currentTarget;
           if (typeof image.decode !== "function") {

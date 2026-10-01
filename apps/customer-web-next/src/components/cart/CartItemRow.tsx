@@ -5,6 +5,7 @@ import type { CartItem } from "@/services/api/cravesCart";
 interface CartItemRowProps {
   item: CartItem;
   disabled?: boolean;
+  priorityImage?: boolean;
   onDecrease: () => void;
   onIncrease: () => void;
   onRemove: () => void;
@@ -21,6 +22,7 @@ function money(amount: number, currency: string): string {
 export function CartItemRow({
   item,
   disabled = false,
+  priorityImage = false,
   onDecrease,
   onIncrease,
   onRemove,
@@ -32,6 +34,9 @@ export function CartItemRow({
           src={item.img}
           alt={item.imageIsPlaceholder ? "" : item.name}
           aria-hidden={item.imageIsPlaceholder || undefined}
+          loading={priorityImage ? "eager" : "lazy"}
+          decoding="async"
+          fetchPriority={priorityImage ? "high" : "auto"}
           className={
             item.imageIsPlaceholder
               ? "h-14 w-14 object-contain opacity-70"

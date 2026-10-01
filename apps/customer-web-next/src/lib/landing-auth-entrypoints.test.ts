@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import test from "node:test";
 
 function source(relativePath: string): string {
@@ -11,6 +12,7 @@ const hero = source(
 );
 const landing = source("../screens/public/LandingPage/LandingPage.tsx");
 const authModal = source("../components/auth/AuthModal.tsx");
+const landingAuthBridge = source("../../../landing-v20/src/components/CustomerAuth.tsx");
 
 test("landing keeps dedicated CTAs locked while general auth can switch roles", () => {
   assert.match(hero, /Sign up \/ Sign in/);
@@ -21,6 +23,46 @@ test("landing keeps dedicated CTAs locked while general auth can switch roles", 
   assert.match(landing, /onOrderFood=\{\(\) => openAuth\("login", "customer", true\)\}/);
   assert.match(landing, /onBecomeChef=\{\(\) => openAuth\("register", "chef", true\)\}/);
   assert.match(landing, /lockAccountMode=\{authAccountLocked\}/);
+});
+
+test("committed landing v20 bundle includes the shared customer auth bridge", () => {
+  const index = source("../../public/landing-v20/index.html");
+  const scripts = Array.from(
+    index.matchAll(/src="\/landing-v20\/assets\/([^"]+\.js)"/g),
+    (match) => match[1],
+  );
+  assert.ok(scripts.length > 0, "landing v20 must load a compiled script");
+  const bundle = scripts
+    .map((filename) => source(`../../public/landing-v20/assets/${filename}`))
+    .join("\n");
+  assert.match(bundle, /\/landing-auth\/manifest\.json/);
+  assert.match(bundle, /a\[href="#sign-in"\]/);
+  assert.match(bundle, /aria-busy/);
+
+  const builtScripts = readdirSync(
+    new URL("../../public/landing-v20/assets/", import.meta.url),
+  ).filter((filename) => filename.endsWith(".js"));
+  assert.ok(
+    builtScripts.some((filename) =>
+      source(`../../public/landing-v20/assets/${filename}`).includes(
+        "/landing-auth/manifest.json",
+      ),
+    ),
+    "at least one committed landing bundle must contain the auth bridge",
+  );
+});
+
+test("landing v20 auth bridge never blocks sign-in on stylesheet load events", () => {
+  assert.match(landingAuthBridge, /\/landing-auth\/manifest\.json/);
+  assert.match(landingAuthBridge, /style\.onerror = \(\) => \{ clearTimeout\(timer\); style\.remove\(\); resolve\(\); \}/);
+  assert.doesNotMatch(landingAuthBridge, /new Promise<void>\(\(resolve, reject\)/);
+});
+
+test("isolated landing auth build shims process for browser-only execution", () => {
+  const builder = source("../../scripts/build-landing-auth.mjs");
+  assert.match(builder, /globalThis\.process = globalThis\.process \|\| \{ env: \{\} \}/);
+  assert.match(builder, /globalThis\.process\.env = Object\.assign/);
+  assert.match(builder, /NODE_ENV: 'production'/);
 });
 
 test("general auth clearly identifies and switches between customer and home chef", () => {

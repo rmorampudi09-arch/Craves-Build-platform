@@ -12,6 +12,13 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   const chefs = source("../screens/public/AllChefs/AllChefs.tsx");
   const kitchens = source("../components/home/KitchensGrid.tsx");
   const cravings = source("../components/home/HomeCategoryRail.tsx");
+  const dishes = source("../components/home/DishesGrid.tsx");
+  const progressiveImage = source("../components/media/ProgressiveImage.tsx");
+  const cartItemList = source("../components/cart/CartItemList.tsx");
+  const cartItemRow = source("../components/cart/CartItemRow.tsx");
+  const wishlist = source("../screens/Wishlist/Wishlist.tsx");
+  const dishHeader = source("../components/order/DishImageHeader.tsx");
+  const similarDishes = source("../components/order/SimilarDishesSection.tsx");
   const header = source("../components/home/BrowseHeader.tsx");
   const skeleton = source("../components/loading/CustomerPageSkeleton.tsx");
 
@@ -33,9 +40,19 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(kitchens, /onPointerDown/);
   assert.match(kitchens, /new window\.Image\(\)/);
   assert.match(kitchens, /kitchenImagePreloads/);
+  assert.match(kitchens, /priority=\{index < 4\}/);
+  assert.match(kitchens, /fetchPriority=\{priority && index === 0 \? "high" : "auto"\}/);
   assert.match(kitchens, /transition-\[opacity,transform\]/);
   assert.doesNotMatch(kitchens, /View chef/);
+  assert.match(dishes, /priorityImage=\{index < 4\}/);
+  assert.match(progressiveImage, /unoptimized = true/);
+  assert.match(cartItemList, /priorityImage=\{index < 4\}/);
+  assert.match(cartItemRow, /fetchPriority=\{priorityImage \? "high" : "auto"\}/);
+  assert.match(wishlist, /fetchPriority=\{index < 4 \? "high" : "auto"\}/);
+  assert.match(dishHeader, /fetchPriority=\{index === safeIndex \? "high" : "low"\}/);
+  assert.match(similarDishes, /fetchPriority=\{index === 0 \? "high" : "auto"\}/);
   assert.match(cravings, /translate-y-\[var\(--craves-mobile-search-offset,0px\)\]/);
+  assert.match(cravings, /fetchPriority=\{priorityImage \? "high" : "auto"\}/);
   assert.match(cravings, /md:top-\[var\(--craves-desktop-header-offset-md,4\.25rem\)\]/);
   assert.match(cravings, /lg:top-\[var\(--craves-desktop-header-offset-lg,4\.65rem\)\]/);
   assert.match(cravings, /shadow-\[0_3px_10px_rgba\(26,26,26,0\.09\)\]/);
@@ -45,6 +62,8 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(header, /hover:-translate-y-0\.5/);
   assert.match(header, /focus-within:bg-white/);
   assert.match(header, /mobileCompact/);
+  assert.match(header, /<CravesLogo size="md" \/>/);
+  assert.doesNotMatch(header, /Food From Home/);
   assert.match(cravings, /md:duration-\[300ms\]/);
   assert.match(header, /fixed inset-x-0 top-0 z-50/);
   assert.match(skeleton, /CustomerPageSkeleton\.module\.css/);

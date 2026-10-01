@@ -102,11 +102,18 @@ function DishDetailPage() {
         );
       }
 
-      const nearby = await discoverDishes(
-        address.lat,
-        address.lng,
-        DEFAULT_DISCOVERY_RADIUS_METERS,
-      );
+      const cachedDish = getDish(id);
+      const detailPromise = cachedDish?.detailsLoaded
+        ? Promise.resolve(cachedDish)
+        : loadDish(id);
+      const [nearby, detail] = await Promise.all([
+        discoverDishes(
+          address.lat,
+          address.lng,
+          DEFAULT_DISCOVERY_RADIUS_METERS,
+        ),
+        detailPromise,
+      ]);
       const nearbyDish = nearby.find((candidate) => candidate.id === id);
       if (!nearbyDish) {
         throw new Error(
@@ -114,9 +121,6 @@ function DishDetailPage() {
         );
       }
 
-      const cachedDish = getDish(id);
-      const detail =
-        cachedDish?.detailsLoaded ? cachedDish : await loadDish(id);
       const resolved: Dish = {
         ...detail,
         distanceMeters: nearbyDish.distanceMeters,

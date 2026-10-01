@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { displayAddressLabel, type CustomerAddress } from "@/lib/address-contract";
+import type { CustomerAddress } from "@/lib/address-contract";
 import {
   parseCustomerSubscription,
   type PublicSubscriptionPlan,
@@ -123,7 +123,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
           <option value="">Select address</option>
           {addresses.map(address => (
             <option key={address.id} value={address.id}>
-              {displayAddressLabel(address.addressLabel)}: {address.addressLine1}, {address.areaName}
+              {address.addressLabel}: {address.addressLine1}, {address.areaName}
             </option>
           ))}
         </select>

@@ -138,6 +138,8 @@ test("dish and customer kitchen detail pages recover live data and return to sav
   assert.match(dishPage, /discoverDishes\([\s\S]{0,180}DEFAULT_DISCOVERY_RADIUS_METERS/);
   assert.match(dishPage, /loadDish\(id\)/);
   assert.match(dishPage, /const cachedDish = getDish\(id\)/);
+  assert.match(dishPage, /const detailPromise = cachedDish\?\.detailsLoaded/);
+  assert.match(dishPage, /Promise\.all\(\[[\s\S]{0,280}discoverDishes\(/);
   assert.match(dishPage, /hasHomeReturnState\(\)/);
   assert.match(dishPage, /window\.history\.back\(\)/);
   assert.match(dishService, /\/api\/catalog\/menu-items/);

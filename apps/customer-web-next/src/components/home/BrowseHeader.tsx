@@ -184,10 +184,7 @@ export function BrowseHeader({
             className="flex shrink-0 items-center gap-2 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
             aria-label="Craves home"
           >
-            <CravesLogo size="sm" />
-            <span className="hidden border-l border-[#E5E7EB] pl-3 text-xs font-bold tracking-[0.02em] text-[#1A1A1A] 2xl:block">
-              Food From Home
-            </span>
+            <CravesLogo size="md" />
           </Link>
 
           <button

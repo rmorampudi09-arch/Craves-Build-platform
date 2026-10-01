@@ -46,6 +46,20 @@ function CartSkeleton() {
   );
 }
 
+async function resolveLeadMinutes(items: CartItem[]): Promise<number | null> {
+  const dishResults = await Promise.allSettled(
+    items.map((item) => loadDish(item.menuItemId)),
+  );
+  const minutes = dishResults
+    .flatMap((result) => {
+      if (result.status !== "fulfilled") return [];
+      const match = /^(\d+)\s*min$/i.exec(result.value.time);
+      return match ? [Number(match[1])] : [];
+    })
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return minutes.length ? Math.max(...minutes) : null;
+}
+
 function CartPage() {
   const navigate = useNavigate();
   const undoTimerRef = useRef<number | null>(null);
@@ -72,17 +86,10 @@ function CartPage() {
         setMessage(checkoutNotice);
       }
 
-      const dishResults = await Promise.allSettled(
-        nextItems.map((item) => loadDish(item.menuItemId)),
-      );
-      const minutes = dishResults
-        .flatMap((result) => {
-          if (result.status !== "fulfilled") return [];
-          const match = /^(\d+)\s*min$/i.exec(result.value.time);
-          return match ? [Number(match[1])] : [];
-        })
-        .filter((value) => Number.isFinite(value) && value > 0);
-      setLeadMinutes(minutes.length ? Math.max(...minutes) : null);
+      setLoading(false);
+      void resolveLeadMinutes(nextItems)
+        .then(setLeadMinutes)
+        .catch(() => setLeadMinutes(null));
     } catch (error) {
       setItems([]);
       setLeadMinutes(null);

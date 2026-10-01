@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ChefHat, UserRound, X } from "lucide-react";
 import {
-  type ConfirmationResult,
   RecaptchaVerifier,
   signInWithPhoneNumber,
 } from "firebase/auth";
+import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from "@/lib/msg91-browser";
 import { getFirebaseBrowserClient } from "@/lib/firebase-client";
 import {
   loadSession,
@@ -71,7 +71,7 @@ export function AuthModal({
   const watchedSession = useRef(captureSessionContext());
   const ownIdentityInstall = useRef(false);
   const phoneSession = useRef<SessionContext | null>(null);
-  const confirmation = useRef<ConfirmationResult | null>(null);
+  const confirmation = useRef<PhoneConfirmation | null>(null);
   const verifier = useRef<RecaptchaVerifier | null>(null);
   const discardedVerifiers = useRef(new WeakSet<RecaptchaVerifier>());
   const discardVerifier = useCallback((instance: RecaptchaVerifier) => {
@@ -85,6 +85,7 @@ export function AuthModal({
   }, [discardVerifier]);
 
   const reset = useCallback(() => {
+    parkMsg91Captcha();
     authAttempt.current += 1; phoneSession.current = null;
     clearVerifier();
     confirmation.current = null;
@@ -107,7 +108,7 @@ export function AuthModal({
     onClose();
   }, [onClose, reset]);
 
-  useEffect(() => () => { authAttempt.current += 1; clearVerifier(); }, [clearVerifier]);
+  useEffect(() => () => { authAttempt.current += 1; clearVerifier(); parkMsg91Captcha(); }, [clearVerifier]);
   useEffect(() => { if (!open) reset(); }, [open, reset]);
   useEffect(() => subscribeSession(() => {
     if (!isSessionContextCurrent(watchedSession.current)) {
@@ -227,12 +228,22 @@ export function AuthModal({
     const context = captureSessionContext();
     const currentAttempt = () => authAttempt.current === attempt && isSessionContextCurrent(context);
     try {
-      const { auth } = getFirebaseBrowserClient();
-      const challengeVerifier = await recaptcha(isResend ? "invisible" : "visible", currentAttempt);
-      if (!challengeVerifier || !currentAttempt()) return;
-      const nextConfirmation = await signInWithPhoneNumber(auth, `+91${phone}`, challengeVerifier);
+      if (isResend && confirmation.current?.resend) {
+        await confirmation.current.resend();
+      } else {
+        const msg91 = await beginMsg91PhoneSignIn(`+91${phone}`, "craves-recaptcha", currentAttempt);
+        if (!currentAttempt()) return;
+        if (msg91) confirmation.current = msg91;
+        else {
+          const { auth } = getFirebaseBrowserClient();
+          const challengeVerifier = await recaptcha(isResend ? "invisible" : "visible", currentAttempt);
+          if (!challengeVerifier || !currentAttempt()) return;
+          const nextConfirmation = await signInWithPhoneNumber(auth, `+91${phone}`, challengeVerifier);
+          if (!currentAttempt()) return;
+          confirmation.current = nextConfirmation;
+        }
+      }
       if (!currentAttempt()) return;
-      confirmation.current = nextConfirmation;
       clearVerifier();
       setOtp("");
       setOtpSent(true);
@@ -281,7 +292,7 @@ export function AuthModal({
     let context = captureSessionContext();
     const currentAttempt = () => authAttempt.current === attempt && isSessionContextCurrent(context);
     try {
-      const credential = await confirmation.current.confirm(otp);
+      const credential = await confirmation.current.confirm(otp, currentAttempt);
       if (!currentAttempt()) return;
       const firebaseIdToken = await credential.user.getIdToken(true);
       if (!currentAttempt()) return;

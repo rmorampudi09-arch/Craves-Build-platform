@@ -34,6 +34,33 @@ reported that commit during inspection. GitHub PR #400 was already merged as
 `33f796e087f0260d2e72d96a2f9f67fe8c4c51ea`; its exact-main regression run
 `36905723693` passed. These are separate facts: the merge was not a deployment.
 
+## Repair findings and current release source
+
+Read-only run [158](https://dev.azure.com/rmorampudi09/Craves/_build/results?buildId=158)
+passed the bank binding plan. The only direct active User/Chef secret is
+`bank-internal`; `svc-secret`, `jwt-public` and `pg-pass` already use the system
+identity and Key Vault. The existing scoped vault is `kvcravesprodlowkmqgfy`.
+The planned destination `craves-user-chef-bank-internal-preserved-v1` is unused.
+The repair copies the exact current value and pins its vault version. It does
+not generate a replacement key, overwrite a different destination value, grant
+permissions, restart the application or change its image. Applying the repair
+is a production configuration operation and requires `confirmDeploy=true`.
+
+The deployed Azure web SHA also contains changes absent from the first #400
+merge: OTP provider selection/Firebase fallback, landing sign-in loading fixes,
+customer loading/image improvements and SEO routes. PR #405 reconciles those
+files with the approved custom string address contract and newer Chef UI. It
+also binds the address snapshot to its customer and rejects stale address loads.
+Next.js and eslint-config-next are patched to 16.3.6, Vitest to 4.1.11, and
+compatible transitive security updates are included without downgrading Firebase.
+The resulting web dependency audit reports zero vulnerabilities as of this check.
+
+**Do not deploy the original 33f796e source after this reconciliation.** Merge and
+validate the finished #405 source first, then select that exact main SHA and its
+main regression run. The release driver rejects a source missing the reconciled
+live web files. No production deployment or binding repair has been run during
+this investigation. Run 158 is evidence of inspection, not a completed repair.
+
 ## Correct execution order
 
 Open [the active pipeline](https://dev.azure.com/rmorampudi09/Craves/_build?definitionId=3).
@@ -49,6 +76,8 @@ select and validate the new main commit before continuing.
 
 | Order | operation | confirmDeploy | Required result |
 | --- | --- | --- | --- |
+| 0a | `binding-plan` | false | Read-only, value-preserving repair plan succeeds |
+| 0b | `bindings` | true | Existing bank key copied to its scoped vault and reference verified |
 | 1 | `preflight` | false | Source evidence, V12/V13 compatibility, backup metadata and existing Key Vault references pass |
 | 2 | `backend` | true | Reviewed User/Chef image healthy; final V13 recorded with matching checksum |
 | 3 | `apim` | true | Reviewed backend confirmed; dedicated readiness operation registered; unsigned response 401 |
@@ -58,7 +87,8 @@ select and validate the new main commit before continuing.
 Run one operation at a time and wait for its successful result. Preflight reports
 the missing readiness route as an expected pending rollout finding before steps
 2-3. It does not claim the new application is live. A database/history failure
-or invalid secret binding remains a hard failure. The web operation requires V13
+or invalid secret binding remains a hard failure. Run the binding repair once
+before preflight when its plan says repairRequired=true. The web operation requires V13
 to be applied and the readiness route to respond correctly first.
 
 After step 2, use an authorized test customer to save/read/edit a custom label,
@@ -83,6 +113,10 @@ page loading. Mobile distribution follows web/backend acceptance.
   redaction and rejection of Azure writes.
 - `scripts/release/tests/test_active_address_release.py` checks order, confirmation,
   concurrent releases and protection of payment/secret/scale settings.
+- `scripts/release/preserve_bank_binding.py` plans or applies the isolated bank
+  secret storage repair; values never appear in process arguments or artifacts.
+- `scripts/release/tests/test_preserve_bank_binding.py` checks value preservation,
+  explicit confirmation, scoped vaults and refusal to overwrite different values.
 - `.github/workflows/active-release-preflight-ci.yml` runs the focused tests.
 
 Backend deployment reuses the existing runtime-preserving helper and checks its
@@ -130,6 +164,7 @@ Run from the repository root with Python 3.12 or newer:
 ```text
 python -m unittest discover -s scripts/release/tests -p test_rmorampudi09_preflight.py -v
 python -m unittest discover -s scripts/release/tests -p test_active_address_release.py -v
+python -m unittest discover -s scripts/release/tests -p test_preserve_bank_binding.py -v
 ```
 
 Azure operations run on the existing hosted Linux runner, which supplies Azure

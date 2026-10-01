@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { CustomerNotification } from "@/lib/notification-contract";
 
@@ -41,7 +42,7 @@ export function NotificationInbox() {
     }
   }
 
-  if (error === "SESSION_EXPIRED" || error === "AUTHENTICATION_REQUIRED") return <section className="rounded-[28px] bg-[#FFF8EC] p-7 text-slate-950"><h2 className="text-2xl font-bold">Please sign in again</h2><p className="mt-3 text-sm text-slate-600">Your secure customer session has expired.</p><a className="mt-6 inline-flex rounded-full bg-[#6930CA] px-5 py-3 font-semibold text-white" href="/sign-in?returnTo=/notifications">Sign in</a></section>;
+  if (error === "SESSION_EXPIRED" || error === "AUTHENTICATION_REQUIRED") return <section className="rounded-[28px] bg-[#FFF8EC] p-7 text-slate-950"><h2 className="text-2xl font-bold">Please sign in again</h2><p className="mt-3 text-sm text-slate-600">Your secure customer session has expired.</p><Link className="mt-6 inline-flex rounded-full bg-[#6930CA] px-5 py-3 font-semibold text-white" href="/sign-in?returnTo=/notifications">Sign in</Link></section>;
   if (error) return <section className="rounded-[28px] bg-[#FFF8EC] p-7 text-slate-950"><h2 className="text-2xl font-bold">Notifications are unavailable</h2><button className="mt-6 rounded-full bg-[#6930CA] px-5 py-3 font-semibold text-white" onClick={() => setReload(value => value + 1)}>Try again</button></section>;
   if (!notices) return <div className="rounded-[28px] bg-[#FFF8EC] p-7 text-slate-600">Loading notifications…</div>;
 

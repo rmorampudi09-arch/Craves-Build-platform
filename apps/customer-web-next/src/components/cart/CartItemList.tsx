@@ -16,11 +16,12 @@ export function CartItemList({
 }: CartItemListProps) {
   return (
     <div className="space-y-4">
-      {items.map((item) => (
+      {items.map((item, index) => (
         <CartItemRow
           key={item.id}
           item={item}
           disabled={busyItemId === item.id}
+          priorityImage={index < 4}
           onRemove={() => onRemove(item.id)}
           onDecrease={() => onSetQty(item.id, item.qty - 1)}
           onIncrease={() => onSetQty(item.id, item.qty + 1)}

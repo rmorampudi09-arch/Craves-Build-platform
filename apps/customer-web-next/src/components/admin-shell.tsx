@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { AdminIdentity } from "@/lib/admin-contract";
 import { loadAdminIdentity } from "@/lib/admin-session";
@@ -25,9 +26,9 @@ export function AdminShell() {
     return () => { active = false; };
   }, []);
 
-  if (!identity) return <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950"><p role="status">{message}</p><a href="/sign-in?returnTo=/admin" className="mt-5 inline-block rounded-2xl bg-[#6930CA] px-5 py-3 font-bold text-white">Administrator sign in</a></section>;
+  if (!identity) return <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950"><p role="status">{message}</p><Link href="/sign-in?returnTo=/admin" className="mt-5 inline-block rounded-2xl bg-[#6930CA] px-5 py-3 font-bold text-white">Administrator sign in</Link></section>;
   return <section>
     <div className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950"><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930CA]">ADMIN ENABLED</p><h2 className="mt-3 text-3xl font-bold">Welcome{identity.displayName ? `, ${identity.displayName}` : ""}</h2><p className="mt-3 text-sm text-slate-600">This shell does not grant roles. Every operation is re-authorized by its owning backend service.</p></div>
-    <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">{links.map(link => <a key={link.href} href={link.href} className="rounded-[28px] border border-white/10 bg-white/5 p-6 text-white transition hover:bg-white/10"><strong className="text-xl">{link.label}</strong><p className="mt-3 text-sm leading-6 text-slate-300">{link.description}</p></a>)}</div>
+    <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">{links.map(link => <Link key={link.href} href={link.href} className="rounded-[28px] border border-white/10 bg-white/5 p-6 text-white transition hover:bg-white/10"><strong className="text-xl">{link.label}</strong><p className="mt-3 text-sm leading-6 text-slate-300">{link.description}</p></Link>)}</div>
   </section>;
 }

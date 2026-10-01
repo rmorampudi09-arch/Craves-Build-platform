@@ -1,4 +1,5 @@
 import { ChefHat, Heart, House } from "lucide-react";
+import Link from "next/link";
 import { FaApple, FaGooglePlay } from "react-icons/fa";
 
 import { CravesLogo } from "@/components/brand/CravesLogo";
@@ -22,13 +23,13 @@ export function FooterSection({ landingHrefPrefix = "" }: FooterSectionProps) {
       <div className="relative mx-auto max-w-7xl px-4 pb-8 pt-32 md:px-6 md:pt-36">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.25fr_0.8fr_0.8fr_0.9fr_0.8fr_1.15fr]">
           <div>
-            <a
+            <Link
               href={landingHrefPrefix || "/"}
               className="inline-flex rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
               aria-label="Craves home"
             >
               <CravesLogo size="lg" />
-            </a>
+            </Link>
             <p className="mt-5 max-w-[15rem] text-sm leading-6 text-[#C7C9CC]">Good food. Real impact. Homemade meals from real people.</p>
           </div>
 
@@ -37,18 +38,18 @@ export function FooterSection({ landingHrefPrefix = "" }: FooterSectionProps) {
             <div className="mt-5 grid gap-2.5">
               <a href={landingHref("why-craves")} className={`${styles.footerLink} text-sm leading-6`}>About us</a>
               <a href={landingHref("how-it-works")} className={`${styles.footerLink} text-sm leading-6`}>How it works</a>
-              <a href="/products-pricing" className={`${styles.footerLink} text-sm leading-6`}>Products &amp; pricing</a>
-              <a href="/contact" className={`${styles.footerLink} text-sm leading-6`}>Contact us</a>
+              <Link href="/products-pricing" className={`${styles.footerLink} text-sm leading-6`}>Products &amp; pricing</Link>
+              <Link href="/contact" className={`${styles.footerLink} text-sm leading-6`}>Contact us</Link>
             </div>
           </div>
 
           <div>
             <FooterHeading>LEGAL</FooterHeading>
             <div className="mt-5 grid gap-2.5" aria-label="Craves legal and security pages">
-              <a href="/privacy" className={`${styles.footerLink} text-sm leading-6`}>Privacy policy</a>
-              <a href="/terms" className={`${styles.footerLink} text-sm leading-6`}>Terms of service</a>
-              <a href="/refunds-cancellations" className={`${styles.footerLink} text-sm leading-6`}>Refunds &amp; cancellations</a>
-              <a href="/security" className={`${styles.footerLink} text-sm leading-6`}>Security</a>
+              <Link href="/privacy" className={`${styles.footerLink} text-sm leading-6`}>Privacy policy</Link>
+              <Link href="/terms" className={`${styles.footerLink} text-sm leading-6`}>Terms of service</Link>
+              <Link href="/refunds-cancellations" className={`${styles.footerLink} text-sm leading-6`}>Refunds &amp; cancellations</Link>
+              <Link href="/security" className={`${styles.footerLink} text-sm leading-6`}>Security</Link>
             </div>
           </div>
 

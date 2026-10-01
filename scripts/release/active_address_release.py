@@ -104,6 +104,10 @@ def source_guard(source, sha, run_id):
     require(bool(re.fullmatch("[0-9a-f]{40}", sha)), "Exact release SHA required")
     require(run("git", "rev-parse", "HEAD", cwd=source) == sha, "Release checkout differs from reviewed SHA")
     require(not run("git", "status", "--porcelain", "--untracked-files=no", cwd=source), "Tracked release source changed")
+    for path in ("src/app/api/auth/otp-config/route.ts", "src/app/api/auth/msg91/verify/route.ts",
+                 "src/lib/msg91-browser.ts", "src/app/sitemap.ts", "src/lib/address-snapshot-owner.vitest.ts"):
+        require((source / "apps/customer-web-next" / path).is_file(),
+                "Release source omits reconciled live web behavior: " + path)
     return evidence.evidence(sha, run_id)
 
 

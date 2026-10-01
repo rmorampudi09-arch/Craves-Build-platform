@@ -461,8 +461,8 @@ export function DishesGrid({
       {state === "ready" && dishes.length > 0 ? (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
-            {visibleDishes.map((dish) => (
-              <DishCard key={dish.id} dish={dish} />
+            {visibleDishes.map((dish, index) => (
+              <DishCard key={dish.id} dish={dish} priorityImage={index < 4} />
             ))}
           </div>
           {hasMoreDishes || hasMoreRemote || loadingMoreRemote ? (

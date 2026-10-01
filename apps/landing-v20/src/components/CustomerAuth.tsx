@@ -13,10 +13,10 @@ function loadCustomerAuth(): Promise<AuthEntry> {
     if (!/^\/landing-auth\/auth-[\w-]+\.js$/.test(assets.script ?? '') || !/^\/landing-auth\/auth-[\w-]+\.css$/.test(assets.style ?? '')) throw new Error('Sign-in could not be loaded.');
     const style = document.createElement('link');
     style.rel = 'stylesheet'; style.href = assets.style!;
-    const cssReady = new Promise<void>((resolve, reject) => {
-      const timer = window.setTimeout(() => { style.remove(); reject(new Error('Sign-in took too long to load.')); }, 15000);
+    const cssReady = new Promise<void>((resolve) => {
+      const timer = window.setTimeout(() => { resolve(); }, 1200);
       style.onload = () => { clearTimeout(timer); resolve(); };
-      style.onerror = () => { clearTimeout(timer); style.remove(); reject(new Error('Sign-in could not be loaded.')); };
+      style.onerror = () => { clearTimeout(timer); style.remove(); resolve(); };
     });
     document.head.append(style);
     const [module] = await Promise.all([import(/* @vite-ignore */ assets.script!) as Promise<AuthEntry>, cssReady]);
@@ -39,7 +39,10 @@ export default function CustomerAuth() {
       anchor.setAttribute('aria-busy', 'true');
       const label = anchor.textContent;
       anchor.textContent = 'Opening…';
-      void loadCustomerAuth().then((entry) => entry.openLandingAuth()).catch(() => setError('We couldn’t open sign-in. Please check your connection and try again.')).finally(() => {
+      void loadCustomerAuth().then((entry) => entry.openLandingAuth()).catch((reason) => {
+        console.warn('Craves landing auth failed', reason);
+        setError('We couldn’t open sign-in. Please check your connection and try again.');
+      }).finally(() => {
         anchor.removeAttribute('aria-busy'); anchor.textContent = label;
       });
     };

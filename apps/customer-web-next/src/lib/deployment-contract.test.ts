@@ -28,3 +28,36 @@ test("deployment shifts Container Apps traffic and verifies the public commit", 
   assert.match(pipeline, /Secure Craves access/);
   assert.match(pipeline, /ROLLBACK_TRAFFIC_B64/);
 });
+
+test("customer and chef pages are not edge cached across web releases", () => {
+  const config = source("../../next.config.ts");
+
+  assert.match(config, /chef\|chefs\|home\|discover\|cart\|checkout\|orders/);
+  assert.match(config, /profile\|subscriptions\|tracking\|wishlist\|sign-in/);
+  assert.match(config, /private, no-store, no-cache, max-age=0, must-revalidate/);
+});
+
+test("seo sitemap is published and advertised to crawlers", () => {
+  const sitemapRoute = source("../app/sitemap.ts");
+  const robots = source("../../public/robots.txt");
+
+  assert.match(sitemapRoute, /siteUrl/);
+  assert.match(sitemapRoute, /\/subscriptions\/plans/);
+  assert.match(sitemapRoute, /\/chefs/);
+  assert.match(sitemapRoute, /cityFoodUrl/);
+  assert.match(robots, /Sitemap: https:\/\/craves\.in\/sitemap\.xml/);
+  assert.match(robots, /User-agent: OAI-SearchBot/);
+  assert.match(robots, /AI discovery brief: https:\/\/craves\.in\/llms\.txt/);
+});
+
+test("home first load keeps non-critical sections out of the initial bundle", () => {
+  const home = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
+
+  assert.match(home, /from "next\/dynamic"/);
+  assert.match(home, /const HomeBottomSections = dynamic/);
+  assert.match(home, /const HomeSearchOverlay = dynamic/);
+  assert.doesNotMatch(
+    home,
+    /import \{ HomeBottomSections \} from "@\/components\/home\/HomeBottomSections"/,
+  );
+});

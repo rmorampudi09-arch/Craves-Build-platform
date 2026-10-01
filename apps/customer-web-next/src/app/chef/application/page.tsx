@@ -1,4 +1,5 @@
 import { ChefApplicationDocumentPanel } from "@/components/chef-application-document-panel";
+import { ChefReadinessPanel } from "@/components/chef-readiness-panel";
 import { ChefApplicationWorkspace } from "@/components/chef-application-workspace";
 import { ChefPageHeader } from "@/components/chef-page-header";
 import { ChefBankOnboardingPanel } from "@/components/chef-bank-onboarding-panel";
@@ -8,9 +9,10 @@ export const metadata = {title: "Chef application | Craves", robots: {index: fal
 export default function ChefApplicationPage() {
   return <main className="mx-auto min-h-screen max-w-6xl px-4 py-6 md:px-6 md:py-8">
     <ChefPageHeader eyebrow="Onboarding and evidence" title="Chef application"
-      description="Submit your chef details and required documents, then add your payout account. Razorpay bank validation is automatic; chef application approval remains separate." />
+      description="Submit your Chef details and required documents for review. Available payout-account options are shown separately." />
     <ChefApplicationSessionBoundary><div className="mt-6 space-y-6">
-      <div className="[&>div>section:last-child]:hidden"><ChefApplicationWorkspace /></div>
+      <ChefApplicationWorkspace />
+      <ChefReadinessPanel />
       <ChefBankOnboardingPanel />
       <ChefApplicationDocumentPanel />
     </div></ChefApplicationSessionBoundary>

@@ -55,10 +55,10 @@ class AuthEmailProjectionDbTest {
         flyway(null).validate();assertEquals(0,flyway(null).migrate().migrationsExecuted);
         resetPublicExplorerFixture(jdbc);
         jdbc.execute("DROP SCHEMA email_userchef_test CASCADE");jdbc.execute("CREATE SCHEMA email_userchef_test");assertEquals(10,flyway("10").migrate().migrationsExecuted);
-        UUID id=UUID.randomUUID();insertProfile(id,"legacy-unverified@example.test");assertEquals(3,flyway(null).migrate().migrationsExecuted);flyway(null).validate();
+        UUID id=UUID.randomUUID();insertProfile(id,"legacy-unverified@example.test");assertEquals(4,flyway(null).migrate().migrationsExecuted);flyway(null).validate();
         assertEquals(0,flyway(null).migrate().migrationsExecuted);assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM auth_email_projection",Integer.class));
         assertEquals("legacy-unverified@example.test",profiles.getProfile(user(id)).email());
-        assertEquals(13,jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
+        assertEquals(14,jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_audit')::text",String.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_admission')::text",String.class));
     }
@@ -67,6 +67,68 @@ class AuthEmailProjectionDbTest {
         database.execute("DROP TABLE IF EXISTS public.admin_explorer_admission CASCADE");
         database.execute("DROP TABLE IF EXISTS public.admin_explorer_audit CASCADE");
         database.execute("DROP FUNCTION IF EXISTS public.reject_admin_explorer_audit_mutation()");
+    }
+
+    @Test void customAddressLabelsPersistThroughCreateUpdateDefaultRecommendationAndDelete() {
+        var owner = user(UUID.randomUUID());
+        var stranger = user(UUID.randomUUID());
+        var home = tx.execute(ignored -> profiles.addAddress(owner, address("HOME", false)));
+        var custom = tx.execute(ignored -> profiles.addAddress(owner, address("  Mom's House  ", false)));
+        assertEquals("Mom's House", custom.addressLabel());
+        assertEquals("Mom's House", profiles.getAddress(owner, custom.id()).addressLabel());
+        assertEquals("Mom's House", profiles.getAddressForInternal(owner.identityId(), custom.id()).addressLabel());
+        assertTrue(home.isDefault());
+        assertFalse(custom.isDefault());
+
+        var updated = tx.execute(ignored -> profiles.updateAddress(owner, custom.id(), address("Office annex", true)));
+        assertEquals("Office annex", updated.addressLabel());
+        assertTrue(updated.isDefault());
+        assertFalse(profiles.getAddress(owner, home.id()).isDefault());
+        assertEquals(custom.id(), profiles.listAddresses(owner).getFirst().id());
+        assertEquals(404, assertThrows(ApiException.class, () -> profiles.getAddress(stranger, custom.id())).getStatus());
+        assertThrows(ApiException.class, () -> tx.execute(ignored -> profiles.updateAddress(stranger, custom.id(), address("Other owner", true))));
+        assertThrows(ApiException.class, () -> tx.executeWithoutResult(ignored -> profiles.deleteAddress(stranger, custom.id())));
+
+        tx.executeWithoutResult(ignored -> profiles.deleteAddress(owner, home.id()));
+        var recommended = profiles.recommendLocation(owner, new java.math.BigDecimal("17.4483"), new java.math.BigDecimal("78.3915"), 100);
+        assertEquals("Office annex", recommended.selectedSavedAddress().addressLabel());
+        assertEquals(custom.id(), recommended.selectedSavedAddress().id());
+        assertEquals("WORK", tx.execute(ignored -> profiles.updateAddress(owner, custom.id(), address("WORK", true))).addressLabel());
+        assertEquals("OTHER", tx.execute(ignored -> profiles.updateAddress(owner, custom.id(), address("OTHER", true))).addressLabel());
+        assertEquals("x".repeat(80), tx.execute(ignored -> profiles.updateAddress(owner, custom.id(), address("x".repeat(80), true))).addressLabel());
+        for (String invalid : new String[] {null, "  ", "x".repeat(81)}) {
+            assertEquals(400, assertThrows(ApiException.class, () -> tx.execute(ignored -> profiles.updateAddress(owner, custom.id(), address(invalid, true)))).getStatus());
+        }
+        tx.executeWithoutResult(ignored -> profiles.deleteAddress(owner, custom.id()));
+        assertTrue(profiles.listAddresses(owner).isEmpty());
+        assertThrows(ApiException.class, () -> profiles.getAddressForInternal(owner.identityId(), custom.id()));
+    }
+
+    @Test void addressLabelMigrationPreservesExistingRowsAndRejectsInvalidDatabaseWrites() {
+        resetPublicExplorerFixture(jdbc);
+        jdbc.execute("DROP SCHEMA email_userchef_test CASCADE");
+        jdbc.execute("CREATE SCHEMA email_userchef_test");
+        flyway("12").migrate();
+        var owner = user(UUID.randomUUID());
+        var old = tx.execute(ignored -> profiles.addAddress(owner, address("OTHER", false)));
+        assertEquals(1, flyway(null).migrate().migrationsExecuted);
+        flyway(null).validate();
+        assertEquals(0, flyway(null).migrate().migrationsExecuted);
+        assertEquals("OTHER", profiles.getAddress(owner, old.id()).addressLabel());
+        var named = tx.execute(ignored -> profiles.updateAddress(owner, old.id(), address("Mom's House", true)));
+        assertEquals("Mom's House", named.addressLabel());
+        assertEquals(80, jdbc.queryForObject("SELECT character_maximum_length FROM information_schema.columns WHERE table_schema='email_userchef_test' AND table_name='customer_address' AND column_name='address_label'", Integer.class));
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM information_schema.columns WHERE table_schema='email_userchef_test' AND table_name='customer_address' AND column_name='address_name'", Integer.class));
+        for (String invalid : new String[] {"", "   ", " untrimmed ", "x".repeat(81)}) {
+            assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
+                () -> jdbc.update("UPDATE customer_address SET address_label=? WHERE id=?", invalid, old.id()));
+        }
+    }
+
+    private ApiDtos.CustomerAddressRequest address(String label, boolean isDefault) {
+        return new ApiDtos.CustomerAddressRequest(label, "Test Customer", "+919876543210", "Flat 101", null, null,
+            "Madhapur", "Hyderabad", "Hyderabad", "Telangana", "500081",
+            new java.math.BigDecimal("17.4483"), new java.math.BigDecimal("78.3915"), isDefault);
     }
     @Test void eventBeforeProfileCreationIsRetainedAndAppliedOnNullEmailProfileWrite() {
         UUID id=UUID.randomUUID();receive(event(id,1,"verified@example.test"),"a");

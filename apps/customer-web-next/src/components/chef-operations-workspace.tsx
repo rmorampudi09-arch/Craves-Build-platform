@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { parseChefApplicationReadiness, type ChefApplicationReadiness } from "@/lib/chef-readiness-contract";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -44,6 +45,7 @@ function statusTone(ready: boolean): string {
 }
 
 export function ChefOperationsWorkspace() {
+  const [readiness, setReadiness] = useState<ChefApplicationReadiness | null>(null);
   const [application, setApplication] = useState<ChefApplication | null>(null);
   const [kitchen, setKitchen] = useState<ChefKitchen | null>(null);
   const [menu, setMenu] = useState<ChefMenuItem[]>([]);
@@ -57,7 +59,7 @@ export function ChefOperationsWorkspace() {
     else setState("loading");
     setError("");
     try {
-      const [applicationResponse, kitchenResponse, menuResponse] =
+      const [applicationResponse, kitchenResponse, menuResponse, readinessResponse] =
         await Promise.all([
           fetch("/api/chef/application", {
             cache: "no-store",
@@ -71,12 +73,14 @@ export function ChefOperationsWorkspace() {
             cache: "no-store",
             credentials: "same-origin",
           }),
+          fetch("/api/chef/application/readiness", { cache: "no-store", credentials: "same-origin" }),
         ]);
 
-      const [applicationRaw, kitchenRaw, menuRaw] = await Promise.all([
+      const [applicationRaw, kitchenRaw, menuRaw, readinessRaw] = await Promise.all([
         applicationResponse.json().catch(() => null),
         kitchenResponse.json().catch(() => null),
         menuResponse.json().catch(() => null),
+        readinessResponse.json().catch(() => null),
       ]);
 
       if (!applicationResponse.ok) {
@@ -111,6 +115,9 @@ export function ChefOperationsWorkspace() {
         throw new Error("Craves returned an invalid chef menu response.");
       }
 
+      const parsedReadiness = readinessResponse.ok ? parseChefApplicationReadiness(readinessRaw) : null;
+      if (!parsedReadiness) throw new Error("Application readiness could not be confirmed. Please try again.");
+      setReadiness(parsedReadiness);
       setApplication(parsedApplication);
       setKitchen(parsedKitchen);
       setMenu(parsedMenu);
@@ -144,12 +151,7 @@ export function ChefOperationsWorkspace() {
   }, [menu]);
 
   const applicationApproved = application?.status === "APPROVED";
-  const requiredDocumentTypes = new Set(
-    application?.documents.map((document) => document.documentType) ?? [],
-  );
-  const hasSupportedProofs =
-    requiredDocumentTypes.has("AADHAAR_CARD") &&
-    requiredDocumentTypes.has("PAN_CARD");
+  const hasSupportedProofs = readiness?.approvedDocumentCount === readiness?.requiredDocumentCount && readiness !== null;
   const kitchenActive = kitchen?.status === "ACTIVE";
   const locationMapped =
     typeof kitchen?.latitude === "number" &&
@@ -270,18 +272,18 @@ export function ChefOperationsWorkspace() {
               <FileCheck2 className="h-5 w-5" aria-hidden="true" />
             </span>
             <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusTone(hasSupportedProofs)}`}>
-              {application?.documents.length ?? 0} uploaded
+              {readiness?.approvedDocumentCount ?? 0}/4 approved
             </span>
           </div>
           <h3 className="mt-4 font-display text-lg font-bold text-ink">
             Supported proof evidence
           </h3>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Current backend evidence types are Aadhaar card and PAN card. Their document statuses are controlled by the chef-application service.
+            Approval requires an applicant photo, government ID front and back, and a tax ID card. Each document must be individually approved. Older Aadhaar/PAN records do not replace these four requirements.
           </p>
           <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
-            {(application?.documents ?? []).map((document) => (
-              <li key={document.id} className="flex items-center justify-between gap-3 rounded-lg bg-cream px-3 py-2">
+            {(readiness?.documents ?? []).map((document) => (
+              <li key={document.documentType} className="flex items-center justify-between gap-3 rounded-lg bg-cream px-3 py-2">
                 <span>{document.documentType.replaceAll("_", " ")}</span>
                 <strong className="text-ink">{document.status}</strong>
               </li>

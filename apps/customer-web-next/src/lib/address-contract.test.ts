@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  addressLabelDraftError,
+  addressLabelFromDraft,
+  createAddressLabelDraft,
+  displayAddressLabel,
   isDeliveryReadyAddress,
   parseAddressInput,
   parseCustomerAddress,
@@ -31,6 +35,46 @@ const metadata = {
   createdAt: "2026-07-30T00:00:00Z",
   updatedAt: "2026-07-30T00:00:00Z",
 };
+
+test("custom labels survive save/read parsing, default updates and location recommendation", () => {
+  for (const label of ["HOME", "WORK", "OTHER", "Mom's House", "అమ్మ ఇల్లు", "x".repeat(80)]) {
+    const payload = parseAddressInput({ ...input, addressLabel: `  ${label}  ` });
+    assert.ok(payload);
+    assert.equal(payload.addressLabel, label);
+    assert.equal("addressName" in payload, false);
+    const saved = parseCustomerAddress({ ...metadata, ...payload });
+    assert.ok(saved);
+    assert.equal(saved.addressLabel, label);
+    assert.equal(parseAddressInput({ ...saved, isDefault: false })?.addressLabel, label);
+    assert.equal(parseLocationRecommendation({
+      locationType: "SAVED_ADDRESS", latitude: input.latitude, longitude: input.longitude,
+      selectedSavedAddress: saved, distanceMeters: 10, matchRadiusMeters: 100,
+    })?.selectedSavedAddress?.addressLabel, label);
+  }
+});
+
+test("rejects blank, missing, non-string and overlong address labels", () => {
+  for (const addressLabel of [null, undefined, 123, "", " \t ", "x".repeat(81)]) {
+    assert.equal(parseAddressInput({ ...input, addressLabel }), null);
+    assert.equal(parseCustomerAddress({ ...metadata, ...input, addressLabel }), null);
+  }
+});
+
+test("Other editing restores the custom label and keeps the category out of the API", () => {
+  assert.deepEqual(createAddressLabelDraft("Mom's House"), { addressCategory: "OTHER", customLabel: "Mom's House" });
+  assert.equal(addressLabelFromDraft({ addressCategory: "OTHER", customLabel: "  Mom's House  " }), "Mom's House");
+  assert.equal(addressLabelFromDraft({ addressCategory: "WORK", customLabel: "Mom's House" }), "WORK");
+  assert.equal(addressLabelFromDraft(createAddressLabelDraft("OTHER")), "Other");
+  for (const customLabel of ["", "   ", "HOME", "WORK", "x".repeat(81)]) {
+    const draft = { addressCategory: "OTHER" as const, customLabel };
+    assert.ok(addressLabelDraftError(draft));
+    assert.equal(addressLabelFromDraft(draft), null);
+  }
+  assert.equal(displayAddressLabel("HOME"), "Home");
+  assert.equal(displayAddressLabel("WORK"), "Work");
+  assert.equal(displayAddressLabel("OTHER"), "Other");
+  assert.equal(displayAddressLabel("Mom's House"), "Mom's House");
+});
 
 test("validates customer-owned address input", () => {
   assert.deepEqual(parseAddressInput(input), input);

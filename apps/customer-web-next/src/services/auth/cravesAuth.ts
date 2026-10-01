@@ -1,5 +1,7 @@
 "use client";
 
+import { displayAddressLabel } from "@/lib/address-contract";
+
 import type { CravesIdentity } from "@/lib/auth-contract";
 import { emailVerificationStateSchema, type EmailVerificationState } from "@/lib/email-verification-contract";
 import type {
@@ -256,7 +258,7 @@ export function getAddress(): CravesAddress | null {
 function fromCustomerAddress(address: DeliveryReadyAddress): CravesAddress {
   return {
     id: address.id,
-    label: address.addressLabel,
+    label: displayAddressLabel(address.addressLabel),
     hno: address.addressLine1,
     street: address.addressLine2 ?? address.landmark ?? undefined,
     city: address.city,

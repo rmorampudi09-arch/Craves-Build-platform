@@ -17,20 +17,25 @@ import {
 import {
   isDeliveryReadyAddress,
   parseAddressInput,
-  type AddressLabel,
+  addressLabelDraftError,
+  addressLabelFromDraft,
+  createAddressLabelDraft,
+  displayAddressLabel,
+  type AddressLabelDraft,
   type CustomerAddress,
   type CustomerAddressInput,
 } from "@/lib/address-contract";
 import { loadSession } from "@/services/auth/cravesAuth";
+import { AddressLabelFields } from "@/components/address-label-fields";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
 
-type AddressDraft = Omit<CustomerAddressInput, "latitude" | "longitude"> & {
+type AddressDraft = Omit<CustomerAddressInput, "latitude" | "longitude" | "addressLabel"> & AddressLabelDraft & {
   latitude: string;
   longitude: string;
 };
 
 const blank: AddressDraft = {
-  addressLabel: "HOME",
+  ...createAddressLabelDraft("HOME"),
   recipientName: "",
   contactPhoneNumber: "",
   addressLine1: "",
@@ -48,7 +53,7 @@ const blank: AddressDraft = {
 
 function draftFrom(address: CustomerAddress): AddressDraft {
   return {
-    addressLabel: address.addressLabel,
+    ...createAddressLabelDraft(address.addressLabel),
     recipientName: address.recipientName ?? "",
     contactPhoneNumber: address.contactPhoneNumber,
     addressLine1: address.addressLine1,
@@ -195,8 +200,14 @@ export default function AddressesPage() {
   }
 
   async function save() {
+    const labelError = addressLabelDraftError(draft);
+    if (labelError) {
+      setMessage(labelError);
+      return;
+    }
     const input = parseAddressInput({
       ...draft,
+      addressLabel: addressLabelFromDraft(draft),
       addressLine2: draft.addressLine2?.trim() || null,
       landmark: draft.landmark?.trim() || null,
       latitude: draft.latitude.trim(),
@@ -233,7 +244,7 @@ export default function AddressesPage() {
   }
 
   async function remove(address: CustomerAddress) {
-    if (!window.confirm(`Delete ${address.addressLabel.toLowerCase()} address?`)) return;
+    if (!window.confirm(`Delete ${displayAddressLabel(address.addressLabel)} address?`)) return;
     setBusy(true);
     try {
       const response = await fetch(`/api/customer/addresses/${address.id}`, {
@@ -282,7 +293,7 @@ export default function AddressesPage() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-display text-lg font-bold text-ink">{address.addressLabel}</h2>
+                      <h2 className="font-display text-lg font-bold text-ink">{displayAddressLabel(address.addressLabel)}</h2>
                       {address.isDefault && (
                         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
                           <Check className="mr-1 inline h-3 w-3" />DEFAULT
@@ -335,7 +346,7 @@ export default function AddressesPage() {
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <label className="text-xs font-semibold text-ink">Label<select value={draft.addressLabel} onChange={(event) => update("addressLabel", event.target.value as AddressLabel)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm"><option value="HOME">Home</option><option value="WORK">Work</option><option value="OTHER">Other</option></select></label>
+              <AddressLabelFields value={draft} onChange={(label) => setDraft((current) => ({ ...current, ...label }))} disabled={busy} />
               <label className="text-xs font-semibold text-ink">Recipient<input value={draft.recipientName} onChange={(event) => update("recipientName", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm" /></label>
               <label className="text-xs font-semibold text-ink">Phone<input value={draft.contactPhoneNumber} onChange={(event) => update("contactPhoneNumber", event.target.value)} placeholder="+919876543210" className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm" /></label>
               <label className="text-xs font-semibold text-ink">Pincode<input value={draft.postalCode} onChange={(event) => update("postalCode", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm" /></label>

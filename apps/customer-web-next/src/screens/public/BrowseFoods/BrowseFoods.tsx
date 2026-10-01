@@ -1,3 +1,4 @@
+import { displayAddressLabel } from "@/lib/address-contract";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, MapPin, Utensils } from "lucide-react";
@@ -56,7 +57,7 @@ function savedAddressToBrowsingLocation(address: CustomerAddress): CravesAddress
   if (address.latitude == null || address.longitude == null || !address.areaName) return null;
   return {
     id: address.id,
-    label: address.addressLabel,
+    label: displayAddressLabel(address.addressLabel),
     hno: address.addressLine1,
     street: address.addressLine2 ?? address.landmark ?? undefined,
     city: address.city,

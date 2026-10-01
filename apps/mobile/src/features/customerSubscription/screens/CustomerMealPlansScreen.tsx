@@ -1,3 +1,4 @@
+import {customerAddressLabel} from '../../customerAddresses/domain/customerAddressContract';
 import React from 'react';
 import {
   ActivityIndicator,
@@ -441,7 +442,7 @@ export function CustomerMealPlansScreen() {
                 {addresses.length ? addresses.map(address => (
                   <Pressable key={address.id} accessibilityRole="radio" accessibilityState={{checked: selectedAddressId === address.id}} onPress={() => setSelectedAddressId(address.id)} style={[styles.addressCard, selectedAddressId === address.id && styles.addressCardSelected]}>
                     <View style={styles.iconTileSmall}><FilledIcon name="map-marker" color={colors.flameRed} /></View>
-                    <View style={styles.addressCopy}><Text style={styles.addressTitle}>{address.addressLabel ?? (address.isDefault ? 'Default address' : 'Saved address')}</Text><Text style={styles.addressText}>{addressLabel(address)}</Text></View>
+                    <View style={styles.addressCopy}><Text style={styles.addressTitle}>{customerAddressLabel(address)}</Text><Text style={styles.addressText}>{addressLabel(address)}</Text></View>
                     {selectedAddressId === address.id ? <FilledIcon name="check-circle" color={colors.flameRed} /> : null}
                   </Pressable>
                 )) : <Text style={styles.helperText}>Add a delivery-ready saved address before starting a meal plan.</Text>}

@@ -3,6 +3,7 @@ import {
   createCustomerAddressDraft,
   createCustomerAddressSavePlan,
   findDuplicateCustomerAddress,
+  isCustomerAddressDraftDirty,
   validateCustomerAddressDraft,
 } from './domain/customerAddressEditor';
 import type {CustomerAddress} from './domain/customerAddressContract';
@@ -46,6 +47,34 @@ function validNewDraft() {
 }
 
 describe('customer address editor domain', () => {
+  it('saves Other directly in addressLabel and restores it when editing', () => {
+    const draft = {...validNewDraft(), addressCategory: 'OTHER' as const, customLabel: "  Mom's House  "};
+    const plan = createCustomerAddressSavePlan(draft, [], null);
+    expect(plan.status).toBe('ready');
+    if (plan.status !== 'ready') throw new Error('Expected a valid save');
+    expect(plan.request.addressLabel).toBe("Mom's House");
+    expect(plan.request).not.toHaveProperty('addressName');
+    expect(plan.request).not.toHaveProperty('addressCategory');
+    expect(plan.request).not.toHaveProperty('customLabel');
+    expect(createCustomerAddressDraft({...savedAddress, addressLabel: plan.request.addressLabel})).toMatchObject({addressCategory: 'OTHER', customLabel: "Mom's House"});
+    expect(isCustomerAddressDraftDirty({...draft, customLabel: 'Office annex'}, draft)).toBe(true);
+  });
+
+  it.each(['', '  ', 'HOME', 'WORK', 'x'.repeat(81)])('blocks invalid Other name %s before saving', customLabel => {
+    const plan = createCustomerAddressSavePlan({...validNewDraft(), addressCategory: 'OTHER', customLabel}, [], null);
+    expect(plan.status).toBe('invalid');
+    if (plan.status !== 'invalid') throw new Error('Expected validation failure');
+    expect(plan.fieldErrors.customLabel).toBeTruthy();
+  });
+
+  it('accepts 80 characters and keeps custom text while switching categories', () => {
+    const draft = {...validNewDraft(), addressCategory: 'OTHER' as const, customLabel: 'x'.repeat(80)};
+    const other = createCustomerAddressSavePlan(draft, [], null);
+    expect(other.status === 'ready' && other.request.addressLabel).toBe(draft.customLabel);
+    const work = createCustomerAddressSavePlan({...draft, addressCategory: 'WORK'}, [], null);
+    expect(work.status === 'ready' && work.request.addressLabel).toBe('WORK');
+    expect(createCustomerAddressDraft({...savedAddress, addressLabel: 'OTHER'})).toMatchObject({addressCategory: 'OTHER', customLabel: 'Other'});
+  });
   it('returns a controlled error for an invalid pincode', () => {
     const draft = {...validNewDraft(), postalCode: '56003'};
     expect(validateCustomerAddressDraft(draft).postalCode).toBe(

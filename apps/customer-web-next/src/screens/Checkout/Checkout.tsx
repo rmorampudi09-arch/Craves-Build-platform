@@ -1,5 +1,7 @@
 "use client";
 
+import { displayAddressLabel } from "@/lib/address-contract";
+
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -246,7 +248,7 @@ export default function CheckoutPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <h2 className="font-display text-lg font-bold text-ink">
-                            {selectedAddress.addressLabel}
+                            {displayAddressLabel(selectedAddress.addressLabel)}
                           </h2>
                           {selectedAddress.isDefault && (
                             <span className="rounded-full border border-border bg-white px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-[0.06em] text-ink">

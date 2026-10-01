@@ -68,4 +68,8 @@ test("customer case preserves audited full contact and address fields", () => {
   assert.equal(parsed?.profile.registeredPhoneNumber, "+919999994821");
   assert.equal(parsed?.addresses[0]?.districtName, "Ranga Reddy");
   assert.equal("storagePath" in (parsed?.addresses[0] ?? {}), false);
+  value.addresses[0].addressLabel = "x".repeat(80);
+  assert.equal(parseCustomerCase(value)?.addresses[0]?.addressLabel, "x".repeat(80));
+  value.addresses[0].addressLabel = "x".repeat(81);
+  assert.equal(parseCustomerCase(value), null);
 });

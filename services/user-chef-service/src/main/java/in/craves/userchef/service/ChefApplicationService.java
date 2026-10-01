@@ -24,7 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class ChefApplicationService {
-    private static final Set<KycDocumentType> REQUIRED_APPLICATION_DOCUMENTS = Set.of(
+    static final Set<KycDocumentType> REQUIRED_APPLICATION_DOCUMENTS = Set.of(
         KycDocumentType.APPLICANT_PHOTO,
         KycDocumentType.GOVERNMENT_ID_FRONT,
         KycDocumentType.GOVERNMENT_ID_BACK,

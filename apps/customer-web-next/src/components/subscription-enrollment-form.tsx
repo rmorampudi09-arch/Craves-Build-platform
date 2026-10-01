@@ -1,5 +1,7 @@
 "use client";
 
+import { displayAddressLabel } from "@/lib/address-contract";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CustomerAddress } from "@/lib/address-contract";
@@ -123,7 +125,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
           <option value="">Select address</option>
           {addresses.map(address => (
             <option key={address.id} value={address.id}>
-              {address.addressLabel}: {address.addressLine1}, {address.areaName}
+              {displayAddressLabel(address.addressLabel)}: {address.addressLine1}, {address.areaName}
             </option>
           ))}
         </select>

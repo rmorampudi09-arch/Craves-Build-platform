@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../../app/navigation/types';
-import { colors } from '../../../design/tokens';
+import { loginColors, loginFonts } from '../components/loginVisuals';
 import { VideoAuthLayout } from '../components/VideoAuthLayout';
 import { AuthActionButton } from '../components/AuthActionButton';
 import { AuthRoleCards } from '../components/AuthRoleCards';
@@ -37,16 +37,17 @@ export function RoleSelectionScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  content: { gap: 2 },
+  content: { gap: 6, marginBottom: 6 },
   title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.ink,
+    fontSize: 28,
+    fontFamily: loginFonts.bold,
+    color: loginColors.ink,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 12,
-    color: colors.mutedText,
+    fontSize: 15,
+    fontFamily: loginFonts.regular,
+    color: loginColors.body,
     textAlign: 'center',
   },
 });

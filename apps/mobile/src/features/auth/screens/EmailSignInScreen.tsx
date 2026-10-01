@@ -116,8 +116,17 @@ export function EmailSignInScreen({ navigation, route }: Props) {
   };
 
   return (
-    <VideoAuthLayout onBack={() => navigation.goBack()} backDisabled={busy}>
-      <AuthRoleCards value={role} onChange={selectRole} disabled={busy} />
+    <VideoAuthLayout
+      variant="email"
+      onBack={() => navigation.goBack()}
+      backDisabled={busy}
+    >
+      <AuthRoleCards
+        value={role}
+        onChange={selectRole}
+        disabled={busy}
+        compact
+      />
       <View style={styles.heading}>
         <Text style={styles.title}>Welcome back</Text>
         <Text style={styles.description}>
@@ -129,14 +138,13 @@ export function EmailSignInScreen({ navigation, route }: Props) {
         value={email}
         onChangeText={updateEmail}
         onBlur={() => setTouched(current => ({ ...current, email: true }))}
-        placeholder="Email Address"
+        placeholder="Enter your email address"
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
         autoComplete="email"
         textContentType="emailAddress"
         importantForAutofill="yes"
-        leftIcon="mail"
         accessibilityLabel="Email address"
         disabled={busy}
         error={touched.email ? fieldErrors.email : undefined}
@@ -146,7 +154,7 @@ export function EmailSignInScreen({ navigation, route }: Props) {
         value={password}
         onChangeText={updatePassword}
         onBlur={() => setTouched(current => ({ ...current, password: true }))}
-        placeholder="Password"
+        placeholder="Enter your password"
         secureTextEntry={!passwordVisible}
         autoCapitalize="none"
         autoCorrect={false}
@@ -154,7 +162,6 @@ export function EmailSignInScreen({ navigation, route }: Props) {
         textContentType="password"
         importantForAutofill="yes"
         returnKeyType="done"
-        leftIcon="lock"
         rightIcon={passwordVisible ? 'eye-off' : 'eye'}
         rightIconAccessibilityLabel={
           passwordVisible ? 'Hide password' : 'Show password'
@@ -190,6 +197,7 @@ export function EmailSignInScreen({ navigation, route }: Props) {
       />
       <AuthActionButton
         outline
+        outlineTone="red"
         label="Use phone OTP instead"
         disabled={busy}
         onPress={openPhoneSignIn}

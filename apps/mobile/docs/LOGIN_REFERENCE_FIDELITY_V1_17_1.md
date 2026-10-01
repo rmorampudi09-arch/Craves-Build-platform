@@ -1,0 +1,112 @@
+# Craves Login Reference Appearance Version 1.17.1
+
+## Request And Scope
+
+The user reported that installed v1.17 did not look like the Word references
+and asked for the exact appearance. The connected phone's signed-out welcome
+and Customer phone form were captured before edits. Differences were visible:
+square logo, thin OEM typography, compact horizontal role cards, hard shine
+stripe, incorrect video crop and different panel proportions.
+
+Only login presentation is corrected. No Home/menu/splash redesign, backend,
+APIM, auth-service/validation/OTP request policy, Chef approval, order/cart,
+finance, Razorpay, remote or CI changes. No GitHub push.
+
+The five screenshot states are the visual authority for this correction.
+Welcome uses a 46.5% video / 53.5% white panel split, instead of v1.17's older
+75/25 written interpretation. Clarifying questions about that discrepancy and
+the screenshot wordmark were offered; pending a reply, the latest request to
+match the screenshot appearance was used as the working interpretation.
+
+The MP4 still replaces the screenshot's food photo, exactly as requested.
+Retain the written omissions: no Already have an account footer; Chef footer
+is New chef sign up and follows the existing phone OTP path. Successful
+authentication and Chef onboarding still use the same services. No fake
+country dropdown, phone/password capability or unapproved legal destinations.
+
+## Changed Paths
+
+Relative to `C:\mscratch\apps\mobile`:
+
+- `src/assets/auth/craves-login-wordmark.png`: reference-derived transparent
+  glossy red CRAVES wordmark, only for login. Generated cutout 2172x724, alpha
+  verified. This is an imagegen extraction, not a claim of bit-identical source
+  screenshot pixels. Original approved app/splash logo files are untouched.
+- `src/assets/auth/fonts/Inter-Regular.ttf`, `Inter-SemiBold.ttf`,
+  `Inter-Bold.ttf`, `LICENSE.txt`: local static faces scoped to login.
+  Source: [Inter 4.1 official release](https://github.com/rsms/inter/releases/tag/v4.1).
+- `src/features/auth/components/loginVisuals.ts`: login-only colors, explicit
+  font families and per-state hero fractions; not global design tokens.
+- `src/features/auth/components/AuthSurfaceFinish.tsx`: reusable SVG gradient
+  highlights for controls using the existing react-native-svg dependency.
+- `AuthRoleCards.tsx`: reference vertical/compact layouts, filled Customer icon,
+  glass-like circular icon wells, red selected check and soft tile highlights.
+- `AuthActionButton.tsx`: gradual glossy lighting, rounded edges, trailing arrow,
+  red/neutral outline variants; existing disabled/loading/action behavior.
+- `AuthTextField.tsx`: labeled reference field layout, local regular/semibold
+  text, Customer label inside field, no extra email/password leading icons.
+- `AuthOtpInput.tsx`: rounded softly lit cells and bold digits; still one native
+  input for autofill, paste and accessibility.
+- `AuthVideoBackground.tsx`: video/poster viewport matches visible hero; one
+  decoder remains managed by the existing lifecycle and fallback implementation.
+- `VideoAuthLayout.tsx`, `loginStyles.ts`: reference spacing, rounded full-width
+  panel and responsive logo; safe-area/scroll/keyboard access retained.
+- `src/features/auth/screens/RoleSelectionScreen.tsx`, `PhoneSignInScreen.tsx`,
+  `EmailSignInScreen.tsx`, `OtpVerificationScreen.tsx`: presentation only.
+- `src/app/navigation/AppNavigator.tsx`: preload bundled login fonts before
+  displaying the auth stack; font errors do not block entry. Shared player
+  framing follows the visible auth route; route/auth contracts unchanged.
+- `package.json`, `package-lock.json`: make already SDK-bundled `expo-font
+  ~56.0.7` an explicit dependency; same version deduplicated from Expo's nested
+  dependency. See [Expo SDK 56 font documentation](https://docs.expo.dev/versions/v56.0.0/sdk/font/).
+- `android/app/build.gradle`: code 25 / name 1.17.1.
+- `jest.config.js`, `jest.setup.js`, `AuthVisuals.test.tsx`, `AuthVideoBackground.test.tsx`,
+  `src/features/auth/screens/LoginScreens.test.tsx`: native-boundary mocks and
+  focused presentation/lifecycle/auth-contract regression checks.
+- `KUSHIRAVI_VERSION.md`, this document: checkpoint and verification evidence.
+
+Component paths without a full prefix above are under
+`src/features/auth/components`.
+
+## Asset Preparation
+
+Original supplied MP4 remains byte-for-byte unchanged:
+`49BF276910E0E956815E3EF6A4394CDC442DC722EF6DE9025DFD21A95A8942D7`.
+
+Wordmark preparation used the built-in imagegen tool with the Word welcome
+screenshot as the edit target, requesting only the existing red uppercase
+CRAVES letters, preserved bevels/perspective/highlights, transparent background,
+no food/status/interface and a wide crop. Saved to the app asset path above.
+This does not imply source-pixel-perfect extraction or an exact Apple font.
+The provided video necessarily differs from the screenshot background.
+
+## Verification And Manual Checks
+
+Final source/tag, APK/source ZIP hashes, tests, native build and actual visual
+checks are recorded after verification. Installed phone identity stays in
+`KUSHIRAVI_VERSION.md`; do not infer installation from a prepared source entry.
+
+1. Open signed-out Craves. Compare the wordmark, bold title, vertically arranged
+   role tiles, red selected check, smooth glossy button and white-panel spacing
+   with the reference. No unwanted login footer. Video stays local and silent.
+2. Select Customer and continue. Customer cards precede the heading. Food remains
+   visible behind the logo. Mobile label is inside the fixed +91 field; Send OTP
+   remains disabled until validation passes, with no accidental SMS during QA.
+3. Change to Chef. Heading precedes the tall cards; neutral secondary action and
+   New chef sign up link remain. Link focuses the existing phone field without
+   requesting OTP or bypassing account verification.
+4. Open email/password. Compact reference choices, bold heading, labeled inputs,
+   password eye, underlined recovery and red outline phone action. Use an approved
+   test account for real sign-in; do not fabricate phone/password support.
+5. With an approved test number, verify six bold OTP cells, masked destination,
+   Edit, gray cooldown with emphasized timer and existing resend/retry behavior.
+   Do not claim real OTP checks from component tests alone.
+6. Check keyboard access, small screen and enlarged text: scroll white panel to
+   all controls, keep safe-area padding, and avoid truncation or overlaps.
+7. Background/foreground; video pauses/resumes. Reduced motion and decoder failure
+   show the still. Switching forms must not create additional video players.
+8. Confirm no unrelated UI/business change and previous tags/APKs remain intact.
+
+No new Azure/APIM/Firebase/payment/signing/DNS/CI setup is required. Approved
+Terms/Privacy URLs are still needed to add working legal links. Rebuild from
+the tagged source ZIP with the existing release script and locked dependencies.

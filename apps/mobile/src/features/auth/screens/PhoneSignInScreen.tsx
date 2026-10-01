@@ -66,14 +66,14 @@ export function PhoneSignInScreen({ navigation, route }: Props) {
 
   const heading = (
     <View style={styles.heading}>
-        <Text style={styles.title}>
-          {chefSignup && role === 'CHEF'
-            ? 'Create your Chef account'
-            : 'Your number, please'}
-        </Text>
-        <Text style={styles.description}>
-          We'll send a one-time code to sign you in.
-        </Text>
+      <Text style={styles.title}>
+        {chefSignup && role === 'CHEF'
+          ? 'Create your Chef account'
+          : 'Your number, please'}
+      </Text>
+      <Text style={styles.description}>
+        We'll send a one-time code to sign you in.
+      </Text>
     </View>
   );
 
@@ -92,6 +92,7 @@ export function PhoneSignInScreen({ navigation, route }: Props) {
       <AuthTextField
         ref={phoneInput}
         label="Mobile number"
+        labelInside={role === 'CUSTOMER'}
         value={phone}
         onChangeText={updatePhone}
         placeholder="Enter 10-digit number"
@@ -113,6 +114,7 @@ export function PhoneSignInScreen({ navigation, route }: Props) {
       ) : null}
       <AuthActionButton
         label="Send OTP"
+        arrow={role === 'CHEF'}
         loading={busy}
         disabled={!phoneValid || busy}
         accessibilityHint={copy.continueAccessibilityHint}
@@ -125,6 +127,7 @@ export function PhoneSignInScreen({ navigation, route }: Props) {
       </View>
       <AuthActionButton
         outline
+        outlineTone={role === 'CUSTOMER' ? 'red' : 'neutral'}
         label="Use email & password"
         disabled={busy}
         onPress={() => navigation.navigate('EmailSignIn', { role })}

@@ -8,6 +8,8 @@ import {
 } from 'react-native';
 import { colors, touchTarget } from '../../../design/tokens';
 import { OTP_CODE_LENGTH } from '../domain/otpVerificationPolicy';
+import { AuthSurfaceFinish } from './AuthSurfaceFinish';
+import { loginColors, loginFonts } from './loginVisuals';
 
 interface Props extends TextInputProps {
   value: string;
@@ -46,6 +48,13 @@ export function AuthOtpInput({
                 disabled && styles.disabled,
               ]}
             >
+              <AuthSurfaceFinish
+                radius={12}
+                selected={
+                  focused &&
+                  index === Math.min(value.length, OTP_CODE_LENGTH - 1)
+                }
+              />
               <Text style={styles.digit}>{value[index] ?? ''}</Text>
             </View>
           ))}
@@ -84,15 +93,15 @@ export function AuthOtpInput({
 
 const styles = StyleSheet.create({
   row: { minHeight: touchTarget.comfortable },
-  cells: { flexDirection: 'row', gap: 8 },
+  cells: { flexDirection: 'row', gap: 6 },
   cell: {
     flex: 1,
     minWidth: 0,
     minHeight: touchTarget.comfortable,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#DDE0E6',
+    borderColor: loginColors.border,
     backgroundColor: '#F8F9FB',
     alignItems: 'center',
     justifyContent: 'center',
@@ -102,7 +111,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF5F3',
   },
   errorBorder: { borderColor: colors.error },
-  digit: { fontSize: 22, fontWeight: '600', color: colors.ink },
+  digit: { fontSize: 26, fontFamily: loginFonts.bold, color: loginColors.ink },
   nativeInput: {
     position: 'absolute',
     top: 0,
@@ -113,6 +122,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     fontSize: 22,
   },
-  error: { fontSize: 13, color: colors.error, marginTop: 8 },
+  error: {
+    fontSize: 13,
+    fontFamily: loginFonts.regular,
+    color: colors.error,
+    marginTop: 8,
+  },
   disabled: { opacity: 0.56 },
 });

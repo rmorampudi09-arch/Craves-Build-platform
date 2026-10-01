@@ -8,6 +8,8 @@ import {
 } from 'react-native';
 import ArrowRight from 'lucide-react-native/icons/arrow-right';
 import { colors, spacing, touchTarget } from '../../../design/tokens';
+import { AuthSurfaceFinish } from './AuthSurfaceFinish';
+import { loginColors, loginFonts } from './loginVisuals';
 
 interface Props {
   label: string;
@@ -15,6 +17,8 @@ interface Props {
   disabled?: boolean;
   loading?: boolean;
   outline?: boolean;
+  outlineTone?: 'red' | 'neutral';
+  arrow?: boolean;
   accessibilityHint?: string;
 }
 
@@ -24,6 +28,8 @@ export function AuthActionButton({
   disabled,
   loading,
   outline,
+  outlineTone = 'neutral',
+  arrow = true,
   accessibilityHint,
 }: Props) {
   const unavailable = Boolean(disabled || loading);
@@ -38,21 +44,32 @@ export function AuthActionButton({
       style={({ pressed }) => [
         styles.button,
         outline && styles.outline,
+        outline && outlineTone === 'red' && styles.redOutline,
         unavailable && styles.disabled,
         pressed && styles.pressed,
       ]}
     >
-      {!outline ? <View pointerEvents="none" style={styles.shine} /> : null}
-      <Text style={[styles.label, outline && styles.outlineLabel]}>
+      {!outline ? <AuthSurfaceFinish action radius={16} /> : null}
+      <Text
+        style={[
+          styles.label,
+          outline && styles.outlineLabel,
+          outline && outlineTone === 'red' && styles.redOutlineLabel,
+        ]}
+      >
         {label}
       </Text>
-      {loading ? (
-        <ActivityIndicator
-          size="small"
-          color={outline ? colors.flameRedAccessible : colors.white}
-        />
-      ) : !outline ? (
-        <ArrowRight size={22} color={colors.white} />
+      {loading || (!outline && arrow) ? (
+        <View style={styles.trailing} pointerEvents="none">
+          {loading ? (
+            <ActivityIndicator
+              size="small"
+              color={outline ? colors.flameRedAccessible : colors.white}
+            />
+          ) : (
+            <ArrowRight size={23} color={colors.white} />
+          )}
+        </View>
       ) : null}
     </Pressable>
   );
@@ -60,44 +77,47 @@ export function AuthActionButton({
 
 const styles = StyleSheet.create({
   button: {
-    minHeight: touchTarget.minimum,
-    borderRadius: 12,
-    paddingHorizontal: spacing.md,
+    minHeight: Math.max(50, touchTarget.minimum),
+    borderRadius: 16,
+    paddingHorizontal: 40,
     paddingVertical: spacing.sm,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.sm,
     backgroundColor: colors.flameRedAccessible,
     borderWidth: 1,
-    borderColor: colors.flameRedAccessible,
-    overflow: 'hidden',
+    borderColor: loginColors.red,
     boxShadow: [
-      {offsetX: 0, offsetY: 2, blurRadius: 5, color: 'rgba(255,255,255,0.5)', inset: true},
-      {offsetX: 0, offsetY: -2, blurRadius: 4, color: 'rgba(130,0,0,0.18)', inset: true},
+      { offsetX: 0, offsetY: 6, blurRadius: 16, color: 'rgba(246,46,24,0.24)' },
     ],
   },
-  shine: {
+  trailing: {
     position: 'absolute',
-    top: 1,
-    left: 2,
-    right: 2,
-    height: 17,
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.17)',
-    borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.48)',
+    right: 16,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
   },
   label: {
     color: colors.white,
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 17,
+    fontFamily: loginFonts.bold,
     textAlign: 'center',
     flexShrink: 1,
   },
-  outline: { backgroundColor: colors.white, borderColor: '#DDE0E6', boxShadow: [] },
-  outlineLabel: { color: colors.ink, fontWeight: '600' },
-  disabled: { opacity: 0.56 },
+  outline: {
+    backgroundColor: 'transparent',
+    borderColor: loginColors.border,
+    boxShadow: [],
+    paddingHorizontal: spacing.md,
+  },
+  outlineLabel: {
+    color: loginColors.ink,
+    fontFamily: loginFonts.semibold,
+    fontSize: 15,
+  },
+  redOutline: { borderColor: loginColors.red },
+  redOutlineLabel: { color: loginColors.textRed },
+  disabled: { opacity: 0.7 },
   pressed: { opacity: 0.82 },
 });

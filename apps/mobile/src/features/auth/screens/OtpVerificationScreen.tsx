@@ -161,7 +161,11 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
     : 'Resend code';
 
   return (
-    <VideoAuthLayout onBack={() => navigation.goBack()} backDisabled={busy}>
+    <VideoAuthLayout
+      variant="otp"
+      onBack={() => navigation.goBack()}
+      backDisabled={busy}
+    >
       <AuthRoleCards value={role} descriptions={false} />
       <View style={styles.heading}>
         <Text style={styles.title}>Verify your number</Text>
@@ -172,7 +176,9 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
         </Text>
         {phone ? (
           <View style={styles.destinationRow}>
-            <Text style={styles.description}>{maskLoginPhone(phone)}</Text>
+            <Text style={[styles.description, styles.emphasis]}>
+              {maskLoginPhone(phone)}
+            </Text>
             <Pressable
               onPress={() => navigation.goBack()}
               disabled={busy}
@@ -206,10 +212,20 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
         accessibilityRole="button"
         accessibilityState={{ disabled: !canResend }}
         accessibilityHint="Requests a new verification code for this phone number"
+        accessibilityLabel={resendLabel}
         style={styles.linkTouch}
       >
-        <Text style={[styles.link, !canResend && styles.disabled]}>
-          {resendLabel}
+        <Text style={canResend ? styles.link : styles.description}>
+          {phone && !rateLimited && resendSeconds > 0 ? (
+            <>
+              Resend code in{' '}
+              <Text style={styles.emphasis}>
+                {formatLoginCountdown(resendSeconds)}
+              </Text>
+            </>
+          ) : (
+            resendLabel
+          )}
         </Text>
       </Pressable>
       <AuthActionButton
@@ -220,7 +236,10 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
         onPress={finish}
       />
       <Text style={styles.description}>
-        Signing in as {role === 'CHEF' ? 'Chef' : 'Customer'}
+        Signing in as{' '}
+        <Text style={styles.emphasis}>
+          {role === 'CHEF' ? 'Chef' : 'Customer'}
+        </Text>
       </Text>
     </VideoAuthLayout>
   );

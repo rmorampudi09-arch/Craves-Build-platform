@@ -46,6 +46,8 @@ import {ChefAccountStatusScreen} from '../../features/auth/screens/ChefAccountSt
 import {StartupErrorScreen} from '../../features/auth/screens/StartupErrorScreen';
 import {AccountRouterScreen} from '../../features/auth/screens/AccountRouterScreen';
 import {AuthVideoBackground} from '../../features/auth/components/AuthVideoBackground';
+import {useFonts} from 'expo-font';
+import {authHeroFraction, loginFontAssets} from '../../features/auth/components/loginVisuals';
 import type {
   AccountResolution,
   ChefApplicationStatus,
@@ -76,17 +78,19 @@ function useAuthStackScreenOptions() {
 
 function AuthNavigator() {
   const screenOptions = useAuthStackScreenOptions();
-  const [videoEnabled, setVideoEnabled] = React.useState(true);
+  const [authScene, setAuthScene] = React.useState('RoleSelection');
+  const [fontsLoaded, fontError] = useFonts(loginFontAssets);
+  const fontsReady = fontsLoaded || Boolean(fontError);
   return (
     <View style={authCanvasStyles.root}>
-      <AuthVideoBackground enabled={videoEnabled} />
-      <AuthStack.Navigator
+      <AuthVideoBackground
+        enabled={authScene !== 'ForgotPassword' && authScene !== 'PasswordResetSent'}
+        heroFraction={authHeroFraction(authScene)} />
+      {fontsReady ? <AuthStack.Navigator
         screenOptions={screenOptions}
         initialRouteName="RoleSelection"
         screenListeners={({route}) => ({
-          focus: () => setVideoEnabled(
-            route.name !== 'ForgotPassword' && route.name !== 'PasswordResetSent',
-          ),
+          focus: () => setAuthScene(route.name),
         })}>
         <AuthStack.Screen name="RoleSelection" component={RoleSelectionScreen} options={authVideoOptions} />
         <AuthStack.Screen name="PhoneSignIn" component={PhoneSignInScreen} options={authVideoOptions} />
@@ -94,7 +98,7 @@ function AuthNavigator() {
         <AuthStack.Screen name="OtpVerification" component={OtpVerificationScreen} options={authVideoOptions} />
         <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         <AuthStack.Screen name="PasswordResetSent" component={PasswordResetSentScreen} />
-      </AuthStack.Navigator>
+      </AuthStack.Navigator> : null}
     </View>
   );
 }

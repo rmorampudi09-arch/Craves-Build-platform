@@ -88,11 +88,18 @@ function LocalVideoPlayback() {
 }
 
 /** One local player behind the auth stack; never one decoder per stacked form. */
-export function AuthVideoBackground({ enabled }: { enabled: boolean }) {
+export function AuthVideoBackground({
+  enabled,
+  heroFraction = 1,
+}: {
+  enabled: boolean;
+  heroFraction?: number;
+}) {
   const reduceMotion = useReducedMotionPreference();
   return (
     <View
-      style={StyleSheet.absoluteFill}
+      testID="auth-video-background"
+      style={[styles.viewport, { height: `${heroFraction * 100}%` }]}
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
@@ -110,3 +117,7 @@ export function AuthVideoBackground({ enabled }: { enabled: boolean }) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  viewport: { position: 'absolute', top: 0, left: 0, right: 0 },
+});

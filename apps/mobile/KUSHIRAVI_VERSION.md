@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.17 Login Update Built and Installed
+# KUSHIRAVI App Build - Version 1.17.1 Reference Correction Prepared
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -18,6 +18,35 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.17.1 Prepared - Match the login reference appearance
+
+- Starts from clean branch HEAD `bde6914c4793de82b49246c266f028e7c78ded69` and
+  installed v1.17, code 24. Preserve the v1.17 tag and all previous artifacts.
+- Android versionCode `25`, versionName `1.17.1`; planned fresh installable tag
+  `KUSHIRAVI-app-v1.17.1` after verification.
+- Correct the observed v1.17/reference visual differences: wide glossy red
+  CRAVES wordmark, bold reference-style login typography, tall frosted welcome
+  and phone role tiles, compact email/OTP choices, smooth rounded glossy red
+  actions, neutral fields and correct outline/link colors.
+- For this exact-look correction, screenshot proportions are the working visual
+  interpretation: welcome video 46.5% / white panel 53.5%, not the older 75/25
+  text interpretation. Keep the requested video, omitted login footer and Chef
+  signup link. Scope questions about the ratio/wordmark were offered; no reply
+  was available when implementing this interpretation of the latest request.
+- `craves-login-wordmark.png` is a transparent cutout derived with imagegen from
+  the user's Word reference, not a new unrelated brand. Original approved logo
+  assets and splash remain untouched. Local Inter 4.1 Regular/SemiBold/Bold
+  faces, with their OFL license, are scoped to login to avoid the phone's thin
+  system-font rendering; no global typography change.
+- Resize the existing shared local video viewport to the visible hero, so the
+  form does not crop off most of the food. Exact MP4 bytes, muted looping,
+  lifecycle/reduced-motion fallback and single-player structure preserved.
+- Existing auth handlers, validation, OTP gates/cooldown, password recovery,
+  Chef authorization, backend/APIM, payments and other app UI are unchanged.
+  Email/password remains email-only; fixed +91 and no fabricated legal URLs.
+- APK/source ZIP, final commit, build/visual/test evidence will be recorded
+  after verification. Details: `docs\LOGIN_REFERENCE_FIDELITY_V1_17_1.md`.
 
 ### Version 1.17 Built and Installed - Local video login reference
 

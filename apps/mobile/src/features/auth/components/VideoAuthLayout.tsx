@@ -12,9 +12,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
 import { colors, spacing, touchTarget } from '../../../design/tokens';
+import { loginHeroFractions, type LoginLayout } from './loginVisuals';
 
 interface Props extends React.PropsWithChildren {
   welcome?: boolean;
+  variant?: LoginLayout;
   onBack?: () => void;
   backDisabled?: boolean;
 }
@@ -22,10 +24,12 @@ interface Props extends React.PropsWithChildren {
 export function VideoAuthLayout({
   children,
   welcome = false,
+  variant = 'phone',
   onBack,
   backDisabled,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const heroFraction = loginHeroFractions[welcome ? 'welcome' : variant];
   return (
     <KeyboardAvoidingView
       style={styles.root}
@@ -34,10 +38,10 @@ export function VideoAuthLayout({
       <StatusBar barStyle="dark-content" />
       <View
         testID="auth-video-window"
-        style={[styles.hero, welcome && styles.welcomeHero]}
+        style={[styles.hero, { flex: heroFraction }]}
       >
         <Image
-          source={require('../../../assets/brand/craves-approved-logo.png')}
+          source={require('../../../assets/auth/craves-login-wordmark.png')}
           accessibilityLabel="Craves"
           resizeMode="contain"
           style={[styles.logo, { marginTop: insets.top + spacing.md }]}
@@ -61,7 +65,7 @@ export function VideoAuthLayout({
       </View>
       <View
         testID="auth-white-panel"
-        style={[styles.panel, welcome && styles.welcomePanel]}
+        style={[styles.panel, { flex: 1 - heroFraction }]}
       >
         <ScrollView
           style={styles.scroll}
@@ -88,34 +92,32 @@ export function VideoAuthLayout({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: 'transparent' },
-  hero: { flex: 0.4, alignItems: 'center', overflow: 'hidden' },
-  welcomeHero: { flex: 0.75 },
+  hero: { alignItems: 'center', overflow: 'hidden' },
   panel: {
-    flex: 0.6,
-    backgroundColor: colors.white,
+    backgroundColor: '#FEFEFF',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     overflow: 'hidden',
   },
-  welcomePanel: { flex: 0.25 },
   scroll: { flex: 1 },
   content: {
     width: '100%',
     maxWidth: 520,
     alignSelf: 'center',
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
-    gap: spacing.xs,
+    paddingTop: 10,
+    gap: 12,
   },
-  welcomeContent: { paddingTop: spacing.xs, gap: 6 },
   handle: {
-    width: 44,
-    height: 4,
-    borderRadius: 2,
+    width: 50,
+    height: 5,
+    borderRadius: 3,
     backgroundColor: '#CED1D8',
     alignSelf: 'center',
+    marginBottom: 10,
   },
-  logo: { width: 104, height: 104 },
+  welcomeContent: { gap: 18, paddingTop: 12 },
+  logo: { width: '65%', maxWidth: 310, aspectRatio: 3 },
   back: {
     position: 'absolute',
     left: spacing.md,

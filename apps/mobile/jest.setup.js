@@ -105,6 +105,10 @@ jest.mock('expo-haptics', () => ({
   selectionAsync: jest.fn(async () => undefined),
 }));
 
+jest.mock('expo-font', () => ({
+  useFonts: jest.fn(() => [true, null]),
+}));
+
 jest.mock('expo-video', () => {
   const React = require('react');
   const {View} = require('react-native');

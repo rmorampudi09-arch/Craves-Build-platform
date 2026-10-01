@@ -1,21 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, BookOpen, GraduationCap, LayoutDashboard, LockKeyhole, Menu, Search, ShieldCheck, Truck, X } from "lucide-react";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import type { AdminIdentity } from "@/lib/admin-contract";
-import type { SessionState } from "@/lib/admin-renewal";
+import { retryAdminSession, type SessionState } from "@/lib/admin-renewal";
 import { AcademySkeleton } from "@/app/admin/academy/academy-ui";
 import "@/app/admin/academy/academy.css";
 
 /** Scoped to Academy: other administrative workspaces retain their existing theme. */
 export function AcademyWorkspace({ identity, message, children, sessionState, onSignOut }: { identity: AdminIdentity | null; message: string; children: ReactNode; sessionState: SessionState; onSignOut: () => void }) {
   const drawer = useRef<HTMLDialogElement>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState("");
   const menuButton = useRef<HTMLButtonElement>(null);
   const close = () => { drawer.current?.close(); menuButton.current?.focus(); };
   const allowInteraction = identity !== null && sessionState === "ready" && message === "";
   useEffect(() => { if (!allowInteraction) drawer.current?.close(); }, [allowInteraction]);
+  async function retryConnection() {
+    if (retrying) return;
+    setRetrying(true); setRetryError("");
+    try { await retryAdminSession(); }
+    catch { setRetryError("Connection could not be restored. Retry or sign in again."); }
+    finally { setRetrying(false); }
+  }
   const nav = <>
     <div className="ca-shell-brand"><CravesLogo size="md" priority /><div><strong>CRAVES</strong><span>INTERNAL ACADEMY</span></div></div>
     <nav className="ca-shell-nav" aria-label="Craves workspaces">
@@ -45,7 +54,7 @@ export function AcademyWorkspace({ identity, message, children, sessionState, on
         <div className="ca-shell-account"><span className="ca-shell-avatar"><ShieldCheck size={18} /></span><div><strong>{identity?.displayName || "Administrator"}</strong><small>{identity ? "Role verified" : "Checking access"}</small></div></div>
       </header>
       <main id="ca-main" className="ca-shell-content" tabIndex={-1}>
-        {identity ? <><div hidden={!allowInteraction}>{children}</div>{!allowInteraction && <section className="ca-error-state"><div><h2>Reconnecting securely</h2><p role="status">Your answers are kept in this tab. We’ll continue when your session is verified.</p></div></section>}</> : verifying ? <AcademySkeleton /> : <section className="ca-error-state"><span className="ca-state-icon"><LockKeyhole size={32} /></span><div><span className="ca-kicker">ADMINISTRATOR ACCESS</span><h2>Continue securely to Academy</h2><p role="alert">{message || "Sign in with an authorized Craves administrator account."}</p><Link className="ca-primary" href="/sign-in?returnTo=%2Fadmin%2Facademy">Administrator sign in</Link></div></section>}
+        {identity ? <><div hidden={!allowInteraction}>{children}</div>{!allowInteraction && <section className="ca-error-state"><div><h2>Reconnecting securely</h2><p role="status">Your answers are kept in this tab. We’ll continue when your session is verified.</p><button type="button" className="ca-secondary" disabled={retrying} onClick={() => void retryConnection()}>{retrying ? "Reconnecting…" : "Retry connection"}</button>{retryError && <p role="alert">{retryError}</p>}</div></section>}</> : verifying ? <AcademySkeleton /> : <section className="ca-error-state"><span className="ca-state-icon"><LockKeyhole size={32} /></span><div><span className="ca-kicker">ADMINISTRATOR ACCESS</span><h2>Continue securely to Academy</h2><p role="alert">{message || "Sign in with an authorized Craves administrator account."}</p><Link className="ca-primary" href="/sign-in?returnTo=%2Fadmin%2Facademy">Administrator sign in</Link></div></section>}
       </main>
     </div>
   </div>;

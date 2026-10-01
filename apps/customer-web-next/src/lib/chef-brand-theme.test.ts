@@ -16,7 +16,7 @@ const chefTheme = readFileSync(
   "utf8",
 );
 
-test("chef workspace uses the approved green, white and neutral palette", () => {
+test("chef workspace keeps branded actions, the shared header and readable neutrals", () => {
   for (const color of ["#f62e18", "#c92716", "#000000", "#ffffff"]) {
     assert.match(theme, new RegExp(color, "i"));
   }
@@ -24,6 +24,8 @@ test("chef workspace uses the approved green, white and neutral palette", () => 
   assert.match(pageHeader, /bg-white/);
   assert.match(pageHeader, /text-\[#1A1A1A\]/i);
   assert.match(pageHeader, /text-\[#178F56\]/i);
+  assert.match(dashboard, /bg-\[#F62E18\][^"]*text-white/i);
+  assert.match(dashboard, /text-\[#F62E18\]/i);
   assert.match(chefTheme, /--chef-action:\s*#178f56/i);
   assert.match(chefTheme, /--chef-action-hover:\s*#147b4a/i);
   assert.match(dashboard, /#F1F3F5/i);

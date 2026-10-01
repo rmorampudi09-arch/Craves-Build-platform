@@ -16,6 +16,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
@@ -26,6 +27,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import static in.craves.integration.payout.ManualSettlementException.Reason.*;
 
 /** Records externally executed Craves bank payments. Contains no provider or money-sending client. */
 @Service
@@ -40,7 +42,8 @@ public class ManualChefSettlementService {
                               Instant paidAt, Instant createdAt) {}
     public record Balance(UUID chefIdentityId, String available, boolean onHold, boolean enabled,
                           boolean manualRequestUsedToday, List<Instruction> recent,
-                          in.craves.integration.settlement.ChefAccountingSummary accounting) {}
+                          in.craves.integration.settlement.ChefAccountingSummary accounting,
+                          List<String> blockers) {}
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
     private final FinancePolicyService policies;
@@ -52,15 +55,31 @@ public class ManualChefSettlementService {
         this.jdbc=jdbc; this.json=json; this.policies=policies; this.ledger=ledger; this.configured=configured;
     }
     public boolean configured() { return configured; }
-    public boolean enabled() { var p=policies.current(); return configured && p.policyId()!=null && p.settings().ledgerEnabled() && p.settings().manualWithdrawalsEnabled(); }
+    public boolean enabled() { return runtimeBlockers().isEmpty(); }
+    private List<ManualSettlementException.Reason> runtimeBlockers() {
+        var p=policies.current();var blockers=new ArrayList<ManualSettlementException.Reason>();
+        if(!configured) blockers.add(MANUAL_SETTLEMENT_RUNTIME_DISABLED);
+        if(p.policyId()==null) blockers.add(FINANCE_POLICY_NOT_ACTIVATED);
+        if(!p.settings().ledgerEnabled()) blockers.add(LEDGER_DISABLED_BY_POLICY);
+        if(!p.settings().manualWithdrawalsEnabled()) blockers.add(MANUAL_WITHDRAWALS_DISABLED_BY_POLICY);
+        if(!ledger.enabled()) blockers.add(JOURNAL_POSTING_DISABLED);
+        return List.copyOf(blockers);
+    }
     public boolean held(UUID chef) { return Boolean.TRUE.equals(jdbc.queryForObject("SELECT payment_schema.finance_manual_money_held(?)",Boolean.class,chef)); }
+    private boolean initialized(UUID chef) { return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM payment_schema.finance_chef_payout_control WHERE chef_identity_id=?)",Boolean.class,chef)); }
     public BigDecimal available(UUID chef) {
         return held(chef)?BigDecimal.ZERO:jdbc.queryForObject("SELECT coalesce(sum(p.amount),0) FROM payment_schema.finance_payable p WHERE p.chef_identity_id=? AND p.manual_available_at<=now() AND NOT EXISTS(SELECT 1 FROM payment_schema.finance_payout_allocation a WHERE a.payable_id=p.id AND a.active)",BigDecimal.class,chef).add(ReferralManualPayables.total(jdbc,chef));
     }
     public Balance balance(CravesPrincipal actor, UUID chef) {
         FinancePolicyService.reader(actor); requireChefId(chef);
-        return new Balance(chef,LedgerMoney.text(available(chef)),held(chef),enabled(),usedToday(chef),listForChef(chef),
-                in.craves.integration.settlement.ChefAccountingSummary.read(jdbc,chef));
+        var runtime=runtimeBlockers();boolean initialized=initialized(chef),held=held(chef),used=usedToday(chef);BigDecimal amount=available(chef);
+        var blockers=new ArrayList<String>(runtime.stream().map(Enum::name).toList());
+        if(!initialized) blockers.add(CHEF_FINANCE_NOT_INITIALIZED.name());
+        if(held && initialized) blockers.add(CHEF_PAYMENT_HELD.name());
+        if(used) blockers.add(DAILY_MANUAL_REQUEST_ALREADY_USED.name());
+        if(amount.signum()<=0 && !held) blockers.add("NO_AVAILABLE_EARNINGS");
+        return new Balance(chef,LedgerMoney.text(amount),held,runtime.isEmpty(),used,listForChef(chef),
+                in.craves.integration.settlement.ChefAccountingSummary.read(jdbc,chef),List.copyOf(blockers));
     }
     public List<Instruction> list(CravesPrincipal actor) {
         FinancePolicyService.reader(actor);
@@ -90,18 +109,18 @@ public class ManualChefSettlementService {
         var prior=jdbc.queryForList("SELECT id,payout_channel,manual_request_hash FROM payment_schema.finance_payout_instruction WHERE chef_identity_id=? AND request_key=?",chef,request.requestKey());
         if(!prior.isEmpty()) {
             var p=prior.getFirst();
-            if(!"CRAVES_MANUAL".equals(p.get("payout_channel")) || !hash.equals(p.get("manual_request_hash"))) throw conflict("Request identity was reused with different settlement context");
+            if(!"CRAVES_MANUAL".equals(p.get("payout_channel")) || !hash.equals(p.get("manual_request_hash"))) throw rejected(SETTLEMENT_REQUEST_CONTEXT_CHANGED);
             return get((UUID)p.get("id"));
         }
         requireEnabled();
-        if(held(chef)) throw conflict("Chef payment is held for financial review");
-        if(usedToday(chef)) throw conflict("One accepted withdrawal is allowed per Asia/Kolkata calendar day");
+        if(held(chef)) throw rejected(initialized(chef)?CHEF_PAYMENT_HELD:CHEF_FINANCE_NOT_INITIALIZED);
+        if(usedToday(chef)) throw rejected(DAILY_MANUAL_REQUEST_ALREADY_USED);
         var rows=jdbc.query("SELECT p.id,p.amount FROM payment_schema.finance_payable p WHERE p.chef_identity_id=? AND p.manual_available_at<=now() AND NOT EXISTS(SELECT 1 FROM payment_schema.finance_payout_allocation a WHERE a.payable_id=p.id AND a.active) ORDER BY p.id FOR UPDATE",
                 (rs,n)->new Payable(rs.getObject(1,UUID.class),rs.getBigDecimal(2)),chef);
         var referralRows=ReferralManualPayables.available(jdbc,chef);
         BigDecimal total=rows.stream().map(Payable::amount).reduce(BigDecimal.ZERO,BigDecimal::add)
             .add(referralRows.stream().map(ReferralManualPayables.Payable::amount).reduce(BigDecimal.ZERO,BigDecimal::add));
-        if(total.signum()<=0 || total.compareTo(expected)!=0) throw conflict("Available balance changed or is empty; refresh before reserving");
+        if(total.signum()<=0 || total.compareTo(expected)!=0) throw rejected(AVAILABLE_BALANCE_CHANGED);
         UUID id=UUID.randomUUID();
         jdbc.update("INSERT INTO payment_schema.finance_payout_instruction(id,chef_identity_id,request_key,mode,amount,status,policy_revision,payout_channel,manual_request_hash) VALUES (?,?,?,'MANUAL',?,'RESERVED',?,'CRAVES_MANUAL',?)",
                 id,chef,request.requestKey(),total,policies.current().revision(),hash);
@@ -122,14 +141,14 @@ public class ManualChefSettlementService {
         String requestHash=hash(request);
         var prior=jdbc.queryForList("SELECT request_hash FROM payment_schema.finance_manual_settlement_action WHERE instruction_id=? AND action_key=?",id,request.actionKey());
         if(!prior.isEmpty()) {
-            if(!requestHash.equals(prior.getFirst().get("request_hash"))) throw conflict("Action identity was reused with changed evidence");
+            if(!requestHash.equals(prior.getFirst().get("request_hash"))) throw rejected(SETTLEMENT_ACTION_CONTEXT_CHANGED);
             return get(id);
         }
         long version=((Number)row.get("manual_version")).longValue();
-        if(version!=request.expectedVersion()) throw conflict("Settlement changed; refresh before acting");
+        if(version!=request.expectedVersion()) throw rejected(SETTLEMENT_VERSION_CHANGED);
         String state=(String)row.get("status");
         String target=switch(request.action()) {
-            case AUTHORIZE_TRANSFER -> { requireState(state,"RESERVED"); requireEnabled(); if(held(chef))throw conflict("Chef payment is held for financial review"); yield "SUBMITTING"; }
+            case AUTHORIZE_TRANSFER -> { requireState(state,"RESERVED"); requireEnabled(); if(held(chef))throw rejected(CHEF_PAYMENT_HELD); yield "SUBMITTING"; }
             case CANCEL_RESERVATION -> { requireState(state,"RESERVED"); yield "CANCELLED"; }
             case MARK_UNKNOWN -> { requireState(state,"SUBMITTING"); yield "UNKNOWN"; }
             case CONFIRM_PAID -> { requireState(state,"SUBMITTING","UNKNOWN","REVIEW_REQUIRED"); validateMoneyEvidence(row,request,false); yield "PAID"; }
@@ -138,6 +157,7 @@ public class ManualChefSettlementService {
         };
         UUID journal=null;
         if(request.action()==Action.CONFIRM_PAID || request.action()==Action.CONFIRM_REVERSED) {
+            if(!ledger.enabled()) throw rejected(JOURNAL_POSTING_DISABLED);
             boolean reversal=request.action()==Action.CONFIRM_REVERSED;
             BigDecimal amount=(BigDecimal)row.get("amount");
             var lines=reversal?inverse((UUID)row.get("settlement_journal_id")):List.of(
@@ -181,7 +201,7 @@ public class ManualChefSettlementService {
         return new Change(r.actionKey(),r.expectedVersion(),r.action(),reason,destination,evidence,bank,r.amount(),r.paidAt()==null?null:r.paidAt().truncatedTo(ChronoUnit.MICROS));
     }
     private void validateMoneyEvidence(java.util.Map<String,Object> row,Change r,boolean reversal) {
-        if(((BigDecimal)row.get("amount")).compareTo(exactMoney(r.amount()))!=0) throw conflict("Bank amount must equal the reserved amount");
+        if(((BigDecimal)row.get("amount")).compareTo(exactMoney(r.amount()))!=0) throw rejected(BANK_AMOUNT_MISMATCH);
         Timestamp start=(Timestamp)row.get(reversal?"manual_paid_at":"manual_authorized_at");
         if(start==null || r.paidAt().isBefore(start.toInstant()) || r.paidAt().isAfter(Instant.now().plusSeconds(30))) throw bad("Bank time must follow authorization and cannot be in the future");
     }
@@ -191,7 +211,7 @@ public class ManualChefSettlementService {
     private Instruction get(UUID id) { return jdbc.query("SELECT * FROM payment_schema.finance_payout_instruction WHERE id=? AND payout_channel='CRAVES_MANUAL'",this::map,id).stream().findFirst().orElseThrow(ManualChefSettlementService::missing); }
     private Instruction map(ResultSet rs,int n)throws SQLException { return new Instruction(rs.getObject("id",UUID.class),rs.getObject("chef_identity_id",UUID.class),LedgerMoney.text(rs.getBigDecimal("amount")),rs.getString("status"),rs.getLong("manual_version"),rs.getString("manual_destination_reference"),rs.getString("transfer_reference"),instant(rs.getTimestamp("manual_authorized_at")),instant(rs.getTimestamp("manual_paid_at")),rs.getTimestamp("created_at").toInstant()); }
     private boolean usedToday(UUID chef) { return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM payment_schema.finance_manual_withdrawal_day WHERE chef_identity_id=? AND business_date=?)",Boolean.class,chef,java.sql.Date.valueOf(Instant.now().atZone(FinancePolicy.ZONE).toLocalDate()))); }
-    private void requireEnabled() { if(!enabled())throw conflict("Manual Craves settlement is not enabled by the reviewed policy"); }
+    private void requireEnabled() { var blockers=runtimeBlockers();if(!blockers.isEmpty())throw rejected(blockers.getFirst()); }
     private void lockChef(UUID chef) {
         jdbc.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",rs->{return null;},"chef-payout/"+chef);
         // Serialize new decisions with source/refund triggers that establish a chef hold.
@@ -201,12 +221,12 @@ public class ManualChefSettlementService {
     private String hash(Object value) { try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json.writeValueAsBytes(value)));}catch(Exception e){throw bad("Invalid settlement context");} }
     private static BigDecimal exactMoney(String value) { if(value==null || !value.matches("[0-9]{1,14}\\.[0-9]{2}"))throw bad("Amount must be an exact decimal string with two fractional digits");return LedgerMoney.parse(value); }
     private static String reference(String value,int max) { if(value==null)return null;value=value.trim();if(value.isEmpty() || value.length()>max || value.chars().anyMatch(Character::isISOControl))throw bad("Invalid evidence reference");return value; }
-    private static void requireState(String state,String...allowed) { if(!Set.of(allowed).contains(state))throw conflict("Action does not apply to the current settlement state"); }
+    private static void requireState(String state,String...allowed) { if(!Set.of(allowed).contains(state))throw rejected(SETTLEMENT_ACTION_NOT_ALLOWED); }
     private static void requireChefId(UUID chef) { if(chef==null)throw bad("Chef identity is required"); }
     private static Instant instant(Timestamp value) { return value==null?null:value.toInstant(); }
     private static Timestamp timestamp(Instant value) { return value==null?null:Timestamp.from(value); }
     private static ResponseStatusException bad(String message) { return new ResponseStatusException(HttpStatus.BAD_REQUEST,message); }
-    private static ResponseStatusException conflict(String message) { return new ResponseStatusException(HttpStatus.CONFLICT,message); }
+    private static ManualSettlementException rejected(ManualSettlementException.Reason reason) { return new ManualSettlementException(reason); }
     private static ResponseStatusException missing() { return new ResponseStatusException(HttpStatus.NOT_FOUND,"Manual settlement not found"); }
     private static ResponseStatusException forbidden() { return new ResponseStatusException(HttpStatus.FORBIDDEN,"Chef role is required"); }
     private record Payable(UUID id,BigDecimal amount) {}

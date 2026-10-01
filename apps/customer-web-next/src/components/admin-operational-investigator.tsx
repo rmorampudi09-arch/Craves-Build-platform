@@ -2,7 +2,7 @@
 
 import { adminFetch } from "@/lib/admin-renewal";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type {
   AdminInvestigationResource,
   AdminInvestigationResult
@@ -27,6 +27,7 @@ function statusMessage(responseStatus: number, code: string | null): string {
   if (responseStatus === 401) return "Administrator session expired. Sign in again.";
   if (responseStatus === 403) return "Administrator access is required, or the request origin was rejected.";
   if (responseStatus === 404) return "No matching backend record was found.";
+  if (code === "SESSION_RENEWED_RETRY_REQUIRED") return "Your session was renewed. Submit the investigation again to continue.";
   if (responseStatus === 400) return "Check the resource UUID and provide an audit reason of 10–500 characters.";
   if (code === "INVALID_INVESTIGATION_RESPONSE") return "The backend returned an unexpected contract. No raw response was displayed.";
   return "The investigation service is temporarily unavailable.";
@@ -39,9 +40,13 @@ export function AdminOperationalInvestigator({ initialReference = "" }: { initia
   const [result, setResult] = useState<AdminInvestigationResult | null>(null);
   const [message, setMessage] = useState("Choose a resource and enter its exact UUID.");
   const [busy, setBusy] = useState(false);
+  const [tone, setTone] = useState<"info" | "error" | "success" | "busy">("info");
+  const inFlight = useRef(false);
 
   async function investigate(event: React.FormEvent) {
     event.preventDefault();
+    if (inFlight.current) return;
+    setTone("error");
     const normalizedReason = reason.replace(/[\r\n]+/g, " ").trim();
     if (!UUID.test(resourceId)) {
       setResult(null);
@@ -54,8 +59,11 @@ export function AdminOperationalInvestigator({ initialReference = "" }: { initia
       return;
     }
 
+    inFlight.current = true;
     setBusy(true);
-    setMessage("");
+    setResult(null);
+    setTone("busy");
+    setMessage("Loading operational evidence…");
     try {
       const response = await adminFetch("/api/admin/operations/investigate", {
         method: "POST",
@@ -64,39 +72,42 @@ export function AdminOperationalInvestigator({ initialReference = "" }: { initia
         cache: "no-store"
       });
       const body = await response.json().catch(() => null) as (AdminInvestigationResult & { code?: string }) | null;
-      if (!response.ok || !body || typeof body.correlationId !== "string") {
-        throw new Error(statusMessage(response.status, body?.code ?? null));
+      if (!response.ok || !body || typeof body.correlationId !== "string" || body.resource !== resource || typeof body.resourceId !== "string" || body.resourceId.toLowerCase() !== resourceId.toLowerCase() || !Array.isArray(body.summary) || !Array.isArray(body.timeline)) {
+        throw new Error(statusMessage(response.status, body?.code ?? "INVALID_INVESTIGATION_RESPONSE"));
       }
       setResult(body);
-      setMessage("Read-only evidence loaded. The owning service recorded the reason and correlation ID.");
+      setTone("success");
+      setMessage("Evidence loaded. Your investigation reason has been recorded.");
     } catch (error) {
       setResult(null);
+      setTone("error");
       setMessage(error instanceof Error ? error.message : "Investigation failed.");
     } finally {
       setBusy(false);
+      inFlight.current = false;
     }
   }
 
   const selected = RESOURCES.find(option => option.value === resource) ?? RESOURCES[0];
 
   return <div className="grid gap-7 lg:grid-cols-[0.72fr_1.28fr]">
-    <form onSubmit={investigate} className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950">
+    <form onSubmit={investigate} aria-busy={busy} className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950">
       <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930CA]">Audited read only</p>
       <h2 className="mt-3 text-2xl font-bold">Investigate an operation</h2>
-      <p className="mt-3 text-sm leading-6 text-slate-600">Every successful lookup is re-authorized and audit-recorded by the owning Spring service. This screen cannot retry, refund, book, cancel, suspend or change any business state.</p>
+      <p className="mt-3 text-sm leading-6 text-slate-600">Review the record and its timeline. Include a short reason so other admins can follow the investigation.</p>
       <label className="mt-5 block text-sm font-bold">Resource
-        <select value={resource} onChange={event => { setResource(event.target.value as AdminInvestigationResource); setResult(null); }} className="mt-2 min-h-12 w-full rounded-2xl bg-white px-4">
+        <select value={resource} disabled={busy} onChange={event => { setResource(event.target.value as AdminInvestigationResource); setResult(null); }} className="mt-2 min-h-12 w-full rounded-2xl bg-white px-4">
           {RESOURCES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
       </label>
       <label className="mt-5 block text-sm font-bold">{selected.hint}
-        <input value={resourceId} onChange={event => setResourceId(event.target.value.trim())} maxLength={64} autoComplete="off" spellCheck={false} className="mt-2 min-h-12 w-full rounded-2xl bg-white px-4 font-mono text-sm" required />
+        <input value={resourceId} disabled={busy} onChange={event => { setResourceId(event.target.value.trim()); setResult(null); }} maxLength={64} autoComplete="off" spellCheck={false} className="mt-2 min-h-12 w-full rounded-2xl bg-white px-4 font-mono text-sm" required />
       </label>
       <label className="mt-5 block text-sm font-bold">Operational reason
-        <textarea value={reason} onChange={event => setReason(event.target.value)} minLength={10} maxLength={500} className="mt-2 min-h-32 w-full rounded-2xl bg-white p-4" placeholder="Example: Investigating support case CRV-2026-001 after customer escalation." required />
+        <textarea value={reason} disabled={busy} onChange={event => setReason(event.target.value)} minLength={10} maxLength={500} className="mt-2 min-h-32 w-full rounded-2xl bg-white p-4" placeholder="Example: Checking a delayed meal after customer escalation." required />
       </label>
       <button disabled={busy} className="mt-5 min-h-12 w-full rounded-2xl bg-[#6930CA] font-bold text-white disabled:opacity-50">{busy ? "Loading evidence…" : "Run read-only investigation"}</button>
-      {message && <p className="mt-4 text-sm leading-6 text-slate-600" role="status">{message}</p>}
+      {message && <p className="cr-action-notice mt-4" data-tone={tone} role={tone === "error" ? "alert" : "status"}>{message}</p>}
     </form>
 
     <section aria-live="polite">

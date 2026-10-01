@@ -19,6 +19,46 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Delivery Intelligence / Pidge Routing Configuration v1, 2026-10-02
+
+- User requested investigation of order `05b31712-f30e-4bb5-a922-2da7ae0943e9`,
+  Pidge priority through delivery intelligence, and temporary Borzo disablement.
+  Confirmed clean `KUSHIRAVI-app-build` before production changes. No GitHub push.
+- Confirmed exact command `b3089845-6dc8-3f73-9672-af829b169692`, Chef sub-order
+  `78110b83-cce9-4fe8-981e-36c3a2ce25a3`, DEAD_LETTER after five attempts:
+  `503 SERVICE_UNAVAILABLE "Delivery intelligence is disabled"`.
+  No delivery job, assignment or Pidge booking exists for that order.
+- Integration Service: set `CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true` and
+  `BORZO_API_ENABLED=false`. Same immutable image, new healthy revision
+  `ca-craves-integration-service-pr--pidge-1002`, one ready replica, 100% traffic.
+- Used the existing authenticated provider-registration API to set only Borzo's
+  active state false, preserving its name, adapter, coverage and capabilities.
+  Pidge remains active; all other providers were already inactive. New routing
+  therefore considers only Pidge through the existing intelligence algorithm;
+  no hardcoded booking shortcut, scoring change or artificial success state.
+- Found the Order Service delivery-status consumer also disabled. Enabled only
+  `CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=true`, same image, healthy revision
+  `ca-craves-order-service-prodlow--delivery-1002`, one replica, 100% traffic.
+  Existing Service Bus receiver role/subscription preserved; startup and actual
+  receiver-link activation confirmed. No new permissions or resources created.
+- Both service health checks UP. Pidge protected readiness reports production
+  ready / active / no blockers. Before/after fingerprints match for all other
+  service template/configuration settings after neutralizing only these flags
+  and revision suffixes. Original dead letter retained: no replay, queue drain,
+  order/payment/refund edit, new quote, booking or provider dispatch.
+- Safe unavailable-candidate diagnostic returned opaque HTTP 503, so it was
+  not counted as proof. A subsequent deliberate unknown-provider diagnostic
+  returned HTTP 400 rather than disabled-engine 503; no assignments/jobs/bookings
+  were created. Genuine new-order / rider / tracking acceptance remains for
+  the user's requested retest. No production delivery status was fabricated.
+- Temporary one-address database firewall rule removed; original rules restored.
+  This is backend configuration only: no app-code/UI changes, build, reinstall,
+  APK version increment or moved APK tag. Mobile remains v1.19/code 30, source
+  `bb6e81d23623b023bf9c8c6ab22d5a9856b8e695`, tag `KUSHIRAVI-app-v1.19`.
+- Local configuration checkpoint tag `KUSHIRAVI-delivery-pidge-routing-v1`
+  (not an installable version). Receipt, exact images/settings, verification
+  boundaries and rollback: `docs\delivery-pidge-routing-20261002.md`.
+
 ### MSG91 Mobile Integration Configuration v1, 2026-10-02
 
 - User explicitly requested enabling Mobile Integration and signed into the

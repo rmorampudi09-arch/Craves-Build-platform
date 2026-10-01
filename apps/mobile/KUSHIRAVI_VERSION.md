@@ -19,6 +19,49 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Chef Application Auth Connection v1, 2026-10-01 - Backend configuration only
+
+- Requested fix for Chef application submission failing to save the address.
+  Confirmed clean `KUSHIRAVI-app-build` before investigation. Mobile address
+  field names/limits match the main-branch backend DTO and database columns;
+  no form, layout, address rule or mobile runtime change was needed.
+- Running backend image `craves/user-chef-service:activate-69`, immutable digest
+  `sha256:cd5b819909bedef99065269cca6dd69346865d3d40b45ddb33d3206ac74fb6da`,
+  contains the verified-email guard before application INSERT/UPDATE. Its
+  configured internal Auth URL included `/api/v1/auth`, which that guard rejects
+  with `503 EMAIL_AUTHORITY_UNAVAILABLE` before saving any application fields.
+- Corrected only `CRAVES_AUTH_INTERNAL_BASE_URL` on existing Azure app
+  `ca-craves-user-chef-service-prod` to the existing Auth service HTTPS origin.
+  Live revision: `ca-craves-user-chef-service-prod--chef-auth-20261001`;
+  Succeeded/Running/Healthy, one replica, 100% traffic. Same backend image,
+  credentials/references, resources, scale, ingress and verification rules.
+  No database/schema write, APIM edit, new resource or financial activation.
+- Both native service health endpoints returned HTTP 200 / UP. From inside
+  the corrected revision, its actual configured Auth origin and existing
+  service credential reached the protected identity lookup. A deliberately
+  nonexistent identity returned honest `400 IDENTITY_NOT_FOUND`, not an
+  authentication or connection error. No real identity or application changed.
+- Like-for-like original/corrected revision template hashes are identical
+  after neutralizing only the requested Auth URL and revision suffix:
+  `5E01A0C584E3E5ED4AEC3EF418938BE3F81FF1DB2DD48216AC6984C1793C77AA`.
+  App configuration fingerprint is unchanged. Earlier app/revision API-view
+  comparisons flagged representation/default differences; retained as diagnostic
+  evidence, not passed guards or proof of unrelated running changes.
+- TypeScript passed. Mobile application/domain/validation: 3 suites / 10 tests
+  passed. Existing backend canonical-email and Auth HTTP guards: 2 classes /
+  6 tests passed, no failures/errors/skips. Anonymous application POST remains
+  HTTP 401. No OTP, new application, approval or credential bypass performed.
+- Real applicant submission/PENDING status and saved-address readback remain
+  a manual acceptance check: the phone account has existing approved Chef
+  access and must not be overwritten to manufacture a successful test.
+- Local configuration checkpoint tag: `KUSHIRAVI-chef-application-auth-v1`
+  (not an APK tag). Runtime app remains `KUSHIRAVI-app-v1.18`, source
+  `f1d6ad5a3a30e3920dcaa88d628eb4ec24cdde0a`, code `29` / name `1.18`;
+  APK/source ZIP and all prior tags remain untouched. No rebuild, reinstall,
+  version increment, GitHub push or change to the original source branch.
+- Detailed cause, exact settings, evidence paths, repeat checks and rollback:
+  `docs\chef-application-auth-connection-20261001.md`.
+
 ### Version 1.18 Installed And Phone-Checked, 2026-10-01
 
 - Requested installation and live checks on the connected phone. Verified clean

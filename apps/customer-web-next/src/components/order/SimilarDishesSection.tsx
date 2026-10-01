@@ -15,7 +15,7 @@ export function SimilarDishesSection({ dishes }: { dishes: Dish[] }) {
         </button>
       </div>
       <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
-        {dishes.map((dish) => (
+        {dishes.map((dish, index) => (
           <Link
             key={dish.id}
             to="/dish/$id"
@@ -23,7 +23,14 @@ export function SimilarDishesSection({ dishes }: { dishes: Dish[] }) {
             className="w-40 shrink-0 overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white transition hover:border-[#F62E18]/40"
           >
             <div className="relative aspect-square bg-[#F1F3F5]">
-              <img src={dish.img} alt={dish.name} className="h-full w-full object-cover" />
+              <img
+                src={dish.img}
+                alt={dish.name}
+                loading={index < 3 ? "eager" : "lazy"}
+                decoding="async"
+                fetchPriority={index === 0 ? "high" : "auto"}
+                className="h-full w-full object-cover"
+              />
               <WishlistHeartButton
                 item={{ id: dish.id, name: dish.name, chef: dish.chef, price: dish.price, img: dish.img }}
                 className="absolute right-2 top-2"

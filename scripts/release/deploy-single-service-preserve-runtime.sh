@@ -447,9 +447,9 @@ fi
 
 if [[ "$WAIT_RC" -eq 20 ]]; then
   if verify_previous_ready_revision_intact; then
-    fail 'Deployment verification was inconclusive after 300 seconds. The previous ready revision is still healthy and serving; retry only after inspecting Azure control-plane status.'
+    fail "Deployment verification was inconclusive after $((READY_ATTEMPTS * READY_SLEEP_SECONDS)) seconds. The previous ready revision is still healthy and serving; retry only after inspecting Azure control-plane status."
   fi
-  fail 'Deployment verification was inconclusive after 300 seconds. Automatic rollback was suppressed because Azure did not report an explicit unhealthy state. Inspect the latest revision before retrying.'
+  fail "Deployment verification was inconclusive after $((READY_ATTEMPTS * READY_SLEEP_SECONDS)) seconds. Automatic rollback was suppressed because Azure did not report an explicit unhealthy state. Inspect the latest revision before retrying."
 fi
 
 [[ "$WAIT_RC" -eq 0 ]] || fail "Deployment verification failed with unexpected status $WAIT_RC."

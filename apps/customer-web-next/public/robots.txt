@@ -2,3 +2,26 @@ User-agent: *
 Allow: /
 Disallow: /orders/
 Disallow: /api/
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /orders/
+Disallow: /api/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /orders/
+Disallow: /api/
+
+User-agent: GPTBot
+Allow: /
+Disallow: /orders/
+Disallow: /api/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /orders/
+Disallow: /api/
+
+Sitemap: https://craves.in/sitemap.xml
+# AI discovery brief: https://craves.in/llms.txt

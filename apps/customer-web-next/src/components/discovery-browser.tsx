@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import type { NearbyKitchenDiscovery, NearbyMenuDiscovery } from "@/lib/discovery-contract";
 import { formatDistance } from "@/lib/discovery-contract";
@@ -143,7 +144,7 @@ export function DiscoveryBrowser() {
               {value === "menu-items" ? "Nearby dishes" : "Home kitchens"}
             </button>
           ))}
-          <a href="/cart" className="ml-auto rounded-full border border-[#6930CA] px-4 py-2 text-sm font-bold text-[#6930CA]">View cart</a>
+          <Link href="/cart" className="ml-auto rounded-full border border-[#6930CA] px-4 py-2 text-sm font-bold text-[#6930CA]">View cart</Link>
         </div>
 
         <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">

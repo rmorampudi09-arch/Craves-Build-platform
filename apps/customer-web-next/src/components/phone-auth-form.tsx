@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
-  type ConfirmationResult,
   RecaptchaVerifier,
   signInWithPhoneNumber,
 } from "firebase/auth";
+import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from "@/lib/msg91-browser";
 import { getFirebaseBrowserClient } from "@/lib/firebase-client";
 import { safeReturnPath } from "@/lib/auth-contract";
 
@@ -26,7 +26,7 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
   );
   const [busy, setBusy] = useState(false);
   const [resendIn, setResendIn] = useState(0);
-  const confirmation = useRef<ConfirmationResult | null>(null);
+  const confirmation = useRef<PhoneConfirmation | null>(null);
   const verifier = useRef<RecaptchaVerifier | null>(null);
 
   const clearVerifier = useCallback(() => {
@@ -34,7 +34,7 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
     verifier.current = null;
   }, []);
 
-  useEffect(() => () => clearVerifier(), [clearVerifier]);
+  useEffect(() => () => { clearVerifier(); parkMsg91Captcha(); }, [clearVerifier]);
 
   useEffect(() => {
     if (stage !== "otp" || resendIn <= 0) return;
@@ -85,16 +85,22 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
           ? "Sending a new OTP…"
           : "Sending your OTP…"
         : isResend
-          ? "Requesting a new OTP securely through Firebase..."
-          : "Requesting OTP securely through Firebase...",
+          ? "Requesting a new verification code..."
+          : "Requesting your verification code...",
     );
     try {
-      const { auth } = getFirebaseBrowserClient();
-      confirmation.current = await signInWithPhoneNumber(
-        auth,
-        normalized,
-        await recaptcha(isResend ? "invisible" : "visible"),
-      );
+      if (isResend && confirmation.current?.resend) {
+        await confirmation.current.resend();
+      } else {
+        const msg91 = await beginMsg91PhoneSignIn(normalized, "craves-recaptcha");
+        if (msg91) confirmation.current = msg91;
+        else {
+          const { auth } = getFirebaseBrowserClient();
+          confirmation.current = await signInWithPhoneNumber(
+            auth, normalized, await recaptcha(isResend ? "invisible" : "visible"),
+          );
+        }
+      }
       clearVerifier();
       setOtp("");
       setStage("otp");
@@ -213,7 +219,7 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
       <p className={bodyClass}>
         {chefJourney
           ? "Confirm your Craves mobile number and we’ll take you straight back to Chef Mode."
-          : "The same Firebase-verified mobile identity supports customer and chef mode. Craves tokens stay in secure HTTP-only cookies."}
+          : "Use one mobile number for both customer and chef mode."}
       </p>
 
       <form
@@ -317,7 +323,7 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
       <p className={chefJourney ? "mt-4 text-xs leading-5 text-[#6B6B6B]" : "mt-4 text-xs leading-5 text-slate-500"}>
         {chefJourney
           ? "Your OTP is used only to securely confirm your Craves account."
-          : "By continuing, the phone number is processed by Firebase for authentication and abuse prevention. Use Firebase test numbers during development."}
+          : "Your phone number and OTP help securely confirm your Craves account."}
       </p>
       {chefJourney ? (
         <Link

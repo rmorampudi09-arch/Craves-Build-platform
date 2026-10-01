@@ -128,14 +128,14 @@
     <meta charset="UTF-8" />
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-    <link rel="stylesheet" href="/landing-v20/font-loading.css?craves_rev=439497ec4f1f8eb8" media="print" data-craves-css="all">
+    <link rel="stylesheet" href="/landing-v20/font-loading.css?craves_rev=be1de5a6b1bfae2f" media="print" data-craves-css="all">
     <link rel="icon" type="image/x-icon" href="/landing-v20/favicon.ico?v=4&craves_rev=fde6aacd127f9972" />
     <link rel="icon" type="image/png" sizes="16x16" href="/landing-v20/craves-favicon-v4-16.png?v=4&craves_rev=bc7fc0c001fe22f4" />
     <link rel="icon" type="image/png" sizes="32x32" href="/landing-v20/craves-favicon-v4-32.png?v=4&craves_rev=ada3f2d6e0f161e7" />
     <link rel="icon" type="image/png" sizes="48x48" href="/landing-v20/craves-favicon-v4-48.png?v=4&craves_rev=037ed5e9c9d3f447" />
     <link rel="shortcut icon" href="/landing-v20/craves-favicon-v4-32.png?v=4&craves_rev=ada3f2d6e0f161e7" />
     <link rel="apple-touch-icon" sizes="180x180" href="/landing-v20/apple-touch-icon.png?v=4&craves_rev=f08d46f5db4cee58" />
-    <link rel="manifest" href="/landing-v20/site.webmanifest?v=4&craves_rev=d140368ae926b06f" />
+    <link rel="manifest" href="/landing-v20/site.webmanifest?v=4&craves_rev=30d49daf7f80e9a9" />
     <meta name="theme-color" content="#F62E18" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
@@ -143,7 +143,7 @@
       content="Craves — good food, good mood. Real, home-cooked meals from home chefs in your community, delivered fresh to your door."
     />
     <title>Craves — Good food. Good mood.</title>
-    <script type="module" crossorigin src="/landing-v20/assets/index-C0G8oe7I.js"></script>
+    <script type="module" crossorigin src="/landing-v20/assets/index-fAKZRsZQ.js"></script>
     <link rel="stylesheet" crossorigin href="/landing-v20/assets/index-Bb6JBaei.css" media="print" data-craves-css="all">
   </head>
   <body>
@@ -152,5 +152,60 @@
 </div>
 
     <div id="root"></div>
+
+    <script id="craves-landing-auth-bridge">
+      (function () {
+        var loading = null;
+        function loadAuth() {
+          if (!loading) {
+            loading = fetch('/landing-auth/manifest.json', { cache: 'no-store' })
+              .then(function (response) {
+                if (!response.ok) throw new Error('Sign-in is temporarily unavailable.');
+                return response.json();
+              })
+              .then(function (manifest) {
+                if (!/^\/landing-auth\/auth-[\w-]+\.js$/.test(manifest.script || '') ||
+                    !/^\/landing-auth\/auth-[\w-]+\.css$/.test(manifest.style || '')) {
+                  throw new Error('Sign-in could not be loaded.');
+                }
+                if (!document.querySelector('link[href="' + manifest.style + '"]')) {
+                  var style = document.createElement('link');
+                  style.rel = 'stylesheet';
+                  style.href = manifest.style;
+                  document.head.appendChild(style);
+                }
+                return import(manifest.script);
+              })
+              .catch(function (error) {
+                loading = null;
+                throw error;
+              });
+          }
+          return loading;
+        }
+        document.addEventListener('click', function (event) {
+          if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          var target = event.target && event.target.closest ? event.target.closest('a[href="#sign-in"]') : null;
+          if (!target) return;
+          event.preventDefault();
+          if (target.getAttribute('aria-busy') === 'true') return;
+          var label = target.textContent;
+          target.setAttribute('aria-busy', 'true');
+          target.textContent = 'Opening...';
+          loadAuth()
+            .then(function (module) {
+              if (typeof module.openLandingAuth !== 'function') throw new Error('Sign-in could not be loaded.');
+              return module.openLandingAuth();
+            })
+            .catch(function (error) {
+              console.warn('Craves landing auth failed', error);
+            })
+            .finally(function () {
+              target.removeAttribute('aria-busy');
+              target.textContent = label;
+            });
+        }, true);
+      })();
+    </script>
   </body>
 </html>

@@ -51,7 +51,7 @@ export async function openLandingAuth() {
     const current = await Promise.race([
       loadSession(),
       new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Sign-in took too long to open.")), 15000); }),
-    ]).finally(() => clearTimeout(timer));
+    ]).catch(() => null).finally(() => clearTimeout(timer));
     // The standalone landing document has no Next router; navigation must load the application.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     if (current) { window.location.assign("/home"); return; }

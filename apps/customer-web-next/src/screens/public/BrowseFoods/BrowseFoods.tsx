@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import dynamic from "next/dynamic";
 import {
   useCallback,
   useEffect,
@@ -14,12 +15,10 @@ import { CartAddressAvailabilityDialog } from "@/components/home/CartAddressAvai
 import { CustomerSignOutDialog } from "@/components/home/CustomerSignOutDialog";
 import { DishesGrid } from "@/components/home/DishesGrid";
 import { CustomerFloatingCart } from "@/components/cart/CustomerFloatingCart";
-import { HomeBottomSections } from "@/components/home/HomeBottomSections";
 import {
   HomeCategoryRail,
   type CravingCategory,
 } from "@/components/home/HomeCategoryRail";
-import { HomeSearchOverlay } from "@/components/home/HomeSearchOverlay";
 import { KitchensGrid } from "@/components/home/KitchensGrid";
 import { WelcomeBanner } from "@/components/home/WelcomeBanner";
 import { ALL_DISHES_CATEGORY } from "@/constants/dishCategories";
@@ -63,13 +62,31 @@ import {
   clearSession,
   getAddress,
   getSession,
+  AuthenticationRequiredError,
   loadSelectedAddress,
   loadSession,
   recoverSessionSnapshotForNavigation,
+  subscribeSession,
   type CravesAddress,
   type CravesUser,
 } from "@/services/auth/cravesAuth";
 import styles from "./HomeReference.module.css";
+
+const HomeBottomSections = dynamic(
+  () =>
+    import("@/components/home/HomeBottomSections").then(
+      (module) => module.HomeBottomSections,
+    ),
+  { ssr: false, loading: () => null },
+);
+
+const HomeSearchOverlay = dynamic(
+  () =>
+    import("@/components/home/HomeSearchOverlay").then(
+      (module) => module.HomeSearchOverlay,
+    ),
+  { ssr: false, loading: () => null },
+);
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
@@ -124,12 +141,13 @@ function forceInstantWindowScroll(top: number): void {
 function BrowseFoodsPage() {
   const navigate = useNavigate();
   const [initialCache] = useState(() => ({
-    user: getSession(),
+    user: getSession() ?? recoverSessionSnapshotForNavigation(),
     address: getAddress(),
-    dishes: [] as Dish[],
-    kitchens: [] as NearbyKitchen[],
+    dishes: allDishes(),
+    kitchens: allKitchens(),
   }));
-  const hasInitialCatalog = false;
+  const hasInitialCatalog =
+    initialCache.dishes.length > 0 || initialCache.kitchens.length > 0;
 
   const [user, setUser] = useState<CravesUser | null>(initialCache.user);
   const [address, setAddress] = useState<CravesAddress | null>(initialCache.address);
@@ -145,7 +163,9 @@ function BrowseFoodsPage() {
   const [cartRepairBusy, setCartRepairBusy] = useState(false);
   const [cartRepairError, setCartRepairError] = useState<string | null>(null);
   const [kitchens, setKitchens] = useState<NearbyKitchen[]>(initialCache.kitchens);
-  const [defaultAddressResolved, setDefaultAddressResolved] = useState(false);
+  const [defaultAddressResolved, setDefaultAddressResolved] = useState(() =>
+    Boolean(initialCache.address),
+  );
   const [kitchenDiscoveryVerified, setKitchenDiscoveryVerified] = useState(hasInitialCatalog);
   const [nearbyDishes, setNearbyDishes] = useState<Dish[]>(initialCache.dishes);
   const [dishLoadMoreBusy, setDishLoadMoreBusy] = useState(false);
@@ -398,15 +418,29 @@ function BrowseFoodsPage() {
       let current: CravesUser | null = null;
 
       try {
-        current = await loadSession();
-      } catch {
+        current = await loadSession({
+          failFastUnauthenticated: true,
+          hydrateCustomerProfile: "background",
+        });
+      } catch (error) {
+        if (error instanceof AuthenticationRequiredError) {
+          navigate({ to: "/", replace: true });
+          return;
+        }
         // Keep the customer on the signed-in surface during a network/BFF
         // interruption. One retry handles short mobile hand-offs cleanly.
         await new Promise((resolve) => window.setTimeout(resolve, 450));
         if (!active) return;
         try {
-          current = await loadSession();
-        } catch {
+          current = await loadSession({
+            failFastUnauthenticated: true,
+            hydrateCustomerProfile: "background",
+          });
+        } catch (retryError) {
+          if (retryError instanceof AuthenticationRequiredError) {
+            navigate({ to: "/", replace: true });
+            return;
+          }
           current = getSession() ?? recoverSessionSnapshotForNavigation();
           if (!current && active) {
             setSessionUnavailable(true);
@@ -423,8 +457,15 @@ function BrowseFoodsPage() {
         await new Promise((resolve) => window.setTimeout(resolve, 450));
         if (!active) return;
         try {
-          current = await loadSession();
-        } catch {
+          current = await loadSession({
+            failFastUnauthenticated: true,
+            hydrateCustomerProfile: "background",
+          });
+        } catch (error) {
+          if (error instanceof AuthenticationRequiredError) {
+            navigate({ to: "/", replace: true });
+            return;
+          }
           current = getSession() ?? recoverSessionSnapshotForNavigation();
           if (!current) {
             setSessionUnavailable(true);
@@ -446,6 +487,18 @@ function BrowseFoodsPage() {
 
       setSessionUnavailable(false);
       setUser(current);
+      setDefaultAddressResolved(true);
+
+      const cartLoad = loadCart()
+        .then(() => {
+          if (active) syncCartSummary();
+        })
+        .catch(() => {
+          if (active) {
+            setCartItemCount(0);
+            setCartItems([]);
+          }
+        });
 
       try {
         const defaultAddress = await loadSelectedAddress();
@@ -456,8 +509,9 @@ function BrowseFoodsPage() {
             ? "Loading food near your default delivery address…"
             : "Choose a default delivery address to see nearby food.",
         );
-        await refreshDiscovery(defaultAddress, false, false);
-        if (active) setDefaultAddressResolved(true);
+        const shouldPreserveCatalog =
+          allDishes().length > 0 || allKitchens().length > 0;
+        await refreshDiscovery(defaultAddress, false, shouldPreserveCatalog);
       } catch (error) {
         if (!active) return;
         setAddress(null);
@@ -474,21 +528,19 @@ function BrowseFoodsPage() {
         );
       }
 
-      try {
-        await loadCart();
-        syncCartSummary();
-      } catch {
-        if (active) {
-          setCartItemCount(0);
-          setCartItems([]);
-        }
-      }
+      void cartLoad;
     })();
 
     const unsubscribeCart = subscribeCart(syncCartSummary);
+    const unsubscribeSession = subscribeSession(() => {
+      if (!active) return;
+      const current = getSession();
+      if (current) setUser(current);
+    });
     return () => {
       active = false;
       unsubscribeCart();
+      unsubscribeSession();
     };
   }, [navigate, refreshDiscovery, sessionRetryNonce]);
 

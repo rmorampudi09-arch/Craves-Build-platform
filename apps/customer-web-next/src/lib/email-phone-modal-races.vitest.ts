@@ -7,6 +7,8 @@ import { getSession, setSessionIdentity } from "../services/auth/cravesAuth";
 const mocks = vi.hoisted(() => ({ send: vi.fn(), render: vi.fn(), clear: vi.fn() }));
 vi.mock("firebase/auth", () => ({ RecaptchaVerifier: class { render = mocks.render; clear = mocks.clear; }, signInWithPhoneNumber: mocks.send }));
 vi.mock("./firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
+// Keep these race tests on the Firebase fallback path.
+vi.mock("@/lib/msg91-browser", () => ({ beginMsg91PhoneSignIn: vi.fn().mockResolvedValue(null), parkMsg91Captcha: vi.fn() }));
 const id = "11111111-1111-4111-8111-111111111111";
 const other = "22222222-2222-4222-8222-222222222222";
 const identity = { id, phoneNumber: "+10000000000", email: null, emailVerified: false, displayName: "Fixture", status: "ACTIVE", roles: ["CUSTOMER"] };

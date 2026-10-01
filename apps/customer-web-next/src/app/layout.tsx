@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 
 import { CartKitchenReplacementDialogHost } from "@/components/cart/CartKitchenReplacementDialogHost";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { StructuredData } from "@/components/seo/StructuredData";
+import { cravesLogoUrl, cravesSiteGraph, seoKeywords, siteUrl } from "@/lib/seo-craves";
 
 import "../styles.css";
 import "../craves-theme.css";
@@ -25,14 +27,37 @@ const bodyFont = Inter({
 const canonicalLogo = "/brand/craves-logo-20260805.png";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
+  applicationName: "Craves",
   title: {
-    default: "Craves — Homemade Meals from Trusted Home Chefs",
+    default: "Craves — Homemade Food from Trusted Home Chefs",
     template: "%s – Craves",
   },
   description:
-    "Discover fresh homemade meals from trusted home chefs near you, delivered through Craves.",
+    "Discover homemade food, trusted home chefs, live dishes, secure checkout, and delivery-supported ordering in Hyderabad and Bangalore with Craves.",
+  keywords: seoKeywords(),
   authors: [{ name: "Craves" }],
   robots: { index: true, follow: true },
+  alternates: {
+    canonical: siteUrl,
+  },
+  openGraph: {
+    title: "Craves — Homemade Food from Trusted Home Chefs",
+    description:
+      "Discover homemade food, trusted home chefs, live dishes, secure checkout, and delivery-supported ordering with Craves.",
+    url: siteUrl,
+    siteName: "Craves",
+    images: [{ url: cravesLogoUrl, width: 512, height: 512, alt: "Craves" }],
+    locale: "en_IN",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Craves — Homemade Food from Trusted Home Chefs",
+    description:
+      "Homemade food discovery and home-chef ordering for Hyderabad and Bangalore.",
+    images: [cravesLogoUrl],
+  },
   icons: {
     icon: canonicalLogo,
     shortcut: canonicalLogo,
@@ -55,6 +80,7 @@ export default function RootLayout({
       className={`${displayFont.variable} ${bodyFont.variable}`}
     >
       <body>
+        <StructuredData data={cravesSiteGraph()} />
         {children}
         <BottomNav />
         <CartKitchenReplacementDialogHost />

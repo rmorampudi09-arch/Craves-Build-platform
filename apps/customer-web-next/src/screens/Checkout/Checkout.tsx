@@ -216,6 +216,20 @@ async function createAuthoritativeCheckout(
   return checkout;
 }
 
+async function resolveLeadMinutes(items: CartItem[]): Promise<number | null> {
+  const dishResults = await Promise.allSettled(
+    items.map((item) => loadDish(item.menuItemId)),
+  );
+  const minutes = dishResults
+    .flatMap((result) => {
+      if (result.status !== "fulfilled") return [];
+      const match = /^(\d+)\s*min$/i.exec(result.value.time);
+      return match ? [Number(match[1])] : [];
+    })
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return minutes.length ? Math.max(...minutes) : null;
+}
+
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const prepareStartedRef = useRef(false);
@@ -322,21 +336,13 @@ export default function CheckoutPage() {
       }
       await validateCart();
 
-      const dishResults = await Promise.allSettled(
-        nextItems.map((item) => loadDish(item.menuItemId)),
-      );
-      const minutes = dishResults
-        .flatMap((result) => {
-          if (result.status !== "fulfilled") return [];
-          const match = /^(\d+)\s*min$/i.exec(result.value.time);
-          return match ? [Number(match[1])] : [];
-        })
-        .filter((value) => Number.isFinite(value) && value > 0);
-
       setItems(nextItems);
       setSelectedId(preferred?.id ?? "");
-      setLeadMinutes(minutes.length ? Math.max(...minutes) : null);
       setCheckout(null);
+      setLoading(false);
+      void resolveLeadMinutes(nextItems)
+        .then(setLeadMinutes)
+        .catch(() => setLeadMinutes(null));
     } catch (caught) {
       setItems([]);
       setAddresses([]);

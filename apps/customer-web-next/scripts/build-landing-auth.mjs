@@ -11,9 +11,12 @@ const output = path.join(project, 'public/landing-auth');
 const source = path.join(project, 'src');
 const publicNames = ['API_KEY', 'AUTH_DOMAIN', 'PROJECT_ID', 'APP_ID', 'MESSAGING_SENDER_ID', 'STORAGE_BUCKET'];
 const define = { 'process.env.NODE_ENV': JSON.stringify('production') };
+const processEnvShim = { NODE_ENV: 'production' };
 for (const suffix of publicNames) {
   const name = `NEXT_PUBLIC_FIREBASE_${suffix}`;
-  define[`process.env.${name}`] = JSON.stringify(process.env[name] ?? '');
+  const value = process.env[name] ?? '';
+  define[`process.env.${name}`] = JSON.stringify(value);
+  processEnvShim[name] = value;
 }
 await mkdir(output, { recursive: true });
 const result = await build({
@@ -25,7 +28,11 @@ const result = await build({
   build: {
     outDir: output, emptyOutDir: false, target: 'es2020', minify: true,
     lib: { entry: path.join(source, 'landing-auth/entry.tsx'), formats: ['es'] },
-    rolldownOptions: { output: { entryFileNames: 'auth-[hash].js', chunkFileNames: '[name]-[hash].js' } },
+    rolldownOptions: { output: {
+      entryFileNames: 'auth-[hash].js',
+      chunkFileNames: '[name]-[hash].js',
+      intro: `globalThis.process = globalThis.process || { env: {} }; globalThis.process.env = Object.assign({}, ${JSON.stringify(processEnvShim)}, globalThis.process.env);\n`,
+    } },
   },
 });
 const entry = (Array.isArray(result) ? result : [result]).flatMap((item) => item.output).find((item) => item.type === 'chunk' && item.isEntry);

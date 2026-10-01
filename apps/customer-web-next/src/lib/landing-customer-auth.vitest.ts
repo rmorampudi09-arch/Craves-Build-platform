@@ -46,11 +46,9 @@ it('deduplicates clicks and restores scrolling and trigger focus on close, then 
   await act(async () => openLandingAuth());
   expect((screen.getByLabelText(/Mobile number/) as HTMLInputElement).value).toBe('');
 });
-it('does not leave the page locked after a session lookup fails and allows retry', async () => {
+it('opens the auth dialog even when the session lookup fails', async () => {
   mocks.load.mockRejectedValueOnce(new Error('offline'));
-  await expect(openLandingAuth()).rejects.toThrow('offline');
-  expect(document.getElementById('craves-customer-auth')).toBeNull();
-  expect(document.body.style.overflow).toBe('');
   await act(async () => openLandingAuth());
   expect(screen.getByRole('dialog', { name: 'Customer sign in' })).toBeTruthy();
+  expect(document.getElementById('root')!.inert).toBe(true);
 });

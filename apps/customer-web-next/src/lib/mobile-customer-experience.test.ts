@@ -76,7 +76,9 @@ test("mobile browse proportions and cart glass stay aligned with the compact ref
   assert.match(nav, /bg-white\/50/);
   assert.match(nav, /backdrop-blur-\[8px\]/);
   assert.match(nav, /backdrop-saturate-\[145%\]/);
-  assert.match(homeStyles, /backdrop-filter: blur\(8px\) saturate\(145%\)/);
+  assert.match(homeStyles, /backdrop-filter: blur\(10px\)/);
+  assert.match(homeStyles, /\.floatingCartGlass::before/);
+  assert.match(homeStyles, /\.floatingCartGlass::after/);
   assert.doesNotMatch(homeStyles, /blur\(48px\)/);
 });
 
@@ -98,10 +100,11 @@ test("customer discovery and detail recovery are fail-closed at 10 km", () => {
   assert.match(policy, /MAX_DISCOVERY_RADIUS_METERS = 10_000/);
   assert.doesNotMatch(policy, /15_000|50_000/);
   assert.match(home, /DEFAULT_DISCOVERY_RADIUS_METERS/);
-  assert.match(home, /dishes: \[\] as Dish\[\]/);
-  assert.match(home, /kitchens: \[\] as NearbyKitchen\[\]/);
-  assert.match(home, /refreshDiscovery\(defaultAddress, false, false\)/);
-  assert.doesNotMatch(home, /canPreserveInitialCatalog/);
+  assert.match(home, /dishes: allDishes\(\)/);
+  assert.match(home, /kitchens: allKitchens\(\)/);
+  assert.match(home, /const hasInitialCatalog =/);
+  assert.match(home, /const shouldPreserveCatalog =/);
+  assert.match(home, /refreshDiscovery\(defaultAddress, false, shouldPreserveCatalog\)/);
   assert.match(dish, /outside the 10 km Craves browsing area/);
   assert.match(kitchen, /outside the 10 km Craves browsing area/);
 });

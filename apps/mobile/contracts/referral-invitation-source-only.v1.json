@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "phase": "P119",
+  "actions": [],
+  "sourceOnly": [
+    {
+      "id": "referrals.invitationCode",
+      "source": "src/features/referralsV2/api/referralRewardsApi.ts",
+      "method": "GET",
+      "path": "/api/v1/referrals/me/code",
+      "auth": "bearer",
+      "requestModel": "none",
+      "responseModel": "ReferralCode",
+      "requestValidator": "member",
+      "responseValidator": "parseReferralCode",
+      "availabilityFlag": "REFERRAL_CODE_AVAILABLE",
+      "reason": "Verified on 2026-10-01: existing service has private ingress, all referral flags OFF and no referral APIM API. Keep code lookup disabled until separately approved publication."
+    }
+  ]
+}

@@ -10,6 +10,15 @@ function state(routes: NavigationStateLike['routes'], index = 0): NavigationStat
 }
 
 describe('P111 process restoration policy', () => {
+  it('restores the customer invitation options inside Profile without storing message contents', () => {
+    const root = state([{name: 'Profile', state: state([{name: 'CustomerProfileRoot'}, {name: 'CustomerShareInvitation'}], 1)}]);
+    expect(captureProcessRestorationSnapshot(root, 'CUSTOMER')).toEqual({version: 1, role: 'CUSTOMER', target: {kind: 'CUSTOMER_SCREEN', tab: 'Profile', screen: 'CustomerShareInvitation'}});
+  });
+
+  it.each(['ChefReferral', 'ChefReferralEarnings'])('restores %s inside the chef Profile stack', screen => {
+    const root = state([{name: 'ChefTabs', state: state([{name: 'Profile', state: state([{name: 'ChefProfileHome'}, {name: screen}], 1)}])}]);
+    expect(captureProcessRestorationSnapshot(root, 'CHEF')).toEqual({version: 1, role: 'CHEF', target: {kind: 'CHEF_NESTED', tab: 'Profile', screen}});
+  });
   it('captures a customer selected tab and safe nested resource route', () => {
     const root = state([
       {

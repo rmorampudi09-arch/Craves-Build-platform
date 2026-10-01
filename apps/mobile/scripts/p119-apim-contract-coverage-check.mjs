@@ -6,6 +6,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const mobileRoot = path.resolve(scriptDir, '..');
 const srcRoot = path.join(mobileRoot, 'src');
 const manifestPaths = [
+  path.resolve(mobileRoot, 'contracts/referral-invitation-source-only.v1.json'),
   path.resolve(mobileRoot, '../../api/apim-api/contracts/mobile-production.v1.json'),
   path.resolve(mobileRoot, '../../api/apim-api/contracts/mobile-subscriptions.v1.json'),
   path.resolve(mobileRoot, '../../api/apim-api/contracts/mobile-catalog-presentation.v1.json'),

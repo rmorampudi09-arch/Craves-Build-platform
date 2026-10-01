@@ -97,8 +97,8 @@ const BUSINESS_ROWS: readonly AccountRowModel[] = [
   },
   {
     id: 'referrals',
-    title: 'Referral earnings',
-    subtitle: 'Chef referral credits, monthly cap and recent postings',
+    title: 'Refer a chef',
+    subtitle: 'Invite home chefs and view referral earnings',
     icon: 'analytics',
     blockerMessage:
       'Chef referral earnings open the protected referral ledger view. The screen remains fail-closed until its gateway route is published.',
@@ -356,7 +356,7 @@ export function ChefProfileScreen() {
         return;
       }
       if (row.id === 'referrals') {
-        navigation.navigate('ChefReferralEarnings');
+        navigation.navigate('ChefReferral');
         return;
       }
       if (row.id === 'subscription') {

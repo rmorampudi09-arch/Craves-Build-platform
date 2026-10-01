@@ -11,8 +11,10 @@ const CURSOR_PATTERN = /^[A-Za-z0-9_-]{1,180}$/;
 // Referral Service is deployed privately on current main and its public/member
 // gateway publication is not enabled yet. Keep mobile fail-closed until APIM is published.
 export const REFERRAL_REWARDS_AVAILABLE = false;
+export const REFERRAL_CODE_AVAILABLE = false;
 
 export const REFERRAL_OVERVIEW_ROUTE = '/api/v1/referrals/me' as const;
+export const REFERRAL_CODE_ROUTE = '/api/v1/referrals/me/code' as const;
 export const REFERRAL_REWARDS_ROUTE =
   '/api/v1/referrals/me/rewards' as const;
 export const REFERRAL_REWARD_PAGE_SIZE = 25;
@@ -180,7 +182,7 @@ function smallInteger(
     : null;
 }
 
-function parseCode(value: unknown): ReferralCode | null {
+export function parseReferralCode(value: unknown): ReferralCode | null {
   const raw = asRecord(value);
   if (!raw || !exactKeys(raw, CODE_KEYS)) return null;
   if (
@@ -291,7 +293,7 @@ export function parseReferralOverview(value: unknown): ReferralOverview | null {
   const availablePaise = paise(raw.availablePaise, true);
   const reservedPaise = paise(raw.reservedPaise);
   const balanceUpdatedAt = instant(raw.balanceUpdatedAt);
-  const code = parseCode(raw.code);
+  const code = parseReferralCode(raw.code);
   const cashout = parseCashout(raw.cashout);
   const policy = parsePolicy(raw.policy);
 
@@ -448,6 +450,15 @@ function requireRewardPage(value: unknown): ReferralRewardPage {
 }
 
 export const referralRewardsApi = {
+  async getCode(signal?: AbortSignal): Promise<ReferralCode> {
+    const parsed = parseReferralCode(await httpClient.get<unknown>(REFERRAL_CODE_ROUTE, {
+      signal,
+      dedupeKey: 'referral-invitation:code',
+    }));
+    if (!parsed) throw new Error('REFERRAL_CODE_INVALID_RESPONSE');
+    return parsed;
+  },
+
   async getOverview(signal?: AbortSignal): Promise<ReferralOverview> {
     return requireOverview(
       await httpClient.get<unknown>(REFERRAL_OVERVIEW_ROUTE, {

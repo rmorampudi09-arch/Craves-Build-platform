@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.17.4 Login Reference Correction Installed
+# KUSHIRAVI App Build - Version 1.18 Referral Reference Screens
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -18,6 +18,45 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.18 - Four referral reference screens
+
+- Requested from `C:\Users\saive\Downloads\referral screens.docx` on
+  2026-10-01. Customer invitation and share-options screens; Chef referral
+  overview and referral earnings screen. No CRAVES masthead on these screens.
+- Existing Chef Profile entry is now **Refer a chef**. The overview action is
+  **View referral earnings**, leading to the referral-only ledger. Back returns
+  to the existing overview without adding duplicate stack history.
+- Customer WhatsApp/Messages open a composer; Copy link and message copy use
+  the real clipboard; More and Chef sharing use native share options. No
+  automatic message send. Unavailable handlers offer native sharing instead.
+- Customer invitation-only screens do not enable cash bonuses or discounts.
+  Chef sharing works as a clearly labelled general invite until a real referral
+  code is available. No mock code, sample earnings or fabricated posting level.
+- Read-only inspection of local `origin/main` at
+  `13710384b90d09c76ea5bed64fdfe6342975e697` verified the existing member code and
+  Chef earnings contracts and policy. Live Azure inspection confirmed no
+  referral APIM API, private service ingress and all seven referral flags OFF.
+  No backend/APIM configuration, auth, payments, cart, checkout, orders, Home,
+  splash, login, remote or CI/CD changes. No GitHub push.
+- New code client: `GET /api/v1/referrals/me/code`; existing ledger:
+  `GET /api/v1/referrals/me/chef-earnings`. Both queries remain disabled pending
+  separately approved publication. Monthly usage is not lifetime earnings;
+  missing financial data is represented by dashes, never invented zero totals.
+- Scoped Inter faces reuse the existing licensed font assets without changing
+  global typography. `expo-clipboard ~56.0.4` matches Expo 56 compatibility;
+  dependency and lockfile updated. No new credentials or permissions.
+- Android target: code `29` / name `1.18`. Intended immutable checkpoint:
+  `KUSHIRAVI-app-v1.18`; exact source/build receipts recorded after verification.
+  Previous installation remains `KUSHIRAVI-app-v1.17.4` until a verified
+  replace-install succeeds. Previous checkpoints are untouched.
+- TypeScript passed; scoped lint passed with one invalid-link test-fixture
+  warning. Four-screen/query tests: 2 suites / 20 tests passed. Code/ledger/
+  navigation/restoration checks passed; sharing rerun: 10 tests passed.
+  Full regression and signed release verification are in progress, not yet
+  claimed as completed. No credentials entered or invitation sent during QA.
+- Full file list, API gaps, local setup and manual checks:
+  `src/features/referralsV2/README.md`.
 
 ### Version 1.17.4 Built and Installed - Final login reference and keyboard correction
 

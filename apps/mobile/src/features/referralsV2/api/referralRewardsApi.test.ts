@@ -1,6 +1,8 @@
 import {httpClient} from '../../../core/http/httpClient';
 import {
   REFERRAL_OVERVIEW_ROUTE,
+  REFERRAL_CODE_ROUTE,
+  parseReferralCode,
   REFERRAL_REWARD_PAGE_SIZE,
   REFERRAL_REWARDS_ROUTE,
   parseReferralOverview,
@@ -86,6 +88,22 @@ const rewardPage = {
 describe('referralRewardsApi', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('validates the existing standalone code contract without accepting sample codes', () => {
+    expect(parseReferralCode(overview.code)).toEqual(overview.code);
+    expect(parseReferralCode({...overview.code, code: 'DEMO1234'})).toBeNull();
+    expect(parseReferralCode({...overview.code, link: 'javascript:alert(1)'})).toBeNull();
+    expect(parseReferralCode({...overview.code, qrPath: '/wrong/path'})).toBeNull();
+    expect(parseReferralCode({...overview.code, earned: '450'})).toBeNull();
+  });
+
+  it('uses the protected code endpoint with cancellation and validates its response', async () => {
+    const controller = new AbortController();
+    jest.mocked(httpClient.get).mockResolvedValueOnce(overview.code).mockResolvedValueOnce({...overview.code, code: 'DEMO1234'});
+    await expect(referralRewardsApi.getCode(controller.signal)).resolves.toEqual(overview.code);
+    expect(httpClient.get).toHaveBeenCalledWith(REFERRAL_CODE_ROUTE, {signal: controller.signal, dedupeKey: 'referral-invitation:code'});
+    await expect(referralRewardsApi.getCode()).rejects.toThrow('REFERRAL_CODE_INVALID_RESPONSE');
   });
 
   it('accepts the exact member overview JSON from main', () => {

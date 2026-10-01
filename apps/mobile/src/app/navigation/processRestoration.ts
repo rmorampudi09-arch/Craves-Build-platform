@@ -36,6 +36,7 @@ const customerNoParamScreenSchema = z.enum([
   'CustomerSettingsAbout',
   'CustomerSettingsShare',
   'CustomerSettingsReferral',
+  'CustomerShareInvitation',
   'CustomerSettingsSupport',
   'CustomerSettingsSubscription',
   'CustomerSettingsLegal',
@@ -60,6 +61,8 @@ const chefNestedScreenSchema = z.enum([
   'ChefPayoutHistory',
   'ChefSubscriptionPlan',
   'ChefAppPreferences',
+  'ChefReferral',
+  'ChefReferralEarnings',
 ]);
 
 const chefProductScreenSchema = z.discriminatedUnion('screen', [

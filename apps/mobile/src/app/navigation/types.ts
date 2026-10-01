@@ -111,6 +111,7 @@ export type CustomerSettingsChildStackParamList = {
   CustomerSettingsAbout: undefined;
   CustomerSettingsShare: undefined;
   CustomerSettingsReferral: undefined;
+  CustomerShareInvitation: undefined;
   CustomerSettingsSupport: undefined;
   CustomerSettingsSubscription: undefined;
   CustomerSettingsLegal: undefined;
@@ -159,6 +160,7 @@ export type ChefProfileStackParamList = {
   ChefSubscriptionPlan: undefined;
   ChefAppPreferences: undefined;
   ChefSupport: undefined;
+  ChefReferral: undefined;
   ChefReferralEarnings: undefined;
   ChefKitchenSchedule: undefined;
   ChefScheduledOrders: undefined;

@@ -44,6 +44,7 @@ import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/
 import {CustomerHomeSearchScreen} from '../../features/discoverySearch/screens/CustomerHomeSearchScreen';
 import {CustomerFavoritesRouteScreen} from '../../features/favorites/screens/CustomerFavoritesRouteScreen';
 import {CustomerHomeRouteScreen} from '../../features/home/screens/CustomerHomeRouteScreen';
+import {CustomerShareInvitationScreen} from '../../features/referralsV2/screens/CustomerReferralScreens';
 import {CustomerKitchenDishesScreen} from '../../features/kitchenProfile/screens/CustomerKitchenDishesScreen';
 import {CustomerKitchenProfileScreen} from '../../features/kitchenProfile/screens/CustomerKitchenProfileScreen';
 import {CustomerNotificationsRouteScreen} from '../../features/notifications/screens/CustomerNotificationsRouteScreen';
@@ -441,6 +442,7 @@ function CustomerProfileStackNavigator() {
       <ProfileStack.Screen name="CustomerSettingsAbout" component={CustomerSettingsAboutScreen} />
       <ProfileStack.Screen name="CustomerSettingsShare" component={CustomerSettingsShareScreen} />
       <ProfileStack.Screen name="CustomerSettingsReferral" component={CustomerSettingsReferralScreen} />
+      <ProfileStack.Screen name="CustomerShareInvitation" component={CustomerShareInvitationScreen} />
       <ProfileStack.Screen name="CustomerSettingsSupport" component={CustomerHelpSupportRouteScreen} />
       <ProfileStack.Screen name="CustomerSettingsSubscription" component={CustomerSettingsSubscriptionScreen} />
       <ProfileStack.Screen name="CustomerSettingsLegal" component={CustomerSettingsLegalScreen} />

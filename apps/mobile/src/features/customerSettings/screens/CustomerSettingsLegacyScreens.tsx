@@ -33,7 +33,7 @@ import {Icon} from '../../../shared/components/Icon';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {firebaseAuth} from '../../auth/firebase/firebaseAuth';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
-import {ReferralRewardsScreen} from '../../referralsV2/screens/ReferralRewardsScreen';
+import {CustomerReferralScreen} from '../../referralsV2/screens/CustomerReferralScreens';
 import {
   CUSTOMER_SETTINGS_CAPABILITY_STATUS,
   hasPasswordChangeErrors,
@@ -388,7 +388,7 @@ export function CustomerSettingsShareScreen() {
 }
 
 export function CustomerSettingsReferralScreen() {
-  return <ReferralRewardsScreen />;
+  return <CustomerReferralScreen />;
 }
 
 export function CustomerSettingsSupportScreen() {

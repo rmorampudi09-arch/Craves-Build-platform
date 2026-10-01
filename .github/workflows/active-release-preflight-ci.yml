@@ -4,6 +4,9 @@ on:
     paths:
       - 'scripts/release/rmorampudi09_preflight.py'
       - 'scripts/release/tests/test_rmorampudi09_preflight.py'
+      - 'scripts/release/active_address_release.py'
+      - 'scripts/release/tests/test_active_address_release.py'
+      - 'azure-pipelines-rmorampudi09-address-readiness.yml'
       - '.github/workflows/active-release-preflight-ci.yml'
   workflow_dispatch:
 permissions:
@@ -17,3 +20,4 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m unittest discover -s scripts/release/tests -p test_rmorampudi09_preflight.py -v
+      - run: python -m unittest discover -s scripts/release/tests -p test_active_address_release.py -v

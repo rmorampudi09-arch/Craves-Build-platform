@@ -1,0 +1,86 @@
+# Register this file in rmorampudi09 / Craves using the existing service connection.
+# Azure Repos can run the same YAML as a pinned bridge to the reviewed GitHub code.
+trigger: none
+pr: none
+pool:
+  vmImage: ubuntu-22.04
+parameters:
+  - name: operation
+    type: string
+    default: preflight
+    values: [preflight, backend, apim, web, status]
+  - name: confirmDeploy
+    type: boolean
+    default: false
+  - name: releaseSha
+    type: string
+    default: 33f796e087f0260d2e72d96a2f9f67fe8c4c51ea
+  - name: regressionRunId
+    type: string
+    default: '36905723693'
+  - name: toolsSha
+    type: string
+    default: SELECT_REVIEWED_TOOLS_COMMIT
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+steps:
+  - checkout: self
+    persistCredentials: true
+  - task: AzureCLI@2
+    displayName: Focused address and Chef readiness release
+    timeoutInMinutes: 90
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -Eeuo pipefail
+        set +x
+        [[ "$TOOLS_SHA" =~ ^[0-9a-f]{40}$ && "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Select exact reviewed tool and application commits.' >&2; exit 2; }
+        [[ "$REGRESSION_RUN_ID" =~ ^[0-9]+$ ]] || exit 2
+        case "$OPERATION" in preflight|backend|apim|web|status) ;; *) exit 2 ;; esac
+        if [[ "$OPERATION" != preflight && "$OPERATION" != status && "${CONFIRM_DEPLOY,,}" != true ]]; then
+          echo 'Select confirmDeploy only for the explicit backend, APIM or web operation.' >&2
+          exit 2
+        fi
+        SOURCE=$(mktemp -d)
+        RELEASE_TOOLS=$(mktemp -d)
+        for entry in "$SOURCE:$RELEASE_SHA" "$RELEASE_TOOLS:$TOOLS_SHA"; do
+          directory=${entry%:*}
+          commit=${entry##*:}
+          git -C "$directory" init --quiet
+          git -C "$directory" remote add origin https://github.com/rmorampudi09-arch/Craves-Build-platform.git
+          git -C "$directory" fetch --quiet --depth 1 origin "$commit"
+          git -C "$directory" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$directory" rev-parse HEAD)" = "$commit"
+        done
+        # Record source drift against the branch that is currently used by Azure
+        # without copying its credentials or deploying any of its application code.
+        if [[ "$OPERATION" == preflight && "$BUILD_REPOSITORY_PROVIDER" == TfsGit ]]; then
+          git -C "$BUILD_SOURCESDIRECTORY" fetch --quiet --depth 1 origin refs/heads/codex/customer-chef-web-wiring-20260927
+          LIVE_BRANCH_SHA=$(git -C "$BUILD_SOURCESDIRECTORY" rev-parse FETCH_HEAD)
+          git -C "$SOURCE" fetch --quiet "$BUILD_SOURCESDIRECTORY" "$LIVE_BRANCH_SHA"
+          echo "AZURE_WEB_BRANCH_SHA=$LIVE_BRANCH_SHA"
+          git -C "$SOURCE" diff --stat "$LIVE_BRANCH_SHA" "$RELEASE_SHA" -- apps/customer-web-next services/user-chef-service
+        fi
+        cd "$RELEASE_TOOLS"
+        python3 -m unittest discover -s scripts/release/tests -p test_rmorampudi09_preflight.py -v
+        python3 -m unittest discover -s scripts/release/tests -p test_active_address_release.py -v
+        confirmation=()
+        if [[ "${CONFIRM_DEPLOY,,}" == true ]]; then confirmation+=(--confirm); fi
+        python3 scripts/release/active_address_release.py \
+          --operation "$OPERATION" "${confirmation[@]}" \
+          --source "$SOURCE" --sha "$RELEASE_SHA" --regression-run "$REGRESSION_RUN_ID" \
+          --output "$BUILD_ARTIFACTSTAGINGDIRECTORY"
+    env:
+      OPERATION: ${{ parameters.operation }}
+      CONFIRM_DEPLOY: ${{ parameters.confirmDeploy }}
+      RELEASE_SHA: ${{ parameters.releaseSha }}
+      REGRESSION_RUN_ID: ${{ parameters.regressionRunId }}
+      TOOLS_SHA: ${{ parameters.toolsSha }}
+  - task: PublishPipelineArtifact@1
+    displayName: Publish sanitized release evidence
+    condition: always()
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)
+      artifact: address-readiness-release

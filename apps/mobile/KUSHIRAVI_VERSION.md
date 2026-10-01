@@ -9,15 +9,70 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `28`
-- Installed Android versionName: `1.17.4`
+- Installed Android versionCode: `29`
+- Installed Android versionName: `1.18`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed source: `12d3fda012069d16ecd1df2642c19c949b25649d`, tag `KUSHIRAVI-app-v1.17.4`. Reference-style login, full wordmark and keyboard opening/dismissal verified on the phone.
-- Last installation: `2026-10-01 08:44:38`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed source: `f1d6ad5a3a30e3920dcaa88d628eb4ec24cdde0a`, tag `KUSHIRAVI-app-v1.18`. Four native referral screens, copy confirmation, native share chooser and both workspace restoration checks verified on the phone; a restored Chef referral Back-stack issue remains recorded below.
+- Last installation: `2026-10-01 21:44:04` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.18 Installed And Phone-Checked, 2026-10-01
+
+- Requested installation and live checks on the connected phone. Verified clean
+  `KUSHIRAVI-app-build` before operating it; installed the existing immutable
+  v1.18 APK with replace-install. Result: Success; existing sign-in preserved.
+  Phone package readback: `com.cravesapp`, code `29`, name `1.18`, last update
+  `2026-10-01 21:44:04` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003.
+- Installed tag/source: `KUSHIRAVI-app-v1.18` /
+  `f1d6ad5a3a30e3920dcaa88d628eb4ec24cdde0a`. APK:
+  `C:\mscratch\artifacts\KUSHIRAVI-app-v1.18.apk`; SHA-256
+  `B5E202ACC268B83E8189293F0C05DA2ED70B3B67DEC948DBD22F4713E7DCE2EC`.
+  Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.18-source.zip`;
+  SHA-256 `507D36F07509609EF362F6D93C39FC9AD4B1D046F576285BA1A05FB1B480A111`.
+  Both hashes rechecked. Existing v2/v3 signature verified before installation;
+  signer SHA-256 remains
+  `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`.
+- Native screenshots and UI hierarchies inspected for Customer Refer a friend,
+  Share invitation, Chef Refer & earn and Chef earnings. Copy link displayed
+  Link copied; More opened Android's native chooser and was cancelled without
+  choosing a recipient. Clipboard bytes and WhatsApp/Messages composers were
+  not independently exercised. No invitation was sent.
+- Existing signed-in Customer -> Chef switch opened Dashboard without signup.
+  Chef Profile -> Refer a chef -> View referral earnings worked. Cold reopening
+  from earnings restored Chef mode and the earnings screen; Back to referrals
+  correctly returned to the overview. A normal Chef -> Customer switch worked;
+  final cold reopen remained Customer Home. Phone left in Customer Mode.
+- Remaining native issue: after restoring Chef earnings and returning to its
+  overview, Android Back goes to Dashboard instead of Chef Profile Home; the
+  Profile tab retains the referral detail stack. Reopening from Dashboard
+  restored a fresh Profile stack, allowing the normal workspace switch.
+  Repeatable steps and likely restoration path recorded in the test receipt.
+  No runtime fix, UI change or additional APK was made in this install turn.
+- Initial native activity launch: Status ok, cold, 582ms total / 602ms wait.
+  Final Customer cold launch: Status ok, 378ms total / 386ms wait. These are
+  activity timings, not full React/auth-ready startup measurements. Scoped
+  AndroidRuntime/ReactNativeJS/ReactNative error checks for the checked app
+  processes were empty, including final PID `28075`; not a blanket crash audit.
+- The prior approved backend deployment made the two protected member GETs
+  live; backend tag/source `KUSHIRAVI-referral-backend-v1.1` /
+  `4e98febeeab94e87fcb70ef853cb3654d97d2631`. Its real-account checks returned
+  honest not-enrolled 403 responses. This supersedes the older local-only
+  checkpoint's live-route status, without changing that historical evidence.
+  The mobile code/earnings/reward flags remain false: native screens display
+  unavailable values honestly. No memberships, consent, credits or payments
+  created. Terms, genuine enrolment and financial acceptance remain pending.
+- Installation-only continuation: no code edits, rebuild, version increment,
+  moved tags, backend changes or GitHub push. Only these version notes and
+  `docs\referral-v1.18-phone-install-20261001.md` are committed locally.
+  Previous build-time TypeScript and 195 suites / 1,019 passing tests are
+  retained evidence, not represented as rerun during this phone check.
+- Detailed native results, exact evidence filenames, remaining issue and manual
+  repeat steps: `docs\referral-v1.18-phone-install-20261001.md`.
+  Backend deployment receipt:
+  `C:\mscratch-referral-backend\docs\referrals\LIVE_RELEASE_RECEIPT_20261001.md`.
 
 ### Backend-only follow-up, 2026-10-01 - Referral member read contract
 

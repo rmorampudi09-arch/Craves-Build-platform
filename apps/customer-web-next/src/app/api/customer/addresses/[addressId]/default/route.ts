@@ -72,7 +72,6 @@ export async function PUT(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           addressLabel: current.addressLabel,
-          addressName: current.addressName ?? null,
           recipientName: current.recipientName,
           contactPhoneNumber: current.contactPhoneNumber,
           addressLine1: current.addressLine1,

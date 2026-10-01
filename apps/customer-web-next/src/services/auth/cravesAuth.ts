@@ -344,9 +344,7 @@ function fromCustomerAddress(address: DeliveryReadyAddress): CravesAddress {
   return {
     id: address.id,
     label:
-      address.addressLabel === "OTHER" && address.addressName
-        ? address.addressName
-        : address.addressLabel,
+      address.addressLabel,
     hno: address.addressLine1,
     street: address.addressLine2 ?? address.landmark ?? undefined,
     city: address.city,

@@ -1,9 +1,43 @@
-export type AddressLabel = "HOME" | "WORK" | "OTHER";
+export type AddressLabel = string;
+export type AddressCategory = "HOME" | "WORK" | "OTHER";
+export const ADDRESS_LABEL_MAX_LENGTH = 80;
+
+export type AddressLabelDraft = {
+  addressCategory: AddressCategory;
+  customLabel: string;
+};
+
+export function displayAddressLabel(label: AddressLabel): string {
+  if (label === "HOME") return "Home";
+  if (label === "WORK") return "Work";
+  if (label === "OTHER") return "Other";
+  return label;
+}
+
+export function createAddressLabelDraft(label: AddressLabel): AddressLabelDraft {
+  if (label === "HOME" || label === "WORK") {
+    return { addressCategory: label, customLabel: "" };
+  }
+  return { addressCategory: "OTHER", customLabel: displayAddressLabel(label) };
+}
+
+export function addressLabelDraftError(draft: AddressLabelDraft): string | null {
+  if (draft.addressCategory !== "OTHER") return null;
+  const label = draft.customLabel.trim();
+  if (!label) return "Enter a name for this address.";
+  if (label.length > ADDRESS_LABEL_MAX_LENGTH) return "Address name must be 80 characters or fewer.";
+  if (label === "HOME" || label === "WORK") return "Choose Home or Work above to use that label.";
+  return null;
+}
+
+export function addressLabelFromDraft(draft: AddressLabelDraft): string | null {
+  if (addressLabelDraftError(draft)) return null;
+  return draft.addressCategory === "OTHER" ? draft.customLabel.trim() : draft.addressCategory;
+}
 
 export type CustomerAddress = {
   id: string;
   addressLabel: AddressLabel;
-  addressName?: string | null;
   recipientName: string | null;
   contactPhoneNumber: string;
   addressLine1: string;
@@ -24,9 +58,7 @@ export type CustomerAddress = {
 
 export type DeliveryReadyAddress = CustomerAddress & {
   recipientName: string;
-  landmark: string;
   areaName: string;
-  districtName: string;
   postalCode: string;
   latitude: number;
   longitude: number;
@@ -35,7 +67,6 @@ export type DeliveryReadyAddress = CustomerAddress & {
 
 export type CustomerAddressInput = {
   addressLabel: AddressLabel;
-  addressName?: string | null;
   recipientName: string;
   contactPhoneNumber: string;
   addressLine1: string;
@@ -62,7 +93,6 @@ export type LocationRecommendation = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PHONE = /^\+?[0-9]{10,15}$/;
-const LABELS = new Set(["HOME", "WORK", "OTHER"]);
 const LOCATION_TYPES = new Set(["SAVED_ADDRESS", "LIVE_GPS"]);
 
 function object(value: unknown): Record<string, unknown> | null {
@@ -128,12 +158,10 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
   const raw = object(value);
   if (!raw) return null;
 
-  const addressLabel = text(raw.addressLabel, 10);
-  const addressName = optionalText(raw.addressName, 80);
+  const addressLabel = text(raw.addressLabel, ADDRESS_LABEL_MAX_LENGTH);
   const recipientName = text(raw.recipientName, 160);
   const contactPhoneNumber = text(raw.contactPhoneNumber, 16);
   const addressLine1 = text(raw.addressLine1, 250);
-  const landmark = text(raw.landmark, 160);
   const areaName = text(raw.areaName, 120);
   const districtName = text(raw.districtName, 120);
   const city = text(raw.city, 120);
@@ -144,13 +172,10 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
 
   if (
     !addressLabel
-    || !LABELS.has(addressLabel)
-    || (addressLabel === "OTHER" && !addressName)
     || !recipientName
     || !contactPhoneNumber
     || !PHONE.test(contactPhoneNumber)
     || !addressLine1
-    || !landmark
     || !areaName
     || !districtName
     || !city
@@ -164,13 +189,12 @@ export function parseAddressInput(value: unknown): CustomerAddressInput | null {
   }
 
   return {
-    addressLabel: addressLabel as AddressLabel,
-    ...(addressName ? { addressName } : {}),
+    addressLabel,
     recipientName,
     contactPhoneNumber,
     addressLine1,
     addressLine2: optionalText(raw.addressLine2, 250),
-    landmark,
+    landmark: optionalText(raw.landmark, 160),
     areaName,
     districtName,
     city,
@@ -192,8 +216,7 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
   if (!raw) return null;
 
   const id = text(raw.id, 64);
-  const addressLabel = text(raw.addressLabel, 10);
-  const addressName = optionalText(raw.addressName, 80);
+  const addressLabel = text(raw.addressLabel, ADDRESS_LABEL_MAX_LENGTH);
   const recipientName = optionalText(raw.recipientName, 160);
   const contactPhoneNumber = text(raw.contactPhoneNumber, 16);
   const addressLine1 = text(raw.addressLine1, 250);
@@ -213,7 +236,6 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
     !id
     || !UUID.test(id)
     || !addressLabel
-    || !LABELS.has(addressLabel)
     || !contactPhoneNumber
     || !PHONE.test(contactPhoneNumber)
     || !addressLine1
@@ -232,9 +254,7 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
 
   const deliveryReady = Boolean(
     recipientName
-    && landmark
     && areaName
-    && districtName
     && postalCode
     && latitude !== null
     && longitude !== null
@@ -242,8 +262,7 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
 
   return {
     id,
-    addressLabel: addressLabel as AddressLabel,
-    ...(addressName ? { addressName } : {}),
+    addressLabel,
     recipientName,
     contactPhoneNumber,
     addressLine1,
@@ -277,9 +296,7 @@ export function isDeliveryReadyAddress(
 ): address is DeliveryReadyAddress {
   return address.active
     && Boolean(address.recipientName)
-    && Boolean(address.landmark)
     && Boolean(address.areaName)
-    && Boolean(address.districtName)
     && Boolean(address.postalCode)
     && address.latitude !== null
     && address.longitude !== null;

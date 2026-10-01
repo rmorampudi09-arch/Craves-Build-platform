@@ -19,6 +19,37 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.21 - Reachable Chef Order Rejection, 2026-10-02
+
+- Clean start on `KUSHIRAVI-app-build` at
+  `ffae3e945fee8030093806809af56e3a3980e080`; phone had v1.20 / code 31.
+  No GitHub push. Previous tags and APK checkpoints remain untouched.
+- Package `com.cravesapp`, versionCode `32`, versionName `1.21`.
+  New installable checkpoint: `KUSHIRAVI-app-v1.21`. Exact source SHA,
+  signed APK/source ZIP hashes and installation receipt follow verification.
+- Reproduced on the connected phone: tapping Reject in New orders opens the
+  sheet, but the unbounded flex reason input pushes Cancel/Reject Order below
+  the screen. The native UI tree has no visible confirmation control.
+- Bounded the multiline reason field to its existing 112-point size. Both
+  rejection sheets have a scrollable, height-constrained body and a separate
+  non-shrinking action row, with bottom safe-area padding. Kept original
+  styling, labels, colors, order cards and acceptance flow.
+- Rejection errors are visible inside the New orders sheet; opening a new
+  rejection clears old feedback/draft. Empty reasons and in-flight actions
+  cannot submit. The same existing validated API, UUID tracing, idempotency,
+  server ownership checks and authoritative status reconciliation are retained.
+- No backend/APIM deployment, order/payment/refund edits, role grants,
+  acceptance deadline bypass or delivery routing changes.
+- Verification: TypeScript passes; changed TS/TSX ESLint passes with zero
+  warnings; full Jest suite passes (202 suites / 1,088 tests). The screen suite
+  covers both rejection entry points, bounded field/footer placement, empty
+  reason, cancellation, delayed server success, failure and busy guards.
+- Expected versioned artifacts:
+  `C:\mscratch\artifacts\KUSHIRAVI-app-v1.21.apk` and
+  `C:\mscratch\artifacts\KUSHIRAVI-app-v1.21-source.zip`.
+- Detailed build/phone receipt and test steps:
+  `docs\chef-order-rejection-v1.21-20261002.md`.
+
 ### Version 1.20 - Chef Acceptance and Automatic Preparation Time, 2026-10-02
 
 - Branch `KUSHIRAVI-app-build`, clean start at

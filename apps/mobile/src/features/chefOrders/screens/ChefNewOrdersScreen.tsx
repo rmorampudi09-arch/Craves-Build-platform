@@ -8,6 +8,7 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,7 +23,7 @@ import {
 } from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {
   ChefOrdersStackParamList,
   ChefProductStackParamList,
@@ -266,6 +267,7 @@ function NewOrderCard({
 
 export function ChefNewOrdersScreen() {
   const navigation = useNavigation<ChefNewOrdersNavigation>();
+  const insets = useSafeAreaInsets();
   const {orderTabs, ordersStatus, isRefreshing, refresh} = useChefOperationalState();
   const actions = useChefNewOrderActions();
   const page = orderTabs.pages.NEW;
@@ -357,9 +359,10 @@ export function ChefNewOrdersScreen() {
   );
 
   const openReject = React.useCallback((orderId: string) => {
+    actions.clearFeedback();
     setRejectReason('');
     setRejectOrderId(orderId);
-  }, []);
+  }, [actions]);
 
   const closeReject = React.useCallback(() => {
     setRejectOrderId(null);
@@ -591,11 +594,13 @@ export function ChefNewOrdersScreen() {
             accessibilityRole="button"
             disabled={rejectBusy}
             onPress={closeReject}
-            style={styles.modalBackdrop}>
-            <Pressable
-              accessibilityRole="none"
-              onPress={event => event.stopPropagation()}
-              style={styles.sheet}>
+            style={styles.modalBackdrop}
+          />
+          <View style={[styles.sheet, {paddingBottom: Math.max(spacing.xl, insets.bottom)}]}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              style={styles.sheetBody}>
               <Text accessibilityRole="header" style={styles.sheetTitle}>Reject order?</Text>
               <Text style={styles.sheetText}>
                 Give a reason before rejecting {rejectOrderId ? shortOrderReference(rejectOrderId) : 'this order'}.
@@ -612,31 +617,36 @@ export function ChefNewOrdersScreen() {
                 textAlignVertical="top"
                 value={rejectReason}
               />
-              <View style={styles.sheetActions}>
-                <Pressable
-                  accessibilityLabel="Cancel rejecting order"
-                  accessibilityRole="button"
-                  disabled={rejectBusy}
-                  onPress={closeReject}
-                  style={({pressed}) => [styles.sheetSecondaryButton, pressed && styles.pressed]}>
-                  <Text style={styles.sheetSecondaryText}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityLabel="Confirm reject order"
-                  accessibilityRole="button"
-                  accessibilityState={{disabled: !rejectReason.trim() || rejectBusy}}
-                  disabled={!rejectReason.trim() || rejectBusy}
-                  onPress={submitReject}
-                  style={({pressed}) => [
-                    styles.sheetRejectButton,
-                    (pressed || !rejectReason.trim() || rejectBusy) && styles.buttonDisabled,
-                  ]}>
-                  {rejectBusy ? <ActivityIndicator color={colors.white} size="small" /> : null}
-                  <Text style={styles.sheetPrimaryText}>{rejectBusy ? 'Rejecting…' : 'Reject Order'}</Text>
-                </Pressable>
-              </View>
-            </Pressable>
-          </Pressable>
+              {actions.feedback?.kind === 'error' ? (
+                <Text accessibilityRole="alert" style={styles.sheetError}>
+                  {actions.feedback.message}
+                </Text>
+              ) : null}
+            </ScrollView>
+            <View style={styles.sheetActions}>
+              <Pressable
+                accessibilityLabel="Cancel rejecting order"
+                accessibilityRole="button"
+                disabled={rejectBusy}
+                onPress={closeReject}
+                style={({pressed}) => [styles.sheetSecondaryButton, pressed && styles.pressed]}>
+                <Text style={styles.sheetSecondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel="Confirm reject order"
+                accessibilityRole="button"
+                accessibilityState={{disabled: !rejectReason.trim() || rejectBusy}}
+                disabled={!rejectReason.trim() || rejectBusy}
+                onPress={submitReject}
+                style={({pressed}) => [
+                  styles.sheetRejectButton,
+                  (pressed || !rejectReason.trim() || rejectBusy) && styles.buttonDisabled,
+                ]}>
+                {rejectBusy ? <ActivityIndicator color={colors.white} size="small" /> : null}
+                <Text style={styles.sheetPrimaryText}>{rejectBusy ? 'Rejecting…' : 'Reject Order'}</Text>
+              </Pressable>
+            </View>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
@@ -711,14 +721,16 @@ const styles = StyleSheet.create({
   tipBanner: {minHeight: touchTarget.comfortable, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginHorizontal: spacing.md, marginBottom: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: radius.md, backgroundColor: colors.warningSoft},
   tipIcon: {width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.white},
   tipText: {flex: 1, color: colors.textPrimary, fontSize: typography.small, fontWeight: fontWeight.medium},
-  modalAvoider: {flex: 1},
-  modalBackdrop: {flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(38,26,21,0.45)'},
-  sheet: {borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, backgroundColor: colors.white, padding: spacing.lg, paddingBottom: spacing.xl},
+  modalAvoider: {flex: 1, justifyContent: 'flex-end'},
+  modalBackdrop: {position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(38,26,21,0.45)'},
+  sheet: {maxHeight: '100%', flexShrink: 1, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, backgroundColor: colors.white, padding: spacing.lg},
+  sheetBody: {flexGrow: 0, flexShrink: 1},
   sheetTitle: {color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold},
   sheetText: {marginTop: spacing.xs, color: colors.textSecondary, fontSize: typography.small},
-  input: {minHeight: touchTarget.minimum, flex: 1, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: radius.md, backgroundColor: colors.white, color: colors.textPrimary, fontSize: typography.body, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs},
-  reasonInput: {minHeight: 112, marginTop: spacing.md},
-  sheetActions: {flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg},
+  input: {borderWidth: 1, borderColor: colors.borderStrong, borderRadius: radius.md, backgroundColor: colors.white, color: colors.textPrimary, fontSize: typography.body, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs},
+  reasonInput: {height: 112, marginTop: spacing.md},
+  sheetError: {color: colors.error, fontSize: typography.small, marginTop: spacing.sm},
+  sheetActions: {flexShrink: 0, flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg},
   sheetSecondaryButton: {flex: 1, minHeight: touchTarget.minimum, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.borderStrong, borderRadius: radius.md, backgroundColor: colors.white},
   sheetSecondaryText: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},
   sheetRejectButton: {flex: 1, minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, backgroundColor: colors.error},

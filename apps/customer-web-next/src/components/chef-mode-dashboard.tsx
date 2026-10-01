@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BadgeIndianRupee,
+  CalendarDays,
   ChefHat,
   CheckCircle2,
   ChevronRight,
@@ -578,7 +579,7 @@ export function ChefModeDashboard() {
           )}
         </section>
 
-        <section className="grid gap-3 sm:grid-cols-3" aria-label="Kitchen summary">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Kitchen summary">
           <Link href="/chef/kitchen" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
               <Store className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
@@ -592,6 +593,13 @@ export function ChefModeDashboard() {
             </span>
             <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Your menu</p>
             <p className="mt-1 font-bold text-[#1A1A1A]">{menuSummary}</p>
+          </Link>
+          <Link href="/chef/meal-plans" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#178F56]/40">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EAF7F0]">
+              <CalendarDays className="h-5 w-5 text-[#178F56]" aria-hidden="true" />
+            </span>
+            <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Meal subscriptions</p>
+            <p className="mt-1 font-bold text-[#1A1A1A]">Manage meal plans</p>
           </Link>
           <Link href="/chef/earnings" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
@@ -608,6 +616,7 @@ export function ChefModeDashboard() {
             <div className="mt-4 grid gap-2 sm:grid-cols-3">
               <Link href="/chef/application" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">Your details</Link>
               <Link href="/chef/orders" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">Previous orders</Link>
+              <Link href="/chef/meal-plans" className="rounded-xl bg-[#F1FAF5] px-4 py-3 text-sm font-semibold text-[#178F56]">Meal plans</Link>
               <Link href="/chef/earnings" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">What you’ve earned</Link>
             </div>
           </details>

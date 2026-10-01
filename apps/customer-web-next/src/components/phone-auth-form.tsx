@@ -7,6 +7,7 @@ import {
   signInWithPhoneNumber,
 } from "firebase/auth";
 import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from "@/lib/msg91-browser";
+import { phoneCodeRequestError } from "@/lib/phone-auth-errors";
 import { getFirebaseBrowserClient } from "@/lib/firebase-client";
 import { safeReturnPath } from "@/lib/auth-contract";
 
@@ -112,15 +113,7 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
       );
     } catch (error) {
       clearVerifier();
-      const code =
-        error && typeof error === "object" && "code" in error
-          ? String(error.code)
-          : "";
-      setMessage(
-        code.includes("too-many-requests")
-          ? "Too many OTP attempts. Please try again later."
-          : "OTP could not be sent. Complete the security check and try again.",
-      );
+      setMessage(phoneCodeRequestError(error));
     } finally {
       setBusy(false);
     }

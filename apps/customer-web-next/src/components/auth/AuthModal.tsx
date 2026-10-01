@@ -8,6 +8,7 @@ import {
   signInWithPhoneNumber,
 } from "firebase/auth";
 import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from "@/lib/msg91-browser";
+import { phoneCodeRequestError } from "@/lib/phone-auth-errors";
 import { getFirebaseBrowserClient } from "@/lib/firebase-client";
 import {
   loadSession,
@@ -258,15 +259,7 @@ export function AuthModal({
     } catch (caught) {
       if (!currentAttempt()) return;
       clearVerifier();
-      const code =
-        caught && typeof caught === "object" && "code" in caught
-          ? String(caught.code)
-          : "";
-      setError(
-        code.includes("too-many-requests")
-          ? "Too many verification attempts. Please try again later."
-          : "We couldn’t send the verification code. Complete the security check and try again.",
-      );
+      setError(phoneCodeRequestError(caught));
     } finally {
       if (authAttempt.current === attempt) { clearVerifier(); setBusy(false); }
     }

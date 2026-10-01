@@ -106,13 +106,17 @@ export async function beginMsg91PhoneSignIn(phone: string, captchaRenderId: stri
     await new Promise(resolve => window.setTimeout(resolve, 100));
   }
   const widget = record(sdk.getWidgetData?.());
+  // MSG91 documents this switch as mobile-SDK-only; such widgets cannot send from a website.
+  // Do not fall back silently or bypass the provider's security configuration.
+  if (widget.mobileIntegration === true || Number(widget.mobileIntegration) === 1)
+    throw new Error("OTP_WEB_UNAVAILABLE");
   if (widget.captchaValidations && Number(record(widget.widgetMeta).captcha_type) !== 2) {
     // With captchaRenderId, sendOtp does nothing until the user has solved the
     // visible challenge. Wait before sending; never bypass or solve it in code.
     const captchaDeadline = Date.now() + 120000;
     while (!sdk.isCaptchaVerified?.()) {
       if (!current()) throw new Error("OTP_CANCELLED");
-      if (Date.now() > captchaDeadline) throw new Error("OTP_TIMEOUT");
+      if (Date.now() > captchaDeadline) throw new Error("OTP_CAPTCHA_TIMEOUT");
       await new Promise(resolve => window.setTimeout(resolve, 100));
     }
   }

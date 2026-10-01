@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import {
+  displayAddressLabel,
   isDeliveryReadyAddress,
   parseCustomerAddresses,
   type CustomerAddress,
@@ -658,7 +659,7 @@ export default function CheckoutPage() {
                             <span className="min-w-0 flex-1">
                               <span className="flex flex-wrap items-center gap-2">
                                 <span className="text-sm font-bold capitalize">
-                                  {address.addressLabel.toLowerCase()}
+                                  {displayAddressLabel(address.addressLabel)}
                                 </span>
                                 {address.isDefault ? (
                                   <span className="rounded-full bg-[#F62E18]/10 px-2 py-0.5 text-[10px] font-bold text-[#F62E18]">

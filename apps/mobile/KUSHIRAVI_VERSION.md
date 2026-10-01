@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.17 Login Update Prepared
+# KUSHIRAVI App Build - Version 1.17 Login Update Built
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -19,12 +19,14 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
-### Version 1.17 Prepared - Local video login reference
+### Version 1.17 Built - Local video login reference
 
 - Starts from installed v1.16 / `a035229b22d4399e8eb23ee1a46bc6770a9c0092`
   and clean branch HEAD `d3f193204243f733b409bd0aa8a6bf573bc54382`.
-- Android versionCode `24`, versionName `1.17`; new installable tag will be
-  `KUSHIRAVI-app-v1.17` after verification. Previous checkpoints untouched.
+- Android versionCode `24`, versionName `1.17`; immutable installable tag
+  `KUSHIRAVI-app-v1.17`. Previous checkpoints untouched.
+- Source commit: `1da74b8373df238c46409ae34f83a88bb6238f69`.
+  Later evidence-only commits do not change this APK or tag.
 - Implements the five login states in `Change the style of login page.docx`:
   welcome, Customer phone, Chef phone, OTP and email/password. Written 75% video /
   25% white-panel split takes priority over the welcome screenshot's ratio.
@@ -43,10 +45,24 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Email/password remains email-only; no unsupported phone/password promise.
   Terms/Privacy links omitted pending real approved destinations, not fake links.
 - No backend, API, finance, cart/order, Razorpay, remote or CI changes; no push.
-- Planned APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.apk`.
-- Planned source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17-source.zip`.
-- Exact source SHA, build/test and artifact evidence will be recorded after
-  verification. Phone still installed with v1.16, code 23; not signed out or reset.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.apk`.
+- APK SHA-256: `65487BF5880E737B56AB47AADBE5E422CF9CFABEDC704A716B9079792292A128`.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17-source.zip`.
+- ZIP SHA-256: `63444204C837D4E52DC1F5330363A2E121FAD8B587761327270BA1510859123A`.
+  Archived from the tag; 926 entries including video, poster, dependency lockfile,
+  build script and Gradle wrapper. No local .env, node_modules or build outputs.
+- TypeScript and scoped ESLint passed; full Jest: 191 suites / 970 tests passed
+  in 655.806 seconds. Existing tests remain green.
+- Signed ARM64/x86_64 release passed in 1h 26m 56s; 835 tasks, 123 executed.
+  Package/code/name and v2/v3 signatures verified with the existing certificate.
+  APK video hash matches the supplied file exactly. Seven login source entries
+  in the release source map match the committed source.
+- Native visual QA remains pending: the API 36 test emulator did not complete
+  boot (package service unavailable), so emulator installation could not finish.
+  The task's emulator was stopped; no device data was cleared. No real SMS,
+  account creation or successful sign-in is claimed tested in this checkpoint.
+- Phone checked read-only: still v1.16 / code 23, last update 2026-09-30 22:24:55.
+  No phone install, sign-out or reset was performed for this UI request.
 - Change paths and manual checks: `docs\LOGIN_VIDEO_V1_17.md`.
 
 ### Version 1.16 Built and Installed - Precise menu and Home scrolling changes

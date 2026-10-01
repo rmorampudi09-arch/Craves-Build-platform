@@ -98,11 +98,65 @@ Privacy destination; those links are omitted pending the user's real URLs.
 
 ## Build And Evidence
 
-Source checkpoint, tag, build logs, hashes and actual verification results are
-recorded after tests and the signed release build. The user's phone remains
-v1.16 / code 23 unless a later install is explicitly performed and recorded.
+- Source commit: `1da74b8373df238c46409ae34f83a88bb6238f69`.
+- Immutable tag: `KUSHIRAVI-app-v1.17`.
+- Android package: `com.cravesapp`, versionCode `24`, versionName `1.17`.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.apk`.
+- APK SHA-256: `65487BF5880E737B56AB47AADBE5E422CF9CFABEDC704A716B9079792292A128`.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17-source.zip`.
+- ZIP SHA-256: `63444204C837D4E52DC1F5330363A2E121FAD8B587761327270BA1510859123A`.
+- ZIP verification: 926 entries, required wrapper/script/lockfile/local video
+  and poster present; no local .env, node_modules or generated build outputs.
+- TypeScript: passed, `C:\mscratch\artifacts\v1.17-typescript-complete.log`.
+- Scoped ESLint: passed, `C:\mscratch\artifacts\v1.17-lint-final-source.log`.
+- Full Jest: 191 suites / 970 tests passed in 655.806 seconds,
+  `C:\mscratch\artifacts\v1.17-final-source-tests.log`.
+- Native signed release: BUILD SUCCESSFUL in 1h 26m 56s; 835 actionable tasks,
+  123 executed, 712 up-to-date. ARM64 and x86_64 are included for phone/emulator.
+  Build log: `C:\mscratch\artifacts\v1.17-release-build.log`.
+- Signing: v2/v3 verified; existing certificate unchanged. SHA-1
+  `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`;
+  SHA-256 `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`.
+- APK media verification: bundled `res/rl.mp4` is 2,388,876 bytes; SHA-256
+  matches the supplied MP4 and committed video exactly. Resource names are
+  shortened by Android packaging, not a video conversion or remote reference.
+- Source-map verification: the built background/layout/role cards and four
+  login screens match their final committed source, not a pre-edit bundle.
+
+Evidence-only documentation commits follow the immutable implementation tag.
+The source ZIP preserves the tagged implementation and its prepared release
+notes; this document and the branch version notes contain the completed build
+evidence. No earlier tag or release artifact was replaced.
+
+### Live Verification Limitations
+
+The `Craves_Design_API_36` x86_64 test emulator did not finish startup despite a
+restart without loading/saving a snapshot. ADB eventually connected but Android's
+package service remained unavailable (`Can't find service: package`), preventing
+installation. The task-owned emulator was stopped without clearing its data.
+No native screenshots, live playback/framing or keyboard checks are claimed.
+Run the manual checks above on a signed-out test device before release approval.
+Real SMS/OTP, successful account sign-in and Chef onboarding require an approved
+test number/account and remain unverified live; mocked regression tests are not
+a substitute for those checks.
+
+The connected phone `RS7PB6VOY9ZLLFYD` was inspected read-only and still reports
+v1.16 / code 23, last update `2026-09-30 22:24:55`. No v1.17 phone install,
+sign-out, application data reset or backend mutation was performed.
+
+### Manual Setup
+
+No new Azure, APIM, Firebase, payment, signing-key, DNS or CI setup is required
+for the background video. It is local to the APK. Approved Terms of Service and
+Privacy Policy URLs are still needed before adding working legal links; none
+were fabricated. APK installation on the user's phone was not requested in
+this turn and has not been performed.
 
 Rebuild from the tagged source ZIP using the existing
 `scripts\build-kushiravi-release-apk.ps1`. The video and poster are included in
 source control and the ZIP; no external video URL or manual media placement is
-needed. Keep existing Firebase/signing configuration; no key rotation.
+needed. Keep existing Firebase/signing configuration; no key rotation. The
+verified build used `-SkipNpmCi` after installing the locked dependency and
+`JAVA_TOOL_OPTIONS=-Dorg.gradle.project.reactNativeArchitectures=arm64-v8a,x86_64`
+for both targets. A source ZIP rebuild should allow the script's normal `npm ci`;
+use `-PhoneOnly` for an ARM64-only phone build when no emulator is needed.

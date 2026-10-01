@@ -13,7 +13,8 @@ steps:
   - script: |
       set -euo pipefail
       cd "$(appPath)"
-      npm install --ignore-scripts
+      npm ci --ignore-scripts --no-audit --no-fund
+      npm run lint
       npm run typecheck
       npm run test
       npm run build

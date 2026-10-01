@@ -164,16 +164,30 @@ not roll back remote MSG91 settings: reversing this specific setting would
 require explicitly selecting web again in the existing widget and saving.
 
 User asked to retry Send OTP and enter the genuine OTP directly on the phone.
-Fresh SMS delivery, verification and session exchange remain pending; the
-successful configuration readback is not a claim of end-to-end sign-in success.
-No OTP/password or phone input was read or entered by the agent. The historical
-OFF blocker above is resolved, not a current instruction to enable it again.
+At configuration readback, fresh SMS delivery and sign-in were still pending;
+readback alone was not a claim of end-to-end sign-in success. The subsequent
+user-confirmed result is recorded below. No OTP/password or phone input was read
+or entered by the agent. The historical OFF blocker above is resolved, not a
+current instruction to enable it again.
+
+## User-Confirmed Phone Sign-In, 2026-10-02
+
+After enabling Mobile Integration, the user reported in this chat:
+
+> yes i got otp and logged in
+
+This confirms real OTP receipt and successful phone sign-in as reported by the
+user on the installed v1.19 checkpoint. The agent did not independently inspect
+the resulting signed-in screen or trace the backend exchange. No OTP was read,
+entered or requested in chat. This acceptance required no app-code change,
+rebuild, reinstall or version increment; installed source/tag/APK are unchanged.
+This later documentation-only local commit leaves all prior tags untouched.
 
 ## Remaining Live Acceptance
 
-Fresh SMS delivery, provider OTP verification and subsequent real-account
-identity/session exchange remain NOT verified. Neither test mocks nor an
-anonymous malformed-body 400 response constitute successful authentication.
+Wrong-code correction, resend limits, session lifecycle and authorized Chef
+restoration remain unchecked live. Passing mocks and an anonymous malformed-body
+400 probe are not substituted for these acceptance checks.
 
 Chef switching/restoration also remains NOT verified on v1.19. An attempted
 switch reached its confirmation dialog; the subsequently observed screen was
@@ -181,11 +195,12 @@ phone entry, not Chef Dashboard. Input stopped to avoid interrupting the user's
 authentication. Do not infer a successful switch, root cause or account state
 from diagnostic filenames. Earlier v1.18 Chef checks are historical only.
 
-Manual acceptance after enabling the existing setting:
+Remaining manual acceptance, with basic OTP receipt/sign-in already user-confirmed:
 
 1. On the phone request OTP for the user's existing account; user enters codes
    directly on the phone, never in chat.
-2. Confirm genuine SMS delivery, wrong-code correction and successful sign-in.
+2. Check wrong-code correction; record an independently observed signed-in screen
+   if further live authentication evidence is needed.
 3. Check resend cooldown and existing retry limits without unnecessary SMS sends.
 4. Confirm Customer Home/Profile and authorized Chef switching/restoration.
 5. Check sign-out and reopening, plus leaving send/verification mid-request.

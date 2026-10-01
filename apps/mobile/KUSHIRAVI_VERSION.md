@@ -12,7 +12,7 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Installed Android versionCode: `30`
 - Installed Android versionName: `1.19`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed source: `bb6e81d23623b023bf9c8c6ab22d5a9856b8e695`, tag `KUSHIRAVI-app-v1.19`. Native MSG91 integration installed; Customer Home/profile checked. MSG91 Mobile Integration enabled and read back on 2026-10-02; fresh OTP and Chef restoration still await live acceptance. Historical v1.18 referral/restoration evidence remains recorded below, not represented as rerun on v1.19.
+- Installed source: `bb6e81d23623b023bf9c8c6ab22d5a9856b8e695`, tag `KUSHIRAVI-app-v1.19`. Native MSG91 integration installed; Customer Home/profile checked. MSG91 Mobile Integration enabled and read back on 2026-10-02; user subsequently confirmed receiving the OTP and successful phone sign-in. Chef restoration and authentication edge cases still await live acceptance. Historical v1.18 referral/restoration evidence remains recorded below, not represented as rerun on v1.19.
 - Last installation: `2026-10-02 00:31:40` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
@@ -36,9 +36,11 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   reinstall, app-code change or version increment required. Installed package
   remains `com.cravesapp`, code `30` / name `1.19`, tag `KUSHIRAVI-app-v1.19`,
   source `bb6e81d23623b023bf9c8c6ab22d5a9856b8e695`. Previous tags/APKs untouched.
-- User asked to retry Send OTP and enter the real code on the phone. Successful
-  SMS delivery, full OTP/session exchange and Chef restoration are not yet
-  verified. No phone number/OTP/password was entered or read by the agent.
+- User retried on the phone and subsequently confirmed on 2026-10-02:
+  "yes i got otp and logged in". SMS receipt and successful OTP sign-in are
+  user-confirmed, not independently inspected or traced by the agent. Chef
+  restoration, wrong-code/resend and session-lifecycle edge cases remain
+  unchecked live. No phone number/OTP/password was entered or read by the agent.
 - Configuration-only local checkpoint tag: `KUSHIRAVI-msg91-mobile-config-v1`,
   not an installable APK version. Resolve its documentation commit with
   `git rev-parse KUSHIRAVI-msg91-mobile-config-v1^{}`. No GitHub push.
@@ -88,9 +90,10 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   still returned `mobileIntegration: 0`. Existing MSG91 account sign-in and
   enabling only CravesOTP Mobile Integration are required; no APK rebuild is
   needed for this remote setting. No OTP/password was read, entered or logged.
-- Fresh SMS/OTP sign-in, resend/wrong-code acceptance and Chef restoration
-  have NOT been verified live. The attempted Chef switch reached its confirmation
-  dialog, but the subsequent visible screen was phone entry, not Chef Dashboard;
+- At initial installation, fresh SMS/OTP sign-in, resend/wrong-code acceptance
+  and Chef restoration had NOT been verified live. The attempted Chef switch
+  reached its confirmation dialog, but the subsequent visible screen was phone
+  entry, not Chef Dashboard;
   stopped input to avoid interrupting user authentication. No role was granted
   or successful Chef check inferred from the earlier v1.18 installation.
 - Pre-build verification: TypeScript passed; changed-source ESLint passed with

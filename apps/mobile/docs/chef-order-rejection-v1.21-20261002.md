@@ -64,9 +64,62 @@ visible server failure, and in-flight close/duplicate submission guards.
 
 ## Build and installation receipt
 
-Build, exact immutable source SHA/tag, APK/ZIP hashes, signature and actual
-phone verification will be recorded after they have completed. This section
-does not claim a new installation until the physical device confirms it.
+- Immutable source: `5fac235a421f9541dfac40f3d82beee7fe6fad93`.
+- Tag: `KUSHIRAVI-app-v1.21`; app commit:
+  `fix(mobile): keep chef rejection controls visible above keyboard (v1.21)`.
+- Built using the existing script with `-SkipNpmCi -PhoneOnly`; no new
+  dependencies. Build passed in 4m 26s, 864 tasks (41 executed / 823 cached).
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.21.apk`, 49,015,928 bytes.
+- APK SHA-256:
+  `0FDD5E1AF580FC645E63D557158960B541B8433A2FFB3B299DE11F4362663918`.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.21-source.zip`,
+  13,337,908 bytes, made with `git archive KUSHIRAVI-app-v1.21`.
+- ZIP SHA-256:
+  `1B67F26F6CB0A788C37A054E8574E11F86CC3137719BC3C10356AFF55631EE1D`.
+- ZIP inspection confirms the locked dependencies, environment example,
+  existing keystore, build script, rejection screen and Android code 32 /
+  name 1.21. The ZIP was not separately extracted and rebuilt in this task.
+- APK metadata: `com.cravesapp`, code 32 / name 1.21, arm64-v8a.
+- v2/v3 APK signature verification passes. Certificate unchanged:
+  SHA-1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`;
+  SHA-256 `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`.
+- Replace-install returned Success. Device confirms code 32 / name 1.21;
+  `lastUpdateTime=2026-10-02 03:38:39` Asia/Calcutta. Original
+  `firstInstallTime=2026-09-30 03:39:04` is unchanged; no app data cleared.
+- The phone's installed base APK SHA-256 matches the versioned APK exactly.
+- Cold launch: Status OK, MainActivity, total time 487 ms / wait time 498 ms.
+  Authenticated Chef side and the previous order detail were restored.
+
+## Physical verification
+
+Inspected fresh Android UI trees and screenshots on the connected phone.
+No production Confirm reject or Accept/Ready action was pressed.
+
+- Order detail: empty reason disables confirmation. Typed
+  `Visibility check only`; with keyboard open, Cancel is at
+  `[51,1350][527,1493]` and Confirm reject at `[558,1350][1029,1493]`.
+  Both are visible/enabled above the keyboard. Cancel closes with one tap.
+  The same order remains NEW.
+- New orders: both buttons now visible without the keyboard (previously
+  absent from the native UI tree). With keyboard open and the test reason,
+  Cancel is at `[51,1371][527,1494]` and Reject Order at
+  `[558,1371][1029,1494]`, visible/enabled above the keyboard. Cancel closes
+  with one tap; order remains in New. Reopening shows an empty draft and
+  disabled confirmation. Android Back closes the sheet.
+- Current process ID 24477: zero matching fatal/ReactNativeJS error entries.
+- Left the phone on Chef Orders -> New, with the rejection sheet dismissed.
+- Physical iOS and actual production rejection/refund were not tested.
+  Automated tests exercise successful/failed submission and status handling.
+
+Screenshots inspected:
+
+- `C:\mscratch\artifacts\chef-rejection-v1.21-phone-20261002\new-orders-reject-after.png`.
+- `C:\mscratch\artifacts\chef-rejection-v1.21-phone-20261002\new-orders-reject-keyboard-after.png`.
+- `C:\mscratch\artifacts\chef-rejection-v1.21-phone-20261002\order-detail-reject-keyboard-after.png`.
+- Build log: `C:\mscratch\artifacts\chef-rejection-v1.21-phone-20261002\build.log`.
+
+Existing SDK metadata/Gradle deprecation warnings were non-blocking; no
+toolchain, dependency or CI/CD changes were made for this fix.
 
 ## Manual retest
 

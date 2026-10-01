@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.20 Chef Acceptance
+# KUSHIRAVI App Build - Version 1.21 Chef Rejection
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,11 +9,11 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `31`
-- Installed Android versionName: `1.20`
+- Installed Android versionCode: `32`
+- Installed Android versionName: `1.21`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed source: `0e892a5b3517ddcf4725dce8e7552e12809d1b79`, tag `KUSHIRAVI-app-v1.20`. Chef acceptance uses saved item preparation times with a 15-minute missing-time fallback; request tracing is UUID-compatible. Cold launch restored the authenticated Chef side, and menu/order-detail/New/Preparing/Ready reads were checked. Both preparation-time inputs are removed. Genuine fresh paid acceptance, rejection/ready mutations and delivery handoff remain unperformed in this task; prior MSG91 user-confirmed sign-in evidence is preserved below.
-- Last installation: `2026-10-02 03:11:43` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed source: `5fac235a421f9541dfac40f3d82beee7fe6fad93`, tag `KUSHIRAVI-app-v1.21`. Chef rejection sheets keep the reason field and confirmation buttons visible, including with the keyboard open. Both entry points were physically checked; cancellation leaves the order unchanged and reopening clears the draft. v1.20 automatic preparation-time/UUID fixes are preserved. Genuine paid acceptance, rejection/ready mutations and delivery handoff remain unperformed in this task; prior MSG91 sign-in evidence is preserved below.
+- Last installation: `2026-10-02 03:38:39` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
@@ -25,8 +25,8 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   `ffae3e945fee8030093806809af56e3a3980e080`; phone had v1.20 / code 31.
   No GitHub push. Previous tags and APK checkpoints remain untouched.
 - Package `com.cravesapp`, versionCode `32`, versionName `1.21`.
-  New installable checkpoint: `KUSHIRAVI-app-v1.21`. Exact source SHA,
-  signed APK/source ZIP hashes and installation receipt follow verification.
+  Immutable checkpoint: `KUSHIRAVI-app-v1.21`, source
+  `5fac235a421f9541dfac40f3d82beee7fe6fad93`.
 - Reproduced on the connected phone: tapping Reject in New orders opens the
   sheet, but the unbounded flex reason input pushes Cancel/Reject Order below
   the screen. The native UI tree has no visible confirmation control.
@@ -44,9 +44,26 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   warnings; full Jest suite passes (202 suites / 1,088 tests). The screen suite
   covers both rejection entry points, bounded field/footer placement, empty
   reason, cancellation, delayed server success, failure and busy guards.
-- Expected versioned artifacts:
-  `C:\mscratch\artifacts\KUSHIRAVI-app-v1.21.apk` and
-  `C:\mscratch\artifacts\KUSHIRAVI-app-v1.21-source.zip`.
+- Signed release build passed in 4m 26s, 864 tasks (41 executed / 823 cached),
+  arm64-v8a. APK metadata code 32 / name 1.21; v2/v3 signing verifies with
+  the unchanged certificate.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.21.apk`, 49,015,928 bytes.
+  SHA-256: `0FDD5E1AF580FC645E63D557158960B541B8433A2FFB3B299DE11F4362663918`.
+  Tagged source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.21-source.zip`,
+  13,337,908 bytes.
+  SHA-256: `1B67F26F6CB0A788C37A054E8574E11F86CC3137719BC3C10356AFF55631EE1D`.
+- Replace-install succeeded; device confirms code 32 / name 1.21, update time
+  `2026-10-02 03:38:39` Asia/Calcutta. Its actual installed base APK SHA-256
+  matches the versioned file exactly. First-install timestamp unchanged:
+  `2026-09-30 03:39:04`. Cold launch OK (487 ms), Chef session restored.
+- Physical checks: New orders and order-detail Reject sheets show both buttons
+  before/after the keyboard opens. Blank reason disables confirmation; a typed
+  reason enables it. Cancel closes each sheet with one tap while the keyboard
+  is open and keeps the order in New. Reopening clears the draft. Zero matched
+  process crash/JavaScript errors; phone left on Chef Orders -> New.
+- No production rejection, refund, paid acceptance, ready mutation or delivery
+  booking was submitted. Server success/failure submission is covered by
+  automated tests; a genuine fresh order remains the production retest.
 - Detailed build/phone receipt and test steps:
   `docs\chef-order-rejection-v1.21-20261002.md`.
 

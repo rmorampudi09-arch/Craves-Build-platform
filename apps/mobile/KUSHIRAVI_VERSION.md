@@ -19,6 +19,41 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.19 - Native MSG91 OTP Integration, 2026-10-02
+
+- Branch `KUSHIRAVI-app-build`; clean start at
+  `8750c988845c0c3c7fab43d41aa27ddbfe687d6a`. No GitHub push, backend changes,
+  payment changes, UI redesign, role grants or account migration.
+- Android package `com.cravesapp`, versionCode `30`, versionName `1.19`.
+  Installable tag `KUSHIRAVI-app-v1.19`; exact source resolves with
+  `git rev-parse KUSHIRAVI-app-v1.19^{}` after the verified source commit.
+- Uses the official native MSG91 SDK and the live web configuration/verification
+  contract. Firebase SMS methods removed. Backend-issued Firebase custom token
+  compatibility remains necessary because the verified live backend still uses
+  it to preserve existing identities, Chef roles and Craves refresh sessions.
+  Email/password and recovery remain consistent with the working web.
+- Resend now retries its existing provider request and tracks replacement IDs.
+  Cooldown, retries and expiry come from actual widget configuration. Runtime
+  response checks, bounded requests, double-tap guards, cancellation, replay
+  prevention and partial-session cleanup added. Existing screens/styles retained.
+- Live reference: `https://craves.in/api/version` source
+  `0472d7e58f9c205c60b55ca7d7475a3953f056c1`. GitHub main remained Firebase;
+  compared the deployed Azure DevOps branch instead of assuming main was live.
+  Public config selected MSG91, backend enabled, malformed bridge body returned
+  HTTP 400 `AUTH_REQUEST_INVALID`. Provider read-only policy confirmed six digits,
+  30 seconds/two retries/15 minutes; Mobile Integration was OFF at preflight.
+  User action requested to enable only that existing setting. No Firebase SMS
+  fallback or bypass while mobile verification is unavailable.
+- Source/build/installation evidence will be recorded after checks, build and
+  phone replace-install. Existing installed checkpoint remains v1.18 until then.
+- Pre-build verification: TypeScript passed; changed-source ESLint passed with
+  zero warnings; all 197 Jest suites / 1,054 tests passed. Focused auth checks:
+  25 suites / 162 tests passed. These are automated checks, not SMS acceptance.
+- Planned immutable APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.19.apk`;
+  source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.19-source.zip`.
+- Setup, exact contracts, protected boundaries and manual acceptance steps:
+  `src\features\auth\msg91\README.md`.
+
 ### Chef Application Auth Connection v1, 2026-10-01 - Backend configuration only
 
 - Requested fix for Chef application submission failing to save the address.

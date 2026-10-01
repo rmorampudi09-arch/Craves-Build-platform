@@ -4,6 +4,7 @@
     "baseUrl": ".",
     "ignoreDeprecations": "6.0",
     "paths": {
+      "@msg91comm/sendotp-react-native": ["src/types/msg91-sendotp.d.ts"],
       "expo-location": [
         "src/features/customerAddresses/location/currentLocation.ts"
       ]

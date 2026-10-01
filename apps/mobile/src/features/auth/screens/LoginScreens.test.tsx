@@ -25,6 +25,9 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('../state/authService', () => ({
   authService: {
     beginPhone: jest.fn(async () => undefined),
+    resendOtp: jest.fn(async () => undefined),
+    otpResendAvailableAt: jest.fn(() => Date.now() + 30000),
+    cancelPhoneVerification: jest.fn(),
     confirmOtp: jest.fn(async () => ({ identity: { uid: 'verified-user' } })),
     emailLogin: jest.fn(async () => ({ identity: { uid: 'verified-user' } })),
   },
@@ -113,6 +116,31 @@ describe('reference login styling preserves auth contracts', () => {
     expect(navigation.navigate).not.toHaveBeenCalled();
     expect(tree.root.findByType(AuthRoleCards).props.value).toBe('CHEF');
   });
+  it('does not navigate or retain a phone when an SMS response arrives after leaving the form', async () => {
+    let finish!: () => void;
+    (authService.beginPhone as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        }),
+    );
+    render(<PhoneSignInScreen {...props()} />);
+    act(() =>
+      tree.root.findByType(AuthTextField).props.onChangeText('9876541234'),
+    );
+    let submission!: Promise<void>;
+    act(() => {
+      submission = button('Send OTP').props.onPress();
+    });
+    act(() => tree.unmount());
+    await act(async () => {
+      finish();
+      await submission;
+    });
+    expect(navigation.navigate).not.toHaveBeenCalled();
+    expect(authTransitionMemory.getPendingPhone()).toBeNull();
+    expect(authService.cancelPhoneVerification).toHaveBeenCalled();
+  });
   it('opens the existing email-only route and does not promise phone/password login', () => {
     render(<PhoneSignInScreen {...props('CHEF')} />);
     act(() => button('Use email & password').props.onPress());
@@ -177,10 +205,7 @@ describe('reference login styling preserves auth contracts', () => {
     await act(async () => {
       await resend().props.onPress();
     });
-    expect(authService.beginPhone).toHaveBeenCalledWith(
-      'CHEF',
-      '+919876541234',
-    );
+    expect(authService.resendOtp).toHaveBeenCalledWith('+919876541234');
     expect(resend().props.disabled).toBe(true);
   });
   it('keeps expired OTP sessions disabled and provides a route back to phone entry', () => {

@@ -1,18 +1,25 @@
-import {AppApiError, toAppApiError} from '../../../core/http/apiError';
-import {sessionManager} from '../api/sessionManager';
-import {authApi} from '../api/authApi';
-import {firebaseAuth} from '../firebase/firebaseAuth';
+import { AppApiError, toAppApiError } from '../../../core/http/apiError';
+import { sessionManager } from '../api/sessionManager';
+import { authApi } from '../api/authApi';
+import { firebaseAuth } from '../firebase/firebaseAuth';
+import { msg91Auth } from '../msg91/msg91Auth';
 import {
   mapFirebaseAuthError,
   mapPasswordRecoveryFirebaseError,
 } from '../firebase/firebaseAuthError';
-import type {AuthRole, AuthTokenResponse} from '../domain/types';
+import type { AuthRole, AuthTokenResponse } from '../domain/types';
 
 async function clearPartialAuthentication(): Promise<void> {
-  await Promise.allSettled([sessionManager.clearLocal(), firebaseAuth.signOut()]);
+  msg91Auth.cancel();
+  await Promise.allSettled([
+    sessionManager.clearLocal(),
+    firebaseAuth.signOut(),
+  ]);
 }
 
-async function exchangeAndPersist(firebaseIdToken: string): Promise<AuthTokenResponse> {
+async function exchangeAndPersist(
+  firebaseIdToken: string,
+): Promise<AuthTokenResponse> {
   try {
     const tokens = await authApi.exchangeFirebaseToken(firebaseIdToken);
     await sessionManager.acceptTokenPair(tokens);
@@ -34,25 +41,64 @@ export const authService = {
   async discardRestoredSession(): Promise<void> {
     await clearPartialAuthentication();
   },
-  async beginPhone(role: AuthRole, e164Phone: string): Promise<{role: AuthRole; phone: string}> {
+  async beginPhone(
+    role: AuthRole,
+    e164Phone: string,
+  ): Promise<{ role: AuthRole; phone: string }> {
     try {
-      await firebaseAuth.beginPhoneSignIn(e164Phone);
-      return {role, phone: e164Phone};
+      await msg91Auth.beginPhoneSignIn(e164Phone);
+      return { role, phone: e164Phone };
     } catch (error) {
       throw mapFirebaseAuthError(error);
     }
+  },
+  async resendOtp(phone: string): Promise<void> {
+    await msg91Auth.resendOtp(phone);
+  },
+  otpResendAvailableAt(): number {
+    return msg91Auth.resendAvailableAt();
+  },
+  cancelPhoneVerification(): void {
+    msg91Auth.cancel();
   },
   async confirmOtp(code: string): Promise<AuthTokenResponse> {
-    try {
-      const firebaseIdToken = await firebaseAuth.confirmOtp(code);
-      return await exchangeAndPersist(firebaseIdToken);
-    } catch (error) {
-      throw mapFirebaseAuthError(error);
-    }
+    return msg91Auth.confirmOtp(code, async (accessToken, assertCurrent) => {
+      try {
+        const customToken = await authApi.verifyMsg91Token(accessToken);
+        assertCurrent();
+        const firebaseIdToken = await firebaseAuth.signInWithBackendToken(
+          customToken,
+        );
+        assertCurrent();
+        const tokens = await authApi.exchangeFirebaseToken(firebaseIdToken);
+        assertCurrent();
+        await sessionManager.acceptTokenPair(tokens);
+        assertCurrent();
+        return tokens;
+      } catch (error) {
+        await clearPartialAuthentication();
+        const mapped = mapFirebaseAuthError(error);
+        if (mapped.cancelled) {
+          throw mapped;
+        }
+        throw new AppApiError(
+          'OTP_RESTART',
+          'Sign-in could not be completed. Go back and request a new code.',
+          mapped.status,
+          mapped.correlationId,
+        );
+      }
+    });
   },
-  async emailLogin(email: string, password: string): Promise<AuthTokenResponse> {
+  async emailLogin(
+    email: string,
+    password: string,
+  ): Promise<AuthTokenResponse> {
     try {
-      const firebaseIdToken = await firebaseAuth.signInWithEmail(email, password);
+      const firebaseIdToken = await firebaseAuth.signInWithEmail(
+        email,
+        password,
+      );
       return await exchangeAndPersist(firebaseIdToken);
     } catch (error) {
       const mapped = mapFirebaseAuthError(error);

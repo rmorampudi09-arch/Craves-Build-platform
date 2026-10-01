@@ -19,7 +19,6 @@ import {
   getOtpFailureRecovery,
   isOtpCodeComplete,
   OTP_CODE_LENGTH,
-  OTP_RESEND_COOLDOWN_SECONDS,
   remainingOtpCooldownSeconds,
   sanitizeOtpCode,
 } from '../domain/otpVerificationPolicy';
@@ -38,12 +37,14 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
   const [busy, setBusy] = useState(false);
   const [clockMs, setClockMs] = useState(() => Date.now());
   const [resendAvailableAt, setResendAvailableAt] = useState(() =>
-    createOtpCooldownDeadline(OTP_RESEND_COOLDOWN_SECONDS, clockMs),
+    authService.otpResendAvailableAt(),
   );
   const [rateLimitUntil, setRateLimitUntil] = useState(0);
   const [requiresResend, setRequiresResend] = useState(false);
+  const [requiresRestart, setRequiresRestart] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestGate = useRef(createOtpRequestGate());
+  const mounted = useRef(true);
   const resendAvailabilityAnnounced = useRef(false);
 
   const resendSeconds = remainingOtpCooldownSeconds(resendAvailableAt, clockMs);
@@ -54,13 +55,27 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
     isOtpCodeComplete(code) &&
     !busy &&
     !requiresResend &&
+    !requiresRestart &&
     !rateLimited;
   const canResend =
-    Boolean(phone) && resendSeconds === 0 && !busy && !rateLimited;
+    Boolean(phone) &&
+    resendSeconds === 0 &&
+    !busy &&
+    !rateLimited &&
+    !requiresRestart;
 
   useEffect(() => {
     const id = setInterval(() => setClockMs(Date.now()), 1000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      authService.cancelPhoneVerification();
+      authTransitionMemory.clearPendingPhone();
+    };
   }, []);
 
   useEffect(() => {
@@ -78,6 +93,15 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
     const apiError = toAppApiError(caught);
     const recovery = getOtpFailureRecovery(apiError.code);
     setError(apiError.message);
+    if (
+      ['OTP_RESTART', 'OTP_RESEND_LIMIT', 'OTP_CANCELLED'].includes(
+        apiError.code,
+      )
+    ) {
+      setRequiresRestart(true);
+      setCode('');
+    }
+    setResendAvailableAt(authService.otpResendAvailableAt());
 
     if (recovery.clearCode) {
       setCode('');
@@ -107,13 +131,20 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
     setError(null);
     try {
       const tokens = await authService.confirmOtp(code);
+      if (!mounted.current) {
+        return;
+      }
       authTransitionMemory.clearPendingPhone();
       dispatch(authActions.authenticated(tokens.identity));
     } catch (caught) {
-      applyFailureRecovery(caught);
+      if (mounted.current) {
+        applyFailureRecovery(caught);
+      }
     } finally {
       requestGate.current.release();
-      setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+      }
     }
   };
 
@@ -125,23 +156,28 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
     setBusy(true);
     setError(null);
     try {
-      await authService.beginPhone(role, phone);
+      await authService.resendOtp(phone);
+      if (!mounted.current) {
+        return;
+      }
       const now = Date.now();
       setClockMs(now);
       setCode('');
       setRequiresResend(false);
       setRateLimitUntil(0);
-      setResendAvailableAt(
-        createOtpCooldownDeadline(OTP_RESEND_COOLDOWN_SECONDS, now),
-      );
+      setResendAvailableAt(authService.otpResendAvailableAt());
       AccessibilityInfo.announceForAccessibility(
         'A new verification code was sent.',
       );
     } catch (caught) {
-      applyFailureRecovery(caught);
+      if (mounted.current) {
+        applyFailureRecovery(caught);
+      }
     } finally {
       requestGate.current.release();
-      setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+      }
     }
   };
 

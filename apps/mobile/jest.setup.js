@@ -137,8 +137,18 @@ jest.mock('@react-native-firebase/auth', () => ({
   getIdToken: jest.fn(),
   sendPasswordResetEmail: jest.fn(),
   signInWithEmailAndPassword: jest.fn(),
-  signInWithPhoneNumber: jest.fn(),
+  signInWithCustomToken: jest.fn(),
   signOut: jest.fn(),
+}));
+
+jest.mock('@msg91comm/sendotp-react-native', () => ({
+  OTPWidget: {
+    initializeWidget: jest.fn(async () => undefined),
+    getWidgetProcess: jest.fn(),
+    sendOTP: jest.fn(),
+    verifyOTP: jest.fn(),
+    retryOTP: jest.fn(),
+  },
 }));
 
 jest.mock('react-native-razorpay', () => ({

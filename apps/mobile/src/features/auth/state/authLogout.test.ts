@@ -1,19 +1,21 @@
-import {authApi} from '../api/authApi';
-import {sessionManager} from '../api/sessionManager';
-import {firebaseAuth} from '../firebase/firebaseAuth';
-import {authService} from './authService';
+import { authApi } from '../api/authApi';
+import { sessionManager } from '../api/sessionManager';
+import { firebaseAuth } from '../firebase/firebaseAuth';
+import { msg91Auth } from '../msg91/msg91Auth';
+import { authService } from './authService';
 
 jest.mock('../api/authApi', () => ({
-  authApi: {logout: jest.fn()},
+  authApi: { logout: jest.fn() },
 }));
 
 jest.mock('../api/sessionManager', () => ({
-  sessionManager: {clearLocal: jest.fn()},
+  sessionManager: { clearLocal: jest.fn() },
 }));
 
 jest.mock('../firebase/firebaseAuth', () => ({
-  firebaseAuth: {signOut: jest.fn()},
+  firebaseAuth: { signOut: jest.fn() },
 }));
+jest.mock('../msg91/msg91Auth', () => ({ msg91Auth: { cancel: jest.fn() } }));
 
 const remoteLogoutMock = authApi.logout as jest.Mock;
 const clearLocalMock = sessionManager.clearLocal as jest.Mock;
@@ -33,6 +35,7 @@ describe('authService logout semantics', () => {
     expect(remoteLogoutMock).toHaveBeenCalledTimes(1);
     expect(clearLocalMock).toHaveBeenCalledTimes(1);
     expect(firebaseSignOutMock).toHaveBeenCalledTimes(1);
+    expect(msg91Auth.cancel).toHaveBeenCalledTimes(1);
     expect(remoteLogoutMock.mock.invocationCallOrder[0]).toBeLessThan(
       clearLocalMock.mock.invocationCallOrder[0],
     );

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../../app/navigation/types';
@@ -31,9 +31,19 @@ export function PhoneSignInScreen({ navigation, route }: Props) {
   const [chefSignup, setChefSignup] = useState(false);
   const phoneInput = useRef<TextInput>(null);
   const requestGate = useRef(createPhoneRequestGate());
+  const mounted = useRef(true);
   const phoneValid = isSupportedPhoneValid(phone);
   const validationError = getPhoneValidationError(phone);
   const copy = getPhoneSignInCopy(role);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      authService.cancelPhoneVerification();
+      authTransitionMemory.clearPendingPhone();
+    };
+  }, []);
 
   const submit = async () => {
     if (!phoneValid || busy || !requestGate.current.tryAcquire()) {
@@ -47,13 +57,20 @@ export function PhoneSignInScreen({ navigation, route }: Props) {
 
     try {
       await authService.beginPhone(submission.role, submission.phone);
+      if (!mounted.current) {
+        return;
+      }
       authTransitionMemory.setPendingPhone(submission.phone);
       navigation.navigate('OtpVerification', { role: submission.role });
     } catch (error) {
-      setRequestError(toAppApiError(error).message);
+      if (mounted.current) {
+        setRequestError(toAppApiError(error).message);
+      }
     } finally {
       requestGate.current.release();
-      setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+      }
     }
   };
 

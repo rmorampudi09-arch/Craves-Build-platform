@@ -21,7 +21,7 @@ export interface PhoneSignInCopy {
 
 const PHONE_SIGN_IN_COPY: Record<AuthRole, PhoneSignInCopy> = {
   CUSTOMER: {
-    description: 'We use Firebase phone verification to keep your Craves account secure.',
+    description: 'We verify your phone number securely to protect your Craves account.',
     continueAccessibilityHint: 'Requests a verification code for this phone number',
   },
   CHEF: {

@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.17.3 Login Keyboard Correction Prepared
+# KUSHIRAVI App Build - Version 1.17.4 Login Keyboard Reset Prepared
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,17 +9,28 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `26`
-- Installed Android versionName: `1.17.2`
+- Installed Android versionCode: `27`
+- Installed Android versionName: `1.17.3`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed source: `33eab68d83085e770dd9a095effd1ba7396ed14e`, tag `KUSHIRAVI-app-v1.17.2`. Reference styling and wordmark verified; final keyboard follow-up is pending.
-- Last installation: `2026-10-01 07:34:54`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed source: `e8392aaa5d3ef15e20da2910cdf6a827b32facd6`, tag `KUSHIRAVI-app-v1.17.3`. Reference styling and focused field verified; keyboard-dismissal follow-up is pending.
+- Last installation: `2026-10-01 08:11:53`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.17.3 Prepared - Login keyboard avoidance
+### Version 1.17.4 Prepared - Restore the full login panel after keyboard dismissal
+
+- Native v1.17.3 showed the focused field above the keyboard, but dismissing the
+  keyboard left a bottom gap. Android's keyboard-hide frame excludes system bars;
+  the framework height avoidance treated that as residual keyboard space.
+- Login-only Android padding uses the measured layout and keyboard-show top,
+  explicitly resets to zero on hide and removes its listeners on unmount.
+  iOS keeps standard padding avoidance. No form/auth/business changes.
+- Code `28` / name `1.17.4`; fresh tag and verified artifacts will follow.
+- Regression covers show, resize, hide with a non-fullscreen frame and cleanup.
+
+### Version 1.17.3 Verification Build - Login keyboard avoidance
 
 - Live v1.17.2 checks confirmed the reference-style welcome, Customer/Chef
   choices and correctly sized top wordmark. The keyboard exposed the existing
@@ -27,8 +38,20 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Use KeyboardAvoidingView's Android `height` behavior in the login layout,
   retaining iOS `padding`. Normal keyboard-closed appearance and auth handlers
   are unchanged. Regression assertions cover the platform behavior.
-- Code `27` / name `1.17.3`; planned fresh tag `KUSHIRAVI-app-v1.17.3`.
-- APK, source ZIP, source SHA and phone checks will follow verification.
+- Code `27` / name `1.17.3`; source/tag
+  `e8392aaa5d3ef15e20da2910cdf6a827b32facd6` / `KUSHIRAVI-app-v1.17.3`.
+- APK `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.3.apk`, SHA-256
+  `A05E7979DFE54CB09C09E0A528C4FC8541CC64D601A74C0018192D84EA27F995`.
+  Source ZIP `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.3-source.zip`, SHA-256
+  `2809A6B85564089FFBC00940CE01BD6C132339DC19466A6DB4B1101FDBADE489`.
+- TypeScript/lint and 22 targeted tests passed (289.526s). Signed ARM64 build
+  passed in 24m 41s, 823 tasks / 41 executed; existing v2/v3 certificate verified.
+  Fourteen packaged source entries match source. Replace-install succeeded at
+  `2026-10-01 08:11:53`, code 27 / name 1.17.3, without clearing data.
+  Cold launch Status ok / TotalTime 761ms / WaitTime 785ms.
+- Welcome and Customer phone inspected. Empty phone input is visible above IME;
+  dismissal exposed a residual bottom gap. This is a trial, fixed in v1.17.4.
+  No phone number entered, OTP sent or authentication submitted.
 
 ### Version 1.17.2 Verification Build - Native wordmark sizing correction
 

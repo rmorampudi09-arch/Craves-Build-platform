@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -31,12 +32,51 @@ export function VideoAuthLayout({
 }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const [androidLayoutBottom, setAndroidLayoutBottom] = useState(0);
+  const [androidKeyboardTop, setAndroidKeyboardTop] = useState<number | null>(
+    () =>
+      Platform.OS === 'android' ? Keyboard.metrics()?.screenY ?? null : null,
+  );
+  useEffect(() => {
+    if (Platform.OS !== 'android') {
+      return;
+    }
+    // Android's hide event can exclude system bars; hiding must reset to zero.
+    const show = Keyboard.addListener('keyboardDidShow', event => {
+      setAndroidKeyboardTop(event.endCoordinates.screenY);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      setAndroidKeyboardTop(null);
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  const androidKeyboardPadding =
+    androidKeyboardTop === null
+      ? 0
+      : Math.max(0, androidLayoutBottom - androidKeyboardTop);
   const logoWidth = Math.min(width * 0.65, 310);
   const heroFraction = loginHeroFractions[welcome ? 'welcome' : variant];
   return (
     <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={[
+        styles.root,
+        Platform.OS === 'android' && {
+          paddingBottom: androidKeyboardPadding,
+        },
+      ]}
+      enabled={Platform.OS === 'ios'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      onLayout={
+        Platform.OS === 'android'
+          ? event => {
+              const { y, height } = event.nativeEvent.layout;
+              setAndroidLayoutBottom(y + height);
+            }
+          : undefined
+      }
     >
       <StatusBar barStyle="dark-content" />
       <View

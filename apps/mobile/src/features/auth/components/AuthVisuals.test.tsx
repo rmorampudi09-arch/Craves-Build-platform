@@ -1,6 +1,13 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text } from 'react-native';
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  type KeyboardEvent,
+} from 'react-native';
 import { LinearGradient, Stop } from 'react-native-svg';
 import { AuthRoleCards } from './AuthRoleCards';
 import { AuthActionButton } from './AuthActionButton';
@@ -35,13 +42,69 @@ describe('login reference visual structure', () => {
           </VideoAuthLayout>,
         );
         expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBe(
-          platform === 'ios' ? 'padding' : 'height',
+          platform === 'ios' ? 'padding' : undefined,
+        );
+        expect(tree.root.findByType(KeyboardAvoidingView).props.enabled).toBe(
+          platform === 'ios',
         );
       } finally {
         replacement.restore();
       }
     },
   );
+
+  it('clears Android keyboard spacing even when the hide frame excludes system bars', () => {
+    const platform = jest.replaceProperty(Platform, 'OS', 'android');
+    const handlers: Record<string, (event: KeyboardEvent) => void> = {};
+    const subscriptions: { remove: jest.Mock }[] = [];
+    const listener = jest
+      .spyOn(Keyboard, 'addListener')
+      .mockImplementation((name, callback) => {
+        handlers[name] = callback;
+        const subscription = { remove: jest.fn() };
+        subscriptions.push(subscription);
+        return subscription;
+      });
+    const metrics = jest.spyOn(Keyboard, 'metrics').mockReturnValue(undefined);
+    try {
+      render(
+        <VideoAuthLayout>
+          <Text>Form</Text>
+        </VideoAuthLayout>,
+      );
+      const root = () => tree.root.findByType(KeyboardAvoidingView);
+      const padding = () => StyleSheet.flatten(root().props.style).paddingBottom;
+      act(() => {
+        root().props.onLayout({ nativeEvent: { layout: { y: 0, height: 800 } } });
+      });
+      expect(padding()).toBe(0);
+      act(() => {
+        handlers.keyboardDidShow({
+          endCoordinates: { screenY: 520, height: 280 },
+        } as KeyboardEvent);
+      });
+      expect(padding()).toBe(280);
+      act(() => {
+        root().props.onLayout({ nativeEvent: { layout: { y: 0, height: 900 } } });
+      });
+      expect(padding()).toBe(380);
+      act(() => {
+        handlers.keyboardDidHide({
+          endCoordinates: { screenY: 840, height: 0 },
+        } as KeyboardEvent);
+      });
+      expect(padding()).toBe(0);
+      act(() => tree.unmount());
+      expect(subscriptions.length).toBeGreaterThanOrEqual(2);
+      expect(subscriptions.every(item => item.remove.mock.calls.length === 1)).toBe(
+        true,
+      );
+    } finally {
+      listener.mockRestore();
+      metrics.mockRestore();
+      platform.restore();
+    }
+  });
 
   it('uses tall welcome tiles and the bundled bold face, not an OEM font weight', () => {
     render(<AuthRoleCards welcome value="CUSTOMER" onChange={jest.fn()} />);

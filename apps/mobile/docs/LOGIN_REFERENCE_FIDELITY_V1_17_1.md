@@ -1,5 +1,25 @@
 # Craves Login Reference Appearance Version 1.17.1
 
+## Keyboard Reset Follow-up Version 1.17.4
+
+The v1.17.3 native check verified that the focused Customer field stays above
+the keyboard. Dismissing it exposed a residual bottom gap: React Native Android
+reports a hide frame excluding system bars, and its height avoidance retained
+that as keyboard space. Login now measures its layout bottom, applies Android
+padding only from keyboard-show coordinates and resets it to zero on hide.
+Listeners are removed on unmount; iOS retains its standard padding behavior.
+Regression covers show, resize, non-fullscreen hide coordinates and cleanup.
+No authentication or other screen changes. Code 28 / name 1.17.4.
+
+Immutable trial v1.17.3: `e8392aaa5d3ef15e20da2910cdf6a827b32facd6` /
+`KUSHIRAVI-app-v1.17.3`, APK SHA-256
+`A05E7979DFE54CB09C09E0A528C4FC8541CC64D601A74C0018192D84EA27F995`, source ZIP
+SHA-256 `2809A6B85564089FFBC00940CE01BD6C132339DC19466A6DB4B1101FDBADE489`.
+TypeScript/lint and 22 targeted tests passed (289.526s); release passed in
+24m 41s (823 tasks, 41 executed). Fourteen packaged source entries matched.
+Installed 08:11:53 Asia/Calcutta on 2026-10-01; cold launch 761ms / 785ms wait.
+No phone data cleared, number entered or OTP/authentication request submitted.
+
 ## Keyboard Follow-up Version 1.17.3
 
 Live v1.17.2 checks confirmed the visual correction and top wordmark on welcome

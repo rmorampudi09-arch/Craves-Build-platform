@@ -1,5 +1,7 @@
 package in.craves.userchef.security;
 
+import in.craves.userchef.exception.ApiException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,7 +28,20 @@ public class CravesJwtAuthenticationFilter extends OncePerRequestFilter {
         throws ServletException, IOException {
         String header = request.getHeader("Authorization");
         if (StringUtils.hasText(header) && header.startsWith("Bearer ")) {
-            CurrentUser currentUser = jwtVerifier.verify(header.substring(7));
+            CurrentUser currentUser;
+            try {
+                currentUser = jwtVerifier.verify(header.substring(7));
+            } catch (ApiException ex) {
+                // Verification happens before MVC exception handling. Return an
+                // authentication failure instead of leaking a filter exception.
+                SecurityContextHolder.clearContext();
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setHeader("Cache-Control", "no-store");
+                response.setContentType("application/json");
+                new ObjectMapper().writeValue(response.getOutputStream(),
+                    java.util.Map.of("code", ex.getCode(), "message", "A valid Craves access token is required."));
+                return;
+            }
             List<SimpleGrantedAuthority> authorities = currentUser.roles().stream()
                 .map(role -> new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()))
                 .toList();

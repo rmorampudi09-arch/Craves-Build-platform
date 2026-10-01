@@ -1,6 +1,5 @@
 package in.craves.userchef.web;
 
-import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
@@ -15,12 +14,6 @@ import java.util.UUID;
 
 public final class ApiDtos {
     private ApiDtos() {
-    }
-
-    public enum AddressLabel {
-        HOME,
-        WORK,
-        OTHER
     }
 
     public enum ActiveLocationType {
@@ -64,8 +57,7 @@ public final class ApiDtos {
     }
 
     public record CustomerAddressRequest(
-        AddressLabel addressLabel,
-        @Size(max = 80) String addressName,
+        @NotBlank @Size(max = 80) String addressLabel,
         @NotBlank String recipientName,
         @NotBlank @Pattern(regexp = "^\\+?[0-9]{10,15}$") String contactPhoneNumber,
         @NotBlank String addressLine1,
@@ -80,18 +72,15 @@ public final class ApiDtos {
         @NotNull @DecimalMin("-180.0") @DecimalMax("180.0") BigDecimal longitude,
         Boolean isDefault
     ) {
-        @AssertTrue(message = "Name this address before saving")
-        public boolean isAddressNameValid() {
-            return addressLabel != AddressLabel.OTHER
-                || (addressName != null && !addressName.isBlank());
+        public CustomerAddressRequest {
+            addressLabel = addressLabel == null ? null : addressLabel.trim();
         }
     }
 
     public record CustomerAddressResponse(
         UUID id,
         UUID identityId,
-        AddressLabel addressLabel,
-        String addressName,
+        String addressLabel,
         String recipientName,
         String contactPhoneNumber,
         String addressLine1,

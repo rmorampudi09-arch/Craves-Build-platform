@@ -11,21 +11,15 @@ const pageHeader = readFileSync(
   "utf8",
 );
 const theme = readFileSync(new URL("../craves-theme.css", import.meta.url), "utf8");
-const chefTheme = readFileSync(
-  new URL("../app/chef/chef-mode.css", import.meta.url),
-  "utf8",
-);
 
-test("chef workspace uses the approved green, white and neutral palette", () => {
+test("chef workspace uses the approved white, contrast-red and flame-red palette", () => {
   for (const color of ["#f62e18", "#c92716", "#000000", "#ffffff"]) {
     assert.match(theme, new RegExp(color, "i"));
   }
   assert.doesNotMatch(theme, /#261a15/i);
   assert.match(pageHeader, /bg-white/);
-  assert.match(pageHeader, /text-\[#1A1A1A\]/i);
-  assert.match(pageHeader, /text-\[#178F56\]/i);
-  assert.match(chefTheme, /--chef-action:\s*#178f56/i);
-  assert.match(chefTheme, /--chef-action-hover:\s*#147b4a/i);
+  assert.match(pageHeader, /text-black/);
+  assert.match(dashboard, /#F62E18/i);
   assert.match(dashboard, /#F1F3F5/i);
   assert.match(dashboard, /#1A1A1A/i);
   assert.match(dashboard, /#6B6B6B/i);

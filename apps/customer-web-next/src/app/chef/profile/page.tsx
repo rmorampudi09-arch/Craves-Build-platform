@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BadgeIndianRupee, Bell, ChevronRight, FileCheck2, MapPin, Store, UserRound } from "lucide-react";
+import { BadgeIndianRupee, Bell, ChevronRight, FileCheck2, MapPin, Settings, Store, UserRound } from "lucide-react";
 import { ChefAccessBoundary } from "@/components/chef-access-boundary";
 import { ChefPageHeader } from "@/components/chef-page-header";
 

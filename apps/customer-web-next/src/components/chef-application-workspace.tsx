@@ -2,12 +2,21 @@
 
 import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  Camera,
+  Check,
+  ChevronRight,
+  MapPin,
+  Phone,
+  Send,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
+import { ChefApplicationDocumentPanel } from "@/components/chef-application-document-panel";
 import type { CustomerAddress } from "@/lib/address-contract";
 import { selectActiveDeliveryAddress } from "@/lib/address-selection";
-import type {
-  ChefApplication,
-  ChefDocumentType,
-} from "@/lib/chef-application-contract";
+import type { ChefApplication } from "@/lib/chef-application-contract";
 import type { CustomerProfile } from "@/lib/profile-contract";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
 import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel";
@@ -27,6 +36,16 @@ type FormState = {
   longitude: string;
 };
 
+type ApplicationStep =
+  | "welcome"
+  | "about"
+  | "address"
+  | "review"
+  | "documents-intro"
+  | "documents"
+  | "waiting"
+  | "approved";
+
 const EMPTY: FormState = {
   email: "",
   firstName: "",
@@ -40,6 +59,10 @@ const EMPTY: FormState = {
   latitude: "",
   longitude: "",
 };
+
+const PENDING_UPDATE_LABEL = "Update pending application";
+const INPUT_CLASS =
+  "mt-2 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-base text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10 disabled:bg-[#F1F3F5]";
 
 function fromApplication(application: ChefApplication): FormState {
   return {
@@ -84,62 +107,131 @@ function prefillNewApplication(
   };
 }
 
-function responseMessage(
-  body: { code?: unknown; message?: unknown } | null,
-  fallback: string,
-): string {
-  return typeof body?.message === "string" && body.message.trim()
-    ? body.message
-    : fallback;
+function needsPhotoCorrection(application: ChefApplication): boolean {
+  return (
+    application.status === "REJECTED" &&
+    /photo|image|id|aadhaar|pan|document|proof/i.test(application.rejectionReason ?? "")
+  );
+}
+
+function hasRequiredEvidence(application: ChefApplication): boolean {
+  const types = new Set(application.documents.map((document) => document.documentType));
+  const modernEvidence = [
+    "APPLICANT_PHOTO",
+    "GOVERNMENT_ID_FRONT",
+    "GOVERNMENT_ID_BACK",
+    "TAX_ID_CARD",
+  ].every((type) => types.has(type as never));
+  return modernEvidence;
+}
+
+function addressSummary(form: FormState): string {
+  return [
+    form.addressLine1,
+    form.addressLine2,
+    form.landmark,
+    form.city,
+    form.state,
+    form.postalCode,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function StepHeader({
+  part,
+  label,
+  onBack,
+}: {
+  part: 1 | 2 | 3;
+  label: string;
+  onBack?: () => void;
+}) {
+  return (
+    <div>
+      <div className="flex min-h-11 items-center justify-between gap-3">
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full px-2 text-sm font-semibold text-[#1A1A1A] hover:bg-[#F1F3F5]"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Back
+          </button>
+        ) : (
+          <span />
+        )}
+        <p className="text-sm font-semibold text-[#6B6B6B]">Part {part} of 3 · {label}</p>
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-2" aria-hidden="true">
+        {[1, 2, 3].map((value) => (
+          <span
+            key={value}
+            className={`h-1.5 rounded-full ${value <= part ? "bg-[#F62E18]" : "bg-[#E5E7EB]"}`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function IconCircle({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+      {children}
+    </span>
+  );
 }
 
 export function ChefApplicationWorkspace() {
   const [application, setApplication] = useState<ChefApplication | null>(null);
+  const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const [emailVerification, setEmailVerification] = useState<EmailVerificationState | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
-  const [message, setMessage] = useState("Loading your chef application…");
+  const [step, setStep] = useState<ApplicationStep>("welcome");
+  const [message, setMessage] = useState("Loading your application…");
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
-  const [proofType, setProofType] = useState<ChefDocumentType>("AADHAAR_CARD");
-  const [proofFile, setProofFile] = useState<File | null>(null);
-  const [emailVerification, setEmailVerification] = useState<EmailVerificationState | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
   async function load() {
     setLoadFailed(false);
-    const [applicationResponse, profileResponse, addressesResponse] =
-      await Promise.all([
-        fetch("/api/chef/application", { cache: "no-store" }),
-        fetch("/api/customer/profile", { cache: "no-store" }),
-        fetch("/api/customer/addresses", { cache: "no-store" }),
-      ]);
-    const applicationBody = (await applicationResponse
-      .json()
-      .catch(() => null)) as ChefApplication | null;
+    const [applicationResponse, profileResponse, addressesResponse] = await Promise.all([
+      fetch("/api/chef/application", { cache: "no-store" }),
+      fetch("/api/customer/profile", { cache: "no-store" }),
+      fetch("/api/customer/addresses", { cache: "no-store" }),
+    ]);
+    const applicationBody = (await applicationResponse.json().catch(() => null)) as ChefApplication | null;
     if (!applicationResponse.ok || !applicationBody) {
       throw new Error(
         applicationResponse.status === 401
-          ? "Sign in to manage your chef application."
-          : "Chef application is temporarily unavailable.",
+          ? "Sign in to continue your chef application."
+          : "We couldn’t load your application right now.",
       );
     }
 
-    const profile = profileResponse.ok
+    const nextProfile = profileResponse.ok
       ? ((await profileResponse.json().catch(() => null)) as CustomerProfile | null)
       : null;
     const addresses = addressesResponse.ok
       ? ((await addressesResponse.json().catch(() => [])) as CustomerAddress[])
       : [];
-    const nextForm =
-      applicationBody.status === "NOT_SUBMITTED"
-        ? prefillNewApplication(applicationBody, profile, addresses)
-        : fromApplication(applicationBody);
+
     setApplication(applicationBody);
-    setForm(nextForm);
-    setMessage(
-      applicationBody.status === "NOT_SUBMITTED"
-        ? "Your saved Craves profile and default address have been prefilled. Review them before submitting."
-        : "",
-    );
+    setProfile(nextProfile);
+    if (applicationBody.status === "NOT_SUBMITTED") {
+      setForm(prefillNewApplication(applicationBody, nextProfile, addresses));
+      setStep("welcome");
+    } else {
+      setForm(fromApplication(applicationBody));
+      if (applicationBody.status === "APPROVED") setStep("approved");
+      else if (needsPhotoCorrection(applicationBody)) setStep("documents-intro");
+      else if (applicationBody.status === "REJECTED") setStep("review");
+      else if (hasRequiredEvidence(applicationBody)) setStep("waiting");
+      else setStep("documents-intro");
+    }
+    setMessage("");
   }
 
   useEffect(() => {
@@ -148,7 +240,7 @@ export function ChefApplicationWorkspace() {
       setMessage(
         error instanceof Error
           ? error.message
-          : "Chef application is temporarily unavailable.",
+          : "We couldn’t load your application right now.",
       );
     });
   }, []);
@@ -157,13 +249,39 @@ export function ChefApplicationWorkspace() {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
+  function go(next: ApplicationStep) {
+    setMessage("");
+    setStep(next);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function continueAbout() {
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      setMessage("Please type your first and last name so we know who you are.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      setMessage("Please check your email address so we know where to reach you.");
+      return;
+    }
+    go("address");
+  }
+
+  function continueAddress() {
+    if (!form.addressLine1.trim() || !form.city.trim() || !form.state.trim()) {
+      setMessage("Please add your house or building, city, and state so pickup can find your kitchen.");
+      return;
+    }
+    go("review");
+  }
+
   function useCurrentLocation() {
     if (!navigator.geolocation) {
-      setMessage("This browser cannot provide a location.");
+      setMessage("This browser can’t use your current location. You can type the address below instead.");
       return;
     }
     setLocating(true);
-    setMessage("Detecting your current address…");
+    setMessage("Finding your kitchen address…");
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const latitude = Number(position.coords.latitude.toFixed(7));
@@ -185,27 +303,23 @@ export function ChefApplicationWorkspace() {
           }));
           setMessage(
             detected.preciseHouseNumber
-              ? "Address detected and filled automatically. Review the written details before submitting."
-              : "Location detected and the available address was filled. Please confirm or correct the flat/house/building details.",
+              ? "We found your neighborhood. Please check the address below."
+              : "We found the area. Please add or check your house or building details below.",
           );
-        } catch (error) {
+        } catch {
           setForm((current) => ({
             ...current,
             latitude: String(latitude),
             longitude: String(longitude),
           }));
-          setMessage(
-            error instanceof Error
-              ? `${error.message} The map point was captured; complete the written address manually.`
-              : "The map point was captured but the written address could not be identified.",
-          );
+          setMessage("We found your location, but not the full written address. Please type the missing details below.");
         } finally {
           setLocating(false);
         }
       },
       () => {
         setLocating(false);
-        setMessage("Location permission was not granted. Your saved address remains unchanged.");
+        setMessage("Location wasn’t shared. That’s okay — type your kitchen address below.");
       },
       { enableHighAccuracy: true, timeout: 12_000, maximumAge: 30_000 },
     );
@@ -213,18 +327,24 @@ export function ChefApplicationWorkspace() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || !application || loadFailed) return;
+    const locked = application?.status === "APPROVED";
+    if (locked || loadFailed) return;
     if (!chefEmailEligible(emailVerification)) {
       setMessage("Verify your email before submitting your chef application.");
       return;
     }
+    if (!form.email.trim() || !form.firstName.trim() || !form.lastName.trim()) {
+      setMessage("Please check your name and email before continuing.");
+      return;
+    }
+    if (!form.addressLine1.trim() || !form.city.trim() || !form.state.trim()) {
+      setMessage("Please check your kitchen address before continuing.");
+      return;
+    }
+
     const updating = application?.status === "PENDING";
     setBusy(true);
-    setMessage(
-      updating
-        ? "Updating your pending chef application…"
-        : "Submitting your chef application…",
-    );
+    setMessage(updating ? "Saving your changes…" : "Saving your details…");
     try {
       const response = await fetch("/api/chef/application", {
         method: "POST",
@@ -239,238 +359,177 @@ export function ChefApplicationWorkspace() {
           longitude: form.longitude === "" ? null : Number(form.longitude),
         }),
       });
-      const body = (await response.json().catch(() => null)) as {
-        code?: unknown;
-        message?: unknown;
-      } | null;
-      if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as ChefApplication | null;
+      if (!response.ok || !body) {
         throw new Error(
-          responseMessage(
-            body,
-            response.status === 400
-              ? "Complete all required fields using valid values."
-              : "Application submission failed.",
-          ),
+          response.status === 400
+            ? "Please check your details and try again."
+            : "We couldn’t save your details. Please try again.",
         );
       }
-      const nextApplication = body as unknown as ChefApplication;
-      setApplication(nextApplication);
-      setForm(fromApplication(nextApplication));
-      window.dispatchEvent(new Event("craves:chef-application-updated"));
-      setMessage(
-        updating
-          ? "Pending application updated. Craves admin review remains authoritative."
-          : "Chef application submitted. Upload the requested proofs and wait for Craves admin review.",
-      );
+      setApplication(body);
+      setForm(fromApplication(body));
+      setMessage("");
+      if (body.status === "APPROVED") setStep("approved");
+      else if (hasRequiredEvidence(body)) setStep("waiting");
+      else setStep("documents-intro");
     } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Application submission failed.",
-      );
+      setMessage(error instanceof Error ? error.message : "We couldn’t save your details. Please try again.");
     } finally {
       setBusy(false);
     }
   }
 
-  async function uploadProof() {
-    if (!proofFile) {
-      setMessage("Choose a PDF, JPG or PNG proof file first.");
-      return;
-    }
+  async function refreshStatus() {
     setBusy(true);
-    setMessage("Uploading proof file…");
+    setMessage("Checking your application status…");
     try {
-      const data = new FormData();
-      data.set("documentType", proofType);
-      data.set("file", proofFile);
-      const response = await fetch("/api/chef/application/proof-files", {
-        method: "POST",
-        body: data,
-      });
-      const body = (await response.json().catch(() => null)) as {
-        message?: unknown;
-      } | null;
-      if (!response.ok) {
-        throw new Error(
-          responseMessage(
-            body,
-            "Proof upload failed. Use a PDF, JPG or PNG file under 10 MB.",
-          ),
-        );
-      }
-      setProofFile(null);
       await load();
-      setMessage("Proof file uploaded for admin review.");
     } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "Proof upload failed.",
-      );
+      setMessage(error instanceof Error ? error.message : "We couldn’t check your status right now.");
     } finally {
       setBusy(false);
     }
   }
 
   const locked = !application || loadFailed || application.status === "APPROVED";
-  const fields: Array<
-    [keyof FormState, string, "text" | "email", boolean]
-  > = [
-    ["firstName", "First name", "text", true],
-    ["lastName", "Last name", "text", true],
-    ["addressLine1", "Flat / House / Building", "text", true],
-    ["addressLine2", "Street / Area / District", "text", false],
-    ["landmark", "Landmark", "text", false],
-    ["city", "City", "text", true],
-    ["state", "State", "text", true],
-    ["postalCode", "Pincode", "text", false],
-  ];
+  const calmCorrection = application?.status === "REJECTED" ? application.rejectionReason : null;
+
+  if (message.startsWith("Loading") && !application) {
+    return <div className="h-72 animate-pulse rounded-3xl bg-[#F1F3F5]" aria-label="Loading your application" />;
+  }
+
+  if (!application && message) {
+    return (
+      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center">
+        <p className="text-sm text-[#6B6B6B]">{message}</p>
+        <button type="button" onClick={() => void load()} className="mt-5 rounded-full bg-[#F62E18] px-6 py-3 font-semibold text-white">Try again</button>
+      </section>
+    );
+  }
+
+  if (step === "welcome") {
+    return (
+      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
+        <IconCircle><UserRound className="h-7 w-7" aria-hidden="true" /></IconCircle>
+        <p className="mt-6 text-sm font-semibold text-[#F62E18]">Become a Craves chef</p>
+        <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A] md:text-4xl">Cook from home with Craves</h1>
+        <p className="mt-4 text-base leading-7 text-[#6B6B6B]">Tell us who you are, where you cook, and share a few clear photos. We’ll guide you one thing at a time.</p>
+        <div className="mt-6 space-y-3 rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]">
+          {["Your name and contact details", "Your kitchen address", "Your photo, ID and PAN card"].map((item) => <p key={item} className="flex items-center gap-3"><Check className="h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />{item}</p>)}
+        </div>
+        <button type="button" onClick={() => go("about")} className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white">Start my application <ChevronRight className="h-4 w-4" aria-hidden="true" /></button>
+      </section>
+    );
+  }
+
+  if (step === "about") {
+    return (
+      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
+        <StepHeader part={1} label="About you" onBack={() => go("welcome")} />
+        <div className="mt-7"><IconCircle><UserRound className="h-7 w-7" aria-hidden="true" /></IconCircle></div>
+        <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">What’s your name?</h1>
+        <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">Use the same name that appears on your ID.</p>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <label className="text-sm font-semibold text-[#1A1A1A]">First name<input value={form.firstName} onChange={(event) => field("firstName", event.target.value)} className={INPUT_CLASS} autoComplete="given-name" /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">Last name<input value={form.lastName} onChange={(event) => field("lastName", event.target.value)} className={INPUT_CLASS} autoComplete="family-name" /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Email<input type="email" value={form.email} onChange={(event) => field("email", event.target.value)} className={INPUT_CLASS} autoComplete="email" /></label>
+        </div>
+        {profile?.registeredPhoneNumber ? <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]"><Phone className="h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" /><span>Your Craves phone number is already saved: <strong className="text-[#1A1A1A]">{profile.registeredPhoneNumber}</strong></span></div> : null}
+        {message ? <p role="alert" className="mt-4 text-sm font-medium text-[#F62E18]">{message}</p> : null}
+        <button type="button" onClick={continueAbout} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white">Continue</button>
+      </section>
+    );
+  }
+
+  if (step === "address") {
+    return (
+      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
+        <StepHeader part={1} label="About you" onBack={() => go("about")} />
+        <div className="mt-7"><IconCircle><MapPin className="h-7 w-7" aria-hidden="true" /></IconCircle></div>
+        <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">Where do you cook?</h1>
+        <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">This is the kitchen address used for food pickup.</p>
+        <button type="button" disabled={locating} onClick={useCurrentLocation} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 font-semibold text-[#F62E18] disabled:opacity-50"><MapPin className="h-4 w-4" aria-hidden="true" />{locating ? "Finding my address…" : "Use my current location"}</button>
+        {message ? <p role="status" className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">{message}</p> : null}
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Flat / House / Building<input value={form.addressLine1} onChange={(event) => field("addressLine1", event.target.value)} className={INPUT_CLASS} autoComplete="address-line1" /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Street / Area <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.addressLine2} onChange={(event) => field("addressLine2", event.target.value)} className={INPUT_CLASS} autoComplete="address-line2" /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Landmark <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.landmark} onChange={(event) => field("landmark", event.target.value)} className={INPUT_CLASS} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">City<input value={form.city} onChange={(event) => field("city", event.target.value)} className={INPUT_CLASS} autoComplete="address-level2" /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">State<input value={form.state} onChange={(event) => field("state", event.target.value)} className={INPUT_CLASS} autoComplete="address-level1" /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">Pincode <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.postalCode} onChange={(event) => field("postalCode", event.target.value)} className={INPUT_CLASS} inputMode="numeric" autoComplete="postal-code" /></label>
+        </div>
+        <button type="button" onClick={continueAddress} disabled={locating} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white disabled:opacity-50">Continue</button>
+      </section>
+    );
+  }
+
+  const emailVerificationPanel = <EmailVerificationPanel required onStateChange={setEmailVerification} />;
+
+  if (step === "review") {
+    return (
+      <form onSubmit={submit} className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
+        {emailVerificationPanel}
+        <StepHeader part={1} label="Check your details" onBack={() => go("address")} />
+        <div className="mt-7"><IconCircle><Check className="h-7 w-7" aria-hidden="true" /></IconCircle></div>
+        <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">Does everything look right?</h1>
+        <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">If something is wrong, change just that part. You won’t lose the rest that Craves already saved.</p>
+        {calmCorrection ? <div className="mt-5 rounded-2xl bg-[#F1F3F5] p-4"><p className="font-semibold text-[#1A1A1A]">We need one more thing</p><p className="mt-1 text-sm leading-6 text-[#6B6B6B]">{calmCorrection}</p></div> : null}
+        <div className="mt-6 space-y-3">
+          <div className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_2px_10px_rgba(0,0,0,0.08)]"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold text-[#6B6B6B]">Your name</p><p className="mt-1 font-semibold text-[#1A1A1A]">{form.firstName} {form.lastName}</p><p className="mt-1 text-sm text-[#6B6B6B]">{form.email}</p></div><button type="button" onClick={() => go("about")} className="rounded-full bg-[#F1F3F5] px-4 py-2 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">Change</button></div></div>
+          <div className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_2px_10px_rgba(0,0,0,0.08)]"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold text-[#6B6B6B]">Kitchen address</p><p className="mt-1 text-sm leading-6 text-[#1A1A1A]">{addressSummary(form) || "Address not added"}</p></div><button type="button" onClick={() => go("address")} className="rounded-full bg-[#F1F3F5] px-4 py-2 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">Change</button></div></div>
+        </div>
+        {message ? <p role="alert" className="mt-4 text-sm font-medium text-[#F62E18]">{message}</p> : null}
+        <button type="submit" disabled={busy || locked || !chefEmailEligible(emailVerification)} aria-label={application?.status === "PENDING" ? PENDING_UPDATE_LABEL : undefined} className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white disabled:opacity-50">{busy ? "Saving…" : "Save and continue"}{!busy ? <ChevronRight className="h-4 w-4" aria-hidden="true" /> : null}</button>
+        {application?.id ? <button type="button" onClick={() => go("documents-intro")} className="mt-3 min-h-11 w-full text-sm font-semibold text-[#6B6B6B] hover:text-[#1A1A1A]">Go to my photos</button> : null}
+      </form>
+    );
+  }
+
+  if (step === "documents-intro") {
+    return (
+      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
+        <StepHeader part={2} label="A few photos" onBack={() => go("review")} />
+        <div className="mt-7"><IconCircle><ShieldCheck className="h-7 w-7" aria-hidden="true" /></IconCircle></div>
+        <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">Next, we need a few photos</h1>
+        <p className="mt-3 text-base leading-7 text-[#6B6B6B]">We ask every chef to provide these details so we know who is preparing your food. Your ID photos are kept private and secure.</p>
+        <div className="mt-6 space-y-3 rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]">{["A clear photo of you", "Front of your government ID", "Back of the same ID", "Your PAN card"].map((item) => <p key={item} className="flex items-center gap-3"><Camera className="h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />{item}</p>)}</div>
+        <button type="button" onClick={() => go("documents")} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white">Continue</button>
+      </section>
+    );
+  }
+
+  if (step === "documents") {
+    return <ChefApplicationDocumentPanel onComplete={() => go("waiting")} />;
+  }
+
+  if (step === "waiting") {
+    return (
+      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center shadow-[0_2px_10px_rgba(0,0,0,0.06)] md:p-10">
+        <IconCircle><Send className="h-7 w-7" aria-hidden="true" /></IconCircle>
+        <p className="mt-6 text-sm font-semibold text-[#F62E18]">Application status</p>
+        <h1 className="mt-1 text-3xl font-bold text-[#1A1A1A]">Application under review</h1>
+        <p className="mx-auto mt-3 max-w-xl text-base leading-7 text-[#6B6B6B]">Your details and photos are with Craves. There’s nothing else you need to do unless we ask for an update.</p>
+        <span className="mt-5 inline-flex rounded-full bg-[#F1F3F5] px-4 py-2 text-sm font-semibold text-[#1A1A1A]">Under review</span>
+        {message ? <p role="status" className="mx-auto mt-4 max-w-xl text-sm text-[#6B6B6B]">{message}</p> : null}
+        <button type="button" onClick={() => void refreshStatus()} disabled={busy} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white disabled:opacity-50 sm:w-auto">{busy ? "Checking…" : "Check status"}</button>
+        <div className="mt-3">
+          <Link href="/home" className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">Switch to Customer Mode</Link>
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-[30px] border border-slate-200 bg-white p-6 text-slate-950 sm:p-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">
-              Application status
-            </p>
-            <h2 className="mt-2 text-3xl font-bold">
-              {loadFailed ? "Application unavailable" : application?.status?.replaceAll("_", " ") ?? "Loading"}
-            </h2>
-          </div>
-          {application?.reviewedAt && (
-            <span className="text-sm text-slate-600">
-              Reviewed {new Date(application.reviewedAt).toLocaleString("en-IN")}
-            </span>
-          )}
-        </div>
-        {application?.status === "REJECTED" && application.rejectionReason && (
-          <p className="mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-800">
-            Review note: {application.rejectionReason}
-          </p>
-        )}
-        {application?.status === "PENDING" && (
-          <p className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
-            Your application is waiting for admin review. You can still correct
-            the details below or replace proof files until it is approved.
-          </p>
-        )}
-        {application?.status === "APPROVED" && (
-          <Link
-            href="/chef"
-            className="mt-4 inline-flex rounded-full bg-[#6930CA] px-5 py-3 text-sm font-bold text-white"
-          >
-            Continue to chef mode
-          </Link>
-        )}
-        <p role="status" className="mt-4 text-sm text-slate-600">{message}</p>
-        {loadFailed && <button type="button" className="mt-4 min-h-12 rounded-full border border-slate-300 px-5 font-semibold" onClick={() => {
-          setMessage("Loading your chef application…");
-          void load().catch(() => { setLoadFailed(true); setMessage("We couldn’t load your application. Please try again."); });
-        }}>Retry application</button>}
-      </section>
-
-      <EmailVerificationPanel required onStateChange={setEmailVerification} />
-
-      <form
-        onSubmit={submit}
-        className="rounded-[30px] bg-white p-6 text-slate-950 sm:p-8"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-2xl font-bold">Chef details</h2>
-          <button
-            type="button"
-            disabled={locked || busy || locating}
-            onClick={useCurrentLocation}
-            className="rounded-full border border-[#6930CA] px-4 py-2 text-sm font-bold text-[#6930CA] disabled:opacity-50"
-          >
-            {locating ? "Detecting address…" : "Use current location"}
-          </button>
-        </div>
-        <p className="mt-3 text-xs leading-5 text-slate-500">
-          Craves stores the precise map point in the background. Chefs never need to enter latitude or longitude.
-        </p>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          {fields.map(([name, label, inputType, required]) => (
-            <label key={name} className="text-sm font-semibold">
-              {label}{required ? " *" : ""}
-              <input
-                type={inputType}
-                required={required}
-                disabled={locked || busy}
-                value={form[name]}
-                onChange={(event) => field(name, event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 disabled:bg-slate-100"
-              />
-            </label>
-          ))}
-        </div>
-        <button
-          type="submit"
-          disabled={locked || busy || locating || !chefEmailEligible(emailVerification)}
-          className="mt-6 rounded-full bg-[#6930CA] px-6 py-3 font-bold text-white disabled:opacity-50"
-        >
-          {application?.status === "PENDING"
-            ? "Update pending application"
-            : application?.status === "REJECTED"
-              ? "Resubmit application"
-              : application?.status === "APPROVED"
-                ? "Application approved"
-                : "Submit application"}
-        </button>
-      </form>
-
-      <section className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950 sm:p-8">
-        <h2 className="text-2xl font-bold">Proof files</h2>
-        <p className="mt-2 text-sm text-slate-600">
-          Upload only the proof types supported by the current backend. File
-          contents are never returned to the browser after upload.
-        </p>
-        <div className="mt-5 grid gap-4 md:grid-cols-[220px_1fr_auto] md:items-end">
-          <label className="text-sm font-semibold">
-            Document type
-            <select
-              value={proofType}
-              onChange={(event) =>
-                setProofType(event.target.value as ChefDocumentType)
-              }
-              className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3"
-            >
-              <option value="AADHAAR_CARD">Aadhaar card</option>
-              <option value="PAN_CARD">PAN card</option>
-            </select>
-          </label>
-          <label className="text-sm font-semibold">
-            File
-            <input
-              type="file"
-              accept="application/pdf,image/jpeg,image/png"
-              onChange={(event) => setProofFile(event.target.files?.[0] ?? null)}
-              className="mt-2 block w-full rounded-2xl border border-slate-300 bg-white px-4 py-3"
-            />
-          </label>
-          <button
-            type="button"
-            disabled={busy || !application?.id || locked}
-            onClick={() => void uploadProof()}
-            className="rounded-full bg-[#6930CA] px-6 py-3 font-bold text-white disabled:opacity-50"
-          >
-            Upload
-          </button>
-        </div>
-        <div className="mt-6 space-y-3">
-          {application?.documents.map((document) => (
-            <div key={document.id} className="rounded-2xl bg-white p-4">
-              <div className="flex flex-wrap justify-between gap-3">
-                <strong>{document.documentType.replaceAll("_", " ")}</strong>
-                <span className="text-sm text-slate-600">{document.status}</span>
-              </div>
-              <p className="mt-1 text-sm text-slate-600">
-                {document.originalFileName} · {(document.fileSizeBytes / 1024).toFixed(1)} KB
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
+    <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center shadow-[0_2px_10px_rgba(0,0,0,0.06)] md:p-10">
+      <IconCircle><Check className="h-7 w-7" aria-hidden="true" /></IconCircle>
+      <p className="mt-6 text-sm font-semibold text-[#F62E18]">You’re approved</p>
+      <h1 className="mt-1 text-3xl font-bold text-[#1A1A1A]">Congratulations! You’re now a Craves chef</h1>
+      <p className="mx-auto mt-3 max-w-xl text-base leading-7 text-[#6B6B6B]">Your Chef Mode is ready. Add your first dish so customers can start discovering what you cook.</p>
+      <Link href="/chef/menu" className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto">Add my first dish <ChevronRight className="h-4 w-4" aria-hidden="true" /></Link>
+      <div className="mt-3">
+        <Link href="/chef" className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">Go to Chef home</Link>
+      </div>
+    </section>
   );
 }

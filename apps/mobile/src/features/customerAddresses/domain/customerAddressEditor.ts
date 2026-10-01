@@ -1,14 +1,16 @@
 import type {
   CustomerAddress,
-  CustomerAddressLabel,
+  CustomerAddressCategory,
   CustomerAddressUpdateRequest,
 } from './customerAddressContract';
+import {CUSTOMER_ADDRESS_LABEL_MAX_LENGTH, customerAddressLabel} from './customerAddressContract';
 
 export const CUSTOMER_ADDRESS_PINCODE_FALLBACK_COPY =
   'Confirm the pincode before saving. Current location can fill the available postal address automatically.';
 
 export interface CustomerAddressDraft {
-  addressLabel: CustomerAddressLabel | null;
+  addressCategory: CustomerAddressCategory;
+  customLabel: string;
   recipientName: string;
   contactPhoneNumber: string;
   addressLine1: string;
@@ -25,6 +27,7 @@ export interface CustomerAddressDraft {
 }
 
 export type CustomerAddressTextField =
+  | 'customLabel'
   | 'recipientName'
   | 'contactPhoneNumber'
   | 'addressLine1'
@@ -72,7 +75,8 @@ export function createCustomerAddressDraft(
 ): CustomerAddressDraft {
   if (!address) {
     return {
-      addressLabel: 'HOME',
+      addressCategory: 'HOME',
+      customLabel: '',
       recipientName: '',
       contactPhoneNumber: '',
       addressLine1: '',
@@ -90,7 +94,8 @@ export function createCustomerAddressDraft(
   }
 
   return {
-    addressLabel: address.addressLabel,
+    addressCategory: address.addressLabel === 'HOME' || address.addressLabel === 'WORK' ? address.addressLabel : 'OTHER',
+    customLabel: address.addressLabel === 'HOME' || address.addressLabel === 'WORK' ? '' : customerAddressLabel(address),
     recipientName: address.recipientName ?? '',
     contactPhoneNumber: address.contactPhoneNumber,
     addressLine1: address.addressLine1,
@@ -154,6 +159,12 @@ export function validateCustomerAddressDraft(
   draft: CustomerAddressDraft,
 ): CustomerAddressFieldErrors {
   const errors: CustomerAddressFieldErrors = {};
+  if (draft.addressCategory === 'OTHER') {
+    const label = draft.customLabel.trim();
+    if (!label) errors.customLabel = 'Enter a name for this address.';
+    else if (label.length > CUSTOMER_ADDRESS_LABEL_MAX_LENGTH) errors.customLabel = 'Address name must be 80 characters or fewer.';
+    else if (label === 'HOME' || label === 'WORK') errors.customLabel = 'Choose Home or Work above to use that label.';
+  }
 
   const required: Array<
     [CustomerAddressTextField, string, number, string]
@@ -228,6 +239,7 @@ export function findDuplicateCustomerAddress(
 function normalizedDraft(draft: CustomerAddressDraft): CustomerAddressDraft {
   return {
     ...draft,
+    customLabel: draft.customLabel.trim(),
     recipientName: normalizeRequired(draft.recipientName),
     contactPhoneNumber: normalizeRequired(draft.contactPhoneNumber),
     addressLine1: normalizeRequired(draft.addressLine1),
@@ -278,7 +290,7 @@ export function createCustomerAddressSavePlan(
     status: 'ready',
     draft,
     request: {
-      addressLabel: draft.addressLabel,
+      addressLabel: draft.addressCategory === 'OTHER' ? draft.customLabel : draft.addressCategory,
       recipientName: draft.recipientName,
       contactPhoneNumber: draft.contactPhoneNumber,
       addressLine1: draft.addressLine1,
@@ -304,7 +316,8 @@ export function isCustomerAddressDraftDirty(
   const right = normalizedDraft(original);
 
   return (
-    left.addressLabel !== right.addressLabel ||
+    left.addressCategory !== right.addressCategory ||
+    left.customLabel !== right.customLabel ||
     left.recipientName !== right.recipientName ||
     left.contactPhoneNumber !== right.contactPhoneNumber ||
     left.addressLine1 !== right.addressLine1 ||

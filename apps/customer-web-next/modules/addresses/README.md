@@ -19,17 +19,33 @@ The active browsing location may change as the customer moves. The permanent sav
 
 ## Customer experience
 
-When the customer chooses **Use my current location** while adding/editing an address:
+The existing `/addresses` list and saved-address cards remain the base UI. Add/Edit Address is one continuous location-first modal flow:
+
+```text
+Search for area, street name... / Use current location / Saved Addresses
+  -> confirm or fine-tune the delivery point on the Azure map
+  -> ADD MORE DETAILS
+  -> Door / Flat No. + Area + optional Landmark + Home/Work/Other
+  -> SAVE ADDRESS & PROCEED
+  -> return to the existing Delivery addresses list
+```
+
+There is no Skip/Add Later action because Craves requires a usable delivery point.
+
+When the customer chooses **Use current location**:
 
 1. the browser obtains a high-accuracy GPS point;
-2. Craves checks the existing PostGIS saved-address recommendation where applicable;
+2. in the initial chooser, Craves checks the existing PostGIS saved-address recommendation where applicable;
 3. when a nearby saved address matches, that saved address is selected/prefilled;
-4. otherwise the same-origin Next.js BFF reverse-geocodes the GPS point with Azure Maps;
-5. Craves prefills the best available flat/house/building, street, area, district, city, state and pincode;
-6. the customer can correct any written field before saving;
-7. latitude/longitude remain internal and are not rendered as editable customer fields.
+4. otherwise the existing same-origin reverse-geocode BFF resolves the GPS point with Azure Maps;
+5. the customer confirms or fine-tunes the point on the map; reverse geocoding runs again after map movement;
+6. street, district, city, state, pincode and coordinates stay in the background while the customer primarily edits the door/flat, area and landmark;
+7. recipient name/phone are reused from the customer profile or saved address where possible;
+8. latitude/longitude remain internal and are never rendered as customer inputs.
 
-The provider may not know a private apartment/unit number. Craves never invents one; it fills the most precise available building/street address and keeps the field editable.
+Location search uses a same-origin server BFF backed by Azure Maps forward geocoding. Azure credentials and managed-identity tokens remain server-side. If geolocation permission is denied, search remains available.
+
+The provider may not know a private apartment/unit number. Craves never invents one; Door / Flat No. remains customer-editable.
 
 ## Web routes
 
@@ -45,6 +61,8 @@ The provider may not know a private apartment/unit number. Craves never invents 
 - `GET|PUT|DELETE /api/customer/addresses/{addressId}`
 - `GET /api/customer/addresses/recommendation`
 - `POST /api/location/reverse-geocode`
+- `POST /api/location/search`
+- `GET /api/location/map-image`
 
 ## Service contract
 

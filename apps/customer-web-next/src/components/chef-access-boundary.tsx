@@ -31,6 +31,7 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+
     void (async () => {
       const initial = captureSessionContext();
       const current = await loadSession();
@@ -47,6 +48,7 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
         setAccess({ scope: accessScope(), state: "sign-in" });
         return;
       }
+
       if (!hasChefRole(current)) {
         setAccess({ scope: accessScope(), state: "not-approved" });
         return;
@@ -61,6 +63,7 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
     })().catch(() => {
       if (active) setAccess({ scope, state: "sign-in" });
     });
+
     return () => {
       active = false;
     };
@@ -92,22 +95,34 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
             : "Complete mobile OTP sign-in again so Catalog and Order services receive your current roles."}
         </p>
       )}
-      {state === "sign-in" && (
+      {state === "sign-in" ? (
         <Link
           href="/sign-in?returnTo=/chef"
-          className="mt-5 inline-flex rounded-full bg-[#6930CA] px-5 py-3 font-bold text-white"
+          className="mt-7 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto"
         >
-          Continue with mobile OTP
+          Verify and continue
         </Link>
-      )}
-      {state === "not-approved" && (
+      ) : null}
+
+      {state === "not-approved" ? (
         <Link
           href="/chef/application"
-          className="mt-5 inline-flex rounded-full bg-[#6930CA] px-5 py-3 font-bold text-white"
+          className="mt-7 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto"
         >
           Open chef application
         </Link>
-      )}
+      ) : null}
+
+      {state !== "synchronizing" ? (
+        <div className="mt-3">
+          <Link
+            href="/home"
+            className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]"
+          >
+            Switch to Customer Mode
+          </Link>
+        </div>
+      ) : null}
     </section>
   );
 }

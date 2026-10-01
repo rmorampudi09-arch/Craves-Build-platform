@@ -42,13 +42,20 @@ test("customer and chef OTP flows hide visible captcha and enforce one border", 
   assert.doesNotMatch(slots, /shadow-sm|ring-1 ring-ring/);
 });
 
-test("signed-in discovery uses a pure white page surface behind product cards", () => {
+test("signed-in discovery keeps the rebuilt paper reference surface", () => {
   const browse = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
+  const skeleton = source("../components/loading/CustomerPageSkeleton.tsx");
 
-  assert.match(browse, /min-h-screen bg-white pb-24 text-ink/);
   assert.match(
     browse,
-    /flex min-h-screen items-center justify-center bg-white/,
+    /return <CustomerPageSkeleton label="Loading your Craves home" \/>/,
   );
-  assert.doesNotMatch(browse, /min-h-screen bg-cream pb-24/);
+  assert.match(skeleton, /CustomerPageSkeleton\.module\.css/);
+  assert.match(skeleton, /SkeletonBlock/);
+  assert.doesNotMatch(skeleton, /animate-pulse/);
+  assert.match(
+    browse,
+    /\$\{styles\.paperSurface\} min-h-screen pb-24 text-\[#1A1A1A\]/,
+  );
+  assert.doesNotMatch(browse, /text-\[#261A15\]/i);
 });

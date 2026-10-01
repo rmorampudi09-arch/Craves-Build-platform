@@ -89,26 +89,50 @@ it("never accepts a delayed response after unmount", async () => {
   expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/application")).toBe(false);
 });
 
-it("shows failed application reads truthfully and disables editing until retry succeeds", async () => {
+it("shows failed application reads truthfully and keeps private editing unavailable until retry succeeds", async () => {
   fetcher.mockResolvedValue(Response.json({}, { status: 503 }));
   render(createElement(ChefApplicationWorkspace));
-  await screen.findByRole("heading", { name: "Application unavailable" });
-  expect((screen.getByLabelText("First name *") as HTMLInputElement).disabled).toBe(true);
-  expect((screen.getByRole("button", { name: "Submit application" }) as HTMLButtonElement).disabled).toBe(true);
-  fetcher.mockImplementation(input => Promise.resolve(Response.json(String(input) === "/api/chef/application" ? { id: owner.id, status: "APPROVED", firstName: "Fixture", documents: [], latitude: null, longitude: null } : [])));
-  fireEvent.click(screen.getByRole("button", { name: "Retry application" }));
-  await screen.findByRole("heading", { name: "APPROVED" });
-  expect(screen.queryByRole("button", { name: "Retry application" })).toBeNull();
-  expect((screen.getByLabelText("First name *") as HTMLInputElement).value).toBe("Fixture");
+  await screen.findByText("We couldn’t load your application right now.");
+  expect(screen.queryByRole("button", { name: "Start my application" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+
+  fetcher.mockImplementation(input => Promise.resolve(Response.json(
+    String(input) === "/api/chef/application"
+      ? { id: owner.id, status: "APPROVED", firstName: "Fixture", documents: [], latitude: null, longitude: null }
+      : [],
+  )));
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  await screen.findByRole("heading", { name: "Congratulations! You’re now a Craves chef" });
+  expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
 });
 
-it("keeps a successfully loaded pending application editable", async () => {
-  fetcher.mockImplementation(input => Promise.resolve(Response.json(String(input) === "/api/chef/application" ? { id: owner.id, status: "PENDING", firstName: "Fixture", documents: [], latitude: null, longitude: null } : [])));
+it("keeps a successfully loaded pending application editable through the guided flow", async () => {
+  fetcher.mockImplementation(input => Promise.resolve(Response.json(
+    String(input) === "/api/chef/application"
+      ? {
+          id: owner.id,
+          status: "PENDING",
+          email: "fixture@example.invalid",
+          firstName: "Fixture",
+          lastName: "Chef",
+          addressLine1: "1 Fixture Road",
+          city: "Fixture City",
+          state: "Fixture State",
+          documents: [],
+          latitude: null,
+          longitude: null,
+        }
+      : [],
+  )));
   render(createElement(ChefApplicationWorkspace));
-  await screen.findByRole("heading", { name: "PENDING" });
-  const firstName = screen.getByLabelText("First name *") as HTMLInputElement;
+  await screen.findByRole("heading", { name: "Next, we need a few photos" });
+
+  fireEvent.click(screen.getByRole("button", { name: "Back" }));
+  await screen.findByRole("heading", { name: "Does everything look right?" });
+  fireEvent.click(screen.getAllByRole("button", { name: "Change" })[0]);
+
+  const firstName = await screen.findByLabelText("First name") as HTMLInputElement;
   expect(firstName.disabled).toBe(false);
   fireEvent.change(firstName, { target: { value: "Corrected" } });
   expect(firstName.value).toBe("Corrected");
-  expect(screen.getByRole("button", { name: "Update pending application" })).toBeTruthy();
 });

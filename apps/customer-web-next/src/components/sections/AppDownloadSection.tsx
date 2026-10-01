@@ -1,3 +1,5 @@
+import { FaApple, FaGooglePlay } from "react-icons/fa";
+
 import styles from "@/screens/public/LandingPage/LandingV2.module.css";
 
 const sampleMeals = [
@@ -28,20 +30,26 @@ export function AppDownloadSection() {
             <button
               type="button"
               disabled
-              className={`${styles.storeButton} min-h-14 px-5 text-left text-xs leading-4`}
+              className={`${styles.storeButton} inline-flex min-h-14 items-center gap-3 px-4 text-left`}
               title="App Store listing is not published yet"
             >
-              <span className="block text-[0.65rem] font-medium text-white/70">COMING SOON ON THE</span>
-              <span className="mt-0.5 block text-sm font-bold">App Store</span>
+              <FaApple className="shrink-0 text-[1.75rem] text-white" aria-hidden="true" />
+              <span>
+                <span className="block text-[0.62rem] font-medium leading-3 text-white/70">COMING SOON ON THE</span>
+                <span className="mt-0.5 block text-sm font-bold leading-4">App Store</span>
+              </span>
             </button>
             <button
               type="button"
               disabled
-              className={`${styles.storeButton} min-h-14 px-5 text-left text-xs leading-4`}
+              className={`${styles.storeButton} inline-flex min-h-14 items-center gap-3 px-4 text-left`}
               title="Google Play listing is not published yet"
             >
-              <span className="block text-[0.65rem] font-medium text-white/70">COMING SOON ON</span>
-              <span className="mt-0.5 block text-sm font-bold">Google Play</span>
+              <FaGooglePlay className="shrink-0 text-[1.55rem] text-white" aria-hidden="true" />
+              <span>
+                <span className="block text-[0.62rem] font-medium leading-3 text-white/70">COMING SOON ON</span>
+                <span className="mt-0.5 block text-sm font-bold leading-4">Google Play</span>
+              </span>
             </button>
           </div>
         </div>

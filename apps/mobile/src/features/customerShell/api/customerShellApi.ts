@@ -1,3 +1,4 @@
+import {CUSTOMER_ADDRESS_LABEL_MAX_LENGTH, customerAddressLabel} from '../../customerAddresses/domain/customerAddressContract';
 import {httpClient} from '../../../core/http/httpClient';
 import type {CustomerBrowsingLocation} from '../state/customerShellSlice';
 
@@ -108,10 +109,9 @@ function parseSavedLocation(value: unknown): CustomerBrowsingLocation | null {
     return null;
   }
 
-  const label =
-    boundedString(item.addressLabel, 40) ??
-    boundedString(item.label, 40) ??
-    'Saved address';
+  const storedLabel = boundedString(item.addressLabel, CUSTOMER_ADDRESS_LABEL_MAX_LENGTH);
+  if (storedLabel === null) return null;
+  const label = customerAddressLabel({addressLabel: storedLabel});
   const areaName = boundedString(item.areaName, 120);
   const addressLine1 = boundedString(item.addressLine1, 160);
   const city = boundedString(item.city, 80);

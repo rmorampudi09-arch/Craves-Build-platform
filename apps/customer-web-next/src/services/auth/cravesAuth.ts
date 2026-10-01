@@ -6,11 +6,12 @@ import type {
   CustomerAddress,
   DeliveryReadyAddress,
 } from "@/lib/address-contract";
-import { selectActiveDeliveryAddress } from "@/lib/address-selection";
+import { selectDefaultDeliveryAddress } from "@/lib/address-selection";
 import {
   parseCustomerProfile,
   type CustomerProfile,
 } from "@/lib/profile-contract";
+import { sessionFetch } from "@/services/auth/sessionFetch";
 
 export type CravesUser = {
   id: string;
@@ -40,6 +41,51 @@ export type CravesAddress = {
   lng?: number;
 };
 
+const SESSION_SNAPSHOT_KEY = "craves.customer.session.snapshot.v1";
+
+function readSessionSnapshot(): CravesUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_SNAPSHOT_KEY);
+    if (!raw) return null;
+    const candidate = JSON.parse(raw) as Partial<CravesUser> | null;
+    if (
+      !candidate ||
+      typeof candidate.id !== "string" ||
+      typeof candidate.phoneNumber !== "string" ||
+      !Array.isArray(candidate.roles) ||
+      candidate.status !== "ACTIVE"
+    ) {
+      return null;
+    }
+    return candidate as CravesUser;
+  } catch {
+    return null;
+  }
+}
+
+function persistSessionSnapshot(value: CravesUser | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (!value) {
+      window.sessionStorage.removeItem(SESSION_SNAPSHOT_KEY);
+      return;
+    }
+    window.sessionStorage.setItem(SESSION_SNAPSHOT_KEY, JSON.stringify(value));
+  } catch {
+    // Storage availability must never decide whether the customer stays signed in.
+  }
+}
+
+export function recoverSessionSnapshotForNavigation(): CravesUser | null {
+  if (session) return session;
+  const cached = readSessionSnapshot();
+  if (!cached) return null;
+  session = cached;
+  notify();
+  return session;
+}
+
 let session: CravesUser | null = null;
 let sessionEmailRevision = -1;
 let sessionGeneration = 0;
@@ -56,11 +102,32 @@ export function isSessionReady(): boolean { return !sessionEnding && session?.st
 function invalidatePendingSessionWork() { sessionGeneration += 1; roleSynchronization = null; }
 export function invalidateSession(context: SessionContext): void { if (isSessionContextCurrent(context)) forgetSession(); }
 function forgetSession() {
-  invalidatePendingSessionWork(); sessionEnding = false; session = null; sessionEmailRevision = -1; selectedLocation = null; notify();
+  invalidatePendingSessionWork(); sessionEnding = false; session = null; sessionEmailRevision = -1; selectedLocation = null; persistSessionSnapshot(null); notify();
 }
 let selectedLocation: CravesAddress | null = null;
 let roleSynchronization: Promise<CravesUser | null> | null = null;
+const sessionRefreshes = new Map<number, Promise<Response | null>>();
 const listeners = new Set<() => void>();
+
+function refreshSessionForGeneration(generation: number): Promise<Response | null> {
+  const existing = sessionRefreshes.get(generation);
+  if (existing) return existing;
+
+  const pending = fetch("/api/auth/refresh", {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+  })
+    .catch(() => null)
+    .finally(() => {
+      if (sessionRefreshes.get(generation) === pending) {
+        sessionRefreshes.delete(generation);
+      }
+    });
+
+  sessionRefreshes.set(generation, pending);
+  return pending;
+}
 
 function fromIdentity(identity: CravesIdentity): CravesUser {
   const digits = identity.phoneNumber.replace(/\D/g, "");
@@ -102,7 +169,7 @@ async function hydrateCustomerProfile(current: CravesUser, context = captureSess
   const isCustomer = current.roles.some((role) => role.toUpperCase() === "CUSTOMER");
   if (!isCustomer) return current;
 
-  const response = await fetch("/api/customer/profile", {
+  const response = await sessionFetch("/api/customer/profile", {
     cache: "no-store",
     credentials: "same-origin",
   }).catch(() => null);
@@ -112,6 +179,7 @@ async function hydrateCustomerProfile(current: CravesUser, context = captureSess
   const profile = parseCustomerProfile(await response.json().catch(() => null));
   if (!profile || !isSessionContextCurrent(context) || session?.id !== current.id) return session;
   session = withCustomerProfile(session, profile);
+  persistSessionSnapshot(session);
   notify();
   return session;
 }
@@ -122,6 +190,7 @@ export function setSessionIdentity(identity: CravesIdentity): CravesUser {
   sessionEnding = false;
   sessionEmailRevision = -1;
   session = fromIdentity(identity);
+  persistSessionSnapshot(session);
   notify();
   return session;
 }
@@ -143,6 +212,7 @@ export function setSessionEmailVerification(identityId: string, value: EmailVeri
   if (!session || !isSessionContextCurrent(context) || session.id !== identityId || !parsed.success || parsed.data.emailRevision < sessionEmailRevision) return session;
   sessionEmailRevision = parsed.data.emailRevision;
   session = { ...session, email: parsed.data.email ?? undefined, emailVerified: parsed.data.emailVerified };
+  persistSessionSnapshot(session);
   notify();
   return session;
 }
@@ -159,6 +229,7 @@ function applyIdentityLookup(identity: CravesIdentity, context: SessionContext, 
   if (previous?.id === identity.id && sessionEmailRevision >= 0) {
     session = { ...session, email: previous.email, emailVerified: previous.emailVerified };
   }
+  persistSessionSnapshot(session);
   notify();
   return session;
 }
@@ -167,21 +238,32 @@ export async function loadSession(): Promise<CravesUser | null> {
   if (sessionEnding) return null;
   const context = captureSessionContext();
   const sequence = ++identityRequestSequence;
-  const lookup = async () => fetch("/api/auth/me", { cache: "no-store", credentials: "same-origin" });
+  const lookup = async () =>
+    fetch("/api/auth/me", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+
   let response = await lookup();
   if (!isSessionContextCurrent(context)) return session;
+
   if (response.status === 401) {
-    const refreshed = await fetch("/api/auth/refresh", {
-      method: "POST", credentials: "same-origin",
-    }).catch(() => null);
+    const refreshed = await refreshSessionForGeneration(context.generation);
     if (!isSessionContextCurrent(context)) return session;
     if (refreshed?.ok) response = await lookup();
   }
-  if (!isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) return session;
+
+  if (!isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) {
+    return session;
+  }
+
   if (!response.ok) {
-    if ((response.status === 401 || response.status === 403) && session) forgetSession();
+    if ((response.status === 401 || response.status === 403) && session) {
+      forgetSession();
+    }
     return null;
   }
+
   const identity = (await response.json().catch(() => null)) as CravesIdentity | null;
   if (!identity?.id || !isSessionContextCurrent(context)) return session;
   const current = applyIdentityLookup(identity, context, sequence);
@@ -194,12 +276,13 @@ export async function synchronizeSessionRoles(): Promise<CravesUser | null> {
   const context = captureSessionContext();
   const sequence = ++identityRequestSequence;
   const pending = (async () => {
-    const response = await fetch("/api/auth/refresh", {
-      method: "POST", credentials: "same-origin",
-    }).catch(() => null);
+    const response = await refreshSessionForGeneration(context.generation);
     if (!isSessionContextCurrent(context)) return session;
     if (!response?.ok) return null;
-    const body = (await response.json().catch(() => null)) as { identity?: CravesIdentity } | null;
+
+    const body = (await response.json().catch(() => null)) as {
+      identity?: CravesIdentity;
+    } | null;
     if (!body?.identity?.id || !isSessionContextCurrent(context)) return session;
     const current = applyIdentityLookup(body.identity, context, sequence);
     return current ? hydrateCustomerProfile(current) : null;
@@ -253,10 +336,15 @@ export function getAddress(): CravesAddress | null {
   return selectedLocation;
 }
 
+export function invalidateSelectedAddress(): void {
+  selectedLocation = null;
+}
+
 function fromCustomerAddress(address: DeliveryReadyAddress): CravesAddress {
   return {
     id: address.id,
-    label: address.addressLabel,
+    label:
+      address.addressLabel,
     hno: address.addressLine1,
     street: address.addressLine2 ?? address.landmark ?? undefined,
     city: address.city,
@@ -269,14 +357,14 @@ function fromCustomerAddress(address: DeliveryReadyAddress): CravesAddress {
 }
 
 export async function loadSelectedAddress(): Promise<CravesAddress | null> {
-  const response = await fetch("/api/customer/addresses", {
+  const response = await sessionFetch("/api/customer/addresses", {
     cache: "no-store",
     credentials: "same-origin",
   });
   if (!response.ok) throw new Error("Saved delivery addresses could not be loaded.");
   const addresses = (await response.json().catch(() => null)) as CustomerAddress[] | null;
   if (!Array.isArray(addresses)) throw new Error("Saved delivery addresses returned an invalid response.");
-  const selected = selectActiveDeliveryAddress(addresses);
+  const selected = selectDefaultDeliveryAddress(addresses);
   selectedLocation = selected ? fromCustomerAddress(selected) : null;
   return selectedLocation;
 }

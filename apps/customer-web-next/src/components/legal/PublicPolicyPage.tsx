@@ -26,6 +26,7 @@ export function PublicPolicyPage({
           </Link>
           <Link
             href="/"
+            data-contextual-back="true"
             className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold transition-colors hover:border-[#F62E18]"
           >
             Back to Craves

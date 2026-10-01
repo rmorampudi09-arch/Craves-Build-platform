@@ -1,0 +1,37 @@
+@keyframes cravesSkeletonShimmer {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(220%); }
+}
+
+.block {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, #eceff1 0%, #e4e7ea 100%);
+}
+
+.block::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -45%;
+  width: 42%;
+  transform: translateX(-120%);
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.34) 30%,
+    rgba(255, 255, 255, 0.78) 50%,
+    rgba(255, 255, 255, 0.34) 70%,
+    transparent 100%
+  );
+  animation: cravesSkeletonShimmer 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.soft {
+  background: linear-gradient(180deg, #f2f4f5 0%, #e9ecef 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .block::after {
+    animation: none;
+  }
+}

@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -13,12 +14,6 @@ import java.util.UUID;
 
 public final class ApiDtos {
     private ApiDtos() {
-    }
-
-    public enum AddressLabel {
-        HOME,
-        WORK,
-        OTHER
     }
 
     public enum ActiveLocationType {
@@ -62,7 +57,7 @@ public final class ApiDtos {
     }
 
     public record CustomerAddressRequest(
-        AddressLabel addressLabel,
+        @NotBlank @Size(max = 80) String addressLabel,
         @NotBlank String recipientName,
         @NotBlank @Pattern(regexp = "^\\+?[0-9]{10,15}$") String contactPhoneNumber,
         @NotBlank String addressLine1,
@@ -77,12 +72,15 @@ public final class ApiDtos {
         @NotNull @DecimalMin("-180.0") @DecimalMax("180.0") BigDecimal longitude,
         Boolean isDefault
     ) {
+        public CustomerAddressRequest {
+            addressLabel = addressLabel == null ? null : addressLabel.trim();
+        }
     }
 
     public record CustomerAddressResponse(
         UUID id,
         UUID identityId,
-        AddressLabel addressLabel,
+        String addressLabel,
         String recipientName,
         String contactPhoneNumber,
         String addressLine1,

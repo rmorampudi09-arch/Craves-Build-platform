@@ -21,12 +21,15 @@ test("the neutral control override loads after all earlier theme files", () => {
   assert.ok(finalImport > otpImport);
 });
 
-test("customer and chef button-like controls have transparent borders", () => {
+test("customer and chef button-like controls use neutral visible borders", () => {
   assert.match(overrides, /\[role="button"\]/);
   assert.match(overrides, /\[role="tab"\]/);
   assert.match(overrides, /a\[class\*="border-primary"\]/);
   assert.match(overrides, /body \.chef-panel-theme :is\(button, a/);
-  assert.match(overrides, /border-color:\s*transparent\s*!important/);
+  assert.match(
+    overrides,
+    /border-color:\s*var\(--color-grey-200\)\s*!important/,
+  );
   assert.doesNotMatch(
     overrides,
     /border(?:-color)?:\s*(?:#f62e18|#c92716|#6930ca|var\(--color-(?:flame|contrast)-red\))/i,

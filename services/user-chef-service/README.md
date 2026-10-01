@@ -2,6 +2,14 @@
 
 Spring Boot service for customer profiles, saved delivery addresses, GPS-aware address recommendation, chef applications, KYC document upload, and backoffice chef review.
 
+## October 2026 address labels and Chef readiness
+
+Saved addresses now require a trimmed `addressLabel` string of 1-80 characters. `HOME` and `WORK` are built-in values; custom names are stored directly in the same field. There is no `addressName` field. Flyway V13 widens `customer_address.address_label` and removes the old enum constraint. The owner confirmed the older proposed V13 address-name migration was never applied.
+
+`GET /api/v1/chef/application/readiness` returns the signed-in applicant's four current evidence requirements, review decisions, email-verification status, blocking reasons and evaluation timestamp. It does not approve applications or grant roles. Readiness requires PENDING, verified application email and all four modern documents APPROVED. Legacy Aadhaar/PAN evidence never satisfies this rule.
+
+Run `mvn verify` with Java 21. The address persistence/migration tests additionally require an isolated PostGIS database; the new GitHub workflow runs them and rejects skipped database evidence. See [implementation and release handover](../../docs/handover/2026-10-01-address-labels-and-chef-readiness.md) for local commands, environment variables, rollout order and remaining product decisions.
+
 ## Responsibilities
 
 - Customer profile create, update, and read.

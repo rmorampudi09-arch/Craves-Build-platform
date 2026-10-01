@@ -95,10 +95,11 @@ JSON
 }
 
 put_operation "get-chef-application" "GET" "/" "Get chef application"
+put_operation "get-chef-application-readiness" "GET" "/readiness" "Get chef application approval readiness"
 put_operation "submit-chef-application" "POST" "/" "Submit chef application"
 put_operation "upload-chef-proof-file" "POST" "/proof-files" "Upload chef proof file"
 
-for ID in get-chef-application submit-chef-application upload-chef-proof-file; do
+for ID in get-chef-application get-chef-application-readiness submit-chef-application upload-chef-proof-file; do
   az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o none
   POLICY=$(az rest --method get --url "${MGMT}/operations/${ID}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
   [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *"Authorization"* && "$POLICY" == *"no-store"* ]] || fail "Operation $ID policy verification failed"

@@ -1,5 +1,13 @@
 This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
+## October 2026 address labels and Chef readiness
+
+Saved-address editors now support Home, Work and a named Other address. Custom names are required, trimmed and limited to 80 characters; the API stores them directly in `addressLabel`. Current address, subscription and cart-selection flows retain these names.
+
+The Chef application-status and business-information screens now show the backend's current four-document approval checklist. Queries are scoped to the signed-in identity and errors do not imply approval. Historical Aadhaar/PAN evidence cannot satisfy new application approval.
+
+Run `npm ci --ignore-scripts`, `npx tsc --noEmit` and the focused tests in `.github/workflows/address-label-contract-ci.yml`. Native packaging still needs the existing Firebase file, Android SDK/signing or macOS/Xcode setup. No new secrets or payment-provider settings are introduced. Deploy backend/APIM and web before distributing this client. See [release handover](../../docs/handover/2026-10-01-address-labels-and-chef-readiness.md).
+
 # Getting Started
 
 > **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.

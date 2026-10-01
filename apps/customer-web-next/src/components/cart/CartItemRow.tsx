@@ -29,7 +29,7 @@ export function CartItemRow({
 }: CartItemRowProps) {
   return (
     <article className="grid grid-cols-[4.75rem_minmax(0,1fr)] gap-3 border-b border-[#F1F3F5] bg-white py-4 last:border-b-0 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-center">
-      <div className="relative flex aspect-square w-[4.75rem] items-center justify-center overflow-hidden rounded-[14px] bg-[#F1F3F5] sm:w-[5.5rem]">
+      <div className="relative flex aspect-square w-[4.75rem] items-center justify-center overflow-hidden rounded-[8px] bg-[#F1F3F5] sm:w-[5.5rem]">
         <img
           src={item.img}
           alt={item.imageIsPlaceholder ? "" : item.name}
@@ -64,13 +64,13 @@ export function CartItemRow({
       </div>
 
       <div className="col-span-2 flex items-center justify-between gap-3 sm:col-span-1 sm:flex-col sm:items-end">
-        <div className="flex h-10 items-center overflow-hidden rounded-[11px] border border-[#D7DADF] bg-[#F1F3F5] shadow-[0_1px_2px_rgba(26,26,26,0.05)]">
+        <div className="flex h-12 items-center overflow-hidden rounded-[8px] border border-[#D7DADF] bg-[#F1F3F5] shadow-[0_1px_2px_rgba(26,26,26,0.05)]">
           <button
             type="button"
             data-craves-borderless="true"
             onClick={onDecrease}
             disabled={disabled}
-            className="flex h-10 w-10 items-center justify-center border-0 bg-transparent text-[#1A1A1A] shadow-none transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BFC4C9] disabled:pointer-events-none disabled:opacity-45"
+            className="flex h-12 w-12 items-center justify-center border-0 bg-transparent text-[#1A1A1A] shadow-none transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BFC4C9] disabled:pointer-events-none disabled:opacity-45"
             aria-label={`Decrease quantity of ${item.name}`}
           >
             <FaMinus className="text-xs" aria-hidden="true" />
@@ -86,7 +86,7 @@ export function CartItemRow({
             data-craves-borderless="true"
             onClick={onIncrease}
             disabled={disabled || item.qty >= 50}
-            className="flex h-10 w-10 items-center justify-center border-0 bg-transparent text-[#1A1A1A] shadow-none transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BFC4C9] disabled:pointer-events-none disabled:opacity-45"
+            className="flex h-12 w-12 items-center justify-center border-0 bg-transparent text-[#1A1A1A] shadow-none transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BFC4C9] disabled:pointer-events-none disabled:opacity-45"
             aria-label={`Increase quantity of ${item.name}`}
           >
             <FaPlus className="text-xs" aria-hidden="true" />
@@ -96,7 +96,7 @@ export function CartItemRow({
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          className="inline-flex min-h-10 items-center gap-2 rounded-[10px] px-2.5 text-xs font-semibold text-[#6B6B6B] transition-colors hover:bg-[#F1F3F5] hover:text-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 disabled:pointer-events-none disabled:opacity-45"
+          className="inline-flex min-h-12 items-center gap-2 rounded-[8px] px-3 text-sm font-semibold text-[#6B6B6B] transition-colors hover:bg-[#F1F3F5] hover:text-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 disabled:pointer-events-none disabled:opacity-45"
         >
           <FaTrashCan className="text-xs" aria-hidden="true" />
           Remove

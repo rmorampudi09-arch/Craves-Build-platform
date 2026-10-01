@@ -159,6 +159,10 @@ def capture():
               "resourceGroup": RG, "registry": registry["loginServer"],
               "apps": [runtime_summary(app) for app in apps if app["name"].startswith("ca-craves-")],
               "blockers": []}
+    secret_metadata = az("containerapp", "secret", "list", "-g", RG, "-n", chef["name"])
+    report["userChefSecretBindings"] = [{"name": item["name"],
+        "keyVaultBacked": bool(item.get("keyVaultUrl")), "identityConfigured": bool(item.get("identity"))}
+        for item in secret_metadata]
     try:
         report["database"] = inspect_database(az("containerapp", "show", "-g", RG, "-n", chef["name"]),
             az("postgres", "flexible-server", "list", "-g", RG), az("keyvault", "list", "-g", RG))

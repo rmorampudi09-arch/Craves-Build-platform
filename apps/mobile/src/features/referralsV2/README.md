@@ -64,6 +64,15 @@ Referral reversal. A future backend contract extension would be required to
 display actual posting levels. `DEMO1234`, sample figures and sample dates are
 never included as live data.
 
+There is also an existing posting-month contract mismatch. `MemberQueries`
+serializes each recent posting's database `month DATE` using `toString()`
+(`YYYY-MM-01`); `parseChefReferralEarnings` currently accepts `YYYY-MM` only.
+The top-level month already uses `YYYY-MM`. Before enabling the ledger,
+normalize recent-posting months on the backend or separately update and test
+the mobile parser against the approved contract. Disabled queries keep this
+unpublished mismatch out of the current UI. This update does not claim that
+live referral earnings are operational.
+
 ## Local Setup And Verification
 
 Use the existing app's documented Firebase/runtime configuration. No new
@@ -86,6 +95,36 @@ actions, error/cancel fallbacks, unavailable data, identity cache isolation,
 exact API responses, monthly-vs-lifetime values and restoration routes.
 `contracts/referral-invitation-source-only.v1.json` maps the new unpublished
 code route without changing platform/backend contract manifests.
+
+## Version 1.18 Build Evidence
+
+- Source: `f1d6ad5a3a30e3920dcaa88d628eb4ec24cdde0a` on
+  `KUSHIRAVI-app-build`; immutable tag `KUSHIRAVI-app-v1.18`.
+- Android: `com.cravesapp`, code 29, name 1.18, ARM64, SDK 24 minimum / 36
+  target. Signed release passed in 32m 42s (823 tasks). Existing v2/v3 signing
+  certificate retained; package/version and nonempty JS bundle verified.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.18.apk`.
+  SHA-256: `B5E202ACC268B83E8189293F0C05DA2ED70B3B67DEC948DBD22F4713E7DCE2EC`.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.18-source.zip`.
+  SHA-256: `507D36F07509609EF362F6D93C39FC9AD4B1D046F576285BA1A05FB1B480A111`.
+  It contains 954 tracked mobile files from the exact source commit, without
+  local .env, node_modules or build outputs. Receipt-only documentation
+  commits made afterward do not modify these artifacts or the source tag.
+- TypeScript passed. Scoped lint: zero errors, one intentional invalid-link
+  fixture warning. Full Jest: 195 suites / 1,019 tests passed (273.386s).
+- API coverage audit passed: 121 published and 45 source-only fail-closed
+  actions, six manifests, 50 HTTP-bearing files.
+- Eight component-layout previews (four screens at 320px and 390px) have no
+  horizontal overflow or clipped text. These are component-render previews,
+  not proof of native device fidelity or live Chef financial data.
+- Phone remains on code 28 / name 1.17.4, tag `KUSHIRAVI-app-v1.17.4`, source
+  `12d3fda012069d16ecd1df2642c19c949b25649d`. No new APK was installed, and no
+  sign-in, OTP, invitation send or data clearing was performed. Native
+  signed-in four-screen checks and iOS checks remain manual.
+
+Logs/results are under `C:\mscratch\artifacts`:
+`referral-v1.18-release-build.log`, `referral-v1.18-tests.json`,
+`referral-v1.18-tests.log` and `referral-v1.18-preview\layout-report.json`.
 
 ## Manual Checks
 
@@ -110,8 +149,9 @@ code route without changing platform/backend contract manifests.
 - Azure/APIM: separately approve public member routes, authentication policies
   and service access. Preserve private/internal finance routes and do not enable
   awards, settlement, withdrawals or spending as a side effect of UI publication.
-- Backend: verify enrolment and the approved production policy, plus invite-link
-  routing. Extend posting JSON only if actual referral-level labels are required.
+- Backend: reconcile and test the recent-posting month format described above;
+  verify enrolment, the approved production policy and invite-link routing.
+  Extend posting JSON only if actual referral-level labels are required.
 - Mobile: after those checks, enable `REFERRAL_CODE_AVAILABLE` and/or
   `CHEF_REFERRAL_EARNINGS_AVAILABLE`, retest, create a new version checkpoint.
 - Device: iOS sharing/clipboard/composer behavior and native reference fidelity

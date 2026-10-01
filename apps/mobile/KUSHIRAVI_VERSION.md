@@ -19,7 +19,7 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
-### Version 1.18 - Four referral reference screens
+### Version 1.18 Built, Not Installed - Four referral reference screens
 
 - Requested from `C:\Users\saive\Downloads\referral screens.docx` on
   2026-10-01. Customer invitation and share-options screens; Chef referral
@@ -35,7 +35,7 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   code is available. No mock code, sample earnings or fabricated posting level.
 - Read-only inspection of local `origin/main` at
   `13710384b90d09c76ea5bed64fdfe6342975e697` verified the existing member code and
-  Chef earnings contracts and policy. Live Azure inspection confirmed no
+  Chef earnings endpoints and policy. Live Azure inspection confirmed no
   referral APIM API, private service ingress and all seven referral flags OFF.
   No backend/APIM configuration, auth, payments, cart, checkout, orders, Home,
   splash, login, remote or CI/CD changes. No GitHub push.
@@ -43,18 +43,43 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   `GET /api/v1/referrals/me/chef-earnings`. Both queries remain disabled pending
   separately approved publication. Monthly usage is not lifetime earnings;
   missing financial data is represented by dashes, never invented zero totals.
+  A final source check found an existing ledger contract mismatch: recent
+  posting months serialize as `YYYY-MM-01`, but the mobile parser requires
+  `YYYY-MM`. This must be reconciled and tested before enabling the ledger.
+  Posting JSON also lacks the reference's per-credit referral level. Both are
+  documented follow-ups, not claims of a currently working live referral ledger.
 - Scoped Inter faces reuse the existing licensed font assets without changing
   global typography. `expo-clipboard ~56.0.4` matches Expo 56 compatibility;
   dependency and lockfile updated. No new credentials or permissions.
-- Android target: code `29` / name `1.18`. Intended immutable checkpoint:
-  `KUSHIRAVI-app-v1.18`; exact source/build receipts recorded after verification.
-  Previous installation remains `KUSHIRAVI-app-v1.17.4` until a verified
-  replace-install succeeds. Previous checkpoints are untouched.
-- TypeScript passed; scoped lint passed with one invalid-link test-fixture
-  warning. Four-screen/query tests: 2 suites / 20 tests passed. Code/ledger/
-  navigation/restoration checks passed; sharing rerun: 10 tests passed.
-  Full regression and signed release verification are in progress, not yet
-  claimed as completed. No credentials entered or invitation sent during QA.
+- Android code `29` / name `1.18`; immutable tag `KUSHIRAVI-app-v1.18`.
+  Exact source commit: `f1d6ad5a3a30e3920dcaa88d628eb4ec24cdde0a`.
+  Subsequent documentation-only receipts do not change this APK/source tag.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.18.apk`; SHA-256
+  `B5E202ACC268B83E8189293F0C05DA2ED70B3B67DEC948DBD22F4713E7DCE2EC`.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.18-source.zip`; SHA-256
+  `507D36F07509609EF362F6D93C39FC9AD4B1D046F576285BA1A05FB1B480A111`.
+  Archived from the exact source commit, 954 entries. Build script, lockfile,
+  native baseline, bundled fonts/video and new referral sources are present.
+  No local .env, node_modules or build outputs included.
+- Signed ARM64 release passed in 32m 42s: 823 tasks / 65 executed / 758
+  up-to-date. APK package/version, v2/v3 signatures and nonempty JS bundle
+  checked. Existing signing certificate SHA-256
+  `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`.
+  Build log: `C:\mscratch\artifacts\referral-v1.18-release-build.log`.
+- TypeScript passed; scoped lint: zero errors, one intentional invalid-link
+  test-fixture warning. Full regression: 195 suites / 1,019 tests passed,
+  273.386s. Results: `C:\mscratch\artifacts\referral-v1.18-tests.json`.
+  API coverage: 121 published + 45 source-only fail-closed actions, six
+  manifests, 50 HTTP-bearing files; passed. Four-screen/query checks:
+  2 suites / 20 tests passed; sharing checks: 10 tests passed.
+- Component-layout previews at 320px and 390px: all four screens captured,
+  eight previews without horizontal overflow or clipped text. These are
+  rendered component previews, not native Android/iOS fidelity verification.
+- Phone remains code `28` / name `1.17.4`, source/tag
+  `12d3fda012069d16ecd1df2642c19c949b25649d` / `KUSHIRAVI-app-v1.17.4`.
+  No installation, data clearing, sign-in, OTP request or invitation sent
+  during this update. Native signed-in four-screen and iOS checks remain
+  manual. Previous checkpoints are untouched.
 - Full file list, API gaps, local setup and manual checks:
   `src/features/referralsV2/README.md`.
 

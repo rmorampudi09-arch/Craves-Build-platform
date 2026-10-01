@@ -6,6 +6,7 @@ import {
   resolveCustomerAddressesContentBottomInset,
 } from './customerAddressesActiveCart';
 import {
+  customerAddressLabel,
   isCustomerAddressDeliveryReady,
   parseCustomerAddress,
   toCustomerAddressUpdateRequest,
@@ -92,10 +93,17 @@ describe('customer address contract and active/empty visuals', () => {
     });
   });
 
-  it('rejects an address response outside the approved enum contract', () => {
-    expect(
-      parseCustomerAddress({...validAddressResponse, addressLabel: 'PRIMARY'}),
-    ).toBeNull();
+  it.each(['HOME', 'WORK', 'OTHER', "Mom's House", 'అమ్మ ఇల్లు', 'x'.repeat(80)])('preserves label %s through reads, default updates and browsing', label => {
+    const address = parseCustomerAddress({...validAddressResponse, addressLabel: `  ${label}  `});
+    expect(address?.addressLabel).toBe(label);
+    if (!address) throw new Error('Expected a valid address');
+    expect(toCustomerAddressUpdateRequest(address, true)?.addressLabel).toBe(label);
+    expect(toCustomerBrowsingLocation(address)?.label).toBe(customerAddressLabel(address));
+    if (!['HOME', 'WORK', 'OTHER'].includes(label)) expect(customerAddressLabel(address)).toBe(label);
+  });
+
+  it.each([null, undefined, 5, '', '  ', 'x'.repeat(81)])('rejects invalid label %s', addressLabel => {
+    expect(parseCustomerAddress({...validAddressResponse, addressLabel})).toBeNull();
   });
 
   it('keeps the detached View Cart overlay suppressed because cart now lives in bottom navigation', () => {

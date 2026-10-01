@@ -186,6 +186,7 @@ export function ChefApplicationEvidenceUploader({
         });
         setTypeProgress(type, { progress: 100, phase: "DONE", message: existing?.status === "REJECTED" ? "Replacement uploaded. This document is back under review ✓" : "Uploaded securely. Awaiting document review ✓" });
         router.refresh();
+        window.dispatchEvent(new Event("craves:chef-application-updated"));
         return;
       }
       const body = xhr.response as { message?: unknown; code?: unknown } | null;

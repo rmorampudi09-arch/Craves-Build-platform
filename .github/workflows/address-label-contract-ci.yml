@@ -1,0 +1,115 @@
+name: Address labels and Chef readiness CI
+on:
+  pull_request:
+    paths:
+      - 'services/user-chef-service/**'
+      - 'apps/customer-web-next/**'
+      - 'apps/mobile/**'
+      - 'scripts/user-chef/**'
+      - 'scripts/apim/configure-chef-application-apim.sh'
+      - '.github/workflows/address-label-contract-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: address-label-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: craves_email_test
+          POSTGRES_USER: address_ci
+          POSTGRES_PASSWORD: disposable-address-ci-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U address_ci -d craves_email_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      explorer-postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: craves_explorer_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d craves_explorer_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      EMAIL_TEST_DB_URL: jdbc:postgresql://localhost:5432/craves_email_test
+      EMAIL_TEST_DB_USER: address_ci
+      EMAIL_TEST_DB_PASSWORD: disposable-address-ci-only
+      EMAIL_TEST_DISPOSABLE: 'true'
+      EXPLORER_TEST_DB_URL: jdbc:postgresql://127.0.0.1:5433/craves_explorer_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/user-chef-service/pom.xml
+      - name: Verify backend and real PostGIS address migration and persistence
+        run: mvn -B -ntp -f services/user-chef-service/pom.xml verify
+      - name: Check Chef application gateway script syntax
+        run: bash -n scripts/apim/configure-chef-application-apim.sh
+      - name: Require database tests to run without skips
+        run: |
+          python3 scripts/email/require-email-test-evidence.py user-chef-service
+          python3 scripts/user-chef/require-release-test-evidence.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: address-backend-${{ github.sha }}
+          path: services/user-chef-service/target/surefire-reports
+          retention-days: 14
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/customer-web-next
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/customer-web-next/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run verify
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx --no-install tsc --noEmit
+      - name: Verify address, location, cart selection and Chef readiness flows
+        run: >-
+          npm test -- --runInBand --runTestsByPath
+          src/features/customerAddresses/customerAddresses.test.ts
+          src/features/customerAddresses/customerAddressEditor.test.ts
+          src/features/customerShell/customerShell.test.ts
+          src/features/cart/cartAddressSelection.test.ts
+          src/features/chefBusinessInformation/domain/chefReadinessContract.test.ts
+          src/features/chefBusinessInformation/domain/chefBusinessInformationContract.test.ts
+          src/features/chefBusinessInformation/api/chefBusinessInformationApi.test.ts

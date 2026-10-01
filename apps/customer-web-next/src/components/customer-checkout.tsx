@@ -1,5 +1,7 @@
 "use client";
 
+import { displayAddressLabel } from "@/lib/address-contract";
+
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import type { CustomerAddress } from "@/lib/address-contract";
@@ -55,7 +57,7 @@ export function CustomerCheckoutForm() {
     <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr]">
       <form onSubmit={submit} className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950 shadow-2xl shadow-black/20">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">Delivery details</p>
-        <label className="mt-5 block text-sm font-semibold">Saved delivery address<select required value={deliveryAddressId} onChange={event => setDeliveryAddressId(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3"><option value="">Choose an address</option>{addresses.map(address => <option key={address.id} value={address.id}>{address.addressLabel}: {address.addressLine1}, {address.areaName}</option>)}</select></label>
+        <label className="mt-5 block text-sm font-semibold">Saved delivery address<select required value={deliveryAddressId} onChange={event => setDeliveryAddressId(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3"><option value="">Choose an address</option>{addresses.map(address => <option key={address.id} value={address.id}>{displayAddressLabel(address.addressLabel)}: {address.addressLine1}, {address.areaName}</option>)}</select></label>
         <Link href="/addresses" className="mt-2 inline-flex text-sm font-semibold text-[#6930CA]">Manage saved addresses</Link>
         <label className="mt-5 block text-sm font-semibold">Order note<textarea maxLength={500} rows={4} value={note} onChange={event => setNote(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3" placeholder="Optional instructions for the chef" /></label>
         <button disabled={busy || !cart?.items.length || !deliveryAddressId} className="mt-6 w-full rounded-full bg-[#6930CA] px-6 py-3 text-sm font-bold text-white disabled:opacity-50">{busy ? "Creating checkout…" : "Create checkout"}</button>

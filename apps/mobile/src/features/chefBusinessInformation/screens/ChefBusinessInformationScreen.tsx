@@ -1,4 +1,5 @@
 import React from 'react';
+import {ChefReadinessPanel} from './ChefReadinessPanel';
 import {
   ActivityIndicator,
   Alert,
@@ -54,7 +55,7 @@ const SERVICE_AREA_MESSAGE =
 const CUISINE_MESSAGE =
   'The current backend does not expose an approved Chef cuisine or specialty taxonomy/read-write contract for this screen.';
 const PAYOUT_MESSAGE =
-  'Payout setup is not available here because the current backend exposes earnings history, not a Chef payout-configuration or payout-setup-status contract.';
+  'Payout setup is not available on this screen yet. Craves currently uses manual settlement; automatic bank payouts require separate activation.';
 
 function toneColors(tone: ChefBusinessInformationTone) {
   switch (tone) {
@@ -207,7 +208,7 @@ function DocumentRow({
             Uploaded {formatChefBusinessDate(document.createdAt)} · updated {formatChefBusinessDate(document.updatedAt)}
           </Text>
           <Text style={styles.documentBoundaryText}>
-            The backend reports only UPLOADED metadata. Craves does not label this proof as individually verified, valid, expired, or rejected without a document-level backend state.
+            Historical evidence is shown for reference. The application readiness checklist above reports the four required documents and their current review decisions.
           </Text>
           <View style={styles.documentActions}>
             <Pressable
@@ -328,6 +329,8 @@ export function ChefBusinessInformationScreen() {
           <Icon name="arrow-left" size={iconSize.sm} color={colors.espressoBrown} />
           <Text style={styles.backButtonText}>Profile</Text>
         </Pressable>
+
+        <ChefReadinessPanel />
 
         {isEmptyInitialState && model.isInitialLoading ? (
           <BusinessInformationSkeleton />
@@ -474,7 +477,7 @@ export function ChefBusinessInformationScreen() {
                       <Icon name="shield" size={iconSize.xl} color={colors.placeholder} />
                       <Text style={styles.emptyDocumentsTitle}>No proof files on record</Text>
                       <Text style={styles.emptyDocumentsText}>
-                        The verification service returned no Aadhaar or PAN proof metadata for this application.
+                        No historical proof metadata is available. The application readiness panel shows the four current evidence requirements.
                       </Text>
                     </View>
                   )

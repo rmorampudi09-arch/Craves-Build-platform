@@ -1,5 +1,13 @@
 # Craves customer web
 
+## October 2026 address labels and Chef readiness
+
+Address editors use Home, Work or Other with a required custom name (maximum 80 characters). The saved API field is `addressLabel`; selecting another category temporarily preserves the custom draft. Checkout, location and subscription selectors display the saved name.
+
+Chef application and operations pages consume `/api/chef/application/readiness`, a private, no-store proxy for the authenticated backend checklist. A pending applicant with four approved documents still awaits the final admin decision. Legacy evidence is no longer presented as sufficient for approval. API failures show unavailable status instead of a successful checklist.
+
+Use Node 24, `npm ci --ignore-scripts`, then `npm run verify`. Existing `.env.example` settings remain applicable; this change introduces no new secret. The backend and APIM readiness operation must be deployed first. See [release handover](../../docs/handover/2026-10-01-address-labels-and-chef-readiness.md).
+
 The uploaded Craves interface has been migrated from its temporary Vite/TanStack shell to the approved Next.js customer-web stack and connected to the current Spring Boot backend contracts. The original orange/cream design tokens, logo, food imagery and Lucide icons are retained.
 
 Backend baseline used for this integration: `rmorampudi09-arch/Craves-Build-platform`, `main` merge commit `a78e676e9a06ed43d6478e645cc22a038ee827b6` (2 August 2026).

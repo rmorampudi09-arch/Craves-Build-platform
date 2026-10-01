@@ -130,7 +130,7 @@ export function parseCustomerCase(value: unknown): CustomerCase | null {
   if (!root || !profile || !correlationId || !profileId || !identityId || !registeredPhoneNumber || !firstName || !lastName || !Array.isArray(root.addresses) || root.addresses.length > 50) return null;
   const addresses: CustomerCase["addresses"] = [];
   for (const raw of root.addresses) {
-    const a = record(raw); const addressId = uuid(a?.addressId); const addressLabel = text(a?.addressLabel, 30); const contactPhoneNumber = text(a?.contactPhoneNumber, 30); const addressLine1 = text(a?.addressLine1, 300); const city = text(a?.city, 160); const state = text(a?.state, 160); const defaultAddress = bool(a?.defaultAddress);
+    const a = record(raw); const addressId = uuid(a?.addressId); const addressLabel = text(a?.addressLabel, 80); const contactPhoneNumber = text(a?.contactPhoneNumber, 30); const addressLine1 = text(a?.addressLine1, 300); const city = text(a?.city, 160); const state = text(a?.state, 160); const defaultAddress = bool(a?.defaultAddress);
     if (!a || !addressId || !addressLabel || !contactPhoneNumber || !addressLine1 || !city || !state || defaultAddress == null) return null;
     addresses.push({ addressId, addressLabel, recipientName: nullableText(a.recipientName, 180), contactPhoneNumber, addressLine1, addressLine2: nullableText(a.addressLine2, 300), landmark: nullableText(a.landmark, 300), areaName: nullableText(a.areaName, 160), districtName: nullableText(a.districtName, 160), city, state, postalCode: nullableText(a.postalCode, 30), latitude: number(a.latitude), longitude: number(a.longitude), defaultAddress, createdAt: date(a.createdAt), updatedAt: date(a.updatedAt) });
   }

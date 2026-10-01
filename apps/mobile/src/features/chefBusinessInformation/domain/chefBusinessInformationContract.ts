@@ -72,15 +72,15 @@ export const CHEF_BUSINESS_INFORMATION_CAPABILITIES = {
   documentMetadata: supported('chefApplication', [
     'The application response contains the current proof-document metadata list.',
     'Supported proof types are APPLICANT_PHOTO, GOVERNMENT_ID_FRONT, GOVERNMENT_ID_BACK, TAX_ID_CARD, AADHAAR_CARD, and PAN_CARD.',
-    'The current persisted document status is only UPLOADED; no client-side validity state is inferred.',
+    'Document review states are UPLOADED, APPROVED, and REJECTED. Application readiness uses only the four modern evidence types; Aadhaar/PAN are historical metadata.',
     'Mobile parsing deliberately excludes blob container/name and reviewer identity identifiers from the Business Information model.',
   ]),
   documentUploadUpdate: unavailable(
     'The existing proof-file endpoint is an onboarding/KYC upload boundary, not a complete approved-Chef business-document maintenance contract. The service rejects document changes after the application is APPROVED, so it cannot satisfy Reference 49 upload/update/resubmission behavior for an approved Chef.',
-    'POST /api/v1/chef/application/proof-files accepts multipart documentType + file for the six authoritative KYC evidence types and replaces the same document type before approval.',
+    'POST /api/v1/chef/application/proof-files accepts multipart documentType + file for the four modern KYC evidence types. Approved documents and approved applications cannot be replaced.',
   ),
   documentValidityLifecycle: unavailable(
-    'No exact Chef-facing contract exposes per-document verification, rejection reason, expiry date, renewal state, or resubmission lifecycle. The current database contract permits only the document status UPLOADED.',
+    'Per-document approval/rejection and review reasons are available. Expiry, renewal, and approved-Chef resubmission remain undefined; document approval does not establish food-business compliance.',
   ),
   serviceAreas: unavailable(
     'No approved Chef service-area list, radius, polygon, lookup, selection, or serviceability-management contract was found. The kitchen profile only exposes areaName plus latitude/longitude.',
@@ -90,8 +90,8 @@ export const CHEF_BUSINESS_INFORMATION_CAPABILITIES = {
     'No approved Chef cuisine/specialty taxonomy or Chef read/write contract was found in the current backend/APIM surface.',
   ),
   payoutSetupStatus: unavailable(
-    'No approved Chef payout-configuration, bank-destination, or payout-setup-status contract was found. The existing earnings ledger is financial history/reconciliation data and must not be reclassified as payout setup.',
-    'GET /api/v1/chef/earnings is not a payout configuration contract.',
+    'Finance now defines payout eligibility, but the production finance contract for this mobile surface must be confirmed before integration. The selected launch mode is Manual Craves settlement.',
+    'Existing automatic payout code does not imply automatic bank payouts are enabled.',
   ),
 } as const satisfies Record<
   ChefBusinessInformationCapabilityKey,
@@ -142,13 +142,13 @@ export const CHEF_BUSINESS_INFORMATION_SOURCES = {
     path: '/api/v1/chef/application/proof-files',
     request: 'multipart/form-data: documentType + file',
     response: 'KycDocumentResponse',
-    purpose: 'Existing onboarding proof upload/replacement for the six authoritative KYC evidence types.',
+    purpose: 'Existing onboarding proof upload/replacement for the four modern KYC evidence types.',
     limitations: [
       'Requires an existing Chef application.',
       'APPROVED applications cannot change documents through this endpoint.',
-      'Allowed server file content types are application/pdf, image/jpeg, and image/png.',
+      'Allowed server file content types are application/pdf, image/jpeg, and image/png; APPLICANT_PHOTO allows JPEG/PNG only. Actual file signatures are checked.',
       'File-size enforcement is backend-configured; the current service default is 10 MiB, so the mobile contract does not invent a permanently fixed product limit.',
-      'No expiry, rejection, renewal, or approved-Chef resubmission semantics.',
+      'Rejected documents can be replaced before application approval; approved documents cannot. No expiry, renewal, or approved-Chef resubmission semantics.',
     ],
   },
 } as const satisfies Record<string, ChefBusinessContractSource>;

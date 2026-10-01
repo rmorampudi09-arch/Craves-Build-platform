@@ -6,7 +6,6 @@ import type { CustomerAddress } from "@/lib/address-contract";
 import { selectActiveDeliveryAddress } from "@/lib/address-selection";
 import type {
   ChefApplication,
-  ChefDocumentType,
 } from "@/lib/chef-application-contract";
 import type { CustomerProfile } from "@/lib/profile-contract";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
@@ -99,8 +98,6 @@ export function ChefApplicationWorkspace() {
   const [message, setMessage] = useState("Loading your chef application…");
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
-  const [proofType, setProofType] = useState<ChefDocumentType>("AADHAAR_CARD");
-  const [proofFile, setProofFile] = useState<File | null>(null);
   const [emailVerification, setEmailVerification] = useState<EmailVerificationState | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -273,44 +270,6 @@ export function ChefApplicationWorkspace() {
     }
   }
 
-  async function uploadProof() {
-    if (!proofFile) {
-      setMessage("Choose a PDF, JPG or PNG proof file first.");
-      return;
-    }
-    setBusy(true);
-    setMessage("Uploading proof file…");
-    try {
-      const data = new FormData();
-      data.set("documentType", proofType);
-      data.set("file", proofFile);
-      const response = await fetch("/api/chef/application/proof-files", {
-        method: "POST",
-        body: data,
-      });
-      const body = (await response.json().catch(() => null)) as {
-        message?: unknown;
-      } | null;
-      if (!response.ok) {
-        throw new Error(
-          responseMessage(
-            body,
-            "Proof upload failed. Use a PDF, JPG or PNG file under 10 MB.",
-          ),
-        );
-      }
-      setProofFile(null);
-      await load();
-      setMessage("Proof file uploaded for admin review.");
-    } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "Proof upload failed.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const locked = !application || loadFailed || application.status === "APPROVED";
   const fields: Array<
     [keyof FormState, string, "text" | "email", boolean]
@@ -419,58 +378,7 @@ export function ChefApplicationWorkspace() {
         </button>
       </form>
 
-      <section className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950 sm:p-8">
-        <h2 className="text-2xl font-bold">Proof files</h2>
-        <p className="mt-2 text-sm text-slate-600">
-          Upload only the proof types supported by the current backend. File
-          contents are never returned to the browser after upload.
-        </p>
-        <div className="mt-5 grid gap-4 md:grid-cols-[220px_1fr_auto] md:items-end">
-          <label className="text-sm font-semibold">
-            Document type
-            <select
-              value={proofType}
-              onChange={(event) =>
-                setProofType(event.target.value as ChefDocumentType)
-              }
-              className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3"
-            >
-              <option value="AADHAAR_CARD">Aadhaar card</option>
-              <option value="PAN_CARD">PAN card</option>
-            </select>
-          </label>
-          <label className="text-sm font-semibold">
-            File
-            <input
-              type="file"
-              accept="application/pdf,image/jpeg,image/png"
-              onChange={(event) => setProofFile(event.target.files?.[0] ?? null)}
-              className="mt-2 block w-full rounded-2xl border border-slate-300 bg-white px-4 py-3"
-            />
-          </label>
-          <button
-            type="button"
-            disabled={busy || !application?.id || locked}
-            onClick={() => void uploadProof()}
-            className="rounded-full bg-[#6930CA] px-6 py-3 font-bold text-white disabled:opacity-50"
-          >
-            Upload
-          </button>
-        </div>
-        <div className="mt-6 space-y-3">
-          {application?.documents.map((document) => (
-            <div key={document.id} className="rounded-2xl bg-white p-4">
-              <div className="flex flex-wrap justify-between gap-3">
-                <strong>{document.documentType.replaceAll("_", " ")}</strong>
-                <span className="text-sm text-slate-600">{document.status}</span>
-              </div>
-              <p className="mt-1 text-sm text-slate-600">
-                {document.originalFileName} · {(document.fileSizeBytes / 1024).toFixed(1)} KB
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
+
     </div>
   );
 }

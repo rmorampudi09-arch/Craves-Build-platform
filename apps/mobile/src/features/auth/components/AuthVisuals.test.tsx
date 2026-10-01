@@ -56,13 +56,14 @@ describe('login reference visual structure', () => {
   it('clears Android keyboard spacing even when the hide frame excludes system bars', () => {
     const platform = jest.replaceProperty(Platform, 'OS', 'android');
     const handlers: Record<string, (event: KeyboardEvent) => void> = {};
-    const subscriptions: { remove: jest.Mock }[] = [];
+    const removals: jest.SpyInstance[] = [];
+    const addListener = Keyboard.addListener.bind(Keyboard);
     const listener = jest
       .spyOn(Keyboard, 'addListener')
       .mockImplementation((name, callback) => {
         handlers[name] = callback;
-        const subscription = { remove: jest.fn() };
-        subscriptions.push(subscription);
+        const subscription = addListener(name, callback);
+        removals.push(jest.spyOn(subscription, 'remove'));
         return subscription;
       });
     const metrics = jest.spyOn(Keyboard, 'metrics').mockReturnValue(undefined);
@@ -95,11 +96,10 @@ describe('login reference visual structure', () => {
       });
       expect(padding()).toBe(0);
       act(() => tree.unmount());
-      expect(subscriptions.length).toBeGreaterThanOrEqual(2);
-      expect(subscriptions.every(item => item.remove.mock.calls.length === 1)).toBe(
-        true,
-      );
+      expect(removals.length).toBeGreaterThanOrEqual(2);
+      expect(removals.every(remove => remove.mock.calls.length === 1)).toBe(true);
     } finally {
+      removals.forEach(remove => remove.mockRestore());
       listener.mockRestore();
       metrics.mockRestore();
       platform.restore();

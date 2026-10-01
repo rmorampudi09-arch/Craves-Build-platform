@@ -40,8 +40,6 @@ export function ChefWorkspaceNavigation() {
   }, []);
 
   if (pathname.startsWith("/chef/application") || !canUseChefWorkspace) return null;
-  const currentContextual = contextualLinks.find((link) => isActive(pathname, link.href));
-
   return (
     <>
       <nav className="chef-desktop-nav" aria-label="Chef workspace">
@@ -51,7 +49,12 @@ export function ChefWorkspaceNavigation() {
             return <Link key={link.href} href={link.href} aria-current={active ? "page" : undefined} className={`chef-desktop-nav-link ${active ? "is-active" : ""}`}><link.icon className="h-4 w-4" aria-hidden="true" /><span>{link.label}</span></Link>;
           })}
         </div>
-        {currentContextual ? <Link href={currentContextual.href} aria-current="page" className="chef-context-link"><currentContextual.icon className="h-4 w-4" aria-hidden="true" /><span>{currentContextual.label}</span></Link> : null}
+      </nav>
+      <nav className="chef-desktop-secondary-nav" aria-label="Chef tools">
+        {contextualLinks.map((link) => {
+          const active = isActive(pathname, link.href);
+          return <Link key={link.href} href={link.href} aria-current={active ? "page" : undefined} className={`chef-context-link ${active ? "is-active" : ""}`}><link.icon className="h-4 w-4" aria-hidden="true" /><span>{link.label}</span></Link>;
+        })}
       </nav>
       <nav className="chef-mobile-nav" aria-label="Chef primary navigation">
         {primaryLinks.map((link) => {

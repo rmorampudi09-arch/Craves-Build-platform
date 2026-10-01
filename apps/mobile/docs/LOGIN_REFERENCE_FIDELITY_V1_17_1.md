@@ -1,4 +1,51 @@
-# Craves Login Reference Appearance Version 1.17.1
+# Craves Login Reference Appearance Version 1.17.4
+
+## Final Installed Checkpoint
+
+- Branch: `KUSHIRAVI-app-build`; source
+  `12d3fda012069d16ecd1df2642c19c949b25649d`; tag `KUSHIRAVI-app-v1.17.4`.
+- Android: `com.cravesapp`, versionCode 28 / versionName 1.17.4; ARM64.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.4.apk`.
+  SHA-256 `251F140C27782A3323C30F7520609E6C7BD5E62C59F2B3DB492D302B1DD9C828`.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.4-source.zip`.
+  SHA-256 `230E81E29532F09A4857EF1364A608F60B0B1AAC3F21388AA99D2E63EEE892AC`.
+  936 entries archived from the tag; script/wrapper/lockfile/assets present,
+  without local .env, node_modules or generated build outputs.
+- Replace-install succeeded on `RS7PB6VOY9ZLLFYD` / RMX5003 at
+  `2026-10-01 08:44:38` Asia/Calcutta, without clearing data. Phone package
+  reports code 28 / name 1.17.4. Evidence-only commits do not alter the source
+  tag or immutable APK/source ZIP.
+- TypeScript and final scoped lint passed. Startup/login: 3 suites / 23 tests
+  passed in 267.564s; final visual/keyboard suite: 13 tests in 16.645s. Full
+  192/981 passed before the image-dimension/keyboard follow-ups, not rerun as
+  a full suite on v1.17.4. No dependency changes during those follow-ups.
+- Release succeeded in 22m 35s, 823 tasks / 41 executed / 782 up-to-date.
+  Existing v2/v3 certificate matches the registered Firebase cert. MP4 and
+  three fonts match APK raw bytes; fourteen release source-map entries match
+  committed source. Logs: `C:\mscratch\artifacts\v1.17.4-*.log`.
+- First cold launch 608ms / 624ms wait; hot foreground 132ms / 147ms wait;
+  final cold reopen 580ms / 608ms wait, all Status ok. Final process 5226 is
+  running; current-process AndroidRuntime/ReactNativeJS error query is empty.
+- Native welcome, Customer/Chef phone, Chef signup focus, email and both
+  footers were inspected. Wordmark fully visible at top, bold faces loaded,
+  local video playing, actions reachable by panel scrolling. Customer/Chef
+  field is above keyboard; hide restores the full white panel with no bottom
+  gap. Background/foreground and cold reopen succeed. Left on welcome.
+- Phone evidence: `C:\mscratch\artifacts\v1.17.4-phone-final.png`,
+  `v1.17.4-phone-customer.png`, `v1.17.4-phone-chef.png`,
+  `v1.17.4-phone-email.png`, `v1.17.4-phone-restored.png` and matching
+  footer/keyboard checks in that folder. Keyboard captures may contain device
+  autofill suggestions; they are not app assets or included in the source ZIP.
+- No real number/password submitted, OTP sent or account created. OTP native
+  verification needs an approved test number. iOS, enlarged text/small-device
+  native checks and actual reduced-motion/decoder-failure checks remain manual;
+  relevant component/lifecycle behavior has test coverage.
+
+This follows the reference layout and controls, not a claim of identical
+generated pixels or an exact Apple font. The required video differs from the
+reference photo, Inter supplies the bundled login typography, and Android's
+system bars remain native. Original approved app/splash logo assets are intact.
+No backend, auth handlers, payments, Home/menu/glass/splash or CI changes; no push.
 
 ## Keyboard Reset Follow-up Version 1.17.4
 
@@ -48,7 +95,7 @@ ratio without explicitly overriding height. `VideoAuthLayout.tsx` now supplies
 both responsive dimensions (maximum width 310, height width/3) and the unchanged
 safe-area top inset. Form-layout regression assertions cover these dimensions.
 No other UI, asset or auth behavior changes in this follow-up. Android code 26 /
-name 1.17.2; final evidence will be recorded after rebuild and phone verification.
+name 1.17.2; verification evidence is retained above and in the version notes.
 
 The v1.17.1 verification build remains immutable: source/tag
 `ca4d92ed10bf764029e09fc0d6d5748b712b981b` / `KUSHIRAVI-app-v1.17.1`;
@@ -124,7 +171,8 @@ Relative to `C:\mscratch\apps\mobile`:
   discovered missing during the first release bundle.
 - `metro.config.js`: cap packaging workers at two for workstation memory.
   This build-only limit does not change runtime scrolling or glass settings.
-- `android/app/build.gradle`: code 25 / name 1.17.1.
+- `android/app/build.gradle`: final code 28 / name 1.17.4, with each native
+  verification checkpoint versioned separately.
 - `jest.config.js`, `jest.setup.js`, `AuthVisuals.test.tsx`, `AuthVideoBackground.test.tsx`,
   `src/features/auth/screens/LoginScreens.test.tsx`: native-boundary mocks and
   focused presentation/lifecycle/auth-contract regression checks.
@@ -148,7 +196,7 @@ The provided video necessarily differs from the screenshot background.
 ## Verification And Manual Checks
 
 Final source/tag, APK/source ZIP hashes, tests, native build and actual visual
-checks are recorded after verification. Installed phone identity stays in
+checks are recorded above. Installed phone identity stays in
 `KUSHIRAVI_VERSION.md`; do not infer installation from a prepared source entry.
 
 1. Open signed-out Craves. Compare the wordmark, bold title, vertically arranged

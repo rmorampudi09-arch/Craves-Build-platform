@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.17.4 Login Keyboard Reset Prepared
+# KUSHIRAVI App Build - Version 1.17.4 Login Reference Correction Installed
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,17 +9,17 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `27`
-- Installed Android versionName: `1.17.3`
+- Installed Android versionCode: `28`
+- Installed Android versionName: `1.17.4`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed source: `e8392aaa5d3ef15e20da2910cdf6a827b32facd6`, tag `KUSHIRAVI-app-v1.17.3`. Reference styling and focused field verified; keyboard-dismissal follow-up is pending.
-- Last installation: `2026-10-01 08:11:53`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed source: `12d3fda012069d16ecd1df2642c19c949b25649d`, tag `KUSHIRAVI-app-v1.17.4`. Reference-style login, full wordmark and keyboard opening/dismissal verified on the phone.
+- Last installation: `2026-10-01 08:44:38`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.17.4 Prepared - Restore the full login panel after keyboard dismissal
+### Version 1.17.4 Built and Installed - Final login reference and keyboard correction
 
 - Native v1.17.3 showed the focused field above the keyboard, but dismissing the
   keyboard left a bottom gap. Android's keyboard-hide frame excludes system bars;
@@ -27,8 +27,48 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Login-only Android padding uses the measured layout and keyboard-show top,
   explicitly resets to zero on hide and removes its listeners on unmount.
   iOS keeps standard padding avoidance. No form/auth/business changes.
-- Code `28` / name `1.17.4`; fresh tag and verified artifacts will follow.
+- Code `28` / name `1.17.4`; immutable tag `KUSHIRAVI-app-v1.17.4`.
+  Source commit `12d3fda012069d16ecd1df2642c19c949b25649d`. Subsequent
+  evidence-only commits do not change this APK or source tag.
 - Regression covers show, resize, hide with a non-fullscreen frame and cleanup.
+- Includes the v1.17.1 reference-style wordmark, bundled bold login faces, tall
+  role tiles, glossy actions, field layouts and per-screen local-video framing,
+  plus the explicit wordmark dimensions from v1.17.2. Other app UI unchanged.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.4.apk`; SHA-256
+  `251F140C27782A3323C30F7520609E6C7BD5E62C59F2B3DB492D302B1DD9C828`.
+- Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.4-source.zip`; SHA-256
+  `230E81E29532F09A4857EF1364A608F60B0B1AAC3F21388AA99D2E63EEE892AC`.
+  Archived from the tag, 936 entries; required build script, Gradle wrapper,
+  dependency lockfile, local video, wordmark and licensed fonts present. No
+  local .env, node_modules or build outputs.
+- Final TypeScript and scoped lint passed. Targeted startup/login: 3 suites /
+  23 tests passed (267.564s). Final keyboard/visual suite: 13 tests passed
+  (16.645s). Full 192 suites / 981 tests passed on the reference-style correction
+  before the subsequent image-dimension/keyboard-only follow-ups; not claimed
+  as a new full-suite run on this checkpoint. Dependencies unchanged since then.
+- Signed ARM64 release passed in 22m 35s: 823 tasks / 41 executed / 782 up-to-date.
+  Package/version/architecture checked. Existing v2/v3 signing certificate
+  SHA-256 `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`.
+  Exact MP4 and all three font hashes match APK bytes; fourteen packaged source
+  entries match committed source.
+- Replace-installed at `2026-10-01 08:44:38` Asia/Calcutta; phone reports code 28 /
+  name 1.17.4. First cold launch: Status ok / 608ms total / 624ms wait. Hot
+  foreground check: Status ok / 132ms total / 147ms wait. Final cold reopen:
+  Status ok / 580ms total / 608ms wait; process 5226 running, current-process
+  AndroidRuntime/ReactNativeJS error query empty. Data and accounts not cleared.
+- Native screenshots inspected: welcome, Customer phone, Chef phone, Chef signup
+  field focus, email/password, and both form footers. Full top wordmark and bold
+  text visible. Customer/Chef input stays above keyboard; after dismissal the
+  white panel fills the screen without the residual bottom gap. Local video
+  plays, app returns from background, and phone is left on signed-out welcome.
+- No number/password entered, OTP sent, real sign-in or account creation during
+  QA. OTP styling/request contracts are covered by tests, not a real SMS claim.
+  iOS, enlarged-text/small-device native checks and actual decoder failure remain
+  manual checks. No backend/auth/payment/Home/splash/remote/CI change or push.
+- Changed paths, interpretation limits and manual checks:
+  `docs\LOGIN_REFERENCE_FIDELITY_V1_17_1.md`. This is reference-style native UI,
+  not a claim of pixel-identical generated artwork or Apple typography. The
+  requested MP4 replaces the reference photo; Android system bars stay native.
 
 ### Version 1.17.3 Verification Build - Login keyboard avoidance
 
@@ -60,9 +100,8 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   wordmark too low and clipping it behind the panel.
 - Explicit responsive width and height override both intrinsic image dimensions;
   preserve the reference top inset, all other styling and auth behavior.
-- Android code `26` / name `1.17.2`; planned new tag `KUSHIRAVI-app-v1.17.2`.
+- Android code `26` / name `1.17.2`; tag `KUSHIRAVI-app-v1.17.2`.
 - Add regression assertions for the image's real width/height in all form layouts.
-- Final APK, source ZIP, source SHA and phone evidence will follow verification.
 - Earlier checkpoints remain immutable. Details: `docs\LOGIN_REFERENCE_FIDELITY_V1_17_1.md`.
 - Built source/tag: `33eab68d83085e770dd9a095effd1ba7396ed14e` /
   `KUSHIRAVI-app-v1.17.2`. APK `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.2.apk`,
@@ -82,8 +121,8 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 - Starts from clean branch HEAD `bde6914c4793de82b49246c266f028e7c78ded69` and
   installed v1.17, code 24. Preserve the v1.17 tag and all previous artifacts.
-- Android versionCode `25`, versionName `1.17.1`; planned fresh installable tag
-  `KUSHIRAVI-app-v1.17.1` after verification.
+- Android versionCode `25`, versionName `1.17.1`; immutable verification tag
+  `KUSHIRAVI-app-v1.17.1`.
 - Correct the observed v1.17/reference visual differences: wide glossy red
   CRAVES wordmark, bold reference-style login typography, tall frosted welcome
   and phone role tiles, compact email/OTP choices, smooth rounded glossy red
@@ -104,8 +143,8 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Existing auth handlers, validation, OTP gates/cooldown, password recovery,
   Chef authorization, backend/APIM, payments and other app UI are unchanged.
   Email/password remains email-only; fixed +91 and no fabricated legal URLs.
-- APK/source ZIP, final commit, build/visual/test evidence will be recorded
-  after verification. Details: `docs\LOGIN_REFERENCE_FIDELITY_V1_17_1.md`.
+- Verification evidence follows below. Details:
+  `docs\LOGIN_REFERENCE_FIDELITY_V1_17_1.md`.
 - The first release bundle exposed missing `expo-asset`; add the installed
   Expo SDK 56-compatible `~56.0.22` asset support required by the font loader.
   Metro uses two packaging workers to stay within workstation memory; no

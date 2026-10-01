@@ -7,6 +7,7 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,6 +30,8 @@ export function VideoAuthLayout({
   backDisabled,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const logoWidth = Math.min(width * 0.65, 310);
   const heroFraction = loginHeroFractions[welcome ? 'welcome' : variant];
   return (
     <KeyboardAvoidingView
@@ -41,10 +44,15 @@ export function VideoAuthLayout({
         style={[styles.hero, { flex: heroFraction }]}
       >
         <Image
+          testID="auth-wordmark"
           source={require('../../../assets/auth/craves-login-wordmark.png')}
           accessibilityLabel="Craves"
           resizeMode="contain"
-          style={[styles.logo, { marginTop: insets.top + spacing.md }]}
+          style={{
+            width: logoWidth,
+            height: logoWidth / 3,
+            marginTop: insets.top + spacing.md,
+          }}
         />
         {onBack ? (
           <Pressable
@@ -117,7 +125,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   welcomeContent: { gap: 18, paddingTop: 12 },
-  logo: { width: '65%', maxWidth: 310, aspectRatio: 3 },
   back: {
     position: 'absolute',
     left: spacing.md,

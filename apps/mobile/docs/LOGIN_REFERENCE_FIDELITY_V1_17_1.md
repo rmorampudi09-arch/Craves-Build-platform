@@ -1,5 +1,27 @@
 # Craves Login Reference Appearance Version 1.17.1
 
+## Native Follow-up Version 1.17.2
+
+The first actual v1.17.1 phone screenshot verified the bold bundled faces,
+tall role tiles and local video, but exposed a clipped wordmark. React Native
+Image's intrinsic height remained because the prior style set width/aspect
+ratio without explicitly overriding height. `VideoAuthLayout.tsx` now supplies
+both responsive dimensions (maximum width 310, height width/3) and the unchanged
+safe-area top inset. Form-layout regression assertions cover these dimensions.
+No other UI, asset or auth behavior changes in this follow-up. Android code 26 /
+name 1.17.2; final evidence will be recorded after rebuild and phone verification.
+
+The v1.17.1 verification build remains immutable: source/tag
+`ca4d92ed10bf764029e09fc0d6d5748b712b981b` / `KUSHIRAVI-app-v1.17.1`;
+APK SHA-256 `409E95F60FCF55D004FE02A886263D124F3B152E9AEAABE2EBE41BBEA659A541`;
+source ZIP SHA-256 `D64B9ABBA411E8B0613B329945F81F4C8C1AC4AA3D4CA6172CA1F70FA6AF11E3`.
+Full Jest 192/981 passed (457.107s), TypeScript and lint passed, signed ARM64 build
+passed in 31m (823 tasks, 110 executed). MP4 and all three fonts match their APK
+bytes; fourteen release source-map entries match source. Installed at 07:05:27
+Asia/Calcutta on 2026-10-01 without clearing data. Cold launch passed (748ms total /
+772ms wait), current-process error buffers empty. The clipped wordmark means this
+trial is not the final accepted visual correction.
+
 ## Request And Scope
 
 The user reported that installed v1.17 did not look like the Word references

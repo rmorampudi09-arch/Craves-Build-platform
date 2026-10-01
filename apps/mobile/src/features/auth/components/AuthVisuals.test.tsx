@@ -123,6 +123,11 @@ describe('login reference visual structure', () => {
       const hero = tree.root.findAllByProps({ testID: 'auth-video-window' })[0];
       expect(StyleSheet.flatten(hero.props.style).flex).toBe(fraction);
       expect(authHeroFraction(route)).toBe(fraction);
+      const logo = tree.root.findAllByProps({ testID: 'auth-wordmark' })[0];
+      const logoStyle = StyleSheet.flatten(logo.props.style);
+      expect(logoStyle.width).toBeGreaterThan(0);
+      expect(logoStyle.width).toBeLessThanOrEqual(310);
+      expect(logoStyle.height).toBe(logoStyle.width / 3);
     },
   );
 });

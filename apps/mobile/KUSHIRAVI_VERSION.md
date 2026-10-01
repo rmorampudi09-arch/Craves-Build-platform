@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.17.1 Reference Correction Prepared
+# KUSHIRAVI App Build - Version 1.17.2 Native Wordmark Correction Prepared
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,17 +9,29 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `24`
-- Installed Android versionName: `1.17`
+- Installed Android versionCode: `25`
+- Installed Android versionName: `1.17.1`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed source: `1da74b8373df238c46409ae34f83a88bb6238f69`, tag `KUSHIRAVI-app-v1.17`. Later evidence-only commits do not change this APK/tag.
-- Last installation: `2026-10-01 05:36:26`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed source: `ca4d92ed10bf764029e09fc0d6d5748b712b981b`, tag `KUSHIRAVI-app-v1.17.1`. This verification build exposed a clipped wordmark and is not the final accepted correction.
+- Last installation: `2026-10-01 07:05:27`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.17.1 Prepared - Match the login reference appearance
+### Version 1.17.2 Prepared - Native wordmark sizing correction
+
+- Follow up on the live v1.17.1 verification: fonts, role tiles and local video
+  render, but React Native retained the PNG's intrinsic height, centering the
+  wordmark too low and clipping it behind the panel.
+- Explicit responsive width and height override both intrinsic image dimensions;
+  preserve the reference top inset, all other styling and auth behavior.
+- Android code `26` / name `1.17.2`; planned new tag `KUSHIRAVI-app-v1.17.2`.
+- Add regression assertions for the image's real width/height in all form layouts.
+- Final APK, source ZIP, source SHA and phone evidence will follow verification.
+- Earlier checkpoints remain immutable. Details: `docs\LOGIN_REFERENCE_FIDELITY_V1_17_1.md`.
+
+### Version 1.17.1 Verification Build - Match the login reference appearance
 
 - Starts from clean branch HEAD `bde6914c4793de82b49246c266f028e7c78ded69` and
   installed v1.17, code 24. Preserve the v1.17 tag and all previous artifacts.
@@ -51,6 +63,18 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   Expo SDK 56-compatible `~56.0.22` asset support required by the font loader.
   Metro uses two packaging workers to stay within workstation memory; no
   runtime feed/scroll performance settings changed.
+- Built source/tag: `ca4d92ed10bf764029e09fc0d6d5748b712b981b` /
+  `KUSHIRAVI-app-v1.17.1`. APK `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.1.apk`,
+  SHA-256 `409E95F60FCF55D004FE02A886263D124F3B152E9AEAABE2EBE41BBEA659A541`.
+- Source ZIP `C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.1-source.zip`, SHA-256
+  `D64B9ABBA411E8B0613B329945F81F4C8C1AC4AA3D4CA6172CA1F70FA6AF11E3`.
+- TypeScript/lint passed; full final Jest 192 suites / 981 tests passed in
+  457.107s. Signed ARM64 release passed in 31m, 823 tasks / 110 executed.
+  Existing certificate and package verified; MP4 and all three font hashes
+  match the bundled assets. Fourteen packaged source entries match source.
+- Replace-install succeeded at `2026-10-01 07:05:27`, code 25 / name 1.17.1.
+  Cold launch Status ok / TotalTime 748ms / WaitTime 772ms. No process errors.
+  Live screenshot exposed clipped wordmark; this is a trial, not final delivery.
 
 ### Version 1.17 Built and Installed - Local video login reference
 

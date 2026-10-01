@@ -1,4 +1,5 @@
 import { ChefApplicationWorkspace } from "@/components/chef-application-workspace";
+import { ChefReadinessPanel } from "@/components/chef-readiness-panel";
 import { ChefApplicationSessionBoundary } from "@/components/chef-application-session-boundary";
 
 export const metadata = {
@@ -10,7 +11,10 @@ export default function ChefApplicationPage() {
   return (
     <ChefApplicationSessionBoundary>
       <main className="mx-auto min-h-screen max-w-3xl px-4 py-6 md:px-6 md:py-8">
-      <ChefApplicationWorkspace />
+        <ChefApplicationWorkspace />
+        <div className="mt-6">
+          <ChefReadinessPanel />
+        </div>
       </main>
     </ChefApplicationSessionBoundary>
   );

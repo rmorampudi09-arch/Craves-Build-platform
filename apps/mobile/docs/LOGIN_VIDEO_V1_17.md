@@ -140,17 +140,41 @@ Real SMS/OTP, successful account sign-in and Chef onboarding require an approved
 test number/account and remain unverified live; mocked regression tests are not
 a substitute for those checks.
 
-The connected phone `RS7PB6VOY9ZLLFYD` was inspected read-only and still reports
-v1.16 / code 23, last update `2026-09-30 22:24:55`. No v1.17 phone install,
-sign-out, application data reset or backend mutation was performed.
+At build completion the connected phone `RS7PB6VOY9ZLLFYD` still had v1.16 /
+code 23. The later user-requested v1.17 installation is recorded below. No
+sign-out, application data reset or intentional backend/auth mutation was used
+to inspect the new login screen.
+
+### Phone Installation
+
+Installed on the user's subsequent explicit request, without rebuilding or
+changing the immutable APK/tag:
+
+- Device: `RS7PB6VOY9ZLLFYD`, RMX5003.
+- Replace-install: `adb -s RS7PB6VOY9ZLLFYD install --no-incremental -r
+  C:\mscratch\artifacts\KUSHIRAVI-app-v1.17.apk`, returned `Success`.
+- Pre-install: versionCode 23 / versionName 1.16.
+- Verified post-install: package `com.cravesapp`, versionCode 24 / versionName
+  1.17; phone-reported lastUpdateTime `2026-10-01 05:36:26` (Asia/Calcutta).
+- Installed tag: `KUSHIRAVI-app-v1.17`, source commit
+  `1da74b8373df238c46409ae34f83a88bb6238f69`.
+- APK SHA-256 checked again before installation:
+  `65487BF5880E737B56AB47AADBE5E422CF9CFABEDC704A716B9079792292A128`.
+- Launch: `com.cravesapp/.MainActivity`, Status `ok`, LaunchState `COLD`,
+  TotalTime 614ms, WaitTime 646ms. Process 21937 remained running on the
+  subsequent check; its AndroidRuntime/ReactNativeJS error query was empty.
+- Existing application data was preserved; no logout or storage clearing.
+  No real OTP/sign-in or complete video/keyboard visual check is claimed from
+  these launch results. The manual checks above remain the release QA checklist.
+- Prior version tags, APKs and source ZIPs remain untouched. No GitHub push.
 
 ### Manual Setup
 
 No new Azure, APIM, Firebase, payment, signing-key, DNS or CI setup is required
 for the background video. It is local to the APK. Approved Terms of Service and
 Privacy Policy URLs are still needed before adding working legal links; none
-were fabricated. APK installation on the user's phone was not requested in
-this turn and has not been performed.
+were fabricated. The user subsequently requested phone installation, which
+completed as recorded above. No extra infrastructure setup was needed.
 
 Rebuild from the tagged source ZIP using the existing
 `scripts\build-kushiravi-release-apk.ps1`. The video and poster are included in

@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.17 Login Update Built
+# KUSHIRAVI App Build - Version 1.17 Login Update Built and Installed
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,17 +9,17 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `23`
-- Installed Android versionName: `1.16`
+- Installed Android versionCode: `24`
+- Installed Android versionName: `1.17`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed source: `a035229b22d4399e8eb23ee1a46bc6770a9c0092`, tag `KUSHIRAVI-app-v1.16`. Later evidence-only commits do not change this APK/tag.
-- Last installation: `2026-09-30 22:24:55`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed source: `1da74b8373df238c46409ae34f83a88bb6238f69`, tag `KUSHIRAVI-app-v1.17`. Later evidence-only commits do not change this APK/tag.
+- Last installation: `2026-10-01 05:36:26`, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
 
-### Version 1.17 Built - Local video login reference
+### Version 1.17 Built and Installed - Local video login reference
 
 - Starts from installed v1.16 / `a035229b22d4399e8eb23ee1a46bc6770a9c0092`
   and clean branch HEAD `d3f193204243f733b409bd0aa8a6bf573bc54382`.
@@ -61,8 +61,15 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   boot (package service unavailable), so emulator installation could not finish.
   The task's emulator was stopped; no device data was cleared. No real SMS,
   account creation or successful sign-in is claimed tested in this checkpoint.
-- Phone checked read-only: still v1.16 / code 23, last update 2026-09-30 22:24:55.
-  No phone install, sign-out or reset was performed for this UI request.
+- Subsequent user-requested phone installation: replace-install returned Success
+  on `RS7PB6VOY9ZLLFYD` / RMX5003, preserving application data. Phone reports
+  code 24 / name 1.17, last update `2026-10-01 05:36:26` (Asia/Calcutta).
+  Installed the immutable APK whose SHA-256 is recorded above; no rebuild.
+- Launch: `com.cravesapp/.MainActivity`, Status ok, COLD, TotalTime 614ms,
+  WaitTime 646ms. Process 21937 remained running on the post-launch check;
+  current-process AndroidRuntime/ReactNativeJS error query returned no errors.
+  No sign-out, data reset, real SMS or auth-flow mutation was performed.
+  Successful launch is not a claim of full login/video visual verification.
 - Change paths and manual checks: `docs\LOGIN_VIDEO_V1_17.md`.
 
 ### Version 1.16 Built and Installed - Precise menu and Home scrolling changes

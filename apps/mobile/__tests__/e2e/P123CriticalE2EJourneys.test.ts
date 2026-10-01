@@ -363,7 +363,8 @@ describe('P123 critical E2E journeys', () => {
 
   it('carries a Chef accept decision forward through newer operational lifecycle events without stale regression', async () => {
     const server: ChefOrderDecisionApi = {
-      getOrder: jest.fn(async () => chefOrderDetail()),
+      getOrder: jest.fn(async () => chefOrderDetail({prepTimeMinutes: 30})),
+      listMenuItems: jest.fn(async () => []),
       acceptOrder: jest.fn(async () =>
         chefOrderDetail({
           status: 'CHEF_ACCEPTED',
@@ -379,7 +380,6 @@ describe('P123 critical E2E journeys', () => {
     const accepted = await createChefOrderDecisionCoordinator(server).execute({
       kind: 'accept',
       orderId: ORDER_ID,
-      prepTimeMinutes: 30,
     });
     expect(accepted.order.status).toBe('CHEF_ACCEPTED');
 

@@ -1,4 +1,9 @@
 import {AppApiError} from '../../../core/http/apiError';
+import {chefMenuApi} from '../../chefMenu/api/chefMenuApi';
+import {
+  resolveChefOrderPreparationTime,
+  type ChefPreparationItem,
+} from './chefOrderPreparation';
 import {
   chefOrderDetailApi,
   type ChefAcceptOrderRequest,
@@ -12,7 +17,6 @@ export type ChefOrderDecisionInput =
   | {
       kind: 'accept';
       orderId: string;
-      prepTimeMinutes: number;
     }
   | {
       kind: 'reject';
@@ -27,6 +31,7 @@ export interface ChefOrderDecisionResult {
 
 export interface ChefOrderDecisionApi {
   getOrder(orderId: string): Promise<ChefOrderDetail>;
+  listMenuItems(): Promise<ChefPreparationItem[]>;
   acceptOrder(
     orderId: string,
     request: ChefAcceptOrderRequest,
@@ -86,7 +91,7 @@ function requireAcceptPrepTime(value: number): number {
   if (!Number.isInteger(value) || value <= 0 || value > 2_147_483_647) {
     throw new AppApiError(
       'CHEF_ORDER_PREP_TIME_REQUIRED',
-      'Enter a valid preparation time in minutes before accepting.',
+      'The saved preparation time is invalid. Check the menu item and try again.',
       400,
     );
   }
@@ -117,7 +122,10 @@ export interface ChefOrderDecisionCoordinator {
 }
 
 export function createChefOrderDecisionCoordinator(
-  api: ChefOrderDecisionApi = chefOrderDetailApi,
+  api: ChefOrderDecisionApi = {
+    ...chefOrderDetailApi,
+    listMenuItems: () => chefMenuApi.listItems(),
+  },
 ): ChefOrderDecisionCoordinator {
   const inFlightByOrder = new Map<string, Promise<ChefOrderDecisionResult>>();
 
@@ -143,12 +151,21 @@ export function createChefOrderDecisionCoordinator(
           input.kind,
           latest,
         );
+        const prepTimeMinutes =
+          input.kind === 'accept'
+            ? requireAcceptPrepTime(
+                resolveChefOrderPreparationTime(
+                  latest,
+                  latest.prepTimeMinutes == null ? await api.listMenuItems() : [],
+                ),
+              )
+            : null;
         const order =
           input.kind === 'accept'
             ? await api.acceptOrder(
                 input.orderId,
                 {
-                  prepTimeMinutes: requireAcceptPrepTime(input.prepTimeMinutes),
+                  prepTimeMinutes: prepTimeMinutes!,
                   note: null,
                 },
                 idempotencyKey,

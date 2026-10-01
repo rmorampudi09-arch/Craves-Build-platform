@@ -18,7 +18,7 @@ export interface ChefNewOrderFeedback {
 export interface ChefNewOrderActionsState {
   actionStateByOrder: Record<string, ChefNewOrderAction | undefined>;
   feedback: ChefNewOrderFeedback | null;
-  accept: (orderId: string, prepTimeMinutes: number) => Promise<ChefOrderDetail>;
+  accept: (orderId: string) => Promise<ChefOrderDetail>;
   reject: (orderId: string, reason: string) => Promise<ChefOrderDetail>;
   clearFeedback: () => void;
 }
@@ -90,7 +90,10 @@ export function useChefNewOrderActions(): ChefNewOrderActionsState {
             reconcile(latest);
             setFeedback({
               kind: 'error',
-              message: `This order is now ${formatChefOrderStatus(latest.status)}. The latest status is shown.`,
+              message:
+                latest.status === 'CHEF_ACCEPTANCE_PENDING'
+                  ? appError.message
+                  : `This order is now ${formatChefOrderStatus(latest.status)}. The latest status is shown.`,
             });
           } catch {
             setFeedback({kind: 'error', message: appError.message});
@@ -113,12 +116,11 @@ export function useChefNewOrderActions(): ChefNewOrderActionsState {
   );
 
   const accept = React.useCallback(
-    (orderId: string, prepTimeMinutes: number) =>
+    (orderId: string) =>
       run(orderId, 'accepting', async () => {
         const result = await coordinatorRef.current.execute({
           kind: 'accept',
           orderId,
-          prepTimeMinutes,
         });
         return result.order;
       }),

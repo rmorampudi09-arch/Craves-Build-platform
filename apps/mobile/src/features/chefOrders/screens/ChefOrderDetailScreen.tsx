@@ -95,7 +95,6 @@ export function ChefOrderDetailScreen({navigation, route}: Props) {
   const {orderId} = route.params;
   const detail = useChefOrderDetailContract(orderId);
   const decision = useChefOrderDecision(orderId);
-  const [prepMinutes, setPrepMinutes] = React.useState('');
   const [rejectOpen, setRejectOpen] = React.useState(false);
   const [rejectReason, setRejectReason] = React.useState('');
 
@@ -146,14 +145,12 @@ export function ChefOrderDetailScreen({navigation, route}: Props) {
   const order = model.order;
   const actionable =
     model.actionability.acceptCandidate && model.actionability.rejectCandidate;
-  const prepValue = Number(prepMinutes);
-  const prepValid = Number.isInteger(prepValue) && prepValue > 0;
   const actionBusy = decision.action !== null;
   const address = order.deliveryAddress;
 
   const acceptOrder = async () => {
     try {
-      await decision.accept(prepValue);
+      await decision.accept();
       goToOrders();
     } catch {
       // The hook exposes the normalized action error inline.
@@ -364,21 +361,6 @@ export function ChefOrderDetailScreen({navigation, route}: Props) {
 
       {actionable ? (
         <View style={styles.actionDock}>
-          <Text style={styles.prepLabel}>Preparation time</Text>
-          <View style={styles.prepInputRow}>
-            <TextInput
-              accessibilityLabel="Preparation time in minutes"
-              editable={!actionBusy}
-              keyboardType="number-pad"
-              maxLength={6}
-              onChangeText={value => setPrepMinutes(value.replace(/\D/g, ''))}
-              placeholder="e.g. 35"
-              placeholderTextColor={colors.placeholder}
-              style={styles.prepInput}
-              value={prepMinutes}
-            />
-            <Text style={styles.minutesLabel}>minutes</Text>
-          </View>
           <View style={styles.actionRow}>
             <Pressable
               accessibilityLabel="Reject order"
@@ -395,10 +377,10 @@ export function ChefOrderDetailScreen({navigation, route}: Props) {
             <Pressable
               accessibilityLabel="Accept order"
               accessibilityRole="button"
-              accessibilityState={{disabled: actionBusy || !prepValid}}
-              disabled={actionBusy || !prepValid}
+              accessibilityState={{disabled: actionBusy}}
+              disabled={actionBusy}
               onPress={acceptOrder}
-              style={({pressed}) => [styles.acceptButton, pressed && styles.pressed, (actionBusy || !prepValid) && styles.disabled]}>
+              style={({pressed}) => [styles.acceptButton, pressed && styles.pressed, actionBusy && styles.disabled]}>
               {decision.action === 'accept' ? (
                 <ActivityIndicator color={colors.white} size="small" />
               ) : (
@@ -543,10 +525,6 @@ const styles = StyleSheet.create({
   latestStatusText: {color: colors.success, fontSize: typography.body, fontWeight: fontWeight.bold, marginTop: spacing.xxs},
   latestStatusHint: {color: colors.textSecondary, fontSize: typography.tiny, marginTop: spacing.xxs},
   actionDock: {...elevation.card, backgroundColor: colors.white, borderTopColor: colors.border, borderTopWidth: 1, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm},
-  prepLabel: {color: colors.textPrimary, fontSize: typography.small, fontWeight: fontWeight.semibold},
-  prepInputRow: {alignItems: 'center', flexDirection: 'row', gap: spacing.xs, marginTop: spacing.xs},
-  prepInput: {backgroundColor: colors.surfaceMuted, borderColor: colors.borderStrong, borderRadius: radius.md, borderWidth: 1, color: colors.textPrimary, flex: 1, fontSize: typography.body, minHeight: touchTarget.minimum, paddingHorizontal: spacing.sm},
-  minutesLabel: {color: colors.textSecondary, fontSize: typography.small},
   actionRow: {flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm},
   rejectButton: {alignItems: 'center', borderColor: colors.flameRed, borderRadius: radius.pill, borderWidth: 1, flex: 1, justifyContent: 'center', minHeight: touchTarget.comfortable},
   rejectButtonText: {color: colors.flameRed, fontSize: typography.button, fontWeight: fontWeight.bold},

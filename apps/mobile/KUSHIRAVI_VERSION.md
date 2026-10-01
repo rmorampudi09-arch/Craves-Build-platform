@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.19 Native MSG91 OTP
+# KUSHIRAVI App Build - Version 1.20 Chef Acceptance
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -18,6 +18,41 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.20 - Chef Acceptance and Automatic Preparation Time, 2026-10-02
+
+- Branch `KUSHIRAVI-app-build`, clean start at
+  `68abc6244358666a49a019f3840af7116ad559e6`. No GitHub push.
+- Android package `com.cravesapp`, versionCode `31`, versionName `1.20`.
+  Installable checkpoint: `KUSHIRAVI-app-v1.20`; immutable source SHA and
+  build/install receipt recorded after verification. Previous tags untouched.
+- Removed manual preparation-time entry from New orders and order detail.
+  Accept now uses the existing authorized menu metadata for the ordered items:
+  longest item preparation time, matching the existing cart rule; only items
+  with no saved preparation time use the user-approved 15-minute default.
+  An existing server order preparation time is preserved. Menu read failures
+  are not treated as missing times and do not send an acceptance.
+- Live Order Service logs confirmed the reported permission-looking failure
+  was preceded by `X-Correlation-ID` UUID conversion errors for the mobile
+  `mobile-...` tracking IDs. Mobile now uses the already-installed Expo native
+  UUID generator. Backend/APIM routes, credentials, roles and access checks
+  are unchanged; acceptance, rejection and ready-for-pickup all receive UUIDs.
+- Preserved server revalidation, per-order duplicate guard, idempotency keys,
+  authoritative status reconciliation and rejection reasons. A failed list
+  refresh no longer turns an authoritative successful acceptance into an error.
+  When the server rejects an expired order still stored as pending, its actual
+  expiry message is preserved instead of reporting a misleading status change.
+- No backend deployment, financial/order policy changes, account grants,
+  acceptance-deadline bypass, Pidge/Borzo changes or unrelated UI redesign.
+- Verification: TypeScript passed; all changed JS/TS/TSX files passed ESLint
+  with zero warnings; entire Jest suite passed (202 suites / 1,078 tests).
+  Final signed release build passed in 3m 9s, 864 tasks, arm64-v8a; APK metadata
+  confirms code 31 / name 1.20. Signing certificate unchanged.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.20.apk`.
+  SHA-256: `AF4D9511673B198BB81631E804AB90BBC2B6F83BBE0B5806E4A448FD81D138E2`.
+  Tagged source: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.20-source.zip`.
+  Full verification and installation status will be recorded in
+  `docs\chef-order-acceptance-v1.20-20261002.md`.
 
 ### Delivery Intelligence / Pidge Routing Configuration v1, 2026-10-02
 

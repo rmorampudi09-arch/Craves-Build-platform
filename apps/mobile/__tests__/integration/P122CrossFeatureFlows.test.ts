@@ -307,7 +307,8 @@ describe('P122 cross-feature integration completion', () => {
 
   it('carries a Chef accept decision into newer operational status without stale regression', async () => {
     const server: ChefOrderDecisionApi = {
-      getOrder: jest.fn(async () => chefOrderDetail()),
+      getOrder: jest.fn(async () => chefOrderDetail({prepTimeMinutes: 30})),
+      listMenuItems: jest.fn(async () => []),
       acceptOrder: jest.fn(async () =>
         chefOrderDetail({
           status: 'CHEF_ACCEPTED',
@@ -323,7 +324,6 @@ describe('P122 cross-feature integration completion', () => {
     const decision = await createChefOrderDecisionCoordinator(server).execute({
       kind: 'accept',
       orderId: ORDER_ID,
-      prepTimeMinutes: 30,
     });
     expect(decision.order.status).toBe('CHEF_ACCEPTED');
 

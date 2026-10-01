@@ -45,6 +45,10 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(async () => undefined),
 }));
 
+jest.mock('expo-modules-core', () => ({
+  uuid: {v4: () => require('crypto').randomUUID()},
+}));
+
 jest.mock('expo-location', () => ({
   Accuracy: {High: 4},
   PermissionStatus: {GRANTED: 'granted', DENIED: 'denied', UNDETERMINED: 'undetermined'},

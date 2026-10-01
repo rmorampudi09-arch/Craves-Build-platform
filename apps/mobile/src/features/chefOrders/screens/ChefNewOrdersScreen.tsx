@@ -273,8 +273,6 @@ export function ChefNewOrdersScreen() {
   const latestScrollOffsetRef = React.useRef(initialScrollOffset);
   const listRef = React.useRef<FlatList<ChefOperationalOrder>>(null);
   const [clockSampleMs, setClockSampleMs] = React.useState(() => Date.now());
-  const [acceptOrderId, setAcceptOrderId] = React.useState<string | null>(null);
-  const [prepMinutes, setPrepMinutes] = React.useState('');
   const [rejectOrderId, setRejectOrderId] = React.useState<string | null>(null);
   const [rejectReason, setRejectReason] = React.useState('');
 
@@ -351,23 +349,16 @@ export function ChefNewOrdersScreen() {
     [orderTabs],
   );
 
-  const openAccept = React.useCallback((orderId: string) => {
-    setRejectOrderId(null);
-    setRejectReason('');
-    setPrepMinutes('');
-    setAcceptOrderId(orderId);
-  }, []);
+  const acceptOrder = React.useCallback(
+    (orderId: string) => {
+      actions.accept(orderId).catch(() => undefined);
+    },
+    [actions],
+  );
 
   const openReject = React.useCallback((orderId: string) => {
-    setAcceptOrderId(null);
-    setPrepMinutes('');
     setRejectReason('');
     setRejectOrderId(orderId);
-  }, []);
-
-  const closeAccept = React.useCallback(() => {
-    setAcceptOrderId(null);
-    setPrepMinutes('');
   }, []);
 
   const closeReject = React.useCallback(() => {
@@ -375,26 +366,8 @@ export function ChefNewOrdersScreen() {
     setRejectReason('');
   }, []);
 
-  const prepValue = Number(prepMinutes);
-  const prepValid = Number.isInteger(prepValue) && prepValue > 0;
-  const acceptBusy =
-    acceptOrderId !== null && actions.actionStateByOrder[acceptOrderId] === 'accepting';
   const rejectBusy =
     rejectOrderId !== null && actions.actionStateByOrder[rejectOrderId] === 'rejecting';
-
-  const submitAccept = React.useCallback(() => {
-    if (!acceptOrderId || !prepValid || acceptBusy) {
-      return;
-    }
-    actions
-      .accept(acceptOrderId, prepValue)
-      .then(() => closeAccept())
-      .catch(error => {
-        if (error instanceof AppApiError && error.status === 409) {
-          closeAccept();
-        }
-      });
-  }, [acceptBusy, acceptOrderId, actions, closeAccept, prepValid, prepValue]);
 
   const submitReject = React.useCallback(() => {
     const reason = rejectReason.trim();
@@ -426,7 +399,7 @@ export function ChefNewOrdersScreen() {
       <NewOrderCard
         action={actions.actionStateByOrder[item.id]}
         nowMs={clockSampleMs}
-        onAccept={() => openAccept(item.id)}
+        onAccept={() => acceptOrder(item.id)}
         onOpen={() => openOrder(item.id)}
         onReject={() => openReject(item.id)}
         order={item}
@@ -435,7 +408,7 @@ export function ChefNewOrdersScreen() {
     [
       actions.actionStateByOrder,
       clockSampleMs,
-      openAccept,
+      acceptOrder,
       openOrder,
       openReject,
     ],
@@ -452,7 +425,7 @@ export function ChefNewOrdersScreen() {
           New orders
         </Text>
         <Text style={styles.subtitle}>
-          Review incoming orders and respond with an accurate preparation time.
+          Review incoming orders and respond promptly.
         </Text>
       </View>
       <StatusTabs counts={orderTabs.tabCounts} onSelect={selectStatusTab} />
@@ -465,7 +438,7 @@ export function ChefNewOrdersScreen() {
           <Text style={styles.summaryTitle}>
             {orderTabs.tabCounts.NEW} new {orderTabs.tabCounts.NEW === 1 ? 'order' : 'orders'}
           </Text>
-          <Text style={styles.summaryText}>Respond individually so each order gets the right prep time.</Text>
+          <Text style={styles.summaryText}>Review and respond to each incoming order.</Text>
         </View>
         <Pressable
           accessibilityHint="Explains why bulk acceptance is not currently available."
@@ -474,7 +447,7 @@ export function ChefNewOrdersScreen() {
           onPress={() =>
             Alert.alert(
               'Accept all unavailable',
-              'Each acceptance currently requires an order-specific preparation time. Accept orders individually for now.',
+              'Review and accept orders individually for now.',
             )
           }
           style={({pressed}) => [styles.bulkButton, pressed && styles.pressed]}>
@@ -601,73 +574,9 @@ export function ChefNewOrdersScreen() {
         <View style={styles.tipIcon}>
           <Icon color={colors.warning} name="star" size={18} />
         </View>
-        <Text style={styles.tipText}>Respond promptly and enter a realistic preparation time.</Text>
+        <Text style={styles.tipText}>Respond promptly to new orders.</Text>
         <Icon color={colors.textSecondary} name="chevron-right" size={17} />
       </Pressable>
-
-      <Modal
-        animationType="slide"
-        onRequestClose={() => !acceptBusy && closeAccept()}
-        transparent
-        visible={acceptOrderId !== null}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalAvoider}>
-          <Pressable
-            accessibilityLabel="Close accept order sheet"
-            accessibilityRole="button"
-            disabled={acceptBusy}
-            onPress={closeAccept}
-            style={styles.modalBackdrop}>
-            <Pressable
-              accessibilityRole="none"
-              onPress={event => event.stopPropagation()}
-              style={styles.sheet}>
-              <Text accessibilityRole="header" style={styles.sheetTitle}>Accept order</Text>
-              <Text style={styles.sheetText}>
-                Enter the preparation time for {acceptOrderId ? shortOrderReference(acceptOrderId) : 'this order'}.
-              </Text>
-              <View style={styles.inputRow}>
-                <TextInput
-                  accessibilityLabel="Preparation time in minutes"
-                  editable={!acceptBusy}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  onChangeText={value => setPrepMinutes(value.replace(/\D/g, ''))}
-                  placeholder="e.g. 35"
-                  placeholderTextColor={colors.placeholder}
-                  style={styles.input}
-                  value={prepMinutes}
-                />
-                <Text style={styles.inputSuffix}>minutes</Text>
-              </View>
-              <View style={styles.sheetActions}>
-                <Pressable
-                  accessibilityLabel="Cancel accepting order"
-                  accessibilityRole="button"
-                  disabled={acceptBusy}
-                  onPress={closeAccept}
-                  style={({pressed}) => [styles.sheetSecondaryButton, pressed && styles.pressed]}>
-                  <Text style={styles.sheetSecondaryText}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityLabel="Confirm accept order"
-                  accessibilityRole="button"
-                  accessibilityState={{disabled: !prepValid || acceptBusy}}
-                  disabled={!prepValid || acceptBusy}
-                  onPress={submitAccept}
-                  style={({pressed}) => [
-                    styles.sheetPrimaryButton,
-                    (pressed || !prepValid || acceptBusy) && styles.buttonDisabled,
-                  ]}>
-                  {acceptBusy ? <ActivityIndicator color={colors.white} size="small" /> : null}
-                  <Text style={styles.sheetPrimaryText}>{acceptBusy ? 'Accepting…' : 'Accept Order'}</Text>
-                </Pressable>
-              </View>
-            </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
 
       <Modal
         animationType="slide"
@@ -807,14 +716,11 @@ const styles = StyleSheet.create({
   sheet: {borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, backgroundColor: colors.white, padding: spacing.lg, paddingBottom: spacing.xl},
   sheetTitle: {color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold},
   sheetText: {marginTop: spacing.xs, color: colors.textSecondary, fontSize: typography.small},
-  inputRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md},
   input: {minHeight: touchTarget.minimum, flex: 1, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: radius.md, backgroundColor: colors.white, color: colors.textPrimary, fontSize: typography.body, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs},
-  inputSuffix: {color: colors.textSecondary, fontSize: typography.body},
   reasonInput: {minHeight: 112, marginTop: spacing.md},
   sheetActions: {flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg},
   sheetSecondaryButton: {flex: 1, minHeight: touchTarget.minimum, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.borderStrong, borderRadius: radius.md, backgroundColor: colors.white},
   sheetSecondaryText: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},
-  sheetPrimaryButton: {flex: 1, minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, backgroundColor: colors.flameRed},
   sheetRejectButton: {flex: 1, minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, backgroundColor: colors.error},
   sheetPrimaryText: {color: colors.white, fontSize: typography.body, fontWeight: fontWeight.semibold},
   buttonDisabled: {opacity: 0.4},

@@ -15,7 +15,7 @@ import {createChefOrderDetailQueryKey} from './useChefOrderDetailContract';
 export interface ChefOrderDecisionState {
   action: ChefOrderDecisionKind | null;
   error: AppApiError | null;
-  accept: (prepTimeMinutes: number) => Promise<ChefOrderDetail>;
+  accept: () => Promise<ChefOrderDetail>;
   reject: (reason: string) => Promise<ChefOrderDetail>;
   clearError: () => void;
 }
@@ -69,13 +69,13 @@ export function useChefOrderDecision(orderId: string): ChefOrderDecisionState {
       actionPromise = execute()
         .then(async result => {
           reconcile(result.order);
-          await operational.refresh();
+          operational.refresh().catch(() => undefined);
           return result.order;
         })
         .catch(async (cause: unknown) => {
           if (cause instanceof ChefOrderDecisionConflictError) {
             reconcile(cause.latestOrder);
-            await operational.refresh();
+            operational.refresh().catch(() => undefined);
             const conflict = toAppApiError(cause);
             setError(conflict);
             throw conflict;
@@ -108,12 +108,11 @@ export function useChefOrderDecision(orderId: string): ChefOrderDecisionState {
   );
 
   const accept = React.useCallback(
-    (prepTimeMinutes: number) =>
+    () =>
       run('accept', () =>
         coordinatorRef.current.execute({
           kind: 'accept',
           orderId,
-          prepTimeMinutes,
         }),
       ),
     [orderId, run],

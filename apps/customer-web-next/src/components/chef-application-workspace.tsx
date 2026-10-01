@@ -122,8 +122,7 @@ function hasRequiredEvidence(application: ChefApplication): boolean {
     "GOVERNMENT_ID_BACK",
     "TAX_ID_CARD",
   ].every((type) => types.has(type as never));
-  const legacyEvidence = types.has("AADHAAR_CARD") && types.has("PAN_CARD");
-  return modernEvidence || legacyEvidence;
+  return modernEvidence;
 }
 
 function addressSummary(form: FormState): string {

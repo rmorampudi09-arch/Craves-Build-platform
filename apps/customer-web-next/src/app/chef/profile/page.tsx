@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BadgeIndianRupee, Bell, ChevronRight, FileCheck2, MapPin, Store, UserRound } from "lucide-react";
+import { BadgeIndianRupee, Bell, CalendarDays, ChevronRight, FileCheck2, Gauge, MapPin, Store, UserRound } from "lucide-react";
 import { ChefAccessBoundary } from "@/components/chef-access-boundary";
 import { ChefPageHeader } from "@/components/chef-page-header";
 
@@ -21,6 +21,8 @@ function ProfileContent(){
   {href:"/chef/application",icon:UserRound,title:"Personal details",desc:name},
   {href:"/chef/kitchen",icon:Store,title:"Kitchen details",desc:kitchen?.kitchenName||"Add your kitchen details"},
   {href:"/chef/kitchen",icon:MapPin,title:"Kitchen location",desc:address||"Add your pickup location"},
+  {href:"/chef/meal-plans",icon:CalendarDays,title:"Meal plans",desc:"Create and manage weekly or monthly customer subscriptions"},
+  {href:"/chef/capacity",icon:Gauge,title:"Subscription capacity",desc:"Control how many recurring meal commitments you can accept"},
   {href:"/chef/earnings",icon:BadgeIndianRupee,title:"Earnings & payouts",desc:"See what you get from completed orders"},
   {href:"/notifications",icon:Bell,title:"Notifications",desc:"Orders, payments and account updates"},
   {href:"/chef/application",icon:FileCheck2,title:"Documents & verification",desc:application?.status==="APPROVED"?"Application approved":"View your verification status"},

@@ -17,8 +17,12 @@ import {
 
 import { AddressMapPicker } from "@/components/location/AddressMapPicker";
 import {
+  addressLabelDraftError,
+  addressLabelFromDraft,
+  createAddressLabelDraft,
   parseAddressInput,
-  type AddressLabel,
+  type AddressCategory,
+  type AddressLabelDraft,
   type CustomerAddress,
   type CustomerAddressInput,
 } from "@/lib/address-contract";
@@ -28,10 +32,11 @@ import { sessionFetch } from "@/services/auth/sessionFetch";
 
 type Step = "locate" | "details";
 
-type AddressDraft = Omit<CustomerAddressInput, "latitude" | "longitude"> & {
-  latitude: string;
-  longitude: string;
-};
+type AddressDraft = Omit<CustomerAddressInput, "latitude" | "longitude" | "addressLabel"> &
+  AddressLabelDraft & {
+    latitude: string;
+    longitude: string;
+  };
 
 type ProfileDefaults = {
   recipientName: string;
@@ -39,7 +44,7 @@ type ProfileDefaults = {
 };
 
 type FieldKey =
-  | "addressName"
+  | "customLabel"
   | "addressLine1"
   | "areaName"
   | "landmark"
@@ -61,8 +66,7 @@ interface AddressEditorFlowProps {
 }
 
 const EMPTY_DRAFT: AddressDraft = {
-  addressLabel: "HOME",
-  addressName: null,
+  ...createAddressLabelDraft("HOME"),
   recipientName: "",
   contactPhoneNumber: "",
   addressLine1: "",
@@ -79,7 +83,7 @@ const EMPTY_DRAFT: AddressDraft = {
 };
 
 const LABELS: Array<{
-  value: AddressLabel;
+  value: AddressCategory;
   label: string;
   icon: typeof Home;
 }> = [
@@ -99,8 +103,7 @@ function localPhone(value: string | null | undefined): string {
 
 function draftFrom(address: CustomerAddress): AddressDraft {
   return {
-    addressLabel: address.addressLabel,
-    addressName: address.addressName ?? null,
+    ...createAddressLabelDraft(address.addressLabel),
     recipientName: address.recipientName ?? "",
     contactPhoneNumber: localPhone(address.contactPhoneNumber),
     addressLine1: address.addressLine1,
@@ -206,8 +209,9 @@ function getBrowserLocation(): Promise<{ latitude: number; longitude: number }> 
 function validateDraft(draft: AddressDraft): FieldErrors {
   const errors: FieldErrors = {};
 
-  if (draft.addressLabel === "OTHER" && !draft.addressName?.trim()) {
-    errors.addressName = "Enter a name for this address.";
+  const labelError = addressLabelDraftError(draft);
+  if (labelError) {
+    errors.customLabel = labelError;
   }
   if (!draft.addressLine1.trim()) {
     errors.addressLine1 = "Enter your flat, house, building or floor.";
@@ -386,8 +390,10 @@ export function AddressEditorFlow({
       return;
     }
 
+    const addressLabel = addressLabelFromDraft(draft);
     const input = parseAddressInput({
       ...draft,
+      addressLabel,
       addressLine1: draft.addressLine1.trim(),
       addressLine2: draft.addressLine2?.trim() || null,
       landmark: draft.landmark?.trim() || null,
@@ -725,17 +731,17 @@ export function AddressEditorFlow({
                     <div className="mt-2 grid grid-cols-3 gap-2 rounded-2xl bg-[#F1F3F5] p-1.5">
                       {LABELS.map((option) => {
                         const Icon = option.icon;
-                        const selected = draft.addressLabel === option.value;
+                        const selected = draft.addressCategory === option.value;
                         return (
                           <button
                             key={option.value}
                             type="button"
-                            onClick={() => {
-                              update("addressLabel", option.value);
-                              if (option.value !== "OTHER") {
-                                update("addressName", null);
-                              }
-                            }}
+                            onClick={() =>
+                              setDraft((current) => ({
+                                ...current,
+                                addressCategory: option.value,
+                              }))
+                            }
                             className={
                               "flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-sm font-black transition-[background-color,box-shadow,transform] duration-200 ease-out " +
                               (selected
@@ -755,26 +761,26 @@ export function AddressEditorFlow({
                         );
                       })}
                     </div>
-                    {draft.addressLabel === "OTHER" ? (
+                    {draft.addressCategory === "OTHER" ? (
                       <label
-                        id="address-addressName"
+                        id="address-customLabel"
                         className="mt-3 block text-xs font-bold text-[#1A1A1A]"
                       >
                         Name this address
                         <input
                           autoFocus
-                          value={draft.addressName ?? ""}
+                          value={draft.customLabel}
                           onChange={(event) =>
-                            update("addressName", event.target.value || null)
+                            update("customLabel", event.target.value)
                           }
                           placeholder="e.g. Mom's home, Studio"
                           maxLength={80}
-                          className={inputClass("addressName")}
-                          aria-invalid={Boolean(fieldErrors.addressName)}
+                          className={inputClass("customLabel")}
+                          aria-invalid={Boolean(fieldErrors.customLabel)}
                         />
-                        {fieldErrors.addressName ? (
+                        {fieldErrors.customLabel ? (
                           <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
-                            {fieldErrors.addressName}
+                            {fieldErrors.customLabel}
                           </span>
                         ) : null}
                       </label>

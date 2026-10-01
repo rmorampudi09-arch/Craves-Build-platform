@@ -12,12 +12,40 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Installed Android versionCode: `30`
 - Installed Android versionName: `1.19`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed source: `bb6e81d23623b023bf9c8c6ab22d5a9856b8e695`, tag `KUSHIRAVI-app-v1.19`. Native MSG91 integration installed; Customer Home/profile checked. Fresh OTP and Chef restoration remain pending, with MSG91 Mobile Integration still OFF. Historical v1.18 referral/restoration evidence remains recorded below, not represented as rerun on v1.19.
+- Installed source: `bb6e81d23623b023bf9c8c6ab22d5a9856b8e695`, tag `KUSHIRAVI-app-v1.19`. Native MSG91 integration installed; Customer Home/profile checked. MSG91 Mobile Integration enabled and read back on 2026-10-02; fresh OTP and Chef restoration still await live acceptance. Historical v1.18 referral/restoration evidence remains recorded below, not represented as rerun on v1.19.
 - Last installation: `2026-10-02 00:31:40` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### MSG91 Mobile Integration Configuration v1, 2026-10-02
+
+- User explicitly requested enabling Mobile Integration and signed into the
+  existing MSG91 account. Confirmed clean `KUSHIRAVI-app-build` before the change.
+- Edited only existing `CravesOTP` widget `366942756930393636363638` in MSG91:
+  Widget Settings -> Widget Integration -> Mobile -> Save & Next.
+  Portal confirmed "Widget updated successfully". Reopened settings from the
+  widget list and verified Mobile remained selected after loading saved values.
+- Read-only live configuration before/after confirmed `mobileIntegration: 0`
+  became `1`. All other checked fields identical: provider MSG91, same widget,
+  enabled status, Mobile Number/OTP verification, six digits, CAPTCHA/invisible
+  OTP off, retry 30 seconds/two retries, expiry 15 minutes. Did not edit channel
+  configuration, SMS template, DLT, credentials, wallet, subscription or caps.
+- Native adapter reads this policy for each new Send OTP request. No APK rebuild,
+  reinstall, app-code change or version increment required. Installed package
+  remains `com.cravesapp`, code `30` / name `1.19`, tag `KUSHIRAVI-app-v1.19`,
+  source `bb6e81d23623b023bf9c8c6ab22d5a9856b8e695`. Previous tags/APKs untouched.
+- User asked to retry Send OTP and enter the real code on the phone. Successful
+  SMS delivery, full OTP/session exchange and Chef restoration are not yet
+  verified. No phone number/OTP/password was entered or read by the agent.
+- Configuration-only local checkpoint tag: `KUSHIRAVI-msg91-mobile-config-v1`,
+  not an installable APK version. Resolve its documentation commit with
+  `git rev-parse KUSHIRAVI-msg91-mobile-config-v1^{}`. No GitHub push.
+- Receipt and screenshot: `docs\msg91-mobile-installation-20261002.md` and
+  `C:\mscratch\artifacts\msg91-mobile-20261002\mobile-integration-enabled.jpg`.
+  This resolves the historical Mobile Integration OFF blocker below; it does
+  not imply that any other live acceptance check has passed.
 
 ### Version 1.19 - Native MSG91 OTP Integration, 2026-10-02
 

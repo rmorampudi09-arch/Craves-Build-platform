@@ -80,7 +80,7 @@ Full setup/contract notes:
   ReferenceError, InvariantViolation or missing BiometricAuth module errors.
   This is scoped evidence, not proof of every feature or future crash absence.
 
-## Confirmed OTP Blocker
+## Confirmed OTP Blocker At Initial Installation
 
 The user reported an error while attempting OTP. The actual phone was on the
 phone-number/Send OTP form and showed:
@@ -116,6 +116,58 @@ https://msg91.com/help/sendotp/integrate-otp-widget-into-mobile-application
 
 The error inspection excluded editable input text and did not save raw OTP UI
 XML locally. No OTP/password was read, entered or requested in chat.
+
+## Mobile Integration Enabled, 2026-10-02
+
+The user explicitly requested enabling Mobile Integration, then signed into the
+existing MSG91 account. From the existing CravesOTP widget, selected Mobile under
+Widget Integration and pressed Save & Next. MSG91 displayed "Widget updated
+successfully". Reopened settings from the widget list; the saved Mobile radio
+option remained selected after the widget finished loading.
+
+Read-only provider policy comparison through the application's actual live
+public widget configuration showed exactly one change among checked fields:
+
+```json
+{
+  "changed": { "mobileIntegration": { "before": 0, "after": 1 } },
+  "provider": "msg91",
+  "widgetId": "366942756930393636363638",
+  "status": "success",
+  "widgetStatus": "1",
+  "processType": "2",
+  "verificationType": "1",
+  "captcha": 0,
+  "invisible": 0,
+  "otpLength": 6,
+  "retryTime": 30,
+  "retryCount": 2,
+  "expiryTime": 15
+}
+```
+
+No other setting was edited: SMS/channel templates, DLT, credentials,
+subscriptions, wallet and spending limits were left alone. No server authkey
+was accessed, secret copied, permission granted, code deployed or API changed.
+
+Visual confirmation:
+`C:\mscratch\artifacts\msg91-mobile-20261002\mobile-integration-enabled.jpg`.
+The screenshot shows CravesOTP settings, six-digit OTP, unchanged resend/expiry
+values and the selected Mobile integration option. It contains no OTP or token.
+
+The installed app fetches provider policy for each new Send OTP request, so no
+rebuild/reinstall/version increment was needed. Source, installable tag and APK
+remain exactly the v1.19 checkpoint recorded above. This configuration receipt
+is committed locally under configuration-only tag
+`KUSHIRAVI-msg91-mobile-config-v1`; not a new installable version. A Git tag does
+not roll back remote MSG91 settings: reversing this specific setting would
+require explicitly selecting web again in the existing widget and saving.
+
+User asked to retry Send OTP and enter the genuine OTP directly on the phone.
+Fresh SMS delivery, verification and session exchange remain pending; the
+successful configuration readback is not a claim of end-to-end sign-in success.
+No OTP/password or phone input was read or entered by the agent. The historical
+OFF blocker above is resolved, not a current instruction to enable it again.
 
 ## Remaining Live Acceptance
 

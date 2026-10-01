@@ -30,6 +30,41 @@ Wishlist remains explicitly browser-local because the current backend has no cus
 
 ## Local setup
 
+### MSG91 phone verification on the website
+
+The website selects its delivery provider from `/api/auth/otp-config`. With
+`CRAVES_OTP_PROVIDER=msg91`, set `MSG91_WIDGET_ID` and `MSG91_WIDGET_TOKEN` on the
+web Container App. The token must be the scoped public widget token; never put
+the server account `MSG91_AUTHKEY` in public configuration. Server verification
+uses the existing `/api/v1/auth/msg91/verify` bridge and retains Firebase/Craves
+identity and session exchange.
+
+Use a web-compatible MSG91 widget with **Mobile Integration off**. MSG91 states
+that enabling Mobile Integration makes a widget mobile-only. If mobile already
+uses that widget, preserve it and configure a separate web widget in the same
+MSG91 account. Preserve the approved SMS template, country restrictions and
+security settings; never disable a CAPTCHA to work around a delivery error.
+See [MSG91's official integration guide](https://msg91.com/help/sendotp/how-to-integrate-the-new-login-with-otp-widget).
+
+The browser rejects a mobile-only widget before sending an OTP. Delivery or
+configuration failures no longer tell users to complete a nonexistent security
+check. Only a real CAPTCHA timeout uses that instruction. Raw provider errors,
+phone numbers and tokens are never included in those customer-facing messages.
+
+Validate the actual provider configuration, then test send, resend, correct and
+incorrect codes, existing-account sign-in, logout and sign-in again on HTTPS.
+Enter real codes only in the website. A successful `/api/auth/otp-config` response
+alone is not proof that SMS delivery or sign-in works. Keep production releases
+manually started. Focused automated checks:
+
+```bash
+npx vitest run src/lib/msg91-browser.vitest.ts src/lib/msg91-auth.vitest.ts src/lib/phone-auth-errors.vitest.ts src/lib/email-phone-modal-races.vitest.ts
+npm run lint
+npm run typecheck
+```
+
+### Development prerequisites
+
 Requirements: Node.js 24 and npm.
 
 1. Copy `.env.example` to `.env.local`.

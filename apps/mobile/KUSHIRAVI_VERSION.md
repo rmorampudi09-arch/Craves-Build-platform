@@ -19,6 +19,47 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Backend-only follow-up, 2026-10-01 - Referral member read contract
+
+- Requested backend continuation for the four v1.18 referral screens. No
+  Android runtime/UI change, APK build, installation or version increment.
+- Backend workspace/branch: `C:\mscratch-referral-backend` /
+  `codex/referral-mobile-backend-20261001`, based on verified local
+  `origin/main` source `13710384b90d09c76ea5bed64fdfe6342975e697`.
+- Backend source/tag: `36293a10eb0daed77cf9f3d5a2c7069a2931a634` /
+  `KUSHIRAVI-referral-backend-v1`. Runtime candidate
+  `e597a46bdbfb5f1033fdfde8d5dc321e8bcec553` is identical in Java/resources,
+  tests, dependency manifest and Dockerfile; later changes are docs/review assets.
+- Fixes recent posting months to `YYYY-MM`; opt-in `includeLevels=true` reads
+  actual original reward levels, including refunds. Default response retains
+  the strict current mobile contract. Adds current Chef-role and active-member
+  guards, and read-only consistent ledger snapshots; no reward rules changed.
+- Final candidate: 109 backend tests passed, zero failures/errors/skips.
+  Earlier full module run: 110 passed including unchanged backlog coverage,
+  before final refinements; not represented as exact final-source evidence.
+  Seven schema checks and four tests parsing actual backend responses through
+  current mobile code passed. Full four-service CI was not run or bypassed.
+- Backend JAR: `C:\mscratch\artifacts\KUSHIRAVI-referral-backend-v1.jar`;
+  SHA-256 `0C6986D03FCA8EE4AAF1C3877634C8B59CB26C8C7E67C5D179202BEB741848A0`.
+- Backend source ZIP:
+  `C:\mscratch\artifacts\KUSHIRAVI-referral-backend-v1-source.zip`;
+  SHA-256 `3A3057663BB6C25D1B78DBADD89C57C3C1F9B2C803B8CD6C9F1DB49449BE4C7E`.
+- Local contract gaps are fixed, but live routes remain unavailable. No Azure
+  write, APIM import, source enrolment, financial activation or GitHub push.
+  Private network/public-entry choice, real Auth/enrolment/current terms and
+  source-pinned deployment remain prerequisites. Both mobile availability flags
+  remain false; level metadata is not requested by the existing parser.
+- Android source/tag remains `f1d6ad5a3a30e3920dcaa88d628eb4ec24cdde0a` /
+  `KUSHIRAVI-app-v1.18` (code 29/name 1.18), built but not installed.
+  Phone remains `KUSHIRAVI-app-v1.17.4`, source
+  `12d3fda012069d16ecd1df2642c19c949b25649d` (code 28/name 1.17.4).
+  This documentation-only continuation does not move either app tag/artifact.
+- Full evidence, changed paths, setup and manual deployment gates:
+  `C:\mscratch-referral-backend\docs\referrals\MOBILE_MEMBER_READ_20261001.md`
+  and `services\referral-service\deploy\member-read\README.md`.
+  Detailed 82-page handoff:
+  `C:\mscratch\artifacts\output\pdf\KUSHIRAVI-referral-backend-v1-handoff.pdf`.
+
 ### Version 1.18 Built, Not Installed - Four referral reference screens
 
 - Requested from `C:\Users\saive\Downloads\referral screens.docx` on

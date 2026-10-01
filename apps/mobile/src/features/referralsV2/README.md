@@ -146,12 +146,30 @@ Logs/results are under `C:\mscratch\artifacts`:
 
 ## Manual Steps Required Later
 
+Backend-only follow-up on 2026-10-01: the month contract, current Chef-role
+guard, active membership guard and consistent read snapshot are implemented
+and locally verified in `C:\mscratch-referral-backend`, branch
+`codex/referral-mobile-backend-20261001`. Immutable source/tag:
+`36293a10eb0daed77cf9f3d5a2c7069a2931a634` /
+`KUSHIRAVI-referral-backend-v1`. Final runtime: 109 tests passed; actual HTTP
+responses pass seven schema checks and four current mobile-parser tests.
+The default ledger is backward-compatible. `includeLevels=true` is available
+only as an opt-in backend contract; the strict current parser intentionally
+does not accept it, and no mobile level metadata is fabricated or requested.
+
+These are local fixes, not published live APIs. Network/public-entry approval,
+real Auth/current-role verification, source enrolment/current terms and a
+source-pinned deployment remain required. Every financial/mobile activation
+flag stays off. No Azure write, push, app runtime edit or installation occurred.
+See `C:\mscratch-referral-backend\docs\referrals\MOBILE_MEMBER_READ_20261001.md`
+for exact source, artifact hashes, local setup and publication acceptance.
+
 - Azure/APIM: separately approve public member routes, authentication policies
   and service access. Preserve private/internal finance routes and do not enable
   awards, settlement, withdrawals or spending as a side effect of UI publication.
-- Backend: reconcile and test the recent-posting month format described above;
-  verify enrolment, the approved production policy and invite-link routing.
-  Extend posting JSON only if actual referral-level labels are required.
+- Backend: deploy the locally verified month/read fixes after the above gates;
+  verify real enrolment, approved production policy and invite-link routing.
+  Request optional level metadata only with a separately tested mobile change.
 - Mobile: after those checks, enable `REFERRAL_CODE_AVAILABLE` and/or
   `CHEF_REFERRAL_EARNINGS_AVAILABLE`, retest, create a new version checkpoint.
 - Device: iOS sharing/clipboard/composer behavior and native reference fidelity

@@ -80,6 +80,8 @@ import {
   formatDishPrice,
 } from '../homePresentation';
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
+import {useQueryClient} from '@tanstack/react-query';
+import {homeBannerQueryKey} from '../query/homeBannerQueries';
 
 const HOME_RADIUS_METERS = 10_000;
 const HOME_PAGE_SIZE = 20;
@@ -309,6 +311,7 @@ function DishCard({
 }
 
 export function CustomerHomeScreen() {
+  const queryClient = useQueryClient();
   const navigation = useNavigation<
     NativeStackNavigationProp<CustomerHomeStackParamList, 'CustomerHomeRoot'>
   >();
@@ -434,6 +437,7 @@ export function CustomerHomeScreen() {
 
   const retryFeed = () => {
     feed.refetch();
+    void queryClient.invalidateQueries({queryKey: homeBannerQueryKey});
   };
 
   const loadNextPage = useCallback(() => {

@@ -7,7 +7,6 @@ import {
   Text,
   useWindowDimensions,
   View,
-  type ImageSourcePropType,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
@@ -50,8 +49,8 @@ import {
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
 import type {NearbyDish} from '../api/homeFeedApi';
 import {formatDishPrice} from '../homePresentation';
-
-declare const require: (path: string) => ImageSourcePropType;
+import {useHomeBannersQuery} from '../query/homeBannerQueries';
+import type {HomeBanner} from '../api/homeBannerApi';
 
 const HOME_RADIUS_METERS = 10_000;
 const TOP_KITCHENS_PAGE_SIZE = 12;
@@ -59,25 +58,6 @@ const TOP_KITCHEN_DISH_PAGE_SIZE = 100;
 const MAX_TOP_KITCHENS = 8;
 const PROMO_AUTO_ADVANCE_MS = 5_000;
 
-const HOME_PROMO_BANNERS = [
-  {
-    id: 'home-kitchen-picks',
-    label: 'Fresh meals from home chefs, up to 30 percent off',
-    image: require('../../../assets/home/home-kitchen-picks.jpg'),
-  },
-  {
-    id: 'daily-home-feasts',
-    label: 'Healthy dinners from trusted home cooks, starting at 199 rupees',
-    image: require('../../../assets/home/daily-home-feasts.jpg'),
-  },
-  {
-    id: 'local-chef-specials',
-    label: 'Tasty lunches from neighborhood kitchens, flat 25 percent off',
-    image: require('../../../assets/home/local-chef-specials.jpg'),
-  },
-] as const;
-
-type PromoBanner = (typeof HOME_PROMO_BANNERS)[number];
 type HomeNavigation = NativeStackNavigationProp<
   CustomerHomeStackParamList,
   'CustomerHomeRoot'
@@ -93,23 +73,27 @@ interface TopKitchenCardModel {
 }
 
 function PromoCarousel({
+  banners,
+  active,
   width,
   onPress,
 }: {
+  banners: HomeBanner[];
+  active: boolean;
   width: number;
   onPress: () => void;
 }) {
-  const listRef = useRef<FlatList<PromoBanner>>(null);
+  const listRef = useRef<FlatList<HomeBanner>>(null);
   const activeIndexRef = useRef(0);
   const isDraggingRef = useRef(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
-    if (width <= 0 || HOME_PROMO_BANNERS.length < 2) return undefined;
+    if (!active || width <= 0 || banners.length < 2) return undefined;
     const interval = setInterval(() => {
       if (isDraggingRef.current) return;
       const nextIndex =
-        (activeIndexRef.current + 1) % HOME_PROMO_BANNERS.length;
+        (activeIndexRef.current + 1) % banners.length;
       listRef.current?.scrollToOffset({
         offset: nextIndex * width,
         animated: true,
@@ -118,7 +102,7 @@ function PromoCarousel({
       setActiveIndex(nextIndex);
     }, PROMO_AUTO_ADVANCE_MS);
     return () => clearInterval(interval);
-  }, [width]);
+  }, [active, banners.length, width]);
 
   const handleMomentumScrollEnd = (
     event: NativeSyntheticEvent<NativeScrollEvent>,
@@ -127,7 +111,7 @@ function PromoCarousel({
     const nextIndex = Math.max(
       0,
       Math.min(
-        HOME_PROMO_BANNERS.length - 1,
+        banners.length - 1,
         Math.round(event.nativeEvent.contentOffset.x / width),
       ),
     );
@@ -140,7 +124,7 @@ function PromoCarousel({
     <View style={styles.promoCarousel}>
       <FlatList
         ref={listRef}
-        data={HOME_PROMO_BANNERS}
+        data={banners}
         horizontal
         pagingEnabled
         nestedScrollEnabled
@@ -164,7 +148,7 @@ function PromoCarousel({
             <Image
               accessible
               accessibilityIgnoresInvertColors
-              source={item.image}
+              source={{uri: item.imageUrl}}
               resizeMode="cover"
               style={styles.bannerImage}
             />
@@ -172,11 +156,11 @@ function PromoCarousel({
         )}
       />
       <View
-        accessibilityLabel={`Banner ${activeIndex + 1} of ${HOME_PROMO_BANNERS.length}`}
+        accessibilityLabel={`Banner ${activeIndex + 1} of ${banners.length}`}
         accessibilityRole="text"
         pointerEvents="none"
         style={styles.pagination}>
-        {HOME_PROMO_BANNERS.map((banner, index) => (
+        {banners.map((banner, index) => (
           <View
             key={banner.id}
             style={[
@@ -369,6 +353,8 @@ export function HomePromoAndKitchens() {
   const tabNavigation =
     navigation.getParent<NavigationProp<CustomerTabParamList>>();
   const {width} = useWindowDimensions();
+  const bannerQuery = useHomeBannersQuery(focused);
+  const banners = bannerQuery.isError ? [] : bannerQuery.data ?? [];
 
   const kitchenDiscovery = useNearbyChefDiscoveryQuery({
     radiusMeters: HOME_RADIUS_METERS,
@@ -440,12 +426,17 @@ export function HomePromoAndKitchens() {
 
   return (
     <View>
-      <View style={styles.bannerRow}>
-        <PromoCarousel
-          width={bannerWidth}
-          onPress={() => navigation.navigate('CustomerHomeSearch')}
-        />
-      </View>
+      {banners.length > 0 ? (
+        <View style={styles.bannerRow}>
+          <PromoCarousel
+            key={banners.map(banner => banner.id).join(':')}
+            banners={banners}
+            active={focused}
+            width={bannerWidth}
+            onPress={() => navigation.navigate('CustomerHomeSearch')}
+          />
+        </View>
+      ) : null}
 
       {topKitchens.length > 0 ? (
         <View style={styles.kitchensSection}>

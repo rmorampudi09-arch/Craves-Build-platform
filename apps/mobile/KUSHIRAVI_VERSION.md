@@ -19,6 +19,30 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.22 - Admin-Published Home Banners, 2026-10-02
+
+- Banner-only update requested by the user. Clean start on `KUSHIRAVI-app-build`
+  at `04cae95fe933f0e88a6173da4752758298bc4692`. No GitHub push.
+- Confirmed that mobile used three bundled promotional images and the exact live
+  Admin source/module list and current main had no banner publishing feature.
+- Replace only the existing home carousel data source with published Catalog
+  banners; retain its geometry, location, paging, press action and timer. No fake
+  fallback. Visible-home polling, focus reload and pull-to-refresh pick up changes.
+- Add banner-only Catalog classes/migration and an Admin upload/draft/publish page
+  under `backend-patches/home-banners-v1`; preserve actual runtime baselines and
+  unchanged source outside the banner scope. Existing admin authorization applies.
+- Android target: versionCode `33`, versionName `1.22`, tag `KUSHIRAVI-app-v1.22`.
+  Mobile TypeScript and all 203 suites / 1096 tests pass. Backend's 7 focused tests
+  and the 9 new Admin contract/BFF tests pass. Full Admin checks, build, live
+  upload/publish and phone verification are in progress, not claimed complete.
+- Intended immutable APK/source ZIP paths:
+  `C:\mscratch\artifacts\KUSHIRAVI-app-v1.22.apk` and
+  `C:\mscratch\artifacts\KUSHIRAVI-app-v1.22-source.zip`. Exact source SHA,
+  deployed images, final test counts and phone evidence will be appended after
+  verification. Previous versions remain untouched.
+- No other home/menu/glass UI, auth, finance, checkout/order, Razorpay, delivery,
+  Chef or customer-web changes. No new Azure resource or public storage container.
+
 ### MSG91 Independent Web And Mobile OTP v1, 2026-10-02
 
 - User explicitly requested simultaneous web/mobile sign-in without UI/UX

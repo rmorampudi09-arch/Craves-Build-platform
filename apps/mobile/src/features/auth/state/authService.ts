@@ -62,9 +62,8 @@ export const authService = {
     msg91Auth.cancel();
   },
   async confirmOtp(code: string): Promise<AuthTokenResponse> {
-    return msg91Auth.confirmOtp(code, async (accessToken, assertCurrent) => {
+    return msg91Auth.confirmOtp(code, async (customToken, assertCurrent) => {
       try {
-        const customToken = await authApi.verifyMsg91Token(accessToken);
         assertCurrent();
         const firebaseIdToken = await firebaseAuth.signInWithBackendToken(
           customToken,

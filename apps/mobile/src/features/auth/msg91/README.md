@@ -1,5 +1,19 @@
 # MSG91 Mobile Phone Verification
 
+## Current Adapter: Version 1.23
+
+The adapter now uses only Craves `/api/v1/auth/otp/send` and `/otp/verify`.
+No MSG91 SDK, authkey, widget ID, widget token or provider network call remains
+in the APK. An opaque challenge stays in memory and verification returns the
+existing Firebase custom-token compatibility response. Customer/Chef roles,
+secure Craves sessions and login screens are unchanged. The backend owns resend,
+expiry, attempt limits and one-use verification. A later pending challenge for
+the same phone supersedes an earlier one without signing out either platform.
+
+See `C:/mscratch/apps/mobile/backend-patches/msg91-centralized-v1/README.md`
+for the current contract, build and testing instructions. The material below is
+historical evidence for the pre-1.23 widget migration, not current setup guidance.
+
 This adapter replaces Firebase SMS OTP, not the existing Craves account/session
 authority. No login layout, role authorization, payment or backend logic changes.
 

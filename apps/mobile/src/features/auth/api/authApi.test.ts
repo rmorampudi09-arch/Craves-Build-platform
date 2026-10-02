@@ -25,7 +25,6 @@ jest.mock('../../../core/security/refreshTokenStore', () => ({
 
 const getMock = httpClient.get as jest.Mock;
 const postMock = publicApiClient.post as jest.Mock;
-const publicGetMock = publicApiClient.get as jest.Mock;
 
 function createIdentity(): Identity {
   return {
@@ -57,20 +56,20 @@ describe('authApi exact auth contracts', () => {
     jest.resetAllMocks();
   });
 
-  it('loads only the live public MSG91 widget config without baked-in credentials', async () => {
+  it('sends to the exact Craves backend with no provider credentials', async () => {
     const config = {
-      provider: 'msg91',
-      widgetId: 'widget',
-      tokenAuth: 'scoped-client-token',
+      challengeId: 'a'.repeat(43),
+      expiresAt: Date.now() + 900000,
+      resendAvailableAt: Date.now() + 30000,
     };
-    publicGetMock.mockResolvedValue({ data: config });
-    await expect(authApi.otpWidgetConfig()).resolves.toEqual(config);
-    expect(publicGetMock).toHaveBeenCalledWith(
-      'https://craves.in/api/auth/otp-config',
-      {
-        timeout: 10000,
-        headers: { 'Cache-Control': 'no-cache' },
-      },
+    postMock.mockResolvedValue({ data: config });
+    await expect(authApi.sendPhoneOtp('+919876543210')).resolves.toEqual(
+      config,
+    );
+    expect(postMock).toHaveBeenCalledWith(
+      '/api/v1/auth/otp/send',
+      { phoneNumber: '9876543210', countryCode: '91' },
+      { timeout: 15000 },
     );
   });
 
@@ -81,22 +80,24 @@ describe('authApi exact auth contracts', () => {
   ])(
     'fails closed for disabled or incomplete MSG91 configuration: %p',
     async data => {
-      publicGetMock.mockResolvedValue({ data });
-      await expect(authApi.otpWidgetConfig()).rejects.toMatchObject({
-        code: 'OTP_UNAVAILABLE',
-      });
+      postMock.mockResolvedValue({ data });
+      await expect(authApi.sendPhoneOtp('+919876543210')).rejects.toMatchObject(
+        {
+          code: 'OTP_UNAVAILABLE',
+        },
+      );
     },
   );
 
-  it('posts only the provider-verified token to the exact backend bridge route', async () => {
+  it('posts the OTP and opaque challenge to the exact backend route', async () => {
     const customToken = 'c'.repeat(100);
     postMock.mockResolvedValue({ data: { firebaseCustomToken: customToken } });
-    await expect(authApi.verifyMsg91Token('msg91-access-token')).resolves.toBe(
-      customToken,
-    );
+    await expect(
+      authApi.verifyPhoneOtp('a'.repeat(43), '123456'),
+    ).resolves.toBe(customToken);
     expect(postMock).toHaveBeenCalledWith(
-      '/api/v1/auth/msg91/verify',
-      { accessToken: 'msg91-access-token' },
+      '/api/v1/auth/otp/verify',
+      { challengeId: 'a'.repeat(43), otp: '123456' },
       { timeout: 15000 },
     );
   });
@@ -111,7 +112,7 @@ describe('authApi exact auth contracts', () => {
     async data => {
       postMock.mockResolvedValue({ data });
       await expect(
-        authApi.verifyMsg91Token('verified-token'),
+        authApi.verifyPhoneOtp('a'.repeat(43), '123456'),
       ).rejects.toMatchObject({ code: 'OTP_RESTART' });
     },
   );

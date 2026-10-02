@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.22 Admin-Published Home Banners
+# KUSHIRAVI App Build - Version 1.23 Centralized Phone OTP
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -18,6 +18,32 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.23 - Centralized Web And Mobile Phone OTP, 2026-10-02
+
+- User authorized live centralized MSG91 authentication. Clean starting source:
+  `ccffe5c0136e050390e851dad2186d433102f325` on `KUSHIRAVI-app-build`.
+- Android target: code `34`, name `1.23`, intended immutable tag
+  `KUSHIRAVI-app-v1.23`. Previous tags remain untouched. No GitHub push.
+- Mobile removes the MSG91 native SDK and all widget credentials/configuration.
+  Only Craves `/api/v1/auth/otp/send` and `/otp/verify` handle SMS verification.
+  Existing Firebase custom-token compatibility, Craves token exchange/storage,
+  account IDs, Customer/Chef roles and email login remain unchanged.
+- Exact live auth baseline is pinned at image `sha256:01b6783cf1f946b178721aa416feb47f8de98996555879f4ff3d82de2184b88b`.
+  New OTP classes/V19 migration only; every existing JAR entry is byte-identical.
+  Reuse existing Key Vault `msg91-authkey` and verified DLT template
+  `6abe727541deb95f6d0b7192`. Legacy widget verification remains available.
+- Exact live web source `e828209dc127085b8c1ffff84387a974b9eeef56` is preserved
+  under a rebuildable overlay. Existing login screens are not restyled.
+- Shared PostgreSQL challenge leases, hashed random challenge IDs, one-use proof,
+  five attempts, two resends, 30-second cooldown, per-phone/shared send limits,
+  bounded requests and reviewed errors protect both clients. No automatic SMS retry.
+- Candidate APK/source paths: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.23.apk`
+  and `C:\mscratch\artifacts\KUSHIRAVI-app-v1.23-source.zip`.
+- Build/deployment, exact commit/image hashes, phone installation and real SMS
+  acceptance will be recorded after verification. Version 1.22 remains installed
+  until replace-install succeeds. UI, orders, payments, delivery and banners are
+  outside this change. No new Azure resource is provisioned.
 
 ### Version 1.22 - Admin-Published Home Banners, 2026-10-02
 

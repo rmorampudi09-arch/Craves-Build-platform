@@ -9,7 +9,6 @@ import { authService } from './authService';
 jest.mock('../api/authApi', () => ({
   authApi: {
     exchangeFirebaseToken: jest.fn(),
-    verifyMsg91Token: jest.fn(),
     me: jest.fn(),
     logout: jest.fn(),
   },
@@ -48,7 +47,6 @@ const acceptTokenPairMock = sessionManager.acceptTokenPair as jest.Mock;
 const clearLocalMock = sessionManager.clearLocal as jest.Mock;
 const bridgeSignInMock = firebaseAuth.signInWithBackendToken as jest.Mock;
 const confirmOtpMock = msg91Auth.confirmOtp as jest.Mock;
-const verifyMsg91Mock = authApi.verifyMsg91Token as jest.Mock;
 const emailSignInMock = firebaseAuth.signInWithEmail as jest.Mock;
 const signOutMock = firebaseAuth.signOut as jest.Mock;
 
@@ -80,9 +78,8 @@ describe('authService MSG91 to existing CRAVES identity/session contract', () =>
     clearLocalMock.mockResolvedValue(undefined);
     signOutMock.mockResolvedValue(undefined);
     confirmOtpMock.mockImplementation(async (_code, complete) =>
-      complete('msg91-access-token', () => {}),
+      complete('backend-custom-token', () => {}),
     );
-    verifyMsg91Mock.mockResolvedValue('backend-custom-token');
     bridgeSignInMock.mockResolvedValue('firebase-id-token');
   });
 
@@ -93,11 +90,7 @@ describe('authService MSG91 to existing CRAVES identity/session contract', () =>
     await expect(authService.confirmOtp('123456')).resolves.toEqual(tokens);
 
     expect(exchangeMock).toHaveBeenCalledWith('firebase-id-token');
-    expect(verifyMsg91Mock).toHaveBeenCalledWith('msg91-access-token');
     expect(bridgeSignInMock).toHaveBeenCalledWith('backend-custom-token');
-    expect(verifyMsg91Mock.mock.invocationCallOrder[0]).toBeLessThan(
-      bridgeSignInMock.mock.invocationCallOrder[0],
-    );
     expect(bridgeSignInMock.mock.invocationCallOrder[0]).toBeLessThan(
       exchangeMock.mock.invocationCallOrder[0],
     );
@@ -157,22 +150,21 @@ describe('authService MSG91 to existing CRAVES identity/session contract', () =>
     const error = new AppApiError('OTP_VERIFICATION_FAILED', 'Check the code.');
     confirmOtpMock.mockRejectedValue(error);
     await expect(authService.confirmOtp('000000')).rejects.toBe(error);
-    expect(verifyMsg91Mock).not.toHaveBeenCalled();
     expect(bridgeSignInMock).not.toHaveBeenCalled();
     expect(acceptTokenPairMock).not.toHaveBeenCalled();
   });
 
-  it('does not accept a provider token without backend verification', async () => {
-    verifyMsg91Mock.mockRejectedValue(
+  it('does not accept an unverified or replayed backend challenge', async () => {
+    confirmOtpMock.mockRejectedValue(
       new AppApiError('OTP_TOKEN_REPLAYED', 'Request a new code.', 409),
     );
     await expect(authService.confirmOtp('123456')).rejects.toMatchObject({
-      code: 'OTP_RESTART',
+      code: 'OTP_TOKEN_REPLAYED',
     });
     expect(bridgeSignInMock).not.toHaveBeenCalled();
     expect(exchangeMock).not.toHaveBeenCalled();
     expect(acceptTokenPairMock).not.toHaveBeenCalled();
-    expect(clearLocalMock).toHaveBeenCalledTimes(1);
+    expect(clearLocalMock).not.toHaveBeenCalled();
   });
 
   it('rejects a cancelled attempt before signing into the compatibility provider', async () => {

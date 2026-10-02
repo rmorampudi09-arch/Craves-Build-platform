@@ -1,34 +1,9 @@
-import { OTPWidget } from '@msg91comm/sendotp-react-native';
-import { z } from 'zod';
 import { AppApiError } from '../../../core/http/apiError';
 import { authApi } from '../api/authApi';
 
-const processSchema = z.object({
-  status: z.literal('success'),
-  hasError: z.literal(false),
-  data: z.object({
-    status: z.object({ value: z.literal('1') }),
-    processType: z.object({ value: z.enum(['1', '2']) }),
-    verificationType: z.literal('1'),
-    otpLength: z.literal(6),
-    mobileIntegration: z.number(),
-    invisible: z.literal(0),
-    captchaValidations: z.literal(0),
-    retryTime: z.number().int().min(1).max(600),
-    retryCount: z.number().int().min(0).max(10),
-    expiryTime: z.number().int().min(1).max(60),
-  }),
-});
-const resultSchema = z.object({
-  type: z.enum(['success', 'error']),
-  message: z.string().optional(),
-  'access-token': z.string().optional(),
-});
-type Policy = z.infer<typeof processSchema>['data'];
 type Challenge = {
   phone: string;
   requestId: string;
-  policy: Policy;
   resendAvailableAt: number;
   expiresAt: number;
   resends: number;
@@ -117,21 +92,6 @@ function reserveSend(phone: string, seconds: number): number {
   recentSends.set(phone, deadline);
   return deadline;
 }
-function successful(value: unknown, verifying = false) {
-  const parsed = resultSchema.safeParse(value);
-  if (!parsed.success) {
-    throw unavailable();
-  }
-  if (parsed.data.type !== 'success') {
-    throw new AppApiError(
-      verifying ? 'OTP_VERIFICATION_FAILED' : 'OTP_SEND_FAILED',
-      verifying
-        ? 'That code could not be verified. Check the six digits or request a new code.'
-        : 'A code could not be sent. Wait a moment and try again.',
-    );
-  }
-  return parsed.data;
-}
 function currentChallenge(phone?: string): Challenge {
   if (!challenge || challenge.used || (phone && phone !== challenge.phone)) {
     throw restart();
@@ -139,7 +99,7 @@ function currentChallenge(phone?: string): Challenge {
   return challenge;
 }
 
-/** Provider challenge and credentials stay in memory, never navigation/storage/logs. */
+/** Only an opaque Craves challenge stays in memory, never navigation/storage/logs. */
 export const msg91Auth = {
   async beginPhoneSignIn(phone: string): Promise<void> {
     if (!/^\+91[6-9]\d{9}$/.test(phone)) {
@@ -152,39 +112,14 @@ export const msg91Auth = {
     const attempt = ++generation;
     challenge = null;
     try {
-      const config = await authApi.otpWidgetConfig();
+      reserveSend(phone, 30);
+      const sent = await bounded(authApi.sendPhoneOtp(phone));
       assertCurrent(attempt);
-      await bounded(
-        OTPWidget.initializeWidget(config.widgetId, config.tokenAuth),
-      );
-      const parsed = processSchema.safeParse(
-        await bounded(OTPWidget.getWidgetProcess()),
-      );
-      assertCurrent(attempt);
-      if (!parsed.success) {
-        throw unavailable();
-      }
-      const policy = parsed.data.data;
-      if (policy.mobileIntegration !== 1) {
-        throw new AppApiError(
-          'OTP_MOBILE_DISABLED',
-          'Mobile verification is not enabled yet. Please try again shortly.',
-        );
-      }
-      const resendAvailableAt = reserveSend(phone, policy.retryTime);
-      const sent = successful(
-        await bounded(OTPWidget.sendOTP({ identifier: phone.slice(1) })),
-      );
-      assertCurrent(attempt);
-      if (!sent.message || sent.message.length > 200 || sent['access-token']) {
-        throw unavailable();
-      }
       challenge = {
         phone,
-        requestId: sent.message,
-        policy,
-        resendAvailableAt,
-        expiresAt: Date.now() + policy.expiryTime * 60000,
+        requestId: sent.challengeId,
+        resendAvailableAt: sent.resendAvailableAt,
+        expiresAt: sent.expiresAt,
         resends: 0,
         used: false,
       };
@@ -194,7 +129,7 @@ export const msg91Auth = {
   },
   async resendOtp(phone: string): Promise<void> {
     const active = currentChallenge(phone);
-    if (active.resends >= active.policy.retryCount) {
+    if (active.resends >= 2) {
       throw new AppApiError(
         'OTP_RESEND_LIMIT',
         'The resend limit was reached. Go back and start a new sign-in attempt shortly.',
@@ -202,28 +137,29 @@ export const msg91Auth = {
     }
     acquire();
     const attempt = generation;
+    let requested = false;
     try {
-      active.resendAvailableAt = reserveSend(phone, active.policy.retryTime);
+      active.resendAvailableAt = reserveSend(phone, 30);
       // Reserve before sending: a timed-out SMS request may still be delivered.
       active.resends += 1;
-      const sent = successful(
-        await bounded(OTPWidget.retryOTP({ reqId: active.requestId })),
-      );
+      requested = true;
+      const sent = await bounded(authApi.sendPhoneOtp(phone, active.requestId));
       assertCurrent(attempt);
-      if (sent.message) {
-        if (sent.message.length > 200) {
-          throw unavailable();
-        }
-        active.requestId = sent.message;
+      active.requestId = sent.challengeId;
+      active.resendAvailableAt = sent.resendAvailableAt;
+      active.expiresAt = sent.expiresAt;
+    } catch (error) {
+      if (requested) {
+        active.used = true;
       }
-      active.expiresAt = Date.now() + active.policy.expiryTime * 60000;
+      throw error;
     } finally {
       pending = false;
     }
   },
   async confirmOtp<T>(
     code: string,
-    complete: (accessToken: string, assertActive: () => void) => Promise<T>,
+    complete: (customToken: string, assertActive: () => void) => Promise<T>,
   ): Promise<T> {
     const active = currentChallenge();
     if (!/^\d{6}$/.test(code)) {
@@ -241,25 +177,17 @@ export const msg91Auth = {
     acquire();
     const attempt = generation;
     try {
-      const verified = successful(
-        await bounded(
-          OTPWidget.verifyOTP({ reqId: active.requestId, otp: code }),
-        ),
-        true,
+      const customToken = await bounded(
+        authApi.verifyPhoneOtp(active.requestId, code),
       );
       assertCurrent(attempt);
       active.used = true;
-      const accessToken = verified['access-token'] ?? verified.message;
-      if (
-        !accessToken ||
-        accessToken.length < 40 ||
-        accessToken.length > 20000
-      ) {
-        throw restart();
-      }
-      return await complete(accessToken, () => assertCurrent(attempt));
+      return await complete(customToken, () => assertCurrent(attempt));
     } catch (error) {
-      if (error instanceof AppApiError && error.code === 'OTP_TIMEOUT') {
+      if (
+        !(error instanceof AppApiError) ||
+        !['OTP_INVALID', 'OTP_BUSY'].includes(error.code)
+      ) {
         active.used = true;
       }
       throw error;

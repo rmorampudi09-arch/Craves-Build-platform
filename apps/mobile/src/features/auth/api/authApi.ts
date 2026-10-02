@@ -5,10 +5,10 @@ import type { AuthTokenResponse, Identity } from '../domain/types';
 import { z } from 'zod';
 import { AppApiError } from '../../../core/http/apiError';
 
-const widgetConfigSchema = z.object({
-  provider: z.literal('msg91'),
-  widgetId: z.string().min(1).max(100),
-  tokenAuth: z.string().min(1).max(2000),
+const challengeSchema = z.object({
+  challengeId: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  expiresAt: z.number().int().positive(),
+  resendAvailableAt: z.number().int().positive(),
 });
 const msg91VerificationSchema = z.object({
   firebaseCustomToken: z.string().min(100).max(20000),
@@ -17,13 +17,20 @@ const msg91VerificationSchema = z.object({
 const authPath = '/api/v1/auth';
 
 export const authApi = {
-  async otpWidgetConfig(): Promise<z.infer<typeof widgetConfigSchema>> {
-    // This is the existing public web configuration, not a server authkey.
-    const response = await publicApiClient.get<unknown>(
-      'https://craves.in/api/auth/otp-config',
-      { timeout: 10000, headers: { 'Cache-Control': 'no-cache' } },
+  async sendPhoneOtp(
+    phone: string,
+    challengeId?: string,
+  ): Promise<z.infer<typeof challengeSchema>> {
+    const response = await publicApiClient.post<unknown>(
+      `${authPath}/otp/send`,
+      {
+        phoneNumber: phone.slice(3),
+        countryCode: '91',
+        ...(challengeId ? { challengeId } : {}),
+      },
+      { timeout: 15000 },
     );
-    const parsed = widgetConfigSchema.safeParse(response.data);
+    const parsed = challengeSchema.safeParse(response.data);
     if (!parsed.success) {
       throw new AppApiError(
         'OTP_UNAVAILABLE',
@@ -32,10 +39,10 @@ export const authApi = {
     }
     return parsed.data;
   },
-  async verifyMsg91Token(accessToken: string): Promise<string> {
+  async verifyPhoneOtp(challengeId: string, otp: string): Promise<string> {
     const response = await publicApiClient.post<unknown>(
-      `${authPath}/msg91/verify`,
-      { accessToken },
+      `${authPath}/otp/verify`,
+      { challengeId, otp },
       { timeout: 15000 },
     );
     const parsed = msg91VerificationSchema.safeParse(response.data);

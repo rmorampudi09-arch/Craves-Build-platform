@@ -1,6 +1,7 @@
 module.exports = {
   preset: '@react-native/jest-preset',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/backend-patches/'],
   transform: {
     '^.+\\.(ttf|otf)$':
       '<rootDir>/node_modules/@react-native/jest-preset/jest/assetFileTransformer.js',

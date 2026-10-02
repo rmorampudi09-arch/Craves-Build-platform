@@ -281,9 +281,13 @@ describe("Chef menu save and recovery", () => {
     expect(stored[0]).toMatchObject({ status: "ACTIVE", available: true, unitPackageWeightGrams: 500, preparationTimeMinutes: null });
     fireEvent.click(screen.getByRole("button", { name: "Edit Fixture dish" }));
     fireEvent.change(screen.getByLabelText(/Price/), { target: { value: "200.50" } });
+    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
     fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
     await screen.findByText("Dish updated successfully");
+    expect(stored[0]).toMatchObject({ status: "ACTIVE", available: false });
     await waitFor(() => expect((screen.getByRole("switch", { name: "Availability for Fixture dish" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("switch", { name: "Availability for Fixture dish" }));
+    await screen.findByText("Dish is now available");
     fireEvent.click(screen.getByRole("switch", { name: "Availability for Fixture dish" }));
     await screen.findByText("Dish is now unavailable");
     cleanup(); render(createElement(ChefMenuManager));

@@ -91,7 +91,7 @@ function apiError(response: Response, body: unknown, fallback: string) {
     response.status === 401
       ? "Your session has expired. Sign in again to continue."
       : response.status === 403
-        ? "Your account needs an approved Chef profile and a kitchen to manage dishes."
+        ? "Your account or kitchen is not eligible for this action. Check Chef approval, kitchen setup and payout readiness."
         : response.status === 404
           ? "This dish or kitchen could not be found. Reload your menu."
           : response.status === 400
@@ -490,15 +490,15 @@ export function ChefMenuManager() {
                       <span>Available</span>
                       <Switch
                         aria-label={`Availability for ${item.itemName}`}
-                        checked={item.available}
-                        disabled={busy || item.status === "DRAFT"}
+                        checked={item.available && item.status === "ACTIVE"}
+                        disabled={busy || item.status !== "ACTIVE"}
                         onCheckedChange={(value) => void setAvailability(item, value)}
                       />
                     </label>
                   </div>
-                  {item.status === "DRAFT" ? (
+                  {item.status !== "ACTIVE" ? (
                     <p className="text-xs text-muted-foreground">
-                      Edit this draft and turn on Currently Available to publish it.
+                      Edit this dish and turn on Currently Available to publish it.
                     </p>
                   ) : null}
                 </div>
@@ -829,7 +829,7 @@ export function ChefMenuManager() {
               checked={form.available}
               onCheckedChange={(value) => {
                 update("available", value);
-                update("status", value ? "ACTIVE" : form.status === "DRAFT" ? "DRAFT" : "INACTIVE");
+                update("status", value ? "ACTIVE" : form.status);
               }}
             />
           </label>

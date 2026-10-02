@@ -5,7 +5,8 @@
 Source: `C:\mscratch`, branch `KUSHIRAVI-app-build`, clean starting commit
 `859afe8b0b7a6e71433a0e5d9e4458fe8cc1df4a`.
 Installed starting release: `KUSHIRAVI-app-v1.23`, Android `1.23` / code `34`.
-Candidate: Android `1.24` / code `35`, package `com.cravesapp`.
+Initial routing release: Android `1.24` / code `35`, package `com.cravesapp`.
+Follow-up recovery candidate: Android `1.24.1` / code `36`.
 
 The user requested the phone's new-Chef account verification error to be fixed,
 and the application journey verified through submission and Admin receipt.
@@ -51,6 +52,41 @@ or successful submission.
 
 No screen styles, navigation layout, OTP-provider configuration, bank/payment
 logic, backend service code, APIM policy, or Admin approval decision changes.
+
+### Live Restart Follow-Up
+
+The 1.24 build succeeds in 38m 7s (859 tasks), verifies the previous signer and
+replace-installs at 12:40:28 IST. Cold launch succeeds, but the old failed Chef
+login never persisted its selected role. Restoring that session therefore opens
+the existing Customer profile form, which had no sign-out control.
+
+The 1.24.1 follow-up changes `state/activeRolePersistence.ts` to save per-identity
+workspace intent on authenticated login, before resolution. Unauthenticated
+attempts remain unpersisted, and this never grants Chef authority. Existing
+bootstrap restores the intent before the backend account router runs.
+
+`screens/CustomerRegistrationScreen.tsx` and `screens/ChefRegistrationScreen.tsx`
+gain the existing outline Sign out control, using `logoutCoordinator.ts`. It is
+disabled during submission/loading, and the primary submission is disabled while
+logging out. This is a functional exit from a wrong-role form, not a redesign.
+No applicant field, email gate, submission contract, approval requirement or
+styling is changed. Three role-persistence tests and two registration-exit tests
+are added; focused recovery/logout verification passes 21 tests in three suites.
+The original routing release and tag are not replaced or deleted.
+
+1.24 source/tag checkpoint: `a4d6e390b6aaa5d90bf4f3291c640c8a37659827`,
+`KUSHIRAVI-app-v1.24`.
+APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.apk`, SHA256
+`08C3057B032E71ABFF5E5E85EC2BDF50B72E343358A231812983D25F1CD7633E`.
+Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24-source.zip`, SHA256
+`A3BEAB0B67B9A06FCDD38DC617F0607F24EC689C4AE39D2948FD6B595BDA7BB2`.
+This archive is the immutable 1.24 checkpoint, with 1,123 entries and no private
+`.env`; the build script, lockfile, Gradle wrapper and signing file are present.
+The later 1.24.1 APK/archive will be distinct files and a distinct immutable tag.
+The follow-up's full suite passes: 204 suites / 1,113 tests, 76.702 seconds.
+TypeScript and targeted ESLint also pass. No new library or native dependency is
+added. React review retains existing components, event-handler-driven logout,
+per-identity intent storage, submission/loading guards and accessible buttons.
 
 ## Backend And Admin Checks
 

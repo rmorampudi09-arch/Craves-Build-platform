@@ -19,6 +19,7 @@ import {
   normalizeCustomerProfileInput,
 } from '../domain/customerProfileCompletion';
 import {authActions} from '../state/authSlice';
+import {completeLogout} from '../state/logoutCoordinator';
 
 type Form = z.infer<typeof customerRegistrationSchema>;
 type Props = NativeStackScreenProps<RootStackParamList, 'CustomerRegistration'>;
@@ -27,6 +28,7 @@ export function CustomerRegistrationScreen({navigation}: Props) {
   const dispatch = useAppDispatch();
   const accountResolution = useAppSelector(state => state.auth.accountResolution);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
   const {
     control,
     handleSubmit,
@@ -69,6 +71,16 @@ export function CustomerRegistrationScreen({navigation}: Props) {
       );
     }
   });
+
+  const signOut = async () => {
+    if (signingOut || isSubmitting) return;
+    setSigningOut(true);
+    try {
+      await completeLogout(dispatch);
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   return (
     <AuthShell>
@@ -126,7 +138,14 @@ export function CustomerRegistrationScreen({navigation}: Props) {
           )}
         />
         {serverError ? <Text style={styles.error}>{serverError}</Text> : null}
-        <PrimaryButton label="Create profile" loading={isSubmitting} onPress={submit} />
+        <PrimaryButton label="Create profile" loading={isSubmitting} disabled={signingOut} onPress={submit} />
+        <PrimaryButton
+          variant="outline"
+          label="Sign out"
+          disabled={isSubmitting}
+          loading={signingOut}
+          onPress={signOut}
+        />
       </AuthCard>
     </AuthShell>
   );

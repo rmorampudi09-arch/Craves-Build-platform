@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.24 Chef Application Routing
+# KUSHIRAVI App Build - Version 1.24.1 Chef Registration Recovery
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,15 +9,34 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `34`
-- Installed Android versionName: `1.23`
+- Installed Android versionCode: `35`
+- Installed Android versionName: `1.24`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed release: `KUSHIRAVI-app-v1.23`, checkpoint `4954acbb6694e05fa79d5fbc249c5e96bfd48dca`. Mobile app code was built from `ed955bdcb3d0ba42a5c28cc3319892c4a32632c4`; later commits contain backend diagnostics and rollout records only. Web and mobile OTP delivery and verification pass; existing web Chef access is confirmed and the user confirmed mobile sign-in completed. Existing banners, Chef actions, billing, payments, delivery and UI are preserved.
-- Last installation: `2026-10-02 09:54:05` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed release: `KUSHIRAVI-app-v1.24`, source/tag checkpoint `a4d6e390b6aaa5d90bf4f3291c640c8a37659827`. The phone restores Customer onboarding because the earlier failed Chef resolution never persisted the Chef selection. Follow-up recovery is being verified; do not claim a submitted application or matching Admin receipt yet.
+- Last installation: `2026-10-02 12:40:28` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.24.1 - Chef Registration Recovery, 2026-10-02
+
+- Live 1.24 restart exposed an existing gap: role intent was persisted only after
+  successful account resolution, so a failed first Chef login restored Customer
+  onboarding. Persist authenticated workspace intent immediately after verified
+  login, per identity. This stores intent only; backend authorization still gates
+  every product role. Unauthenticated login attempts remain unpersisted.
+- Add the existing outline Sign out action to the two registration forms, using
+  the existing coordinated logout. A wrong-role applicant can return to the role
+  picker without creating a Customer profile or submitting a Chef application.
+  No restyling or changes to fields, submission, email verification or approval.
+- Target Android 1.24.1 / code 36; intended tag `KUSHIRAVI-app-v1.24.1` and paths
+  `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.1.apk` and
+  `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.1-source.zip`.
+- Verification: all 204 Jest suites / 1,113 tests pass (30 new regression tests
+  across 1.24 and 1.24.1), TypeScript and targeted ESLint pass. Release build,
+  install and genuine applicant/Admin receipt are in progress. Keep the
+  already-created 1.24 checkpoint and all previous tags unchanged.
 
 ### Version 1.24 - Chef Application Routing, 2026-10-02
 
@@ -44,6 +63,14 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   application/proof and Admin review routes; the signed-in Admin queue loads
   existing pending applications. This is not yet this phone's submission proof.
   See `docs/chef-registration-live-20261002.md`. No backend/APIM changes made.
+- Build succeeded (38m 7s, 859 tasks); APK signer matches the previous release.
+  Source/tag checkpoint `a4d6e390b6aaa5d90bf4f3291c640c8a37659827`, immutable tag
+  `KUSHIRAVI-app-v1.24`. Replace-install succeeded at 12:40:28 IST; phone reports
+  code 35 / name 1.24 and cold launch succeeds. The prior failed login's absent
+  persisted Chef choice restores Customer registration; 1.24.1 addresses recovery.
+- APK SHA256 `08C3057B032E71ABFF5E5E85EC2BDF50B72E343358A231812983D25F1CD7633E`.
+  Source ZIP SHA256 `A3BEAB0B67B9A06FCDD38DC617F0607F24EC689C4AE39D2948FD6B595BDA7BB2`;
+  1,123 entries, all required build files present, private `.env` absent.
 
 ### Version 1.23 - Centralized Web And Mobile Phone OTP, 2026-10-02
 

@@ -37,6 +37,27 @@ describe('authenticated workspace restoration', () => {
     await activeRoleStorage.read(identity.id);
   });
 
+  it.each(['CHEF', 'CUSTOMER'] as const)('persists %s after OTP login before account resolution completes', async role => {
+    const state = makeStore();
+    state.dispatch(authActions.roleSelected(role));
+    expect(await activeRoleStorage.read(identity.id)).toBeNull();
+    state.dispatch(authActions.authenticated(identity));
+    expect(await activeRoleStorage.read(identity.id)).toBe(role);
+    expect(state.getState().auth.accountResolution).toBeNull();
+  });
+
+  it('restores the new Chef choice after closing during unresolved onboarding', async () => {
+    const state = makeStore();
+    state.dispatch(authActions.roleSelected('CHEF'));
+    state.dispatch(authActions.authenticated(identity));
+    await activeRoleStorage.read(identity.id);
+    jest.mocked(authService.restore).mockResolvedValue({identity} as Awaited<ReturnType<typeof authService.restore>>);
+    const reopened = makeStore();
+    await act(async () => {tree = renderer.create(<Provider store={reopened}><BootstrapProbe /></Provider>);});
+    expect(reopened.getState().auth.selectedRole).toBe('CHEF');
+    expect(reopened.getState().auth.accountResolution).toBeNull();
+  });
+
   it.each(['CHEF', 'CUSTOMER'] as const)('restores %s before exposing the authenticated account router', async role => {
     const oldStore = makeStore();
     oldStore.dispatch(authActions.authenticated(identity));

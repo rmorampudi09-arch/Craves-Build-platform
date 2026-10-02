@@ -10,11 +10,13 @@ import type {AccountResolution, ChefApplication} from '../domain/types';
 import {accountResolutionService} from '../state/accountResolutionService';
 import {ChefRegistrationScreen} from './ChefRegistrationScreen';
 import {ChefAccountStatusScreen} from './ChefAccountStatusScreen';
+import {CustomerRegistrationScreen} from './CustomerRegistrationScreen';
+import {completeLogout} from '../state/logoutCoordinator';
 
 jest.setTimeout(15000);
 
 const mockDispatch = jest.fn();
-let mockResolution: Extract<AccountResolution, {flow: 'CHEF_ONBOARDING'}>;
+let mockResolution: AccountResolution;
 jest.mock('../../../app/store/hooks', () => ({
   useAppDispatch: () => mockDispatch,
   useAppSelector: (selector: (state: unknown) => unknown) =>
@@ -28,7 +30,7 @@ jest.mock('../../../design/reducedMotion', () => ({
   useReducedMotionPreference: () => true,
 }));
 jest.mock('../api/profileApi', () => ({
-  profileApi: {getChefApplication: jest.fn(), submitChefApplication: jest.fn()},
+  profileApi: {getChefApplication: jest.fn(), submitChefApplication: jest.fn(), saveCustomerProfile: jest.fn()},
 }));
 jest.mock('../state/accountResolutionService', () => ({
   accountResolutionService: {resolve: jest.fn()},
@@ -142,7 +144,7 @@ describe('Chef onboarding screen journey', () => {
   });
 
   it('prefills a rejected application and resubmits through the same endpoint', async () => {
-    mockResolution = {...mockResolution, onboardingStatus: 'REJECTED'};
+    mockResolution = {flow: 'CHEF_ONBOARDING', requestedRole: 'CHEF', authorizedRole: 'CUSTOMER', onboardingStatus: 'REJECTED'};
     (profileApi.getChefApplication as jest.Mock).mockResolvedValue({...application, status: 'REJECTED', rejectionReason: 'Check address'});
     await registration();
     expect(JSON.stringify(tree.toJSON())).toContain('Review note:');
@@ -153,7 +155,7 @@ describe('Chef onboarding screen journey', () => {
   });
 
   it('restores pending status with proof uploads available but without Chef access', async () => {
-    mockResolution = {...mockResolution, onboardingStatus: 'PENDING'};
+    mockResolution = {flow: 'CHEF_ONBOARDING', requestedRole: 'CHEF', authorizedRole: 'CUSTOMER', onboardingStatus: 'PENDING'};
     await status();
     expect(JSON.stringify(tree.toJSON())).toContain('Chef application under review');
     expect(tree.root.findByType(ChefKycEvidencePanel).props.applicationStatus).toBe('PENDING');
@@ -188,5 +190,22 @@ describe('Chef onboarding screen journey', () => {
     await status();
     expect(accountResolutionService.resolve).toHaveBeenCalledWith('CHEF');
     expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({type: 'auth/accountResolved', payload: resolved}));
+  });
+
+  it('lets an unsubmitted Chef leave onboarding without submitting an application', async () => {
+    await registration();
+    await act(async () => {await button('Sign out').props.onPress();});
+    expect(completeLogout).toHaveBeenCalledWith(mockDispatch);
+    expect(profileApi.submitChefApplication).not.toHaveBeenCalled();
+  });
+
+  it('lets a wrong-role Customer registration exit without creating a profile', async () => {
+    mockResolution = {flow: 'CUSTOMER', requestedRole: 'CUSTOMER', authorizedRole: 'CUSTOMER', onboardingStatus: 'PROFILE_REQUIRED'};
+    await render(<CustomerRegistrationScreen navigation={navigation as never} route={{} as never} />);
+    await act(async () => {await button('Sign out').props.onPress();});
+    expect(completeLogout).toHaveBeenCalledWith(mockDispatch);
+    expect(profileApi.saveCustomerProfile).not.toHaveBeenCalled();
+    expect(profileApi.submitChefApplication).not.toHaveBeenCalled();
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 });

@@ -22,6 +22,7 @@ import {
 } from '../domain/chefApplicationOnboarding';
 import {accountResolutionService} from '../state/accountResolutionService';
 import {authActions} from '../state/authSlice';
+import {completeLogout} from '../state/logoutCoordinator';
 
 type Form = z.infer<typeof chefRegistrationSchema>;
 type Props = NativeStackScreenProps<RootStackParamList, 'ChefRegistration'>;
@@ -45,6 +46,7 @@ export function ChefRegistrationScreen({navigation}: Props) {
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [verifiedEmail, setVerifiedEmail] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
   const {
     control,
     handleSubmit,
@@ -155,6 +157,16 @@ export function ChefRegistrationScreen({navigation}: Props) {
     }
   });
 
+  const signOut = async () => {
+    if (signingOut || isSubmitting || loadingExisting) return;
+    setSigningOut(true);
+    try {
+      await completeLogout(dispatch);
+    } finally {
+      setSigningOut(false);
+    }
+  };
+
   return (
     <AuthShell>
       <ScreenHeader title="Become a Chef" />
@@ -223,7 +235,7 @@ export function ChefRegistrationScreen({navigation}: Props) {
         />
         <EmailVerificationPanel
           email={chefEmail}
-          disabled={isSubmitting || loadingExisting}
+          disabled={isSubmitting || loadingExisting || signingOut}
           onVerified={setVerifiedEmail}
         />
         <Controller
@@ -314,8 +326,15 @@ export function ChefRegistrationScreen({navigation}: Props) {
         <PrimaryButton
           label={isRejectedApplication ? 'Resubmit for review' : 'Submit for review'}
           loading={isSubmitting}
-          disabled={loadingExisting || !emailVerifiedForSubmission}
+          disabled={loadingExisting || signingOut || !emailVerifiedForSubmission}
           onPress={submit}
+        />
+        <PrimaryButton
+          variant="outline"
+          label="Sign out"
+          disabled={isSubmitting || loadingExisting}
+          loading={signingOut}
+          onPress={signOut}
         />
       </AuthCard>
     </AuthShell>

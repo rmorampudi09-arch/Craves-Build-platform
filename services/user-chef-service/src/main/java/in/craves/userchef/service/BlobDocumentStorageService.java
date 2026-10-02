@@ -112,12 +112,12 @@ public class BlobDocumentStorageService {
             throw ApiException.badRequest("DOCUMENT_STORE_NOT_CONFIGURED", "Document storage is not configured");
         }
         try {
-            BlobContainerClientBuilder builder = new BlobContainerClientBuilder()
-                .containerName(properties.getDocumentsContainer());
+            BlobContainerClientBuilder builder = new BlobContainerClientBuilder();
             BlobContainerClientBuilder.class
                 .getMethod("connection" + "String", String.class)
                 .invoke(builder, properties.getEndpointValue());
-            return builder.buildClient();
+            // Parsing an explicit endpoint ending in / can select $root. Apply our container last.
+            return builder.containerName(properties.getDocumentsContainer()).buildClient();
         } catch (ApiException ex) {
             throw ex;
         } catch (Exception ex) {

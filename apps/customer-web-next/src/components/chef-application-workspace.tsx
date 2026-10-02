@@ -211,7 +211,7 @@ export function ChefApplicationWorkspace() {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     input?.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
     if (!reduced) input?.animate([{ transform: "translateX(0)" }, { transform: "translateX(-3px)" }, { transform: "translateX(3px)" }, { transform: "translateX(0)" }], { duration: 240, iterations: 1 });
-  }, [invalidField, validationAttempt]);
+  }, [invalidField, validationAttempt, step]);
 
   function invalidate(name: keyof FormState, reason: string) {
     setInvalidField(name);
@@ -305,19 +305,15 @@ export function ChefApplicationWorkspace() {
 
   function continueAbout() {
     if (!form.firstName.trim() || !form.lastName.trim()) {
-      invalidate(!form.firstName.trim() ? "firstName" : "lastName", "Please enter your first and last name.");
+      invalidate(!form.firstName.trim() ? "firstName" : "lastName", !form.firstName.trim() ? "First name is required." : "Last name is required.");
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      invalidate("email", "Please enter a valid email address.");
-      return;
-    }
-    go("kitchen");
+    go("account");
   }
 
   function continueAddress() {
     if (!form.addressLine1.trim() || !form.city.trim() || !form.state.trim()) {
-      invalidate(!form.addressLine1.trim() ? "addressLine1" : !form.city.trim() ? "city" : "state", "Please add your house or building, city, and state.");
+      invalidate(!form.addressLine1.trim() ? "addressLine1" : !form.city.trim() ? "city" : "state", !form.addressLine1.trim() ? "House or building is required." : !form.city.trim() ? "City is required." : "State is required.");
       return;
     }
     go("kitchen-photos");
@@ -382,11 +378,13 @@ export function ChefApplicationWorkspace() {
       return;
     }
     if (!form.email.trim() || !form.firstName.trim() || !form.lastName.trim()) {
-      setMessage("Please check your name and email before continuing.");
+      setStep(!form.firstName.trim() || !form.lastName.trim() ? "about" : "account");
+      invalidate(!form.firstName.trim() ? "firstName" : !form.lastName.trim() ? "lastName" : "email", "Complete your required contact details.");
       return;
     }
     if (!form.addressLine1.trim() || !form.city.trim() || !form.state.trim()) {
-      setMessage("Please check your kitchen address before continuing.");
+      setStep("address");
+      invalidate(!form.addressLine1.trim() ? "addressLine1" : !form.city.trim() ? "city" : "state", !form.addressLine1.trim() ? "House or building is required." : !form.city.trim() ? "City is required." : "State is required.");
       return;
     }
 
@@ -462,7 +460,7 @@ export function ChefApplicationWorkspace() {
       <div className="p-6 md:p-9"><p className="text-sm font-semibold text-primary">Become a Craves Chef</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">Share your homemade food with thousands of customers</h1>
         <div className="mt-6 space-y-3 text-sm">{["Earn from your cooking", "Reach nearby customers", "Manage your kitchen easily"].map(item => <p key={item} className="flex items-center gap-3"><Check className="h-5 w-5 text-primary" aria-hidden="true" />{item}</p>)}</div>
-        <Button className="mt-7 w-full" onClick={() => go("account")}>Become a Chef <ChevronRight className="h-4 w-4" /></Button>
+        <Button className="mt-7 w-full" onClick={() => go("about")}>Become a Chef <ChevronRight className="h-4 w-4" /></Button>
         <Button asChild variant="ghost" className="mt-2 w-full"><Link href="/sign-in?returnTo=/chef">Already a Chef? Login</Link></Button>
       </div>
     </section>;
@@ -470,12 +468,12 @@ export function ChefApplicationWorkspace() {
 
   if (step === "account") {
     return <section className="chef-step rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
-      <StepHeader part={1} label="Your account" onBack={() => go("welcome")} />
+      <StepHeader part={2} label="Your account" onBack={() => go("about")} />
       <h1 className="mt-7 text-3xl font-bold">Let’s get to know you</h1>
       <p className="mt-3 text-sm text-[#6B6B6B]">Use your existing Craves phone sign-in and verify the email for your Chef application.</p>
       <div className="mt-5 flex items-center gap-3 rounded-2xl bg-[#F1F3F5] p-4"><Phone className="h-5 w-5 text-primary" /><span className="text-sm">{profile?.registeredPhoneNumber ? `Signed in with ${profile.registeredPhoneNumber}` : "Your signed-in Craves account is connected."}</span></div>
       <div className="mt-5"><EmailVerificationPanel required onStateChange={state => { setEmailVerification(state); if (state?.email) field("email", state.email); }} /></div>
-      <Button className="mt-6 w-full" disabled={!chefEmailEligible(emailVerification)} onClick={() => go("about")}>Continue</Button>
+      <Button className="mt-6 w-full" disabled={!chefEmailEligible(emailVerification)} onClick={() => go("kitchen")}>Continue</Button>
     </section>;
   }
 
@@ -483,7 +481,7 @@ export function ChefApplicationWorkspace() {
     const kitchenStep = step === "kitchen";
     const photoStep = step === "kitchen-photos";
     return <form onSubmit={submit} className="chef-step rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
-      <StepHeader part={kitchenStep ? 3 : photoStep ? 5 : 6} label={kitchenStep ? "Kitchen details" : photoStep ? "Kitchen photos" : "Food safety"} onBack={() => go(kitchenStep ? "about" : photoStep ? "address" : "kitchen-photos")} />
+      <StepHeader part={kitchenStep ? 3 : photoStep ? 5 : 6} label={kitchenStep ? "Kitchen details" : photoStep ? "Kitchen photos" : "Food safety"} onBack={() => go(kitchenStep ? "account" : photoStep ? "address" : "kitchen-photos")} />
       <h1 className="mt-7 text-3xl font-bold">{kitchenStep ? "Tell customers about your kitchen" : photoStep ? "Show your kitchen" : "Food Safety Details"}</h1>
       <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">{kitchenStep ? "You can save your kitchen name, description and contact details after your Chef application is approved." : photoStep ? "Kitchen-photo verification is not available yet. Photos cannot be submitted in this step." : "FSSAI submission and application assistance are not available yet. Identity approval does not verify food-business compliance."}</p>
       <div className="mt-6 grid gap-3 sm:grid-cols-2">{(kitchenStep ? ["Kitchen name & description", "Kitchen contact details"] : photoStep ? ["Cooking area", "Storage area", "Hygiene area", "Kitchen overview"] : ["Already have FSSAI", "Need help applying"]).map(item => <div key={item} className="rounded-2xl border border-[#E5E7EB] bg-[#F1F3F5] p-5"><p className="font-semibold">{item}</p><p className="mt-2 text-xs text-[#6B6B6B]">{kitchenStep ? "Available after approval" : "Not available yet"}</p></div>)}</div>
@@ -495,14 +493,13 @@ export function ChefApplicationWorkspace() {
   if (step === "about") {
     return (
       <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
-        <StepHeader part={2} label="Personal details" onBack={() => go("account")} />
+        <StepHeader part={1} label="Personal details" onBack={() => go("welcome")} />
         <div className="mt-7"><IconCircle><UserRound className="h-7 w-7" aria-hidden="true" /></IconCircle></div>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">What’s your name?</h1>
-        <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">Use the same name that appears on your ID.</p>
+        <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">Use the same name that appears on your ID. Both names are required.</p>
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-semibold text-[#1A1A1A]">First name<input {...inputProps("firstName")} value={form.firstName} onChange={(event) => field("firstName", event.target.value)} className={INPUT_CLASS} autoComplete="given-name" /></label>
           <label className="text-sm font-semibold text-[#1A1A1A]">Last name<input {...inputProps("lastName")} value={form.lastName} onChange={(event) => field("lastName", event.target.value)} className={INPUT_CLASS} autoComplete="family-name" /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Email<input {...inputProps("email")} readOnly type="email" value={form.email} onChange={(event) => field("email", event.target.value)} className={INPUT_CLASS} autoComplete="email" /></label>
         </div>
         {profile?.registeredPhoneNumber ? <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]"><Phone className="h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" /><span>Your Craves phone number is already saved: <strong className="text-[#1A1A1A]">{profile.registeredPhoneNumber}</strong></span></div> : null}
         {message ? <p id="chef-field-error" role="alert" className="mt-4 text-sm font-medium text-[#F62E18]">{message}</p> : null}
@@ -517,7 +514,7 @@ export function ChefApplicationWorkspace() {
         <StepHeader part={4} label="Kitchen location" onBack={() => go("kitchen")} />
         <div className="mt-7"><IconCircle><MapPin className="h-7 w-7" aria-hidden="true" /></IconCircle></div>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">Where is your kitchen located?</h1>
-        <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">This is the kitchen address used for food pickup.</p>
+        <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">This is the kitchen address used for food pickup. House or building, city and state are required; other fields are optional.</p>
         <button type="button" disabled={locating} onClick={useCurrentLocation} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 font-semibold text-[#F62E18] disabled:opacity-50"><MapPin className="h-4 w-4" aria-hidden="true" />{locating ? "Finding my address…" : "Use my current location"}</button>
         {message ? <p id="chef-field-error" role={invalidField ? "alert" : "status"} className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">{message}</p> : null}
         {form.latitude !== "" && form.longitude !== "" ? <div className="mt-5"><AddressMapPicker latitude={Number(form.latitude)} longitude={Number(form.longitude)} onCenterChange={next => void moveKitchenPin(next)} onUseCurrentLocation={useCurrentLocation} locating={locating} disabled={locating} /></div> : null}
@@ -546,7 +543,7 @@ export function ChefApplicationWorkspace() {
     const completion = Math.round(checklist.filter(item => item.complete).length / checklist.length * 100);
     return <section className="chef-step rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
       <StepHeader part={8} label="Review your application" onBack={() => go("documents")} />
-      <div className="mt-7 flex items-center gap-5"><div role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Available application details complete" className="grid h-20 w-20 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(var(--color-success) ${completion}%, #e5e7eb 0)` }}><span className="grid h-16 w-16 place-items-center rounded-full bg-white text-lg font-bold">{completion}%</span></div><div><h1 className="text-3xl font-bold">Your Chef Profile</h1><p className="mt-2 text-sm text-[#6B6B6B]">Available application details complete</p></div></div>
+      <div className="mt-7 flex items-center gap-5"><div role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Available application details complete" className="grid h-20 w-20 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(var(--color-flame-red) ${completion}%, #e5e7eb 0)` }}><span className="grid h-16 w-16 place-items-center rounded-full bg-white text-lg font-bold">{completion}%</span></div><div><h1 className="text-3xl font-bold">Your Chef Profile</h1><p className="mt-2 text-sm text-[#6B6B6B]">Available application details complete</p></div></div>
       {application?.rejectionReason ? <p role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm">{application.rejectionReason}</p> : null}
       <div className="mt-5"><EmailVerificationPanel compact required onStateChange={setEmailVerification} /></div>
       <p className="mt-5 font-semibold">{form.firstName} {form.lastName}</p><p className="mt-1 text-sm text-[#6B6B6B]">{addressSummary(form)}</p>

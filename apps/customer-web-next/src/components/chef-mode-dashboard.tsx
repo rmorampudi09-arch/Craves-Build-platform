@@ -360,14 +360,25 @@ export function ChefModeDashboard() {
   }
 
   if (state === "signed-out") {
-    return <section className="chef-step mx-auto grid max-w-5xl overflow-hidden rounded-3xl border border-[#E5E7EB] bg-white shadow-[var(--shadow-card)] md:grid-cols-2">
-      <img src="/home/cravings/craves-home-banner.webp" alt="A generous spread of homemade food" className="aspect-[4/3] h-full w-full object-cover object-right" fetchPriority="high" />
-      <div className="p-6 md:p-10"><p className="text-sm font-semibold text-primary">Become a Craves Chef</p><h1 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">Share your homemade food with thousands of customers</h1>
-        <div className="my-6 space-y-3 text-sm">{["Earn from your cooking", "Reach nearby customers", "Manage your kitchen easily"].map(benefit => <p key={benefit} className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />{benefit}</p>)}</div>
-        <Button asChild className="w-full"><Link href="/sign-in?returnTo=/chef/application">Become a Chef</Link></Button>
-        <Button asChild variant="ghost" className="mt-2 w-full"><Link href="/sign-in?returnTo=/chef">Already a Chef? Login</Link></Button>
-      </div>
-    </section>;
+    return <div className="chef-step mx-auto max-w-6xl space-y-6 md:space-y-10">
+      <section className="relative isolate overflow-hidden rounded-3xl bg-[#F1F3F5]">
+        <div className="grid md:min-h-[480px] md:grid-cols-2">
+          <div className="order-2 flex flex-col justify-center p-6 md:order-1 md:p-10 lg:p-12">
+            <p className="text-sm font-semibold uppercase tracking-wider text-[var(--color-flame-red)]">Your kitchen. Your story.</p>
+            <h1 className="mt-3 text-3xl font-bold leading-tight tracking-tight md:text-4xl lg:text-5xl">Share your homemade food with thousands of customers</h1>
+            <p className="mt-5 text-base leading-7 text-[#6B6B6B]">Build your kitchen on Craves, serve nearby customers, and manage orders in one place. Turn the food you love making into an income of your own.</p>
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row md:flex-col lg:flex-row">
+              <Button asChild><Link href="/sign-in?returnTo=/chef/application">Become a Chef <ChevronRight aria-hidden="true" /></Link></Button>
+              <Button asChild variant="outline"><Link href="/sign-in?returnTo=/chef">Already a Chef? Login</Link></Button>
+            </div>
+          </div>
+          <div className="relative order-1 overflow-hidden md:order-2"><img src="/home/cravings/craves-home-banner.webp" alt="A home chef preparing fresh homemade food" className="aspect-[16/10] h-full w-full origin-right scale-[1.12] object-cover object-right md:absolute md:inset-0" fetchPriority="high" /></div>
+        </div>
+      </section>
+      <section aria-label="Why cook with Craves" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[{icon:BadgeIndianRupee,title:"Earn from your cooking",text:"Bring your signature dishes to a local audience."},{icon:Store,title:"Reach nearby customers",text:"Connect your home kitchen with your neighbourhood."},{icon:Utensils,title:"Manage your kitchen easily",text:"Keep dishes, availability and orders together."},{icon:ShieldCheck,title:"Build a trusted Chef profile",text:"Share your story and complete your verification."}].map(({icon:Icon,title,text}) => <article key={title} className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)]"><span className="inline-flex rounded-xl bg-[var(--color-flame-red)]/10 p-3 text-[var(--color-flame-red)]"><Icon className="h-5 w-5" aria-hidden="true" /></span><h2 className="mt-4 text-base font-bold">{title}</h2><p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{text}</p></article>)}
+      </section>
+    </div>;
   }
 
   if (state === "verification") {

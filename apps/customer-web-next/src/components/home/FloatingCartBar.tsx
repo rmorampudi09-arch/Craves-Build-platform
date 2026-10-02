@@ -45,7 +45,7 @@ export function FloatingCartBar({
       <button
         type="button"
         onClick={onViewCart}
-        className={`${styles.floatingCartButton} group pointer-events-auto relative isolate mx-auto flex min-h-[4.2rem] w-full max-w-[58rem] items-center gap-2.5 overflow-hidden rounded-[8px] px-3 text-left sm:min-h-[4.7rem] sm:gap-4 sm:px-6`}
+        className={`${styles.floatingCartButton} group pointer-events-auto relative isolate mx-auto flex min-h-[4.2rem] w-full max-w-[58rem] items-center gap-2.5 overflow-hidden rounded-[1.8rem] px-3 text-left sm:min-h-[4.7rem] sm:gap-4 sm:px-6`}
         aria-label={`View cart with ${itemCount} ${itemCount === 1 ? "item" : "items"}`}
       >
         <span aria-hidden="true" className={styles.floatingCartGlass} />

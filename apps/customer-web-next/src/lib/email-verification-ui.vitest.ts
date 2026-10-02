@@ -152,6 +152,8 @@ describe("registration and verify-later email UI", () => {
     vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
     vi.stubGlobal("scrollTo", vi.fn());
     fireEvent.click(await screen.findByRole("button", { name: "Become a Chef" }));
+    await screen.findByRole("heading", { name: "What’s your name?" });
+    fireEvent.click(button("Continue"));
     await waitFor(() => expect(button("Refresh verification status").disabled).toBe(false));
     expect(button("Continue").disabled).toBe(true);
     expect(fetcher.mock.calls.some(([url, init]) => url === "/api/chef/application" && init?.method === "POST")).toBe(false);
@@ -159,10 +161,6 @@ describe("registration and verify-later email UI", () => {
     current = verified;
     fireEvent.click(button("Refresh verification status"));
     await waitFor(() => expect(button("Continue").disabled).toBe(false));
-    fireEvent.click(button("Continue"));
-    const email = await screen.findByLabelText("Email") as HTMLInputElement;
-    expect(email.readOnly).toBe(true);
-    expect(email.value).toBe(verified.email);
     for (const heading of ["Tell customers about your kitchen", "Where is your kitchen located?", "Show your kitchen", "Food Safety Details"]) {
       fireEvent.click(button("Continue"));
       await screen.findByRole("heading", { name: heading });

@@ -52,6 +52,21 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   code 32 / name 1.21, source `5fac235a421f9541dfac40f3d82beee7fe6fad93`;
   APK `C:\mscratch\artifacts\KUSHIRAVI-app-v1.21.apk`. No mobile rebuild is
   needed because its public configuration contract remains compatible.
+- Deployment verified: source `01728e3d27220691b8f67cc65b8e8791f790ecc5`, tag
+  `KUSHIRAVI-msg91-dual-platform-v1.1`. TypeScript/changed-source lint pass;
+  423 Vitest and 340 Node tests pass. ACR build `cu4x` passed; healthy Web
+  revision `ca-craves-web-prodlow--msg91-dual-1002` serves 100% traffic, image
+  `sha256:8a5a8d7c5781bdecfbdf8d2a6419a38e4c80c2bb159f653d51ecea96c266c77c`.
+  Existing non-OTP template/secret references verified unchanged. Same-run live
+  configuration readback confirms mobile mode 1 and separate web mode 0.
+  Live landing auth bundle uses the independent web URL. Fresh user-only sign-in
+  on both platforms requested; not inferred from successful configuration reads.
+  Source ZIP, hashes, exact paths, rollback and full receipt:
+  `docs\msg91-dual-platform-20261002.md`.
+- After being asked to test the deployed split on web and mobile, the user
+  confirmed "it is working". This is recorded as user-reported acceptance,
+  not an agent-created session or independent trace of two OTP exchanges.
+  No OTP was read or entered. Existing APK/tags remain untouched.
 
 ### MSG91 Mobile Configuration Repair v2, 2026-10-02
 

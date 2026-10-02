@@ -9,11 +9,11 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `33`
-- Installed Android versionName: `1.22`
+- Installed Android versionCode: `34`
+- Installed Android versionName: `1.23`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed source: `b9be7ea33ab8a3fcd615beac491a32f708a01bef`, tag `KUSHIRAVI-app-v1.22`. Existing home carousel now reads admin-published banners instead of bundled promotions. Upload/publish/unpublish and exact public image bytes are verified live. Phone is on user-only OTP verification; customer Home rendering remains pending the user's sign-in. Earlier Chef rejection, preparation-time, billing and independent MSG91 platform fixes are preserved, not modified or re-tested as paid mutations in this task.
-- Last installation: `2026-10-02 06:59:10` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed release: `KUSHIRAVI-app-v1.23`. Mobile app code was built from `ed955bdcb3d0ba42a5c28cc3319892c4a32632c4`; later commits contain backend diagnostics and rollout records only. Web OTP delivery, verification and existing Chef access are confirmed; mobile OTP verification is pending the user's phone test. Existing banners, Chef actions, billing, payments, delivery and UI are preserved.
+- Last installation: `2026-10-02 09:54:05` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
@@ -38,16 +38,15 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Shared PostgreSQL challenge leases, hashed random challenge IDs, one-use proof,
   five attempts, two resends, 30-second cooldown, per-phone/shared send limits,
   bounded requests and reviewed errors protect both clients. No automatic SMS retry.
-- Candidate APK/source paths: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.23.apk`
+- Release APK/source paths: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.23.apk`
   and `C:\mscratch\artifacts\KUSHIRAVI-app-v1.23-source.zip`.
-- Build/deployment, exact commit/image hashes, phone installation and real SMS
-  acceptance will be recorded after verification. Version 1.22 remains installed
-  until replace-install succeeds. UI, orders, payments, delivery and banners are
+- Build/deployment, exact image hashes, phone installation and real web SMS
+  acceptance are recorded in the rollout receipt. UI, orders, payments, delivery and banners are
   outside this change. No new Azure resource is provisioned.
-- Live user acceptance failed: an accepted send did not deliver SMS. Version 1.23
-  is not tagged or installed. Investigating the exact provider request and DLT
-  delivery status; a separate earlier account log reports template mismatch, not
-  yet correlated with this request. Add real-time provider responses, redacted
+- Initial live user acceptance failed: an accepted send did not deliver SMS.
+  Investigated the exact provider request and DLT delivery status; a separate
+  earlier account log reported template mismatch, not correlated with this
+  request. Added real-time provider responses, redacted
   operational diagnostics and redirect rejection. Do not claim login readiness
   from invalid-input probes or provider acceptance alone.
 - Backend diagnostic fix is committed at
@@ -57,9 +56,16 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   send permission). After owner verification the user enabled only Send SMS
   Allowed on the existing `CravesOTPServer` rule 3752 and saved Update. A fresh
   rule read confirms it alongside the original Send OTP Allowed and Widget View;
-  no other scopes or IP restrictions changed. Real post-change delivery/sign-in
-  is pending, not claimed complete. Full failure/rollout receipt:
-  `docs/msg91-centralized-live-20261002.md`. Version 1.22 stays installed.
+  no other scopes or IP restrictions changed. Post-change web request
+  `366a62695930616376657452` was sent at 09:51:00 and delivered at 09:51:02
+  Asia/Calcutta, with Verified YES and INR 0.25 debit. Existing approved Chef
+  dashboard opens after sign-in. Full failure/rollout receipt:
+  `docs/msg91-centralized-live-20261002.md`.
+- Android build/signature verification and replace-install pass. Installed phone
+  reports name `1.23`, code `34`; normal launch reaches the existing role picker.
+  APK SHA256 `04E3FC546152AEB8538DEB9A150AA0819CF8BFBE180AD3AA1CDFDC6D7C4E857A`.
+  The phone test of the new centralized OTP transport is pending user input;
+  do not claim mobile delivery or completed end-to-end rollout yet.
 
 ### Version 1.22 - Admin-Published Home Banners, 2026-10-02
 

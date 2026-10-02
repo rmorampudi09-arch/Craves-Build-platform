@@ -3,13 +3,17 @@
 ## Current Status
 
 The user authorized centralizing web and Android phone OTP through the existing
-Spring Boot auth service. The backend and web transport are deployed, but real
-SMS delivery has not passed acceptance. The candidate Android APK is built, not
-installed or tagged. Do not describe this rollout as complete.
+Spring Boot auth service. Backend and web transport are deployed. After the
+user saved the minimum MSG91 key permission fix, real web SMS delivery and
+verification pass, including access to the existing approved Chef dashboard.
+Android 1.23 is built and replace-installed; real mobile OTP verification is
+pending the user's phone test. Do not describe the complete rollout as verified
+until that test passes.
 
 No UI, account IDs, Customer/Chef roles, email login, checkout, orders, payments,
 delivery or banners are modified by this change. No GitHub push or new Azure
-resource. The phone remains `com.cravesapp` 1.22 / code 33, installed from
+resource. The phone is now `com.cravesapp` 1.23 / code 34, replacing 1.22 without
+clearing app data. The previous rollback remains
 `b9be7ea33ab8a3fcd615beac491a32f708a01bef`, tag `KUSHIRAVI-app-v1.22`.
 
 ## Source Checkpoints
@@ -20,7 +24,7 @@ resource. The phone remains `com.cravesapp` 1.22 / code 33, installed from
 - APIM Consumption-compatible policies: `f0ceb7f33ae0f89d366bbb03d2c77d245bc8debc`.
 - Real-time provider responses, safe diagnostics and redirect rejection:
   `8f956490f5cdf8b8036c29098967f34eb8f1fa91`.
-- Candidate Android target: 1.23 / code 34. No `KUSHIRAVI-app-v1.23` tag yet.
+- Installed Android target: 1.23 / code 34, checkpoint `KUSHIRAVI-app-v1.23`.
 
 ## Exact Live Baselines
 
@@ -112,8 +116,17 @@ rule 3752 at approximately `2026-10-02T04:20Z` confirms only those three
 permissions checked; all other scopes, including every Select All, remain off.
 The key was not revealed, rotated or replaced. No IP whitelist change was made.
 Proof: `C:\mscratch\artifacts\msg91-centralized-live-20261002\msg91-send-sms-permission-saved.jpg`.
-Real post-change SMS delivery and sign-in are still pending a controlled user
-attempt; saved permissions alone are not delivery evidence.
+The post-change real web attempt is correlated with auth logs at
+`2026-10-02T04:21:00.056Z`, request `366a62695930616376657452`. SendOTP billable
+logs show sent `2026-10-02 09:51:00`, delivered `09:51:02` Asia/Calcutta,
+Status Delivered, Verified YES, Credit Deduction 0.25, sender CRAVSX, configured
+Flow ID `6abe727541deb95f6d0b7192`, and the existing DLT ID. No failure reason.
+The signed-in account opens `/chef` with its existing Approved Chef status and
+two existing menu dishes. No account approval or business mutation was made.
+Proof: `C:\mscratch\artifacts\msg91-centralized-live-20261002\web-chef-after-otp.jpg`.
+The visible account wallet is INR 40.25, but its difference from the earlier
+snapshot is not attributed solely to this attempt; the exact record's INR 0.25
+debit is the billing evidence.
 
 ## Verification
 
@@ -123,13 +136,18 @@ attempt; saved permissions alone are not delivery evidence.
   the final helper regression suite has 10 focused tests. Production build passes.
 - Live invalid phone: 400; invalid challenge: 400 OTP_RESTART; oversized request:
   413; rejected foreign origin: 403; existing anonymous `/auth/me`: 401.
-- Real valid send: accepted, SMS/sign-in not verified. These probes do not replace
-  real user acceptance or prove shared-wallet billing.
+- Real web send: exact request delivered in two seconds, provider Verified YES,
+  existing Chef session/access verified, INR 0.25 record-level debit. Mobile
+  send/verification and its same-account wallet debit still require the phone test.
 - Android release build and signing verification succeed; existing certificate
   retained. Built APK SHA256
   `04E3FC546152AEB8538DEB9A150AA0819CF8BFBE180AD3AA1CDFDC6D7C4E857A`.
   Output `C:\mscratch\apps\mobile\android\app\build\outputs\apk\release\app-release-signed.apk`.
-  Not installed, not tagged, not declared launch-ready.
+  Copied release checkpoint `C:\mscratch\artifacts\KUSHIRAVI-app-v1.23.apk`.
+  Replace-install returns Success; phone reports 1.23 / code 34, last update
+  `2026-10-02 09:54:05` Asia/Calcutta. App launch succeeds and shows the existing
+  Customer/Chef role picker. No data clear, uninstall or unrelated UI change.
+  Real mobile sign-in is not yet declared verified or launch-ready.
 
 ## Required Completion
 
@@ -137,10 +155,10 @@ attempt; saved permissions alone are not delivery evidence.
    server key's rule without revealing its value.
 2. Completed: user enabled and saved only Send SMS Allowed; persisted scopes
    verified. No other security permission or IP restriction changed.
-3. Correlate one real send with its exact request ID, delivery status and debit.
-4. User enters the OTP on the web. Verify the existing identity and Chef access.
-5. Only after delivery/sign-in pass, replace-install candidate Android without
-   clearing data, and verify a real mobile sign-in through the same backend.
+3. Completed for web: exact request, delivery, verification and debit correlated.
+4. Completed: web OTP verification and existing approved Chef access confirmed.
+5. Replace-install completed after web acceptance, without clearing data. Pending:
+   user verifies a real mobile sign-in through the same backend.
 6. Record full final source SHA, immutable version tag, installed version,
    APK/source ZIP hashes and final live image evidence. Refresh provisional source
    ZIPs after final local commits; preserve all previous version tags.

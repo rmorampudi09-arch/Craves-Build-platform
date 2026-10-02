@@ -269,6 +269,7 @@ function StepIndicator({ current }: { current: number }) {
 export function ChefSubscriptionPlanManager() {
   const [plans, setPlans] = useState<ChefMealPlan[]>([]);
   const [menu, setMenu] = useState<ChefMenuItem[]>([]);
+  const [kitchenRequired, setKitchenRequired] = useState(false);
   const [capacity, setCapacity] = useState<ChefCapacitySummary | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<PlanForm>(EMPTY_FORM);
@@ -392,17 +393,21 @@ export function ChefSubscriptionPlanManager() {
         errorMessage(body, "Your meal plans are temporarily unavailable."),
       );
     }
-    if (!menuResponse.ok) {
-      const body = await menuResponse.json().catch(() => null);
+    const menuBody: unknown = await menuResponse.json().catch(() => null);
+    const missingKitchen =
+      menuResponse.status === 400 &&
+      menuBody !== null &&
+      typeof menuBody === "object" &&
+      !Array.isArray(menuBody) &&
+      "code" in menuBody &&
+      menuBody.code === "KITCHEN_PROFILE_REQUIRED";
+    if (!menuResponse.ok && !missingKitchen) {
       throw new Error(
-        errorMessage(body, "Your available menu is temporarily unavailable."),
+        errorMessage(menuBody, "Your available menu is temporarily unavailable."),
       );
     }
 
-    const [planBody, menuBody] = await Promise.all([
-      plansResponse.json(),
-      menuResponse.json(),
-    ]);
+    const planBody = await plansResponse.json();
 
     const nextPlans = Array.isArray(planBody)
       ? (planBody as ChefMealPlan[])
@@ -413,6 +418,7 @@ export function ChefSubscriptionPlanManager() {
 
     setPlans(nextPlans);
     setMenu(nextMenu);
+    setKitchenRequired(missingKitchen);
 
     if (capacityResponse.ok) {
       const capacityBody = await capacityResponse.json().catch(() => null);
@@ -898,9 +904,11 @@ export function ChefSubscriptionPlanManager() {
     setLeadHours("24");
     setNote("");
     setInfoMessage(
-      availableMenu.length
+      kitchenRequired
+        ? "You can save plan details as a draft. Set up your kitchen and add an active dish before building its meal schedule."
+        : availableMenu.length
         ? "Start with the customer-facing plan details. You will add the meal schedule next."
-        : "Activate at least one available menu item before building a meal plan.",
+        : "You can save plan details as a draft. Add or activate a dish before building its meal schedule.",
     );
   }
 
@@ -983,6 +991,25 @@ export function ChefSubscriptionPlanManager() {
             <Info className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           )}
           <span className="min-w-0 flex-1">{message}</span>
+        </div>
+      ) : null}
+
+      {kitchenRequired ? (
+        <div className="flex items-start gap-3 rounded-2xl border border-[#D8DEE3] bg-[#F8F9FA] p-4 text-sm shadow-[var(--shadow-card)]">
+          <Info className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-flame-red)]" aria-hidden="true" />
+          <div>
+            <p className="font-bold text-[#1A1A1A]">Your kitchen setup is next</p>
+            <p className="mt-1 leading-6 text-[#6B6B6B]">
+              You can create and keep meal-plan drafts now. Set up your kitchen and add an active, available dish before saving a meal schedule or submitting a plan.
+            </p>
+            <Link
+              href="/chef/kitchen"
+              className="mt-2 inline-flex min-h-11 items-center gap-2 font-bold text-[var(--color-flame-red)] underline-offset-4 hover:underline"
+            >
+              Set up my kitchen
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </div>
         </div>
       ) : null}
 
@@ -1450,16 +1477,18 @@ export function ChefSubscriptionPlanManager() {
                           />
                           <div>
                             <p className="text-sm font-bold text-[#1A1A1A]">
-                              Your menu is not ready yet
+                              {kitchenRequired ? "Set up your kitchen first" : "Your menu is not ready yet"}
                             </p>
                             <p className="mt-1 text-sm leading-6 text-[#4B5563]">
-                              Add or activate at least one available dish in Menu before submitting this meal plan.
+                              {kitchenRequired
+                                ? "Your draft is available. Set up your kitchen, then add an active, available dish to build its meal schedule."
+                                : "Add or activate at least one available dish in Menu before submitting this meal plan."}
                             </p>
                             <Link
-                              href="/chef/menu"
+                              href={kitchenRequired ? "/chef/kitchen" : "/chef/menu"}
                               className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[var(--color-flame-red)] underline-offset-4 hover:underline"
                             >
-                              Manage menu
+                              {kitchenRequired ? "Go to kitchen setup" : "Manage menu"}
                               <ChevronRight className="h-4 w-4" aria-hidden="true" />
                             </Link>
                           </div>

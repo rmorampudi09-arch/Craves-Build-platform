@@ -6,6 +6,7 @@ import { GET as readProfile } from "../app/api/customer/profile/route";
 import { GET as readMenu, POST as createDish } from "../app/api/chef/menu/route";
 import { PUT as editDish } from "../app/api/chef/menu/[menuItemId]/route";
 import { PATCH as updateAvailability } from "../app/api/chef/menu/[menuItemId]/availability/route";
+import { GET as readKitchen, PUT as saveKitchen } from "../app/api/chef/kitchen/route";
 
 const upstream = vi.hoisted(() => vi.fn());
 vi.mock("./bounded-fetch", () => ({ boundedFetch: upstream }));
@@ -54,6 +55,50 @@ it("does not reinterpret another menu rejection as a missing kitchen", async () 
   const response = await readMenu(menuRequest("GET"));
   expect(response.status).toBe(400);
   expect(await response.json()).toEqual({ code: "MENU_REQUEST_FAILED" });
+});
+
+function kitchenRequest(method: "GET" | "PUT" = "GET") {
+  vi.stubEnv("CRAVES_API_BASE_URL", "https://api.craves.in/api/v1");
+  return new NextRequest("https://craves.in/api/chef/kitchen", {
+    method, headers: { Origin: "https://craves.in", Cookie: "craves_access_token=fixture-only", ...(method === "PUT" ? { "Content-Type": "application/json" } : {}) },
+    ...(method === "PUT" ? { body: JSON.stringify({ kitchenName: "Fixture kitchen", addressLine1: "Fixture house", city: "Fixture city", state: "Fixture state", status: "DRAFT" }) } : {}),
+  });
+}
+
+it.each(["KITCHEN_PROFILE_NOT_FOUND", "ResourceNotFound", null] as const)("treats only the authoritative %s kitchen404 as missing setup", async code => {
+  upstream.mockResolvedValue(Response.json({ code, message: "private diagnostics" }, { status: 404 }));
+  const response = await readKitchen(kitchenRequest());
+  expect(response.status).toBe(code === "KITCHEN_PROFILE_NOT_FOUND" ? 200 : 404);
+  const body = await response.json();
+  if (code === "KITCHEN_PROFILE_NOT_FOUND") expect(body).toBeNull();
+  else expect(body).toMatchObject({ code: "KITCHEN_REQUEST_FAILED" });
+  expect(JSON.stringify(body)).not.toContain("private diagnostics");
+  expect(response.headers.get("Cache-Control")).toContain("no-store");
+  expect(upstream).toHaveBeenCalledWith("https://api.craves.in/api/v1/kitchens/me", expect.objectContaining({ method: "GET", headers: expect.objectContaining({ Authorization: "Bearer fixture-only" }) }), 40_000);
+});
+
+it("preserves malformed kitchen404 responses as errors rather than missing setup", async () => {
+  upstream.mockResolvedValue(new Response("not json", { status: 404 }));
+  const response = await readKitchen(kitchenRequest());
+  expect(response.status).toBe(404);
+  expect((await response.json()).code).toBe("KITCHEN_REQUEST_FAILED");
+  expect(response.headers.get("Cache-Control")).toContain("no-store");
+});
+
+it("never treats a missing kitchen during save as a successful empty profile", async () => {
+  upstream.mockResolvedValue(Response.json({ code: "KITCHEN_PROFILE_NOT_FOUND" }, { status: 404 }));
+  const response = await saveKitchen(kitchenRequest("PUT"));
+  expect(response.status).toBe(404);
+  expect((await response.json()).code).toBe("KITCHEN_REQUEST_FAILED");
+  expect(response.headers.get("Cache-Control")).toContain("no-store");
+});
+
+it.each([401, 403, 503])("retains kitchen%s authentication and availability errors with private no-store headers", async status => {
+  upstream.mockResolvedValue(Response.json({ code: "KITCHEN_PROFILE_NOT_FOUND" }, { status }));
+  const response = await readKitchen(kitchenRequest());
+  expect(response.status).toBe(status);
+  expect((await response.json()).code).toBe(status === 401 ? "SESSION_EXPIRED" : status === 403 ? "CHEF_ACCESS_REQUIRED" : "KITCHEN_REQUEST_FAILED");
+  expect(response.headers.get("Cache-Control")).toContain("no-store");
 });
 
 it.each([

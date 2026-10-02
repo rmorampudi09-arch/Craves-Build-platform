@@ -7,10 +7,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { ChefMenuManager } from "../components/chef-menu-manager";
 import { ChefKitchenForm } from "../components/chef-kitchen-form";
 import { ChefModeDashboard } from "../components/chef-mode-dashboard";
+import { ChefSubscriptionPlanManager } from "../components/chef-subscription-plan-manager";
 import ChefLayout from "../app/chef/layout";
 import { ChefWorkspaceNavigation } from "../components/chef-workspace-navigation";
 import type { ChefMenuItem } from "./chef-menu-contract";
 import type { ChefKitchen } from "./chef-kitchen-types";
+import type { ChefMealPlan } from "./chef-subscription-plan-contract";
 import { ChefAccessBoundary } from "../components/chef-access-boundary";
 import { ChefBankOnboardingPanel } from "../components/chef-bank-onboarding-panel";
 import ChefFinancePage from "../app/chef/finance/page";
@@ -53,7 +55,7 @@ function change(owner: CravesIdentity) { identity = owner; act(() => { setSessio
 describe("Chef navigation placement", () => {
   it("keeps fixed bottom navigation outside the filtered sticky header", () => {
     vi.mocked(usePathname).mockReturnValue("/chef/menu");
-    render(createElement(ChefLayout, { children: createElement("main", null, "Chef fixture") }));
+    render(createElement(ChefLayout, null, createElement("main", null, "Chef fixture")));
     const header = screen.getByRole("link", { name: "Craves home" }).closest("header")!;
     expect(header.contains(screen.getByRole("navigation", { name: "Chef workspace" }))).toBe(true);
     expect(header.contains(screen.getByRole("navigation", { name: "Chef primary navigation" }))).toBe(false);
@@ -535,5 +537,81 @@ describe("Approved Chef first step", () => {
     expect(screen.queryByRole("link", { name: "Name my kitchen" })).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/menu")).toBe(false);
+  });
+});
+
+describe("Chef meal plans before kitchen setup", () => {
+  const draft: ChefMealPlan = { id: a.id, planCode: "FIXTURE_WEEKLY", name: "Existing weekly draft", description: null, billingPeriod: "WEEKLY", amount: 750, currency: "INR", status: "DRAFT", reviewReason: null, submittedAt: null, reviewedAt: null, createdAt: "2026-10-02T00:00:00Z", updatedAt: "2026-10-02T00:00:00Z" };
+  let plans: ChefMealPlan[];
+  let menuStatus: number;
+  let menuBody: unknown;
+  beforeEach(() => {
+    plans = [{ ...draft }];
+    menuStatus = 400;
+    menuBody = { code: "KITCHEN_PROFILE_REQUIRED" };
+    fetcher.mockImplementation(async (input, options) => {
+      const url = String(input);
+      if (url === "/api/chef/subscription-plans") {
+        if (options?.method === "POST") {
+          const payload = JSON.parse(String(options.body));
+          const created: ChefMealPlan = { ...draft, ...payload, id: b.id, planCode: "FIXTURE_NEW" };
+          plans = [created, ...plans];
+          return Response.json(created, { status: 201 });
+        }
+        return Response.json(plans);
+      }
+      if (url === "/api/chef/menu") return Response.json(menuBody, { status: menuStatus });
+      if (url === "/api/chef/subscription-capacity") return Response.json({ chefIdentityId: a.id, adminSalesFrozen: true, freezeReason: "Fixture capacity hold", slotRules: [], menuItemRules: [], dateOverrides: [], menuItemDateOverrides: [], openIncidentCount: 0 });
+      if (/^\/api\/chef\/subscription-plans\/[^/]+\/schedule$/.test(url)) return Response.json({ code: "SCHEDULE_NOT_FOUND" }, { status: 404 });
+      throw new Error(`Unexpected meal-plan fixture route ${url}`);
+    });
+  });
+
+  it("keeps real plans and capacity available when the menu explicitly requires a kitchen", async () => {
+    render(createElement(ChefSubscriptionPlanManager));
+    await screen.findByRole("heading", { name: draft.name });
+    expect(screen.getByText("Fixture capacity hold")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Set up my kitchen" }).getAttribute("href")).toBe("/chef/kitchen");
+    expect(screen.getByRole("link", { name: "Go to kitchen setup" }).getAttribute("href")).toBe("/chef/kitchen");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect((screen.getByRole("button", { name: "Create new meal plan" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Save & submit for approval" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("allows a draft to be created before kitchen setup and retains it after remount", async () => {
+    render(createElement(ChefSubscriptionPlanManager));
+    await screen.findByRole("link", { name: "Set up my kitchen" });
+    fireEvent.click(screen.getByRole("button", { name: "Create new meal plan" }));
+    expect(screen.getByRole("link", { name: "Set up my kitchen" })).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox", { name: /^Plan name/ }), { target: { value: "New Chef draft" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: /Subscription price/ }), { target: { value: "900" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create draft & continue" }));
+    await screen.findByRole("heading", { name: "New Chef draft" });
+    expect(plans[0]).toMatchObject({ name: "New Chef draft", amount: 900, status: "DRAFT" });
+    expect(screen.getByRole("link", { name: "Set up my kitchen" })).toBeTruthy();
+    cleanup();
+    render(createElement(ChefSubscriptionPlanManager));
+    await screen.findByRole("heading", { name: "New Chef draft" });
+    expect(fetcher.mock.calls.filter(([, options]) => options?.method === "POST")).toHaveLength(1);
+  });
+
+  it("returns to normal menu guidance after kitchen setup is confirmed by a successful menu read", async () => {
+    render(createElement(ChefSubscriptionPlanManager));
+    await screen.findByRole("link", { name: "Set up my kitchen" });
+    menuStatus = 200;
+    menuBody = [];
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(screen.queryByRole("link", { name: "Set up my kitchen" })).toBeNull());
+    expect(screen.getByRole("link", { name: "Manage menu" }).getAttribute("href")).toBe("/chef/menu");
+    expect(screen.getByRole("heading", { name: draft.name })).toBeTruthy();
+    expect(screen.getByText("Fixture capacity hold")).toBeTruthy();
+  });
+
+  it.each([400, 503, 404])("keeps an unrelated menu %s failure visible instead of claiming kitchen setup is missing", async status => {
+    menuStatus = status;
+    menuBody = { code: status === 400 ? "MENU_REQUEST_FAILED" : "KITCHEN_PROFILE_REQUIRED", message: "Fixture menu read failed" };
+    render(createElement(ChefSubscriptionPlanManager));
+    expect((await screen.findByRole("alert")).textContent).toContain("Fixture menu read failed");
+    expect(screen.queryByRole("link", { name: "Set up my kitchen" })).toBeNull();
   });
 });

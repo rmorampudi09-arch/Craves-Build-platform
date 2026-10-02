@@ -211,6 +211,98 @@ No artificial account, Chef grant, application submission, payment or financial
 credit was created to manufacture a passing result. Prior installable tags and
 APKs are untouched.
 
+## Recurrent Send OTP Failure Resolved, Configuration v2
+
+On 2026-10-02 the user reported that mobile sign-in was failing again and
+confirmed the failure occurred on Send OTP, before entering a code. The worktree
+was clean on `KUSHIRAVI-app-build`, starting at
+`ad0ef851e4551dc498583741f69eefc89a75944d`.
+
+The connected phone remained on `com.cravesapp` v1.21, versionCode 32, installed
+at `2026-10-02 03:38:39` Asia/Calcutta. Immutable installed source/tag:
+`5fac235a421f9541dfac40f3d82beee7fe6fad93` / `KUSHIRAVI-app-v1.21`.
+APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.21.apk`, SHA-256
+`0FDD5E1AF580FC645E63D557158960B541B8433A2FFB3B299DE11F4362663918`.
+
+### Cause And Exact Repair
+
+- Non-editable phone UI showed the same `OTP_MOBILE_DISABLED` message:
+  "Mobile verification is not enabled yet. Please try again shortly."
+- The application's public `/api/auth/otp-config` still pointed to the existing
+  MSG91 widget `366942756930393636363638`. Read-only provider process policy
+  returned `mobileIntegration: 0`, with all other checked policy fields matching
+  the previously verified values. No SMS request was sent by the agent.
+- The existing MSG91 settings tab initially showed a stale Mobile selection.
+  Reloading it showed the actual saved integration selection was web. Do not
+  treat an old browser tab as proof of persisted provider configuration.
+- Selected Mobile and pressed Save & Next. MSG91 displayed "Widget updated
+  successfully". Returned to Widget Settings to verify the saved selection.
+- Independent provider readback at `2026-10-02T00:11:40.3117381Z`
+  (05:41:40 Asia/Calcutta) showed:
+
+```json
+{
+  "provider": "msg91",
+  "widgetId": "366942756930393636363638",
+  "status": "success",
+  "hasError": false,
+  "widgetStatus": "1",
+  "processType": "2",
+  "verificationType": "1",
+  "mobileIntegration": 1,
+  "captchaValidations": 0,
+  "invisible": 0,
+  "otpLength": 6,
+  "retryTime": 30,
+  "retryCount": 2,
+  "expiryTime": 15
+}
+```
+
+Only Widget Integration was edited. SMS templates/DLT, channel configuration,
+credentials, CAPTCHA/invisible OTP, authorization, web/backend code, APIM,
+payments and delivery configuration were not changed. No provider gate was
+bypassed, no Firebase SMS fallback added and no server authkey accessed.
+
+Saved visual evidence:
+`C:\mscratch\artifacts\msg91-mobile-20261002\mobile-integration-restored.jpg`.
+It shows CravesOTP with Mobile selected and invisible OTP off; no code or token.
+
+### Live Acceptance And Checkpoint
+
+The user retried on the connected phone and confirmed:
+
+> OTP arrived and sign-in works
+
+This is user-confirmed real SMS delivery and successful phone sign-in, not an
+agent-created session. No OTP/password or editable phone input was read or
+entered by the agent. An additional non-editable UI inspection showed no Send
+OTP control or mobile-disabled message, but returned no recognized home/menu
+labels; it is not independent proof of a particular signed-in screen.
+
+The app reads provider policy for each new sign-in request, so the repair needed
+no APK rebuild, installation or version increment. The installed v1.21 source,
+APK and installable tag remain untouched. This documentation-only local repair
+checkpoint is tagged `KUSHIRAVI-msg91-mobile-config-v2`; resolve its exact commit
+with `git rev-parse KUSHIRAVI-msg91-mobile-config-v2^{commit}`. A Git checkout
+does not change remote MSG91 configuration.
+
+### Recurrence Precautions
+
+The observed cause is a saved provider setting changing back to web. There is
+no audit evidence identifying who or what changed it, so this receipt does not
+attribute the change to a user, deployment, MSG91 reset or automated process.
+The dashboard exposes web and Mobile as mutually exclusive selections. Avoid
+saving this widget with web selected when editing the shared widget; after any
+settings save, reload and confirm Mobile remains selected, then compare the
+live provider policy. Do not relax authentication checks to hide a disabled
+provider setting. No scheduled monitoring or automatic configuration rewrite
+was created without a separate request.
+
+Web OTP delivery was not separately tested in this repair. Basic mobile sign-in
+is now user-confirmed; wrong-code correction, resend/lifecycle, authorized Chef
+restoration and iOS live acceptance remain distinct checks.
+
 ## Rebuild
 
 Use the immutable source ZIP or tag with the existing README/build script and

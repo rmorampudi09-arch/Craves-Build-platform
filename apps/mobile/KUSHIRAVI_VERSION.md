@@ -19,6 +19,35 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### MSG91 Mobile Configuration Repair v2, 2026-10-02
+
+- Clean start on `KUSHIRAVI-app-build` at
+  `ad0ef851e4551dc498583741f69eefc89a75944d`. No GitHub push.
+- User reported Send OTP failing on the connected phone. The actual phone
+  displayed "Mobile verification is not enabled yet. Please try again shortly."
+  The live widget policy, fetched using the application's public configuration,
+  confirmed `mobileIntegration: 0`. Reloading the existing CravesOTP settings
+  confirmed that the saved Widget Integration selection was web, not Mobile.
+- Restored only Widget Integration to Mobile in the existing MSG91 widget
+  `366942756930393636363638`; saved with Save & Next. MSG91 reported success.
+  Reopened settings and independently read back the provider policy at
+  `2026-10-02T00:11:40.3117381Z`: `mobileIntegration: 1`. Other checked policy
+  fields remained unchanged, including six-digit SMS OTP, 30-second resend,
+  two resends, 15-minute expiry, CAPTCHA off and invisible OTP off.
+- User subsequently confirmed: "OTP arrived and sign-in works". The user
+  requested and entered the genuine OTP on the phone; the agent did not read
+  or enter any OTP, password or phone input. No artificial session was created.
+- Configuration-only checkpoint: `KUSHIRAVI-msg91-mobile-config-v2`.
+  Repair evidence and recurrence precautions:
+  `docs\msg91-mobile-installation-20261002.md`. Git tags record evidence;
+  they do not restore external MSG91 settings.
+- Mobile source/UI/backend contracts unchanged. Installed app remains code 32 /
+  name 1.21, tag `KUSHIRAVI-app-v1.21`, source
+  `5fac235a421f9541dfac40f3d82beee7fe6fad93`. Existing APK:
+  `C:\mscratch\artifacts\KUSHIRAVI-app-v1.21.apk`.
+  No rebuild/reinstall/version increment, credential access, backend/APIM
+  deployment, new resource, template edit or security-check bypass.
+
 ### Backend Checkpoint - Pidge Coordinate Routing v1, 2026-10-02
 
 - Requested backend-only correction: use actual latitude/longitude and Pidge's

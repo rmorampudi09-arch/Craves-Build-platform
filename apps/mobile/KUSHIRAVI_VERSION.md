@@ -44,6 +44,12 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   acceptance will be recorded after verification. Version 1.22 remains installed
   until replace-install succeeds. UI, orders, payments, delivery and banners are
   outside this change. No new Azure resource is provisioned.
+- Live user acceptance failed: an accepted send did not deliver SMS. Version 1.23
+  is not tagged or installed. Investigating the exact provider request and DLT
+  delivery status; a separate earlier account log reports template mismatch, not
+  yet correlated with this request. Add real-time provider responses, redacted
+  operational diagnostics and redirect rejection. Do not claim login readiness
+  from invalid-input probes or provider acceptance alone.
 
 ### Version 1.22 - Admin-Published Home Banners, 2026-10-02
 

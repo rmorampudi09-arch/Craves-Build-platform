@@ -1,11 +1,12 @@
-param([Parameter(Mandatory)][string]$Image, [Parameter(Mandatory)][string]$RevisionSuffix)
+param([Parameter(Mandatory)][string]$Image, [Parameter(Mandatory)][string]$RevisionSuffix,
+    [string]$ExpectedImage = 'cravesrm09prodlow6bf632.azurecr.io/craves/auth-service@sha256:01b6783cf1f946b178721aa416feb47f8de98996555879f4ff3d82de2184b88b')
 $ErrorActionPreference = 'Stop'
 $group = 'rg-craves-prodlow-centralindia'
 $app = 'ca-craves-auth-service-prodlow'
 $before = az containerapp show -g $group -n $app -o json | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect auth runtime.' }
 $oldImage = $before.properties.template.containers[0].image
-if ($oldImage -ne 'cravesrm09prodlow6bf632.azurecr.io/craves/auth-service@sha256:01b6783cf1f946b178721aa416feb47f8de98996555879f4ff3d82de2184b88b') {
+if ($oldImage -ne $ExpectedImage) {
     throw 'Auth changed after preflight; do not overwrite another deployment.'
 }
 az containerapp update -g $group -n $app --image $Image --revision-suffix $RevisionSuffix `

@@ -147,6 +147,12 @@ class CentralOtpTest {
             assertEquals("synthetic-test-key",exchange.getRequestHeaders().getFirst("authkey"));
             String query=exchange.getRequestURI().getRawQuery();
             assertFalse(query.contains("authkey")); assertTrue(query.contains("mobile=919876543210"));
+            if ("POST".equals(exchange.getRequestMethod())) {
+                assertTrue(query.contains("template_id=6abe727541deb95f6d0b7192"));
+                assertTrue(query.contains("realTimeResponse=1"));
+                assertFalse(query.contains("invisible"));
+                assertEquals("{}", new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            }
             byte[] bytes=response.get().getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200,bytes.length); exchange.getResponseBody().write(bytes); exchange.close();
         }); server.start();
@@ -163,5 +169,22 @@ class CentralOtpTest {
             assertThrows(AuthException.class, () -> provider.verify(phone,"123456"));
             response.set("x".repeat(8193)); assertThrows(AuthException.class, () -> provider.send(phone));
         } finally { server.stop(0); }
+    }
+    @Test void providerNeverFollowsRedirectsWithTheAccountAuthkey() throws Exception {
+        var calls=new java.util.concurrent.atomic.AtomicInteger();
+        var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+        server.createContext("/api/v5/otp", exchange -> {
+            exchange.getResponseHeaders().set("Location","http://127.0.0.1:"+server.getAddress().getPort()+"/redirected");
+            exchange.sendResponseHeaders(302,-1);exchange.close();
+        });
+        server.createContext("/redirected",exchange->{calls.incrementAndGet();exchange.sendResponseHeaders(200,-1);exchange.close();});
+        server.start();
+        try {
+            var provider=new CentralOtpProvider(new Msg91Properties(true,"synthetic-test-key"),
+                    "6abe727541deb95f6d0b7192",URI.create("http://127.0.0.1:"+server.getAddress().getPort()));
+            assertThrows(AuthException.class,()->provider.send(phone));
+            assertThrows(AuthException.class,()->provider.verify(phone,"123456"));
+            assertEquals(0,calls.get());
+        } finally {server.stop(0);}
     }
 }

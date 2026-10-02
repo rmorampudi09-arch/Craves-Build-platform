@@ -41,7 +41,11 @@ and `CRAVES_CENTRAL_OTP_ENABLED=true`. Web adds only the latter flag.
 No new frontend credential or APK environment variable is needed. Do not send
 keys or OTPs in chat. Do not log provider query strings: official Verify OTP
 uses GET with the code, while the authkey is a header. Provider exceptions and
-diagnostics are not returned or logged by this patch.
+raw diagnostics are never returned or logged. Safe diagnostics log only an accepted
+provider request ID, numeric error code, HTTP status or exception class, never its
+message. Send requests use MSG91's documented `realTimeResponse=1` to avoid cached
+validation responses; no mobile-only invisible-verification parameter is sent.
+HTTP redirects are disabled so the account key cannot follow a redirect.
 
 ## Local verification
 

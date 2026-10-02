@@ -1,6 +1,4 @@
 import { build } from 'vite';
-import postcss from 'postcss';
-import tailwind from '@tailwindcss/postcss';
 import { createHash } from 'node:crypto';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -26,7 +24,7 @@ const result = await build({
     { find: '@', replacement: source },
   ], dedupe: ['react', 'react-dom'] },
   build: {
-    outDir: output, emptyOutDir: false, target: 'es2020', minify: true,
+    outDir: output, emptyOutDir: false, write: false, target: 'es2020', minify: true,
     lib: { entry: path.join(source, 'landing-auth/entry.tsx'), formats: ['es'] },
     rolldownOptions: { output: {
       entryFileNames: 'auth-[hash].js',
@@ -35,41 +33,19 @@ const result = await build({
     } },
   },
 });
-const entry = (Array.isArray(result) ? result : [result]).flatMap((item) => item.output).find((item) => item.type === 'chunk' && item.isEntry);
+const artifacts = (Array.isArray(result) ? result : [result]).flatMap((item) => item.output);
+const entry = artifacts.find((item) => item.type === 'chunk' && item.isEntry);
 if (!entry) throw new Error('Missing landing authentication entry');
-
-// Reuse the application's actual theme. Scope every rule to the popup, including
-// Tailwind's reset, so loading authentication cannot restyle the landing document.
-let css = await readFile(path.join(source, 'styles.css'), 'utf8');
-css = css.replace('@source "../src";', '@source "./components/auth";\n@source "./components/brand/CravesLogo.tsx";');
-for (const filename of ['craves-theme.css', 'otp-overrides.css', 'control-border-overrides.css']) {
-  css += '\n' + await readFile(path.join(source, filename), 'utf8');
+for (const artifact of artifacts) {
+  // The original stylesheet is published below; omit Vite's duplicate/minified CSS.
+  if (artifact.type === 'asset' && artifact.fileName.endsWith('.css')) continue;
+  await writeFile(path.join(output, artifact.fileName), artifact.type === 'chunk' ? artifact.code : artifact.source);
 }
-const compiled = await postcss([tailwind({ base: project })]).process(css, { from: path.join(source, 'styles.css') });
-compiled.root.walkAtRules('layer', (rule) => {
-  if (rule.nodes) rule.replaceWith(rule.nodes); else rule.remove();
-});
-compiled.root.walkRules((rule) => {
-  let parent = rule.parent;
-  while (parent) {
-    if (parent.type === 'rule' || (parent.type === 'atrule' && /keyframes$/.test(parent.name))) return;
-    parent = parent.parent;
-  }
-  rule.selectors = rule.selectors.map((selector) => {
-    if (/^(?::root|:host|html|body)(?=$|[\s.:#[])/.test(selector)) {
-      return selector.replace(/^(?::root|:host|html|body)/, '#craves-customer-auth');
-    }
-    return `#craves-customer-auth ${selector}`;
-  });
-});
-const scoped = compiled.root.toString() + `
-#craves-customer-auth { position: fixed; inset: 0; z-index: 1000; min-height: 0; --font-craves-display: Inter; --font-craves-body: Inter; font-family: Inter, system-ui, sans-serif; }
-#craves-customer-auth > div { background: rgb(0 0 0 / .25); backdrop-filter: blur(16px); }
-#craves-customer-auth [role=dialog] { background: #fff; max-height: 95dvh; overscroll-behavior: contain; }
-#craves-customer-auth [aria-pressed=true] { background: #F62E18 !important; border-color: #F62E18 !important; color: #fff !important; }
-#craves-customer-auth p { line-height: inherit; }
-`;
-const cssName = `auth-${createHash('sha256').update(scoped).digest('hex').slice(0, 16)}.css`;
-await writeFile(path.join(output, cssName), scoped);
+
+// Publish the original ZIP stylesheet unchanged. Its selectors are already
+// scoped to .auth-modal, and the popup renders a portal outside the host node.
+const css = await readFile(path.join(source, 'landing-auth/AuthModal.css'));
+const cssName = `auth-${createHash('sha256').update(css).digest('hex').slice(0, 16)}.css`;
+await writeFile(path.join(output, cssName), css);
 await writeFile(path.join(output, 'manifest.json'), JSON.stringify({ script: `/landing-auth/${entry.fileName}`, style: `/landing-auth/${cssName}` }) + '\n');
-console.log('Built isolated landing popup from the current shared customer/chef authentication components.');
+console.log('Built the original landing popup with the existing MSG91/session flow.');

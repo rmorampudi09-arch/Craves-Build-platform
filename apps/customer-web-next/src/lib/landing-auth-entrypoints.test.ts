@@ -14,6 +14,23 @@ const hero = source(
 const landing = source("../screens/public/LandingPage/LandingPage.tsx");
 const authModal = source("../components/auth/AuthModal.tsx");
 const landingAuthBridge = source("../../../landing-v20/src/components/CustomerAuth.tsx");
+const zipAuthModal = source("../landing-auth/AuthModal.tsx");
+const zipAuthCss = source("../landing-auth/AuthModal.css");
+
+test("standalone landing preserves the original ZIP popup styling and uses real callbacks", () => {
+  assert.equal(createHash("sha256").update(zipAuthCss.replace(/\r\n/g, "\n")).digest("hex"),
+    "8a63f2aeb295122917216bfead2f07157246d380314abdd7dac6a1a61d0c72c5");
+  assert.match(zipAuthModal, /className="auth-modal__panel"/);
+  assert.match(zipAuthModal, /Choose your role/);
+  assert.match(zipAuthModal, /Create your account/);
+  assert.doesNotMatch(zipAuthModal, /not connected in this preview/);
+  const entry = source("../landing-auth/entry.tsx");
+  assert.match(entry, /onRequestCode=\{requestCode\}/);
+  assert.match(entry, /onVerifyCode=\{verifyCode\}/);
+  const builder = source("../../scripts/build-landing-auth.mjs");
+  assert.match(builder, /readFile\(path\.join\(source, 'landing-auth\/AuthModal\.css'\)\)/);
+  assert.doesNotMatch(builder, /\[aria-pressed=true\]/);
+});
 
 test("landing keeps dedicated CTAs locked while general auth can switch roles", () => {
   assert.match(hero, /Sign up \/ Sign in/);

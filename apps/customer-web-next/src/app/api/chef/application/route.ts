@@ -39,6 +39,12 @@ function upstreamFailure(
         "This chef application is already approved and cannot be resubmitted.",
     };
   }
+  if (upstreamCode === "EMAIL_VERIFICATION_REQUIRED") {
+    return { code: upstreamCode, message: "Verify the email on your Craves account, then submit your Chef details again." };
+  }
+  if (upstreamCode === "EMAIL_AUTHORITY_UNAVAILABLE") {
+    return { code: upstreamCode, message: "We couldn’t confirm your verified email right now. Please try again shortly." };
+  }
   if (status === 409) {
     return {
       code: upstreamCode ?? "CHEF_APPLICATION_CONFLICT",
@@ -69,8 +75,6 @@ async function forward(
       { code: "AUTHENTICATION_REQUIRED" },
       { status: 401 },
     );
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
     const upstream = await boundedFetch(`${apiBaseUrl()}/chef/application`, {
       method,
@@ -81,7 +85,6 @@ async function forward(
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
-      signal: controller.signal,
     }, 40_000);
     if (!upstream.ok) {
       const failure = upstreamFailure(
@@ -111,14 +114,13 @@ async function forward(
     const timedOut = error instanceof Error && error.name === "AbortError";
     return NextResponse.json(
       {
+        message: timedOut ? "Saving took too long. Reload your application to check whether it was saved before trying again." : "Chef application is temporarily unavailable. Please try again shortly.",
         code: timedOut
           ? "CHEF_APPLICATION_TIMEOUT"
           : "CHEF_APPLICATION_UNAVAILABLE",
       },
       { status: timedOut ? 504 : 503 },
     );
-  } finally {
-    clearTimeout(timeout);
   }
 }
 

@@ -53,6 +53,13 @@ test("rejects unsupported document metadata", () => {
   assert.equal(parseChefProofDocument({ ...application.documents[0], fileSizeBytes: 50_000_000 }), null);
 });
 
+test("accepts the backend's full 10 MiB evidence limit after upload and reload", () => {
+  const document = { ...application.documents[0], documentType: "APPLICANT_PHOTO", contentType: "image/png", fileSizeBytes: 10 * 1024 * 1024 };
+  assert.ok(parseChefProofDocument(document));
+  assert.ok(parseChefApplication({ ...application, documents: [document] }));
+  assert.equal(parseChefProofDocument({ ...document, fileSizeBytes: document.fileSizeBytes + 1 }), null);
+});
+
 test("validates paired coordinates and email", () => {
   const valid = { email: "chef@example.com", firstName: "Chef", lastName: "One", addressLine1: "Road", city: "Hyderabad", state: "Telangana", latitude: 17.4, longitude: 78.4 };
   assert.ok(parseChefApplicationInput(valid));

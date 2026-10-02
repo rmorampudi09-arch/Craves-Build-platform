@@ -18,7 +18,26 @@ const ALLOWED_CONTENT_TYPES = new Set([
   "image/png",
 ]);
 const PHOTO_CONTENT_TYPES = new Set(["image/jpeg", "image/png"]);
-const MAX_FILE_BYTES = 10_000_000;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+// File validation and storage failures both use HTTP 400 upstream. Only expose
+// these known codes and safe copy, never raw storage diagnostics or credentials.
+const UPLOAD_ERRORS: Record<string, string> = {
+  DOCUMENT_FILE_REQUIRED: "Choose a non-empty file to upload.",
+  DOCUMENT_FILE_TOO_LARGE: "Choose a file no larger than 10 MB.",
+  DOCUMENT_FILE_TYPE_NOT_ALLOWED: "Choose a JPG, PNG or PDF file.",
+  APPLICANT_PHOTO_FILE_TYPE_NOT_ALLOWED: "Your applicant photo must be a JPG or PNG image.",
+  DOCUMENT_CONTENT_TYPE_MISMATCH: "The file contents do not match its format. Export the original as JPG, PNG or PDF; renaming the extension is not enough.",
+  DOCUMENT_FILE_SIZE_INVALID: "The complete file could not be read. Select it again and retry.",
+  DOCUMENT_FILE_UNREADABLE: "The file could not be read. Select it again and retry.",
+  DOCUMENT_STORE_NOT_CONFIGURED: "Craves document storage is not ready. Your file format is not the issue. Please contact support.",
+  DOCUMENT_STORAGE_PRIVACY_REQUIRED: "Secure document storage is temporarily unavailable. Please try again later.",
+  DOCUMENT_SIZE_LIMIT_INVALID: "Document uploads are temporarily unavailable. Please contact support.",
+  DOCUMENT_UPLOAD_FAILED: "Craves could not store your document. Please try again later or contact support.",
+  CHEF_DOCUMENT_TYPE_NOT_ALLOWED: "Choose one of the four supported Chef identity documents.",
+  CHEF_DOCUMENT_ALREADY_APPROVED: "This document is already approved and cannot be replaced.",
+  CHEF_ALREADY_APPROVED: "Your Chef application is approved, so its documents cannot be replaced.",
+};
 
 function apiBaseUrl(): string {
   const value = process.env.CRAVES_API_BASE_URL?.trim();
@@ -68,20 +87,19 @@ export async function POST(request: NextRequest) {
     );
     if (!upstream.ok) {
       const upstreamError = await upstream.json().catch(() => null) as { code?: unknown } | null;
-      const approvedDocument = upstream.status === 409 && upstreamError?.code === "CHEF_DOCUMENT_ALREADY_APPROVED";
+      const knownCode = typeof upstreamError?.code === "string" && Object.hasOwn(UPLOAD_ERRORS, upstreamError.code)
+        ? upstreamError.code : null;
       const response = NextResponse.json(
         {
           code: upstream.status === 401
             ? "SESSION_EXPIRED"
-            : approvedDocument
-              ? "CHEF_DOCUMENT_ALREADY_APPROVED"
-              : "PROOF_FILE_UPLOAD_FAILED",
+            : knownCode ?? "PROOF_FILE_UPLOAD_FAILED",
           message: upstream.status === 401
             ? "Your session expired. Sign in again."
-            : upstream.status === 400
-              ? "The file was rejected. Use the requested JPG, PNG or PDF format under 10 MB."
-              : approvedDocument
-                ? "This document is already approved and cannot be replaced."
+            : knownCode
+              ? UPLOAD_ERRORS[knownCode]
+              : upstream.status === 400
+                ? "The upload could not be accepted. Please try again or contact support if it continues."
                 : upstream.status === 409
                   ? "This document cannot be replaced in its current review state."
                   : "Proof upload is temporarily unavailable.",

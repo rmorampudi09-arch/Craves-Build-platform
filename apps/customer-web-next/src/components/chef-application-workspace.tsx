@@ -18,7 +18,7 @@ import {
 import { ChefApplicationDocumentPanel } from "@/components/chef-application-document-panel";
 import type { CustomerAddress } from "@/lib/address-contract";
 import { selectActiveDeliveryAddress } from "@/lib/address-selection";
-import type { ChefApplication } from "@/lib/chef-application-contract";
+import { parseChefApplication, type ChefApplication } from "@/lib/chef-application-contract";
 import type { CustomerProfile } from "@/lib/profile-contract";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
 import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel";
@@ -129,6 +129,13 @@ function hasRequiredEvidence(application: ChefApplication): boolean {
     "TAX_ID_CARD",
   ].every((type) => types.has(type as never));
   return modernEvidence;
+}
+
+function applicationError(body: unknown, fallback: string): string {
+  if (body && typeof body === "object" && "message" in body && typeof body.message === "string") {
+    return body.message.slice(0, 500);
+  }
+  return fallback;
 }
 
 function addressSummary(form: FormState): string {
@@ -243,36 +250,40 @@ export function ChefApplicationWorkspace() {
 
   async function load() {
     setLoadFailed(false);
-    const [applicationResponse, profileResponse, addressesResponse] = await Promise.all([
-      fetch("/api/chef/application", { cache: "no-store" }),
-      fetch("/api/customer/profile", { cache: "no-store" }),
-      fetch("/api/customer/addresses", { cache: "no-store" }),
+    const signal = AbortSignal.timeout(45_000);
+    const [applicationResult, profileResult, addressesResult] = await Promise.allSettled([
+      fetch("/api/chef/application", { cache: "no-store", signal }),
+      fetch("/api/customer/profile", { cache: "no-store", signal }),
+      fetch("/api/customer/addresses", { cache: "no-store", signal }),
     ]);
-    const applicationBody = (await applicationResponse.json().catch(() => null)) as ChefApplication | null;
+    if (applicationResult.status === "rejected") throw new Error("We couldn’t load your application right now. Please try again.");
+    const applicationResponse = applicationResult.value;
+    const rawApplication = await applicationResponse.json().catch(() => null);
+    const applicationBody = parseChefApplication(rawApplication);
     if (!applicationResponse.ok || !applicationBody) {
       throw new Error(
         applicationResponse.status === 401
           ? "Sign in to continue your chef application."
-          : "We couldn’t load your application right now.",
+          : applicationError(rawApplication, "We couldn’t load your application right now."),
       );
     }
 
-    const nextProfile = profileResponse.ok
-      ? ((await profileResponse.json().catch(() => null)) as CustomerProfile | null)
+    const nextProfile = profileResult.status === "fulfilled" && profileResult.value.ok
+      ? ((await profileResult.value.json().catch(() => null)) as CustomerProfile | null)
       : null;
-    const addresses = addressesResponse.ok
-      ? ((await addressesResponse.json().catch(() => [])) as CustomerAddress[])
+    const addresses = addressesResult.status === "fulfilled" && addressesResult.value.ok
+      ? ((await addressesResult.value.json().catch(() => [])) as CustomerAddress[])
       : [];
 
     setApplication(applicationBody);
     setProfile(nextProfile);
     if (applicationBody.status === "NOT_SUBMITTED") {
-      setForm(prefillNewApplication(applicationBody, nextProfile, addresses));
+      setForm(prefillNewApplication(applicationBody, nextProfile, Array.isArray(addresses) ? addresses : []));
       setStep("welcome");
     } else {
       setForm(fromApplication(applicationBody));
       if (applicationBody.status === "APPROVED") setStep("approved");
-      else if (needsPhotoCorrection(applicationBody)) setStep("documents-intro");
+      else if (needsPhotoCorrection(applicationBody) && !hasRequiredEvidence(applicationBody)) setStep("documents-intro");
       else if (applicationBody.status === "REJECTED") setStep("review");
       else if (hasRequiredEvidence(applicationBody)) setStep("waiting");
       else setStep("documents-intro");
@@ -372,12 +383,13 @@ export function ChefApplicationWorkspace() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const locked = application?.status === "APPROVED";
-    if (locked || loadFailed) return;
+    if (locked || loadFailed || busy || !application) return;
     if (!chefEmailEligible(emailVerification)) {
+      setStep("account");
       setMessage("Verify your email before submitting your chef application.");
       return;
     }
-    if (!form.email.trim() || !form.firstName.trim() || !form.lastName.trim()) {
+    if (!emailVerification?.email || !form.firstName.trim() || !form.lastName.trim()) {
       setStep(!form.firstName.trim() || !form.lastName.trim() ? "about" : "account");
       invalidate(!form.firstName.trim() ? "firstName" : !form.lastName.trim() ? "lastName" : "email", "Complete your required contact details.");
       return;
@@ -404,13 +416,15 @@ export function ChefApplicationWorkspace() {
           latitude: form.latitude === "" ? null : Number(form.latitude),
           longitude: form.longitude === "" ? null : Number(form.longitude),
         }),
+        signal: AbortSignal.timeout(45_000),
       });
-      const body = (await response.json().catch(() => null)) as ChefApplication | null;
+      const raw = await response.json().catch(() => null);
+      const body = parseChefApplication(raw);
       if (!response.ok || !body) {
         throw new Error(
-          response.status === 400
+          applicationError(raw, response.status === 400
             ? "Please check your details and try again."
-            : "We couldn’t save your details. Please try again.",
+            : "We couldn’t save your details. Please try again."),
         );
       }
       setApplication(body);
@@ -420,7 +434,9 @@ export function ChefApplicationWorkspace() {
       else if (hasRequiredEvidence(body)) setStep("review");
       else setStep("documents-intro");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "We couldn’t save your details. Please try again.");
+      setMessage(error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")
+        ? "Saving took too long. Check your application status before trying again."
+        : error instanceof Error ? error.message : "We couldn’t save your details. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -449,7 +465,7 @@ export function ChefApplicationWorkspace() {
     return (
       <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center">
         <p className="text-sm text-[#6B6B6B]">{message}</p>
-        <button type="button" onClick={() => void load()} className="mt-5 rounded-full bg-[#F62E18] px-6 py-3 font-semibold text-white">Try again</button>
+        <button type="button" disabled={busy} onClick={() => void refreshStatus()} className="mt-5 rounded-full bg-[#F62E18] px-6 py-3 font-semibold text-white">{busy ? "Checking…" : "Try again"}</button>
       </section>
     );
   }
@@ -541,7 +557,7 @@ export function ChefApplicationWorkspace() {
       { label: "Identity & address documents", complete: documentsReady, target: "documents" as ApplicationStep },
     ];
     const completion = Math.round(checklist.filter(item => item.complete).length / checklist.length * 100);
-    return <section className="chef-step rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
+    return <form onSubmit={submit} className="chef-step rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
       <StepHeader part={8} label="Review your application" onBack={() => go("documents")} />
       <div className="mt-7 flex items-center gap-5"><div role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Available application details complete" className="grid h-20 w-20 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(var(--color-flame-red) ${completion}%, #e5e7eb 0)` }}><span className="grid h-16 w-16 place-items-center rounded-full bg-white text-lg font-bold">{completion}%</span></div><div><h1 className="text-3xl font-bold">Your Chef Profile</h1><p className="mt-2 text-sm text-[#6B6B6B]">Available application details complete</p></div></div>
       {application?.rejectionReason ? <p role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm">{application.rejectionReason}</p> : null}
@@ -549,8 +565,9 @@ export function ChefApplicationWorkspace() {
       <p className="mt-5 font-semibold">{form.firstName} {form.lastName}</p><p className="mt-1 text-sm text-[#6B6B6B]">{addressSummary(form)}</p>
       <div className="mt-6 space-y-2">{checklist.map(item => <button key={item.label} type="button" onClick={() => go(item.target)} className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-[#E5E7EB] bg-white px-4 text-left text-sm"><Check className={`h-5 w-5 ${item.complete ? "text-primary" : "text-[#9CA3AF]"}`} /><span className="flex-1">{item.label}</span><span className="text-xs text-[#6B6B6B]">{item.complete ? "Saved" : "Needs attention"}</span><ChevronRight className="h-4 w-4" /></button>)}</div>
       <p className="mt-5 rounded-xl bg-[#F1F3F5] p-4 text-sm leading-6 text-[#6B6B6B]">Kitchen setup opens after approval. Kitchen photos and FSSAI are not included in this percentage because submission is not available yet. Each identity document is reviewed separately.</p>
-      <Button className="mt-6 w-full" disabled={!documentsReady || busy} onClick={() => go("waiting")}>View verification status</Button>
-    </section>;
+      {message ? <p role="alert" className="mt-4 text-sm">{message}</p> : null}
+      {application?.status === "REJECTED" ? <Button type="submit" className="mt-6 w-full" disabled={!documentsReady || busy || !chefEmailEligible(emailVerification)}>{busy ? "Resubmitting…" : "Resubmit for verification"}</Button> : <Button type="button" className="mt-6 w-full" disabled={!documentsReady || busy} onClick={() => void refreshStatus()}>View verification status</Button>}
+    </form>;
   }
 
   if (step === "documents-intro") {

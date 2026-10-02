@@ -101,7 +101,7 @@ export function parseChefProofDocument(value: unknown): ChefProofDocument | null
     !status ||
     !createdAt ||
     fileSizeBytes < 0 ||
-    fileSizeBytes > 10_000_000
+    fileSizeBytes > 10 * 1024 * 1024
   ) return null;
   return { id, documentType, originalFileName, contentType, fileSizeBytes, status, createdAt };
 }

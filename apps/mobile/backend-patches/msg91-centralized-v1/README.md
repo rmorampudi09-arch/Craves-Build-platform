@@ -15,6 +15,10 @@ Key Vault secret, never in web JavaScript, the APK, source archives or receipts.
   isolated auth tables; no alteration to customer identities or orders.
 - `auth/src/test/java/in/craves/auth/centralotp`: real PostgreSQL concurrency,
   replay, budget and identity tests plus synthetic HTTP provider contracts.
+- `auth/diagnostics/Msg91DeliveryDiagnostics.java`: read-only operator utility
+  run inside the existing auth container. It reads the existing key from server
+  memory and requests only delivery metadata for one provider request ID. No SMS
+  is sent, and no phone number, SMS body, OTP or credential is printed.
 - `Prepare-Web.ps1`: restore exact live web source `e828209dc127085b8c1ffff84387a974b9eeef56`
   and apply the web-only transport overlay. The baseline Git object must exist.
 - `web`: complete replacement transport and same-origin bounded BFF routes/tests.
@@ -46,6 +50,10 @@ provider request ID, numeric error code, HTTP status or exception class, never i
 message. Send requests use MSG91's documented `realTimeResponse=1` to avoid cached
 validation responses; no mobile-only invisible-verification parameter is sent.
 HTTP redirects are disabled so the account key cannot follow a redirect.
+Provider acceptance does not guarantee SMS permission or carrier delivery. The
+MSG91 account alert can report error 204 after an accepted send; an account owner
+must review the exact key's SMS/SendOTP permission. Do not broaden all key scopes,
+remove IP restrictions, rotate credentials or create a new key as a shortcut.
 
 ## Local verification
 

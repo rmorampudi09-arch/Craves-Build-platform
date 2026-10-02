@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
+import in.craves.integration.delivery.command.DeliveryCommandRepository;
 import in.craves.integration.delivery.command.DeliveryProviderCatalogRepository;
 import in.craves.integration.delivery.command.DeliveryProviderRouter;
 import java.time.Clock;
@@ -57,6 +58,11 @@ class DeliverySchedulingConfigurationTest {
         @Bean
         DeliveryAssignmentRepository deliveryAssignmentRepository() {
             return mock(DeliveryAssignmentRepository.class);
+        }
+
+        @Bean
+        DeliveryCommandRepository deliveryCommandRepository() {
+            return mock(DeliveryCommandRepository.class);
         }
     }
 }

@@ -62,8 +62,12 @@ public class ShadowfaxProperties {
     }
 
     public boolean createReady() {
-        return enabled && createEnabled && credentialReady() && accountProductVerified
+        return enabled && createEnabled && credentialReady() && webhookReady() && accountProductVerified
             && ("SANDBOX".equals(normalizedEnvironment()) || productionActivationApproved);
+    }
+
+    public boolean webhookReady() {
+        return StringUtils.hasText(webhookToken);
     }
 
     public String normalizedEnvironment() {

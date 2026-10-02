@@ -175,6 +175,11 @@ public class DeliveryCommandRepository {
                 provider_wait_attempt_count = provider_wait_attempt_count + 1,
                 provider_wait_started_at = COALESCE(provider_wait_started_at, now()),
                 next_provider_retry_at = ?,
+                reconciliation_processing_started_at = NULL,
+                next_reconciliation_at = NULL,
+                reconciliation_provider_id = NULL,
+                reconciliation_client_reference = NULL,
+                reconciliation_started_at = NULL,
                 active_provider_id = ?,
                 active_provider_delivery_id = ?,
                 active_provider_deadline_at = ?,
@@ -184,7 +189,7 @@ public class DeliveryCommandRepository {
                 END,
                 last_error = ?,
                 updated_at = now()
-            WHERE id = ? AND status = 'PROCESSING'
+            WHERE id = ? AND status IN ('PROCESSING', 'RECONCILIATION_PENDING')
             """,
             toDatabaseTimestamp(retryAt),
             providerId,
@@ -209,6 +214,50 @@ public class DeliveryCommandRepository {
               AND active_provider_id = ?
               AND active_provider_delivery_id = ?
             """, commandId, providerId, providerDeliveryId) == 1;
+    }
+
+    public boolean recordProviderCreateIntent(UUID commandId,
+                                              String providerId,
+                                              String clientReference,
+                                              Instant attemptedAt,
+                                              String safeDetail) {
+        return jdbc.update("""
+            UPDATE delivery_schema.delivery_command
+            SET reconciliation_provider_id = ?,
+                reconciliation_client_reference = ?,
+                reconciliation_started_at = ?,
+                reconciliation_attempt_count = 0,
+                reconciliation_processing_started_at = NULL,
+                next_reconciliation_at = now(),
+                last_error = ?,
+                updated_at = now()
+            WHERE id = ? AND status = 'PROCESSING'
+            """,
+            providerId,
+            clientReference,
+            toDatabaseTimestamp(attemptedAt),
+            truncate(safeDetail, 2000),
+            commandId
+        ) == 1;
+    }
+
+    public boolean clearProviderCreateIntent(UUID commandId,
+                                             String providerId,
+                                             String clientReference) {
+        return jdbc.update("""
+            UPDATE delivery_schema.delivery_command
+            SET reconciliation_provider_id = NULL,
+                reconciliation_client_reference = NULL,
+                reconciliation_started_at = NULL,
+                reconciliation_processing_started_at = NULL,
+                next_reconciliation_at = NULL,
+                last_error = NULL,
+                updated_at = now()
+            WHERE id = ?
+              AND status = 'PROCESSING'
+              AND reconciliation_provider_id = ?
+              AND reconciliation_client_reference = ?
+            """, commandId, providerId, clientReference) == 1;
     }
 
     public boolean markReconciliationPending(UUID commandId,

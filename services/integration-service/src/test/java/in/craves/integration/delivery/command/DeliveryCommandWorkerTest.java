@@ -145,6 +145,49 @@ class DeliveryCommandWorkerTest {
     }
 
     @Test
+    void recoveredProcessingCommandWithCreateIntentMovesToReconciliationWithoutRecreating() {
+        DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
+        DeliveryJobRepository deliveryJobs = mock(DeliveryJobRepository.class);
+        DeliveryProviderRouter router = mock(DeliveryProviderRouter.class);
+        DeliveryCommandCompletionService completion = mock(DeliveryCommandCompletionService.class);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setMaxDeliveryAttempts(5);
+        DeliveryCommandWorker worker = new DeliveryCommandWorker(
+            commands, deliveryJobs, router, completion, properties, retryProperties()
+        );
+
+        DeliveryCommandMessage message = command();
+        Instant attemptedAt = Instant.parse("2026-10-02T06:10:00Z");
+        CommandRecord claimed = commandRecordWithCreateIntent(
+            message,
+            "shadowfax",
+            message.chefSubOrderId().toString(),
+            attemptedAt
+        );
+        when(commands.claim(message.commandId(), 5)).thenReturn(Optional.of(claimed));
+        when(commands.markReconciliationPending(
+            message.commandId(),
+            "shadowfax",
+            message.chefSubOrderId().toString(),
+            attemptedAt,
+            "Recovered provider create intent from stale processing lease"
+        )).thenReturn(true);
+
+        var receipt = worker.process(message);
+
+        assertThat(receipt.deliveryJobId()).isNull();
+        assertThat(receipt.providerId()).isEqualTo("RECONCILIATION_PENDING");
+        verify(commands).markReconciliationPending(
+            message.commandId(),
+            "shadowfax",
+            message.chefSubOrderId().toString(),
+            attemptedAt,
+            "Recovered provider create intent from stale processing lease"
+        );
+        verifyNoInteractions(router, completion, deliveryJobs);
+    }
+
+    @Test
     void storesProviderAssignmentWindowWithoutCompletingJob() {
         DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
         DeliveryJobRepository deliveryJobs = mock(DeliveryJobRepository.class);
@@ -207,6 +250,33 @@ class DeliveryCommandWorkerTest {
             null,
             null,
             null,
+            0,
+            0,
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of()
+        );
+    }
+
+    private static CommandRecord commandRecordWithCreateIntent(DeliveryCommandMessage message,
+                                                               String providerId,
+                                                               String clientReference,
+                                                               Instant attemptedAt) {
+        return new CommandRecord(
+            message.commandId(),
+            message.chefSubOrderId(),
+            message.orderId(),
+            "PROCESSING",
+            2,
+            message,
+            7001L,
+            "delivery-command:test",
+            providerId,
+            clientReference,
+            attemptedAt,
             0,
             0,
             null,

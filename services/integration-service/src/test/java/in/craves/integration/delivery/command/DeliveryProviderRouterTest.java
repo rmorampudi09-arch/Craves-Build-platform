@@ -3,6 +3,7 @@ package in.craves.integration.delivery.command;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -25,6 +26,7 @@ import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryPro
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationResult;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import java.math.BigDecimal;
@@ -65,6 +67,7 @@ class DeliveryProviderRouterTest {
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
         properties.setQuoteTimeoutSeconds(4);
         properties.setMaxProviderAttempts(2);
+        properties.setProviderSequence("fast,backup");
 
         UUID fastCandidateId = UUID.randomUUID();
         UUID backupCandidateId = UUID.randomUUID();
@@ -99,6 +102,54 @@ class DeliveryProviderRouterTest {
     }
 
     @Test
+    void recordsCreateIntentBeforeProviderCreateAndClearsItBeforeFallback() {
+        DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
+        DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
+        DeliveryAssignmentRepository assignments = mock(DeliveryAssignmentRepository.class);
+        DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
+        when(commands.recordProviderCreateIntent(any(), anyString(), anyString(), any(), anyString()))
+            .thenReturn(true);
+        when(commands.clearProviderCreateIntent(any(), anyString(), anyString())).thenReturn(true);
+        when(catalog.activeProviderIds()).thenReturn(List.of("fast", "backup"));
+
+        FakeAdapter fast = new FakeAdapter("fast", 5, "110.00", CreateBehavior.FAIL);
+        FakeAdapter backup = new FakeAdapter("backup", 8, "90.00", CreateBehavior.SUCCESS);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setMaxProviderAttempts(2);
+        properties.setProviderSequence("fast,backup");
+        when(intelligence.assign(any())).thenReturn(assignment(UUID.randomUUID(), UUID.randomUUID()));
+
+        DeliveryProviderRouter router = new DeliveryProviderRouter(
+            List.of(fast, backup), catalog, intelligence, assignments, commands, properties,
+            quoteExecutor, clock
+        );
+
+        DeliveryCommandMessage message = command();
+        var result = router.route(message);
+
+        assertThat(result.providerId()).isEqualTo("backup");
+        verify(commands).recordProviderCreateIntent(
+            org.mockito.ArgumentMatchers.eq(message.commandId()),
+            org.mockito.ArgumentMatchers.eq("fast"),
+            org.mockito.ArgumentMatchers.eq(message.chefSubOrderId().toString()),
+            any(Instant.class),
+            org.mockito.ArgumentMatchers.eq("Provider create intent recorded before external dispatch")
+        );
+        verify(commands).clearProviderCreateIntent(
+            message.commandId(),
+            "fast",
+            message.chefSubOrderId().toString()
+        );
+        verify(commands).recordProviderCreateIntent(
+            org.mockito.ArgumentMatchers.eq(message.commandId()),
+            org.mockito.ArgumentMatchers.eq("backup"),
+            org.mockito.ArgumentMatchers.eq(message.chefSubOrderId().toString()),
+            any(Instant.class),
+            org.mockito.ArgumentMatchers.eq("Provider create intent recorded before external dispatch")
+        );
+    }
+
+    @Test
     void treatsZeroActiveProvidersAsTemporaryProviderOutage() {
         DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
         DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
@@ -127,8 +178,10 @@ class DeliveryProviderRouterTest {
         when(intelligence.assign(any())).thenReturn(new AssignmentResponse(original.assignmentId(),original.chefSubOrderId(),
             original.orderId(),AssignmentStrategy.STOCHASTIC,original.status(),original.scoringVersion(),selected.candidateId(),
             selected.providerId(),null,original.candidates(),original.createdAt()));
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setProviderSequence("fast,backup");
         var router=new DeliveryProviderRouter(List.of(fast,backup),catalog,intelligence,mock(DeliveryAssignmentRepository.class),
-            new DeliveryCommandProperties(),quoteExecutor,clock);
+            properties,quoteExecutor,clock);
         assertThat(router.route(command()).providerId()).isEqualTo("fast");
         assertThat(backup.createCalls()).isZero();
     }
@@ -149,8 +202,10 @@ class DeliveryProviderRouterTest {
         when(intelligence.assign(any())).thenReturn(new AssignmentResponse(original.assignmentId(),original.chefSubOrderId(),
             original.orderId(),original.strategy(),original.status(),original.scoringVersion(),original.selectedCandidateId(),
             original.selectedProviderId(),null,List.of(original.candidates().getFirst(),skipped),original.createdAt()));
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setProviderSequence("fast,backup");
         var router=new DeliveryProviderRouter(List.of(fast,backup),catalog,intelligence,mock(DeliveryAssignmentRepository.class),
-            new DeliveryCommandProperties(),quoteExecutor,clock);
+            properties,quoteExecutor,clock);
         assertThatThrownBy(()->router.route(command())).isInstanceOf(DeliveryProviderRouter.DeliveryRoutingException.class);
         assertThat(backup.createCalls()).isZero();
     }
@@ -167,6 +222,7 @@ class DeliveryProviderRouterTest {
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
         properties.setQuoteTimeoutSeconds(4);
         properties.setMaxProviderAttempts(2);
+        properties.setProviderSequence("fast,backup");
 
         AssignmentResponse assignment = assignment(UUID.randomUUID(), UUID.randomUUID());
         when(intelligence.assign(any())).thenReturn(assignment);
@@ -182,6 +238,37 @@ class DeliveryProviderRouterTest {
 
         assertThat(fast.createCalls()).isEqualTo(1);
         assertThat(backup.createCalls()).isZero();
+    }
+
+    @Test
+    void providerSequenceDoesNotFallThroughToUnconfiguredFourthProvider() {
+        DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
+        DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
+        DeliveryAssignmentRepository assignments = mock(DeliveryAssignmentRepository.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("borzo", "shadowfax", "pidge", "shiprocket"));
+
+        FakeAdapter borzo = new FakeAdapter("borzo", 5, "110.00", CreateBehavior.FAIL);
+        FakeAdapter shadowfax = new FakeAdapter("shadowfax", 6, "100.00", CreateBehavior.FAIL);
+        FakeAdapter pidge = new FakeAdapter("pidge", 8, "90.00", CreateBehavior.FAIL);
+        FakeAdapter shiprocket = new FakeAdapter("shiprocket", 9, "80.00", CreateBehavior.SUCCESS);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setMaxProviderAttempts(4);
+        DeliveryCommandMessage message = command();
+        when(intelligence.assign(any())).thenReturn(assignmentForProviders(message, "borzo", "shadowfax", "pidge"));
+
+        DeliveryProviderRouter router = new DeliveryProviderRouter(
+            List.of(borzo, shadowfax, pidge, shiprocket), catalog, intelligence, assignments, properties,
+            quoteExecutor, clock
+        );
+
+        assertThatThrownBy(() -> router.route(message))
+            .isInstanceOf(DeliveryProviderRouter.DeliveryRoutingException.class);
+
+        assertThat(borzo.createCalls()).isEqualTo(1);
+        assertThat(shadowfax.createCalls()).isEqualTo(1);
+        assertThat(pidge.createCalls()).isEqualTo(1);
+        assertThat(shiprocket.quoteCalls()).isZero();
+        assertThat(shiprocket.createCalls()).isZero();
     }
 
     @Test
@@ -271,6 +358,31 @@ class DeliveryProviderRouterTest {
     }
 
     @Test
+    void reconciliationFoundButUnassignedStartsProviderAcceptanceWindow() {
+        DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
+        DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
+        DeliveryAssignmentRepository assignments = mock(DeliveryAssignmentRepository.class);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+
+        FakeAdapter borzo = new FakeAdapter("borzo", 5, "110.00", CreateBehavior.SUCCESS);
+        ProviderDelivery recovered = borzo.delivery("borzo-delivery-recovered", DeliveryStatus.SEARCHING);
+        borzo.reconciliationResult = CreateReconciliationResult.found(recovered);
+        DeliveryCommandMessage message = command();
+
+        DeliveryProviderRouter router = new DeliveryProviderRouter(
+            List.of(borzo), catalog, intelligence, assignments, properties,
+            quoteExecutor, clock
+        );
+
+        assertThatThrownBy(() -> router.reconcile(reconciliationPending(message, "borzo")))
+            .isInstanceOf(DeliveryProviderAssignmentPendingException.class)
+            .hasMessageContaining("no courier is assigned");
+
+        assertThat(borzo.createCalls()).isZero();
+        assertThat(borzo.reconcileCalls()).isEqualTo(1);
+    }
+
+    @Test
     void pendingProviderAssignmentCompletesWhenCourierIsAssignedBeforeTimeout() {
         DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
         DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
@@ -296,6 +408,58 @@ class DeliveryProviderRouterTest {
         assertThat(result.delivery().status()).isEqualTo(DeliveryStatus.COURIER_ASSIGNED);
         assertThat(borzo.cancelCalls()).isZero();
         assertThat(borzo.createCalls()).isZero();
+    }
+
+    @Test
+    void pendingProviderAssignmentUsesActualProviderCandidateWhenPersistedSelectionDiffers() {
+        DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
+        DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
+        DeliveryAssignmentRepository assignments = mock(DeliveryAssignmentRepository.class);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        DeliveryCommandMessage message = command();
+        FakeAdapter borzo = new FakeAdapter("borzo", 5, "110.00", CreateBehavior.SUCCESS)
+            .withTrackedStatus(DeliveryStatus.COURIER_ASSIGNED);
+        UUID borzoCandidateId = UUID.randomUUID();
+        UUID pidgeCandidateId = UUID.randomUUID();
+        when(assignments.findResponseByChefSubOrderId(message.chefSubOrderId()))
+            .thenReturn(Optional.of(mismatchedSelectedAssignment(message, borzoCandidateId, pidgeCandidateId)));
+
+        DeliveryProviderRouter router = new DeliveryProviderRouter(
+            List.of(borzo), catalog, intelligence, assignments, properties,
+            quoteExecutor, clock
+        );
+
+        var result = router.resumePendingAssignment(pendingAssignment(message, "borzo", "borzo-123", 120));
+
+        assertThat(result.providerId()).isEqualTo("borzo");
+        assertThat(result.executedCandidateId()).isEqualTo(borzoCandidateId);
+    }
+
+    @Test
+    void trackingFailureKeepsActiveProviderHoldAndDoesNotCreateNextProvider() {
+        DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
+        DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
+        DeliveryAssignmentRepository assignments = mock(DeliveryAssignmentRepository.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("borzo", "shadowfax"));
+
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        DeliveryCommandMessage message = command();
+        FakeAdapter borzo = new FakeAdapter("borzo", 5, "110.00", CreateBehavior.SUCCESS)
+            .withTrackFailure(new IllegalStateException("provider unavailable"));
+        FakeAdapter shadowfax = new FakeAdapter("shadowfax", 6, "100.00", CreateBehavior.SUCCESS);
+
+        DeliveryProviderRouter router = new DeliveryProviderRouter(
+            List.of(borzo, shadowfax), catalog, intelligence, assignments, properties,
+            quoteExecutor, clock
+        );
+
+        assertThatThrownBy(() -> router.resumePendingAssignment(
+            pendingAssignment(message, "borzo", "borzo-123", -1)
+        )).isInstanceOf(DeliveryProviderAssignmentPendingException.class)
+            .hasMessageContaining("tracking state is uncertain");
+
+        assertThat(borzo.cancelCalls()).isZero();
+        assertThat(shadowfax.createCalls()).isZero();
     }
 
     @Test
@@ -347,8 +511,36 @@ class DeliveryProviderRouterTest {
 
         assertThatThrownBy(() -> router.resumePendingAssignment(
             pendingAssignment(message, "borzo", "borzo-123", -1)
-        )).isInstanceOf(DeliveryCreateReconciliationPendingException.class)
+        )).isInstanceOf(DeliveryProviderAssignmentPendingException.class)
             .hasMessageContaining("cancellation was not confirmed");
+
+        assertThat(borzo.cancelCalls()).isEqualTo(1);
+        assertThat(shadowfax.createCalls()).isZero();
+    }
+
+    @Test
+    void cancellationFailureKeepsActiveProviderHoldAndDoesNotCreateNextProvider() {
+        DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
+        DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
+        DeliveryAssignmentRepository assignments = mock(DeliveryAssignmentRepository.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("borzo", "shadowfax"));
+
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        DeliveryCommandMessage message = command();
+        FakeAdapter borzo = new FakeAdapter("borzo", 5, "110.00", CreateBehavior.SUCCESS)
+            .withTrackedStatus(DeliveryStatus.SEARCHING)
+            .withCancelFailure(new IllegalStateException("cancel unknown"));
+        FakeAdapter shadowfax = new FakeAdapter("shadowfax", 6, "100.00", CreateBehavior.SUCCESS);
+
+        DeliveryProviderRouter router = new DeliveryProviderRouter(
+            List.of(borzo, shadowfax), catalog, intelligence, assignments, properties,
+            quoteExecutor, clock
+        );
+
+        assertThatThrownBy(() -> router.resumePendingAssignment(
+            pendingAssignment(message, "borzo", "borzo-123", -1)
+        )).isInstanceOf(DeliveryProviderAssignmentPendingException.class)
+            .hasMessageContaining("cancellation state is uncertain");
 
         assertThat(borzo.cancelCalls()).isEqualTo(1);
         assertThat(shadowfax.createCalls()).isZero();
@@ -411,8 +603,50 @@ class DeliveryProviderRouterTest {
     }
 
     private static AssignmentResponse assignmentFor(DeliveryCommandMessage message, String providerId) {
+        return assignmentForProviders(message, providerId);
+    }
+
+    private static AssignmentResponse assignmentForProviders(DeliveryCommandMessage message, String... providerIds) {
+        List<CandidateScore> candidates = new java.util.ArrayList<>();
+        for (int index = 0; index < providerIds.length; index++) {
+            String providerId = providerIds[index];
+            candidates.add(new CandidateScore(
+                UUID.randomUUID(), index + 1, providerId, providerId + "-quote", null,
+                null, 5.0 + index, new BigDecimal("100.00"), "INR",
+                0.95, 95.0, 95.0, 95.0, Momentum.STABLE,
+                0.5, 92.0, 83.0, 88.0,
+                index == 0 ? CandidateStatus.SELECTED : CandidateStatus.RANKED,
+                new ObjectMapper().createObjectNode()
+            ));
+        }
+        CandidateScore selected = candidates.getFirst();
+        return new AssignmentResponse(
+            UUID.randomUUID(),
+            message.chefSubOrderId(),
+            message.orderId(),
+            AssignmentStrategy.STOCHASTIC,
+            AssignmentStatus.RANKED,
+            "HEURISTIC_V1|ROLLING_V1|BANDIT_V1|PROXIMITY_QUALITY_V2",
+            selected.candidateId(),
+            selected.providerId(),
+            null,
+            candidates,
+            Instant.now()
+        );
+    }
+
+    private static AssignmentResponse mismatchedSelectedAssignment(DeliveryCommandMessage message,
+                                                                   UUID borzoCandidateId,
+                                                                   UUID pidgeCandidateId) {
+        CandidateScore borzo = new CandidateScore(
+            borzoCandidateId, 1, "borzo", "borzo-quote", null,
+            null, 5.0, new BigDecimal("100.00"), "INR",
+            0.95, 95.0, 95.0, 95.0, Momentum.STABLE,
+            0.5, 92.0, 83.0, 88.0, CandidateStatus.RANKED,
+            new ObjectMapper().createObjectNode()
+        );
         CandidateScore candidate = new CandidateScore(
-            UUID.randomUUID(), 1, providerId, providerId + "-quote", null,
+            pidgeCandidateId, 2, "pidge", "pidge-quote", null,
             null, 5.0, new BigDecimal("100.00"), "INR",
             0.95, 95.0, 95.0, 95.0, Momentum.STABLE,
             0.5, 92.0, 83.0, 88.0, CandidateStatus.SELECTED,
@@ -426,10 +660,34 @@ class DeliveryProviderRouterTest {
             AssignmentStatus.RANKED,
             "HEURISTIC_V1|ROLLING_V1|BANDIT_V1|PROXIMITY_QUALITY_V2",
             candidate.candidateId(),
-            providerId,
+            "pidge",
             null,
-            List.of(candidate),
+            List.of(borzo, candidate),
             Instant.now()
+        );
+    }
+
+    private static CommandRecord reconciliationPending(DeliveryCommandMessage message, String providerId) {
+        return new CommandRecord(
+            message.commandId(),
+            message.chefSubOrderId(),
+            message.orderId(),
+            "RECONCILIATION_PENDING",
+            1,
+            message,
+            7001L,
+            "delivery-command:test",
+            providerId,
+            message.chefSubOrderId().toString(),
+            Instant.parse("2026-07-24T02:00:00Z"),
+            1,
+            0,
+            null,
+            null,
+            null,
+            null,
+            null,
+            java.util.List.of()
         );
     }
 
@@ -508,6 +766,8 @@ class DeliveryProviderRouterTest {
             CreateReconciliationResult.unsupported("Not configured");
         private DeliveryStatus trackedStatus = DeliveryStatus.COURIER_ASSIGNED;
         private DeliveryStatus cancelStatus = DeliveryStatus.CANCELLED;
+        private RuntimeException trackFailure;
+        private RuntimeException cancelFailure;
 
         private FakeAdapter(String providerId,
                             int pickupEtaMinutes,
@@ -526,6 +786,16 @@ class DeliveryProviderRouterTest {
 
         private FakeAdapter withCancelStatus(DeliveryStatus status) {
             this.cancelStatus = status;
+            return this;
+        }
+
+        private FakeAdapter withTrackFailure(RuntimeException error) {
+            this.trackFailure = error;
+            return this;
+        }
+
+        private FakeAdapter withCancelFailure(RuntimeException error) {
+            this.cancelFailure = error;
             return this;
         }
 
@@ -589,11 +859,17 @@ class DeliveryProviderRouterTest {
         @Override
         public ProviderDelivery cancel(String providerDeliveryId) {
             cancelCalls.incrementAndGet();
+            if (cancelFailure != null) {
+                throw cancelFailure;
+            }
             return delivery(providerDeliveryId, cancelStatus);
         }
 
         @Override
         public TrackingSnapshot track(String providerDeliveryId) {
+            if (trackFailure != null) {
+                throw trackFailure;
+            }
             ProviderDelivery delivery = delivery(providerDeliveryId, trackedStatus);
             return new TrackingSnapshot(delivery, null, delivery.observedAt());
         }

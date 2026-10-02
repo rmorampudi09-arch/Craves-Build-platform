@@ -29,12 +29,13 @@ public class ShadowfaxWebhookService {
     @Transactional
     public Receipt accept(String raw, String authorization) {
         String expected = properties.getWebhookToken();
-        if (StringUtils.hasText(expected)) {
-            String supplied = authorization == null ? "" : authorization.trim();
-            if (supplied.regionMatches(true, 0, "Bearer ", 0, 7)) supplied = supplied.substring(7);
-            if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), supplied.getBytes(StandardCharsets.UTF_8))) {
-                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid Shadowfax callback credential");
-            }
+        if (!StringUtils.hasText(expected)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Shadowfax callback credential is not configured");
+        }
+        String supplied = authorization == null ? "" : authorization.trim();
+        if (supplied.regionMatches(true, 0, "Bearer ", 0, 7)) supplied = supplied.substring(7);
+        if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), supplied.getBytes(StandardCharsets.UTF_8))) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid Shadowfax callback credential");
         }
         if (raw == null || raw.length() > 262144) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid callback body size");

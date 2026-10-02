@@ -40,6 +40,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
@@ -49,14 +50,17 @@ public class DeliveryProviderRouter {
     private final DeliveryProviderCatalogRepository providerCatalog;
     private final DeliveryIntelligenceService intelligenceService;
     private final DeliveryAssignmentRepository assignmentRepository;
+    private final DeliveryCommandRepository commandRepository;
     private final DeliveryCommandProperties properties;
     private final ExecutorService quoteExecutor;
     private final Clock clock;
 
+    @Autowired
     public DeliveryProviderRouter(List<DeliveryProviderAdapter> adapters,
                                   DeliveryProviderCatalogRepository providerCatalog,
                                   DeliveryIntelligenceService intelligenceService,
                                   DeliveryAssignmentRepository assignmentRepository,
+                                  DeliveryCommandRepository commandRepository,
                                   DeliveryCommandProperties properties,
                                   @Qualifier("deliveryQuoteExecutor") ExecutorService quoteExecutor,
                                   Clock clock) {
@@ -71,9 +75,29 @@ public class DeliveryProviderRouter {
         this.providerCatalog = providerCatalog;
         this.intelligenceService = intelligenceService;
         this.assignmentRepository = assignmentRepository;
+        this.commandRepository = commandRepository;
         this.properties = properties;
         this.quoteExecutor = quoteExecutor;
         this.clock = clock;
+    }
+
+    DeliveryProviderRouter(List<DeliveryProviderAdapter> adapters,
+                           DeliveryProviderCatalogRepository providerCatalog,
+                           DeliveryIntelligenceService intelligenceService,
+                           DeliveryAssignmentRepository assignmentRepository,
+                           DeliveryCommandProperties properties,
+                           ExecutorService quoteExecutor,
+                           Clock clock) {
+        this(
+            adapters,
+            providerCatalog,
+            intelligenceService,
+            assignmentRepository,
+            null,
+            properties,
+            quoteExecutor,
+            clock
+        );
     }
 
     public RoutingResult route(DeliveryCommandMessage command) {
@@ -133,6 +157,8 @@ public class DeliveryProviderRouter {
         for (int index = 0; index < maximumAttempts; index++) {
             RankedQuoteOutcome ranked = candidates.get(index);
             QuoteOutcome candidate = ranked.outcome();
+            Instant attemptedAt = clock.instant();
+            recordCreateIntent(command, candidate.providerId(), clientReference, attemptedAt);
             try {
                 ProviderDelivery delivery = candidate.adapter().create(
                     new CreateDeliveryRequest(
@@ -177,6 +203,7 @@ public class DeliveryProviderRouter {
                 throw ex;
             } catch (RuntimeException ex) {
                 createAudit.add(new CreateAudit(candidate.providerId(), false, safeMessage(ex)));
+                clearCreateIntentOrBlock(command, candidate.providerId(), clientReference, attemptedAt, ex);
             }
         }
 
@@ -197,8 +224,19 @@ public class DeliveryProviderRouter {
                 "Active provider adapter is not deployed; fallback is blocked"
             );
         }
-        TrackingSnapshot snapshot = adapter.track(providerDeliveryId);
-        ProviderDelivery current = Objects.requireNonNull(snapshot.delivery(), "tracking delivery is required");
+        ProviderDelivery current;
+        try {
+            TrackingSnapshot snapshot = adapter.track(providerDeliveryId);
+            current = Objects.requireNonNull(snapshot.delivery(), "tracking delivery is required");
+        } catch (RuntimeException ex) {
+            throw providerAssignmentStillUnsafe(
+                providerId,
+                providerDeliveryId,
+                deadline,
+                "Provider tracking state is uncertain; fallback is blocked",
+                ex
+            );
+        }
         if (isAssigned(current)) {
             AssignmentResponse assignment = existingAssignment(command.chefSubOrderId());
             CandidateScore selected = selectedCandidate(assignment, providerId);
@@ -210,10 +248,23 @@ public class DeliveryProviderRouter {
                 providerId, current, deadline, "Provider is still searching for a courier"
             );
         }
-        ProviderDelivery cancelled = adapter.cancel(providerDeliveryId);
+        ProviderDelivery cancelled;
+        try {
+            cancelled = adapter.cancel(providerDeliveryId);
+        } catch (RuntimeException ex) {
+            throw providerAssignmentStillUnsafe(
+                providerId,
+                providerDeliveryId,
+                clock.instant().plus(properties.providerAcceptanceTimeout()),
+                "Provider cancellation state is uncertain; fallback is blocked",
+                ex
+            );
+        }
         if (cancelled.status() != DeliveryStatus.CANCELLED) {
-            throw new DeliveryCreateReconciliationPendingException(
-                providerId, command.message().idempotencyKey(), clock.instant(),
+            throw new DeliveryProviderAssignmentPendingException(
+                providerId,
+                cancelled,
+                clock.instant().plus(properties.providerAcceptanceTimeout()),
                 "Provider cancellation was not confirmed; fallback is blocked"
             );
         }
@@ -278,6 +329,8 @@ public class DeliveryProviderRouter {
         for (int index = 0; index < maximumAttempts; index++) {
             RankedQuoteOutcome ranked = candidates.get(index);
             QuoteOutcome candidate = ranked.outcome();
+            Instant attemptedAt = clock.instant();
+            recordCreateIntent(command, candidate.providerId(), clientReference, attemptedAt);
             try {
                 ProviderDelivery delivery = candidate.adapter().create(
                     new CreateDeliveryRequest(clientReference, command.deliveryRequest(), candidate.quote()));
@@ -301,6 +354,7 @@ public class DeliveryProviderRouter {
                 throw ex;
             } catch (RuntimeException ex) {
                 createAudit.add(new CreateAudit(candidate.providerId(), false, safeMessage(ex)));
+                clearCreateIntentOrBlock(command, candidate.providerId(), clientReference, attemptedAt, ex);
             }
         }
         throw new DeliveryRoutingException(
@@ -356,6 +410,22 @@ public class DeliveryProviderRouter {
             ProviderDelivery delivery = Objects.requireNonNull(
                 reconciliation.delivery(), "reconciled provider delivery is required"
             );
+            if (!isAssigned(delivery)) {
+                if (delivery.status() == DeliveryStatus.CANCELLED) {
+                    throw new DeliveryCreateDefinitivelyNotFoundException(
+                        providerId,
+                        clientReference,
+                        attemptedAt,
+                        "Provider delivery was recovered but is already cancelled"
+                    );
+                }
+                throw new DeliveryProviderAssignmentPendingException(
+                    providerId,
+                    delivery,
+                    clock.instant().plus(properties.providerAcceptanceTimeout()),
+                    "Provider delivery exists but no courier is assigned yet"
+                );
+            }
             AssignmentResponse assignment = existingAssignment(command.chefSubOrderId());
             CandidateScore selected = selectedCandidate(assignment, providerId);
             return new RoutingResult(
@@ -395,7 +465,8 @@ public class DeliveryProviderRouter {
     private static CandidateScore selectedCandidate(AssignmentResponse assignment, String providerId) {
         if (assignment.selectedCandidateId() != null) {
             for (CandidateScore candidate : assignment.rankedCandidates()) {
-                if (assignment.selectedCandidateId().equals(candidate.candidateId())) {
+                if (assignment.selectedCandidateId().equals(candidate.candidateId())
+                    && providerId.equals(normalize(candidate.providerId()))) {
                     return candidate;
                 }
             }
@@ -418,6 +489,51 @@ public class DeliveryProviderRouter {
             return new QuoteOutcome(providerId, adapter, quote, null);
         } catch (RuntimeException ex) {
             return new QuoteOutcome(providerId, adapter, null, safeMessage(ex));
+        }
+    }
+
+    private void recordCreateIntent(DeliveryCommandMessage command,
+                                    String providerId,
+                                    String clientReference,
+                                    Instant attemptedAt) {
+        if (commandRepository == null) {
+            return;
+        }
+        boolean stored = commandRepository.recordProviderCreateIntent(
+            command.commandId(),
+            providerId,
+            clientReference,
+            attemptedAt,
+            "Provider create intent recorded before external dispatch"
+        );
+        if (!stored) {
+            throw new DeliveryRoutingException(
+                "Provider create intent could not be persisted before external dispatch"
+            );
+        }
+    }
+
+    private void clearCreateIntentOrBlock(DeliveryCommandMessage command,
+                                          String providerId,
+                                          String clientReference,
+                                          Instant attemptedAt,
+                                          RuntimeException cause) {
+        if (commandRepository == null) {
+            return;
+        }
+        boolean cleared = commandRepository.clearProviderCreateIntent(
+            command.commandId(),
+            providerId,
+            clientReference
+        );
+        if (!cleared) {
+            throw new DeliveryCreateReconciliationPendingException(
+                providerId,
+                clientReference,
+                attemptedAt,
+                "Provider create attempt state could not be cleared; fallback is blocked",
+                cause
+            );
         }
     }
 
@@ -553,12 +669,33 @@ public class DeliveryProviderRouter {
                 ordered.add(providerId);
             }
         }
-        for (String providerId : normalizedActive) {
-            if (!ordered.contains(providerId)) {
-                ordered.add(providerId);
-            }
-        }
         return List.copyOf(ordered);
+    }
+
+    private DeliveryProviderAssignmentPendingException providerAssignmentStillUnsafe(String providerId,
+                                                                                     String providerDeliveryId,
+                                                                                     Instant retryAt,
+                                                                                     String message,
+                                                                                     Throwable cause) {
+        ProviderDelivery delivery = new ProviderDelivery(
+            providerId,
+            providerDeliveryId,
+            null,
+            DeliveryStatus.UNKNOWN,
+            "UNKNOWN",
+            null,
+            null,
+            null,
+            null,
+            clock.instant()
+        );
+        return new DeliveryProviderAssignmentPendingException(
+            providerId,
+            delivery,
+            retryAt,
+            message,
+            cause
+        );
     }
 
     private static boolean isAssigned(ProviderDelivery delivery) {
@@ -727,6 +864,17 @@ public class DeliveryProviderRouter {
                                                           Instant retryAt,
                                                           String message) {
             super(message);
+            this.providerId = providerId;
+            this.delivery = delivery;
+            this.retryAt = retryAt;
+        }
+
+        public DeliveryProviderAssignmentPendingException(String providerId,
+                                                          ProviderDelivery delivery,
+                                                          Instant retryAt,
+                                                          String message,
+                                                          Throwable cause) {
+            super(message, cause);
             this.providerId = providerId;
             this.delivery = delivery;
             this.retryAt = retryAt;

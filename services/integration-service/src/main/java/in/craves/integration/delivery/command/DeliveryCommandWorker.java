@@ -49,6 +49,24 @@ public class DeliveryCommandWorker {
         }
 
         CommandRecord command = claimed.get();
+        if (hasProviderCreateIntent(command) && command.activeProviderId() == null) {
+            boolean stored = commands.markReconciliationPending(
+                command.id(),
+                command.reconciliationProviderId(),
+                command.reconciliationClientReference(),
+                command.reconciliationStartedAt(),
+                "Recovered provider create intent from stale processing lease"
+            );
+            if (!stored) {
+                throw new DeliveryCommandTransientException(
+                    "Recovered provider create intent could not be moved to reconciliation",
+                    Instant.now().plus(retryProperties.claimContentionDelay()),
+                    "create-intent-recovery-" + command.id()
+                );
+            }
+            return new WorkerReceipt(null, false, "RECONCILIATION_PENDING");
+        }
+
         Optional<UUID> existingJob = deliveryJobs.findIdByChefSubOrderId(message.chefSubOrderId());
         if (existingJob.isPresent()) {
             commands.markCompleted(message.commandId());
@@ -168,6 +186,14 @@ public class DeliveryCommandWorker {
             Instant.now().plus(retryProperties.claimContentionDelay()),
             "claim-contention-" + commandId + "-" + UUID.randomUUID()
         );
+    }
+
+    private static boolean hasProviderCreateIntent(CommandRecord command) {
+        return command.reconciliationProviderId() != null
+            && !command.reconciliationProviderId().isBlank()
+            && command.reconciliationClientReference() != null
+            && !command.reconciliationClientReference().isBlank()
+            && command.reconciliationStartedAt() != null;
     }
 
     private DeliveryCommandTransientException transientRetry(CommandRecord command,

@@ -80,10 +80,12 @@ public class ShadowfaxApiClient implements DeliveryProviderAdapter {
             }
             return delivery;
         } catch (ShadowfaxApiException ex) {
-            if (ex.getCause() instanceof ResourceAccessException) {
+            if (ambiguousCreateFailure(ex)) {
                 throw new ProviderCreateUncertainException(PROVIDER_ID, reference, attempted, ex);
             }
             throw ex;
+        } catch (RuntimeException ex) {
+            throw new ProviderCreateUncertainException(PROVIDER_ID, reference, attempted, ex);
         }
     }
 
@@ -184,6 +186,12 @@ public class ShadowfaxApiClient implements DeliveryProviderAdapter {
         } catch (ResourceAccessException ex) {
             throw new ShadowfaxApiException(null, "Shadowfax API could not be reached", null, ex);
         }
+    }
+
+    private static boolean ambiguousCreateFailure(ShadowfaxApiException ex) {
+        return ex.getCause() instanceof ResourceAccessException
+            || ex.getProviderStatus() == null
+            || ex.getProviderStatus().is5xxServerError();
     }
 
     private JsonNode get(String path) {

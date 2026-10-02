@@ -13,7 +13,9 @@ trust a client-selected phone, widget or role as an authenticated identity.
 ## Source And Contracts
 
 Exact deployed web baseline: `889fea7b13d9b05be86ea482c8abbfb387544750`.
-Image: `cravesrm09prodlow6bf632.azurecr.io/craves/customer-web-next@sha256:00a8872c333352f5397b8b7a0701686dfe1c0b42cf5367ea3d3a91241798d9ca`.
+Image: `cravesrm09prodlow6bf632.azurecr.io/craves/customer-web-next@sha256:1886687428f003b80c31affb1987e3995055e17be9a16d969ae9df98ecad9f9d`.
+This revision completed during inspection; its source SHA remains the baseline
+above. Recheck the current image/environment immediately before deployment.
 The mobile branch's older web tree is not a deployment baseline. The `web`
 overlay contains only two runtime files and their existing extended tests.
 Everything else is restored from that exact baseline by `Prepare-Web.ps1`.

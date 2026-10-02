@@ -42,7 +42,11 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Only two web runtime files and their focused tests are overlaid on the exact
   deployed web baseline. Source, rebuild/verification instructions:
   `backend-patches\msg91-dual-platform-v1`. Checkpoint tag:
-  `KUSHIRAVI-msg91-dual-platform-v1`. Build/deployment/live acceptance evidence
+  `KUSHIRAVI-msg91-dual-platform-v1`; rebuild-fixture/baseline clarification
+  checkpoint `KUSHIRAVI-msg91-dual-platform-v1.1`. Current ready web baseline
+  completed during inspection: revision `ca-craves-web-prodlow--0000066`, image
+  `sha256:1886687428f003b80c31affb1987e3995055e17be9a16d969ae9df98ecad9f9d`.
+  Source remains the same exact web commit above. Build/deployment/live acceptance evidence
   will be appended after verification; this entry is not a success claim.
 - Mobile runtime/UI/version/APK unchanged: installed `KUSHIRAVI-app-v1.21`,
   code 32 / name 1.21, source `5fac235a421f9541dfac40f3d82beee7fe6fad93`;

@@ -14,7 +14,8 @@ $source = Join-Path $baselineRoot 'apps\customer-web-next'
 $fixtures = Join-Path $root 'web-test-fixtures.zip'
 & git -C $repo archive --format=zip --output $fixtures $baseline `
     azure-pipelines-customer-web-next-delivery-tracking.yml `
-    azure-pipelines-customer-addresses-apim.yml scripts/apim/configure-customer-addresses-apim.sh
+    azure-pipelines-customer-addresses-apim.yml scripts/apim/configure-customer-addresses-apim.sh `
+    apps/landing-v20/src/components/CustomerAuth.tsx
 if ($LASTEXITCODE -ne 0) { throw 'Cannot restore the existing read-only deployment test fixtures.' }
 Expand-Archive -LiteralPath $fixtures -DestinationPath $baselineRoot
 $overlay = Join-Path $PSScriptRoot 'web'

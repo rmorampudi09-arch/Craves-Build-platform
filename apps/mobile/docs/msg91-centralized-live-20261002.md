@@ -6,9 +6,11 @@ The user authorized centralizing web and Android phone OTP through the existing
 Spring Boot auth service. Backend and web transport are deployed. After the
 user saved the minimum MSG91 key permission fix, real web SMS delivery and
 verification pass, including access to the existing approved Chef dashboard.
-Android 1.23 is built and replace-installed; real mobile OTP verification is
-pending the user's phone test. Do not describe the complete rollout as verified
-until that test passes.
+Android 1.23 is built and replace-installed. The user confirmed mobile sign-in
+completed, and its exact provider request is Delivered / Verified YES with a
+record-level debit from the same MSG91 account. Centralized phone OTP now passes
+real web and mobile acceptance. This is not a claim that unrelated flows were
+re-tested or that all users/carriers will receive SMS within a fixed duration.
 
 No UI, account IDs, Customer/Chef roles, email login, checkout, orders, payments,
 delivery or banners are modified by this change. No GitHub push or new Azure
@@ -25,6 +27,11 @@ clearing app data. The previous rollback remains
 - Real-time provider responses, safe diagnostics and redirect rejection:
   `8f956490f5cdf8b8036c29098967f34eb8f1fa91`.
 - Installed Android target: 1.23 / code 34, checkpoint `KUSHIRAVI-app-v1.23`.
+- Immutable installed release checkpoint:
+  `4954acbb6694e05fa79d5fbc249c5e96bfd48dca`. Mobile build code is from
+  `ed955bdcb3d0ba42a5c28cc3319892c4a32632c4`; later commits only add backend
+  diagnostics and rollout records. Post-checkpoint documentation does not change
+  the installed app code or move the release tag.
 
 ## Exact Live Baselines
 
@@ -128,6 +135,17 @@ The visible account wallet is INR 40.25, but its difference from the earlier
 snapshot is not attributed solely to this attempt; the exact record's INR 0.25
 debit is the billing evidence.
 
+The mobile attempt is correlated with backend acceptance at
+`2026-10-02T04:24:59.596Z`, request `366a62693237336d6434596b`. The same MSG91
+SendOTP billable log shows sent `2026-10-02 09:55:04`, delivered `09:55:05`
+Asia/Calcutta, Status Delivered, Verified YES, Credit Deduction 0.25, no failure
+reason, sender CRAVSX, Flow ID `6abe727541deb95f6d0b7192` and DLT ID
+`1777179087070185024`. This is about 5.4 seconds from backend acceptance, not
+an assertion of one-second end-to-end mobile delivery. The user independently
+confirmed the SMS-based mobile sign-in completed. Both record-level debits are
+visible under the same existing MSG91 account; no second communication account,
+plan purchase or wallet top-up was introduced.
+
 ## Verification
 
 - Backend: 13 focused tests pass against isolated local PostgreSQL, not production.
@@ -137,8 +155,11 @@ debit is the billing evidence.
 - Live invalid phone: 400; invalid challenge: 400 OTP_RESTART; oversized request:
   413; rejected foreign origin: 403; existing anonymous `/auth/me`: 401.
 - Real web send: exact request delivered in two seconds, provider Verified YES,
-  existing Chef session/access verified, INR 0.25 record-level debit. Mobile
-  send/verification and its same-account wallet debit still require the phone test.
+  existing Chef session/access verified, INR 0.25 record-level debit.
+- Real mobile send: exact request Delivered / Verified YES, user confirmed
+  completed sign-in, INR 0.25 record-level debit under the same account. Provider
+  sent-to-delivered interval is one second; backend-acceptance-to-delivery is
+  approximately 5.4 seconds. Neither result guarantees future carrier latency.
 - Android release build and signing verification succeed; existing certificate
   retained. Built APK SHA256
   `04E3FC546152AEB8538DEB9A150AA0819CF8BFBE180AD3AA1CDFDC6D7C4E857A`.
@@ -147,9 +168,9 @@ debit is the billing evidence.
   Replace-install returns Success; phone reports 1.23 / code 34, last update
   `2026-10-02 09:54:05` Asia/Calcutta. App launch succeeds and shows the existing
   Customer/Chef role picker. No data clear, uninstall or unrelated UI change.
-  Real mobile sign-in is not yet declared verified or launch-ready.
+  Real mobile SMS/sign-in acceptance subsequently passes as recorded above.
 
-## Required Completion
+## Completed Rollout
 
 1. Completed: user-only MSG91 owner verification and inspection of the existing
    server key's rule without revealing its value.
@@ -157,11 +178,27 @@ debit is the billing evidence.
    verified. No other security permission or IP restriction changed.
 3. Completed for web: exact request, delivery, verification and debit correlated.
 4. Completed: web OTP verification and existing approved Chef access confirmed.
-5. Replace-install completed after web acceptance, without clearing data. Pending:
-   user verifies a real mobile sign-in through the same backend.
-6. Record full final source SHA, immutable version tag, installed version,
-   APK/source ZIP hashes and final live image evidence. Refresh provisional source
-   ZIPs after final local commits; preserve all previous version tags.
+5. Completed: replace-install after web acceptance without clearing data, real
+   mobile delivery/verification under the same backend/account, user sign-in
+   confirmation.
+6. Installed checkpoint, immutable tag, APK hash/path/version and live immutable
+   images are recorded above. Source ZIPs are refreshed from the final local
+   documentation checkpoint; app code is identical to the installed release tag.
+   Archive commit/hashes are in the artifact `release-evidence.json`. Previous
+   version tags remain untouched. No GitHub push.
+
+## Manual Regression Steps
+
+1. On web, enter the usual phone number, Send OTP once, enter the SMS code only
+   on the site, and confirm the existing account and Customer/Chef access.
+2. On Android 1.23, sign in with the usual number and enter the code only on the
+   phone. Confirm the existing role and account are retained.
+3. In MSG91 SendOTP logs, correlate each backend request ID with Delivered,
+   Verified YES and record-level wallet debit. Avoid repeated sends or viewing
+   message bodies containing OTPs.
+4. Confirm network requests from both clients use Craves OTP endpoints, not a
+   provider SDK or a client-side MSG91 Authkey. The backend alone holds the key
+   through its existing managed-identity Key Vault reference.
 
 Do not repeatedly resend, remove send budgets, bypass verification or manufacture
 account proof. Keep all OTPs and passwords on the user's device/site.

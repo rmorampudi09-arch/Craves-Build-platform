@@ -12,7 +12,7 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Installed Android versionCode: `34`
 - Installed Android versionName: `1.23`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed release: `KUSHIRAVI-app-v1.23`. Mobile app code was built from `ed955bdcb3d0ba42a5c28cc3319892c4a32632c4`; later commits contain backend diagnostics and rollout records only. Web OTP delivery, verification and existing Chef access are confirmed; mobile OTP verification is pending the user's phone test. Existing banners, Chef actions, billing, payments, delivery and UI are preserved.
+- Installed release: `KUSHIRAVI-app-v1.23`, checkpoint `4954acbb6694e05fa79d5fbc249c5e96bfd48dca`. Mobile app code was built from `ed955bdcb3d0ba42a5c28cc3319892c4a32632c4`; later commits contain backend diagnostics and rollout records only. Web and mobile OTP delivery and verification pass; existing web Chef access is confirmed and the user confirmed mobile sign-in completed. Existing banners, Chef actions, billing, payments, delivery and UI are preserved.
 - Last installation: `2026-10-02 09:54:05` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
@@ -64,8 +64,13 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Android build/signature verification and replace-install pass. Installed phone
   reports name `1.23`, code `34`; normal launch reaches the existing role picker.
   APK SHA256 `04E3FC546152AEB8538DEB9A150AA0819CF8BFBE180AD3AA1CDFDC6D7C4E857A`.
-  The phone test of the new centralized OTP transport is pending user input;
-  do not claim mobile delivery or completed end-to-end rollout yet.
+  Release checkpoint: `4954acbb6694e05fa79d5fbc249c5e96bfd48dca`, immutable tag
+  `KUSHIRAVI-app-v1.23`; no previous tag changed.
+- Mobile request `366a62693237336d6434596b` is correlated with auth acceptance at
+  `2026-10-02T04:24:59.596Z`. MSG91 logs show sent 09:55:04, delivered 09:55:05
+  Asia/Calcutta, Verified YES, INR 0.25 debit and the same sender/template/account
+  as web. The user confirmed mobile sign-in completed. Both frontends now use
+  the centralized backend and the same MSG91 wallet. No OTP or key was exposed.
 
 ### Version 1.22 - Admin-Published Home Banners, 2026-10-02
 

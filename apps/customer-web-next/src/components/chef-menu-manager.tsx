@@ -595,13 +595,14 @@ export function ChefMenuManager() {
                       setImageFile(file);
                     }}
                   />
-                  {imageFile ? (
+                  {imageFile || errors.photo ? (
                     <Button
                       type="button"
                       variant="ghost"
                       className="mt-1"
                       onClick={() => {
                         setImageFile(null);
+                        setErrors(current => ({ ...current, photo: undefined }));
                         const input = document.getElementById(
                           "dish-photo",
                         ) as HTMLInputElement | null;

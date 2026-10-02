@@ -333,13 +333,16 @@ describe("Chef menu save and recovery", () => {
     await screen.findByRole("button", { name: "Reload menu" });
     expect(screen.queryByText("Your first dish starts here")).toBeNull();
   });
-  it("rejects a photo above 8 MB before sending the dish", async () => {
+  it("rejects a photo above 8 MB and lets the Chef remove it and save without a photo", async () => {
     await openNew(); fillRequired();
     const file = new File([new Uint8Array(8 * 1024 * 1024 + 1)], "large.png", { type: "image/png" });
     fireEvent.change(screen.getByLabelText(/Dish photo/), { target: { files: [file] } });
     expect(screen.getByText("Choose a JPEG, PNG or WebP photo up to 8 MB.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
     expect(fetcher.mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Remove selected photo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    await screen.findByText("Dish added successfully");
   });
   it("keeps the saved dish ID after a photo failure so retry updates instead of creating a duplicate", async () => {
     await openNew(); fillRequired();

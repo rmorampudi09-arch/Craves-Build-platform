@@ -12,6 +12,19 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class DocumentContentValidationTest {
+    @Test void explicitEndpointCannotReplaceTheConfiguredDocumentsContainerWithRoot() {
+        for(String suffix:java.util.List.of("", ";BlobEndpoint=https://fixtureonly.blob.core.windows.net", ";BlobEndpoint=https://fixtureonly.blob.core.windows.net/")) {
+            var properties=new DocumentStoreProperties();
+            properties.setDocumentsContainer("documents");
+            properties.setEndpointValue("DefaultEndpointsProtocol=https;AccountName=fixtureonly;AccountKey=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=;EndpointSuffix=core.windows.net"+suffix);
+            var storage=new BlobDocumentStorageService(properties);
+            com.azure.storage.blob.BlobContainerClient container=org.springframework.test.util.ReflectionTestUtils.invokeMethod(storage,"documentsContainer");
+            assertNotNull(container);
+            assertEquals("documents",container.getBlobContainerName());
+            assertEquals("https://fixtureonly.blob.core.windows.net/documents",container.getBlobContainerUrl());
+            assertTrue(container.getBlobClient("kyc/fixture/identity.png").getBlobUrl().startsWith("https://fixtureonly.blob.core.windows.net/documents/"));
+        }
+    }
     BlobDocumentStorageService service=new BlobDocumentStorageService(new DocumentStoreProperties());
     MockMultipartFile file(String type,byte[] bytes) {return new MockMultipartFile("file","synthetic-test-only",type,bytes);}
     @Test void acceptsAllowedSignaturesWithoutContactingStorage() {

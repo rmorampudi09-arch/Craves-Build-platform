@@ -237,16 +237,16 @@ function StepIndicator({ current }: { current: number }) {
             key={number}
             className={`flex min-h-11 items-center gap-3 rounded-xl border px-3 py-2 ${
               active
-                ? "border-[#147A4B] bg-[#F1FAF5]"
+                ? "border-[var(--color-flame-red)] bg-[var(--color-flame-red)]/5"
                 : complete
-                  ? "border-[#BBE8D0] bg-[#F7FCF9]"
+                  ? "border-[var(--color-flame-red)]/20 bg-[var(--color-flame-red)]/5"
                   : "border-[#E5E7EB] bg-[#F8F9FA]"
             }`}
           >
             <span
               className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                 active || complete
-                  ? "bg-[#147A4B] text-white"
+                  ? "bg-[var(--color-flame-red)] text-white"
                   : "bg-[#E5E7EB] text-[#6B6B6B]"
               }`}
             >
@@ -999,7 +999,7 @@ export function ChefSubscriptionPlanManager() {
           type="button"
           onClick={() => void refreshWorkspace()}
           disabled={refreshing || busy}
-          className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#1A1A1A] transition hover:border-[#147A4B] hover:text-[#147A4B] disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#1A1A1A] transition hover:border-[var(--color-flame-red)] hover:text-[var(--color-flame-red)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw
             className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
@@ -1018,7 +1018,7 @@ export function ChefSubscriptionPlanManager() {
           <button
             type="button"
             onClick={beginNew}
-            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#147A4B] px-5 text-sm font-bold text-white shadow-sm transition hover:bg-[#126B41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147A4B] focus-visible:ring-offset-2"
+            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-flame-red)] px-5 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-contrast-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-flame-red)] focus-visible:ring-offset-2"
           >
             <Plus className="h-5 w-5" aria-hidden="true" />
             Create new meal plan
@@ -1041,7 +1041,7 @@ export function ChefSubscriptionPlanManager() {
               {plans.length === 0 ? (
                 <div className="rounded-xl bg-[#F1F3F5] p-4">
                   <UtensilsCrossed
-                    className="h-5 w-5 text-[#147A4B]"
+                    className="h-5 w-5 text-[var(--color-flame-red)]"
                     aria-hidden="true"
                   />
                   <p className="mt-2 text-sm font-semibold text-[#1A1A1A]">
@@ -1060,14 +1060,14 @@ export function ChefSubscriptionPlanManager() {
                       key={plan.id}
                       onClick={() => selectPlan(plan.id)}
                       aria-pressed={selectedId === plan.id}
-                      className={`w-full rounded-xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147A4B] focus-visible:ring-offset-2 ${
+                      className={`w-full rounded-xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-flame-red)] focus-visible:ring-offset-2 ${
                         selectedId === plan.id
-                          ? "border-[#147A4B] bg-[#F1FAF5]"
+                          ? "border-[var(--color-flame-red)] bg-[var(--color-flame-red)]/5"
                           : "border-[#E5E7EB] bg-white hover:border-[#B9DCC8]"
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F1F3F5] text-[#147A4B]">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F1F3F5] text-[var(--color-flame-red)]">
                           <CalendarDays className="h-5 w-5" aria-hidden="true" />
                         </span>
                         <span className="min-w-0 flex-1">
@@ -1105,7 +1105,7 @@ export function ChefSubscriptionPlanManager() {
           <section className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[var(--shadow-card)]">
             <div className="flex items-center gap-2">
               <CircleDollarSign
-                className="h-5 w-5 text-[#147A4B]"
+                className="h-5 w-5 text-[var(--color-flame-red)]"
                 aria-hidden="true"
               />
               <h2 className="text-sm font-bold text-[#1A1A1A]">
@@ -1119,7 +1119,7 @@ export function ChefSubscriptionPlanManager() {
 
           <section className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[var(--shadow-card)]">
             <div className="flex items-center gap-2">
-              <Gauge className="h-5 w-5 text-[#147A4B]" aria-hidden="true" />
+              <Gauge className="h-5 w-5 text-[var(--color-flame-red)]" aria-hidden="true" />
               <h2 className="text-sm font-bold text-[#1A1A1A]">
                 Capacity is separate
               </h2>
@@ -1129,7 +1129,7 @@ export function ChefSubscriptionPlanManager() {
             </p>
             <Link
               href="/chef/capacity"
-              className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[#147A4B] underline-offset-4 hover:underline"
+              className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[var(--color-flame-red)] underline-offset-4 hover:underline"
             >
               Open advanced capacity
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -1144,11 +1144,11 @@ export function ChefSubscriptionPlanManager() {
               className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)] md:p-6"
             >
               <div className="flex items-start gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F1FAF5] text-[#147A4B]">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-flame-red)]/5 text-[var(--color-flame-red)]">
                   <FileText className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.08em] text-[#147A4B]">
+                  <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-flame-red)]">
                     Step 1
                   </p>
                   <h2 className="mt-1 text-2xl font-bold tracking-tight text-[#1A1A1A]">
@@ -1168,7 +1168,7 @@ export function ChefSubscriptionPlanManager() {
                     onChange={(event) => setField("name", event.target.value)}
                     maxLength={160}
                     placeholder="Weekly home lunch plan"
-                    className="mt-2 min-h-12 w-full rounded-xl border border-[#D8DEE3] bg-white px-4 text-[#1A1A1A] outline-none transition focus:border-[#147A4B] focus:ring-2 focus:ring-[#147A4B]/15"
+                    className="mt-2 min-h-12 w-full rounded-xl border border-[#D8DEE3] bg-white px-4 text-[#1A1A1A] outline-none transition focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
                     required
                   />
                   <span className="mt-1 block text-xs font-normal text-[#6B6B6B]">
@@ -1185,7 +1185,7 @@ export function ChefSubscriptionPlanManager() {
                       setField("billingPeriod", period);
                       setRows([emptyMeal()]);
                     }}
-                    className="mt-2 min-h-12 w-full rounded-xl border border-[#D8DEE3] bg-white px-4 text-[#1A1A1A] outline-none focus:border-[#147A4B] focus:ring-2 focus:ring-[#147A4B]/15"
+                    className="mt-2 min-h-12 w-full rounded-xl border border-[#D8DEE3] bg-white px-4 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
                   >
                     <option value="WEEKLY">Weekly</option>
                     <option value="MONTHLY">Monthly</option>
@@ -1202,7 +1202,7 @@ export function ChefSubscriptionPlanManager() {
                     step="0.01"
                     inputMode="decimal"
                     placeholder="0.00"
-                    className="mt-2 min-h-12 w-full rounded-xl border border-[#D8DEE3] bg-white px-4 text-[#1A1A1A] outline-none focus:border-[#147A4B] focus:ring-2 focus:ring-[#147A4B]/15"
+                    className="mt-2 min-h-12 w-full rounded-xl border border-[#D8DEE3] bg-white px-4 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
                     required
                   />
                 </label>
@@ -1216,7 +1216,7 @@ export function ChefSubscriptionPlanManager() {
                     }
                     maxLength={2000}
                     placeholder="Example: 5 homemade lunches every week, prepared fresh by my kitchen."
-                    className="mt-2 min-h-28 w-full resize-y rounded-xl border border-[#D8DEE3] bg-white p-4 text-[#1A1A1A] outline-none focus:border-[#147A4B] focus:ring-2 focus:ring-[#147A4B]/15"
+                    className="mt-2 min-h-28 w-full resize-y rounded-xl border border-[#D8DEE3] bg-white p-4 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
                   />
                   <span className="mt-1 block text-xs font-normal text-[#6B6B6B]">
                     Explain what the customer receives. Avoid internal kitchen terminology.
@@ -1228,7 +1228,7 @@ export function ChefSubscriptionPlanManager() {
                 <button
                   type="submit"
                   disabled={busy}
-                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#147A4B] px-5 text-sm font-bold text-white transition hover:bg-[#126B41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147A4B] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[var(--color-flame-red)] px-5 text-sm font-bold text-white transition hover:bg-[var(--color-contrast-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-flame-red)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Plus className="h-4 w-4" aria-hidden="true" />
                   Create draft & continue
@@ -1237,7 +1237,7 @@ export function ChefSubscriptionPlanManager() {
                   type="button"
                   onClick={() => setShowNew(false)}
                   disabled={busy}
-                  className="inline-flex min-h-12 items-center justify-center rounded-xl border border-[#D8DEE3] bg-white px-5 text-sm font-bold text-[#1A1A1A] hover:border-[#147A4B] disabled:opacity-50"
+                  className="inline-flex min-h-12 items-center justify-center rounded-xl border border-[#D8DEE3] bg-white px-5 text-sm font-bold text-[#1A1A1A] hover:border-[var(--color-flame-red)] disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -1265,11 +1265,11 @@ export function ChefSubscriptionPlanManager() {
                     </p>
                   </div>
 
-                  <div className="rounded-2xl bg-[#F1FAF5] px-5 py-4 text-right">
+                  <div className="rounded-2xl bg-[var(--color-flame-red)]/5 px-5 py-4 text-right">
                     <p className="text-xs font-bold uppercase tracking-[0.08em] text-[#6B6B6B]">
                       Recurring price
                     </p>
-                    <p className="mt-1 text-2xl font-bold text-[#147A4B]">
+                    <p className="mt-1 text-2xl font-bold text-[var(--color-flame-red)]">
                       {money(selected.amount, selected.currency)}
                     </p>
                     <p className="mt-1 text-xs text-[#6B6B6B]">
@@ -1340,7 +1340,7 @@ export function ChefSubscriptionPlanManager() {
                           setField("name", event.target.value)
                         }
                         maxLength={160}
-                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] px-3 text-[#1A1A1A] outline-none focus:border-[#147A4B] focus:ring-2 focus:ring-[#147A4B]/15"
+                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] px-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
                       />
                     </label>
                     <label className="text-sm font-semibold text-[#1A1A1A]">
@@ -1353,7 +1353,7 @@ export function ChefSubscriptionPlanManager() {
                             event.target.value as ChefMealPlanPeriod,
                           )
                         }
-                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] px-3 text-[#1A1A1A] outline-none focus:border-[#147A4B] focus:ring-2 focus:ring-[#147A4B]/15"
+                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] px-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
                       >
                         <option value="WEEKLY">Weekly</option>
                         <option value="MONTHLY">Monthly</option>
@@ -1370,7 +1370,7 @@ export function ChefSubscriptionPlanManager() {
                         min="0"
                         step="0.01"
                         inputMode="decimal"
-                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] px-3 text-[#1A1A1A] outline-none focus:border-[#147A4B] focus:ring-2 focus:ring-[#147A4B]/15"
+                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] px-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
                       />
                     </label>
                     <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">
@@ -1381,7 +1381,7 @@ export function ChefSubscriptionPlanManager() {
                           setField("description", event.target.value)
                         }
                         maxLength={2000}
-                        className="mt-2 min-h-20 w-full resize-y rounded-xl border border-[#D8DEE3] p-3 text-[#1A1A1A] outline-none focus:border-[#147A4B] focus:ring-2 focus:ring-[#147A4B]/15"
+                        className="mt-2 min-h-20 w-full resize-y rounded-xl border border-[#D8DEE3] p-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
                       />
                     </label>
                     <div className="sm:col-span-2">
@@ -1389,7 +1389,7 @@ export function ChefSubscriptionPlanManager() {
                         type="button"
                         disabled={busy}
                         onClick={() => void saveDetails()}
-                        className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#147A4B] bg-white px-4 text-sm font-bold text-[#147A4B] hover:bg-[#F1FAF5] disabled:opacity-50"
+                        className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--color-flame-red)] bg-white px-4 text-sm font-bold text-[var(--color-flame-red)] hover:bg-[var(--color-flame-red)]/5 disabled:opacity-50"
                       >
                         <Save className="h-4 w-4" aria-hidden="true" />
                         Save plan details
@@ -1402,11 +1402,11 @@ export function ChefSubscriptionPlanManager() {
               <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex items-start gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F1FAF5] text-[#147A4B]">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-flame-red)]/5 text-[var(--color-flame-red)]">
                       <CalendarDays className="h-5 w-5" aria-hidden="true" />
                     </span>
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.08em] text-[#147A4B]">
+                      <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-flame-red)]">
                         Step 2
                       </p>
                       <h3 className="mt-1 text-xl font-bold text-[#1A1A1A]">
@@ -1457,7 +1457,7 @@ export function ChefSubscriptionPlanManager() {
                             </p>
                             <Link
                               href="/chef/menu"
-                              className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[#147A4B] underline-offset-4 hover:underline"
+                              className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[var(--color-flame-red)] underline-offset-4 hover:underline"
                             >
                               Manage menu
                               <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -1480,7 +1480,7 @@ export function ChefSubscriptionPlanManager() {
                               onChange={(event) =>
                                 setLeadHours(event.target.value)
                               }
-                              className="min-h-11 w-full rounded-l-xl border border-r-0 border-[#D8DEE3] bg-white px-3 text-[#1A1A1A] outline-none focus:border-[#147A4B]"
+                              className="min-h-11 w-full rounded-l-xl border border-r-0 border-[#D8DEE3] bg-white px-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)]"
                             />
                             <span className="inline-flex min-h-11 items-center rounded-r-xl border border-[#D8DEE3] bg-[#F1F3F5] px-3 text-xs font-bold text-[#6B6B6B]">
                               hours
@@ -1515,7 +1515,7 @@ export function ChefSubscriptionPlanManager() {
                         >
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
-                              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F1FAF5] text-sm font-bold text-[#147A4B]">
+                              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-flame-red)]/5 text-sm font-bold text-[var(--color-flame-red)]">
                                 {index + 1}
                               </span>
                               <div>
@@ -1564,7 +1564,7 @@ export function ChefSubscriptionPlanManager() {
                                       event.target.value,
                                     )
                                   }
-                                  className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-sm font-normal normal-case text-[#1A1A1A] outline-none focus:border-[#147A4B]"
+                                  className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-sm font-normal normal-case text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)]"
                                 >
                                   {WEEKDAYS.map((day, dayIndex) => (
                                     <option key={day} value={dayIndex + 1}>
@@ -1585,7 +1585,7 @@ export function ChefSubscriptionPlanManager() {
                                       event.target.value,
                                     )
                                   }
-                                  className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-sm font-normal normal-case text-[#1A1A1A] outline-none focus:border-[#147A4B]"
+                                  className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-sm font-normal normal-case text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)]"
                                 />
                               )}
                             </label>
@@ -1601,7 +1601,7 @@ export function ChefSubscriptionPlanManager() {
                                     event.target.value,
                                   )
                                 }
-                                className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-sm font-normal normal-case text-[#1A1A1A] outline-none focus:border-[#147A4B]"
+                                className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-sm font-normal normal-case text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)]"
                               >
                                 {MEAL_SLOTS.map(([value, label]) => (
                                   <option key={value} value={value}>
@@ -1622,7 +1622,7 @@ export function ChefSubscriptionPlanManager() {
                                     event.target.value,
                                   )
                                 }
-                                className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-sm font-normal normal-case text-[#1A1A1A] outline-none focus:border-[#147A4B]"
+                                className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-sm font-normal normal-case text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)]"
                               >
                                 <option value="">Choose a dish</option>
                                 {availableMenu.map((item) => (
@@ -1646,7 +1646,7 @@ export function ChefSubscriptionPlanManager() {
                                     event.target.value,
                                   )
                                 }
-                                className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-sm font-normal normal-case text-[#1A1A1A] outline-none focus:border-[#147A4B]"
+                                className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-sm font-normal normal-case text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)]"
                               />
                             </label>
 
@@ -1664,7 +1664,7 @@ export function ChefSubscriptionPlanManager() {
                                     event.target.value,
                                   )
                                 }
-                                className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-sm font-normal normal-case text-[#1A1A1A] outline-none focus:border-[#147A4B]"
+                                className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-sm font-normal normal-case text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)]"
                               />
                             </label>
                           </div>
@@ -1686,7 +1686,7 @@ export function ChefSubscriptionPlanManager() {
                       onClick={() =>
                         setRows((current) => [...current, emptyMeal()])
                       }
-                      className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-dashed border-[#147A4B] bg-[#F8FFFA] px-4 text-sm font-bold text-[#147A4B] hover:bg-[#F1FAF5] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-dashed border-[var(--color-flame-red)] bg-[#F8FFFA] px-4 text-sm font-bold text-[var(--color-flame-red)] hover:bg-[var(--color-flame-red)]/5 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Plus className="h-4 w-4" aria-hidden="true" />
                       Add another meal
@@ -1695,7 +1695,7 @@ export function ChefSubscriptionPlanManager() {
                     <div className="mt-5 rounded-2xl border border-[#E5E7EB] bg-[#F8F9FA] p-4">
                       <div className="flex items-start gap-3">
                         <UtensilsCrossed
-                          className="mt-0.5 h-5 w-5 shrink-0 text-[#147A4B]"
+                          className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-flame-red)]"
                           aria-hidden="true"
                         />
                         <div>
@@ -1735,11 +1735,11 @@ export function ChefSubscriptionPlanManager() {
               <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex items-start gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F1FAF5] text-[#147A4B]">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-flame-red)]/5 text-[var(--color-flame-red)]">
                       <Gauge className="h-5 w-5" aria-hidden="true" />
                     </span>
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.08em] text-[#147A4B]">
+                      <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-flame-red)]">
                         Capacity
                       </p>
                       <h3 className="mt-1 text-xl font-bold text-[#1A1A1A]">
@@ -1752,7 +1752,7 @@ export function ChefSubscriptionPlanManager() {
                   </div>
                   <Link
                     href="/chef/capacity"
-                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#D8DEE3] bg-white px-4 text-sm font-bold text-[#147A4B] hover:border-[#147A4B] hover:bg-[#F1FAF5]"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#D8DEE3] bg-white px-4 text-sm font-bold text-[var(--color-flame-red)] hover:border-[var(--color-flame-red)] hover:bg-[var(--color-flame-red)]/5"
                   >
                     Advanced capacity
                     <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -1865,7 +1865,7 @@ export function ChefSubscriptionPlanManager() {
                         onChange={(event) =>
                           setCapacityDay(event.target.value)
                         }
-                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-[#1A1A1A] outline-none focus:border-[#147A4B]"
+                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)]"
                       >
                         {WEEKDAYS.map((day, index) => (
                           <option key={day} value={index + 1}>
@@ -1882,7 +1882,7 @@ export function ChefSubscriptionPlanManager() {
                         onChange={(event) =>
                           setCapacitySlot(event.target.value)
                         }
-                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-[#1A1A1A] outline-none focus:border-[#147A4B]"
+                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)]"
                       >
                         {MEAL_SLOTS.map(([value, label]) => (
                           <option key={value} value={value}>
@@ -1901,7 +1901,7 @@ export function ChefSubscriptionPlanManager() {
                         onChange={(event) =>
                           setTotalCapacity(event.target.value)
                         }
-                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-[#1A1A1A] outline-none focus:border-[#147A4B]"
+                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)]"
                       />
                     </label>
 
@@ -1914,7 +1914,7 @@ export function ChefSubscriptionPlanManager() {
                         onChange={(event) =>
                           setSubscriptionCapacity(event.target.value)
                         }
-                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-[#1A1A1A] outline-none focus:border-[#147A4B]"
+                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] bg-white px-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)]"
                       />
                     </label>
                   </div>
@@ -1926,7 +1926,7 @@ export function ChefSubscriptionPlanManager() {
                       onChange={(event) =>
                         setCapacitySalesEnabled(event.target.checked)
                       }
-                      className="mt-1 h-4 w-4 accent-[#147A4B]"
+                      className="mt-1 h-4 w-4 accent-[var(--color-flame-red)]"
                     />
                     <span>
                       <span className="block font-bold">
@@ -1942,7 +1942,7 @@ export function ChefSubscriptionPlanManager() {
                     type="button"
                     disabled={busy || capacity?.adminSalesFrozen}
                     onClick={() => void saveCapacity()}
-                    className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#147A4B] bg-white px-4 text-sm font-bold text-[#147A4B] hover:bg-[#F1FAF5] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--color-flame-red)] bg-white px-4 text-sm font-bold text-[var(--color-flame-red)] hover:bg-[var(--color-flame-red)]/5 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Gauge className="h-4 w-4" aria-hidden="true" />
                     Save capacity
@@ -1952,11 +1952,11 @@ export function ChefSubscriptionPlanManager() {
 
               <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
                 <div className="flex items-start gap-3">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F1FAF5] text-[#147A4B]">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-flame-red)]/5 text-[var(--color-flame-red)]">
                     <Send className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.08em] text-[#147A4B]">
+                    <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-flame-red)]">
                       Step 3
                     </p>
                     <h3 className="mt-1 text-xl font-bold text-[#1A1A1A]">
@@ -1998,7 +1998,7 @@ export function ChefSubscriptionPlanManager() {
                         <span
                           className={`mt-0.5 flex h-6 w-6 items-center justify-center rounded-full ${
                             ready
-                              ? "bg-[#147A4B] text-white"
+                              ? "bg-[var(--color-flame-red)] text-white"
                               : "bg-[#E5E7EB] text-[#6B6B6B]"
                           }`}
                         >
@@ -2033,7 +2033,7 @@ export function ChefSubscriptionPlanManager() {
                         value={note}
                         onChange={(event) => setNote(event.target.value)}
                         placeholder="Anything the reviewer should know about this plan."
-                        className="mt-2 min-h-24 w-full resize-y rounded-xl border border-[#D8DEE3] p-3 text-[#1A1A1A] outline-none focus:border-[#147A4B] focus:ring-2 focus:ring-[#147A4B]/15"
+                        className="mt-2 min-h-24 w-full resize-y rounded-xl border border-[#D8DEE3] p-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
                       />
                     </label>
 
@@ -2042,7 +2042,7 @@ export function ChefSubscriptionPlanManager() {
                         type="button"
                         disabled={busy}
                         onClick={() => void saveSchedule(false)}
-                        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#147A4B] bg-white px-5 text-sm font-bold text-[#147A4B] hover:bg-[#F1FAF5] disabled:opacity-50"
+                        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[var(--color-flame-red)] bg-white px-5 text-sm font-bold text-[var(--color-flame-red)] hover:bg-[var(--color-flame-red)]/5 disabled:opacity-50"
                       >
                         <Save className="h-4 w-4" aria-hidden="true" />
                         Save draft
@@ -2058,7 +2058,7 @@ export function ChefSubscriptionPlanManager() {
                           !readiness.dishesReady
                         }
                         onClick={() => void saveSchedule(true)}
-                        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#147A4B] px-6 text-sm font-bold text-white shadow-sm transition hover:bg-[#126B41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147A4B] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[var(--color-flame-red)] px-6 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-contrast-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-flame-red)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Send className="h-4 w-4" aria-hidden="true" />
                         Save & submit for approval
@@ -2092,7 +2092,7 @@ export function ChefSubscriptionPlanManager() {
             </>
           ) : (
             <section className="rounded-2xl border border-dashed border-[#D8DEE3] bg-white p-10 text-center shadow-[var(--shadow-card)]">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F1FAF5] text-[#147A4B]">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--color-flame-red)]/5 text-[var(--color-flame-red)]">
                 <CalendarDays className="h-7 w-7" aria-hidden="true" />
               </div>
               <h2 className="mt-4 text-2xl font-bold tracking-tight text-[#1A1A1A]">
@@ -2106,7 +2106,7 @@ export function ChefSubscriptionPlanManager() {
               <button
                 type="button"
                 onClick={beginNew}
-                className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#147A4B] px-5 text-sm font-bold text-white hover:bg-[#126B41]"
+                className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-xl bg-[var(--color-flame-red)] px-5 text-sm font-bold text-white hover:bg-[var(--color-contrast-red)]"
               >
                 <Plus className="h-5 w-5" aria-hidden="true" />
                 Create meal plan

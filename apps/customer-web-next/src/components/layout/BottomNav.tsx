@@ -303,7 +303,7 @@ export function BottomNav() {
               >
                 <Link
                   href="/cart"
-                  className="relative flex h-full min-h-[3.45rem] items-center gap-3 overflow-hidden rounded-[8px] border border-white/80 bg-white/50 px-3.5 text-[#1A1A1A] shadow-[0_16px_42px_rgba(26,26,26,0.18),0_2px_8px_rgba(26,26,26,0.06),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-[8px] backdrop-saturate-[145%]"
+                  className="relative flex h-full min-h-[3.45rem] items-center gap-3 overflow-hidden rounded-[1.05rem] border border-white/80 bg-white/50 px-3.5 text-[#1A1A1A] shadow-[0_16px_42px_rgba(26,26,26,0.18),0_2px_8px_rgba(26,26,26,0.06),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-[8px] backdrop-saturate-[145%]"
                   aria-label={`View cart with ${itemCount} ${itemCount === 1 ? "item" : "items"}`}
                 >
                   <span

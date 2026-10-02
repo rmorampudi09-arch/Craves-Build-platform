@@ -129,7 +129,7 @@ it("keeps a successfully loaded pending application editable through the guided 
 
   vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
   vi.stubGlobal("scrollTo", vi.fn());
-  for (const heading of ["Food Safety Details", "Show your kitchen", "Where is your kitchen located?", "Tell customers about your kitchen", "What’s your name?"]) {
+  for (const heading of ["Food Safety Details", "Show your kitchen", "Where is your kitchen located?", "Tell customers about your kitchen", "Let’s get to know you", "What’s your name?"]) {
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     await screen.findByRole("heading", { name: heading });
   }
@@ -143,7 +143,7 @@ it("keeps a successfully loaded pending application editable through the guided 
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   expect(firstName.getAttribute("aria-invalid")).toBe("true");
   expect(document.activeElement).toBe(firstName);
-  expect(screen.getByRole("alert").textContent).toContain("first and last name");
+  expect(screen.getByRole("alert").textContent).toContain("First name is required");
   expect(fetcher.mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
 
 });

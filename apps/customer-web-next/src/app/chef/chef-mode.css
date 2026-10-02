@@ -1,10 +1,10 @@
 .chef-panel-theme {
-  --chef-action: var(--color-success);
-  --primary: var(--color-success);
+  --chef-action: var(--color-flame-red);
+  --primary: var(--color-flame-red);
   --primary-foreground: #fff;
-  --ring: var(--color-success);
-  --gradient-primary: var(--color-success);
-  --chef-action-hover: color-mix(in srgb, var(--color-success) 88%, #000);
+  --ring: var(--color-flame-red);
+  --gradient-primary: var(--color-flame-red);
+  --chef-action-hover: var(--color-contrast-red);
   --chef-page: var(--background);
   --chef-text: #1a1a1a;
   --chef-muted: #6b6b6b;
@@ -39,14 +39,14 @@
 .chef-panel-theme :is(input,textarea,select):focus-visible {
   border-color: var(--chef-action) !important;
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 14%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-flame-red) 14%, transparent);
 }
 .chef-desktop-nav{display:flex;align-items:center;gap:6px;overflow-x:auto;scrollbar-width:none;border-top:1px solid var(--chef-border);padding:8px 0 2px}
 .chef-desktop-nav::-webkit-scrollbar{display:none}
 .chef-desktop-nav-primary{display:flex;gap:6px;min-width:max-content}
 .chef-desktop-nav-link,.chef-context-link{min-height:44px;display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:0 15px;color:var(--chef-text);font-size:14px;font-weight:700;text-decoration:none;white-space:nowrap}
 .chef-desktop-nav-link:hover,.chef-context-link:hover{background:var(--chef-input)}
-.chef-desktop-nav-link.is-active,.chef-context-link{background:#eaf7f0;color:var(--chef-success)}
+.chef-desktop-nav-link.is-active,.chef-context-link{background:color-mix(in srgb,var(--color-flame-red) 8%,white);color:var(--chef-action)}
 .chef-context-link{margin-left:auto}
 .chef-mobile-nav{display:none}
 @media (max-width:767px){
@@ -54,7 +54,7 @@
  .chef-desktop-nav{display:none}
  .chef-mobile-nav{position:fixed;z-index:40;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(5,1fr);min-height:64px;padding:7px 6px;border:1px solid rgba(255,255,255,.72);border-radius:22px;background:var(--chef-glass);box-shadow:0 12px 35px rgba(26,26,26,.13);backdrop-filter:blur(8px) saturate(145%);-webkit-backdrop-filter:blur(8px) saturate(145%)}
  .chef-mobile-nav-link{min-width:44px;min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:16px;color:var(--chef-muted);font-size:11px;font-weight:700;text-decoration:none}
- .chef-mobile-nav-link.is-active{color:var(--chef-action);background:rgba(234,247,240,.82)}
+ .chef-mobile-nav-link.is-active{color:var(--chef-action);background:color-mix(in srgb,var(--color-flame-red) 8%,transparent)}
  .chef-mobile-nav-icon{display:grid;place-items:center;min-height:24px}
 }
 @media (prefers-reduced-motion:reduce){
@@ -63,8 +63,7 @@
 
 /* Keep older Chef forms on the same customer tokens during their UI migration. */
 .chef-panel-theme [class*="text-[#F62E18]"],
-.chef-panel-theme [class*="text-[#178F56]"],
-.chef-panel-theme [class*="text-[#15803D]"] { color: var(--chef-action); }
+.chef-panel-theme [class*="text-[#178F56]"] { color: var(--chef-action); }
 .chef-panel-theme [class*="bg-[#F62E18]"]:not(button):not(a) { background: var(--chef-action); }
 .chef-panel-theme :is(button, a)[class*="bg-[#F62E18]"],
 .chef-panel-theme :is(button, a)[class*="bg-primary"] {
@@ -77,7 +76,7 @@
 .chef-panel-theme :is(button, a)[class*="bg-primary"]:active { transform: scale(.98); }
 .chef-panel-theme :is(button, input, textarea, select):disabled { cursor: not-allowed; }
 .chef-panel-theme [role="alert"] { color: #dc2626; }
-.chef-panel-theme :is(input, textarea, select)[aria-invalid="true"] { border-color: #dc2626 !important; }
+.chef-panel-theme :is(input, textarea, select)[aria-invalid="true"] { border-color: var(--chef-error) !important; }
 .chef-field-error { margin-top: .4rem; color: #dc2626; font-size: .8rem; font-weight: 500; }
 .chef-step { animation: chefStepIn 240ms cubic-bezier(.23,.88,.26,.92) both; }
 .chef-mobile-nav-link, .chef-desktop-nav-link { transition: color 200ms, background-color 200ms; }
@@ -85,3 +84,5 @@
 .chef-mobile-nav-icon { transition: transform 200ms cubic-bezier(.23,.88,.26,.92); }
 @keyframes chefStepIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes chefFieldShake { 0%,100% { transform: translateX(0); } 30% { transform: translateX(-3px); } 65% { transform: translateX(3px); } }
+
+.chef-panel-theme :is(input,textarea,select)[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--chef-error) 14%, transparent); }

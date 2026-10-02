@@ -186,7 +186,7 @@ export function HomeCategoryRail({
         className="mx-auto max-w-[88rem] bg-white px-4 pt-3 md:px-7 md:pt-4 lg:px-10 lg:pt-5"
         aria-labelledby="craving-categories-heading"
       >
-        <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[var(--color-success)]">
+        <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[var(--color-flame-red)]">
           Find your comfort food
         </p>
         <h2
@@ -219,9 +219,9 @@ export function HomeCategoryRail({
                 >
                   <span
                     className={[
-                      "flex h-[5.75rem] w-[5.75rem] items-center justify-center rounded-full bg-white shadow-[0_3px_10px_rgba(26,26,26,0.09)] ring-1 ring-black/[0.025] transition-[box-shadow,border-color,transform] duration-[240ms] group-hover:-translate-y-0.5 group-hover:shadow-[0_7px_17px_rgba(26,26,26,0.13)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--color-success)]/20 motion-reduce:transform-none sm:h-[6.25rem] sm:w-[6.25rem] md:h-[6.75rem] md:w-[6.75rem] lg:h-[7.25rem] lg:w-[7.25rem]",
+                      "flex h-[5.75rem] w-[5.75rem] items-center justify-center rounded-full bg-white shadow-[0_3px_10px_rgba(26,26,26,0.09)] ring-1 ring-black/[0.025] transition-[box-shadow,border-color,transform] duration-[240ms] group-hover:-translate-y-0.5 group-hover:shadow-[0_7px_17px_rgba(26,26,26,0.13)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--color-flame-red)]/20 motion-reduce:transform-none sm:h-[6.25rem] sm:w-[6.25rem] md:h-[6.75rem] md:w-[6.75rem] lg:h-[7.25rem] lg:w-[7.25rem]",
                       active
-                        ? "border border-[var(--color-success)]/35 shadow-[0_5px_16px_rgba(14,124,58,0.12)]"
+                        ? "border border-[var(--color-flame-red)]/35 shadow-[0_5px_16px_rgba(246,46,24,0.12)]"
                         : "border border-[#E9EBEE]",
                     ].join(" ")}
                   >
@@ -235,7 +235,7 @@ export function HomeCategoryRail({
                         className="pointer-events-none h-full w-full select-none rounded-full object-contain transition-transform duration-[240ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] group-hover:scale-[1.025] group-focus-visible:scale-[1.025] motion-reduce:transform-none motion-reduce:transition-none"
                       />
                     ) : (
-                      <span className="flex h-[72%] w-[72%] items-center justify-center rounded-full bg-[#F1F3F5] text-[var(--color-success)]">
+                      <span className="flex h-[72%] w-[72%] items-center justify-center rounded-full bg-[#F1F3F5] text-[var(--color-flame-red)]">
                         <Icon className="h-9 w-9" aria-hidden="true" />
                       </span>
                     )}
@@ -243,7 +243,7 @@ export function HomeCategoryRail({
                   <span
                     className={[
                       "text-sm font-extrabold leading-5 transition-colors duration-200 lg:text-base",
-                      active ? "text-[var(--color-success)]" : "text-[#1A1A1A]",
+                      active ? "text-[var(--color-flame-red)]" : "text-[#1A1A1A]",
                     ].join(" ")}
                   >
                     {label}
@@ -265,7 +265,7 @@ export function HomeCategoryRail({
               type="button"
               onClick={() => scrollCategories(-1)}
               aria-label="Show previous craving categories"
-              className="absolute left-1.5 top-[3.25rem] z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white/94 !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] backdrop-blur transition-[box-shadow,background-color,transform] duration-200 hover:!bg-white hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-success)]/30 md:left-4 md:top-[3.75rem] lg:left-7 lg:top-[4rem]"
+              className="absolute left-1.5 top-[3.25rem] z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white/94 !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] backdrop-blur transition-[box-shadow,background-color,transform] duration-200 hover:!bg-white hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-flame-red)]/30 md:left-4 md:top-[3.75rem] lg:left-7 lg:top-[4rem]"
             >
               <FaChevronLeft
                 className="h-4 w-4 lg:h-5 lg:w-5"
@@ -286,7 +286,7 @@ export function HomeCategoryRail({
               type="button"
               onClick={() => scrollCategories(1)}
               aria-label="Show more craving categories"
-              className="absolute right-1.5 top-[3.25rem] z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white/94 !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] backdrop-blur transition-[box-shadow,background-color,transform] duration-200 hover:!bg-white hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-success)]/30 md:right-4 md:top-[3.75rem] lg:right-7 lg:top-[4rem]"
+              className="absolute right-1.5 top-[3.25rem] z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white/94 !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] backdrop-blur transition-[box-shadow,background-color,transform] duration-200 hover:!bg-white hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-flame-red)]/30 md:right-4 md:top-[3.75rem] lg:right-7 lg:top-[4rem]"
             >
               <FaChevronRight
                 className="h-4 w-4 lg:h-5 lg:w-5"

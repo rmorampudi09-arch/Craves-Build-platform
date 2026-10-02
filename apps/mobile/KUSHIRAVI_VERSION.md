@@ -52,9 +52,13 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   from invalid-input probes or provider acceptance alone.
 - Backend diagnostic fix is committed at
   `8f956490f5cdf8b8036c29098967f34eb8f1fa91` and deployed as healthy auth revision
-  `central-otp-rt-1002`, ACR build `cu53`. The account reports SMS error 204
-  (authkey has no send permission). Review of the exact key is pending user-only
-  owner verification. Full failure/rollout receipt:
+  `central-otp-rt-1002`, ACR build `cu53`. SMS API Failed Logs correlate the exact
+  current request `366a6269706c52556457796c` with error 204 (authkey has no SMS
+  send permission). After owner verification the user enabled only Send SMS
+  Allowed on the existing `CravesOTPServer` rule 3752 and saved Update. A fresh
+  rule read confirms it alongside the original Send OTP Allowed and Widget View;
+  no other scopes or IP restrictions changed. Real post-change delivery/sign-in
+  is pending, not claimed complete. Full failure/rollout receipt:
   `docs/msg91-centralized-live-20261002.md`. Version 1.22 stays installed.
 
 ### Version 1.22 - Admin-Published Home Banners, 2026-10-02

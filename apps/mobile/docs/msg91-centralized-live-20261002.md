@@ -93,17 +93,27 @@ request. It must not be asserted as the confirmed cause of the current failure.
 
 After the real-time-response patch, one controlled resend received HTTP 200.
 Auth logs at `2026-10-02T03:46:12.607Z` report provider acceptance, request
-`366a6269706c52556457796c`. The provider portal and server-side read-only report
-returned no matching delivery record during investigation. No delivery success
-or provider credit debit is claimed for this request.
+`366a6269706c52556457796c`. The OTP delivery report initially returned no matching
+record. The SMS API Failed Logs subsequently showed this exact request at
+09:16 Asia/Calcutta with error 204, `Authkey has no permission to send an sms.`
+The three earlier attempts at 09:09, 09:03 and 09:02 had the same rejection.
+This exact correlation confirms missing SMS-send permission as the current
+failure, not the older DLT mismatch. No delivery or debit is claimed for these
+failed requests.
 
 The account dashboard's one alert reads:
 `SMS - 4 Authkey has no permission to send an sms. Error 204`.
-This is a concrete authorization problem requiring review of the exact server
-key's SMS/SendOTP permission. Viewing its key settings triggered account-owner
-verification, which is handed to the user. No key was revealed, changed or given
-broader permissions by the agent. Any security-sensitive scope expansion needs
-specific action-time confirmation, not broad prior approval.
+The unlocked existing `CravesOTPServer` key uses rule 3752 and retains IP
+security. Its original checked permissions were Send OTP Allowed and OTPWidget
+View only. Send SMS Allowed was unchecked. The agent requested specific
+action-time confirmation and did not toggle or save permissions. The user
+enabled Send SMS Allowed and reported saving Update. A fresh navigation to
+rule 3752 at approximately `2026-10-02T04:20Z` confirms only those three
+permissions checked; all other scopes, including every Select All, remain off.
+The key was not revealed, rotated or replaced. No IP whitelist change was made.
+Proof: `C:\mscratch\artifacts\msg91-centralized-live-20261002\msg91-send-sms-permission-saved.jpg`.
+Real post-change SMS delivery and sign-in are still pending a controlled user
+attempt; saved permissions alone are not delivery evidence.
 
 ## Verification
 
@@ -123,9 +133,10 @@ specific action-time confirmation, not broad prior approval.
 
 ## Required Completion
 
-1. User completes MSG91 owner verification on the existing account.
-2. Inspect the exact existing server key's permissions without revealing its
-   value; seek specific confirmation for the minimum necessary scope change.
+1. Completed: user-only MSG91 owner verification and inspection of the existing
+   server key's rule without revealing its value.
+2. Completed: user enabled and saved only Send SMS Allowed; persisted scopes
+   verified. No other security permission or IP restriction changed.
 3. Correlate one real send with its exact request ID, delivery status and debit.
 4. User enters the OTP on the web. Verify the existing identity and Chef access.
 5. Only after delivery/sign-in pass, replace-install candidate Android without

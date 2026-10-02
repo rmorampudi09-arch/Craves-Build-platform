@@ -30,7 +30,7 @@ function hasChefRole(user: CravesUser | null) {
   return Boolean(user?.roles.some((role) => role.toUpperCase() === "CHEF"));
 }
 
-export function ChefWorkspaceNavigation() {
+export function ChefWorkspaceNavigation({ placement }: { placement: "header" | "bottom" }) {
   const pathname = usePathname();
   const [canUseChefWorkspace, setCanUseChefWorkspace] = useState(() => hasChefRole(getSession()));
 
@@ -43,8 +43,7 @@ export function ChefWorkspaceNavigation() {
   if (pathname.startsWith("/chef/application") || !canUseChefWorkspace) return null;
   const currentContextual = contextualLinks.find((link) => isActive(pathname, link.href));
 
-  return (
-    <>
+  if (placement === "header") return (
       <nav className="chef-desktop-nav" aria-label="Chef workspace">
         <div className="chef-desktop-nav-primary">
           {primaryLinks.map((link) => {
@@ -54,13 +53,14 @@ export function ChefWorkspaceNavigation() {
         </div>
         {currentContextual ? <Link href={currentContextual.href} aria-current="page" className="chef-context-link"><currentContextual.icon className="h-4 w-4" aria-hidden="true" /><span>{currentContextual.label}</span></Link> : null}
       </nav>
+  );
+  return (
       <nav className="chef-mobile-nav" aria-label="Chef primary navigation">
         {primaryLinks.map((link) => {
           const active = isActive(pathname, link.href);
-          return <Link key={link.href} href={link.href} aria-current={active ? "page" : undefined} className={`chef-mobile-nav-link ${active ? "is-active" : ""}`}><span className="chef-mobile-nav-icon"><link.icon className="h-5 w-5" aria-hidden="true" /></span><span>{link.label}</span></Link>;
+          return <Link key={link.href} href={link.href} aria-current={active ? "page" : undefined} className={`chef-mobile-nav-link ${active ? "is-active" : ""}`}><span className="chef-mobile-nav-icon"><link.icon className="h-[1.12rem] w-[1.12rem] shrink-0" aria-hidden="true" /></span><span>{link.label}</span></Link>;
         })}
       </nav>
-    </>
   );
 }
 export default ChefWorkspaceNavigation;

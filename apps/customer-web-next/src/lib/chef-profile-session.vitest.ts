@@ -2,10 +2,13 @@
 // Actual rendered components; all service responses and identity changes are disposable fixtures.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement, useState } from "react";
+import { usePathname } from "next/navigation";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ChefMenuManager } from "../components/chef-menu-manager";
 import { ChefKitchenForm } from "../components/chef-kitchen-form";
 import { ChefModeDashboard } from "../components/chef-mode-dashboard";
+import ChefLayout from "../app/chef/layout";
+import { ChefWorkspaceNavigation } from "../components/chef-workspace-navigation";
 import type { ChefMenuItem } from "./chef-menu-contract";
 import type { ChefKitchen } from "./chef-kitchen-types";
 import { ChefAccessBoundary } from "../components/chef-access-boundary";
@@ -17,7 +20,7 @@ import type { CravesIdentity } from "./auth-contract";
 
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate, Link: ({ children }: { children: unknown }) => children }));
-vi.mock("next/navigation", () => ({ usePathname: () => "/profile", useRouter: () => ({ push: navigate, replace: navigate }) }));
+vi.mock("next/navigation", () => ({ usePathname: vi.fn(() => "/profile"), useRouter: () => ({ push: navigate, replace: navigate }) }));
 vi.mock("../components/location/AddressMapPicker", () => ({ AddressMapPicker: () => null }));
 
 const a: CravesIdentity = { id: "11111111-1111-4111-8111-111111111111", phoneNumber: "+10000000000", displayName: "Chef A", email: "a@example.invalid", emailVerified: true, status: "ACTIVE", roles: ["CHEF"] };
@@ -43,9 +46,38 @@ async function normal(input: RequestInfo | URL): Promise<Response> {
   if (url === "/api/chef-onboarding/bank") return Response.json({ id: null, state: "NOT_SUBMITTED", lastFour: null, ifsc: null, bankValidated: false, applicationApproved: true, automaticActivation: true, message: "Fixture enrollment", updatedAt: null });
   throw new Error(`Unexpected fixture route ${url}`);
 }
-beforeEach(() => { identity = a; setSessionIdentity(a); navigate.mockReset(); fetcher = vi.fn<typeof fetch>(normal); vi.stubGlobal("fetch", fetcher); });
+beforeEach(() => { identity = a; setSessionIdentity(a); navigate.mockReset(); vi.mocked(usePathname).mockReturnValue("/profile"); fetcher = vi.fn<typeof fetch>(normal); vi.stubGlobal("fetch", fetcher); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 function change(owner: CravesIdentity) { identity = owner; act(() => { setSessionIdentity(owner); }); }
+
+describe("Chef navigation placement", () => {
+  it("keeps fixed bottom navigation outside the filtered sticky header", () => {
+    vi.mocked(usePathname).mockReturnValue("/chef/menu");
+    render(createElement(ChefLayout, { children: createElement("main", null, "Chef fixture") }));
+    const header = screen.getByRole("link", { name: "Craves home" }).closest("header")!;
+    expect(header.contains(screen.getByRole("navigation", { name: "Chef workspace" }))).toBe(true);
+    expect(header.contains(screen.getByRole("navigation", { name: "Chef primary navigation" }))).toBe(false);
+    expect(screen.getByRole("navigation", { name: "Chef primary navigation" }).closest(".chef-panel-theme")).toBeTruthy();
+  });
+  it.each([["/chef", "Home"], ["/chef/orders/fixture", "Orders"], ["/chef/menu", "Menu"], ["/chef/earnings", "Earnings"], ["/chef/profile", "Profile"]])("keeps labeled active navigation for %s", (pathname, label) => {
+    vi.mocked(usePathname).mockReturnValue(pathname);
+    render(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
+    const links = screen.getAllByRole("link");
+    expect(links.map(link => link.textContent)).toEqual(["Home", "Orders", "Menu", "Earnings", "Profile"]);
+    expect(screen.getByRole("link", { name: label }).getAttribute("aria-current")).toBe("page");
+    expect(links.filter(link => link.hasAttribute("aria-current"))).toHaveLength(1);
+  });
+  it("retains onboarding and Chef-access visibility boundaries", () => {
+    vi.mocked(usePathname).mockReturnValue("/chef/application");
+    const view = render(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
+    expect(screen.queryByRole("navigation")).toBeNull();
+    vi.mocked(usePathname).mockReturnValue("/chef/menu");
+    view.rerender(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
+    expect(screen.getByRole("navigation")).toBeTruthy();
+    change({ ...a, roles: ["CUSTOMER"] });
+    expect(screen.queryByRole("navigation")).toBeNull();
+  });
+});
 
 describe("chef finance owner boundaries", () => {
   it("shows the authoritative verified email alongside real finance panels", async () => {

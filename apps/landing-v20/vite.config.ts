@@ -71,6 +71,34 @@ function versionPublicAssets(): Plugin {
   }
 }
 
+/** Keep the released host authentication adapter when rebuilding the artwork. */
+function preserveLandingAuthBridge(): Plugin {
+  let bridge = ''
+  const bridgePattern = /<script\b[^>]*\bid=["']craves-landing-auth-bridge["'][^>]*>[\s\S]*?<\/script>/g
+
+  return {
+    name: 'craves-preserve-landing-auth-bridge',
+    apply: 'build',
+    configResolved(config) {
+      if (!config.publicDir) throw new Error('The landing public directory is required for authentication.')
+      const filename = path.join(config.publicDir, 'index.html')
+      if (!existsSync(filename)) throw new Error('The released landing authentication bridge is missing.')
+      const matches = readFileSync(filename, 'utf8').match(bridgePattern) ?? []
+      if (matches.length !== 1) throw new Error('Exactly one released landing authentication bridge is required.')
+      bridge = matches[0]
+    },
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        const matches = html.match(bridgePattern) ?? []
+        if (matches.length === 1 && matches[0] === bridge) return html
+        if (matches.length || !html.includes('</body>')) throw new Error('The landing authentication bridge could not be preserved.')
+        return html.replace('</body>', `${bridge}\n</body>`)
+      },
+    },
+  }
+}
+
 const assetBase = '/landing-v20';
 
 const revalidate = { 'Cache-Control': 'no-cache, max-age=0, must-revalidate' }
@@ -78,7 +106,7 @@ const revalidate = { 'Cache-Control': 'no-cache, max-age=0, must-revalidate' }
 export default defineConfig({
   base: assetBase + '/',
   publicDir: '../customer-web-next/public/landing-v20',
-  plugins: [versionPublicAssets(), react(), cravesFirstPaintSplash()],
+  plugins: [versionPublicAssets(), react(), cravesFirstPaintSplash(), preserveLandingAuthBridge()],
   server: { headers: revalidate },
   preview: { headers: revalidate },
   build: {

@@ -1,5 +1,5 @@
 .specials {
-  min-height: 0;
+  min-height: calc(100svh - 96px);
   display: flex;
   align-items: center;
   padding: 42px 0 34px;

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Navbar from './components/Navbar/Navbar';
+import CustomerAuth from './components/CustomerAuth';
+import LandingNotice from './components/LandingNotice';
 import Hero from './components/Hero/Hero';
 import ForHomeChefs from './components/ForHomeChefs/ForHomeChefs';
 import RiderSection from './components/RiderSection/RiderSection';
@@ -10,8 +12,6 @@ import Footer from './components/Footer/Footer';
 import SplashScreen from './components/SplashScreen/SplashScreen';
 import { usePremiumScroll } from './hooks/usePremiumScroll';
 import './App.css';
-import CustomerAuth from './components/CustomerAuth';
-import LandingNotice from './components/LandingNotice';
 
 function App() {
   const [landingReady, setLandingReady] = useState(false);
@@ -101,6 +101,7 @@ function App() {
         <RiderSection />
       </main>
       <Footer />
+
       <LandingNotice />
       <CustomerAuth />
 

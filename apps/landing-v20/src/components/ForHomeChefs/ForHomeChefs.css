@@ -1,198 +1,609 @@
-.chefs {
-  position: relative;
-  padding: 56px 0 104px;
-  background: #ffffff;
-  font-family: var(--font-ui);
-}
+/* All styles are scoped to the chef-invitation section. */
 
-.chefs__frame {
-  position: relative;
-}
+.chefs.chefs--invitation {
+  --chef-invite-background: #ffffff;
+  --chef-invite-ink: #101218;
+  --chef-invite-muted: #62748a;
+  --chef-invite-red: #e42922;
+  --chef-invite-ui: var(
+    --font-ui,
+    'Inter',
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif
+  );
 
-.chefs__panel {
   position: relative;
-  max-width: 1020px;
-  margin: 0 auto;
-  padding: 52px 72px 62px;
-  border-radius: 36px;
-  text-align: center;
-  background: #ffffff;
-  border: 1px solid rgba(229, 52, 42, 0.08);
-  box-shadow:
-    0 28px 68px rgba(24, 20, 18, 0.07),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  isolation: isolate;
+  width: 100%;
+  margin: 0;
+  padding: 100px 0;
   overflow: hidden;
+  background: var(--chef-invite-background);
+  font-family: var(--chef-invite-ui);
 }
 
-.chefs__eyebrow {
+.chefs--invitation,
+.chefs--invitation *,
+.chefs--invitation *::before,
+.chefs--invitation *::after {
+  box-sizing: border-box;
+}
+
+/* Full-width layout: food | content | food.
+   Each image is clipped inside its own grid column. */
+
+.chefs--invitation .chefs__layout {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, 740px)
+    minmax(0, 1fr);
+  column-gap: clamp(16px, 2vw, 32px);
+  align-items: center;
+  width: 100%;
+}
+
+.chefs--invitation .chefs__content {
   position: relative;
   z-index: 1;
-  margin-bottom: 22px;
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: center;
 }
 
-.chefs__eyebrow span {
+/* The supplied PNGs have wide canvases with food at one edge.
+   Scale by image height and anchor the relevant canvas edge.
+   Do not set these images to width: 100%. */
+
+.chefs--invitation .chefs__food {
+  position: relative;
+  grid-row: 1;
+  align-self: center;
+  min-width: 0;
+  width: 100%;
+  height: clamp(320px, 33vw, 464px);
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.chefs--invitation .chefs__food--left {
+  grid-column: 1;
+}
+
+.chefs--invitation .chefs__food--right {
+  grid-column: 3;
+}
+
+.chefs--invitation .chefs__food img {
+  position: absolute;
+  top: 0;
+  display: block;
+  width: auto;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+  border: 0;
+  border-radius: 0;
+  user-select: none;
+}
+
+.chefs--invitation .chefs__food--left img {
+  left: 0;
+}
+
+.chefs--invitation .chefs__food--right img {
+  right: 0;
+}
+
+/* Label */
+
+.chefs--invitation .chefs__eyebrow {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 38px;
-  padding: 0 18px;
+  min-height: 34px;
+  max-width: 100%;
+  margin: 0 0 22px;
+  padding: 8px 18px;
+  border: 0;
   border-radius: 999px;
-  background: rgba(246, 46, 24, 0.08);
-  border: 1px solid rgba(246, 46, 24, 0.12);
-  color: var(--color-red);
-  font-family: 'fraunces', var(--font-body);
+  background: #fff0ed;
+  color: #c92a24;
+  font-family: var(--chef-invite-ui);
+  font-size: 0.78rem;
   font-weight: 700;
-  font-size: 0.89rem;
-  letter-spacing: 0.14em;
+  line-height: 1.2;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
 }
 
-.chefs__headline {
+/* Two-line heading */
+
+.chefs--invitation .chefs__headline {
   position: relative;
-  z-index: 1;
-  max-width: 820px;
-  margin: 0 auto 22px;
-  font-family: var(--font-ui);
-  font-size: clamp(2.45rem, 4vw, 4rem);
+  margin: 0 0 24px;
+  padding: 0;
+  color: var(--chef-invite-ink);
+  font-family: var(--chef-invite-ui);
+  font-size: clamp(2.4rem, 4vw, 3.6rem);
   font-weight: 800;
-  line-height: 1.08;
+  line-height: 1.05;
   letter-spacing: -0.055em;
-  color: #101218;
   text-wrap: balance;
 }
 
-.chefs__headline-accent {
+.chefs--invitation .chefs__headline-line {
+  display: block;
+}
+
+.chefs--invitation .chefs__headline-accent {
   position: relative;
   display: inline-block;
-  color: #16181d;
+  isolation: isolate;
+  color: inherit;
 }
 
-.chefs__headline-accent::after {
+.chefs--invitation .chefs__headline-accent::after {
   content: '';
   position: absolute;
-  left: 4px;
-  right: 4px;
-  bottom: 0.12em;
-  height: 0.28em;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(246, 46, 24, 0.24), rgba(246, 46, 24, 0.12));
   z-index: -1;
+  left: 2%;
+  right: 0;
+  bottom: -0.015em;
+  height: 0.12em;
+  border-radius: 55% 40% 60% 35%;
+  background: linear-gradient(90deg, #ffe0db, #ffc9c4);
+  transform: rotate(-0.7deg);
+  pointer-events: none;
 }
 
-.chefs__text {
-  position: relative;
-  z-index: 1;
-  max-width: 860px;
+/* Supporting description */
+
+.chefs--invitation .chefs__text {
+  max-width: 660px;
   margin: 0 auto;
-  font-family: 'Fraunces',var(--font-body);
-  font-size: clamp(1.04rem, 1.12vw, 1.15rem);
-  line-height: 1.86;
+  padding: 0;
+  color: var(--chef-invite-muted);
+  font-family: 'Fraunces', var(--font-body, Georgia, serif);
+  font-size: clamp(1rem, 1.4vw, 1.2rem);
   font-weight: 400;
-  letter-spacing: -0.016em;
-  color: #656d77;
+  line-height: 1.65;
+  letter-spacing: -0.018em;
   text-wrap: balance;
 }
 
-.chefs__text strong {
-  color: #2a2f36;
-  font-weight: 700;
+.chefs--invitation .chefs__description-line {
+  display: block;
 }
 
-.chefs__actions {
-  position: relative;
-  z-index: 1;
+/* Existing shared Button, styled only inside this section. */
+
+.chefs--invitation .chefs__actions {
   display: flex;
   justify-content: center;
-  margin-top: 34px;
+  margin-top: 28px;
 }
 
-.chefs__cta {
-  min-height: 56px;
-  padding: 16px 28px;
-  font-family: 'Inter', var(--font-body);
-  font-size: 1rem;
+.chefs--invitation .chefs__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 58px;
+  max-width: 100%;
+  padding: 16px 32px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--chef-invite-red);
+  color: #ffffff;
+  box-shadow: 0 10px 26px rgba(228, 41, 34, 0.12);
+  font-family: var(--chef-invite-ui);
+  font-size: 1.125rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  box-shadow: 0 16px 36px rgba(229, 52, 42, 0.22);
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+  text-align: center;
+  text-decoration: none;
+  white-space: normal;
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    box-shadow 180ms ease;
 }
 
-.chefs__cta:hover {
-  box-shadow: 0 20px 42px rgba(229, 52, 42, 0.26);
+.chefs--invitation .chefs__cta:focus-visible {
+  outline: 3px solid #a9221c;
+  outline-offset: 4px;
 }
 
-.chefs__cta-icon {
-  width: 18px;
-  height: 18px;
+.chefs--invitation .chefs__cta-icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 2.25;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-@media (max-width: 900px) {
-  .chefs {
-    padding: 42px 0 88px;
-  }
-
-  .chefs__panel {
-    padding: 42px 34px 48px;
-    border-radius: 28px;
-  }
-
-  .chefs__headline {
-    margin-bottom: 18px;
-  }
-
-  .chefs__text {
-    max-width: 760px;
-    line-height: 1.76;
-  }
-
-  .chefs__actions {
-    margin-top: 28px;
+@media (hover: hover) {
+  .chefs--invitation .chefs__cta:hover {
+    background: #d9231c;
+    box-shadow: 0 12px 28px rgba(228, 41, 34, 0.17);
   }
 }
 
-@media (max-width: 560px) {
-  .chefs {
-    padding: 34px 0 72px;
+/* Three benefits */
+
+.chefs--invitation .chefs__benefits {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  width: 100%;
+  max-width: 660px;
+  margin: 32px auto 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chefs--invitation .chefs__benefit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 14px;
+  color: var(--chef-invite-muted);
+  text-align: left;
+}
+
+.chefs--invitation .chefs__benefit + .chefs__benefit {
+  border-inline-start: 1px solid #d5dde4;
+}
+
+.chefs--invitation .chefs__benefit-icon {
+  display: block;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chefs--invitation .chefs__benefit-label {
+  display: block;
+  min-width: 0;
+  font-family: 'Fraunces', var(--font-body, Georgia, serif);
+  font-size: 0.92rem;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: -0.015em;
+}
+
+/* Smaller desktops and landscape tablets */
+
+@media (max-width: 1180px) {
+  .chefs--invitation .chefs__layout {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(0, 64%)
+      minmax(0, 1fr);
+    column-gap: 16px;
   }
 
-  .chefs__panel {
-    padding: 34px 22px 38px;
-    border-radius: 24px;
+  .chefs--invitation .chefs__food {
+    height: clamp(280px, 34vw, 390px);
   }
 
-  .chefs__eyebrow {
-    margin-bottom: 16px;
+  .chefs--invitation .chefs__benefit {
+    gap: 8px;
+    padding: 0 10px;
   }
 
-  .chefs__eyebrow span {
-    min-height: 34px;
-    padding: 0 14px;
-    font-size: 0.78rem;
-    letter-spacing: 0.1em;
+  .chefs--invitation .chefs__benefit-icon {
+    width: 26px;
+    height: 26px;
   }
 
-  .chefs__headline {
-    font-size: clamp(1.9rem, 8vw, 2.7rem);
-    line-height: 1.12;
+  .chefs--invitation .chefs__benefit-label {
+    font-size: 0.85rem;
+  }
+}
+
+/* Mobile and smaller tablets:
+   food occupies row 1; all text occupies row 2.
+   The image row cannot overlap the content row. */
+
+@media (max-width: 767px) {
+  .chefs.chefs--invitation {
+    padding: 24px 0 48px;
   }
 
-  .chefs__text {
-    font-size: 0.98rem;
-    line-height: 1.72;
+  .chefs--invitation .chefs__layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 0;
+    row-gap: 20px;
   }
 
-  .chefs__actions {
+  .chefs--invitation .chefs__food {
+    grid-row: 1;
+    height: clamp(120px, 23vw, 160px);
+  }
+
+  .chefs--invitation .chefs__food--left {
+    grid-column: 1;
+  }
+
+  .chefs--invitation .chefs__food--right {
+    grid-column: 2;
+  }
+
+  .chefs--invitation .chefs__food img {
+    top: 50%;
+    height: 170%;
+    transform: translateY(-50%);
+  }
+
+  .chefs--invitation .chefs__content {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0 22px;
+  }
+
+  .chefs--invitation .chefs__eyebrow {
+    min-height: 30px;
+    margin-bottom: 18px;
+    padding: 7px 15px;
+    font-size: 0.7rem;
+    letter-spacing: 0.19em;
+  }
+
+  .chefs--invitation .chefs__headline {
+    margin-bottom: 15px;
+    font-size: clamp(1.9rem, 8vw, 3rem);
+    line-height: 1.08;
+    letter-spacing: -0.05em;
+  }
+
+  .chefs--invitation .chefs__text {
+    max-width: 480px;
+    font-size: 1rem;
+    line-height: 1.65;
+  }
+
+  .chefs--invitation .chefs__description-line {
+    display: inline;
+  }
+
+  .chefs--invitation .chefs__actions {
     margin-top: 24px;
   }
 
-  .chefs__cta {
+  .chefs--invitation .chefs__cta {
     width: 100%;
-    justify-content: center;
-    min-height: 52px;
-    font-size: 0.96rem;
+    max-width: 360px;
+    min-height: 54px;
+    gap: 10px;
+    padding: 14px 16px;
+    font-size: 1rem;
+  }
+
+  .chefs--invitation .chefs__benefits {
+    max-width: 440px;
+    margin-top: 28px;
+  }
+
+  .chefs--invitation .chefs__benefit {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 0 8px;
+    text-align: center;
+  }
+
+  .chefs--invitation .chefs__benefit-icon {
+    width: 27px;
+    height: 27px;
+  }
+
+  .chefs--invitation .chefs__benefit-label {
+    font-size: 0.81rem;
+    line-height: 1.45;
+    text-wrap: balance;
+  }
+}
+
+@media (max-width: 380px) {
+  .chefs--invitation .chefs__content {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .chefs--invitation .chefs__benefit {
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+
+  .chefs--invitation .chefs__benefit-label {
+    font-size: 0.78rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chefs--invitation .chefs__cta {
+    transition: none;
+  }
+
+}
+
+/* Letter-hanging vegetable friends. Each decorative character is anchored
+   to a real letter so the artwork stays attached at every responsive size. */
+.chefs--invitation .chefs__headline-stage {
+  position: relative;
+  width: min(100%, 860px);
+  margin: 0 auto 28px;
+  padding: 28px 76px 76px;
+  isolation: isolate;
+}
+
+.chefs--invitation .chefs__headline-stage .chefs__headline {
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  font-size: clamp(3rem, 4.85vw, 5.35rem);
+  line-height: 0.98;
+  letter-spacing: -0.067em;
+}
+
+.chefs--invitation .chefs__headline-stage .chefs__headline-line {
+  display: block;
+  white-space: nowrap;
+}
+
+.chefs--invitation .chefs__letter-anchor {
+  position: relative;
+  display: inline-block;
+  z-index: 2;
+}
+
+.chefs--invitation .chefs__letter-friend {
+  position: absolute;
+  z-index: 4;
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: none;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 5px 8px rgba(26, 24, 20, 0.08));
+}
+
+/* Tomato hooks visually into the opening S. */
+.chefs--invitation .chefs__letter-anchor--s .chefs__letter-friend--tomato {
+  width: 1.45em;
+  left: -1.00em;
+  top: 0.67em;
+  transform: rotate(-8deg);
+  transform-origin: 70% 18%;
+}
+
+/* Potato hangs from the first O of “love”. */
+.chefs--invitation .chefs__letter-anchor--o .chefs__letter-friend--potato {
+  width: 1.08em;
+  left: -0.03em;
+  top: 0.67em;
+  transform: rotate(-2deg);
+  transform-origin: 50% 0%;
+}
+
+/* The leafy top rises behind the U in “you”. */
+.chefs--invitation .chefs__letter-anchor--u .chefs__letter-friend--sprig {
+  z-index: 1;
+  width: 1.18em;
+  left: 0.12em;
+  bottom: 0.69em;
+  transform: rotate(5deg);
+  transform-origin: 18% 100%;
+}
+
+/* Carrot hangs from the same U on the right, like the reference. */
+.chefs--invitation .chefs__letter-anchor--u .chefs__letter-friend--carrot {
+  width: 1.02em;
+  left: 0.10em;
+  top: 0.37em;
+  transform: rotate(4deg);
+  transform-origin: 45% 0%;
+}
+
+/* Onion hangs directly from the K in “cook.” */
+.chefs--invitation .chefs__letter-anchor--k .chefs__letter-friend--onion {
+  width: 1.02em;
+  left: 0.18em;
+  top: 0.62em;
+  transform: rotate(6deg);
+  transform-origin: 42% 0%;
+}
+
+@media (max-width: 1180px) {
+  .chefs--invitation .chefs__headline-stage {
+    width: min(100%, 760px);
+    padding: 24px 64px 68px;
+  }
+
+  .chefs--invitation .chefs__headline-stage .chefs__headline {
+    font-size: clamp(2.7rem, 5vw, 4.5rem);
+  }
+}
+
+@media (max-width: 767px) {
+  .chefs--invitation .chefs__headline-stage {
+    width: 100%;
+    margin-bottom: 20px;
+    padding: 20px 42px 58px;
+  }
+
+  .chefs--invitation .chefs__headline-stage .chefs__headline {
+    font-size: clamp(2rem, 9.4vw, 3.15rem);
+    line-height: 1.01;
+    letter-spacing: -0.055em;
+  }
+
+  .chefs--invitation .chefs__letter-anchor--s .chefs__letter-friend--tomato {
+    width: 1.28em;
+    left: -0.88em;
+    top: 0.52em;
+  }
+
+  .chefs--invitation .chefs__letter-anchor--o .chefs__letter-friend--potato {
+    width: 0.98em;
+    left: -0.18em;
+    top: 0.7em;
+  }
+
+  .chefs--invitation .chefs__letter-anchor--u .chefs__letter-friend--sprig {
+    width: 1.08em;
+    left: 0.1em;
+    bottom: 0.68em;
+  }
+
+  .chefs--invitation .chefs__letter-anchor--u .chefs__letter-friend--carrot {
+    width: 0.93em;
+    left: 0.33em;
+    top: 0.59em;
+  }
+
+  .chefs--invitation .chefs__letter-anchor--k .chefs__letter-friend--onion {
+    width: 0.93em;
+    left: 0.14em;
+    top: 0.64em;
+  }
+}
+
+@media (max-width: 430px) {
+  .chefs--invitation .chefs__headline-stage {
+    padding-right: 32px;
+    padding-left: 32px;
+  }
+
+  .chefs--invitation .chefs__headline-stage .chefs__headline {
+    font-size: clamp(1.82rem, 9.25vw, 2.6rem);
   }
 }

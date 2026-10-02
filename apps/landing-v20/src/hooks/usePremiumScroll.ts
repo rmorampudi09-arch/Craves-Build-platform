@@ -4,17 +4,20 @@ const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
 // Rates are per SECOND, not per frame: no faster braking on a 144 Hz display.
-const NORMAL_DAMPING = 14;
+const NORMAL_DAMPING = 6.3;
 const HERO_DAMPING = 5.5;
+const HERO_ZOOM = 0.08;
 const SETTLE_EPSILON = 0.5;
 const easeInOutCubic = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
 /**
- * Smooth desktop wheel/trackpad scrolling with a soft return to the hero.
- * The hero brake changes arrival SPEED, never the user's destination: no snap,
- * scroll lock or timer that pulls visitors to the top. Touch, keyboard, zoom,
- * nested scrollers and reduced-motion preferences retain native control.
+ * One frame-synchronised scrolling/hero-motion controller.
+ * Desktop wheel/trackpad input uses time-based damping in BOTH directions.
+ * The hero media gently grows from 1 to 1.08 as its screen scrolls out, and
+ * reverses on the way back. No pinning, layout changes or second scroll engine.
+ * Touch, keyboard, browser zoom, nested scrollers and reduced-motion
+ * preferences retain native control.
  */
 export const usePremiumScroll = (enabled: boolean) => {
   useEffect(() => {
@@ -23,11 +26,19 @@ export const usePremiumScroll = (enabled: boolean) => {
     const root = document.documentElement;
     const nav = document.querySelector<HTMLElement>('.navbar__inner');
     const hero = document.getElementById('top');
+    const heroMedia = hero?.querySelector<HTMLElement>('.hero__media');
+    const previousHeroScale = heroMedia?.style.getPropertyValue('--hero-scroll-scale') ?? '';
+    const previousHeroActive = heroMedia?.getAttribute('data-scroll-active') ?? null;
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const pointer = window.matchMedia('(any-pointer: fine)');
     const previousClearance = root.style.getPropertyValue('--anchor-clearance');
     let frame = 0;
     let resizeFrame = 0;
+    let heroFrame = 0;
+    let heroStart = 0;
+    let heroHeight = Math.max(1, window.innerHeight);
+    let paintedHeroScale = '';
+    let paintedHeroActive: boolean | undefined;
     let disposed = false;
     let userInteracted = false;
     let wheelListening = false;
@@ -72,6 +83,36 @@ export const usePremiumScroll = (enabled: boolean) => {
       | undefined;
     const restoringHistory = navigation?.type === 'back_forward';
 
+    // Paint from the actual rendered scroll position, not its future target.
+    // The existing video intro keeps its own transform; scroll zoom belongs
+    // to its media parent so the two animations never overwrite one another.
+    const paintHero = (y = window.scrollY) => {
+      if (!heroMedia || disposed) return;
+      const progress = clamp((y - heroStart) / heroHeight, 0, 1);
+      const eased = progress * progress * (3 - 2 * progress);
+      const scale = (motion.matches ? 1 : 1 + HERO_ZOOM * eased).toFixed(5);
+      const active = !motion.matches && !document.hidden &&
+        y < heroStart + heroHeight && y + window.innerHeight > heroStart;
+      if (scale !== paintedHeroScale) {
+        heroMedia.style.setProperty('--hero-scroll-scale', scale);
+        paintedHeroScale = scale;
+      }
+      // Keep a compositor layer only while the hero is on screen.
+      if (active !== paintedHeroActive) {
+        heroMedia.toggleAttribute('data-scroll-active', active);
+        paintedHeroActive = active;
+      }
+    };
+
+    const scheduleHeroPaint = () => {
+      // Native touch/keyboard/scrollbar input needs only one paint per frame.
+      if (heroFrame || disposed) return;
+      heroFrame = requestAnimationFrame(() => {
+        heroFrame = 0;
+        paintHero();
+      });
+    };
+
     const measureClearance = () => {
       resizeFrame = 0;
       if (disposed) return;
@@ -79,16 +120,17 @@ export const usePremiumScroll = (enabled: boolean) => {
       const bottom = nav?.getBoundingClientRect().bottom ?? 86;
       const clearance = `${Math.ceil(Math.max(0, bottom) + 18)}px`;
       maxScroll = Math.max(0, root.scrollHeight - window.innerHeight);
-      // Start easing as the first screen re-enters the viewport; strongest
-      // damping is reserved for the final approach to the top.
-      heroZone = Math.max(1, Math.min(hero?.offsetHeight || window.innerHeight,
-        window.innerHeight) * 1.05);
+      heroStart = hero ? hero.getBoundingClientRect().top + window.scrollY : 0;
+      heroHeight = Math.max(1, hero?.offsetHeight || window.innerHeight);
+      // Blend gently from the hero into the page, with the same feel in reverse.
+      heroZone = Math.max(1, Math.min(heroHeight, window.innerHeight) * 1.05);
       targetY = clamp(targetY, 0, maxScroll);
       lastGeometryCheck = performance.now();
       nativeCache = new WeakMap();
       if (root.style.getPropertyValue('--anchor-clearance') !== clearance) {
         root.style.setProperty('--anchor-clearance', clearance);
       }
+      paintHero();
     };
 
     const scheduleMeasurement = () => {
@@ -127,6 +169,9 @@ export const usePremiumScroll = (enabled: boolean) => {
       window.scrollTo(window.scrollX, y);
       // Keep the fractional accumulator separate from browser-rounded scrollY.
       lastWrittenY = window.scrollY;
+      cancelAnimationFrame(heroFrame);
+      heroFrame = 0;
+      paintHero(lastWrittenY);
     };
 
     const clearTemporaryFocus = () => {
@@ -158,18 +203,14 @@ export const usePremiumScroll = (enabled: boolean) => {
         done = progress >= 1;
       } else {
         const difference = targetY - currentY;
-        const proximity = difference < 0 ? 1 - clamp(currentY / heroZone, 0, 1) : 0;
+        const proximity = 1 - clamp((currentY - heroStart) / heroZone, 0, 1);
         const blend = proximity * proximity * (3 - 2 * proximity);
-        // Catch up a little faster during long wheel bursts, without losing
-        // the soft, slower final arrival inside the hero.
+        // Frame-rate-independent interpolation, without a top-of-page speed
+        // cap. Long wheel bursts catch up gently rather than feeling stuck.
         const backlog = clamp(Math.abs(difference) / Math.max(1, window.innerHeight) - 0.75, 0, 1);
         const damping = NORMAL_DAMPING + (HERO_DAMPING - NORMAL_DAMPING) * blend +
-          6 * backlog * (1 - blend);
-        let travel = difference * (1 - Math.exp(-damping * dt));
-        if (proximity > 0) {
-          const pixelsPerSecond = 2400 - 1900 * blend;
-          travel = clamp(travel, -pixelsPerSecond * dt, pixelsPerSecond * dt);
-        }
+          3 * backlog * (1 - blend);
+        const travel = difference * (1 - Math.exp(-damping * dt));
         currentY = clamp(currentY + travel, 0, maxScroll);
         done = Math.abs(targetY - currentY) <= SETTLE_EPSILON;
       }
@@ -307,10 +348,14 @@ export const usePremiumScroll = (enabled: boolean) => {
       // Scrollbar drags, focus movement, find-in-page and other scripts win.
       if (mode && Math.abs(window.scrollY - lastWrittenY) > 2) stop();
       else if (!mode) currentY = targetY = lastWrittenY = window.scrollY;
+      if (!mode) scheduleHeroPaint();
     };
 
     const onResize = () => { stop(); scheduleMeasurement(); };
-    const onVisibility = () => { if (document.hidden) stop(); };
+    const onVisibility = () => {
+      if (document.hidden) stop();
+      paintHero();
+    };
     const onHistory = () => { interrupt(); scheduleMeasurement(); };
 
     const alignInitialHash = () => {
@@ -329,6 +374,7 @@ export const usePremiumScroll = (enabled: boolean) => {
 
     const updateInputMode = () => {
       stop();
+      paintHero();
       const shouldListen = !motion.matches && pointer.matches;
       if (shouldListen === wheelListening) return;
       if (shouldListen) window.addEventListener('wheel', onWheel, { passive: false });
@@ -385,6 +431,13 @@ export const usePremiumScroll = (enabled: boolean) => {
       stop();
       clearTemporaryFocus();
       cancelAnimationFrame(resizeFrame);
+      cancelAnimationFrame(heroFrame);
+      if (heroMedia) {
+        if (previousHeroScale) heroMedia.style.setProperty('--hero-scroll-scale', previousHeroScale);
+        else heroMedia.style.removeProperty('--hero-scroll-scale');
+        if (previousHeroActive !== null) heroMedia.setAttribute('data-scroll-active', previousHeroActive);
+        else heroMedia.removeAttribute('data-scroll-active');
+      }
       resizeObserver?.disconnect();
       removeMotionListener();
       removePointerListener();

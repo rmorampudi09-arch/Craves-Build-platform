@@ -143,7 +143,7 @@ export function ChefApplicationEvidenceUploader({
     }
     if (!applicationReady || locked || existing?.status === "APPROVED") return;
     const accepted = REQUIREMENTS.find(item => item.type === type)?.accept.split(",") ?? [];
-    if (file.size <= 0 || file.size > 10_000_000 || !accepted.includes(file.type)) {
+    if (file.size <= 0 || file.size > 10 * 1024 * 1024 || !accepted.includes(file.type)) {
       setTypeProgress(type, { progress: 0, phase: "ERROR", message: "Choose a supported file up to 10 MB. Photos must be JPG or PNG." });
       return;
     }

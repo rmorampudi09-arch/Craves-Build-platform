@@ -161,6 +161,17 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  /* Zoom the existing media layer only; text, scrim styling, section height,
+     and the video's original entrance animation remain unchanged. */
+  .hero__media {
+    transform: scale(var(--hero-scroll-scale, 1));
+    transform-origin: center center;
+  }
+
+  .hero__media[data-scroll-active] {
+    will-change: transform;
+  }
+
   .hero__inner > * {
     opacity: 0;
     transform: translateY(24px);

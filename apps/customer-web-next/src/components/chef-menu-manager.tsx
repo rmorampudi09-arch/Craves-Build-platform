@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { ArrowLeft, ImagePlus, Plus, UtensilsCrossed } from "lucide-react";
 import { FaPepperHot } from "react-icons/fa";
 import { Button } from "@/components/ui/buttons/button";
 import { Input } from "@/components/ui/forms/input";
 import { Switch } from "@/components/ui/forms/switch";
 import { Skeleton } from "@/components/ui/feedback/skeleton";
+import { parseChefKitchen } from "@/lib/chef-kitchen-contract";
 import {
   parseChefMenuItem,
   parseChefMenuItems,
@@ -78,6 +80,11 @@ function primaryImage(item?: ChefMenuItem) {
     item?.images.find((image) => image.primary)?.publicUrl ?? item?.images[0]?.publicUrl ?? null
   );
 }
+function requiresKitchen(response: Response, body: unknown): boolean {
+  return response.status === 400 && !!body && typeof body === "object" &&
+    "code" in body && body.code === "KITCHEN_PROFILE_REQUIRED";
+}
+
 function apiError(response: Response, body: unknown, fallback: string) {
   const code =
     body &&
@@ -88,7 +95,9 @@ function apiError(response: Response, body: unknown, fallback: string) {
       ? body.code
       : "";
   const reason =
-    response.status === 401
+    requiresKitchen(response, body)
+      ? "Set up your kitchen before adding or managing dishes."
+      : response.status === 401
       ? "Your session has expired. Sign in again to continue."
       : response.status === 403
         ? "Your account or kitchen is not eligible for this action. Check Chef approval, kitchen setup and payout readiness."
@@ -124,6 +133,7 @@ export function ChefMenuManager() {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [kitchenRequired, setKitchenRequired] = useState(false);
   const [message, setMessage] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -137,14 +147,33 @@ export function ChefMenuManager() {
   const load = useCallback(async (initial = false): Promise<boolean> => {
     if (initial) setLoading(true);
     try {
+      const kitchenResponse = await fetch("/api/chef/kitchen", { cache: "no-store" });
+      const kitchenBody: unknown = await kitchenResponse.json().catch(() => undefined);
+      if (!kitchenResponse.ok)
+        throw new Error(apiError(kitchenResponse, kitchenBody, "Your kitchen could not be checked. Please retry."));
+      if (kitchenBody === null) {
+        setItems([]);
+        setKitchenRequired(true);
+        setLoadError("");
+        return true;
+      }
+      if (!parseChefKitchen(kitchenBody))
+        throw new Error("Your kitchen could not be verified. Please retry. (INVALID_KITCHEN_RESPONSE)");
       const response = await fetch("/api/chef/menu", { cache: "no-store" });
       const body: unknown = await response.json().catch(() => null);
+      if (requiresKitchen(response, body)) {
+        setItems([]);
+        setKitchenRequired(true);
+        setLoadError("");
+        return true;
+      }
       if (!response.ok)
         throw new Error(apiError(response, body, "Your menu could not be loaded. Please retry."));
       const next = parseChefMenuItems(body);
       if (!next)
         throw new Error("The menu response was incomplete. Please retry. (INVALID_MENU_RESPONSE)");
       setItems(next);
+      setKitchenRequired(false);
       setLoadError("");
       return true;
     } catch (error) {
@@ -279,6 +308,11 @@ export function ChefMenuManager() {
       const body: unknown = await response.json().catch(() => null);
       if (!response.ok) {
         confirmedRejection = response.status >= 400 && response.status < 500;
+        if (requiresKitchen(response, body)) {
+          setItems([]);
+          setKitchenRequired(true);
+          setEditing(false);
+        }
         throw new Error(
           apiError(
             response,
@@ -349,10 +383,15 @@ export function ChefMenuManager() {
         body: JSON.stringify({ available, reason: null }),
       });
       const body: unknown = await response.json().catch(() => null);
-      if (!response.ok)
+      if (!response.ok) {
+        if (requiresKitchen(response, body)) {
+          setItems([]);
+          setKitchenRequired(true);
+        }
         throw new Error(
           apiError(response, body, "Availability was not confirmed. Reload the menu to check it."),
         );
+      }
       const updated = parseChefMenuItem(body);
       if (!updated)
         throw new Error(
@@ -389,6 +428,16 @@ export function ChefMenuManager() {
       ) : null}
     </>
   );
+
+  if (kitchenRequired && !loading && !loadError)
+    return <section className={SECTION}>
+      <h2 className="text-2xl font-semibold">Set up your kitchen first</h2>
+      <p className="mt-3 text-muted-foreground">Your Chef account is approved. Save your kitchen name and pickup address before adding dishes.</p>
+      <div className="mt-5 flex flex-wrap gap-3">
+        <Button asChild><Link href="/chef/kitchen">Set up my kitchen</Link></Button>
+        <Button variant="outline" disabled={busy || loading} onClick={() => void load(true)}>Check my kitchen</Button>
+      </div>
+    </section>;
 
   if (!editing)
     return (

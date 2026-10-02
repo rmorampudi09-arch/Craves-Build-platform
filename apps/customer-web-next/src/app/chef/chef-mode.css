@@ -41,7 +41,7 @@
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-flame-red) 14%, transparent);
 }
-.chef-desktop-nav{display:flex;align-items:center;gap:6px;overflow-x:auto;scrollbar-width:none;border-top:1px solid var(--chef-border);padding:8px 0 2px}
+.chef-desktop-nav{display:flex;align-items:center;gap:6px;min-width:0;overflow-x:auto;scrollbar-width:none;border-top:1px solid var(--chef-border);padding:8px 0 2px}
 .chef-desktop-nav::-webkit-scrollbar{display:none}
 .chef-desktop-nav-primary{display:flex;gap:6px;min-width:max-content}
 .chef-desktop-nav-link,.chef-context-link{min-height:44px;display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:0 15px;color:var(--chef-text);font-size:14px;font-weight:700;text-decoration:none;white-space:nowrap}
@@ -49,14 +49,15 @@
 .chef-desktop-nav-link.is-active,.chef-context-link{background:color-mix(in srgb,var(--color-flame-red) 8%,white);color:var(--chef-action)}
 .chef-context-link{margin-left:auto}
 .chef-mobile-nav{display:none}
-@media (max-width:767px){
- .chef-panel-theme{padding-bottom:calc(78px + env(safe-area-inset-bottom))}
+@media (max-width:1023px){
+ .chef-panel-theme{padding-bottom:calc(4.7rem + env(safe-area-inset-bottom))}
  .chef-desktop-nav{display:none}
- .chef-mobile-nav{position:fixed;z-index:40;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(5,1fr);min-height:64px;padding:7px 6px;border:1px solid rgba(255,255,255,.72);border-radius:22px;background:var(--chef-glass);box-shadow:0 12px 35px rgba(26,26,26,.13);backdrop-filter:blur(8px) saturate(145%);-webkit-backdrop-filter:blur(8px) saturate(145%)}
- .chef-mobile-nav-link{min-width:44px;min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:16px;color:var(--chef-muted);font-size:11px;font-weight:700;text-decoration:none}
- .chef-mobile-nav-link.is-active{color:var(--chef-action);background:color-mix(in srgb,var(--color-flame-red) 8%,transparent)}
- .chef-mobile-nav-icon{display:grid;place-items:center;min-height:24px}
+ .chef-mobile-nav{position:fixed;z-index:40;left:0;right:0;top:auto;bottom:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));width:100%;max-width:32rem;margin-inline:auto;padding:6px 6px max(6px,env(safe-area-inset-bottom));border-top:1px solid #eceef0;border-radius:1.15rem 1.15rem 0 0;background:rgba(255,255,255,.96);box-shadow:0 -8px 24px rgba(26,26,26,.065);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+ .chef-mobile-nav-link{min-width:44px;min-height:3.45rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:12px;padding:0 2px;color:var(--chef-muted);font-size:.61rem;line-height:.72rem;font-weight:800;text-decoration:none;text-align:center}
+ .chef-mobile-nav-link.is-active{color:var(--chef-action)}
+ .chef-mobile-nav-icon{display:grid;place-items:center;min-height:1.12rem}
 }
+.chef-mobile-nav-link:focus-visible,.chef-desktop-nav-link:focus-visible,.chef-context-link:focus-visible{outline:2px solid var(--chef-action);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){
  .chef-panel-theme *, .chef-panel-theme *::before, .chef-panel-theme *::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }

@@ -17,7 +17,8 @@ export async function boundBffRequest(request: NextRequest, options: { maxBytes?
   if (!isSameOrigin(request)) return rejected(403, "ORIGIN_REJECTED");
   const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
   const multipart = contentType.startsWith("multipart/form-data;");
-  if (multipart && !/^\/api\/chef\/(?:application\/proof-files|menu\/[0-9a-f-]{36}\/images)$/.test(request.nextUrl.pathname)) {
+  const pathname = new URL(request.url).pathname;
+  if (multipart && !/^\/api\/chef\/(?:application\/proof-files|menu\/[0-9a-f-]{36}\/images)$/.test(pathname)) {
     return rejected(415, "JSON_REQUIRED");
   }
   if (request.body && !multipart && !/^application\/json(?:\s*;|$)/.test(contentType)) {
@@ -25,7 +26,10 @@ export async function boundBffRequest(request: NextRequest, options: { maxBytes?
   }
   const encoding = request.headers.get("content-encoding")?.trim().toLowerCase();
   if (encoding && encoding !== "identity") return rejected(415, "CONTENT_ENCODING_NOT_SUPPORTED");
-  const limit = Math.min(multipart ? MULTIPART_BYTES : JSON_BYTES, options.maxBytes ?? Number.MAX_SAFE_INTEGER);
+  // The KYC service accepts a 10 MiB file within a 12 MiB multipart request.
+  // Keep the existing menu-image request ceiling unchanged.
+  const multipartLimit = pathname === "/api/chef/application/proof-files" ? 12 * 1024 * 1024 : MULTIPART_BYTES;
+  const limit = Math.min(multipart ? multipartLimit : JSON_BYTES, options.maxBytes ?? Number.MAX_SAFE_INTEGER);
   const timeoutMs = Math.min(multipart ? 15_000 : 5_000, options.timeoutMs ?? Number.MAX_SAFE_INTEGER);
   if (!Number.isSafeInteger(limit) || limit < 1 || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1) {
     throw new Error("INVALID_REQUEST_LIMIT_CONFIGURATION");

@@ -18,6 +18,14 @@ const EDITABLE = new Set<EditableKitchenStatus>([
   "INACTIVE",
 ]);
 
+export const CHEF_KITCHEN_FIELD_LIMITS = {
+  kitchenName: 160,
+  displayName: 160,
+  city: 80,
+  state: 80,
+  postalCode: 16,
+} as const;
+
 function text(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
   const result = value.trim();
@@ -27,6 +35,10 @@ function optional(value: unknown, max: number): string | null {
   return value === null || value === undefined || value === ""
     ? null
     : text(value, max);
+}
+function validOptionalText(value: unknown, max: number): boolean {
+  return value === null || value === undefined ||
+    (typeof value === "string" && value.trim().length <= max);
 }
 function number(value: unknown, min: number, max: number): number | null {
   if (value === null || value === undefined || value === "") return null;
@@ -45,10 +57,10 @@ export function parseChefKitchen(value: unknown): ChefKitchen | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
   const id = text(raw.id, 64);
-  const kitchenName = text(raw.kitchenName, 180);
+  const kitchenName = text(raw.kitchenName, CHEF_KITCHEN_FIELD_LIMITS.kitchenName);
   const addressLine1 = text(raw.addressLine1, 250);
-  const city = text(raw.city, 120);
-  const state = text(raw.state, 120);
+  const city = text(raw.city, CHEF_KITCHEN_FIELD_LIMITS.city);
+  const state = text(raw.state, CHEF_KITCHEN_FIELD_LIMITS.state);
   const status = text(raw.status, 40) as KitchenStatus | null;
   const createdAt = instant(raw.createdAt);
   const updatedAt = instant(raw.updatedAt);
@@ -68,7 +80,7 @@ export function parseChefKitchen(value: unknown): ChefKitchen | null {
   return {
     id,
     kitchenName,
-    displayName: optional(raw.displayName, 180),
+    displayName: optional(raw.displayName, CHEF_KITCHEN_FIELD_LIMITS.displayName),
     description: optional(raw.description, 2000),
     phoneNumber: optional(raw.phoneNumber, 24),
     email: optional(raw.email, 320),
@@ -78,7 +90,7 @@ export function parseChefKitchen(value: unknown): ChefKitchen | null {
     areaName: optional(raw.areaName, 120),
     city,
     state,
-    postalCode: optional(raw.postalCode, 20),
+    postalCode: optional(raw.postalCode, CHEF_KITCHEN_FIELD_LIMITS.postalCode),
     latitude: number(raw.latitude, -90, 90),
     longitude: number(raw.longitude, -180, 180),
     status,
@@ -90,10 +102,10 @@ export function parseChefKitchen(value: unknown): ChefKitchen | null {
 export function parseChefKitchenInput(value: unknown): ChefKitchenInput | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
-  const kitchenName = text(raw.kitchenName, 180);
+  const kitchenName = text(raw.kitchenName, CHEF_KITCHEN_FIELD_LIMITS.kitchenName);
   const addressLine1 = text(raw.addressLine1, 250);
-  const city = text(raw.city, 120);
-  const state = text(raw.state, 120);
+  const city = text(raw.city, CHEF_KITCHEN_FIELD_LIMITS.city);
+  const state = text(raw.state, CHEF_KITCHEN_FIELD_LIMITS.state);
   const status = text(raw.status, 40) as EditableKitchenStatus | null;
   const latitude = number(raw.latitude, -90, 90);
   const longitude = number(raw.longitude, -180, 180);
@@ -110,6 +122,8 @@ export function parseChefKitchenInput(value: unknown): ChefKitchenInput | null {
     !state ||
     !status ||
     !EDITABLE.has(status) ||
+    !validOptionalText(raw.displayName, CHEF_KITCHEN_FIELD_LIMITS.displayName) ||
+    !validOptionalText(raw.postalCode, CHEF_KITCHEN_FIELD_LIMITS.postalCode) ||
     hasLat !== hasLon ||
     (hasLat && (latitude === null || longitude === null)) ||
     (status === "ACTIVE" && (latitude === null || longitude === null))
@@ -117,7 +131,7 @@ export function parseChefKitchenInput(value: unknown): ChefKitchenInput | null {
     return null;
   return {
     kitchenName,
-    displayName: optional(raw.displayName, 180),
+    displayName: optional(raw.displayName, CHEF_KITCHEN_FIELD_LIMITS.displayName),
     description: optional(raw.description, 2000),
     phoneNumber: optional(raw.phoneNumber, 24),
     email: optional(raw.email, 320),
@@ -127,7 +141,7 @@ export function parseChefKitchenInput(value: unknown): ChefKitchenInput | null {
     areaName: optional(raw.areaName, 120),
     city,
     state,
-    postalCode: optional(raw.postalCode, 20),
+    postalCode: optional(raw.postalCode, CHEF_KITCHEN_FIELD_LIMITS.postalCode),
     latitude,
     longitude,
     status,

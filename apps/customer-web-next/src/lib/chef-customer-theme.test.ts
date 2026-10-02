@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import postcss from "postcss";
 
 const layout = readFileSync(
   new URL("../app/chef/layout.tsx", import.meta.url),
@@ -23,6 +24,7 @@ const kitchenPage = readFileSync(
   "utf8",
 );
 const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+const chefTheme = postcss.parse(readFileSync(new URL("../app/chef/chef-mode.css", import.meta.url), "utf8"));
 
 const workspaceRoutes = [
   "/chef/application",
@@ -61,6 +63,44 @@ test("every chef route inherits the responsive Craves workspace shell", () => {
   }
   assert.match(navigation, /aria-current=\{active \? "page" : undefined\}/);
 });
+
+function navigationStyles(selector: string, width: number) {
+  const declarations = new Map<string, string>();
+  chefTheme.walkRules(rule => {
+    if (rule.selector !== selector) return;
+    let parent: postcss.Rule["parent"] | postcss.Root["parent"] = rule.parent;
+    while (parent) {
+      if (parent.type === "atrule" && parent.name === "media") {
+        const maximum = /max-width:\s*(\d+)px/.exec(parent.params);
+        if (!maximum || width > Number(maximum[1])) return;
+      }
+      parent = parent.parent;
+    }
+    rule.walkDecls(declaration => { declarations.set(declaration.prop, declaration.value); });
+  });
+  return declarations;
+}
+
+for (const width of [390, 768, 1440]) {
+  test(`Chef navigation has a non-overlapping layout at ${width}px`, () => {
+    const desktop = navigationStyles(".chef-desktop-nav", width);
+    const bottom = navigationStyles(".chef-mobile-nav", width);
+    if (width < 1024) {
+      assert.equal(desktop.get("display"), "none");
+      assert.equal(bottom.get("display"), "grid");
+      assert.equal(bottom.get("position"), "fixed");
+      assert.equal(bottom.get("top"), "auto");
+      assert.equal(bottom.get("bottom"), "0");
+      assert.equal(bottom.get("max-width"), "32rem");
+      assert.match(bottom.get("padding") ?? "", /safe-area-inset-bottom/);
+      assert.match(navigationStyles(".chef-panel-theme", width).get("padding-bottom") ?? "", /safe-area-inset-bottom/);
+      assert.equal(navigationStyles(".chef-mobile-nav-link", width).get("min-height"), "3.45rem");
+    } else {
+      assert.equal(desktop.get("display"), "flex");
+      assert.equal(bottom.get("display"), "none");
+    }
+  });
+}
 
 test("chef dashboard keeps daily actions visible and defers advanced areas", () => {
   for (const route of dailyDashboardRoutes) {

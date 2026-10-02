@@ -13,7 +13,16 @@ async function requestUpstream(request: NextRequest, method: "GET" | "POST", bod
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
     const upstream = await boundedFetch(`${apiBaseUrl()}/kitchens/me/menu-items`, { method, headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(body === undefined ? {} : { "Content-Type": "application/json" }) }, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", signal: controller.signal }, 40_000);
-    if (!upstream.ok) { const response = NextResponse.json({ code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "CHEF_ACCESS_REQUIRED" : "MENU_REQUEST_FAILED" }, { status: upstream.status }); if (upstream.status === 401) response.cookies.delete("craves_access_token"); return response; }
+    if (!upstream.ok) {
+      const failure = await upstream.json().catch(() => null) as { code?: unknown } | null;
+      const kitchenRequired = upstream.status === 400 && failure?.code === "KITCHEN_PROFILE_REQUIRED";
+      const response = NextResponse.json({
+        code: kitchenRequired ? "KITCHEN_PROFILE_REQUIRED" : upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "CHEF_ACCESS_REQUIRED" : "MENU_REQUEST_FAILED",
+        ...(kitchenRequired ? { message: "Set up your kitchen before adding or managing dishes." } : {}),
+      }, { status: upstream.status, headers: { "Cache-Control": "no-store" } });
+      if (upstream.status === 401) response.cookies.delete("craves_access_token");
+      return response;
+    }
     const raw = await upstream.json().catch(() => null);
     const parsed = method === "GET" ? parseChefMenuItems(raw) : parseChefMenuItem(raw);
     if (!parsed) return NextResponse.json({ code: "INVALID_MENU_RESPONSE" }, { status: 502 });

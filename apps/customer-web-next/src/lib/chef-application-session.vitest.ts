@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { createElement, useEffect, useState } from "react";
+import { createElement, useEffect, useRef, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ChefApplicationSessionBoundary } from "../components/chef-application-session-boundary";
@@ -7,7 +7,12 @@ import { ChefApplicationWorkspace } from "../components/chef-application-workspa
 import { captureSessionContext, invalidateSession, setSessionIdentity, setSessionEmailVerification } from "../services/auth/cravesAuth";
 import type { CravesIdentity } from "./auth-contract";
 
-vi.mock("../components/auth/EmailVerificationPanel", () => ({ EmailVerificationPanel: () => null }));
+let verifiedEmail = false;
+vi.mock("../components/auth/EmailVerificationPanel", () => ({ EmailVerificationPanel: ({ onStateChange }: { onStateChange: (state: unknown) => void }) => {
+  const callback = useRef(onStateChange);
+  useEffect(() => { if (verifiedEmail) callback.current({ email: "a@example.invalid", emailVerified: true, emailRevision: 1, pending: null, serverTime: "2026-10-02T00:00:00Z" }); }, []);
+  return null;
+} }));
 const owner: CravesIdentity = { id: "11111111-1111-4111-8111-111111111111", phoneNumber: "+10000000000", displayName: "Fixture A", email: "a@example.invalid", emailVerified: true, status: "ACTIVE", roles: ["CUSTOMER"] };
 let current: CravesIdentity | null = owner;
 const fetcher = vi.fn<typeof fetch>();
@@ -23,7 +28,7 @@ function normal(input: RequestInfo | URL) {
   if (String(input) === "/api/auth/refresh") return Promise.resolve(Response.json({ identity: current }, { status: current ? 200 : 401 }));
   return Promise.resolve(Response.json({}, { status: 404 }));
 }
-beforeEach(() => { current = owner; invalidateSession(captureSessionContext()); fetcher.mockReset().mockImplementation(normal); vi.stubGlobal("fetch", fetcher); });
+beforeEach(() => { verifiedEmail = false; current = owner; invalidateSession(captureSessionContext()); fetcher.mockReset().mockImplementation(normal); vi.stubGlobal("fetch", fetcher); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 it("waits for expired-session recovery before mounting private sections", async () => {
@@ -41,8 +46,92 @@ it("waits for expired-session recovery before mounting private sections", async 
   expect(fetcher.mock.calls.filter(([url]) => url === "/api/auth/refresh")).toHaveLength(1);
 });
 
+it("opens a new application when optional address/profile prefills fail", async () => {
+  fetcher.mockImplementation(input => String(input) === "/api/chef/application"
+    ? Promise.resolve(Response.json({ status: "NOT_SUBMITTED", documents: [] }))
+    : Promise.reject(new Error("Optional prefill unavailable")));
+  render(createElement(ChefApplicationWorkspace));
+  await screen.findByRole("button", { name: /Become a Chef/ });
+});
+
+it("shows repeated load failures after retry without an unhandled rejection", async () => {
+  fetcher.mockResolvedValue(Response.json({}, { status: 503 }));
+  render(createElement(ChefApplicationWorkspace));
+  fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(6));
+  await screen.findByText("We couldn’t load your application right now.");
+  expect(screen.getByRole("button", { name: "Try again" }).hasAttribute("disabled")).toBe(false);
+});
+
+it("resubmits corrected rejected applications and does not fake a pending state on failure", async () => {
+  verifiedEmail = true;
+  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+  vi.stubGlobal("scrollTo", vi.fn());
+  const rejected = {
+    id: owner.id, status: "REJECTED", email: "a@example.invalid", firstName: "Fixture", lastName: "Chef",
+    addressLine1: "1 Test Road", city: "Hyderabad", state: "Telangana", rejectionReason: "Please replace the ID photo",
+    documents: ["APPLICANT_PHOTO", "GOVERNMENT_ID_FRONT", "GOVERNMENT_ID_BACK", "TAX_ID_CARD"].map(documentType => ({
+      id: owner.id, documentType, originalFileName: "fixture.png", contentType: "image/png", fileSizeBytes: 100,
+      status: "UPLOADED", createdAt: "2026-10-02T00:00:00Z",
+    })),
+  };
+  let succeeds = false;
+  fetcher.mockImplementation((input, init) => Promise.resolve(Response.json(
+    init?.method === "POST" ? succeeds ? { ...rejected, status: "PENDING", rejectionReason: null }
+      : { code: "EMAIL_AUTHORITY_UNAVAILABLE", message: "We couldn’t confirm your verified email right now." }
+      : String(input) === "/api/chef/application" ? rejected : [],
+    { status: init?.method === "POST" && !succeeds ? 503 : 200 },
+  )));
+  render(createElement(ChefApplicationWorkspace));
+  const submit = await screen.findByRole("button", { name: "Resubmit for verification" });
+  await waitFor(() => expect(submit.hasAttribute("disabled")).toBe(false));
+  fireEvent.click(submit);
+  await screen.findByText("We couldn’t confirm your verified email right now.");
+  expect(screen.queryByText("Application under review")).toBeNull();
+  succeeds = true;
+  fireEvent.click(screen.getByRole("button", { name: "Resubmit for verification" }));
+  await screen.findByRole("button", { name: "View verification status" });
+  const posts = fetcher.mock.calls.filter(([, init]) => init?.method === "POST");
+  expect(posts).toHaveLength(2);
+  expect(JSON.parse(posts[1][1]!.body as string).email).toBe("a@example.invalid");
+});
+
 it("allows an active CUSTOMER to apply before chef approval", async () => {
   boundary(); await screen.findByLabelText("Private chef draft");
+});
+
+it("saves a new application through the guided flow and restores its saved state after remount", async () => {
+  verifiedEmail = true;
+  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+  vi.stubGlobal("scrollTo", vi.fn());
+  let saved: Record<string, unknown> = { status: "NOT_SUBMITTED", documents: [] };
+  fetcher.mockImplementation((input, init) => {
+    if (String(input) !== "/api/chef/application") return Promise.resolve(Response.json([]));
+    if (init?.method === "POST") saved = { ...JSON.parse(init.body as string), id: owner.id, status: "PENDING", documents: [] };
+    return Promise.resolve(Response.json(saved));
+  });
+  const view = render(createElement(ChefApplicationWorkspace));
+  fireEvent.click(await screen.findByRole("button", { name: /Become a Chef/ }));
+  fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Test" } });
+  fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Chef" } });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  const accountContinue = screen.getByRole("button", { name: "Continue" });
+  await waitFor(() => expect(accountContinue.hasAttribute("disabled")).toBe(false));
+  fireEvent.click(accountContinue);
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  fireEvent.change(screen.getByLabelText("Flat / House / Building"), { target: { value: "1 Test Road" } });
+  fireEvent.change(screen.getByLabelText("City"), { target: { value: "Hyderabad" } });
+  fireEvent.change(screen.getByLabelText("State"), { target: { value: "Telangana" } });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save details and continue" }));
+  await screen.findByRole("heading", { name: "Verify your identity" });
+  expect(saved).toMatchObject({ firstName: "Test", email: "a@example.invalid", status: "PENDING", latitude: null, longitude: null });
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+  view.unmount();
+  render(createElement(ChefApplicationWorkspace));
+  await screen.findByRole("heading", { name: "Verify your identity" });
+  expect(screen.queryByRole("button", { name: /Become a Chef/ })).toBeNull();
 });
 
 it("provides retry for a failed check and never mounts the private form prematurely", async () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Button } from "@/components/ui/buttons/button";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -10,7 +11,7 @@ import {
   ChevronRight,
   ClipboardCheck,
   ClipboardList,
-  LogIn,
+  Bell,
   RefreshCw,
   ShieldCheck,
   Store,
@@ -78,14 +79,13 @@ function hasChefRole(user: CravesUser | null): boolean {
 }
 
 function hasRequiredEvidence(application: ChefApplication): boolean {
-  const types = new Set(application.documents.map((document) => document.documentType));
+  const types = new Set(application.documents.filter(document => document.status === "UPLOADED" || document.status === "APPROVED").map((document) => document.documentType));
   const modernEvidence =
     types.has("APPLICANT_PHOTO") &&
     types.has("GOVERNMENT_ID_FRONT") &&
     types.has("GOVERNMENT_ID_BACK") &&
     types.has("TAX_ID_CARD");
-  const legacyEvidence = types.has("AADHAAR_CARD") && types.has("PAN_CARD");
-  return modernEvidence || legacyEvidence;
+  return modernEvidence;
 }
 
 async function responseBody(response: Response): Promise<unknown> {
@@ -329,7 +329,9 @@ export function ChefModeDashboard() {
     );
     const weekCurrency = weekEntries[0]?.currency ?? snapshot.earnings[0]?.currency ?? "INR";
     const weekAmount = weekEntries.reduce((sum, entry) => sum + entry.netPayable, 0);
-    return { actionOrders, activeOrders, availableMenu, weekAmount, weekCurrency };
+    const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    const todayOrders = snapshot.orders.filter(order => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(order.createdAt)) === todayKey).length;
+    return { actionOrders, activeOrders, availableMenu, weekAmount, weekCurrency, todayOrders };
   }, [snapshot]);
 
   function dismissApprovalNotice() {
@@ -358,21 +360,14 @@ export function ChefModeDashboard() {
   }
 
   if (state === "signed-out") {
-    return (
-      <section className="mx-auto max-w-2xl rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center md:p-10">
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]">
-          <LogIn className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
-        </span>
-        <h1 className="mt-5 text-3xl font-bold tracking-tight text-[#1A1A1A]">Sign in to Chef Mode</h1>
-        <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[#6B6B6B]">{message}</p>
-        <Link href="/sign-in?returnTo=/chef" className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto">
-          Sign in
-        </Link>
-        <div className="mt-3">
-          <Link href="/home" className="inline-flex min-h-11 items-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A]">Switch to Customer Mode</Link>
-        </div>
-      </section>
-    );
+    return <section className="chef-step mx-auto grid max-w-5xl overflow-hidden rounded-3xl border border-[#E5E7EB] bg-white shadow-[var(--shadow-card)] md:grid-cols-2">
+      <img src="/home/cravings/craves-home-banner.webp" alt="A generous spread of homemade food" className="aspect-[4/3] h-full w-full object-cover object-right" fetchPriority="high" />
+      <div className="p-6 md:p-10"><p className="text-sm font-semibold text-primary">Become a Craves Chef</p><h1 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">Share your homemade food with thousands of customers</h1>
+        <div className="my-6 space-y-3 text-sm">{["Earn from your cooking", "Reach nearby customers", "Manage your kitchen easily"].map(benefit => <p key={benefit} className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />{benefit}</p>)}</div>
+        <Button asChild className="w-full"><Link href="/sign-in?returnTo=/chef/application">Become a Chef</Link></Button>
+        <Button asChild variant="ghost" className="mt-2 w-full"><Link href="/sign-in?returnTo=/chef">Already a Chef? Login</Link></Button>
+      </div>
+    </section>;
   }
 
   if (state === "verification") {
@@ -541,7 +536,7 @@ export function ChefModeDashboard() {
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A] md:text-4xl">
             Hello, {user?.firstName || user?.username || "Chef"}
           </h1>
-          <p className="mt-2 text-sm text-[#6B6B6B]">Here’s the one thing that needs your attention now.</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3"><span className="rounded-full bg-[#F1F3F5] px-3 py-2 text-sm font-semibold">{snapshot.kitchen?.kitchenName || "Your Craves kitchen"}</span><span className="inline-flex items-center gap-1 text-sm text-primary"><ShieldCheck className="h-4 w-4" />Approved Chef</span><Button asChild variant="ghost" size="icon"><Link href="/notifications" aria-label="Chef notifications"><Bell className="h-5 w-5" /></Link></Button></div>
         </div>
 
         {snapshot.unavailable.length > 0 ? (
@@ -578,13 +573,14 @@ export function ChefModeDashboard() {
           )}
         </section>
 
-        <section className="grid gap-3 sm:grid-cols-3" aria-label="Kitchen summary">
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Kitchen summary">
+          <Link href="/chef/orders" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)]"><ClipboardList className="h-5 w-5 text-primary" /><p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Today’s orders</p><p className="mt-1 text-2xl font-bold">{snapshot.unavailable.includes("orders") ? "—" : stats.todayOrders}</p></Link>
           <Link href="/chef/kitchen" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
               <Store className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
             </span>
             <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Your kitchen</p>
-            <p className="mt-1 font-bold text-[#1A1A1A]">{kitchenOpen ? "Open" : "Closed for now"}</p>
+            <p className="mt-1 font-bold text-[#1A1A1A]">{kitchenOpen ? "Accepting orders" : "Not accepting orders"}</p>
           </Link>
           <Link href="/chef/menu" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">

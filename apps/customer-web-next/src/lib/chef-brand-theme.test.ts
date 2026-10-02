@@ -24,8 +24,8 @@ test("chef workspace uses the approved green, white and neutral palette", () => 
   assert.match(pageHeader, /bg-white/);
   assert.match(pageHeader, /text-\[#1A1A1A\]/i);
   assert.match(pageHeader, /text-\[#178F56\]/i);
-  assert.match(chefTheme, /--chef-action:\s*#178f56/i);
-  assert.match(chefTheme, /--chef-action-hover:\s*#147b4a/i);
+  assert.match(chefTheme, /--chef-action:\s*var\(--color-success\)/i);
+  assert.match(chefTheme, /--chef-action-hover:\s*color-mix\(in srgb, var\(--color-success\)/i);
   assert.match(dashboard, /#F1F3F5/i);
   assert.match(dashboard, /#1A1A1A/i);
   assert.match(dashboard, /#6B6B6B/i);

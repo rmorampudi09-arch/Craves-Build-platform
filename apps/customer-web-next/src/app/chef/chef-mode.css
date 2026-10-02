@@ -1,18 +1,22 @@
 .chef-panel-theme {
-  --chef-action: #178f56;
-  --chef-action-hover: #147b4a;
-  --chef-page: #f7f8f7;
+  --chef-action: var(--color-success);
+  --primary: var(--color-success);
+  --primary-foreground: #fff;
+  --ring: var(--color-success);
+  --gradient-primary: var(--color-success);
+  --chef-action-hover: color-mix(in srgb, var(--color-success) 88%, #000);
+  --chef-page: var(--background);
   --chef-text: #1a1a1a;
   --chef-muted: #6b6b6b;
   --chef-placeholder: #9ca3af;
   --chef-border: #e5e7eb;
   --chef-input: #f1f3f5;
-  --chef-success: #15803d;
+  --chef-success: var(--color-success);
   --chef-warning: #b45309;
   --chef-error: #b91c1c;
   --chef-info: #2563eb;
   --chef-food: #ff8a3d;
-  --chef-glass: rgba(255,255,255,.78);
+  --chef-glass: rgba(255,255,255,.64);
   min-height: 100vh;
   background: var(--chef-page);
   color: var(--chef-text);
@@ -35,7 +39,7 @@
 .chef-panel-theme :is(input,textarea,select):focus-visible {
   border-color: var(--chef-action) !important;
   outline: none;
-  box-shadow: 0 0 0 3px rgba(23,143,86,.14);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 14%, transparent);
 }
 .chef-desktop-nav{display:flex;align-items:center;gap:6px;overflow-x:auto;scrollbar-width:none;border-top:1px solid var(--chef-border);padding:8px 0 2px}
 .chef-desktop-nav::-webkit-scrollbar{display:none}
@@ -48,7 +52,7 @@
 @media (max-width:767px){
  .chef-panel-theme{padding-bottom:calc(78px + env(safe-area-inset-bottom))}
  .chef-desktop-nav{display:none}
- .chef-mobile-nav{position:fixed;z-index:40;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(5,1fr);min-height:64px;padding:7px 6px;border:1px solid rgba(255,255,255,.72);border-radius:22px;background:var(--chef-glass);box-shadow:0 12px 35px rgba(26,26,26,.13);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+ .chef-mobile-nav{position:fixed;z-index:40;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(5,1fr);min-height:64px;padding:7px 6px;border:1px solid rgba(255,255,255,.72);border-radius:22px;background:var(--chef-glass);box-shadow:0 12px 35px rgba(26,26,26,.13);backdrop-filter:blur(8px) saturate(145%);-webkit-backdrop-filter:blur(8px) saturate(145%)}
  .chef-mobile-nav-link{min-width:44px;min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:16px;color:var(--chef-muted);font-size:11px;font-weight:700;text-decoration:none}
  .chef-mobile-nav-link.is-active{color:var(--chef-action);background:rgba(234,247,240,.82)}
  .chef-mobile-nav-icon{display:grid;place-items:center;min-height:24px}
@@ -56,3 +60,28 @@
 @media (prefers-reduced-motion:reduce){
  .chef-panel-theme *, .chef-panel-theme *::before, .chef-panel-theme *::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+/* Keep older Chef forms on the same customer tokens during their UI migration. */
+.chef-panel-theme [class*="text-[#F62E18]"],
+.chef-panel-theme [class*="text-[#178F56]"],
+.chef-panel-theme [class*="text-[#15803D]"] { color: var(--chef-action); }
+.chef-panel-theme [class*="bg-[#F62E18]"]:not(button):not(a) { background: var(--chef-action); }
+.chef-panel-theme :is(button, a)[class*="bg-[#F62E18]"],
+.chef-panel-theme :is(button, a)[class*="bg-primary"] {
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 200ms, box-shadow 200ms, transform 200ms;
+}
+.chef-panel-theme :is(button, a)[class*="bg-[#F62E18]"]:active,
+.chef-panel-theme :is(button, a)[class*="bg-primary"]:active { transform: scale(.98); }
+.chef-panel-theme :is(button, input, textarea, select):disabled { cursor: not-allowed; }
+.chef-panel-theme [role="alert"] { color: #dc2626; }
+.chef-panel-theme :is(input, textarea, select)[aria-invalid="true"] { border-color: #dc2626 !important; }
+.chef-field-error { margin-top: .4rem; color: #dc2626; font-size: .8rem; font-weight: 500; }
+.chef-step { animation: chefStepIn 240ms cubic-bezier(.23,.88,.26,.92) both; }
+.chef-mobile-nav-link, .chef-desktop-nav-link { transition: color 200ms, background-color 200ms; }
+.chef-mobile-nav-link.is-active .chef-mobile-nav-icon { transform: translateY(-1px); }
+.chef-mobile-nav-icon { transition: transform 200ms cubic-bezier(.23,.88,.26,.92); }
+@keyframes chefStepIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes chefFieldShake { 0%,100% { transform: translateX(0); } 30% { transform: translateX(-3px); } 65% { transform: translateX(3px); } }

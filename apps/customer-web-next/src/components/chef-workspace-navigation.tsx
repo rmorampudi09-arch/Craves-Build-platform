@@ -1,17 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { FaHome, FaUser } from "react-icons/fa";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BadgeIndianRupee, CalendarDays, ClipboardCheck, ClipboardList, Gauge, Home, ShieldCheck, Store, Utensils } from "lucide-react";
+import { BadgeIndianRupee, CalendarDays, ClipboardCheck, ClipboardList, Gauge, ShieldCheck, Store, Utensils } from "lucide-react";
 import { getSession, subscribeSession, type CravesUser } from "@/services/auth/cravesAuth";
 
 const primaryLinks = [
-  { href: "/chef", label: "Home", icon: Home },
+  { href: "/chef", label: "Home", icon: FaHome },
   { href: "/chef/orders", label: "Orders", icon: ClipboardList },
   { href: "/chef/menu", label: "Menu", icon: Utensils },
   { href: "/chef/earnings", label: "Earnings", icon: BadgeIndianRupee },
-  { href: "/chef/profile", label: "Profile", icon: Store },
+  { href: "/chef/profile", label: "Profile", icon: FaUser },
 ] as const;
 
 const contextualLinks = [

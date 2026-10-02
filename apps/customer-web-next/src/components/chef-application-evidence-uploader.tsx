@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, CircleAlert, FileUp, ShieldCheck, XCircle } from "lucide-react";
+import { Button } from "@/components/ui/buttons/button";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -61,9 +62,9 @@ function formatBytes(value: number): string {
 }
 
 function statusLabel(document: ChefEvidenceMetadata | undefined): string {
-  if (!document) return "Required";
+  if (!document) return "Not submitted";
   if (document.status === "APPROVED") return "Approved ✓";
-  if (document.status === "REJECTED") return "Replacement required";
+  if (document.status === "REJECTED") return "Rejected · resubmit";
   return "Under review";
 }
 
@@ -114,17 +115,6 @@ export function ChefApplicationEvidenceUploader({
   const approvalProgress = Math.round((approvedCount / REQUIREMENTS.length) * 100);
   const incompleteApprovedHistory = locked && approvedCount < REQUIREMENTS.length;
 
-  useEffect(() => {
-    if (
-      onComplete &&
-      applicationReady &&
-      !locked &&
-      uploadedCount === REQUIREMENTS.length &&
-      rejectedCount === 0
-    ) {
-      onComplete();
-    }
-  }, [applicationReady, locked, onComplete, rejectedCount, uploadedCount]);
 
   function stateFor(type: EvidenceType): ProgressState {
     return progress[type] ?? INITIAL_PROGRESS;
@@ -225,7 +215,7 @@ export function ChefApplicationEvidenceUploader({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-3xl">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Chef application documents</p>
-          <h2 className="mt-2 text-2xl font-bold">Document review status</h2>
+          <h2 className="mt-2 text-2xl font-bold">Verify your identity</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             {locked ? "Your application is approved. The available document history is shown below." : "Each file is reviewed independently. If a document needs replacing, your other approved documents stay accepted."}
           </p>
@@ -260,7 +250,7 @@ export function ChefApplicationEvidenceUploader({
         </div>
       )}
 
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
         {REQUIREMENTS.filter(requirement => !locked || uploadedByType.has(requirement.type)).map(requirement => {
           const uploaded = uploadedByType.get(requirement.type);
           const selected = files[requirement.type];
@@ -302,7 +292,7 @@ export function ChefApplicationEvidenceUploader({
                   <div><strong>Accepted by Craves.</strong><p className="mt-1">No action is required for this document, and normal replacement is disabled.</p></div>
                 </div>
               ) : !locked ? (
-                <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                <div className="mt-4 grid gap-3 items-end">
                   <label className="text-sm font-semibold">
                     {rejected ? "Choose replacement file" : uploaded ? "Replace before review completes (optional)" : "Choose file"}
                     <input
@@ -318,9 +308,9 @@ export function ChefApplicationEvidenceUploader({
                     type="button"
                     disabled={!canReplace || busy || !selected}
                     onClick={() => upload(requirement.type)}
-                    className={`min-h-12 rounded-full px-6 font-bold text-white disabled:opacity-40 ${rejected ? "bg-red-700" : "bg-primary"}`}
+                    className="min-h-12 rounded-md bg-primary px-6 font-semibold text-white disabled:opacity-40"
                   >
-                    {busy ? "Uploading…" : rejected ? "Replace rejected document" : uploaded ? "Replace" : "Upload"}
+                    {busy ? "Uploading…" : rejected ? "Resubmit" : uploaded ? "Replace" : "Upload"}
                   </button>
                 </div>
               ) : null}
@@ -341,6 +331,7 @@ export function ChefApplicationEvidenceUploader({
         })}
       </div>
 
+      {onComplete ? <Button className="mt-6 w-full" disabled={!applicationReady || locked || uploadedCount !== REQUIREMENTS.length || rejectedCount > 0} onClick={onComplete}>Review application</Button> : null}
       <div className={`mt-5 rounded-2xl p-4 text-sm ${approvedCount === 4 ? "bg-emerald-50 text-emerald-900" : rejectedCount > 0 ? "bg-red-50 text-red-950" : "bg-white text-slate-700"}`}>
         {locked
           ? incompleteApprovedHistory ? "Your application approval has not changed. Missing history has not been marked as verified." : "Your application and all four documents are approved."

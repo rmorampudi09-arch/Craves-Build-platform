@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BadgeIndianRupee, Bell, ChevronRight, FileCheck2, MapPin, Store, UserRound } from "lucide-react";
+import { BadgeIndianRupee, Bell, CalendarDays, ChevronRight, FileCheck2, MapPin, Store, UserRound } from "lucide-react";
 import { ChefAccessBoundary } from "@/components/chef-access-boundary";
 import { ChefPageHeader } from "@/components/chef-page-header";
 
@@ -13,8 +13,11 @@ function ProfileContent(){
  const [application,setApplication]=useState<Application|null>(null);
  const [kitchen,setKitchen]=useState<Kitchen|null>(null);
  const [loading,setLoading]=useState(true);
- useEffect(()=>{let active=true; void Promise.all([fetch("/api/chef/application",{cache:"no-store"}),fetch("/api/chef/kitchen",{cache:"no-store"})]).then(async([a,k])=>{const av=a.ok?await a.json().catch(()=>null):null;const kv=k.ok?await k.json().catch(()=>null):null;if(active){setApplication(av);setKitchen(kv);setLoading(false)}}).catch(()=>{if(active)setLoading(false)});return()=>{active=false}},[]);
+ const [error,setError]=useState(false);
+ const [retry,setRetry]=useState(0);
+ useEffect(()=>{let active=true; setLoading(true); setError(false); void Promise.all([fetch("/api/chef/application",{cache:"no-store"}),fetch("/api/chef/kitchen",{cache:"no-store"})]).then(async([a,k])=>{if(!a.ok || !k.ok) throw new Error("Profile unavailable");const av=a.ok?await a.json().catch(()=>null):null;const kv=k.ok?await k.json().catch(()=>null):null;if(active){setApplication(av);setKitchen(kv);setLoading(false)}}).catch(()=>{if(active){setError(true);setLoading(false)}});return()=>{active=false}},[retry]);
  if(loading)return <div className="h-80 animate-pulse rounded-3xl bg-[#F1F3F5]" aria-label="Loading profile"/>;
+ if(error)return <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6"><p role="alert">Your profile could not load. Please try again.</p><button type="button" onClick={()=>setRetry(value=>value+1)} className="mt-4 min-h-12 rounded-md bg-primary px-5 text-white">Try again</button></section>;
  const name=[application?.firstName,application?.lastName].filter(Boolean).join(" ")||"Chef";
  const address=[kitchen?.addressLine1,kitchen?.addressLine2,kitchen?.areaName,kitchen?.city,kitchen?.state,kitchen?.postalCode].filter(Boolean).join(", ");
  const items=[
@@ -22,6 +25,7 @@ function ProfileContent(){
   {href:"/chef/kitchen",icon:Store,title:"Kitchen details",desc:kitchen?.kitchenName||"Add your kitchen details"},
   {href:"/chef/kitchen",icon:MapPin,title:"Kitchen location",desc:address||"Add your pickup location"},
   {href:"/chef/earnings",icon:BadgeIndianRupee,title:"Earnings & payouts",desc:"See what you get from completed orders"},
+  {href:"/chef/meal-plans",icon:CalendarDays,title:"Meal Plans",desc:"Manage your dishes, schedules and availability"},
   {href:"/notifications",icon:Bell,title:"Notifications",desc:"Orders, payments and account updates"},
   {href:"/chef/application",icon:FileCheck2,title:"Documents & verification",desc:application?.status==="APPROVED"?"Application approved":"View your verification status"},
  ];
@@ -35,6 +39,7 @@ function ProfileContent(){
    <section className="overflow-hidden rounded-3xl border border-[#E5E7EB] bg-white">
     {items.map((item,index)=>{const Icon=item.icon;return <Link key={item.href+item.title} href={item.href} className={`flex min-h-[76px] items-center gap-4 px-5 py-4 transition hover:bg-[#F7F8F7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#178F56] sm:px-6 ${index?"border-t border-[#E5E7EB]":""}`}><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#178F56]"><Icon className="h-5 w-5" aria-hidden="true"/></span><span className="min-w-0 flex-1"><strong className="block text-sm text-[#1A1A1A]">{item.title}</strong><span className="mt-1 block truncate text-sm text-[#6B6B6B]">{item.desc}</span></span><ChevronRight className="h-5 w-5 shrink-0 text-[#6B6B6B]" aria-hidden="true"/></Link>})}
    </section>
+   <section className="grid gap-3 sm:grid-cols-2" aria-label="Additional verification"><div className="rounded-2xl border border-[#E5E7EB] bg-white p-5"><h3 className="font-semibold">Food safety details</h3><p className="mt-2 text-sm text-[#6B6B6B]">FSSAI submission is not available yet. Chef identity approval does not confirm food-business compliance.</p></div><div className="rounded-2xl border border-[#E5E7EB] bg-white p-5"><h3 className="font-semibold">Kitchen photos</h3><p className="mt-2 text-sm text-[#6B6B6B]">Kitchen photo uploads are not available yet.</p></div></section>
    <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 text-sm text-[#6B6B6B]"><p className="font-semibold text-[#1A1A1A]">Keep your details current</p><p className="mt-1 leading-6">Customers see your kitchen information, while payout and verification information stays protected behind your signed-in Chef access.</p></section>
  </div>;
 }

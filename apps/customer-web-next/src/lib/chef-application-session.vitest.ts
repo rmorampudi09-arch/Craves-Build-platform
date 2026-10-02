@@ -125,14 +125,25 @@ it("keeps a successfully loaded pending application editable through the guided 
       : [],
   )));
   render(createElement(ChefApplicationWorkspace));
-  await screen.findByRole("heading", { name: "Next, we need a few photos" });
+  await screen.findByRole("heading", { name: "Verify your identity" });
 
-  fireEvent.click(screen.getByRole("button", { name: "Back" }));
-  await screen.findByRole("heading", { name: "Does everything look right?" });
-  fireEvent.click(screen.getAllByRole("button", { name: "Change" })[0]);
+  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+  vi.stubGlobal("scrollTo", vi.fn());
+  for (const heading of ["Food Safety Details", "Show your kitchen", "Where is your kitchen located?", "Tell customers about your kitchen", "What’s your name?"]) {
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByRole("heading", { name: heading });
+  }
 
   const firstName = await screen.findByLabelText("First name") as HTMLInputElement;
   expect(firstName.disabled).toBe(false);
   fireEvent.change(firstName, { target: { value: "Corrected" } });
   expect(firstName.value).toBe("Corrected");
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
+  fireEvent.change(firstName, { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  expect(firstName.getAttribute("aria-invalid")).toBe("true");
+  expect(document.activeElement).toBe(firstName);
+  expect(screen.getByRole("alert").textContent).toContain("first and last name");
+  expect(fetcher.mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
+
 });

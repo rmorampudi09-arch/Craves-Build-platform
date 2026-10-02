@@ -87,3 +87,15 @@ describe("chef document readiness", () => {
     expect(xhr).not.toHaveBeenCalled();
   });
 });
+
+it("lets applicants review uploaded evidence explicitly and blocks rejected files", () => {
+  const onComplete = vi.fn();
+  const initialDocuments = ["APPLICANT_PHOTO", "GOVERNMENT_ID_FRONT", "GOVERNMENT_ID_BACK", "TAX_ID_CARD"].map((documentType, index) => ({ id: `${id}-${index}`, documentType, originalFileName: "fixture.png", contentType: "image/png", fileSizeBytes: 100, status: "UPLOADED", createdAt: "2026-10-01T00:00:00Z", reviewedAt: null, reviewReason: null })) as Parameters<typeof ChefApplicationEvidenceUploader>[0]["initialDocuments"];
+  const view = render(createElement(ChefApplicationEvidenceUploader, { applicationReady: true, locked: false, initialDocuments, onComplete }));
+  expect(onComplete).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Review application" }));
+  expect(onComplete).toHaveBeenCalledTimes(1);
+  view.unmount();
+  render(createElement(ChefApplicationEvidenceUploader, { applicationReady: true, locked: false, initialDocuments: initialDocuments.map((document, index) => index === 0 ? { ...document, status: "REJECTED" as const } : document), onComplete }));
+  expect((screen.getByRole("button", { name: "Review application" }) as HTMLButtonElement).disabled).toBe(true);
+});

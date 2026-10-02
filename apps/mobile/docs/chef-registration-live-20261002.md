@@ -148,8 +148,33 @@ No Customer address is created. Email verification and review gates are unchange
 The exact house/flat/building must be reviewed by the applicant, not invented.
 
 All 204 Jest suites / 1,132 tests pass (32.514 seconds), with TypeScript and
-targeted ESLint passing. Build/install and actual application/Admin receipt are
-pending; do not claim them from these tests.
+targeted ESLint passing. The release builds in 2m 54s, all four Android ABIs,
+859 tasks (77 executed / 782 up-to-date). Existing APK v2/v3 signer verifies.
+
+1.24.2 source/tag: `983a24898a5f7ff3535ce64b8162e70b2d081f7c`, immutable
+`KUSHIRAVI-app-v1.24.2`. APK `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.2.apk`,
+SHA256 `A2C90E321F76BC2A1CAC4EB2FBFDFFAE25472ACF8E6934D1DFAFD05C713BAE30`.
+ZIP `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.2-source.zip`, SHA256
+`94C26E4C7988851CD7D97DE006BBFFCDC6B6149551BFF648676CD236575C8CA4`;
+1,123 entries, required rebuild files, no private `.env`.
+Replace-install at 13:06:00 IST succeeds without clearing data, and cold launch
+opens Chef registration. Phone reports code 37 / name 1.24.2. Verified email
+status survives. After the owner enables phone location, lookup succeeds and
+fills the address; the owner submits actual applicant details.
+
+The phone shows Chef application under review. Admin has a new matching PENDING
+request `16e204db-6160-484c-a339-5113b9791941`, account ending 4345, submitted
+`2026-10-02T07:37:37.228468Z` / 13:07:37 IST. Refresh application returns HTTP
+200 from the Admin BFF for this exact ID; saved address and finite/in-range
+latitude/longitude are present. No credentials, precise coordinates or identity
+document contents are included in this committed record.
+Screenshot: `C:\mscratch\artifacts\chef-registration-live-20261002\admin-chef-application-v1.24.2.png`.
+
+The user subsequently reports Document upload failed after selecting an Applicant
+photo. The phone confirms the error, and Admin still has zero uploaded proofs.
+This separate storage/upload failure is under investigation. Application receipt
+is verified; KYC upload, post-upload restoration and final approval are not yet
+claimed. No application/document approval or rejection has been performed.
 
 ## Backend And Admin Checks
 

@@ -9,11 +9,11 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `36`
-- Installed Android versionName: `1.24.1`
+- Installed Android versionCode: `37`
+- Installed Android versionName: `1.24.2`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed release: `KUSHIRAVI-app-v1.24.1`, source/tag checkpoint `7cb18d405033e978475798336226d9832f794f28`. Live recovery and owner-completed Chef sign-in reach the existing registration form without the account-verification error. Application submission and matching Admin receipt remain unverified.
-- Last installation: `2026-10-02 12:48:21` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed release: `KUSHIRAVI-app-v1.24.2`, source/tag checkpoint `983a24898a5f7ff3535ce64b8162e70b2d081f7c`. Chef sign-in, verified email, current-location address fill, submission and matching Admin pending request are verified. Subsequent document upload fails and is under investigation; no approval is claimed.
+- Last installation: `2026-10-02 13:06:00` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
@@ -41,8 +41,22 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.2-source.zip`. Prior tags untouched.
 - All 204 Jest suites / 1,132 tests pass, including 19 location regressions;
   TypeScript, targeted ESLint and `git diff --check` pass. Build/install and
-  genuine applicant submission/Admin receipt remain pending. Installed release is still 1.24.1
-  until the new signed APK is verified and replace-installed.
+  validation completed. All-architecture build succeeds in 2m 54s (859 tasks,
+  77 executed / 782 up-to-date). Existing signer verifies with APK v2/v3.
+- Source/tag checkpoint `983a24898a5f7ff3535ce64b8162e70b2d081f7c`, immutable
+  tag `KUSHIRAVI-app-v1.24.2`. Replace-install at 13:06:00 IST and cold launch
+  succeed; phone reports code 37 / name 1.24.2 and retains Chef session/email status.
+- APK SHA256 `A2C90E321F76BC2A1CAC4EB2FBFDFFAE25472ACF8E6934D1DFAFD05C713BAE30`.
+  Source ZIP SHA256 `94C26E4C7988851CD7D97DE006BBFFCDC6B6149551BFF648676CD236575C8CA4`;
+  1,123 entries, required rebuild files present, no private `.env`.
+- Live GPS/backend lookup fills the address. Owner submits genuine details;
+  phone shows Chef application under review. Matching Admin pending request:
+  `16e204db-6160-484c-a339-5113b9791941`, account ending 4345, submitted
+  `2026-10-02T07:37:37.228468Z` (13:07:37 IST). Admin refresh returns HTTP 200,
+  PENDING, saved address and valid latitude/longitude. No Admin decision made.
+- Subsequent owner-selected Applicant photo upload shows Document upload failed.
+  All four proofs remain missing at this observation. Storage/upload investigation
+  is ongoing; registration receipt is not evidence of completed KYC or approval.
 
 ### Version 1.24.1 - Chef Registration Recovery, 2026-10-02
 

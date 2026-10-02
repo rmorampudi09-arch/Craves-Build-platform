@@ -6,7 +6,7 @@ Source: `C:\mscratch`, branch `KUSHIRAVI-app-build`, clean starting commit
 `859afe8b0b7a6e71433a0e5d9e4458fe8cc1df4a`.
 Installed starting release: `KUSHIRAVI-app-v1.23`, Android `1.23` / code `34`.
 Initial routing release: Android `1.24` / code `35`, package `com.cravesapp`.
-Follow-up recovery candidate: Android `1.24.1` / code `36`.
+Installed follow-up recovery release: Android `1.24.1` / code `36`.
 
 The user requested the phone's new-Chef account verification error to be fixed,
 and the application journey verified through submission and Admin receipt.
@@ -82,11 +82,45 @@ Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24-source.zip`, SHA256
 `A3BEAB0B67B9A06FCDD38DC617F0607F24EC689C4AE39D2948FD6B595BDA7BB2`.
 This archive is the immutable 1.24 checkpoint, with 1,123 entries and no private
 `.env`; the build script, lockfile, Gradle wrapper and signing file are present.
-The later 1.24.1 APK/archive will be distinct files and a distinct immutable tag.
+The 1.24.1 APK/archive are distinct files with a distinct immutable tag.
 The follow-up's full suite passes: 204 suites / 1,113 tests, 76.702 seconds.
 TypeScript and targeted ESLint also pass. No new library or native dependency is
 added. React review retains existing components, event-handler-driven logout,
 per-identity intent storage, submission/loading guards and accessible buttons.
+
+### Installed 1.24.1 Evidence
+
+Source/tag checkpoint: `7cb18d405033e978475798336226d9832f794f28`,
+`KUSHIRAVI-app-v1.24.1`. This installation receipt is a subsequent documentation
+commit; it does not replace the tagged source or its immutable source archive.
+
+APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.1.apk`, SHA256
+`7BE828C7F7B0BF44166ADDC8A53EA5E19308734AF500A3EEBD8225246B35118A`.
+Source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.1-source.zip`, SHA256
+`6DCA641691566CB7A1C313C8AAF3D11C5F5873D443716AEE8FDAA7C36612DFA0`.
+The ZIP contains 1,123 entries, required rebuild files and no private `.env`.
+
+All-architecture release build succeeds in 3m 14s: 859 tasks, 77 executed and
+782 up-to-date. APK v2/v3 signatures verify with the previous release's signer.
+Replace-install succeeds at 2026-10-02 12:48:21 Asia/Calcutta on
+`RS7PB6VOY9ZLLFYD` / RMX5003. The phone reports name 1.24.1 / code 36; cold launch
+of MainActivity succeeds. No uninstall or app-data clear was performed.
+
+The restored old session opens an empty Customer registration form. The new
+coordinated Sign out action returns to the existing role picker; choosing Chef
+opens the existing phone sign-in screen. This recovery creates no profile or
+application. The owner subsequently completes sign-in and asks for another
+screen check. At 12:54 IST the phone shows Become a Chef with the existing
+registration form and empty applicant fields, not the original account error.
+
+Screenshots:
+- `C:\mscratch\artifacts\chef-registration-live-20261002\phone-chef-sign-in-v1.24.1.png`
+- `C:\mscratch\artifacts\chef-registration-live-20261002\phone-chef-registration-v1.24.1.png`
+
+Actual applicant details, owner-controlled email verification, submission and
+the matching Admin pending request remain outstanding. Neither unit tests nor
+unrelated existing Admin applications are evidence of this applicant's receipt.
+No backend/APIM changes or Admin approval/rejection were made in this task.
 
 ## Backend And Admin Checks
 
@@ -129,8 +163,9 @@ while the Android native build was running; the screen tests now use reduced
 motion and a bounded fifteen-second timeout. TypeScript and targeted ESLint pass.
 The final combined run passes all 204 suites / 1,108 tests (571.346 seconds).
 The final onboarding-screen fixture is also rechecked separately: all ten tests
-pass. There are 25 new regression tests overall. APK/install evidence remains
-pending until the release build and phone retest complete.
+pass. There are 25 initial regression tests plus five recovery tests, 30 total.
+The 1.24.1 full run passes 204 suites / 1,113 tests; installed release evidence
+is recorded above. Real application submission/Admin receipt remains pending.
 
 ## Build And Rollback
 
@@ -142,9 +177,9 @@ This run skips dependency reinstallation because dependency files are unchanged.
 It builds all configured Android architectures and uses the existing signer.
 Replace-install only; do not uninstall or clear app data.
 
-Intended outputs:
-`C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.apk` and
-`C:\mscratch\artifacts\KUSHIRAVI-app-v1.24-source.zip`.
+Current installed outputs:
+`C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.1.apk` and
+`C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.1-source.zip`.
 The source archive includes the complete tracked mobile tree, lockfile,
 `.env.example`, Gradle wrapper and existing build/signing files, not a private
 runtime `.env` or any MSG91 credential.
@@ -170,6 +205,7 @@ to force an APK downgrade without explicit approval.
    application ID and Admin receipt. Do not mark end-to-end submission complete
    before observing both phone success and that matching Admin request.
 
-Live registration, applicant submission and matching Admin receipt remain
-unverified at the time this initial record was written. Real applicant details
-and owner-controlled email verification cannot be fabricated by an automated test.
+Live Chef sign-in and entry to registration are verified on the installed phone.
+Applicant submission and matching Admin receipt remain unverified. Real
+applicant details and owner-controlled email verification cannot be fabricated
+by an automated test.

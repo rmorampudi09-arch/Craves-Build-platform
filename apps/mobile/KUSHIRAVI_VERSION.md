@@ -9,11 +9,11 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `35`
-- Installed Android versionName: `1.24`
+- Installed Android versionCode: `36`
+- Installed Android versionName: `1.24.1`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed release: `KUSHIRAVI-app-v1.24`, source/tag checkpoint `a4d6e390b6aaa5d90bf4f3291c640c8a37659827`. The phone restores Customer onboarding because the earlier failed Chef resolution never persisted the Chef selection. Follow-up recovery is being verified; do not claim a submitted application or matching Admin receipt yet.
-- Last installation: `2026-10-02 12:40:28` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed release: `KUSHIRAVI-app-v1.24.1`, source/tag checkpoint `7cb18d405033e978475798336226d9832f794f28`. Live recovery and owner-completed Chef sign-in reach the existing registration form without the account-verification error. Application submission and matching Admin receipt remain unverified.
+- Last installation: `2026-10-02 12:48:21` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
@@ -30,13 +30,27 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   the existing coordinated logout. A wrong-role applicant can return to the role
   picker without creating a Customer profile or submitting a Chef application.
   No restyling or changes to fields, submission, email verification or approval.
-- Target Android 1.24.1 / code 36; intended tag `KUSHIRAVI-app-v1.24.1` and paths
+- Installed Android 1.24.1 / code 36; immutable tag `KUSHIRAVI-app-v1.24.1` and paths
   `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.1.apk` and
   `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.1-source.zip`.
 - Verification: all 204 Jest suites / 1,113 tests pass (30 new regression tests
-  across 1.24 and 1.24.1), TypeScript and targeted ESLint pass. Release build,
-  install and genuine applicant/Admin receipt are in progress. Keep the
-  already-created 1.24 checkpoint and all previous tags unchanged.
+  across 1.24 and 1.24.1), TypeScript and targeted ESLint pass. All-architecture
+  release build succeeds in 3m 14s (859 tasks: 77 executed, 782 up-to-date).
+  APK v2/v3 signature verifies against the existing signer. Replace-install at
+  12:48:21 IST and cold launch succeed; phone confirms code 36 / name 1.24.1.
+- Source/tag checkpoint `7cb18d405033e978475798336226d9832f794f28`.
+  APK SHA256 `7BE828C7F7B0BF44166ADDC8A53EA5E19308734AF500A3EEBD8225246B35118A`.
+  Source ZIP SHA256 `6DCA641691566CB7A1C313C8AAF3D11C5F5873D443716AEE8FDAA7C36612DFA0`;
+  1,123 entries, required rebuild files present, private `.env` absent.
+- Live empty Customer form -> coordinated Sign out -> role picker -> Chef
+  sign-in works without creating a profile or application. After the owner
+  signs in, the phone shows Become a Chef and the existing registration form at
+  12:54 IST, not the account-verification error. Fields remain empty at that
+  observation. Evidence: `artifacts/chef-registration-live-20261002/phone-chef-registration-v1.24.1.png`.
+- Genuine applicant details, email verification, application submission and a
+  matching Admin pending request still await owner completion. Do not claim
+  end-to-end submission from tests or unrelated existing queue entries. No
+  backend/APIM changes or Admin decision. All earlier tags remain unchanged.
 
 ### Version 1.24 - Chef Application Routing, 2026-10-02
 

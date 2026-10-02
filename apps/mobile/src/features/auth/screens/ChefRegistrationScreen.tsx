@@ -1,9 +1,10 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {StyleSheet, Text} from 'react-native';
 import {Controller, useForm} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {z} from 'zod';
+import * as Location from 'expo-location';
 import type {RootStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {colors, spacing} from '../../../design/tokens';
@@ -15,10 +16,15 @@ import {InputField} from '../components/InputField';
 import {PrimaryButton} from '../components/PrimaryButton';
 import {ScreenHeader} from '../components/ScreenHeader';
 import {EmailVerificationPanel} from '../../customerProfile/components/EmailVerificationPanel';
+import {customerAddressesApi} from '../../customerAddresses/api/customerAddressesApi';
+import {toAppApiError} from '../../../core/http/apiError';
 import {
+  applyDetectedChefAddress,
   chefApplicationToDraft,
   mapChefApplicationSubmissionFailure,
   normalizeChefApplicationInput,
+  validChefApplicationCoordinates,
+  type ChefApplicationCoordinates,
 } from '../domain/chefApplicationOnboarding';
 import {accountResolutionService} from '../state/accountResolutionService';
 import {authActions} from '../state/authSlice';
@@ -47,17 +53,75 @@ export function ChefRegistrationScreen({navigation}: Props) {
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [verifiedEmail, setVerifiedEmail] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [locationMessage, setLocationMessage] = useState<string | null>(null);
+  const [coordinates, setCoordinates] = useState<ChefApplicationCoordinates | null>(null);
+  const mounted = useRef(true);
+  const locationInFlight = useRef(false);
   const {
     control,
     handleSubmit,
     reset,
     setError,
     watch,
+    getValues,
+    setValue,
     formState: {errors, isSubmitting},
   } = useForm<Form>({
     resolver: zodResolver(chefRegistrationSchema),
     defaultValues: emptyDraft,
   });
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  const handleUseCurrentLocation = async () => {
+    if (locationInFlight.current || isSubmitting || loadingExisting || signingOut) return;
+    locationInFlight.current = true;
+    setLocating(true);
+    setLocationMessage(null);
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (!mounted.current) return;
+      if (permission.status !== Location.PermissionStatus.GRANTED) {
+        setLocationMessage(permission.canAskAgain
+          ? 'Location access was not allowed. You can enter the address manually.'
+          : 'Allow location for Craves in phone settings, or enter the address manually.');
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({accuracy: Location.Accuracy.High});
+      if (!mounted.current) return;
+      const detectedCoordinates = validChefApplicationCoordinates(position.coords);
+      if (!detectedCoordinates) {
+        setLocationMessage('Current location could not be determined. Try again or enter the address manually.');
+        return;
+      }
+      const resolved = await customerAddressesApi.reverseGeocode(
+        detectedCoordinates.latitude,
+        detectedCoordinates.longitude,
+      );
+      if (!mounted.current) return;
+      const detected = applyDetectedChefAddress(getValues(), resolved);
+      for (const field of ['addressLine1', 'city', 'state', 'postalCode'] as const) {
+        setValue(field, detected[field], {shouldDirty: true, shouldValidate: true});
+      }
+      setCoordinates(detectedCoordinates);
+      setLocationMessage('Location found. Confirm your exact house, flat or building before submitting.');
+    } catch (cause) {
+      if (!mounted.current) return;
+      const code = (cause as {code?: string} | null)?.code;
+      setLocationMessage(code === 'LOCATION_PROVIDER_DISABLED'
+        ? 'Turn on phone location services and try again, or enter the address manually.'
+        : code?.startsWith('LOCATION_')
+          ? 'Current location could not be determined. Try again or enter the address manually.'
+          : toAppApiError(cause).message);
+    } finally {
+      locationInFlight.current = false;
+      if (mounted.current) setLocating(false);
+    }
+  };
 
   const chefEmail = watch('email');
   const emailVerifiedForSubmission = Boolean(
@@ -93,11 +157,13 @@ export function ChefRegistrationScreen({navigation}: Props) {
 
       if (application.status === 'NOT_SUBMITTED') {
         setRejectionReason(null);
+        setCoordinates(null);
         reset(emptyDraft);
         return;
       }
 
       setRejectionReason(application.rejectionReason);
+      setCoordinates(validChefApplicationCoordinates(application));
       reset(chefApplicationToDraft(application));
     } catch (cause) {
       const failure = mapChefApplicationSubmissionFailure(cause);
@@ -114,6 +180,7 @@ export function ChefRegistrationScreen({navigation}: Props) {
   }, [isRejectedApplication, loadRejectedApplication]);
 
   const submit = handleSubmit(async values => {
+    if (locationInFlight.current || signingOut) return;
     setServerError(null);
 
     if (
@@ -127,7 +194,7 @@ export function ChefRegistrationScreen({navigation}: Props) {
 
     try {
       const application = await profileApi.submitChefApplication(
-        normalizeChefApplicationInput(values),
+        normalizeChefApplicationInput(values, coordinates),
       );
 
       if (application.status !== 'PENDING') {
@@ -158,7 +225,7 @@ export function ChefRegistrationScreen({navigation}: Props) {
   });
 
   const signOut = async () => {
-    if (signingOut || isSubmitting || loadingExisting) return;
+    if (signingOut || isSubmitting || loadingExisting || locationInFlight.current) return;
     setSigningOut(true);
     try {
       await completeLogout(dispatch);
@@ -235,9 +302,20 @@ export function ChefRegistrationScreen({navigation}: Props) {
         />
         <EmailVerificationPanel
           email={chefEmail}
-          disabled={isSubmitting || loadingExisting || signingOut}
+          disabled={isSubmitting || loadingExisting || signingOut || locating}
           onVerified={setVerifiedEmail}
         />
+        <PrimaryButton
+          variant="outline"
+          label="Use my current location"
+          leftIcon="location"
+          loading={locating}
+          disabled={isSubmitting || loadingExisting || signingOut}
+          onPress={handleUseCurrentLocation}
+        />
+        {locationMessage ? (
+          <Text accessibilityLiveRegion="polite" style={styles.loadingText}>{locationMessage}</Text>
+        ) : null}
         <Controller
           control={control}
           name="addressLine1"
@@ -289,7 +367,7 @@ export function ChefRegistrationScreen({navigation}: Props) {
               autoCapitalize="words"
               value={field.value}
               onBlur={field.onBlur}
-              onChangeText={field.onChange}
+              onChangeText={value => { setCoordinates(null); field.onChange(value); }}
               error={errors.city?.message}
             />
           )}
@@ -303,7 +381,7 @@ export function ChefRegistrationScreen({navigation}: Props) {
               autoCapitalize="words"
               value={field.value}
               onBlur={field.onBlur}
-              onChangeText={field.onChange}
+              onChangeText={value => { setCoordinates(null); field.onChange(value); }}
               error={errors.state?.message}
             />
           )}
@@ -317,7 +395,7 @@ export function ChefRegistrationScreen({navigation}: Props) {
               autoCapitalize="characters"
               value={field.value}
               onBlur={field.onBlur}
-              onChangeText={field.onChange}
+              onChangeText={value => { setCoordinates(null); field.onChange(value); }}
               error={errors.postalCode?.message}
             />
           )}
@@ -326,13 +404,13 @@ export function ChefRegistrationScreen({navigation}: Props) {
         <PrimaryButton
           label={isRejectedApplication ? 'Resubmit for review' : 'Submit for review'}
           loading={isSubmitting}
-          disabled={loadingExisting || signingOut || !emailVerifiedForSubmission}
+          disabled={loadingExisting || signingOut || locating || !emailVerifiedForSubmission}
           onPress={submit}
         />
         <PrimaryButton
           variant="outline"
           label="Sign out"
-          disabled={isSubmitting || loadingExisting}
+          disabled={isSubmitting || loadingExisting || locating}
           loading={signingOut}
           onPress={signOut}
         />

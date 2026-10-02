@@ -1,6 +1,7 @@
 import {toAppApiError, type AppApiError} from '../../../core/http/apiError';
 import type {ChefApplicationInput} from '../api/profileApi';
 import type {ChefApplication} from './types';
+import type {ReverseGeocodedCustomerAddress} from '../../customerAddresses/api/customerAddressesApi';
 
 export interface ChefApplicationDraft {
   email: string;
@@ -22,12 +23,48 @@ export interface ChefApplicationSubmissionFailure {
   fieldErrors: ChefApplicationFieldErrors;
 }
 
+export interface ChefApplicationCoordinates {
+  latitude: number;
+  longitude: number;
+}
+
+export function validChefApplicationCoordinates(location: {
+  latitude?: number | null;
+  longitude?: number | null;
+}): ChefApplicationCoordinates | null {
+  const {latitude, longitude} = location;
+  return typeof latitude === 'number' && Number.isFinite(latitude) &&
+    latitude >= -90 && latitude <= 90 &&
+    typeof longitude === 'number' && Number.isFinite(longitude) &&
+    longitude >= -180 && longitude <= 180
+    ? {latitude, longitude}
+    : null;
+}
+
+export function applyDetectedChefAddress(
+  draft: ChefApplicationDraft,
+  detected: ReverseGeocodedCustomerAddress,
+): ChefApplicationDraft {
+  const addressLine1 = detected.houseNumber && detected.street
+    ? `${detected.houseNumber}, ${detected.street}`
+    : detected.houseNumber || detected.street || detected.formattedAddress;
+  return {
+    ...draft,
+    addressLine1,
+    city: detected.city || draft.city,
+    state: detected.state || draft.state,
+    postalCode: detected.postalCode || draft.postalCode,
+  };
+}
+
 export function normalizeChefApplicationInput(
   values: ChefApplicationDraft,
+  location?: ChefApplicationCoordinates | null,
 ): ChefApplicationInput {
   const addressLine2 = values.addressLine2.trim();
   const landmark = values.landmark.trim();
   const postalCode = values.postalCode.trim();
+  const coordinates = location ? validChefApplicationCoordinates(location) : null;
 
   return {
     email: values.email.trim().toLowerCase(),
@@ -39,6 +76,7 @@ export function normalizeChefApplicationInput(
     city: values.city.trim(),
     state: values.state.trim(),
     ...(postalCode ? {postalCode} : {}),
+    ...(coordinates ?? {}),
   };
 }
 

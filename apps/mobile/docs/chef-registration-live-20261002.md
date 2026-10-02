@@ -122,6 +122,35 @@ the matching Admin pending request remain outstanding. Neither unit tests nor
 unrelated existing Admin applications are evidence of this applicant's receipt.
 No backend/APIM changes or Admin approval/rejection were made in this task.
 
+### Requested Current-Location Follow-Up
+
+After successful Chef sign-in, the user reports that the registration address
+has no current-location control. The precise 1.24.2 follow-up adds the existing
+outline/icon button above the address fields, without restyling the screen.
+
+Changed files:
+- `src/features/auth/screens/ChefRegistrationScreen.tsx`: explicit foreground
+  location action, existing backend reverse lookup, address fill, status/errors
+  and submission/loading/logout guards. Preserve rejected application pins;
+  city/state/pincode edits invalidate detected coordinates.
+- `src/features/auth/domain/chefApplicationOnboarding.ts`: available-address
+  mapping and finite/range-validated coordinates in the existing POST payload.
+- `src/features/auth/screens/ChefOnboardingScreens.test.tsx` and
+  `src/features/auth/domain/chefApplicationOnboarding.test.ts`: 19 new tests.
+- `android/app/build.gradle`: 1.24.2 / code 37.
+- `KUSHIRAVI_VERSION.md` and this record: separate release checkpoint/evidence.
+
+APIM `craves-customer-v1` publishes `reverse-geocode-customer-address`, POST
+`/addresses/reverse-geocode` under `/api/v1/customer`, pointing at the existing
+live User-Chef service. Existing GPS native modules/Metro alias and API client
+are reused; no library, backend deployment, resource, auth policy or key changes.
+No Customer address is created. Email verification and review gates are unchanged.
+The exact house/flat/building must be reviewed by the applicant, not invented.
+
+All 204 Jest suites / 1,132 tests pass (32.514 seconds), with TypeScript and
+targeted ESLint passing. Build/install and actual application/Admin receipt are
+pending; do not claim them from these tests.
+
 ## Backend And Admin Checks
 
 Read-only inspection confirms APIM `craves-chef-application-v1` publishes:

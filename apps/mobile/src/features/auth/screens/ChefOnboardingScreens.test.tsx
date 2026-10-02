@@ -1,5 +1,6 @@
 import React from 'react';
 import renderer, {act} from 'react-test-renderer';
+import * as Location from 'expo-location';
 import {AppApiError} from '../../../core/http/apiError';
 import {EmailVerificationPanel} from '../../customerProfile/components/EmailVerificationPanel';
 import {ChefKycEvidencePanel} from '../../chefBusinessInformation/components/ChefKycEvidencePanel';
@@ -12,6 +13,7 @@ import {ChefRegistrationScreen} from './ChefRegistrationScreen';
 import {ChefAccountStatusScreen} from './ChefAccountStatusScreen';
 import {CustomerRegistrationScreen} from './CustomerRegistrationScreen';
 import {completeLogout} from '../state/logoutCoordinator';
+import {customerAddressesApi} from '../../customerAddresses/api/customerAddressesApi';
 
 jest.setTimeout(15000);
 
@@ -36,6 +38,13 @@ jest.mock('../state/accountResolutionService', () => ({
   accountResolutionService: {resolve: jest.fn()},
 }));
 jest.mock('../state/logoutCoordinator', () => ({completeLogout: jest.fn()}));
+jest.mock('expo-location', () => ({
+  PermissionStatus: {GRANTED: 'granted'}, Accuracy: {High: 'high'},
+  requestForegroundPermissionsAsync: jest.fn(), getCurrentPositionAsync: jest.fn(),
+}));
+jest.mock('../../customerAddresses/api/customerAddressesApi', () => ({
+  customerAddressesApi: {reverseGeocode: jest.fn()},
+}));
 jest.mock('../../customerProfile/components/EmailVerificationPanel', () => ({
   EmailVerificationPanel: () => null,
 }));
@@ -86,6 +95,15 @@ describe('Chef onboarding screen journey', () => {
     (profileApi.getChefApplication as jest.Mock).mockReset();
     (profileApi.submitChefApplication as jest.Mock).mockReset();
     (accountResolutionService.resolve as jest.Mock).mockReset();
+    (Location.requestForegroundPermissionsAsync as jest.Mock).mockReset()
+      .mockResolvedValue({status: 'granted', canAskAgain: true});
+    (Location.getCurrentPositionAsync as jest.Mock).mockReset()
+      .mockResolvedValue({coords: {latitude: 17.385, longitude: 78.4867}});
+    (customerAddressesApi.reverseGeocode as jest.Mock).mockReset().mockResolvedValue({
+      formattedAddress: '14, Lake Road, Hyderabad', houseNumber: '14', street: 'Lake Road',
+      area: 'Central', city: 'Hyderabad', district: 'Hyderabad', state: 'Telangana',
+      postalCode: '500002', country: 'India', confidence: 'High', preciseHouseNumber: true,
+    });
     mockResolution = {flow: 'CHEF_ONBOARDING', requestedRole: 'CHEF', authorizedRole: 'CUSTOMER', onboardingStatus: 'NOT_SUBMITTED'};
     (profileApi.getChefApplication as jest.Mock).mockResolvedValue(application);
     (profileApi.submitChefApplication as jest.Mock).mockResolvedValue(application);
@@ -101,6 +119,108 @@ describe('Chef onboarding screen journey', () => {
     await act(async () => tree.root.findAllByType(InputField).find(node => node.props.placeholder === 'Chef email')!.props.onChangeText('other@example.com'));
     expect(button('Submit for review').props.disabled).toBe(true);
     expect(profileApi.submitChefApplication).not.toHaveBeenCalled();
+  });
+
+  it('requests location only on an explicit tap and submits the mapped address and coordinates', async () => {
+    await registration(); await fill();
+    expect(Location.requestForegroundPermissionsAsync).not.toHaveBeenCalled();
+    await act(async () => {await button('Use my current location').props.onPress();});
+    expect(customerAddressesApi.reverseGeocode).toHaveBeenCalledWith(17.385, 78.4867);
+    expect(tree.root.findAllByType(InputField).find(node => node.props.placeholder === 'Address line 1')!.props.value).toBe('14, Lake Road');
+    expect(tree.root.findAllByType(InputField).find(node => node.props.placeholder === 'First name')!.props.value).toBe(' Asha ');
+    expect(button('Submit for review').props.disabled).toBe(true);
+    await verifyEmail();
+    await act(async () => {await button('Submit for review').props.onPress();});
+    expect(profileApi.submitChefApplication).toHaveBeenCalledWith(expect.objectContaining({
+      addressLine1: '14, Lake Road', postalCode: '500002', latitude: 17.385, longitude: 78.4867,
+    }));
+  });
+
+  it('keeps manual address entry available after permission denial', async () => {
+    (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({status: 'denied', canAskAgain: false});
+    await registration(); await fill(); await verifyEmail();
+    await act(async () => {await button('Use my current location').props.onPress();});
+    expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
+    expect(customerAddressesApi.reverseGeocode).not.toHaveBeenCalled();
+    expect(JSON.stringify(tree.toJSON())).toContain('phone settings');
+    expect(button('Submit for review').props.disabled).toBe(false);
+    await act(async () => {await button('Submit for review').props.onPress();});
+    expect(profileApi.submitChefApplication).toHaveBeenCalledWith(expect.objectContaining({addressLine1: '12 Market Road'}));
+    expect((profileApi.submitChefApplication as jest.Mock).mock.calls[0][0]).not.toHaveProperty('latitude');
+  });
+
+  it('retains the address and allows a retry when reverse lookup fails', async () => {
+    (customerAddressesApi.reverseGeocode as jest.Mock).mockRejectedValueOnce(new AppApiError('SERVICE_UNAVAILABLE', 'Try again.', 503));
+    await registration(); await fill();
+    await act(async () => {await button('Use my current location').props.onPress();});
+    expect(JSON.stringify(tree.toJSON())).toContain('Try again.');
+    expect(tree.root.findAllByType(InputField).find(node => node.props.placeholder === 'Address line 1')!.props.value).toBe(' 12 Market Road ');
+    expect(button('Use my current location').props.loading).toBe(false);
+    await act(async () => {await button('Use my current location').props.onPress();});
+    expect(JSON.stringify(tree.toJSON())).toContain('Location found.');
+  });
+
+  it('does not send malformed GPS coordinates to the backend', async () => {
+    (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({coords: {latitude: 91, longitude: 78}});
+    await registration();
+    await act(async () => {await button('Use my current location').props.onPress();});
+    expect(customerAddressesApi.reverseGeocode).not.toHaveBeenCalled();
+    expect(JSON.stringify(tree.toJSON())).toContain('Current location could not be determined.');
+  });
+
+  it('handles disabled device location without a crash or address overwrite', async () => {
+    (Location.getCurrentPositionAsync as jest.Mock).mockRejectedValue({code: 'LOCATION_PROVIDER_DISABLED'});
+    await registration(); await fill();
+    await act(async () => {await button('Use my current location').props.onPress();});
+    expect(customerAddressesApi.reverseGeocode).not.toHaveBeenCalled();
+    expect(JSON.stringify(tree.toJSON())).toContain('Turn on phone location services');
+    expect(button('Use my current location').props.loading).toBe(false);
+  });
+
+  it('blocks duplicate location requests and submission/sign-out while locating', async () => {
+    let releasePermission!: (value: unknown) => void;
+    (Location.requestForegroundPermissionsAsync as jest.Mock).mockReturnValue(new Promise(resolve => {releasePermission = resolve;}));
+    await registration(); await fill(); await verifyEmail();
+    let request!: Promise<void>;
+    await act(async () => {
+      request = button('Use my current location').props.onPress();
+      await button('Use my current location').props.onPress();
+    });
+    expect(Location.requestForegroundPermissionsAsync).toHaveBeenCalledTimes(1);
+    expect(button('Submit for review').props.disabled).toBe(true);
+    expect(button('Sign out').props.disabled).toBe(true);
+    await act(async () => {await button('Submit for review').props.onPress();});
+    expect(profileApi.submitChefApplication).not.toHaveBeenCalled();
+    await act(async () => {releasePermission({status: 'granted'}); await request;});
+    expect(button('Submit for review').props.disabled).toBe(false);
+  });
+
+  it('does not continue location work after the form is unmounted', async () => {
+    let releasePermission!: (value: unknown) => void;
+    (Location.requestForegroundPermissionsAsync as jest.Mock).mockReturnValue(new Promise(resolve => {releasePermission = resolve;}));
+    await registration();
+    let request!: Promise<void>;
+    await act(async () => {request = button('Use my current location').props.onPress();});
+    act(() => tree.unmount());
+    await act(async () => {releasePermission({status: 'granted'}); await request;});
+    expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
+    expect(customerAddressesApi.reverseGeocode).not.toHaveBeenCalled();
+  });
+
+  it('does not reuse a detected pin when the user changes the city', async () => {
+    await registration(); await fill(); await verifyEmail();
+    await act(async () => {await button('Use my current location').props.onPress();});
+    await act(async () => tree.root.findAllByType(InputField).find(node => node.props.placeholder === 'City')!.props.onChangeText('Bengaluru'));
+    await act(async () => {await button('Submit for review').props.onPress();});
+    expect((profileApi.submitChefApplication as jest.Mock).mock.calls[0][0]).not.toHaveProperty('latitude');
+  });
+
+  it('preserves an existing rejected application pin on resubmission', async () => {
+    mockResolution = {flow: 'CHEF_ONBOARDING', requestedRole: 'CHEF', authorizedRole: 'CUSTOMER', onboardingStatus: 'REJECTED'};
+    (profileApi.getChefApplication as jest.Mock).mockResolvedValue({...application, status: 'REJECTED', latitude: 17.385, longitude: 78.4867});
+    await registration(); await verifyEmail();
+    await act(async () => {await button('Resubmit for review').props.onPress();});
+    expect(profileApi.submitChefApplication).toHaveBeenCalledWith(expect.objectContaining({latitude: 17.385, longitude: 78.4867}));
   });
 
   it('sends normalized address fields and opens pending only after confirmed submission', async () => {

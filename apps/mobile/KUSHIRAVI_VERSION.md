@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.24.1 Chef Registration Recovery
+# KUSHIRAVI App Build - Version 1.24.2 Chef Application Location
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -18,6 +18,31 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.24.2 - Chef Application Current Location, 2026-10-02
+
+- User confirmed Chef sign-in opens registration, then reported the missing
+  current-location action. Add only Use my current location above the existing
+  address fields; reuse the existing location icon, outline button, native
+  foreground permission/GPS service and backend reverse-geocode contract.
+- The published APIM POST `/api/v1/customer/addresses/reverse-geocode` targets
+  the existing live User-Chef service. No new backend endpoint, keys or resource.
+  Fill detected address/city/state/pincode, preserving applicant/email and
+  address-line-2/landmark details. The applicant reviews exact house/flat details.
+- Send valid detected latitude/longitude through the existing Chef application
+  POST contract. Preserve rejected application coordinates on resubmission;
+  clear the detected pin when city/state/pincode is manually changed. Do not
+  auto-create a Customer address or bypass email verification/Admin approval.
+- Explicit tap only, no background location request. Handle denied permission,
+  disabled GPS, invalid coordinates and lookup failure without discarding the
+  form. Guard duplicate requests, unmounted screens and overlapping submit/logout.
+- Android target 1.24.2 / code 37; intended immutable tag `KUSHIRAVI-app-v1.24.2`.
+  Intended files `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.2.apk` and
+  `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.2-source.zip`. Prior tags untouched.
+- All 204 Jest suites / 1,132 tests pass, including 19 location regressions;
+  TypeScript, targeted ESLint and `git diff --check` pass. Build/install and
+  genuine applicant submission/Admin receipt remain pending. Installed release is still 1.24.1
+  until the new signed APK is verified and replace-installed.
 
 ### Version 1.24.1 - Chef Registration Recovery, 2026-10-02
 

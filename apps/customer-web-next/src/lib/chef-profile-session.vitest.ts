@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ChefMenuManager } from "../components/chef-menu-manager";
+import { ChefKitchenForm } from "../components/chef-kitchen-form";
+import { ChefModeDashboard } from "../components/chef-mode-dashboard";
 import type { ChefMenuItem } from "./chef-menu-contract";
+import type { ChefKitchen } from "./chef-kitchen-types";
 import { ChefAccessBoundary } from "../components/chef-access-boundary";
 import { ChefBankOnboardingPanel } from "../components/chef-bank-onboarding-panel";
 import ChefFinancePage from "../app/chef/finance/page";
@@ -15,9 +18,11 @@ import type { CravesIdentity } from "./auth-contract";
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate, Link: ({ children }: { children: unknown }) => children }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/profile", useRouter: () => ({ push: navigate, replace: navigate }) }));
+vi.mock("../components/location/AddressMapPicker", () => ({ AddressMapPicker: () => null }));
 
 const a: CravesIdentity = { id: "11111111-1111-4111-8111-111111111111", phoneNumber: "+10000000000", displayName: "Chef A", email: "a@example.invalid", emailVerified: true, status: "ACTIVE", roles: ["CHEF"] };
 const b: CravesIdentity = { ...a, id: "22222222-2222-4222-8222-222222222222", displayName: "Chef B", email: "b@example.invalid" };
+const kitchenFixture: ChefKitchen = { id: a.id, kitchenName: "Fixture kitchen", displayName: null, description: null, phoneNumber: null, email: null, addressLine1: "Fixture house", addressLine2: null, landmark: null, areaName: null, city: "Fixture city", state: "Fixture state", postalCode: null, latitude: null, longitude: null, status: "DRAFT", createdAt: "2026-10-02T00:00:00Z", updatedAt: "2026-10-02T00:00:00Z" };
 let identity: CravesIdentity | null;
 let fetcher: ReturnType<typeof vi.fn<typeof fetch>>;
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
@@ -255,6 +260,7 @@ describe("Chef menu save and recovery", () => {
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
     fetcher.mockImplementation(async (input, options) => {
       const url = String(input);
+      if (url === "/api/chef/kitchen" && !options?.method) return Response.json(kitchenFixture);
       if (url === "/api/chef/menu" && !options?.method) return Response.json(stored);
       if (url === "/api/chef/menu" && options?.method === "POST") { const item = { ...fixture, ...JSON.parse(String(options.body)) }; stored.push(item); return Response.json(item, { status: 201 }); }
       if (url === `/api/chef/menu/${a.id}` && options?.method === "PUT") { stored = [{ ...stored[0], ...JSON.parse(String(options.body)) }]; return Response.json(stored[0]); }
@@ -273,6 +279,112 @@ describe("Chef menu save and recovery", () => {
     fireEvent.change(screen.getByLabelText(/Price/), { target: { value: "180" } });
     fireEvent.change(screen.getByLabelText(/Packed weight/), { target: { value: "500" } });
   }
+  it("takes a new approved Chef through kitchen setup, dish creation and persisted menu changes", async () => {
+    let savedKitchen: ChefKitchen | null = null;
+    const original = fetcher.getMockImplementation()!;
+    vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+    fetcher.mockImplementation(async (input, options) => {
+      const url = String(input);
+      if (url === "/api/chef/kitchen" && !options?.method) return Response.json(savedKitchen);
+      if (url === "/api/chef/kitchen" && options?.method === "PUT") {
+        savedKitchen = { ...kitchenFixture, ...JSON.parse(String(options.body)) };
+        return Response.json(savedKitchen);
+      }
+      if (url === "/api/chef/application") return Response.json({ id: a.id, firstName: "Fixture", lastName: "Chef", email: a.email, status: "APPROVED", addressLine1: "Fixture house", city: "Fixture city", state: "Fixture state", latitude: null, longitude: null, documents: [] });
+      return original(input, options);
+    });
+    render(createElement(ChefMenuManager));
+    const setup = await screen.findByRole("link", { name: "Set up my kitchen" });
+    expect(setup.getAttribute("href")).toBe("/chef/kitchen");
+    expect(screen.queryByRole("button", { name: "Add Dish" })).toBeNull();
+    expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/menu")).toBe(false);
+    cleanup(); render(createElement(ChefKitchenForm));
+    fireEvent.change(await screen.findByLabelText("Kitchen name"), { target: { value: "New fixture kitchen" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, this is right" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Not yet/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save my kitchen" }));
+    expect((await screen.findByRole("link", { name: /Go to my menu/ })).getAttribute("href")).toBe("/chef/menu");
+    expect(savedKitchen).toMatchObject({ kitchenName: "New fixture kitchen", status: "DRAFT", latitude: null, longitude: null });
+    cleanup(); render(createElement(ChefKitchenForm));
+    await screen.findByRole("heading", { name: "New fixture kitchen" });
+    cleanup(); await openNew(); fillRequired();
+    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    await screen.findByText("Dish added successfully");
+    fireEvent.click(screen.getByRole("button", { name: "Edit Fixture dish" }));
+    fireEvent.change(screen.getByLabelText(/Price/), { target: { value: "190" } });
+    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    await screen.findByText("Dish updated successfully");
+    await waitFor(() => expect((screen.getByRole("switch", { name: "Availability for Fixture dish" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("switch", { name: "Availability for Fixture dish" }));
+    await screen.findByText("Dish is now unavailable");
+    await waitFor(() => expect((screen.getByRole("switch", { name: "Availability for Fixture dish" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("switch", { name: "Availability for Fixture dish" }));
+    await screen.findByText("Dish is now available");
+    cleanup(); render(createElement(ChefMenuManager));
+    await screen.findByRole("heading", { name: "Fixture dish" });
+    expect(screen.getByText("₹190.00")).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "Availability for Fixture dish" }).getAttribute("aria-checked")).toBe("true");
+  });
+  it.each(["unavailable", "invalid", "bad-json"])("does not mistake a %s kitchen read for a new or empty menu", async state => {
+    const original = fetcher.getMockImplementation()!;
+    fetcher.mockImplementation((input, options) => String(input) === "/api/chef/kitchen"
+      ? Promise.resolve(state === "unavailable" ? Response.json({ code: "KITCHEN_UNAVAILABLE" }, { status: 503 }) : state === "invalid" ? Response.json({ kitchenName: "Incomplete" }) : new Response("not json"))
+      : original(input, options));
+    render(createElement(ChefMenuManager));
+    await screen.findByRole("button", { name: "Reload menu" });
+    expect(screen.queryByRole("link", { name: "Set up my kitchen" })).toBeNull();
+    expect(screen.queryByText("Your first dish starts here")).toBeNull();
+    expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/menu")).toBe(false);
+  });
+  it.each(["displayName", "city"] as const)("guides a new Chef to an overlong %s prefilled from the application", async field => {
+    vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+    fetcher.mockImplementation(async input => {
+      if (String(input) === "/api/chef/kitchen") return Response.json(null);
+      if (String(input) === "/api/chef/application") return Response.json({
+        status: "APPROVED", firstName: field === "displayName" ? "x".repeat(159) : "Fixture", lastName: "Y",
+        addressLine1: "Fixture house", city: field === "city" ? "x".repeat(81) : "Fixture city", state: "Fixture state", latitude: null, longitude: null,
+      });
+      throw new Error(`Unexpected kitchen fixture route ${input}`);
+    });
+    render(createElement(ChefKitchenForm));
+    const name = await screen.findByLabelText("Kitchen name");
+    expect((name as HTMLInputElement).maxLength).toBe(160);
+    fireEvent.change(name, { target: { value: "New kitchen" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    if (field === "city") fireEvent.click(screen.getByRole("button", { name: "Yes, this is right" }));
+    const invalid = screen.getByLabelText(field === "city" ? "City" : /Chef name customers see/);
+    expect(invalid.getAttribute("aria-invalid")).toBe("true");
+    expect(document.activeElement).toBe(invalid);
+    expect(screen.getByRole("alert").textContent).toBe(`${field === "city" ? "City" : "Chef name"} must be ${field === "city" ? 80 : 160} characters or fewer.`);
+    if (field === "displayName") expect(invalid.closest("details")?.open).toBe(true);
+    expect(fetcher.mock.calls.some(([, options]) => options?.method === "PUT")).toBe(false);
+  });
+  it("recovers a menu race by directing the Chef to their kitchen instead of retrying failed dish fields", async () => {
+    const original = fetcher.getMockImplementation()!;
+    fetcher.mockImplementation((input, options) => String(input) === "/api/chef/menu"
+      ? Promise.resolve(Response.json({ code: "KITCHEN_PROFILE_REQUIRED" }, { status: 400 })) : original(input, options));
+    render(createElement(ChefMenuManager));
+    await screen.findByRole("link", { name: "Set up my kitchen" });
+    expect(screen.queryByText(/packed weight/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add Dish" })).toBeNull();
+  });
+  it.each(["POST", "PUT", "PATCH"] as const)("returns to kitchen setup if the kitchen disappears before a %s mutation", async method => {
+    if (method === "POST") { await openNew(); fillRequired(); }
+    else {
+      stored = [{ ...fixture }];
+      render(createElement(ChefMenuManager));
+      await screen.findByRole("heading", { name: "Fixture dish" });
+      if (method === "PUT") fireEvent.click(screen.getByRole("button", { name: "Edit Fixture dish" }));
+    }
+    fetcher.mockResolvedValueOnce(Response.json({ code: "KITCHEN_PROFILE_REQUIRED" }, { status: 400 }));
+    fireEvent.click(screen.getByRole(method === "PATCH" ? "switch" : "button", { name: method === "PATCH" ? "Availability for Fixture dish" : "Save Dish" }));
+    expect((await screen.findByRole("link", { name: "Set up my kitchen" })).getAttribute("href")).toBe("/chef/kitchen");
+    expect(screen.queryByRole("button", { name: "Save Dish" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add Dish" })).toBeNull();
+    expect(screen.queryByText(/Dish (added|updated) successfully|Dish is now/)).toBeNull();
+  });
   it("creates, edits, changes availability and retains the server result after remount", async () => {
     await openNew(); fillRequired();
     fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
@@ -358,5 +470,38 @@ describe("Chef menu save and recovery", () => {
     await screen.findByText("Dish updated successfully");
     expect(stored).toHaveLength(1);
     expect(fetcher.mock.calls.filter(([url, options]) => url === "/api/chef/menu" && options?.method === "POST")).toHaveLength(1);
+  });
+});
+
+describe("Approved Chef first step", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+  });
+  it.each([false, true])("offers the correct approval action when a saved kitchen exists: %s", async hasKitchen => {
+    fetcher.mockImplementation(input => {
+      const url = String(input);
+      if (url === "/api/chef/kitchen") return Promise.resolve(Response.json(hasKitchen ? kitchenFixture : null));
+      if (["/api/chef/menu", "/api/chef/orders", "/api/chef/earnings"].includes(url)) return Promise.resolve(Response.json([]));
+      return normal(input);
+    });
+    render(createElement(ChefModeDashboard));
+    const first = await screen.findByRole("link", { name: hasKitchen ? "Add my first dish" : "Set up my kitchen" });
+    expect(first.getAttribute("href")).toBe(hasKitchen ? "/chef/menu" : "/chef/kitchen");
+    expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/menu")).toBe(hasKitchen);
+  });
+  it.each(["unavailable", "invalid"])("does not claim kitchen setup is missing after a %s kitchen read", async state => {
+    fetcher.mockImplementation(input => {
+      const url = String(input);
+      if (url === "/api/chef/kitchen") return Promise.resolve(state === "unavailable" ? Response.json({}, { status: 503 }) : Response.json({ kitchenName: "Incomplete" }));
+      if (["/api/chef/orders", "/api/chef/earnings"].includes(url)) return Promise.resolve(Response.json([]));
+      return normal(input);
+    });
+    render(createElement(ChefModeDashboard));
+    await screen.findByRole("button", { name: "Refresh kitchen and menu" });
+    expect(screen.queryByRole("link", { name: "Set up my kitchen" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Name my kitchen" })).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/menu")).toBe(false);
   });
 });

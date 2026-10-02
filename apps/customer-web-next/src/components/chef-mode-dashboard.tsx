@@ -177,19 +177,23 @@ export function ChefModeDashboard() {
     let active = true;
 
     async function loadApprovedSnapshot(current: CravesUser) {
+      const kitchenRequest = fetch("/api/chef/kitchen", {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+      const menuRequest = kitchenRequest.then(async response => {
+        if (!response.ok) return null;
+        const raw = await response.clone().json().catch(() => undefined);
+        if (raw === null || !parseChefKitchen(raw)) return null;
+        return fetch("/api/chef/menu", { cache: "no-store", credentials: "same-origin" });
+      });
       const requests = await Promise.allSettled([
         fetch("/api/chef/application", {
           cache: "no-store",
           credentials: "same-origin",
         }),
-        fetch("/api/chef/kitchen", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        fetch("/api/chef/menu", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
+        kitchenRequest,
+        menuRequest,
         fetch("/api/chef/orders", {
           cache: "no-store",
           credentials: "same-origin",
@@ -211,14 +215,22 @@ export function ChefModeDashboard() {
       for (let index = 0; index < requests.length; index += 1) {
         const result = requests[index];
         const label = ["application", "kitchen", "menu", "orders", "earnings"][index]!;
-        if (result.status !== "fulfilled" || !result.value.ok) {
+        if (index === 2 && result.status === "fulfilled" && result.value === null) continue;
+        if (result.status !== "fulfilled" || !result.value?.ok) {
           unavailable.push(label);
           continue;
         }
-        const raw = await responseBody(result.value);
+        const raw = await result.value.json().catch(() => undefined);
         if (index === 0) application = parseChefApplication(raw);
-        if (index === 1) kitchen = raw === null ? null : parseChefKitchen(raw);
-        if (index === 2) menu = parseChefMenuItems(raw) ?? [];
+        if (index === 1) {
+          kitchen = raw === null ? null : parseChefKitchen(raw);
+          if (raw !== null && !kitchen) unavailable.push(label);
+        }
+        if (index === 2) {
+          const parsedMenu = parseChefMenuItems(raw);
+          if (parsedMenu) menu = parsedMenu;
+          else unavailable.push(label);
+        }
         if (index === 3) orders = parseChefOrdersResponse(raw) ?? [];
         if (index === 4) earnings = parseChefEarnings(raw) ?? [];
       }
@@ -226,7 +238,7 @@ export function ChefModeDashboard() {
       if (!active) return;
       setUser(current);
       setSnapshot({ application, kitchen, menu, orders, earnings, unavailable });
-      if (application?.status === "APPROVED") {
+      if (application?.status === "APPROVED" && !unavailable.includes("kitchen")) {
         const noticeKey = `craves-chef-approved:${application.id ?? current.id}:${application.reviewedAt ?? "approved"}`;
         setApprovalNoticeKey(noticeKey);
         try {
@@ -449,7 +461,16 @@ export function ChefModeDashboard() {
   }
 
   let priority: PriorityAction;
-  if (!snapshot.kitchen) {
+  if (snapshot.unavailable.includes("kitchen") || snapshot.unavailable.includes("menu")) {
+    priority = {
+      eyebrow: "Try again",
+      title: "Check your kitchen and menu",
+      description: "We couldn’t verify your saved kitchen or dishes. Refresh before continuing setup.",
+      action: "Refresh kitchen and menu",
+      refresh: true,
+      icon: RefreshCw,
+    };
+  } else if (!snapshot.kitchen) {
     priority = {
       eyebrow: "You’re approved",
       title: "Give your kitchen a name",
@@ -521,13 +542,13 @@ export function ChefModeDashboard() {
             </span>
             <p className="mt-5 text-sm font-semibold text-[#F62E18]">You’re approved</p>
             <h2 id="chef-approved-title" className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A]">Congratulations! You’re now a Craves chef</h2>
-            <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">Your Chef Mode is ready. Add your first dish so customers can discover what you cook.</p>
+            <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">{snapshot.kitchen ? "Your Chef Mode is ready. Add your first dish so customers can discover what you cook." : "Your Chef Mode is ready. Save your kitchen name and pickup address, then add your first dish."}</p>
             <Link
-              href="/chef/menu"
+              href={snapshot.kitchen ? "/chef/menu" : "/chef/kitchen"}
               onClick={dismissApprovalNotice}
               className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white"
             >
-              Add my first dish
+              {snapshot.kitchen ? "Add my first dish" : "Set up my kitchen"}
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </Link>
             <button

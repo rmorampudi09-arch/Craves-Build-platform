@@ -24,7 +24,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ m
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
     const upstream = await boundedFetch(`${apiBaseUrl()}/kitchens/me/menu-items/${encodeURIComponent(menuItemId)}/availability`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify({ available: raw.available, reason }), cache: "no-store", signal: controller.signal }, 40_000);
-    if (!upstream.ok) { const response = NextResponse.json({ code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 404 ? "MENU_ITEM_NOT_FOUND" : "AVAILABILITY_UPDATE_FAILED" }, { status: upstream.status }); if (upstream.status === 401) response.cookies.delete("craves_access_token"); return response; }
+    if (!upstream.ok) {
+      const failure = await upstream.json().catch(() => null) as { code?: unknown } | null;
+      const kitchenRequired = upstream.status === 400 && failure?.code === "KITCHEN_PROFILE_REQUIRED";
+      const response = NextResponse.json({ code: kitchenRequired ? "KITCHEN_PROFILE_REQUIRED" : upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 404 ? "MENU_ITEM_NOT_FOUND" : "AVAILABILITY_UPDATE_FAILED", ...(kitchenRequired ? { message: "Set up your kitchen before adding or managing dishes." } : {}) }, { status: upstream.status, headers: { "Cache-Control": "no-store" } });
+      if (upstream.status === 401) response.cookies.delete("craves_access_token");
+      return response;
+    }
     const item = parseChefMenuItem(await upstream.json().catch(() => null));
     if (!item) return NextResponse.json({ code: "INVALID_MENU_RESPONSE" }, { status: 502 });
     const response = NextResponse.json(item); response.headers.set("Cache-Control", "no-store"); return response;

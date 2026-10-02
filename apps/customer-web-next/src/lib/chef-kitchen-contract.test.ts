@@ -30,3 +30,12 @@ test("accepts suspended read state but blocks suspended writes", () => {
 test("requires paired coordinates", () => {
   assert.equal(parseChefKitchenInput({ ...kitchen, status: "DRAFT", latitude: 17.4, longitude: null }), null);
 });
+
+for (const [field, limit] of [["kitchenName", 160], ["displayName", 160], ["city", 80], ["state", 80], ["postalCode", 16]] as const) {
+  test(`accepts ${field} at its database limit and rejects a longer write`, () => {
+    const input = { ...kitchen, status: "DRAFT", [field]: "x".repeat(limit) };
+    assert.equal(parseChefKitchenInput(input)?.[field], "x".repeat(limit));
+    assert.equal(parseChefKitchenInput({ ...input, [field]: "x".repeat(limit + 1) }), null);
+    assert.equal(parseChefKitchenInput({ ...input, [field]: 123 }), null);
+  });
+}

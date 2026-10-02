@@ -3,6 +3,9 @@ import { NextRequest } from "next/server";
 import { POST } from "../app/api/chef/application/route";
 import { POST as uploadProof } from "../app/api/chef/application/proof-files/route";
 import { GET as readProfile } from "../app/api/customer/profile/route";
+import { GET as readMenu, POST as createDish } from "../app/api/chef/menu/route";
+import { PUT as editDish } from "../app/api/chef/menu/[menuItemId]/route";
+import { PATCH as updateAvailability } from "../app/api/chef/menu/[menuItemId]/availability/route";
 
 const upstream = vi.hoisted(() => vi.fn());
 vi.mock("./bounded-fetch", () => ({ boundedFetch: upstream }));
@@ -25,6 +28,32 @@ it("forwards a new application to the correct authenticated APIM operation", asy
     method: "POST", headers: expect.objectContaining({ Authorization: "Bearer fixture-only" }),
   }), 40_000);
   expect(JSON.parse(upstream.mock.calls[0][1].body)).toMatchObject(details);
+});
+
+function menuRequest(method: "GET" | "POST" | "PUT" | "PATCH") {
+  vi.stubEnv("CRAVES_API_BASE_URL", "https://api.craves.in/api/v1");
+  return new NextRequest("https://craves.in/api/chef/menu", {
+    method, headers: { Origin: "https://craves.in", Cookie: "craves_access_token=fixture-only", ...(method !== "GET" ? { "Content-Type": "application/json" } : {}) },
+    ...(method !== "GET" ? { body: JSON.stringify(method === "PATCH" ? { available: false } : { itemName: "Fixture dish", category: "Meals", foodType: "VEG", price: 180, currency: "INR", unitPackageWeightGrams: 500, available: false, status: "DRAFT" }) } : {}),
+  });
+}
+
+it.each(["GET", "POST", "PUT", "PATCH"] as const)("preserves the exact missing-kitchen error for menu %s without leaking backend diagnostics", async method => {
+  upstream.mockResolvedValue(Response.json({ code: "KITCHEN_PROFILE_REQUIRED", message: "private upstream diagnostics" }, { status: 400 }));
+  const context = { params: Promise.resolve({ menuItemId: "11111111-1111-4111-8111-111111111111" }) };
+  const response = await (method === "GET" ? readMenu(menuRequest(method)) : method === "POST" ? createDish(menuRequest(method)) : method === "PUT" ? editDish(menuRequest(method), context) : updateAvailability(menuRequest(method), context));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ code: "KITCHEN_PROFILE_REQUIRED", message: "Set up your kitchen before adding or managing dishes." });
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  const path = method === "PUT" || method === "PATCH" ? "/11111111-1111-4111-8111-111111111111" + (method === "PATCH" ? "/availability" : "") : "";
+  expect(upstream).toHaveBeenCalledWith(`https://api.craves.in/api/v1/kitchens/me/menu-items${path}`, expect.objectContaining({ method, headers: expect.objectContaining({ Authorization: "Bearer fixture-only" }) }), 40_000);
+});
+
+it("does not reinterpret another menu rejection as a missing kitchen", async () => {
+  upstream.mockResolvedValue(Response.json({ code: "INVALID_PACKAGE_WEIGHT", message: "private diagnostics" }, { status: 400 }));
+  const response = await readMenu(menuRequest("GET"));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ code: "MENU_REQUEST_FAILED" });
 });
 
 it.each([

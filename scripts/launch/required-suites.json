@@ -37,7 +37,7 @@
       "RedisRevocationConsumerTest": 6,
       "AdminSessionRevocationWebConfigurationTest": 6,
       "CatalogFinanceEligibilityTest": 5,
-      "CatalogSellingDatabaseTest": 3,
+      "CatalogSellingDatabaseTest": 4,
       "CatalogSellingGateTest": 2,
       "DiscoveryCacheServiceTest": 4,
       "FavoriteHomeFeedServiceValidationTest": 3,

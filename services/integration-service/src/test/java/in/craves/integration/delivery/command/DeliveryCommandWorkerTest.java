@@ -13,15 +13,11 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryComm
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
 import in.craves.integration.delivery.command.DeliveryCommandWorker.DeliveryCommandDeferredException;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException;
-import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderAssignmentPendingException;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
-import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
-import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Stop;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -144,91 +140,6 @@ class DeliveryCommandWorkerTest {
         verifyNoInteractions(completion);
     }
 
-    @Test
-    void recoveredProcessingCommandWithCreateIntentMovesToReconciliationWithoutRecreating() {
-        DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
-        DeliveryJobRepository deliveryJobs = mock(DeliveryJobRepository.class);
-        DeliveryProviderRouter router = mock(DeliveryProviderRouter.class);
-        DeliveryCommandCompletionService completion = mock(DeliveryCommandCompletionService.class);
-        DeliveryCommandProperties properties = new DeliveryCommandProperties();
-        properties.setMaxDeliveryAttempts(5);
-        DeliveryCommandWorker worker = new DeliveryCommandWorker(
-            commands, deliveryJobs, router, completion, properties, retryProperties()
-        );
-
-        DeliveryCommandMessage message = command();
-        Instant attemptedAt = Instant.parse("2026-10-02T06:10:00Z");
-        CommandRecord claimed = commandRecordWithCreateIntent(
-            message,
-            "shadowfax",
-            message.chefSubOrderId().toString(),
-            attemptedAt
-        );
-        when(commands.claim(message.commandId(), 5)).thenReturn(Optional.of(claimed));
-        when(commands.markReconciliationPending(
-            message.commandId(),
-            "shadowfax",
-            message.chefSubOrderId().toString(),
-            attemptedAt,
-            "Recovered provider create intent from stale processing lease"
-        )).thenReturn(true);
-
-        var receipt = worker.process(message);
-
-        assertThat(receipt.deliveryJobId()).isNull();
-        assertThat(receipt.providerId()).isEqualTo("RECONCILIATION_PENDING");
-        verify(commands).markReconciliationPending(
-            message.commandId(),
-            "shadowfax",
-            message.chefSubOrderId().toString(),
-            attemptedAt,
-            "Recovered provider create intent from stale processing lease"
-        );
-        verifyNoInteractions(router, completion, deliveryJobs);
-    }
-
-    @Test
-    void storesProviderAssignmentWindowWithoutCompletingJob() {
-        DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
-        DeliveryJobRepository deliveryJobs = mock(DeliveryJobRepository.class);
-        DeliveryProviderRouter router = mock(DeliveryProviderRouter.class);
-        DeliveryCommandCompletionService completion = mock(DeliveryCommandCompletionService.class);
-        DeliveryCommandProperties properties = new DeliveryCommandProperties();
-        properties.setMaxDeliveryAttempts(5);
-        DeliveryCommandWorker worker = new DeliveryCommandWorker(
-            commands, deliveryJobs, router, completion, properties, retryProperties()
-        );
-
-        DeliveryCommandMessage message = command();
-        CommandRecord claimed = commandRecord(message, "PROCESSING");
-        Instant retryAt = Instant.parse("2026-10-02T06:12:00Z");
-        ProviderDelivery createdButSearching = new ProviderDelivery(
-            "shadowfax", "21030620", null, DeliveryStatus.SEARCHING, "ACCEPTED",
-            null, null, null, null, Instant.parse("2026-10-02T06:10:00Z")
-        );
-
-        when(commands.claim(message.commandId(), 5)).thenReturn(Optional.of(claimed));
-        when(deliveryJobs.findIdByChefSubOrderId(message.chefSubOrderId())).thenReturn(Optional.empty());
-        when(router.route(message)).thenThrow(new DeliveryProviderAssignmentPendingException(
-            "shadowfax", createdButSearching, retryAt,
-            "Provider order was created but no courier is assigned yet"
-        ));
-        when(commands.markProviderAssignmentPending(
-            message.commandId(), "shadowfax", "21030620", retryAt,
-            "Provider order was created but no courier is assigned yet"
-        )).thenReturn(true);
-
-        assertThatThrownBy(() -> worker.process(message))
-            .isInstanceOf(DeliveryCommandDeferredException.class)
-            .hasMessage("Provider order was created but no courier is assigned yet");
-
-        verify(commands).markProviderAssignmentPending(
-            message.commandId(), "shadowfax", "21030620", retryAt,
-            "Provider order was created but no courier is assigned yet"
-        );
-        verifyNoInteractions(completion);
-    }
-
     private static DeliveryCommandRetryProperties retryProperties() {
         DeliveryCommandRetryProperties retry = new DeliveryCommandRetryProperties();
         retry.setBaseSeconds(30);
@@ -253,38 +164,7 @@ class DeliveryCommandWorkerTest {
             0,
             0,
             null,
-            null,
-            null,
-            null,
-            null,
-            List.of()
-        );
-    }
-
-    private static CommandRecord commandRecordWithCreateIntent(DeliveryCommandMessage message,
-                                                               String providerId,
-                                                               String clientReference,
-                                                               Instant attemptedAt) {
-        return new CommandRecord(
-            message.commandId(),
-            message.chefSubOrderId(),
-            message.orderId(),
-            "PROCESSING",
-            2,
-            message,
-            7001L,
-            "delivery-command:test",
-            providerId,
-            clientReference,
-            attemptedAt,
-            0,
-            0,
-            null,
-            null,
-            null,
-            null,
-            null,
-            List.of()
+            null
         );
     }
 

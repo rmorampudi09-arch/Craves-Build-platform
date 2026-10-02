@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 class DeliveryProviderReadinessServiceTest {
 
     @Test
-    void matrixReportsShadowfaxAccountAndRuntimeBlockers() {
+    void matrixKeepsVendorGatedProvidersExplicitlyBlocked() {
         BorzoProperties borzo = mock(BorzoProperties.class);
         ShiprocketProperties shiprocket = mock(ShiprocketProperties.class);
         DeliveryCommandProperties delivery = mock(DeliveryCommandProperties.class);
@@ -52,15 +52,7 @@ class DeliveryProviderReadinessServiceTest {
         var matrix = service.matrix();
 
         assertThat(provider(matrix, "SHADOWFAX").blockers())
-            .contains(
-                "SHADOWFAX_API_DISABLED",
-                "SHADOWFAX_CREATE_DISABLED",
-                "API_CREDENTIALS_NOT_BOUND",
-                "SHADOWFAX_ACCOUNT_PRODUCT_NOT_VERIFIED",
-                "WEBHOOK_TOKEN_NOT_BOUND",
-                "COMMAND_ADAPTER_NOT_REGISTERED",
-                "PROVIDER_CATALOG_INACTIVE"
-            );
+            .contains("VENDOR_PRIVATE_API_CONTRACT_REQUIRED", "COMMAND_ADAPTER_NOT_REGISTERED", "PROVIDER_CATALOG_INACTIVE");
         assertThat(provider(matrix, "PORTER").blockers())
             .contains("ENTERPRISE_API_ONBOARDING_REQUIRED", "COMMAND_ADAPTER_NOT_REGISTERED", "PROVIDER_CATALOG_INACTIVE");
         assertThat(provider(matrix, "DELHIVERY").blockers())
@@ -68,7 +60,7 @@ class DeliveryProviderReadinessServiceTest {
     }
 
     @Test
-    void shadowfaxCannotCreateWhenCatalogIsActiveButAccountProductIsUnverified() {
+    void vendorContractBlockersRemainAuthoritativeEvenIfCatalogIsAccidentallyActivated() {
         BorzoProperties borzo = mock(BorzoProperties.class);
         ShiprocketProperties shiprocket = mock(ShiprocketProperties.class);
         DeliveryCommandProperties delivery = mock(DeliveryCommandProperties.class);
@@ -107,7 +99,7 @@ class DeliveryProviderReadinessServiceTest {
             assertThat(status.providerCatalogActive()).isTrue();
             assertThat(status.productionReady()).isFalse();
             assertThat(status.providerCreateEnabled()).isFalse();
-            assertThat(status.blockers()).contains("SHADOWFAX_ACCOUNT_PRODUCT_NOT_VERIFIED");
+            assertThat(status.blockers()).contains("VENDOR_PRIVATE_API_CONTRACT_REQUIRED");
         });
         assertThat(provider(matrix, "PORTER")).satisfies(status -> {
             assertThat(status.commandAdapterRegistered()).isTrue();

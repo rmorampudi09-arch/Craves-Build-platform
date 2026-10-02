@@ -52,8 +52,6 @@ craves:
     lead-time-minutes: ${CRAVES_DELIVERY_COMMAND_LEAD_TIME_MINUTES:10}
     quote-timeout-seconds: ${CRAVES_DELIVERY_QUOTE_TIMEOUT_SECONDS:4}
     max-provider-attempts: ${CRAVES_DELIVERY_MAX_PROVIDER_ATTEMPTS:3}
-    provider-sequence: ${CRAVES_DELIVERY_PROVIDER_SEQUENCE:borzo,shadowfax,pidge}
-    provider-acceptance-timeout-seconds: ${CRAVES_DELIVERY_PROVIDER_ACCEPTANCE_TIMEOUT_SECONDS:120}
     max-delivery-attempts: ${CRAVES_DELIVERY_MAX_DELIVERY_ATTEMPTS:5}
     retry:
       base-seconds: ${CRAVES_DELIVERY_RETRY_BASE_SECONDS:30}
@@ -140,19 +138,6 @@ craves:
       connect-timeout-seconds: ${PIDGE_CONNECT_TIMEOUT_SECONDS:5}
       read-timeout-seconds: ${PIDGE_READ_TIMEOUT_SECONDS:20}
       default-volumetric-weight-grams: ${PIDGE_DEFAULT_VOLUMETRIC_WEIGHT_GRAMS:900}
-    shadowfax:
-      enabled: ${SHADOWFAX_API_ENABLED:false}
-      create-enabled: ${SHADOWFAX_CREATE_ENABLED:false}
-      production-activation-approved: ${SHADOWFAX_PRODUCTION_ACTIVATION_APPROVED:false}
-      account-product-verified: ${SHADOWFAX_ACCOUNT_PRODUCT_VERIFIED:false}
-      environment: ${SHADOWFAX_API_ENVIRONMENT:SANDBOX}
-      product: ${SHADOWFAX_PRODUCT:MARKETPLACE}
-      base-url: ${SHADOWFAX_API_BASE_URL:https://hlbackend.staging.shadowfax.in}
-      auth-token: ${SHADOWFAX_API_AUTH_TOKEN:}
-      client-code: ${SHADOWFAX_CLIENT_CODE:}
-      webhook-token: ${SHADOWFAX_WEBHOOK_TOKEN:}
-      connect-timeout-seconds: ${SHADOWFAX_CONNECT_TIMEOUT_SECONDS:5}
-      read-timeout-seconds: ${SHADOWFAX_READ_TIMEOUT_SECONDS:20}
     borzo:
       enabled: ${BORZO_API_ENABLED:false}
       environment: ${BORZO_API_ENVIRONMENT:SANDBOX}

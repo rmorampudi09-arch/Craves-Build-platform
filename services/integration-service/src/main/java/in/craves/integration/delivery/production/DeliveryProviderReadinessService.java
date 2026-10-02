@@ -3,7 +3,6 @@ package in.craves.integration.delivery.production;
 import in.craves.integration.config.BorzoProperties;
 import in.craves.integration.config.ShiprocketProperties;
 import in.craves.integration.config.PidgeProperties;
-import in.craves.integration.config.ShadowfaxProperties;
 import in.craves.integration.delivery.DeliveryProviderRepository;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
@@ -27,7 +26,6 @@ public class DeliveryProviderReadinessService {
     private final DeliveryProviderPickupLocationRepository pickupLocations;
     private final Set<String> commandAdapterIds;
     private final PidgeProperties pidge;
-    private final ShadowfaxProperties shadowfax;
 
     public DeliveryProviderReadinessService(BorzoProperties borzo,
                                             ShiprocketProperties shiprocket,
@@ -35,18 +33,16 @@ public class DeliveryProviderReadinessService {
                                             DeliveryProviderRepository providerRepository,
                                             DeliveryProviderPickupLocationRepository pickupLocations,
                                             List<DeliveryProviderAdapter> commandAdapters) {
-        this(borzo, shiprocket, delivery, providerRepository, pickupLocations, commandAdapters,
-            new PidgeProperties(), new ShadowfaxProperties());
+        this(borzo, shiprocket, delivery, providerRepository, pickupLocations, commandAdapters, new PidgeProperties());
     }
 
     @Autowired
     public DeliveryProviderReadinessService(BorzoProperties borzo, ShiprocketProperties shiprocket,
         DeliveryCommandProperties delivery, DeliveryProviderRepository providerRepository,
         DeliveryProviderPickupLocationRepository pickupLocations, List<DeliveryProviderAdapter> commandAdapters,
-        PidgeProperties pidge, ShadowfaxProperties shadowfax) {
+        PidgeProperties pidge) {
         this.borzo = borzo;
         this.pidge = pidge;
-        this.shadowfax = shadowfax;
         this.shiprocket = shiprocket;
         this.delivery = delivery;
         this.providerRepository = providerRepository;
@@ -82,7 +78,10 @@ public class DeliveryProviderReadinessService {
                 borzoReadiness(),
                 shiprocketReadiness(),
                 pidgeReadiness(),
-                shadowfaxReadiness(),
+                vendorBlocked(
+                    "SHADOWFAX",
+                    "VENDOR_PRIVATE_API_CONTRACT_REQUIRED"
+                ),
                 vendorBlocked(
                     "PORTER",
                     "ENTERPRISE_API_ONBOARDING_REQUIRED"
@@ -165,27 +164,6 @@ public class DeliveryProviderReadinessService {
         return new ProviderReadiness("PIDGE", pidge.getEnvironment(), adapterRegistered("pidge"),
             pidge.isEnabled(), create, blockers.isEmpty() && create,
             pidge.isEnabled() && pidge.credentialReady(), catalogActive("pidge"), 0, List.copyOf(blockers));
-    }
-
-    private ProviderReadiness shadowfaxReadiness() {
-        List<String> blockers = new ArrayList<>(sharedDownstreamBlockers());
-        if (!shadowfax.isEnabled()) blockers.add("SHADOWFAX_API_DISABLED");
-        if (!shadowfax.isCreateEnabled()) blockers.add("SHADOWFAX_CREATE_DISABLED");
-        if (!shadowfax.credentialReady()) blockers.add("API_CREDENTIALS_NOT_BOUND");
-        if (!shadowfax.isAccountProductVerified()) blockers.add("SHADOWFAX_ACCOUNT_PRODUCT_NOT_VERIFIED");
-        if (!"MARKETPLACE".equals(shadowfax.normalizedProduct())) blockers.add("DEDICATED_STORE_MAPPING_NOT_VERIFIED");
-        if (!StringUtils.hasText(shadowfax.getWebhookToken())) blockers.add("WEBHOOK_TOKEN_NOT_BOUND");
-        if ("PRODUCTION".equals(shadowfax.normalizedEnvironment())
-            && !shadowfax.isProductionActivationApproved()) {
-            blockers.add("PRODUCTION_ACTIVATION_NOT_APPROVED");
-        }
-        if (!catalogActive("shadowfax")) blockers.add("PROVIDER_CATALOG_INACTIVE");
-        if (!adapterRegistered("shadowfax")) blockers.add("COMMAND_ADAPTER_NOT_REGISTERED");
-        boolean create = shadowfax.createReady() && delivery.isEnabled() && catalogActive("shadowfax");
-        return new ProviderReadiness("SHADOWFAX", shadowfax.normalizedEnvironment(),
-            adapterRegistered("shadowfax"), shadowfax.isEnabled(), create,
-            blockers.isEmpty() && create, shadowfax.isEnabled() && shadowfax.credentialReady(),
-            catalogActive("shadowfax"), pickupLocations.countVerified("shadowfax"), List.copyOf(blockers));
     }
 
     private ProviderReadiness shiprocketReadiness() {

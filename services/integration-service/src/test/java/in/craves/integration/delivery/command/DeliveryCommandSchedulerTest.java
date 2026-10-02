@@ -173,8 +173,7 @@ class DeliveryCommandSchedulerTest {
             "SCHEDULED", 0, message, sequenceNumber,
             sequenceNumber == null ? null : "delivery-command:test",
             null, null, null, 0,
-            0, null, null,
-            null, null, null, java.util.List.of()
+            0, null, null
         );
     }
 }

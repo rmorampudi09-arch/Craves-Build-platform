@@ -5,7 +5,6 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryComm
 import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResult;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException;
-import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderAssignmentPendingException;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryRoutingException;
 import java.time.Instant;
@@ -49,24 +48,6 @@ public class DeliveryCommandWorker {
         }
 
         CommandRecord command = claimed.get();
-        if (hasProviderCreateIntent(command) && command.activeProviderId() == null) {
-            boolean stored = commands.markReconciliationPending(
-                command.id(),
-                command.reconciliationProviderId(),
-                command.reconciliationClientReference(),
-                command.reconciliationStartedAt(),
-                "Recovered provider create intent from stale processing lease"
-            );
-            if (!stored) {
-                throw new DeliveryCommandTransientException(
-                    "Recovered provider create intent could not be moved to reconciliation",
-                    Instant.now().plus(retryProperties.claimContentionDelay()),
-                    "create-intent-recovery-" + command.id()
-                );
-            }
-            return new WorkerReceipt(null, false, "RECONCILIATION_PENDING");
-        }
-
         Optional<UUID> existingJob = deliveryJobs.findIdByChefSubOrderId(message.chefSubOrderId());
         if (existingJob.isPresent()) {
             commands.markCompleted(message.commandId());
@@ -74,9 +55,7 @@ public class DeliveryCommandWorker {
         }
 
         try {
-            RoutingResult routingResult = command.activeProviderId() == null
-                ? router.route(command.message())
-                : router.resumePendingAssignment(command);
+            RoutingResult routingResult = router.route(command.message());
             CompletionReceipt receipt = completionService.complete(command.message(), routingResult);
             return new WorkerReceipt(
                 receipt.deliveryJobId(), receipt.duplicate(), routingResult.providerId()
@@ -97,27 +76,6 @@ public class DeliveryCommandWorker {
                 );
             }
             return new WorkerReceipt(null, false, "RECONCILIATION_PENDING");
-        } catch (DeliveryProviderAssignmentPendingException ex) {
-            boolean stored = commands.markProviderAssignmentPending(
-                command.id(),
-                ex.providerId(),
-                ex.delivery().providerDeliveryId(),
-                ex.retryAt(),
-                safeMessage(ex)
-            );
-            if (!stored) {
-                throw transientRetry(
-                    command,
-                    "Provider assignment wait state could not be persisted",
-                    ex
-                );
-            }
-            throw new DeliveryCommandDeferredException(
-                safeMessage(ex),
-                ex.retryAt(),
-                "provider-assignment-" + command.id() + "-" + ex.providerId(),
-                ex
-            );
         } catch (DeliveryProviderTemporarilyUnavailableException ex) {
             int providerWaitAttempt = command.providerWaitAttemptCount() + 1;
             Instant retryAt = Instant.now().plus(retryProperties.delay(providerWaitAttempt));
@@ -186,14 +144,6 @@ public class DeliveryCommandWorker {
             Instant.now().plus(retryProperties.claimContentionDelay()),
             "claim-contention-" + commandId + "-" + UUID.randomUUID()
         );
-    }
-
-    private static boolean hasProviderCreateIntent(CommandRecord command) {
-        return command.reconciliationProviderId() != null
-            && !command.reconciliationProviderId().isBlank()
-            && command.reconciliationClientReference() != null
-            && !command.reconciliationClientReference().isBlank()
-            && command.reconciliationStartedAt() != null;
     }
 
     private DeliveryCommandTransientException transientRetry(CommandRecord command,

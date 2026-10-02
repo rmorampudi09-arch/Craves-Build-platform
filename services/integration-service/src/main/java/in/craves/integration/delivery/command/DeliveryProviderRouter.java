@@ -16,31 +16,26 @@ import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateDeliveryRequest;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationResult;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationStatus;
-import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderQuote;
-import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
@@ -50,17 +45,14 @@ public class DeliveryProviderRouter {
     private final DeliveryProviderCatalogRepository providerCatalog;
     private final DeliveryIntelligenceService intelligenceService;
     private final DeliveryAssignmentRepository assignmentRepository;
-    private final DeliveryCommandRepository commandRepository;
     private final DeliveryCommandProperties properties;
     private final ExecutorService quoteExecutor;
     private final Clock clock;
 
-    @Autowired
     public DeliveryProviderRouter(List<DeliveryProviderAdapter> adapters,
                                   DeliveryProviderCatalogRepository providerCatalog,
                                   DeliveryIntelligenceService intelligenceService,
                                   DeliveryAssignmentRepository assignmentRepository,
-                                  DeliveryCommandRepository commandRepository,
                                   DeliveryCommandProperties properties,
                                   @Qualifier("deliveryQuoteExecutor") ExecutorService quoteExecutor,
                                   Clock clock) {
@@ -75,34 +67,14 @@ public class DeliveryProviderRouter {
         this.providerCatalog = providerCatalog;
         this.intelligenceService = intelligenceService;
         this.assignmentRepository = assignmentRepository;
-        this.commandRepository = commandRepository;
         this.properties = properties;
         this.quoteExecutor = quoteExecutor;
         this.clock = clock;
     }
 
-    DeliveryProviderRouter(List<DeliveryProviderAdapter> adapters,
-                           DeliveryProviderCatalogRepository providerCatalog,
-                           DeliveryIntelligenceService intelligenceService,
-                           DeliveryAssignmentRepository assignmentRepository,
-                           DeliveryCommandProperties properties,
-                           ExecutorService quoteExecutor,
-                           Clock clock) {
-        this(
-            adapters,
-            providerCatalog,
-            intelligenceService,
-            assignmentRepository,
-            null,
-            properties,
-            quoteExecutor,
-            clock
-        );
-    }
-
     public RoutingResult route(DeliveryCommandMessage command) {
         Objects.requireNonNull(command, "delivery command is required");
-        List<String> activeProviderIds = orderedActiveProviderIds(providerCatalog.activeProviderIds(), Set.of());
+        List<String> activeProviderIds = providerCatalog.activeProviderIds();
         if (activeProviderIds.isEmpty()) {
             throw new DeliveryProviderTemporarilyUnavailableException(
                 "No active delivery providers are configured"
@@ -143,7 +115,7 @@ public class DeliveryProviderRouter {
         AssignmentResponse assignment = intelligenceService.assign(
             assignmentRequest(command, outcomes)
         );
-        List<RankedQuoteOutcome> candidates = orderByDispatchSequence(assignment, outcomes);
+        List<RankedQuoteOutcome> candidates = orderByIntelligence(assignment, outcomes);
         if (candidates.isEmpty()) {
             throw new DeliveryRoutingException(
                 "The persisted intelligent assignment has no currently available provider quote"
@@ -157,8 +129,6 @@ public class DeliveryProviderRouter {
         for (int index = 0; index < maximumAttempts; index++) {
             RankedQuoteOutcome ranked = candidates.get(index);
             QuoteOutcome candidate = ranked.outcome();
-            Instant attemptedAt = clock.instant();
-            recordCreateIntent(command, candidate.providerId(), clientReference, attemptedAt);
             try {
                 ProviderDelivery delivery = candidate.adapter().create(
                     new CreateDeliveryRequest(
@@ -172,14 +142,6 @@ public class DeliveryProviderRouter {
                     throw new IllegalStateException("Provider returned no delivery identifier");
                 }
                 createAudit.add(new CreateAudit(candidate.providerId(), true, null));
-                if (!isAssigned(delivery)) {
-                    throw new DeliveryProviderAssignmentPendingException(
-                        candidate.providerId(),
-                        delivery,
-                        clock.instant().plus(properties.providerAcceptanceTimeout()),
-                        "Provider order was created but no courier is assigned yet"
-                    );
-                }
                 return new RoutingResult(
                     candidate.providerId(),
                     delivery,
@@ -199,166 +161,14 @@ public class DeliveryProviderRouter {
                     "Provider create response was not received; fallback is blocked",
                     ex
                 );
-            } catch (DeliveryProviderAssignmentPendingException ex) {
-                throw ex;
             } catch (RuntimeException ex) {
                 createAudit.add(new CreateAudit(candidate.providerId(), false, safeMessage(ex)));
-                clearCreateIntentOrBlock(command, candidate.providerId(), clientReference, attemptedAt, ex);
             }
         }
 
         throw new DeliveryRoutingException(
             "Delivery creation failed across " + maximumAttempts + " intelligently ranked provider attempt(s)"
         );
-    }
-
-    public RoutingResult resumePendingAssignment(CommandRecord command) {
-        Objects.requireNonNull(command, "delivery command is required");
-        String providerId = normalize(command.activeProviderId());
-        String providerDeliveryId = requireText(command.activeProviderDeliveryId(), "active provider delivery id");
-        Instant deadline = Objects.requireNonNull(command.activeProviderDeadlineAt(), "active provider deadline is required");
-        DeliveryProviderAdapter adapter = adapters.get(providerId);
-        if (adapter == null) {
-            throw new DeliveryCreateReconciliationPendingException(
-                providerId, command.message().idempotencyKey(), clock.instant(),
-                "Active provider adapter is not deployed; fallback is blocked"
-            );
-        }
-        ProviderDelivery current;
-        try {
-            TrackingSnapshot snapshot = adapter.track(providerDeliveryId);
-            current = Objects.requireNonNull(snapshot.delivery(), "tracking delivery is required");
-        } catch (RuntimeException ex) {
-            throw providerAssignmentStillUnsafe(
-                providerId,
-                providerDeliveryId,
-                deadline,
-                "Provider tracking state is uncertain; fallback is blocked",
-                ex
-            );
-        }
-        if (isAssigned(current)) {
-            AssignmentResponse assignment = existingAssignment(command.chefSubOrderId());
-            CandidateScore selected = selectedCandidate(assignment, providerId);
-            return new RoutingResult(providerId, current, assignment, selected.candidateId(), List.of(),
-                List.of(new CreateAudit(providerId, true, "Accepted after assignment polling")));
-        }
-        if (clock.instant().isBefore(deadline)) {
-            throw new DeliveryProviderAssignmentPendingException(
-                providerId, current, deadline, "Provider is still searching for a courier"
-            );
-        }
-        ProviderDelivery cancelled;
-        try {
-            cancelled = adapter.cancel(providerDeliveryId);
-        } catch (RuntimeException ex) {
-            throw providerAssignmentStillUnsafe(
-                providerId,
-                providerDeliveryId,
-                clock.instant().plus(properties.providerAcceptanceTimeout()),
-                "Provider cancellation state is uncertain; fallback is blocked",
-                ex
-            );
-        }
-        if (cancelled.status() != DeliveryStatus.CANCELLED) {
-            throw new DeliveryProviderAssignmentPendingException(
-                providerId,
-                cancelled,
-                clock.instant().plus(properties.providerAcceptanceTimeout()),
-                "Provider cancellation was not confirmed; fallback is blocked"
-            );
-        }
-        Set<String> skipped = new HashSet<>(command.attemptedProviderIds());
-        skipped.add(providerId);
-        return route(command.message(), skipped);
-    }
-
-    RoutingResult route(DeliveryCommandMessage command, Set<String> skippedProviderIds) {
-        Objects.requireNonNull(command, "delivery command is required");
-        Set<String> skipped = new HashSet<>();
-        for (String skippedProviderId : skippedProviderIds) {
-            skipped.add(normalize(skippedProviderId));
-        }
-        List<String> activeProviderIds = orderedActiveProviderIds(providerCatalog.activeProviderIds(), skipped);
-        if (activeProviderIds.isEmpty()) {
-            throw new DeliveryProviderTemporarilyUnavailableException(
-                "No active delivery providers are configured"
-            );
-        }
-
-        List<QuoteAudit> quoteAudit = new ArrayList<>();
-        List<Callable<QuoteOutcome>> tasks = new ArrayList<>();
-        for (String configuredProviderId : activeProviderIds) {
-            String providerId = normalize(configuredProviderId);
-            DeliveryProviderAdapter adapter = adapters.get(providerId);
-            if (adapter == null) {
-                quoteAudit.add(new QuoteAudit(providerId, false, false, null, null, null,
-                    "Provider is active in the database but no adapter is deployed"));
-                continue;
-            }
-            tasks.add(() -> quote(adapter, command));
-        }
-        return routeQuoted(command, quoteAudit, invokeQuotes(tasks, quoteAudit));
-    }
-
-    private RoutingResult routeQuoted(DeliveryCommandMessage command,
-                                      List<QuoteAudit> quoteAudit,
-                                      List<QuoteOutcome> outcomes) {
-        boolean anyAvailableQuote = outcomes.stream()
-            .anyMatch(outcome -> outcome.quote() != null && outcome.quote().available());
-        if (!anyAvailableQuote) {
-            boolean anyProviderResponse = outcomes.stream().anyMatch(outcome -> outcome.quote() != null);
-            if (!anyProviderResponse) {
-                throw new DeliveryProviderTemporarilyUnavailableException(
-                    "Active delivery providers did not return a quote"
-                );
-            }
-            throw new DeliveryRoutingException("No active delivery provider returned an available quote");
-        }
-
-        AssignmentResponse assignment = intelligenceService.assign(assignmentRequest(command, outcomes));
-        List<RankedQuoteOutcome> candidates = orderByDispatchSequence(assignment, outcomes);
-        if (candidates.isEmpty()) {
-            throw new DeliveryRoutingException(
-                "The persisted intelligent assignment has no currently available provider quote"
-            );
-        }
-        List<CreateAudit> createAudit = new ArrayList<>();
-        int maximumAttempts = Math.min(properties.getMaxProviderAttempts(), candidates.size());
-        String clientReference = clientReference(command.chefSubOrderId());
-        for (int index = 0; index < maximumAttempts; index++) {
-            RankedQuoteOutcome ranked = candidates.get(index);
-            QuoteOutcome candidate = ranked.outcome();
-            Instant attemptedAt = clock.instant();
-            recordCreateIntent(command, candidate.providerId(), clientReference, attemptedAt);
-            try {
-                ProviderDelivery delivery = candidate.adapter().create(
-                    new CreateDeliveryRequest(clientReference, command.deliveryRequest(), candidate.quote()));
-                if (delivery == null || delivery.providerDeliveryId() == null || delivery.providerDeliveryId().isBlank()) {
-                    throw new IllegalStateException("Provider returned no delivery identifier");
-                }
-                createAudit.add(new CreateAudit(candidate.providerId(), true, null));
-                if (!isAssigned(delivery)) {
-                    throw new DeliveryProviderAssignmentPendingException(candidate.providerId(), delivery,
-                        clock.instant().plus(properties.providerAcceptanceTimeout()),
-                        "Provider order was created but no courier is assigned yet");
-                }
-                return new RoutingResult(candidate.providerId(), delivery, assignment,
-                    ranked.candidate().candidateId(), List.copyOf(quoteAudit), List.copyOf(createAudit));
-            } catch (ProviderCreateUncertainException ex) {
-                createAudit.add(new CreateAudit(candidate.providerId(), false,
-                    "Provider create outcome requires reconciliation"));
-                throw new DeliveryCreateReconciliationPendingException(ex.providerId(), ex.clientReference(),
-                    ex.attemptedAt(), "Provider create response was not received; fallback is blocked", ex);
-            } catch (DeliveryProviderAssignmentPendingException ex) {
-                throw ex;
-            } catch (RuntimeException ex) {
-                createAudit.add(new CreateAudit(candidate.providerId(), false, safeMessage(ex)));
-                clearCreateIntentOrBlock(command, candidate.providerId(), clientReference, attemptedAt, ex);
-            }
-        }
-        throw new DeliveryRoutingException(
-            "Delivery creation failed across " + maximumAttempts + " provider attempt(s)");
     }
 
     /**
@@ -410,22 +220,6 @@ public class DeliveryProviderRouter {
             ProviderDelivery delivery = Objects.requireNonNull(
                 reconciliation.delivery(), "reconciled provider delivery is required"
             );
-            if (!isAssigned(delivery)) {
-                if (delivery.status() == DeliveryStatus.CANCELLED) {
-                    throw new DeliveryCreateDefinitivelyNotFoundException(
-                        providerId,
-                        clientReference,
-                        attemptedAt,
-                        "Provider delivery was recovered but is already cancelled"
-                    );
-                }
-                throw new DeliveryProviderAssignmentPendingException(
-                    providerId,
-                    delivery,
-                    clock.instant().plus(properties.providerAcceptanceTimeout()),
-                    "Provider delivery exists but no courier is assigned yet"
-                );
-            }
             AssignmentResponse assignment = existingAssignment(command.chefSubOrderId());
             CandidateScore selected = selectedCandidate(assignment, providerId);
             return new RoutingResult(
@@ -465,8 +259,7 @@ public class DeliveryProviderRouter {
     private static CandidateScore selectedCandidate(AssignmentResponse assignment, String providerId) {
         if (assignment.selectedCandidateId() != null) {
             for (CandidateScore candidate : assignment.rankedCandidates()) {
-                if (assignment.selectedCandidateId().equals(candidate.candidateId())
-                    && providerId.equals(normalize(candidate.providerId()))) {
+                if (assignment.selectedCandidateId().equals(candidate.candidateId())) {
                     return candidate;
                 }
             }
@@ -489,51 +282,6 @@ public class DeliveryProviderRouter {
             return new QuoteOutcome(providerId, adapter, quote, null);
         } catch (RuntimeException ex) {
             return new QuoteOutcome(providerId, adapter, null, safeMessage(ex));
-        }
-    }
-
-    private void recordCreateIntent(DeliveryCommandMessage command,
-                                    String providerId,
-                                    String clientReference,
-                                    Instant attemptedAt) {
-        if (commandRepository == null) {
-            return;
-        }
-        boolean stored = commandRepository.recordProviderCreateIntent(
-            command.commandId(),
-            providerId,
-            clientReference,
-            attemptedAt,
-            "Provider create intent recorded before external dispatch"
-        );
-        if (!stored) {
-            throw new DeliveryRoutingException(
-                "Provider create intent could not be persisted before external dispatch"
-            );
-        }
-    }
-
-    private void clearCreateIntentOrBlock(DeliveryCommandMessage command,
-                                          String providerId,
-                                          String clientReference,
-                                          Instant attemptedAt,
-                                          RuntimeException cause) {
-        if (commandRepository == null) {
-            return;
-        }
-        boolean cleared = commandRepository.clearProviderCreateIntent(
-            command.commandId(),
-            providerId,
-            clientReference
-        );
-        if (!cleared) {
-            throw new DeliveryCreateReconciliationPendingException(
-                providerId,
-                clientReference,
-                attemptedAt,
-                "Provider create attempt state could not be cleared; fallback is blocked",
-                cause
-            );
         }
     }
 
@@ -626,7 +374,7 @@ public class DeliveryProviderRouter {
         );
     }
 
-    private List<RankedQuoteOutcome> orderByDispatchSequence(AssignmentResponse assignment,
+    private List<RankedQuoteOutcome> orderByIntelligence(AssignmentResponse assignment,
                                                          List<QuoteOutcome> outcomes) {
         Map<String, QuoteOutcome> byProvider = new HashMap<>();
         for (QuoteOutcome outcome : outcomes) {
@@ -646,67 +394,10 @@ public class DeliveryProviderRouter {
                 result.add(new RankedQuoteOutcome(candidate, outcome));
             }
         }
-        Map<String, Integer> sequenceRank = new HashMap<>();
-        List<String> sequence = properties.providerSequence();
-        for (int index = 0; index < sequence.size(); index++) {
-            sequenceRank.put(sequence.get(index), index);
-        }
         result.sort(Comparator.<RankedQuoteOutcome>comparingInt(ranked ->
-                sequenceRank.getOrDefault(normalize(ranked.candidate().providerId()), Integer.MAX_VALUE))
+            Objects.equals(ranked.candidate().candidateId(), assignment.selectedCandidateId()) ? 0 : 1)
             .thenComparingInt(ranked -> ranked.candidate().candidateRank()));
         return List.copyOf(result);
-    }
-
-    private List<String> orderedActiveProviderIds(List<String> activeProviderIds, Set<String> skippedProviderIds) {
-        List<String> normalizedActive = activeProviderIds.stream()
-            .map(DeliveryProviderRouter::normalize)
-            .filter(providerId -> !providerId.isBlank() && !skippedProviderIds.contains(providerId))
-            .distinct()
-            .toList();
-        List<String> ordered = new ArrayList<>();
-        for (String providerId : properties.providerSequence()) {
-            if (normalizedActive.contains(providerId) && !ordered.contains(providerId)) {
-                ordered.add(providerId);
-            }
-        }
-        return List.copyOf(ordered);
-    }
-
-    private DeliveryProviderAssignmentPendingException providerAssignmentStillUnsafe(String providerId,
-                                                                                     String providerDeliveryId,
-                                                                                     Instant retryAt,
-                                                                                     String message,
-                                                                                     Throwable cause) {
-        ProviderDelivery delivery = new ProviderDelivery(
-            providerId,
-            providerDeliveryId,
-            null,
-            DeliveryStatus.UNKNOWN,
-            "UNKNOWN",
-            null,
-            null,
-            null,
-            null,
-            clock.instant()
-        );
-        return new DeliveryProviderAssignmentPendingException(
-            providerId,
-            delivery,
-            retryAt,
-            message,
-            cause
-        );
-    }
-
-    private static boolean isAssigned(ProviderDelivery delivery) {
-        DeliveryStatus status = delivery.status();
-        return status == DeliveryStatus.COURIER_ASSIGNED
-            || status == DeliveryStatus.COURIER_TO_PICKUP
-            || status == DeliveryStatus.AT_PICKUP
-            || status == DeliveryStatus.PICKED_UP
-            || status == DeliveryStatus.IN_TRANSIT
-            || status == DeliveryStatus.AT_DROPOFF
-            || status == DeliveryStatus.DELIVERED;
     }
 
     private static String clientReference(java.util.UUID chefSubOrderId) {
@@ -852,37 +543,6 @@ public class DeliveryProviderRouter {
         public Instant attemptedAt() {
             return attemptedAt;
         }
-    }
-
-    public static class DeliveryProviderAssignmentPendingException extends RuntimeException {
-        private final String providerId;
-        private final ProviderDelivery delivery;
-        private final Instant retryAt;
-
-        public DeliveryProviderAssignmentPendingException(String providerId,
-                                                          ProviderDelivery delivery,
-                                                          Instant retryAt,
-                                                          String message) {
-            super(message);
-            this.providerId = providerId;
-            this.delivery = delivery;
-            this.retryAt = retryAt;
-        }
-
-        public DeliveryProviderAssignmentPendingException(String providerId,
-                                                          ProviderDelivery delivery,
-                                                          Instant retryAt,
-                                                          String message,
-                                                          Throwable cause) {
-            super(message, cause);
-            this.providerId = providerId;
-            this.delivery = delivery;
-            this.retryAt = retryAt;
-        }
-
-        public String providerId() { return providerId; }
-        public ProviderDelivery delivery() { return delivery; }
-        public Instant retryAt() { return retryAt; }
     }
 
     public static class DeliveryCreateDefinitivelyNotFoundException extends RuntimeException {

@@ -227,7 +227,7 @@ steps:
       done
 
       grep -Fq "adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/shadowfax'" "$shadowfax"
-      grep -Fq 'SHADOWFAX_ACCOUNT_PRODUCT_VERIFIED' services/integration-service/src/main/resources/application.yml
+      grep -Fq 'VENDOR_PRIVATE_API_CONTRACT_REQUIRED' "$shadowfax"
       grep -Fq "provider_id='shadowfax' AND is_active=TRUE" "$shadowfax"
 
       grep -Fq "adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/porter'" "$porter"
@@ -263,8 +263,6 @@ steps:
       set -euo pipefail
 
       grep -Fq 'SHADOWFAX_API_AUTH_TOKEN="secretref:${secret_name}"' azure-pipelines-shadowfax-environment.yml
-      grep -Fq 'SHADOWFAX_CLIENT_CODE="secretref:${client_code_secret_name}"' azure-pipelines-shadowfax-environment.yml
-      grep -Fq 'SHADOWFAX_WEBHOOK_TOKEN="secretref:${webhook_secret_name}"' azure-pipelines-shadowfax-environment.yml
       grep -Fq 'PORTER_API_AUTH_TOKEN="secretref:${secret_name}"' azure-pipelines-porter-environment.yml
       grep -Fq 'DELHIVERY_API_AUTH_TOKEN="secretref:${secret_name}"' azure-pipelines-delhivery-environment.yml
       grep -Fq 'BORZO_API_AUTH_TOKEN=secretref:borzo-api-auth-token' azure-pipelines-delivery-provider-production-activation.yml

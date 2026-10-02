@@ -3,7 +3,6 @@ package in.craves.integration.delivery.command;
 import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResult;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException;
-import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderAssignmentPendingException;
 import in.craves.integration.delivery.status.DeliveryLeaseRecoveryRepository;
 import java.time.Instant;
 import java.util.List;
@@ -99,22 +98,6 @@ public class DeliveryCreateReconciliationWorker {
             );
         } catch (DeliveryCreateReconciliationPendingException ex) {
             retry(command, safeMessage(ex));
-        } catch (DeliveryProviderAssignmentPendingException ex) {
-            commands.markProviderAssignmentPending(
-                command.id(),
-                ex.providerId(),
-                ex.delivery().providerDeliveryId(),
-                ex.retryAt(),
-                safeMessage(ex)
-            );
-            log.warn(
-                "Delivery create reconciliation recovered an unassigned provider order commandId={} chefSubOrderId={} providerId={} providerDeliveryId={} retryAt={}",
-                command.id(),
-                command.chefSubOrderId(),
-                ex.providerId(),
-                ex.delivery().providerDeliveryId(),
-                ex.retryAt()
-            );
         } catch (RuntimeException ex) {
             retry(
                 command,

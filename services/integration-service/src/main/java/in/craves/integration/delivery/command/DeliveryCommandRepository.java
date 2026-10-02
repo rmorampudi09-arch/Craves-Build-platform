@@ -1,7 +1,6 @@
 package in.craves.integration.delivery.command;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import java.sql.ResultSet;
@@ -54,9 +53,7 @@ public class DeliveryCommandRepository {
                    scheduled_sequence_number, service_bus_message_id,
                    reconciliation_provider_id, reconciliation_client_reference,
                    reconciliation_started_at, reconciliation_attempt_count,
-                   provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at,
-                   active_provider_id, active_provider_delivery_id, active_provider_deadline_at,
-                   attempted_provider_ids
+                   provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at
             FROM delivery_schema.delivery_command
             WHERE chef_sub_order_id = ?
             """, chefSubOrderId);
@@ -68,9 +65,7 @@ public class DeliveryCommandRepository {
                    scheduled_sequence_number, service_bus_message_id,
                    reconciliation_provider_id, reconciliation_client_reference,
                    reconciliation_started_at, reconciliation_attempt_count,
-                   provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at,
-                   active_provider_id, active_provider_delivery_id, active_provider_deadline_at,
-                   attempted_provider_ids
+                   provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at
             FROM delivery_schema.delivery_command
             WHERE id = ?
             """, commandId);
@@ -136,9 +131,7 @@ public class DeliveryCommandRepository {
                       scheduled_sequence_number, service_bus_message_id,
                       reconciliation_provider_id, reconciliation_client_reference,
                       reconciliation_started_at, reconciliation_attempt_count,
-                      provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at,
-                      active_provider_id, active_provider_delivery_id, active_provider_deadline_at,
-                      attempted_provider_ids
+                      provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at
             """, this::mapRow, commandId, maximumAttempts, maximumAttempts);
         return rows.stream().findFirst();
     }
@@ -163,103 +156,6 @@ public class DeliveryCommandRepository {
         ) == 1;
     }
 
-    public boolean markProviderAssignmentPending(UUID commandId,
-                                                 String providerId,
-                                                 String providerDeliveryId,
-                                                 Instant retryAt,
-                                                 String safeError) {
-        return jdbc.update("""
-            UPDATE delivery_schema.delivery_command
-            SET status = 'WAITING_FOR_PROVIDER',
-                processing_started_at = NULL,
-                provider_wait_attempt_count = provider_wait_attempt_count + 1,
-                provider_wait_started_at = COALESCE(provider_wait_started_at, now()),
-                next_provider_retry_at = ?,
-                reconciliation_processing_started_at = NULL,
-                next_reconciliation_at = NULL,
-                reconciliation_provider_id = NULL,
-                reconciliation_client_reference = NULL,
-                reconciliation_started_at = NULL,
-                active_provider_id = ?,
-                active_provider_delivery_id = ?,
-                active_provider_deadline_at = ?,
-                attempted_provider_ids = CASE
-                    WHEN attempted_provider_ids @> jsonb_build_array(?) THEN attempted_provider_ids
-                    ELSE attempted_provider_ids || jsonb_build_array(?)
-                END,
-                last_error = ?,
-                updated_at = now()
-            WHERE id = ? AND status IN ('PROCESSING', 'RECONCILIATION_PENDING')
-            """,
-            toDatabaseTimestamp(retryAt),
-            providerId,
-            providerDeliveryId,
-            toDatabaseTimestamp(retryAt),
-            providerId,
-            providerId,
-            truncate(safeError, 2000),
-            commandId
-        ) == 1;
-    }
-
-    public boolean clearActiveProvider(UUID commandId, String providerId, String providerDeliveryId) {
-        return jdbc.update("""
-            UPDATE delivery_schema.delivery_command
-            SET active_provider_id = NULL,
-                active_provider_delivery_id = NULL,
-                active_provider_deadline_at = NULL,
-                next_provider_retry_at = NULL,
-                updated_at = now()
-            WHERE id = ?
-              AND active_provider_id = ?
-              AND active_provider_delivery_id = ?
-            """, commandId, providerId, providerDeliveryId) == 1;
-    }
-
-    public boolean recordProviderCreateIntent(UUID commandId,
-                                              String providerId,
-                                              String clientReference,
-                                              Instant attemptedAt,
-                                              String safeDetail) {
-        return jdbc.update("""
-            UPDATE delivery_schema.delivery_command
-            SET reconciliation_provider_id = ?,
-                reconciliation_client_reference = ?,
-                reconciliation_started_at = ?,
-                reconciliation_attempt_count = 0,
-                reconciliation_processing_started_at = NULL,
-                next_reconciliation_at = now(),
-                last_error = ?,
-                updated_at = now()
-            WHERE id = ? AND status = 'PROCESSING'
-            """,
-            providerId,
-            clientReference,
-            toDatabaseTimestamp(attemptedAt),
-            truncate(safeDetail, 2000),
-            commandId
-        ) == 1;
-    }
-
-    public boolean clearProviderCreateIntent(UUID commandId,
-                                             String providerId,
-                                             String clientReference) {
-        return jdbc.update("""
-            UPDATE delivery_schema.delivery_command
-            SET reconciliation_provider_id = NULL,
-                reconciliation_client_reference = NULL,
-                reconciliation_started_at = NULL,
-                reconciliation_processing_started_at = NULL,
-                next_reconciliation_at = NULL,
-                last_error = NULL,
-                updated_at = now()
-            WHERE id = ?
-              AND status = 'PROCESSING'
-              AND reconciliation_provider_id = ?
-              AND reconciliation_client_reference = ?
-            """, commandId, providerId, clientReference) == 1;
-    }
-
     public boolean markReconciliationPending(UUID commandId,
                                              String providerId,
                                              String clientReference,
@@ -276,9 +172,6 @@ public class DeliveryCommandRepository {
                 reconciliation_processing_started_at = NULL,
                 next_reconciliation_at = now(),
                 next_provider_retry_at = NULL,
-                active_provider_id = NULL,
-                active_provider_delivery_id = NULL,
-                active_provider_deadline_at = NULL,
                 last_error = ?,
                 updated_at = now()
             WHERE id = ? AND status = 'PROCESSING'
@@ -326,11 +219,7 @@ public class DeliveryCommandRepository {
                       command.reconciliation_attempt_count,
                       command.provider_wait_attempt_count,
                       command.provider_wait_started_at,
-                      command.next_provider_retry_at,
-                      command.active_provider_id,
-                      command.active_provider_delivery_id,
-                      command.active_provider_deadline_at,
-                      command.attempted_provider_ids
+                      command.next_provider_retry_at
             """, this::mapRow, maximumAttempts, staleMinutes, limit);
     }
 
@@ -367,9 +256,6 @@ public class DeliveryCommandRepository {
                 reconciliation_processing_started_at = NULL,
                 next_reconciliation_at = NULL,
                 next_provider_retry_at = NULL,
-                active_provider_id = NULL,
-                active_provider_delivery_id = NULL,
-                active_provider_deadline_at = NULL,
                 last_error = NULL,
                 updated_at = now()
             WHERE id = ?
@@ -382,9 +268,6 @@ public class DeliveryCommandRepository {
             SET status = 'FAILED',
                 processing_started_at = NULL,
                 next_provider_retry_at = NULL,
-                active_provider_id = NULL,
-                active_provider_delivery_id = NULL,
-                active_provider_deadline_at = NULL,
                 last_error = ?,
                 updated_at = now()
             WHERE id = ? AND status = 'PROCESSING'
@@ -398,9 +281,6 @@ public class DeliveryCommandRepository {
                 processing_started_at = NULL,
                 reconciliation_processing_started_at = NULL,
                 next_provider_retry_at = NULL,
-                active_provider_id = NULL,
-                active_provider_delivery_id = NULL,
-                active_provider_deadline_at = NULL,
                 last_error = ?,
                 updated_at = now()
             WHERE id = ?
@@ -434,11 +314,7 @@ public class DeliveryCommandRepository {
                 rs.getInt("reconciliation_attempt_count"),
                 rs.getInt("provider_wait_attempt_count"),
                 instantOrNull(rs, "provider_wait_started_at"),
-                instantOrNull(rs, "next_provider_retry_at"),
-                rs.getString("active_provider_id"),
-                rs.getString("active_provider_delivery_id"),
-                instantOrNull(rs, "active_provider_deadline_at"),
-                readAttemptedProviders(rs.getString("attempted_provider_ids"))
+                instantOrNull(rs, "next_provider_retry_at")
             );
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Stored delivery command payload is invalid", ex);
@@ -455,28 +331,6 @@ public class DeliveryCommandRepository {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException ex) {
             throw new IllegalArgumentException("Delivery command payload could not be serialized", ex);
-        }
-    }
-
-    private List<String> readAttemptedProviders(String value) {
-        if (value == null || value.isBlank()) {
-            return List.of();
-        }
-        try {
-            JsonNode node = objectMapper.readTree(value);
-            if (!node.isArray()) {
-                return List.of();
-            }
-            List<String> result = new java.util.ArrayList<>();
-            for (JsonNode item : node) {
-                String providerId = item.asText(null);
-                if (providerId != null && !providerId.isBlank() && !result.contains(providerId)) {
-                    result.add(providerId);
-                }
-            }
-            return List.copyOf(result);
-        } catch (JsonProcessingException ex) {
-            throw new IllegalStateException("Stored delivery provider attempts are invalid", ex);
         }
     }
 
@@ -502,10 +356,6 @@ public class DeliveryCommandRepository {
         int reconciliationAttemptCount,
         int providerWaitAttemptCount,
         Instant providerWaitStartedAt,
-        Instant nextProviderRetryAt,
-        String activeProviderId,
-        String activeProviderDeliveryId,
-        Instant activeProviderDeadlineAt,
-        List<String> attemptedProviderIds
+        Instant nextProviderRetryAt
     ) {}
 }

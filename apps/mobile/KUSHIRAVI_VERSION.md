@@ -19,6 +19,36 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### MSG91 Independent Web And Mobile OTP v1, 2026-10-02
+
+- User explicitly requested simultaneous web/mobile sign-in without UI/UX
+  changes. Clean start on `KUSHIRAVI-app-build` at
+  `9de3adfb4b4b12d9fc9c011bba0e64be25075054`. No GitHub push.
+- Confirmed the live Web app's actual source
+  `889fea7b13d9b05be86ea482c8abbfb387544750`, not the older reference. Fetched
+  that exact commit read-only, without switching or modifying either branch.
+- Preserve existing widget `366942756930393636363638` in Mobile mode and the
+  installed v1.21 configuration URL. Created a separate web widget
+  `366a62307562353731383338` with the existing Craves India SMS template,
+  six-digit OTP, 30-second resend, two resends, 15-minute expiry, invisible OTP
+  off, and web CAPTCHA protection retained. User explicitly requested completing
+  its Free OTP Widget plan, monthly charge/confirmation amount/spending limit
+  all zero. No wallet top-up, paid plan or spending-limit increase.
+- Web configuration route accepts `platform=web` for the dedicated web widget;
+  legacy/no-platform and `platform=mobile` preserve the existing mobile widget.
+  Web SDK explicitly requests web. Missing/shared web config fails closed; no
+  bypass or fallback to a wrong-platform widget. Existing server token bridge
+  and identity/account/role/session contracts remain unchanged.
+- Only two web runtime files and their focused tests are overlaid on the exact
+  deployed web baseline. Source, rebuild/verification instructions:
+  `backend-patches\msg91-dual-platform-v1`. Checkpoint tag:
+  `KUSHIRAVI-msg91-dual-platform-v1`. Build/deployment/live acceptance evidence
+  will be appended after verification; this entry is not a success claim.
+- Mobile runtime/UI/version/APK unchanged: installed `KUSHIRAVI-app-v1.21`,
+  code 32 / name 1.21, source `5fac235a421f9541dfac40f3d82beee7fe6fad93`;
+  APK `C:\mscratch\artifacts\KUSHIRAVI-app-v1.21.apk`. No mobile rebuild is
+  needed because its public configuration contract remains compatible.
+
 ### MSG91 Mobile Configuration Repair v2, 2026-10-02
 
 - Clean start on `KUSHIRAVI-app-build` at

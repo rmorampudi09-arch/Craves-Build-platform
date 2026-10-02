@@ -5,6 +5,7 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryComm
 import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResult;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException;
+import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderAssignmentPendingException;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryRoutingException;
 import java.time.Instant;
@@ -55,7 +56,9 @@ public class DeliveryCommandWorker {
         }
 
         try {
-            RoutingResult routingResult = router.route(command.message());
+            RoutingResult routingResult = command.activeProviderId() == null
+                ? router.route(command.message())
+                : router.resumePendingAssignment(command);
             CompletionReceipt receipt = completionService.complete(command.message(), routingResult);
             return new WorkerReceipt(
                 receipt.deliveryJobId(), receipt.duplicate(), routingResult.providerId()
@@ -76,6 +79,27 @@ public class DeliveryCommandWorker {
                 );
             }
             return new WorkerReceipt(null, false, "RECONCILIATION_PENDING");
+        } catch (DeliveryProviderAssignmentPendingException ex) {
+            boolean stored = commands.markProviderAssignmentPending(
+                command.id(),
+                ex.providerId(),
+                ex.delivery().providerDeliveryId(),
+                ex.retryAt(),
+                safeMessage(ex)
+            );
+            if (!stored) {
+                throw transientRetry(
+                    command,
+                    "Provider assignment wait state could not be persisted",
+                    ex
+                );
+            }
+            throw new DeliveryCommandDeferredException(
+                safeMessage(ex),
+                ex.retryAt(),
+                "provider-assignment-" + command.id() + "-" + ex.providerId(),
+                ex
+            );
         } catch (DeliveryProviderTemporarilyUnavailableException ex) {
             int providerWaitAttempt = command.providerWaitAttemptCount() + 1;
             Instant retryAt = Instant.now().plus(retryProperties.delay(providerWaitAttempt));

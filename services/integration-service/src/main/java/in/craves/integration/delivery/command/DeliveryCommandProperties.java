@@ -2,6 +2,9 @@ package in.craves.integration.delivery.command;
 
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -22,6 +25,8 @@ public class DeliveryCommandProperties {
     private int leadTimeMinutes = 10;
     private int quoteTimeoutSeconds = 4;
     private int maxProviderAttempts = 3;
+    private String providerSequence = "borzo,shadowfax,pidge";
+    private int providerAcceptanceTimeoutSeconds = 120;
     private int maxDeliveryAttempts = 5;
     private int maxConcurrentMessages = 4;
     private int prefetchCount = 8;
@@ -55,6 +60,12 @@ public class DeliveryCommandProperties {
         }
         if (maxProviderAttempts < 1 || maxProviderAttempts > 10) {
             throw new IllegalStateException("Delivery command maxProviderAttempts must be between 1 and 10");
+        }
+        if (providerAcceptanceTimeoutSeconds < 10 || providerAcceptanceTimeoutSeconds > 600) {
+            throw new IllegalStateException("Delivery provider acceptance timeout must be between 10 and 600 seconds");
+        }
+        if (providerSequence().isEmpty()) {
+            throw new IllegalStateException("Delivery provider sequence must contain at least one provider");
         }
         if (maxDeliveryAttempts < 1 || maxDeliveryAttempts > 20) {
             throw new IllegalStateException("Delivery command maxDeliveryAttempts must be between 1 and 20");
@@ -155,6 +166,19 @@ public class DeliveryCommandProperties {
 
     public Duration quoteTimeout() { return Duration.ofSeconds(quoteTimeoutSeconds); }
     public Duration maxAutoLockRenewDuration() { return Duration.ofMinutes(maxAutoLockRenewMinutes); }
+    public Duration providerAcceptanceTimeout() { return Duration.ofSeconds(providerAcceptanceTimeoutSeconds); }
+    public List<String> providerSequence() {
+        List<String> result = new ArrayList<>();
+        if (providerSequence != null) {
+            for (String value : providerSequence.split(",")) {
+                String normalized = value.trim().toLowerCase(Locale.ROOT);
+                if (!normalized.isEmpty() && !result.contains(normalized)) {
+                    result.add(normalized);
+                }
+            }
+        }
+        return List.copyOf(result);
+    }
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -182,6 +206,10 @@ public class DeliveryCommandProperties {
     public void setQuoteTimeoutSeconds(int quoteTimeoutSeconds) { this.quoteTimeoutSeconds = quoteTimeoutSeconds; }
     public int getMaxProviderAttempts() { return maxProviderAttempts; }
     public void setMaxProviderAttempts(int maxProviderAttempts) { this.maxProviderAttempts = maxProviderAttempts; }
+    public String getProviderSequence() { return providerSequence; }
+    public void setProviderSequence(String providerSequence) { this.providerSequence = providerSequence; }
+    public int getProviderAcceptanceTimeoutSeconds() { return providerAcceptanceTimeoutSeconds; }
+    public void setProviderAcceptanceTimeoutSeconds(int providerAcceptanceTimeoutSeconds) { this.providerAcceptanceTimeoutSeconds = providerAcceptanceTimeoutSeconds; }
     public int getMaxDeliveryAttempts() { return maxDeliveryAttempts; }
     public void setMaxDeliveryAttempts(int maxDeliveryAttempts) { this.maxDeliveryAttempts = maxDeliveryAttempts; }
     public int getMaxConcurrentMessages() { return maxConcurrentMessages; }

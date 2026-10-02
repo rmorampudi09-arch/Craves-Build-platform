@@ -20,6 +20,15 @@ parameters:
   - name: authSecretName
     type: string
     default: shadowfax-api-token
+  - name: clientCodeSecretName
+    type: string
+    default: shadowfax-client-code
+  - name: webhookSecretName
+    type: string
+    default: shadowfax-webhook-token
+  - name: accountProductVerified
+    type: boolean
+    default: false
   - name: resourceGroupName
     type: string
     default: rg-craves-prodlow-centralindia
@@ -57,6 +66,10 @@ steps:
         confirm="${confirm_raw,,}"
         base_url='${{ parameters.providerBaseUrl }}'
         secret_name='${{ parameters.authSecretName }}'
+        client_code_secret_name='${{ parameters.clientCodeSecretName }}'
+        webhook_secret_name='${{ parameters.webhookSecretName }}'
+        account_product_verified_raw='${{ parameters.accountProductVerified }}'
+        account_product_verified="${account_product_verified_raw,,}"
         app_yml='services/integration-service/src/main/resources/application.yml'
         adapter_dir='services/integration-service/src/main/java/in/craves/integration/delivery/shadowfax'
 
@@ -92,11 +105,14 @@ steps:
           [[ "$adapter_present" == 'true' ]] || fail 'VENDOR_PRIVATE_API_CONTRACT_REQUIRED: Shadowfax Spring adapter is not implemented.'
           [[ "$runtime_config_present" == 'true' ]] || fail 'VENDOR_PRIVATE_API_CONTRACT_REQUIRED: Shadowfax runtime configuration is not implemented.'
           [[ "$base_url" == https://* && "$base_url" != *replace-before-run.invalid* ]] || fail 'Shadowfax vendor-issued HTTPS base URL is required.'
+          [[ "$account_product_verified" == 'true' ]] || fail 'SHADOWFAX_ACCOUNT_PRODUCT_NOT_VERIFIED: inspect Shadowfax360 and confirm Hyperlocal Marketplace API access before enabling.'
           [[ "$environment" != 'PRODUCTION' || "$confirm" == 'true' ]] || fail 'Production switch requires confirmProductionActivation=true.'
           lower="${base_url,,}"
           [[ "$environment" != 'PRODUCTION' || ( "$lower" != *test* && "$lower" != *sandbox* && "$lower" != *stage* ) ]] || fail 'Shadowfax production cannot use a test/stage/sandbox host.'
           secrets="$(az containerapp secret list -g "$RG" -n "$APP" --query '[].name' -o tsv --only-show-errors)"
           grep -qx "$secret_name" <<<"$secrets" || fail "Missing Container App secret $secret_name."
+          grep -qx "$client_code_secret_name" <<<"$secrets" || fail "Missing Container App secret $client_code_secret_name."
+          grep -qx "$webhook_secret_name" <<<"$secrets" || fail "Missing Container App secret $webhook_secret_name."
         fi
 
         db_url="$(az containerapp show -g "$RG" -n "$APP" --query "properties.template.containers[0].env[?name=='SPRING_DATASOURCE_URL']|[0].value" -o tsv --only-show-errors)"
@@ -116,6 +132,8 @@ steps:
               SHADOWFAX_API_ENVIRONMENT="$environment" \
               SHADOWFAX_PRODUCTION_ACTIVATION_APPROVED=false \
               SHADOWFAX_API_ENABLED=false \
+              SHADOWFAX_CREATE_ENABLED=false \
+              SHADOWFAX_ACCOUNT_PRODUCT_VERIFIED=false \
               CRAVES_DELIVERY_INTELLIGENCE_ENABLED=true >/dev/null
           wait_ready
         else
@@ -127,7 +145,12 @@ steps:
               SHADOWFAX_PRODUCTION_ACTIVATION_APPROVED="$approved" \
               SHADOWFAX_API_BASE_URL="$base_url" \
               SHADOWFAX_API_AUTH_TOKEN="secretref:${secret_name}" \
+              SHADOWFAX_CLIENT_CODE="secretref:${client_code_secret_name}" \
+              SHADOWFAX_WEBHOOK_TOKEN="secretref:${webhook_secret_name}" \
               SHADOWFAX_API_ENABLED=true \
+              SHADOWFAX_CREATE_ENABLED=true \
+              SHADOWFAX_ACCOUNT_PRODUCT_VERIFIED=true \
+              SHADOWFAX_PRODUCT=MARKETPLACE \
               CRAVES_DELIVERY_RECONCILIATION_ENABLED=true \
               CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED=true \
               CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED=true \

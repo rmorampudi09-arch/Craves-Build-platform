@@ -32,6 +32,14 @@ async function begin() {
   document.querySelector("script")!.dispatchEvent(new Event("load"));
   return result;
 }
+it.each(["firebase", "unknown", undefined])("rejects provider %s without loading another OTP provider", async provider => {
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ provider }));
+  const { beginMsg91PhoneSignIn } = await import("./msg91-browser");
+  await expect(beginMsg91PhoneSignIn("+919876543210", "captcha")).rejects.toThrow("OTP_UNAVAILABLE");
+  expect(document.querySelector("script")).toBeNull();
+  expect(sdk.sendOtp).not.toHaveBeenCalled();
+  expect(mocks.signin).not.toHaveBeenCalled();
+});
 it.each([1, "1", true])("rejects a mobile-only widget (%s) before sending an OTP", async mobileIntegration => {
   sdk.getWidgetData = () => ({ widgetId: "widget", mobileIntegration, captchaValidations: false });
   await expect(begin()).rejects.toThrow("OTP_WEB_UNAVAILABLE");
@@ -62,6 +70,13 @@ it("rejects non-token verify responses before contacting the bridge", async () =
   await expect(confirmation!.confirm("123456")).rejects.toThrow();
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(mocks.signin).not.toHaveBeenCalled();
+});
+it("shows a useful session error without exposing Firebase implementation details", async () => {
+  mocks.signin.mockRejectedValueOnce(new Error("Firebase: Error (auth/internal-error)."));
+  const confirmation = await begin();
+  await expect(confirmation.confirm("123456")).rejects.toThrow(
+    "Your phone was verified, but sign-in could not finish. Please try again.",
+  );
 });
 it("does not install a Firebase identity after its owner cancels the attempt", async () => {
   const confirmation = await begin();

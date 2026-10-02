@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// All identities, codes and provider responses below are isolated fixtures; fetch and Firebase are mocked.
+// All identities, codes and provider responses below are isolated fixtures; fetch and MSG91 are mocked.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -11,14 +11,8 @@ import { clearSession, getSession, setSessionIdentity } from "../services/auth/c
 import type { EmailVerificationState } from "./email-verification-contract";
 
 const phoneSignIn = vi.hoisted(() => vi.fn());
-vi.mock("firebase/auth", () => ({
-  RecaptchaVerifier: class { async render() { return 0; } clear() {} },
-  signInWithPhoneNumber: phoneSignIn,
-}));
-vi.mock("./firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
-// Registration and email assertions exercise the Firebase fallback independently of MSG91.
 vi.mock("@/lib/msg91-browser", () => ({
-  beginMsg91PhoneSignIn: vi.fn(async () => null),
+  beginMsg91PhoneSignIn: phoneSignIn,
   parkMsg91Captcha: vi.fn(),
 }));
 

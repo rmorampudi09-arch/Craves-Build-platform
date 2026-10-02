@@ -64,13 +64,12 @@ function invoke(call: (success: Callback, failure: Callback) => void, current: (
   });
 }
 
-/** Returns null only when the server explicitly selects the existing Firebase provider. */
+/** Phone OTP is MSG91-only; an invalid deployment configuration must fail closed. */
 export async function beginMsg91PhoneSignIn(phone: string, captchaRenderId: string,
-  currentAttempt: () => boolean = () => true): Promise<PhoneConfirmation | null> {
+  currentAttempt: () => boolean = () => true): Promise<PhoneConfirmation> {
   const response = await fetch("/api/auth/otp-config", { cache: "no-store", signal: AbortSignal.timeout(10000) });
   if (!response.ok) throw new Error("OTP_UNAVAILABLE");
   const config = record(await response.json());
-  if (config.provider === "firebase") return null;
   if (config.provider !== "msg91" || typeof config.widgetId !== "string" || typeof config.tokenAuth !== "string")
     throw new Error("OTP_UNAVAILABLE");
   if (!/^\+91[6-9]\d{9}$/.test(phone)) throw new Error("Enter a valid Indian mobile number.");
@@ -142,7 +141,11 @@ export async function beginMsg91PhoneSignIn(phone: string, captchaRenderId: stri
       if (!verifyCurrent()) throw new Error("OTP_CANCELLED");
       if (!verified.ok || typeof body.firebaseCustomToken !== "string")
         throw new Error("The verification could not be completed. Please request a new code.");
-      return signInWithCustomToken(getFirebaseBrowserClient().auth, body.firebaseCustomToken);
+      try {
+        return await signInWithCustomToken(getFirebaseBrowserClient().auth, body.firebaseCustomToken);
+      } catch {
+        throw new Error("Your phone was verified, but sign-in could not finish. Please try again.");
+      }
     },
   };
 }

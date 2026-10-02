@@ -4,8 +4,7 @@ import { act, fireEvent, screen } from "@testing-library/react";
 import { openLandingAuth } from "../landing-auth/entry";
 
 const mocks = vi.hoisted(() => ({ load: vi.fn(), send: vi.fn() }));
-vi.mock("firebase/auth", () => ({ RecaptchaVerifier: class {}, signInWithPhoneNumber: mocks.send }));
-vi.mock("./firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
+vi.mock("@/lib/msg91-browser", () => ({ beginMsg91PhoneSignIn: mocks.send, parkMsg91Captcha: vi.fn() }));
 vi.mock("../services/auth/cravesAuth", async (original) => ({ ...(await original<object>()), loadSession: mocks.load }));
 
 beforeEach(() => {

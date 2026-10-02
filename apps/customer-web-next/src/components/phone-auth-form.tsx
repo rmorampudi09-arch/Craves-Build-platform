@@ -1,18 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import {
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-} from "firebase/auth";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from "@/lib/msg91-browser";
 import { phoneCodeRequestError } from "@/lib/phone-auth-errors";
-import { getFirebaseBrowserClient } from "@/lib/firebase-client";
 import { safeReturnPath } from "@/lib/auth-contract";
 
 type Stage = "phone" | "otp" | "creating-session" | "done";
-type RecaptchaMode = "visible" | "invisible";
 
 const RESEND_DELAY_SECONDS = 30;
 
@@ -28,14 +22,7 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
   const [busy, setBusy] = useState(false);
   const [resendIn, setResendIn] = useState(0);
   const confirmation = useRef<PhoneConfirmation | null>(null);
-  const verifier = useRef<RecaptchaVerifier | null>(null);
-
-  const clearVerifier = useCallback(() => {
-    verifier.current?.clear();
-    verifier.current = null;
-  }, []);
-
-  useEffect(() => () => { clearVerifier(); parkMsg91Captcha(); }, [clearVerifier]);
+  useEffect(() => () => parkMsg91Captcha(), []);
 
   useEffect(() => {
     if (stage !== "otp" || resendIn <= 0) return;
@@ -45,30 +32,6 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
     );
     return () => window.clearTimeout(timer);
   }, [resendIn, stage]);
-
-  async function recaptcha(mode: RecaptchaMode): Promise<RecaptchaVerifier> {
-    clearVerifier();
-    const { auth } = getFirebaseBrowserClient();
-    const visible = mode === "visible";
-    const instance = new RecaptchaVerifier(
-      auth,
-      visible ? "craves-recaptcha" : "craves-recaptcha-resend",
-      {
-        size: visible ? "normal" : "invisible",
-        callback: () => {
-          if (visible)
-            setMessage("Security check completed. You can request the OTP.");
-        },
-        "expired-callback": () => {
-          if (visible)
-            setMessage("The security check expired. Complete it again.");
-        },
-      },
-    );
-    await instance.render();
-    verifier.current = instance;
-    return instance;
-  }
 
   async function sendOtp(isResend: boolean) {
     const normalized = phone.replace(/[\s()-]/g, "");
@@ -93,16 +56,8 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
       if (isResend && confirmation.current?.resend) {
         await confirmation.current.resend();
       } else {
-        const msg91 = await beginMsg91PhoneSignIn(normalized, "craves-recaptcha");
-        if (msg91) confirmation.current = msg91;
-        else {
-          const { auth } = getFirebaseBrowserClient();
-          confirmation.current = await signInWithPhoneNumber(
-            auth, normalized, await recaptcha(isResend ? "invisible" : "visible"),
-          );
-        }
+        confirmation.current = await beginMsg91PhoneSignIn(normalized, "craves-otp-security");
       }
-      clearVerifier();
       setOtp("");
       setStage("otp");
       setResendIn(RESEND_DELAY_SECONDS);
@@ -112,7 +67,6 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
           : "OTP sent. Enter the six-digit code.",
       );
     } catch (error) {
-      clearVerifier();
       setMessage(phoneCodeRequestError(error));
     } finally {
       setBusy(false);
@@ -167,7 +121,6 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
   }
 
   function useAnotherNumber() {
-    clearVerifier();
     confirmation.current = null;
     setOtp("");
     setResendIn(0);
@@ -261,15 +214,10 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
 
         {!otpStage && (
           <div
-            id="craves-recaptcha"
+            id="craves-otp-security"
             className={`min-h-20 overflow-hidden rounded-2xl p-2 ${chefJourney ? "border border-[#E5E7EB] bg-[#F1F3F5]" : "bg-white"}`}
           />
         )}
-        <div
-          id="craves-recaptcha-resend"
-          className="hidden"
-          aria-hidden="true"
-        />
 
         {otpStage ? (
           <>

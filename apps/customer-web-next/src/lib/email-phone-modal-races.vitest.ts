@@ -4,16 +4,13 @@ import { createElement } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AuthModal } from "../components/auth/AuthModal";
 import { getSession, setSessionIdentity } from "../services/auth/cravesAuth";
-const mocks = vi.hoisted(() => ({ send: vi.fn(), render: vi.fn(), clear: vi.fn() }));
-vi.mock("firebase/auth", () => ({ RecaptchaVerifier: class { render = mocks.render; clear = mocks.clear; }, signInWithPhoneNumber: mocks.send }));
-vi.mock("./firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
-// Keep these race tests on the Firebase fallback path.
-vi.mock("@/lib/msg91-browser", () => ({ beginMsg91PhoneSignIn: vi.fn().mockResolvedValue(null), parkMsg91Captcha: vi.fn() }));
+const mocks = vi.hoisted(() => ({ send: vi.fn(), park: vi.fn() }));
+vi.mock("@/lib/msg91-browser", () => ({ beginMsg91PhoneSignIn: mocks.send, parkMsg91Captcha: mocks.park }));
 const id = "11111111-1111-4111-8111-111111111111";
 const other = "22222222-2222-4222-8222-222222222222";
 const identity = { id, phoneNumber: "+10000000000", email: null, emailVerified: false, displayName: "Fixture", status: "ACTIVE", roles: ["CUSTOMER"] };
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done; }); return { promise, resolve }; }
-beforeEach(() => { setSessionIdentity(identity); mocks.send.mockReset(); mocks.render.mockReset().mockResolvedValue(0); mocks.clear.mockReset(); });
+beforeEach(() => { setSessionIdentity(identity); mocks.send.mockReset(); mocks.park.mockReset(); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 function setup() {
   const props = { open: true, mode: "login" as const, onClose: vi.fn(), onSwitchMode: vi.fn(), onAuthenticated: vi.fn() };
@@ -22,12 +19,14 @@ function setup() {
   fireEvent.click(screen.getByRole("button", { name: "Send verification code" }));
   return { props, view };
 }
-it("does not send a phone code when the modal closes during reCAPTCHA rendering", async () => {
-  const widget = deferred<number>(); mocks.render.mockReturnValue(widget.promise);
-  const { props, view } = setup(); await waitFor(() => expect(mocks.render).toHaveBeenCalledOnce());
+it("cancels MSG91 initialization when the modal closes during its security check", async () => {
+  const widget = deferred<unknown>(); mocks.send.mockReturnValue(widget.promise);
+  const { props, view } = setup(); await waitFor(() => expect(mocks.send).toHaveBeenCalledOnce());
+  const currentAttempt = mocks.send.mock.calls[0][2] as () => boolean;
+  expect(currentAttempt()).toBe(true);
   view.rerender(createElement(AuthModal, { ...props, open: false }));
-  await act(async () => widget.resolve(0));
-  expect(mocks.send).not.toHaveBeenCalled(); expect(mocks.clear).toHaveBeenCalledOnce();
+  expect(currentAttempt()).toBe(false); expect(mocks.park).toHaveBeenCalled();
+  await act(async () => widget.resolve({ confirm: vi.fn() }));
   view.rerender(createElement(AuthModal, props)); expect(screen.queryByLabelText("Six-digit verification code")).toBeNull();
 });
 it("does not restore a sent phone challenge after closing and reopening for another number", async () => {

@@ -6,7 +6,7 @@ function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
-test("customer and chef OTP flows hide visible captcha and enforce one border", () => {
+test("customer and chef OTP flows use MSG91 only and enforce one border", () => {
   const modal = source("../components/auth/AuthModal.tsx");
   const standalone = source("../components/phone-auth-form.tsx");
   const slots = source("../components/ui/forms/input-otp.tsx");
@@ -15,9 +15,9 @@ test("customer and chef OTP flows hide visible captcha and enforce one border", 
 
   for (const contents of [modal, standalone]) {
     assert.match(contents, /RESEND_DELAY_SECONDS = 30/);
-    assert.match(contents, /type RecaptchaMode = "visible" \| "invisible"/);
-    assert.match(contents, /craves-recaptcha-resend/);
-    assert.match(contents, /size: visible \? "normal" : "invisible"/);
+    assert.match(contents, /beginMsg91PhoneSignIn/);
+    assert.match(contents, /craves-otp-security/);
+    assert.doesNotMatch(contents, /RecaptchaVerifier|signInWithPhoneNumber|getFirebaseBrowserClient/);
     assert.match(contents, /craves-otp-field/);
   }
 
@@ -27,8 +27,8 @@ test("customer and chef OTP flows hide visible captcha and enforce one border", 
 
   assert.match(modal, /!otpSent && \(/);
   assert.match(standalone, /!otpStage && \(/);
-  assert.match(modal, /clearVerifier\(\);\s*setOtp\(""\);\s*setOtpSent\(true\)/s);
-  assert.match(standalone, /clearVerifier\(\);\s*setOtp\(""\);\s*setStage\("otp"\)/s);
+  assert.match(modal, /setOtp\(""\);\s*setOtpSent\(true\)/s);
+  assert.match(standalone, /setOtp\(""\);\s*setStage\("otp"\)/s);
 
   assert.match(layout, /import "\.\.\/otp-overrides\.css"/);
   assert.match(overrides, /input\.craves-otp-field:focus-visible/);

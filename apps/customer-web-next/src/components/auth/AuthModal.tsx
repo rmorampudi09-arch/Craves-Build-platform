@@ -3,13 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ChefHat, UserRound, X } from "lucide-react";
-import {
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-} from "firebase/auth";
 import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from "@/lib/msg91-browser";
 import { phoneCodeRequestError } from "@/lib/phone-auth-errors";
-import { getFirebaseBrowserClient } from "@/lib/firebase-client";
 import {
   loadSession,
   getSession,
@@ -29,7 +24,6 @@ import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel
 import { chefEmailEligible, verificationEmail, EMAIL_VERIFICATION_MAX_LENGTH, type EmailVerificationState } from "@/lib/email-verification-contract";
 
 type Mode = "login" | "register";
-type RecaptchaMode = "visible" | "invisible";
 export type AccountMode = "customer" | "chef";
 
 interface AuthModalProps {
@@ -73,22 +67,9 @@ export function AuthModal({
   const ownIdentityInstall = useRef(false);
   const phoneSession = useRef<SessionContext | null>(null);
   const confirmation = useRef<PhoneConfirmation | null>(null);
-  const verifier = useRef<RecaptchaVerifier | null>(null);
-  const discardedVerifiers = useRef(new WeakSet<RecaptchaVerifier>());
-  const discardVerifier = useCallback((instance: RecaptchaVerifier) => {
-    if (discardedVerifiers.current.has(instance)) return;
-    discardedVerifiers.current.add(instance);
-    try { instance.clear(); } catch { /* The provider may have already disposed an abandoned widget. */ }
-  }, []);
-  const clearVerifier = useCallback(() => {
-    const instance = verifier.current; verifier.current = null;
-    if (instance) discardVerifier(instance);
-  }, [discardVerifier]);
-
   const reset = useCallback(() => {
     parkMsg91Captcha();
     authAttempt.current += 1; phoneSession.current = null;
-    clearVerifier();
     confirmation.current = null;
     setPhone("");
     setFirstName("");
@@ -102,14 +83,14 @@ export function AuthModal({
     setInfo(null);
     setPhoneAuthenticated(null);
     setVerifiedEmail(null);
-  }, [clearVerifier]);
+  }, []);
 
   const handleClose = useCallback(() => {
     reset();
     onClose();
   }, [onClose, reset]);
 
-  useEffect(() => () => { authAttempt.current += 1; clearVerifier(); parkMsg91Captcha(); }, [clearVerifier]);
+  useEffect(() => () => { authAttempt.current += 1; parkMsg91Captcha(); }, []);
   useEffect(() => { if (!open) reset(); }, [open, reset]);
   useEffect(() => subscribeSession(() => {
     if (!isSessionContextCurrent(watchedSession.current)) {
@@ -168,36 +149,6 @@ export function AuthModal({
       ? "Your next homemade favourite is waiting. Sign in to discover trusted home chefs and enjoy food that feels like home."
       : "Join Craves to discover fresh homemade food from trusted home chefs near you, made with care and delivered to your door.";
 
-  async function recaptcha(mode: RecaptchaMode, currentAttempt: () => boolean): Promise<RecaptchaVerifier | null> {
-    clearVerifier();
-    const { auth } = getFirebaseBrowserClient();
-    const visible = mode === "visible";
-    const instance = new RecaptchaVerifier(
-      auth,
-      visible ? "craves-recaptcha" : "craves-recaptcha-resend",
-      {
-        size: visible ? "normal" : "invisible",
-        callback: () => {
-          if (visible && currentAttempt())
-            setInfo("You’re all set. Request your verification code when you’re ready.");
-        },
-        "expired-callback": () => {
-          if (visible && currentAttempt())
-            setInfo("Your verification check expired. Please complete it again.");
-        },
-      },
-    );
-    verifier.current = instance;
-    try {
-      await instance.render();
-      if (!currentAttempt()) { if (verifier.current === instance) clearVerifier(); else discardVerifier(instance); return null; }
-      return instance;
-    } catch (error) {
-      if (verifier.current === instance) clearVerifier(); else discardVerifier(instance);
-      throw error;
-    }
-  }
-
   function validateRegistration(): string | null {
     if (firstName.trim().length < 2)
       return "Enter your first name using at least two characters.";
@@ -232,20 +183,11 @@ export function AuthModal({
       if (isResend && confirmation.current?.resend) {
         await confirmation.current.resend();
       } else {
-        const msg91 = await beginMsg91PhoneSignIn(`+91${phone}`, "craves-recaptcha", currentAttempt);
+        const msg91 = await beginMsg91PhoneSignIn(`+91${phone}`, "craves-otp-security", currentAttempt);
         if (!currentAttempt()) return;
-        if (msg91) confirmation.current = msg91;
-        else {
-          const { auth } = getFirebaseBrowserClient();
-          const challengeVerifier = await recaptcha(isResend ? "invisible" : "visible", currentAttempt);
-          if (!challengeVerifier || !currentAttempt()) return;
-          const nextConfirmation = await signInWithPhoneNumber(auth, `+91${phone}`, challengeVerifier);
-          if (!currentAttempt()) return;
-          confirmation.current = nextConfirmation;
-        }
+        confirmation.current = msg91;
       }
       if (!currentAttempt()) return;
-      clearVerifier();
       setOtp("");
       setOtpSent(true);
       setResendIn(RESEND_DELAY_SECONDS);
@@ -258,10 +200,9 @@ export function AuthModal({
       );
     } catch (caught) {
       if (!currentAttempt()) return;
-      clearVerifier();
       setError(phoneCodeRequestError(caught));
     } finally {
-      if (authAttempt.current === attempt) { clearVerifier(); setBusy(false); }
+      if (authAttempt.current === attempt) setBusy(false);
     }
   }
 
@@ -341,7 +282,6 @@ export function AuthModal({
       if (!currentAttempt() || !isSessionReady()) return;
 
       if (mode === "register" || (isChef && !user.emailVerified)) {
-        clearVerifier();
         confirmation.current = null;
         setOtp("");
         phoneSession.current = context;
@@ -365,7 +305,6 @@ export function AuthModal({
 
   const switchAccountMode = (next: AccountMode) => {
     if (next === accountMode || otpSent || busy) return;
-    clearVerifier();
     confirmation.current = null;
     setAccountMode(next);
     setOtp("");
@@ -374,7 +313,6 @@ export function AuthModal({
   };
 
   const useAnotherNumber = () => {
-    clearVerifier();
     confirmation.current = null;
     setOtp("");
     setOtpSent(false);
@@ -615,15 +553,10 @@ export function AuthModal({
 
             {!otpSent && (
               <div
-                id="craves-recaptcha"
+                id="craves-otp-security"
                 className="min-h-20 overflow-hidden rounded-lg border border-border bg-white p-2"
               />
             )}
-            <div
-              id="craves-recaptcha-resend"
-              className="hidden"
-              aria-hidden="true"
-            />
 
             {otpSent && (
               <label

@@ -34,6 +34,8 @@ const UPLOAD_ERRORS: Record<string, string> = {
   DOCUMENT_STORAGE_PRIVACY_REQUIRED: "Secure document storage is temporarily unavailable. Please try again later.",
   DOCUMENT_SIZE_LIMIT_INVALID: "Document uploads are temporarily unavailable. Please contact support.",
   DOCUMENT_UPLOAD_FAILED: "Craves could not store your document. Please try again later or contact support.",
+  DOCUMENT_UPLOAD_UNAVAILABLE: "Craves document storage is temporarily unavailable. Please try again later.",
+  CHEF_APPLICATION_REQUIRED: "Save your Chef application details before uploading identity documents.",
   CHEF_DOCUMENT_TYPE_NOT_ALLOWED: "Choose one of the four supported Chef identity documents.",
   CHEF_DOCUMENT_ALREADY_APPROVED: "This document is already approved and cannot be replaced.",
   CHEF_ALREADY_APPROVED: "Your Chef application is approved, so its documents cannot be replaced.",
@@ -89,6 +91,7 @@ export async function POST(request: NextRequest) {
       const upstreamError = await upstream.json().catch(() => null) as { code?: unknown } | null;
       const knownCode = typeof upstreamError?.code === "string" && Object.hasOwn(UPLOAD_ERRORS, upstreamError.code)
         ? upstreamError.code : null;
+      console.warn("CHEF_PROOF_UPLOAD_REJECTED", { status: upstream.status, code: knownCode ?? "UNKNOWN_UPSTREAM_ERROR" });
       const response = NextResponse.json(
         {
           code: upstream.status === 401

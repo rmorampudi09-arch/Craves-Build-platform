@@ -79,6 +79,7 @@ it.each([
   ["DOCUMENT_UPLOAD_FAILED", "could not store"],
   ["DOCUMENT_CONTENT_TYPE_MISMATCH", "contents do not match"],
   ["DOCUMENT_FILE_TOO_LARGE", "no larger than 10 MB"],
+  ["CHEF_APPLICATION_REQUIRED", "Save your Chef application details"],
 ])("distinguishes %s from an unsupported file without exposing internal diagnostics", async (code, message) => {
   upstream.mockResolvedValue(Response.json({ code, message: "private storage diagnostics" }, { status: 400 }));
   const response = await uploadProof(uploadRequest());

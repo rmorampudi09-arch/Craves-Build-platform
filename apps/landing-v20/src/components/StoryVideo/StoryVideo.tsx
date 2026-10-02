@@ -34,7 +34,7 @@ const StoryVideo = () => {
         <div className="story-video__frame">
           <div className="story-video__intro">
             <h2 id="home-chef-story-title" className="story-video__heading">
-              The Care Behind The <span className="story-video__heading-accent">Cooking.</span>
+              The Care Behind The <span className="story-video__heading-accent">Coking.</span>
             </h2>
           </div>
 

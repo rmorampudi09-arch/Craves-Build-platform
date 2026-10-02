@@ -8,7 +8,9 @@ const RiderSection = () => {
           <div className="rider__content">
             <span className="rider__eyebrow">DELIVERY, WITH CARE</span>
             <h2 id="rider-section-title" className="rider__headline">
-              From kitchen to doorstep, handled with care.
+              <span className="rider__headline-text">From kitchen </span>{' '}
+                <span className="rider__headline-text"> to doorstep,</span>{' '}
+               <span className="rider__headline-text"> handled with care.</span>{' '}
             </h2>
 
             <p className="rider__text">

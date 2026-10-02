@@ -452,3 +452,158 @@
   }
 
 }
+
+/* Letter-hanging vegetable friends. Each decorative character is anchored
+   to a real letter so the artwork stays attached at every responsive size. */
+.chefs--invitation .chefs__headline-stage {
+  position: relative;
+  width: min(100%, 860px);
+  margin: 0 auto 28px;
+  padding: 28px 76px 76px;
+  isolation: isolate;
+}
+
+.chefs--invitation .chefs__headline-stage .chefs__headline {
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  font-size: clamp(3rem, 4.85vw, 5.35rem);
+  line-height: 0.98;
+  letter-spacing: -0.067em;
+}
+
+.chefs--invitation .chefs__headline-stage .chefs__headline-line {
+  display: block;
+  white-space: nowrap;
+}
+
+.chefs--invitation .chefs__letter-anchor {
+  position: relative;
+  display: inline-block;
+  z-index: 2;
+}
+
+.chefs--invitation .chefs__letter-friend {
+  position: absolute;
+  z-index: 4;
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: none;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 5px 8px rgba(26, 24, 20, 0.08));
+}
+
+/* Tomato hooks visually into the opening S. */
+.chefs--invitation .chefs__letter-anchor--s .chefs__letter-friend--tomato {
+  width: 1.45em;
+  left: -1.00em;
+  top: 0.67em;
+  transform: rotate(-8deg);
+  transform-origin: 70% 18%;
+}
+
+/* Potato hangs from the first O of “love”. */
+.chefs--invitation .chefs__letter-anchor--o .chefs__letter-friend--potato {
+  width: 1.08em;
+  left: -0.03em;
+  top: 0.67em;
+  transform: rotate(-2deg);
+  transform-origin: 50% 0%;
+}
+
+/* The leafy top rises behind the U in “you”. */
+.chefs--invitation .chefs__letter-anchor--u .chefs__letter-friend--sprig {
+  z-index: 1;
+  width: 1.18em;
+  left: 0.12em;
+  bottom: 0.69em;
+  transform: rotate(5deg);
+  transform-origin: 18% 100%;
+}
+
+/* Carrot hangs from the same U on the right, like the reference. */
+.chefs--invitation .chefs__letter-anchor--u .chefs__letter-friend--carrot {
+  width: 1.02em;
+  left: 0.10em;
+  top: 0.37em;
+  transform: rotate(4deg);
+  transform-origin: 45% 0%;
+}
+
+/* Onion hangs directly from the K in “cook.” */
+.chefs--invitation .chefs__letter-anchor--k .chefs__letter-friend--onion {
+  width: 1.02em;
+  left: 0.18em;
+  top: 0.62em;
+  transform: rotate(6deg);
+  transform-origin: 42% 0%;
+}
+
+@media (max-width: 1180px) {
+  .chefs--invitation .chefs__headline-stage {
+    width: min(100%, 760px);
+    padding: 24px 64px 68px;
+  }
+
+  .chefs--invitation .chefs__headline-stage .chefs__headline {
+    font-size: clamp(2.7rem, 5vw, 4.5rem);
+  }
+}
+
+@media (max-width: 767px) {
+  .chefs--invitation .chefs__headline-stage {
+    width: 100%;
+    margin-bottom: 20px;
+    padding: 20px 42px 58px;
+  }
+
+  .chefs--invitation .chefs__headline-stage .chefs__headline {
+    font-size: clamp(2rem, 9.4vw, 3.15rem);
+    line-height: 1.01;
+    letter-spacing: -0.055em;
+  }
+
+  .chefs--invitation .chefs__letter-anchor--s .chefs__letter-friend--tomato {
+    width: 1.28em;
+    left: -0.88em;
+    top: 0.52em;
+  }
+
+  .chefs--invitation .chefs__letter-anchor--o .chefs__letter-friend--potato {
+    width: 0.98em;
+    left: -0.18em;
+    top: 0.7em;
+  }
+
+  .chefs--invitation .chefs__letter-anchor--u .chefs__letter-friend--sprig {
+    width: 1.08em;
+    left: 0.1em;
+    bottom: 0.68em;
+  }
+
+  .chefs--invitation .chefs__letter-anchor--u .chefs__letter-friend--carrot {
+    width: 0.93em;
+    left: 0.33em;
+    top: 0.59em;
+  }
+
+  .chefs--invitation .chefs__letter-anchor--k .chefs__letter-friend--onion {
+    width: 0.93em;
+    left: 0.14em;
+    top: 0.64em;
+  }
+}
+
+@media (max-width: 430px) {
+  .chefs--invitation .chefs__headline-stage {
+    padding-right: 32px;
+    padding-left: 32px;
+  }
+
+  .chefs--invitation .chefs__headline-stage .chefs__headline {
+    font-size: clamp(1.82rem, 9.25vw, 2.6rem);
+  }
+}

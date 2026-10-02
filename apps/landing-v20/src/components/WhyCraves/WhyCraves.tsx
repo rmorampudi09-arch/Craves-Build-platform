@@ -67,12 +67,11 @@ const WhyCraves = () => {
         <p className="why__eyebrow" data-why-reveal="">Why Craves Exists</p>
 
         <div className="why__message" data-why-reveal="">
-          <h2 id="why-craves-title" className="why__title">
+          <h1 id="why-craves-title" className="why__title">
            <span  className="why__title-line">
              Everyday food should </span>{' '}
-
-                   still feel personal.
-          </h2>
+               still feel personal.
+          </h1>
           <p className="why__statement">
             <span className="why__line">
               We connect you with home chefs who cook with care, familiarity
@@ -81,7 +80,7 @@ const WhyCraves = () => {
                and freshness. Every meal brings you closer to home and
             </span>{' '}
             <span className="why__line">
-               supports a real kitchen in your community.
+               supports a real kitchen in your commmunity.
             </span>
           </p>
         </div>

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { readdirSync } from "node:fs";
 import test from "node:test";
@@ -56,6 +57,22 @@ test("landing v20 auth bridge never blocks sign-in on stylesheet load events", (
   assert.match(landingAuthBridge, /\/landing-auth\/manifest\.json/);
   assert.match(landingAuthBridge, /style\.onerror = \(\) => \{ clearTimeout\(timer\); style\.remove\(\); resolve\(\); \}/);
   assert.doesNotMatch(landingAuthBridge, /new Promise<void>\(\(resolve, reject\)/);
+});
+
+test("rebuilt landing preserves the released host auth and startup scripts", () => {
+  const index = source("../../public/landing-v20/index.html");
+  for (const [id, checksum] of [
+    ["craves-landing-auth-bridge", "037a3bc17d477351a310338220d4f5221ce72f0d384a01bf6eca62564f8df4b6"],
+    ["craves-boot-script", "11a49bd7849c76b8e0df9021bed0556220b3f113547b932cfa3fc05c8be00d6d"],
+  ]) {
+    const scripts = Array.from(
+      index.matchAll(new RegExp(`<script\\b[^>]*\\bid=["']${id}["'][^>]*>[\\s\\S]*?<\\/script>`, "g")),
+      (match) => match[0],
+    );
+    assert.equal(scripts.length, 1, `${id} must be included exactly once`);
+    assert.equal(createHash("sha256").update(scripts[0].replace(/\r\n/g, "\n")).digest("hex"), checksum,
+      `${id} must retain the released authentication and startup behavior`);
+  }
 });
 
 test("isolated landing auth build shims process for browser-only execution", () => {

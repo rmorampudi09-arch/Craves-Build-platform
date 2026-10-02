@@ -23,7 +23,9 @@ Home focus, 30-second polling while visible, and pull-to-refresh reload the feed
   records in position/creation/id order. Each record includes id, label,
   imagePath, published, sortOrder, createdAt and updatedAt.
 - Public `GET /api/v1/catalog/banners/{id}/image`: published JPEG/PNG only;
-  404 for drafts or missing records. Public browser image cache: 300 seconds.
+  drafts/missing records are denied. Native controller uses 404; existing
+  production security's error dispatch yields 403 for an anonymous draft request.
+  No error-dispatch/security bypass was introduced. Image cache: 300 seconds.
 - Admin `GET /api/v1/catalog/admin/banners`: PLATFORM_ADMIN or AUDIT_ADMIN.
 - Admin `POST /api/v1/catalog/admin/banners`: PLATFORM_ADMIN; multipart fields
   file, label, sortOrder; always creates a draft.
@@ -91,7 +93,7 @@ deployment overlays, which have their own web/backend verification.
 
 1. Open the approved administrator session at `/admin/banners`.
 2. Upload the existing approved Craves artwork as a draft; confirm it is absent
-   from the public feed and public image access returns 404.
+   from the public feed and anonymous public image access is denied.
 3. Publish it; verify the feed returns the same ID and image bytes.
 4. Replace-install the tagged APK without clearing app data. Open customer Home,
    pull to refresh, and confirm the same artwork appears instead of bundled promos.

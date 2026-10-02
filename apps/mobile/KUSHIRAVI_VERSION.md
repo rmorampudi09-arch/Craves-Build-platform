@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.21 Chef Rejection
+# KUSHIRAVI App Build - Version 1.22 Admin-Published Home Banners
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,11 +9,11 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `32`
-- Installed Android versionName: `1.21`
+- Installed Android versionCode: `33`
+- Installed Android versionName: `1.22`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed source: `5fac235a421f9541dfac40f3d82beee7fe6fad93`, tag `KUSHIRAVI-app-v1.21`. Chef rejection sheets keep the reason field and confirmation buttons visible, including with the keyboard open. Both entry points were physically checked; cancellation leaves the order unchanged and reopening clears the draft. v1.20 automatic preparation-time/UUID fixes are preserved. Genuine paid acceptance, rejection/ready mutations and delivery handoff remain unperformed in this task; prior MSG91 sign-in evidence is preserved below.
-- Last installation: `2026-10-02 03:38:39` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed source: `b9be7ea33ab8a3fcd615beac491a32f708a01bef`, tag `KUSHIRAVI-app-v1.22`. Existing home carousel now reads admin-published banners instead of bundled promotions. Upload/publish/unpublish and exact public image bytes are verified live. Phone is on user-only OTP verification; customer Home rendering remains pending the user's sign-in. Earlier Chef rejection, preparation-time, billing and independent MSG91 platform fixes are preserved, not modified or re-tested as paid mutations in this task.
+- Last installation: `2026-10-02 06:59:10` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
@@ -42,6 +42,44 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   verification. Previous versions remain untouched.
 - No other home/menu/glass UI, auth, finance, checkout/order, Razorpay, delivery,
   Chef or customer-web changes. No new Azure resource or public storage container.
+- Final source: `b9be7ea33ab8a3fcd615beac491a32f708a01bef`, immutable tag
+  `KUSHIRAVI-app-v1.22`. APK build/signature verification and replace-install
+  succeeded; phone reports code 33 / name 1.22. APK SHA256:
+  `F0FD0ACF219ACDB3DE54DBC6703425C7500752204AAA094B488C8C4D39724B6A`.
+- Final Admin checks: TypeScript and changed-source lint pass; 422 Vitest and
+  334 Node tests pass. Initial full-tree tests lacked root fixtures; restored the
+  exact baseline repository. Worker/time-out failures were re-run with bounded
+  workers and a 15-second test limit; no test or runtime behavior was skipped.
+  Existing dependency audit reports 10 issues (2 moderate, 7 high, 1 critical);
+  dependencies were not upgraded in this banner-only change.
+- Catalog ACR build `cu4y`, healthy one-replica revision
+  `ca-craves-catalog-service-prodlo--home-banners-1002`, image
+  `sha256:c7792c391e7dbac986c420394ea452092039c84f1b6c2eec29dd768a632ebf0c`.
+  V8 migration applied. All pre-existing runtime archive entries are unchanged.
+  Literal environment values, secret references, CPU/memory and replica limits
+  match the prior ready revision. Azure materialized defaults in its metadata;
+  a raw unordered-JSON fingerprint was not a reliable comparison.
+- Admin ACR build `cu50`, healthy one-replica revision
+  `ca-craves-admin-r92-ffe80e7c--home-banners-1002`, image
+  `sha256:750cccb048743cf4e15d118e53d9ec9af93c15793eadbe3296460c9a3aa8574c`.
+  Existing configuration matches its pre-deployment fingerprint ignoring JSON
+  key order. Existing Front Door origin and APIM Catalog wildcard routes reused;
+  no APIM, Front Door, role, secret or customer-web deployment changes.
+- Uploaded the existing approved Craves web artwork through the real Admin UI,
+  converted only from WebP to JPEG. Banner ID
+  `50fe8e74-8397-4ab8-8a84-560d43851e21`, label `Craves homemade food`.
+  Draft absent from public feed; public draft image access denied (production
+  security error dispatch returns 403). Publish returns this ID and exact JPEG
+  bytes; unpublish returns empty feed; republished and left live. Image SHA256:
+  `FBA1A8E7BCF55C96C489DA4F10D5F9670DE9C911DDC093D2E767F30816FC251D`.
+- Source ZIP SHA256:
+  `7F24274B4C273CB5A99AAB0F49D1F5ABE702E667B1FD5CF6BB75D87D14E86A2D`.
+  Checked the archived version, banner sources, build script and signing input.
+  Text matches Git-normalized newlines; signing bytes match exactly. This is an
+  input inspection, not a second complete clean ZIP build.
+- Full receipt, changed paths, manual test steps and limitations:
+  `docs/home-banners-20261002.md`. No OTP was entered by the agent. No phone Home
+  screenshot or live native rendering success is claimed until the user signs in.
 
 ### MSG91 Independent Web And Mobile OTP v1, 2026-10-02
 

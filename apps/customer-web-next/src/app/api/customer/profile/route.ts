@@ -12,6 +12,11 @@ export async function GET(request: NextRequest) {
   try {
     const upstream = await authenticatedApiFetch(request, "/customer/profile");
     const raw = await upstream.json().catch(() => null);
+    // A signed-in account can exist before its optional customer profile is
+    // saved. Keep that empty state distinct from missing APIM routes or outages.
+    if (upstream.status === 404 && raw?.code === "CUSTOMER_PROFILE_NOT_FOUND") {
+      return NextResponse.json(null, { headers: { "Cache-Control": "private, no-store" } });
+    }
     if (!upstream.ok) return failure(upstream.status);
     const profile = parseCustomerProfile(raw);
     return profile ? NextResponse.json(profile, { headers: { "Cache-Control": "no-store" } }) : failure(502, "Customer profile response validation failed.");

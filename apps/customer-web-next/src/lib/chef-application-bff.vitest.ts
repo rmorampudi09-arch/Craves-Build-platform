@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "../app/api/chef/application/route";
 import { POST as uploadProof } from "../app/api/chef/application/proof-files/route";
+import { GET as readProfile } from "../app/api/customer/profile/route";
 
 const upstream = vi.hoisted(() => vi.fn());
 vi.mock("./bounded-fetch", () => ({ boundedFetch: upstream }));
@@ -56,6 +57,22 @@ function uploadRequest() {
     method: "POST", headers: { Origin: "https://craves.in", Cookie: "craves_access_token=fixture-only" }, body,
   });
 }
+
+it.each([
+  ["CUSTOMER_PROFILE_NOT_FOUND", 200],
+  ["ResourceNotFound", 404],
+])("treats only %s as an empty customer profile and preserves routing failures", async (code, status) => {
+  vi.stubEnv("CRAVES_API_BASE_URL", "https://api.craves.in/api/v1");
+  upstream.mockResolvedValue(Response.json({ code }, { status: 404 }));
+  const response = await readProfile(new NextRequest("https://craves.in/api/customer/profile", {
+    headers: { Cookie: "craves_access_token=fixture-only" },
+  }));
+  expect(response.status).toBe(status);
+  if (status === 200) {
+    expect(await response.json()).toBeNull();
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+  }
+});
 
 it.each([
   ["DOCUMENT_STORE_NOT_CONFIGURED", "file format is not the issue"],

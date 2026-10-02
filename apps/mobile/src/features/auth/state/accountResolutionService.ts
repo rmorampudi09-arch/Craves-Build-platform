@@ -58,6 +58,14 @@ async function resolveChef(identity: Identity): Promise<AccountResolution> {
   const application = await profileApi.getChefApplication();
   const hasChefRole = identity.roles.includes('CHEF');
 
+  if (application.identityId !== identity.id) {
+    throw new AppApiError(
+      'CHEF_APPLICATION_OWNER_MISMATCH',
+      'We could not confirm your Chef application. Please try again.',
+      409,
+    );
+  }
+
   if (application.status === 'APPROVED') {
     if (!hasChefRole) {
       throw new AppApiError(
@@ -76,14 +84,7 @@ async function resolveChef(identity: Identity): Promise<AccountResolution> {
     };
   }
 
-  if (hasChefRole) {
-    throw new AppApiError(
-      'CHEF_AUTHORIZATION_STATUS_MISMATCH',
-      'We could not verify your Chef access. Please try again or contact Craves support.',
-      409,
-    );
-  }
-
+  // A role alone never opens Chef mode or prevents the owner from applying.
   return {
     flow: 'CHEF_ONBOARDING',
     requestedRole: 'CHEF',

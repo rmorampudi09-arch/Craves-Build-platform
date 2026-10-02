@@ -1,5 +1,30 @@
 import {httpClient} from '../../../core/http/httpClient';
+import {AppApiError} from '../../../core/http/apiError';
+import {z} from 'zod';
 import type {ChefApplication, CustomerProfile} from '../domain/types';
+
+const chefApplicationStateSchema = z.object({
+  id: z.string().min(1).nullable(),
+  identityId: z.string().min(1),
+  status: z.enum(['NOT_SUBMITTED', 'PENDING', 'APPROVED', 'REJECTED']),
+}).refine(application =>
+  application.status === 'NOT_SUBMITTED'
+    ? application.id === null
+    : application.id !== null,
+);
+
+function requireChefApplication(response: unknown): ChefApplication {
+  if (!chefApplicationStateSchema.safeParse(response).success) {
+    throw new AppApiError(
+      'CHEF_APPLICATION_INVALID_RESPONSE',
+      'We could not load your Chef application. Please try again.',
+      502,
+      undefined,
+      true,
+    );
+  }
+  return response as ChefApplication;
+}
 
 export interface CustomerProfileInput {
   firstName: string;
@@ -29,9 +54,13 @@ export const profileApi = {
     return httpClient.put<CustomerProfile>('/api/v1/customer/profile', input);
   },
   async getChefApplication(): Promise<ChefApplication> {
-    return httpClient.get<ChefApplication>('/api/v1/chef/application');
+    return requireChefApplication(
+      await httpClient.get<unknown>('/api/v1/chef/application'),
+    );
   },
   async submitChefApplication(input: ChefApplicationInput): Promise<ChefApplication> {
-    return httpClient.post<ChefApplication>('/api/v1/chef/application', input);
+    return requireChefApplication(
+      await httpClient.post<unknown>('/api/v1/chef/application', input),
+    );
   },
 };

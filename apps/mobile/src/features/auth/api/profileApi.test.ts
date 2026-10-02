@@ -85,6 +85,34 @@ describe('P23 exact Chef application contract', () => {
     expect(getMock).toHaveBeenCalledWith('/api/v1/chef/application');
   });
 
+  it('accepts the exact no-application response without inventing approval', async () => {
+    const unsubmitted = {...chefApplication, id: null, status: 'NOT_SUBMITTED', submittedAt: null};
+    getMock.mockResolvedValue(unsubmitted);
+    await expect(profileApi.getChefApplication()).resolves.toEqual(unsubmitted);
+  });
+
+  it.each([
+    null,
+    {data: chefApplication},
+    {...chefApplication, status: 'UNKNOWN'},
+    {...chefApplication, status: 'APPROVED', id: null},
+    {...chefApplication, identityId: undefined},
+  ])('rejects malformed application reads before routing: %j', async response => {
+    getMock.mockResolvedValue(response);
+    await expect(profileApi.getChefApplication()).rejects.toMatchObject({
+      code: 'CHEF_APPLICATION_INVALID_RESPONSE',
+      status: 502,
+    });
+  });
+
+  it('does not confirm submission from an invalid backend response', async () => {
+    postMock.mockResolvedValue({success: true});
+    await expect(profileApi.submitChefApplication({
+      email: 'chef@example.com', firstName: 'Asha', lastName: 'Rao',
+      addressLine1: '12 Market Road', city: 'Hyderabad', state: 'Telangana',
+    })).rejects.toMatchObject({code: 'CHEF_APPLICATION_INVALID_RESPONSE'});
+  });
+
   it('posts only the approved application request fields to the exact route', async () => {
     postMock.mockResolvedValue(chefApplication);
     const request = {

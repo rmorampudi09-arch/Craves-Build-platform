@@ -140,6 +140,54 @@ describe('P21 account resolution', () => {
     });
   });
 
+  it.each(['NOT_SUBMITTED', 'PENDING', 'REJECTED'] as const)(
+    'keeps a Chef-enabled owner in onboarding when the application is %s',
+    async status => {
+      meMock.mockResolvedValue(identity(['CUSTOMER', 'CHEF', 'ADMIN']));
+      chefApplicationMock.mockResolvedValue(chefApplication(status));
+
+      await expect(accountResolutionService.resolve('CHEF')).resolves.toMatchObject({
+        resolution: {
+          flow: 'CHEF_ONBOARDING',
+          requestedRole: 'CHEF',
+          authorizedRole: 'CUSTOMER',
+          onboardingStatus: status,
+        },
+      });
+    },
+  );
+
+  it.each(['NOT_SUBMITTED', 'PENDING', 'REJECTED'] as const)(
+    'routes a new Customer-only owner to the correct %s onboarding state',
+    async status => {
+      meMock.mockResolvedValue(identity(['CUSTOMER']));
+      chefApplicationMock.mockResolvedValue(chefApplication(status));
+      await expect(accountResolutionService.resolve('CHEF')).resolves.toMatchObject({
+        resolution: {flow: 'CHEF_ONBOARDING', onboardingStatus: status},
+      });
+    },
+  );
+
+  it('rejects another identity\'s application instead of granting Chef access', async () => {
+    meMock.mockResolvedValue(identity(['CUSTOMER', 'CHEF']));
+    chefApplicationMock.mockResolvedValue({
+      ...chefApplication('APPROVED'),
+      identityId: 'another-identity',
+    });
+    await expect(accountResolutionService.resolve('CHEF')).rejects.toMatchObject({
+      code: 'CHEF_APPLICATION_OWNER_MISMATCH',
+      status: 409,
+    });
+  });
+
+  it('keeps an inactive identity out of all Chef onboarding states', async () => {
+    meMock.mockResolvedValue({...identity(['CUSTOMER', 'CHEF']), status: 'SUSPENDED'});
+    await expect(accountResolutionService.resolve('CHEF')).rejects.toMatchObject({
+      code: 'IDENTITY_NOT_ACTIVE',
+    });
+    expect(chefApplicationMock).not.toHaveBeenCalled();
+  });
+
   it('grants the Chef flow only when /me contains CHEF and the application is approved', async () => {
     const authoritativeIdentity = identity(['CUSTOMER', 'CHEF']);
     meMock.mockResolvedValue(authoritativeIdentity);

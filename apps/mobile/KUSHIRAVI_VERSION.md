@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.23 Centralized Phone OTP
+# KUSHIRAVI App Build - Version 1.24 Chef Application Routing
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -18,6 +18,32 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.24 - Chef Application Routing, 2026-10-02
+
+- Requested: fix the live phone's Chef account-verification error and verify
+  registration through submission and the Admin pending approval request.
+- Clean start `859afe8b0b7a6e71433a0e5d9e4458fe8cc1df4a`, branch
+  `KUSHIRAVI-app-build`. Installed baseline remains 1.23 / code 34 until verified
+  replace-install. No GitHub push and no UI redesign.
+- The mobile resolver previously rejected every non-approved application if the
+  authenticated identity already had CHEF. Live read-only checks confirm a
+  Chef-enabled identity without an application. Route NOT_SUBMITTED, PENDING and
+  REJECTED to the existing onboarding screens irrespective of existing CHEF;
+  Chef product access still requires ACTIVE identity, CUSTOMER/CHEF authority,
+  matching application ownership and APPROVED application status.
+- Validate the backend's application state before routing or confirming
+  submission. Do not invent approval, grant/revoke roles, bypass verified email
+  or KYC, or write applicant details through diagnostic SQL.
+- Android target 1.24 / code 35, intended immutable tag `KUSHIRAVI-app-v1.24`.
+  Intended APK/source ZIP: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24.apk` and
+  `C:\mscratch\artifacts\KUSHIRAVI-app-v1.24-source.zip`.
+- Verification: all 204 Jest suites / 1,108 tests pass, including 25 added
+  regression tests. TypeScript, targeted ESLint and `git diff --check` pass.
+  Release build and phone acceptance are in progress. APIM publishes the
+  application/proof and Admin review routes; the signed-in Admin queue loads
+  existing pending applications. This is not yet this phone's submission proof.
+  See `docs/chef-registration-live-20261002.md`. No backend/APIM changes made.
 
 ### Version 1.23 - Centralized Web And Mobile Phone OTP, 2026-10-02
 

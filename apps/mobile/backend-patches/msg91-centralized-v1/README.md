@@ -59,7 +59,9 @@ then the existing release APK script. Build/install without clearing app data.
 Build immutable ACR images, deploy auth first with the additive migration, verify
 health and request validation, then web and Android. Keep legacy widget settings
 and routes unchanged for older clients. APIM operations add only the two new
-POST routes, per-IP burst bounds, body size and exact Craves CORS origins.
+POST routes, body size and exact Craves CORS origins. The deployed APIM tier is
+Consumption, which does not support `rate-limit-by-key`; shared send budgets
+remain enforced by PostgreSQL and cannot be bypassed using a forged client IP.
 Existing gateway role and authentication policies are not removed.
 Restore the previous web/auth images if a real acceptance check fails. The additive
 tables may remain; never undo unrelated migrations or change user identities.
@@ -80,6 +82,7 @@ HTTP success. Existing DLT-approved template/sender is reused, not re-created.
 
 Conservative launch limits are 5 sends per phone/hour and 100 sends across clients
 per minute. This is abuse protection, not capacity for 1M simultaneous sign-ins.
+There is no claim of per-IP gateway throttling or bot attestation in this rollout.
 PostgreSQL serializes only the short reservation/finalization transactions; provider
 HTTP calls never hold database locks. Larger scale needs measured capacity and
 approved configurable budgets/edge bot protection, not removal of safeguards.

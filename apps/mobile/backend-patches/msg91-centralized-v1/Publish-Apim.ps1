@@ -15,7 +15,6 @@ try {
     <allowed-methods><method>POST</method><method>OPTIONS</method></allowed-methods>
     <allowed-headers><header>Content-Type</header><header>Cache-Control</header></allowed-headers></cors>
   <base />
-  <rate-limit-by-key calls="30" renewal-period="60" counter-key="@(&quot;craves-central-otp:&quot; + context.Request.IpAddress)" />
   <choose><when condition="@(context.Request.Body != null &amp;&amp; context.Request.Body.As&lt;byte[]&gt;(preserveContent: true).Length > 1024)">
     <return-response><set-status code="413" reason="Request too large" /><set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header>
       <set-body>{"code":"OTP_REQUEST_TOO_LARGE"}</set-body></return-response>
@@ -25,7 +24,7 @@ try {
         $policy = @{ properties = @{ format = 'rawxml'; value = $xml } } | ConvertTo-Json -Depth 6
         Invoke-RestMethod -Uri "$operation/policies/policy?api-version=2022-08-01" -Method Put -Headers $headers -ContentType 'application/json' -Body $policy | Out-Null
         $readback = Invoke-RestMethod -Uri "$operation/policies/policy?api-version=2022-08-01" -Headers $headers
-        if ($readback.properties.value -notmatch 'rate-limit-by-key' -or $readback.properties.value -notmatch '1024') { throw 'OTP policy readback failed.' }
-        Write-Output "Published only POST /api/v1/auth/otp/$action with burst/body bounds; inherited policies retained."
+        if ($readback.properties.value -notmatch 'https://craves.in' -or $readback.properties.value -notmatch '1024') { throw 'OTP policy readback failed.' }
+        Write-Output "Published only POST /api/v1/auth/otp/$action with body/CORS bounds; inherited policies retained. Shared send limits are backend-enforced."
     }
 } finally { $token=$null; $headers=$null }

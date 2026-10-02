@@ -366,7 +366,7 @@ export function BrowseHeader({
       <div
         aria-hidden={!mobileCompact}
         className={[
-          "fixed inset-x-0 top-0 z-50 border-b border-[#ECEEF0] bg-white/96 px-3 py-2 shadow-[0_7px_22px_rgba(26,26,26,0.065)] backdrop-blur-xl will-change-[transform,opacity] transition-[transform,opacity,box-shadow] duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden",
+          "fixed inset-x-0 top-0 z-50 border-b border-[#ECEEF0] bg-white/96 px-3 py-2 shadow-[0_7px_22px_rgba(26,26,26,0.065)] backdrop-blur-xl will-change-[transform,opacity] transition-[transform,opacity,box-shadow] duration-[260ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] motion-reduce:transition-none md:hidden",
           mobileCompact
             ? "translate-y-0 opacity-100"
             : "pointer-events-none -translate-y-[115%] opacity-0 shadow-none",

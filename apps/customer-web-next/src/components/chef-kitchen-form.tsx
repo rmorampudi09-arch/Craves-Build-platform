@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { AddressMapPicker } from "@/components/location/AddressMapPicker";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Check,
@@ -128,6 +129,31 @@ export function ChefKitchenForm() {
   const [message, setMessage] = useState("Loading your kitchen…");
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
+  const locationRequest = useRef(0);
+  const [invalidField, setInvalidField] = useState<keyof FormState | null>(null);
+  const [validationAttempt, setValidationAttempt] = useState(0);
+  useEffect(() => {
+    if (!invalidField) return;
+    const input = document.getElementById(`kitchen-${invalidField}`);
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    input?.focus({ preventScroll: true });
+    input?.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
+    if (!reduced) input?.animate([{ transform: "translateX(0)" }, { transform: "translateX(-3px)" }, { transform: "translateX(3px)" }, { transform: "translateX(0)" }], { duration: 240, iterations: 1 });
+  }, [invalidField, validationAttempt]);
+  function invalidate(name: keyof FormState, reason: string) { setInvalidField(name); setValidationAttempt(value => value + 1); setMessage(reason); }
+  function inputProps(name: keyof FormState) { return { id: `kitchen-${name}`, "aria-invalid": invalidField === name, "aria-describedby": invalidField === name ? "kitchen-field-error" : undefined }; }
+  async function moveKitchenPin(next: { latitude: number; longitude: number }) {
+    const version = ++locationRequest.current;
+    setForm(current => ({ ...current, latitude: String(next.latitude), longitude: String(next.longitude) }));
+    setLocating(true);
+    try {
+      const address = await reverseGeocodeCurrentLocation(next.latitude, next.longitude);
+      if (version !== locationRequest.current) return;
+      setForm(current => ({ ...current, addressLine1: address.houseNumber || address.formattedAddress, addressLine2: address.street || "", areaName: address.area || "", city: address.city || current.city, state: address.state || current.state, postalCode: address.postalCode || current.postalCode }));
+      setMessage("Pin updated. Check your house and address details below.");
+    } catch { if (version === locationRequest.current) setMessage("Pin updated. Please check your address details below."); }
+    finally { if (version === locationRequest.current) setLocating(false); }
+  }
 
   useEffect(() => {
     let active = true;
@@ -168,17 +194,19 @@ export function ChefKitchenForm() {
 
   function setField<K extends keyof FormState>(name: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [name]: value }));
+    if (invalidField === name) { setInvalidField(null); setMessage(""); }
   }
 
   function go(next: SetupStep) {
     setMessage("");
+    setInvalidField(null);
     setStep(next);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   }
 
   function continueName() {
     if (!form.kitchenName.trim()) {
-      setMessage("Please give your kitchen a name customers can recognize.");
+      invalidate("kitchenName", "Please give your kitchen a name customers can recognize.");
       return;
     }
     go("address");
@@ -186,7 +214,7 @@ export function ChefKitchenForm() {
 
   function continueAddress() {
     if (!form.addressLine1.trim() || !form.city.trim() || !form.state.trim()) {
-      setMessage("Please check your house or building, city, and state before continuing.");
+      invalidate(!form.addressLine1.trim() ? "addressLine1" : !form.city.trim() ? "city" : "state", "Please check your house or building, city, and state before continuing.");
       return;
     }
     go("ready");
@@ -335,7 +363,7 @@ export function ChefKitchenForm() {
         {suspended ? (
           <p className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">Craves has paused this kitchen for now. Your saved details are still here.</p>
         ) : null}
-        {message ? <p role="status" className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">{message}</p> : null}
+        {message ? <p id="kitchen-field-error" role={invalidField ? "alert" : "status"} className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">{message}</p> : null}
         <div className="mt-7 grid gap-3 sm:grid-cols-2">
           <button type="button" disabled={suspended} onClick={() => go("name")} className="min-h-12 rounded-full border border-[#F62E18] bg-white px-5 font-semibold text-[#F62E18] disabled:opacity-50">Change kitchen details</button>
           <Link href="/chef/menu" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#F62E18] px-5 font-semibold text-white">Go to my menu <ChevronRight className="h-4 w-4" aria-hidden="true" /></Link>
@@ -351,7 +379,7 @@ export function ChefKitchenForm() {
         <span className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]"><Store className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">What should customers call your kitchen?</h1>
         <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">Choose a simple name you’ll be happy to see next to your food.</p>
-        <label className="mt-6 block text-sm font-semibold text-[#1A1A1A]">Kitchen name<input value={form.kitchenName} onChange={(event) => setField("kitchenName", event.target.value)} className={INPUT_CLASS} maxLength={180} /></label>
+        <label className="mt-6 block text-sm font-semibold text-[#1A1A1A]">Kitchen name<input {...inputProps("kitchenName")} value={form.kitchenName} onChange={(event) => setField("kitchenName", event.target.value)} className={INPUT_CLASS} maxLength={180} /></label>
         <label className="mt-4 block text-sm font-semibold text-[#1A1A1A]">Tell customers what you cook <span className="font-normal text-[#6B6B6B]">(optional)</span><textarea value={form.description} onChange={(event) => setField("description", event.target.value)} className={`${INPUT_CLASS} min-h-28`} maxLength={1000} /></label>
         <details className="mt-5 rounded-2xl bg-[#F1F3F5] p-4">
           <summary className="cursor-pointer text-sm font-semibold text-[#1A1A1A]">More kitchen details</summary>
@@ -361,7 +389,7 @@ export function ChefKitchenForm() {
             <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Kitchen email <span className="font-normal text-[#6B6B6B]">(optional)</span><input type="email" value={form.email} onChange={(event) => setField("email", event.target.value)} className={INPUT_CLASS} /></label>
           </div>
         </details>
-        {message ? <p role="alert" className="mt-4 text-sm font-medium text-[#F62E18]">{message}</p> : null}
+        {message ? <p id="kitchen-field-error" role="alert" className="mt-4 text-sm font-medium text-[#F62E18]">{message}</p> : null}
         <button type="button" onClick={continueName} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white">Continue</button>
       </section>
     );
@@ -375,14 +403,15 @@ export function ChefKitchenForm() {
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">Is this where you cook?</h1>
         <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">Pickup partners use this location when food is ready.</p>
         <button type="button" disabled={locating} onClick={useCurrentLocation} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 font-semibold text-[#F62E18] disabled:opacity-50"><MapPin className="h-4 w-4" aria-hidden="true" />{locating ? "Finding my address…" : mapped ? "Refresh current location" : "Use my current location"}</button>
-        {message ? <p role="status" className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">{message}</p> : null}
+        {message ? <p id="kitchen-field-error" role={invalidField ? "alert" : "status"} className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">{message}</p> : null}
+        {form.latitude !== "" && form.longitude !== "" ? <div className="mt-5"><AddressMapPicker latitude={Number(form.latitude)} longitude={Number(form.longitude)} onCenterChange={next => void moveKitchenPin(next)} onUseCurrentLocation={useCurrentLocation} locating={locating} disabled={locating} /></div> : null}
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Flat / House / Building<input value={form.addressLine1} onChange={(event) => setField("addressLine1", event.target.value)} className={INPUT_CLASS} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Flat / House / Building<input {...inputProps("addressLine1")} value={form.addressLine1} onChange={(event) => setField("addressLine1", event.target.value)} className={INPUT_CLASS} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Street / Road <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.addressLine2} onChange={(event) => setField("addressLine2", event.target.value)} className={INPUT_CLASS} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A]">Area <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.areaName} onChange={(event) => setField("areaName", event.target.value)} className={INPUT_CLASS} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A]">Landmark <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.landmark} onChange={(event) => setField("landmark", event.target.value)} className={INPUT_CLASS} /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A]">City<input value={form.city} onChange={(event) => setField("city", event.target.value)} className={INPUT_CLASS} /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A]">State<input value={form.state} onChange={(event) => setField("state", event.target.value)} className={INPUT_CLASS} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">City<input {...inputProps("city")} value={form.city} onChange={(event) => setField("city", event.target.value)} className={INPUT_CLASS} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">State<input {...inputProps("state")} value={form.state} onChange={(event) => setField("state", event.target.value)} className={INPUT_CLASS} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A]">Pincode <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.postalCode} onChange={(event) => setField("postalCode", event.target.value)} className={INPUT_CLASS} inputMode="numeric" /></label>
         </div>
         <button type="button" onClick={continueAddress} disabled={locating} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white disabled:opacity-50">Yes, this is right</button>
@@ -407,7 +436,7 @@ export function ChefKitchenForm() {
           <p className="mt-1 text-sm text-[#6B6B6B]">Save everything and keep the kitchen closed for now.</p>
         </button>
       </div>
-      {message ? <p role="alert" className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm font-medium text-[#F62E18]">{message}</p> : null}
+      {message ? <p id="kitchen-field-error" role="alert" className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm font-medium text-[#F62E18]">{message}</p> : null}
       <button type="button" disabled={busy || locating || suspended} onClick={() => void save()} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white disabled:opacity-50">{busy ? "Saving…" : "Save my kitchen"}</button>
     </section>
   );

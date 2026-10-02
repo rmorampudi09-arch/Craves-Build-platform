@@ -58,13 +58,13 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(cravings, /shadow-\[0_3px_10px_rgba\(26,26,26,0\.09\)\]/);
   assert.match(cravings, /lg:top-\[var\(--craves-desktop-header-offset-lg,4\.65rem\)\]/);
   assert.doesNotMatch(cravings, /md:static/);
-  assert.match(cravings, /duration-\[1200ms\]/);
+  assert.match(cravings, /duration-\[240ms\]/);
   assert.match(header, /hover:-translate-y-0\.5/);
   assert.match(header, /focus-within:bg-white/);
   assert.match(header, /mobileCompact/);
   assert.match(header, /<CravesLogo size="md" \/>/);
   assert.doesNotMatch(header, /Food From Home/);
-  assert.match(cravings, /md:duration-\[300ms\]/);
+  assert.match(cravings, /md:duration-\[260ms\]/);
   assert.match(header, /fixed inset-x-0 top-0 z-50/);
   assert.match(skeleton, /CustomerPageSkeleton\.module\.css/);
   assert.match(skeleton, /SkeletonBlock/);

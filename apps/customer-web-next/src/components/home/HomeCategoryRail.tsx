@@ -118,7 +118,9 @@ export function HomeCategoryRail({
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
+    let frame = 0;
     const updateScrollState = () => {
+      frame = 0;
       const maxScrollLeft = Math.max(
         0,
         scroller.scrollWidth - scroller.clientWidth,
@@ -132,14 +134,20 @@ export function HomeCategoryRail({
       setCanScrollRight(scrollLeft < maxScrollLeft - edgeTolerance);
     };
 
-    scroller.scrollLeft = 0;
+    const scheduleUpdate = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateScrollState);
+    };
+    const observer = new ResizeObserver(scheduleUpdate);
+    observer.observe(scroller);
     updateScrollState();
-    scroller.addEventListener("scroll", updateScrollState, { passive: true });
-    window.addEventListener("resize", updateScrollState);
+    scroller.addEventListener("scroll", scheduleUpdate, { passive: true });
+
 
     return () => {
-      scroller.removeEventListener("scroll", updateScrollState);
-      window.removeEventListener("resize", updateScrollState);
+      scroller.removeEventListener("scroll", scheduleUpdate);
+      observer.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+
     };
   }, []);
 
@@ -178,7 +186,7 @@ export function HomeCategoryRail({
         className="mx-auto max-w-[88rem] bg-white px-4 pt-3 md:px-7 md:pt-4 lg:px-10 lg:pt-5"
         aria-labelledby="craving-categories-heading"
       >
-        <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">
+        <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[var(--color-success)]">
           Find your comfort food
         </p>
         <h2
@@ -189,7 +197,7 @@ export function HomeCategoryRail({
         </h2>
       </section>
 
-      <div className="sticky top-0 z-30 translate-y-[var(--craves-mobile-search-offset,0px)] border-b border-[#F1F3F5] bg-white/97 shadow-[0_5px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl will-change-[transform,top] transition-[transform,top,box-shadow] duration-[340ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:top-[var(--craves-desktop-header-offset-md,4.25rem)] md:translate-y-0 md:duration-[300ms] lg:top-[var(--craves-desktop-header-offset-lg,4.65rem)]">
+      <div className="sticky top-0 z-30 translate-y-[var(--craves-mobile-search-offset,0px)] border-b border-[#F1F3F5] bg-white/97 shadow-[0_5px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl will-change-transform motion-reduce:transition-none transition-[transform,top,box-shadow] duration-[260ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] md:top-[var(--craves-desktop-header-offset-md,4.25rem)] md:translate-y-0 md:duration-[260ms] lg:top-[var(--craves-desktop-header-offset-lg,4.65rem)]">
         <div className="relative mx-auto max-w-[88rem] bg-white/96 px-3 pb-0 pt-1.5 md:bg-white md:px-7 md:pt-2 lg:px-10">
           <div
             ref={scrollerRef}
@@ -211,9 +219,9 @@ export function HomeCategoryRail({
                 >
                   <span
                     className={[
-                      "flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-white shadow-[0_3px_10px_rgba(26,26,26,0.09)] ring-1 ring-black/[0.025] transition-[box-shadow,border-color,transform] duration-[420ms] group-hover:-translate-y-0.5 group-hover:shadow-[0_7px_17px_rgba(26,26,26,0.13)] group-focus-visible:ring-2 group-focus-visible:ring-[#F62E18]/20 motion-reduce:transform-none sm:h-[5.25rem] sm:w-[5.25rem] md:h-[5.75rem] md:w-[5.75rem] lg:h-[6.25rem] lg:w-[6.25rem]",
+                      "flex h-[5.75rem] w-[5.75rem] items-center justify-center rounded-full bg-white shadow-[0_3px_10px_rgba(26,26,26,0.09)] ring-1 ring-black/[0.025] transition-[box-shadow,border-color,transform] duration-[240ms] group-hover:-translate-y-0.5 group-hover:shadow-[0_7px_17px_rgba(26,26,26,0.13)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--color-success)]/20 motion-reduce:transform-none sm:h-[6.25rem] sm:w-[6.25rem] md:h-[6.75rem] md:w-[6.75rem] lg:h-[7.25rem] lg:w-[7.25rem]",
                       active
-                        ? "border border-[#F62E18]/35 shadow-[0_5px_16px_rgba(246,46,24,0.12)]"
+                        ? "border border-[var(--color-success)]/35 shadow-[0_5px_16px_rgba(14,124,58,0.12)]"
                         : "border border-[#E9EBEE]",
                     ].join(" ")}
                   >
@@ -224,18 +232,18 @@ export function HomeCategoryRail({
                         loading={priorityImage ? "eager" : "lazy"}
                         decoding="async"
                         fetchPriority={priorityImage ? "high" : "auto"}
-                        className="pointer-events-none h-full w-full select-none rounded-full object-cover transition-transform duration-[1200ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.085] group-focus-visible:scale-[1.055] motion-reduce:transform-none motion-reduce:transition-none"
+                        className="pointer-events-none h-full w-full select-none rounded-full object-contain transition-transform duration-[240ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] group-hover:scale-[1.025] group-focus-visible:scale-[1.025] motion-reduce:transform-none motion-reduce:transition-none"
                       />
                     ) : (
-                      <span className="flex h-[72%] w-[72%] items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-                        <Icon className="h-7 w-7" aria-hidden="true" />
+                      <span className="flex h-[72%] w-[72%] items-center justify-center rounded-full bg-[#F1F3F5] text-[var(--color-success)]">
+                        <Icon className="h-9 w-9" aria-hidden="true" />
                       </span>
                     )}
                   </span>
                   <span
                     className={[
                       "text-sm font-extrabold leading-5 transition-colors duration-200 lg:text-base",
-                      active ? "text-[#F62E18]" : "text-[#1A1A1A]",
+                      active ? "text-[var(--color-success)]" : "text-[#1A1A1A]",
                     ].join(" ")}
                   >
                     {label}
@@ -257,7 +265,7 @@ export function HomeCategoryRail({
               type="button"
               onClick={() => scrollCategories(-1)}
               aria-label="Show previous craving categories"
-              className="absolute left-1.5 top-[3.25rem] z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white/94 !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] backdrop-blur transition-[box-shadow,background-color,transform] duration-200 hover:!bg-white hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 md:left-4 md:top-[3.75rem] lg:left-7 lg:top-[4rem]"
+              className="absolute left-1.5 top-[3.25rem] z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white/94 !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] backdrop-blur transition-[box-shadow,background-color,transform] duration-200 hover:!bg-white hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-success)]/30 md:left-4 md:top-[3.75rem] lg:left-7 lg:top-[4rem]"
             >
               <FaChevronLeft
                 className="h-4 w-4 lg:h-5 lg:w-5"
@@ -278,7 +286,7 @@ export function HomeCategoryRail({
               type="button"
               onClick={() => scrollCategories(1)}
               aria-label="Show more craving categories"
-              className="absolute right-1.5 top-[3.25rem] z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white/94 !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] backdrop-blur transition-[box-shadow,background-color,transform] duration-200 hover:!bg-white hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 md:right-4 md:top-[3.75rem] lg:right-7 lg:top-[4rem]"
+              className="absolute right-1.5 top-[3.25rem] z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white/94 !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] backdrop-blur transition-[box-shadow,background-color,transform] duration-200 hover:!bg-white hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-success)]/30 md:right-4 md:top-[3.75rem] lg:right-7 lg:top-[4rem]"
             >
               <FaChevronRight
                 className="h-4 w-4 lg:h-5 lg:w-5"

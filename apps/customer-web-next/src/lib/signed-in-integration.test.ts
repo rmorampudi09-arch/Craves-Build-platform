@@ -305,10 +305,10 @@ test("customer headers stay lean and share the same responsive scroll behavior",
 
   assert.match(autoHide, /TOP_REVEAL_PX = 24/);
   assert.match(autoHide, /HIDE_AFTER_PX = 96/);
-  assert.match(autoHide, /delta > HIDE_DELTA_PX/);
-  assert.match(autoHide, /delta < -SHOW_DELTA_PX/);
+  assert.match(autoHide, /travel >= HIDE_DELTA_PX/);
+  assert.match(autoHide, /travel >= SHOW_DELTA_PX/);
   assert.match(autoHide, /requestAnimationFrame/);
-  assert.match(autoHide, /duration-\[300ms\]/);
+  assert.match(autoHide, /duration-\[260ms\]/);
   assert.match(autoHide, /--craves-desktop-header-offset-md/);
   assert.match(autoHide, /--craves-desktop-header-offset-lg/);
   assert.match(autoHide, /motion-reduce:transition-none/);

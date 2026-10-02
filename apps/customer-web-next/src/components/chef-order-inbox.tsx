@@ -15,21 +15,18 @@ import {
   type ChefOrder,
 } from "@/lib/chef-order-contract";
 
-type InboxView = "NEEDS_ANSWER" | "IN_PROGRESS" | "PREVIOUS" | "ALL";
+type InboxView = "NEEDS_ANSWER" | "IN_PROGRESS" | "READY" | "PREVIOUS" | "ALL";
 
 const NEEDS_ANSWER = new Set(["CHEF_ACCEPTANCE_PENDING"]);
 const IN_PROGRESS = new Set([
   "CHEF_ACCEPTED",
   "PREPARING",
-  "READY_FOR_PICKUP",
-  "OUT_FOR_DELIVERY",
+
 ]);
+const READY = new Set(["READY_FOR_PICKUP", "OUT_FOR_DELIVERY"]);
 const PREVIOUS = new Set([
   "DELIVERED",
-  "CHEF_REJECTED",
-  "CANCELLED",
-  "REFUNDED",
-  "REFUND_FAILED",
+
 ]);
 
 function money(value: number, currency: string): string {
@@ -59,6 +56,7 @@ function friendlyStatus(status: string): string {
 function statusesFor(view: InboxView): Set<string> | null {
   if (view === "NEEDS_ANSWER") return NEEDS_ANSWER;
   if (view === "IN_PROGRESS") return IN_PROGRESS;
+  if (view === "READY") return READY;
   if (view === "PREVIOUS") return PREVIOUS;
   return null;
 }
@@ -118,6 +116,7 @@ export function ChefOrderInbox() {
     () => ({
       NEEDS_ANSWER: orders.filter((order) => NEEDS_ANSWER.has(order.status)).length,
       IN_PROGRESS: orders.filter((order) => IN_PROGRESS.has(order.status)).length,
+      READY: orders.filter((order) => READY.has(order.status)).length,
       PREVIOUS: orders.filter((order) => PREVIOUS.has(order.status)).length,
       ALL: orders.length,
     }),
@@ -133,8 +132,9 @@ export function ChefOrderInbox() {
     if (loading || orders.length === 0) return;
     if (counts.NEEDS_ANSWER > 0) setView("NEEDS_ANSWER");
     else if (counts.IN_PROGRESS > 0) setView("IN_PROGRESS");
+    else if (counts.READY > 0) setView("READY");
     else setView("PREVIOUS");
-  }, [counts.IN_PROGRESS, counts.NEEDS_ANSWER, loading, orders.length]);
+  }, [counts.READY, counts.IN_PROGRESS, counts.NEEDS_ANSWER, loading, orders.length]);
 
   return (
     <div className="space-y-5">
@@ -170,14 +170,14 @@ export function ChefOrderInbox() {
       ) : orders.length === 0 ? (
         <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center md:p-10">
           <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]"><ChefHat className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
-          <h2 className="mt-5 text-2xl font-bold text-[#1A1A1A]">No orders yet</h2>
+          <h2 className="mt-5 text-2xl font-bold text-[#1A1A1A]">Your first order is coming soon</h2>
           <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#6B6B6B]">New orders will appear here when customers choose your food. You don’t need to do anything right now.</p>
         </section>
       ) : (
         <>
           <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Choose which orders to see">
-            {(["NEEDS_ANSWER", "IN_PROGRESS", "PREVIOUS", "ALL"] as const).map((nextView) => {
-              const label = nextView === "NEEDS_ANSWER" ? "Needs your answer" : nextView === "IN_PROGRESS" ? "Cooking now" : nextView === "PREVIOUS" ? "Previous" : "All";
+            {(["NEEDS_ANSWER", "IN_PROGRESS", "READY", "PREVIOUS", "ALL"] as const).map((nextView) => {
+              const label = nextView === "NEEDS_ANSWER" ? "New" : nextView === "IN_PROGRESS" ? "Preparing" : nextView === "READY" ? "Ready" : nextView === "PREVIOUS" ? "Completed" : "All";
               const count = counts[nextView];
               return (
                 <button key={nextView} type="button" onClick={() => setView(nextView)} aria-pressed={view === nextView} className={`min-h-11 shrink-0 rounded-full border px-4 text-sm font-semibold ${view === nextView ? "border-[#F62E18] bg-[#F62E18] text-white" : "border-[#E5E7EB] bg-white text-[#1A1A1A]"}`}>
@@ -194,7 +194,7 @@ export function ChefOrderInbox() {
               <p className="mt-2 text-sm text-[#6B6B6B]">Choose another view if you want to look at older orders.</p>
             </section>
           ) : (
-            <div className="space-y-3">
+            <div key={view} className="chef-step space-y-3">
               {visibleOrders.map((order) => {
                 const headline = order.items[0]?.itemName ?? "Food order";
                 const additional = Math.max(0, order.items.length - 1);

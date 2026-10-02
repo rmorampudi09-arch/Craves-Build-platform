@@ -26,32 +26,41 @@ export function AutoHideCustomerHeader({
   const [hidden, setHidden] = useState(false);
   const lastScrollY = useRef(0);
   const lastViewportWidth = useRef(0);
-  const framePending = useRef(false);
+  const framePending = useRef(0);
+  const directionAnchor = useRef(0);
+  const lastDirection = useRef<"up" | "down" | null>(null);
 
   useEffect(() => {
     lastScrollY.current = Math.max(window.scrollY, 0);
     lastViewportWidth.current = window.innerWidth;
+    directionAnchor.current = lastScrollY.current;
 
     const updateFromScroll = () => {
       const currentY = Math.max(window.scrollY, 0);
       const delta = currentY - lastScrollY.current;
 
+      const direction = delta > 0 ? "down" : delta < 0 ? "up" : null;
+      if (direction && direction !== lastDirection.current) {
+        directionAnchor.current = lastScrollY.current;
+        lastDirection.current = direction;
+      }
+      const travel = Math.abs(currentY - directionAnchor.current);
       if (currentY <= TOP_REVEAL_PX) {
         setHidden(false);
-      } else if (currentY > HIDE_AFTER_PX && delta > HIDE_DELTA_PX) {
+        directionAnchor.current = currentY;
+      } else if (currentY > HIDE_AFTER_PX && direction === "down" && travel >= HIDE_DELTA_PX) {
         setHidden(true);
-      } else if (delta < -SHOW_DELTA_PX) {
+      } else if (direction === "up" && travel >= SHOW_DELTA_PX) {
         setHidden(false);
       }
 
       lastScrollY.current = currentY;
-      framePending.current = false;
+      framePending.current = 0;
     };
 
     const handleScroll = () => {
       if (framePending.current) return;
-      framePending.current = true;
-      window.requestAnimationFrame(updateFromScroll);
+      framePending.current = window.requestAnimationFrame(updateFromScroll);
     };
 
     const handleResize = () => {
@@ -69,6 +78,7 @@ export function AutoHideCustomerHeader({
     return () => {
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", handleResize);
+      if (framePending.current) window.cancelAnimationFrame(framePending.current);
     };
   }, []);
 
@@ -112,7 +122,7 @@ export function AutoHideCustomerHeader({
       className={[
         positionClass,
         "z-40",
-        "will-change-transform transition-transform duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+        "will-change-transform transition-transform duration-[260ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)]",
         "motion-reduce:transition-none",
         visibilityClass,
         className,

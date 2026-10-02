@@ -193,7 +193,7 @@ test("home rechecks cart availability after default-address changes", () => {
 
 test("home cart bar uses a balanced true frosted-glass blur", () => {
   assert.match(floatingCart, /background:\s*rgba\(255, 255, 255, 0\.4\)/);
-  assert.match(floatingCart, /backdrop-filter:\s*blur\(10px\)/);
+  assert.match(floatingCart, /backdrop-filter:\s*blur\(8px\) saturate\(145%\)/);
   assert.match(floatingCart, /\.floatingCartGlass::before/);
   assert.match(floatingCart, /\.floatingCartGlass::after/);
   assert.match(floatingCart, /@supports not/);

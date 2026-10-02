@@ -192,6 +192,10 @@ it("shows failed application reads truthfully and keeps private editing unavaila
   )));
   fireEvent.click(screen.getByRole("button", { name: "Try again" }));
   await screen.findByRole("heading", { name: "Congratulations! You’re now a Craves chef" });
+  expect(screen.getByRole("link", { name: "Continue Chef setup" }).getAttribute("href")).toBe("/chef");
+  expect(screen.getByText("Your Chef Mode is ready. Save your kitchen details, then add and publish your dishes.")).toBeTruthy();
+  expect(screen.queryByRole("link", { name: "Add my first dish" })).toBeNull();
+  expect(screen.getAllByRole("link")).toHaveLength(1);
   expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
 });
 

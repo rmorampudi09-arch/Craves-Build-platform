@@ -609,11 +609,8 @@ export function ChefApplicationWorkspace() {
       <IconCircle><Check className="h-7 w-7" aria-hidden="true" /></IconCircle>
       <p className="mt-6 text-sm font-semibold text-[#F62E18]">You’re approved</p>
       <h1 className="mt-1 text-3xl font-bold text-[#1A1A1A]">Congratulations! You’re now a Craves chef</h1>
-      <p className="mx-auto mt-3 max-w-xl text-base leading-7 text-[#6B6B6B]">Your Chef Mode is ready. Add your first dish so customers can start discovering what you cook.</p>
-      <Link href="/chef/menu" className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto">Add my first dish <ChevronRight className="h-4 w-4" aria-hidden="true" /></Link>
-      <div className="mt-3">
-        <Link href="/chef" className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">Go to Chef home</Link>
-      </div>
+      <p className="mx-auto mt-3 max-w-xl text-base leading-7 text-[#6B6B6B]">Your Chef Mode is ready. Save your kitchen details, then add and publish your dishes.</p>
+      <Link href="/chef" className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto">Continue Chef setup <ChevronRight className="h-4 w-4" aria-hidden="true" /></Link>
     </section>
   );
 }

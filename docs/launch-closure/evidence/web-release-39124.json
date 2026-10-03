@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "azureRun": 39124,
+  "result": "succeeded",
+  "sourceSha": "09cf6454b515d37452ae61777a04926fb8180b66",
+  "regressionRun": 35135326909,
+  "regressionArtifact": 10464425163,
+  "verifiedAt": "2026-09-16T18:57:26.4372439Z",
+  "revision": "ca-craves-web-prodlow--0000089",
+  "image": "cravesprodlowacr82121.azurecr.io/craves/customer-web-next@sha256:898b3c88ffbf666205c40f42774fb4eb8cae13200ebda783aa50564265c8a043",
+  "rollbackImage": "cravesprodlowacr82121.azurecr.io/craves/customer-web-next@sha256:e62b8bcfb7c2e088e6357736b69841a99502a4ae6ec5f7e6777c383c7b657493",
+  "trafficPercent": 100,
+  "replicas": 1,
+  "productionPaymentModeAndRuntimePreserved": true,
+  "privateAnonymousEmailDenialsPassedAtBothOrigins": true,
+  "mailboxAcceptedByReleaseProbe": false,
+  "chefBrowserAcceptance": "NOT_ACCEPTED_INITIAL_SESSION_RECOVERY_DEFECT",
+  "publicLaunchAccepted": false
+}

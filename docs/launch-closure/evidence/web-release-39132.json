@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "azureRun": 39132,
+  "result": "succeeded",
+  "sourceSha": "d91b44d7e8b841d7301b52914e41b46f63aaee53",
+  "regressionRun": 35140839374,
+  "regressionArtifact": 10465351588,
+  "verifiedAt": "2026-09-16T19:44:59.0425258Z",
+  "revision": "ca-craves-web-prodlow--0000091",
+  "image": "cravesprodlowacr82121.azurecr.io/craves/customer-web-next@sha256:6d1212662c63ecabab68e851c88f58478381900c6ff62a5e322b76ceafe1b317",
+  "rollbackImage": "cravesprodlowacr82121.azurecr.io/craves/customer-web-next@sha256:8d50c5c31f9b3252936be03db97fadea1f2cf94a839073b003e168d38b165f8b",
+  "trafficPercent": 100,
+  "replicas": 1,
+  "productionPaymentModeAndRuntimePreserved": true,
+  "privateAnonymousEmailDenialsPassedAtBothOrigins": true,
+  "mailboxAcceptedByReleaseProbe": false,
+  "chefBrowserAcceptance": {
+    "path": "/chef/application",
+    "observedAtIndiaDate": "2026-09-17",
+    "directReloadWithoutNewSignIn": true,
+    "initialSessionCheckVisible": true,
+    "approvedApplicationLoaded": true,
+    "savedDetailsLoadedAndLocked": true,
+    "verifiedEmailDisplayed": true,
+    "approvedButIncompleteDocumentHistoryExplained": true,
+    "misleadingSignInErrorRecurred": false,
+    "realUploadsAccepted": false,
+    "bankEnrollmentAccepted": false
+  },
+  "publicLaunchAccepted": false
+}

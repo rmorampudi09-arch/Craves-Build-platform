@@ -2,7 +2,11 @@
 
 Authority: owner request of16 September2026 to execute the69-page public-launch fixing plan. All46 findings stay in scope; no item is accepted merely because an image is deployed. The owner's final real payment/delivery/bank journey remains NOT RUN and separate.
 
-## Current checkpoint: P0 merged; P1 rollout in progress
+## Current checkpoint: 17 September 2026
+
+Read `2026-09-17-checkpoint.md` first for the latest evidence. Live Auth protection passed bounded verification in Azure39122; the owner then confirmed normal sign-in and Profile work. The owner also confirmed real email receipt and verification. Azure39125 observed matching canonical email and profile records without writes. Chef document-state fixes are live; the follow-up session correction in Azure39132 passed a direct browser reload without another sign-in, with approved details, verified email and truthful document history together. Referral policy calculations and the draft's CI pass, but earnings integration and financial activation are unfinished. Genuine uploads, final financial journeys and restore/load acceptance remain open. Older sections below are a chronological record and do not override this dated checkpoint. The platform is not declared public-launch ready.
+
+## Earlier checkpoint: P0 merged; P1 rollout in progress
 
 Owner-approved PR360 is merged as `111160c1a71674c8b0c178a55884e389c97ffb8c`. PR362 is merged as `b0cc44f574eb4fff7a31682fd8baaa14f57b2700`; its exact-main full regression35112960978 passed all four required jobs. The separate admin workflows also passed. The required second-person approval was removed only after the owner's explicit confirmation; all other recorded main protections remain. See `REPOSITORY_PROTECTION.md` and the dated progress log for chronological evidence.
 

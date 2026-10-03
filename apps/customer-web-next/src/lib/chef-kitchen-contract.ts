@@ -53,6 +53,18 @@ function instant(value: unknown): string | null {
     : null;
 }
 
+/** These pickup fields are also required by Order's checkout snapshot. Drafts can remain incomplete. */
+export function missingKitchenPickupField(value: {
+  phoneNumber?: unknown;
+  areaName?: unknown;
+  postalCode?: unknown;
+}): "phoneNumber" | "areaName" | "postalCode" | null {
+  if (!text(value.phoneNumber, 24)) return "phoneNumber";
+  if (!text(value.areaName, 120)) return "areaName";
+  if (!text(value.postalCode, CHEF_KITCHEN_FIELD_LIMITS.postalCode)) return "postalCode";
+  return null;
+}
+
 export function parseChefKitchen(value: unknown): ChefKitchen | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
@@ -126,7 +138,7 @@ export function parseChefKitchenInput(value: unknown): ChefKitchenInput | null {
     !validOptionalText(raw.postalCode, CHEF_KITCHEN_FIELD_LIMITS.postalCode) ||
     hasLat !== hasLon ||
     (hasLat && (latitude === null || longitude === null)) ||
-    (status === "ACTIVE" && (latitude === null || longitude === null))
+    (status === "ACTIVE" && (latitude === null || longitude === null || missingKitchenPickupField(raw) !== null))
   )
     return null;
   return {

@@ -91,6 +91,33 @@ function kitchenRequest(method: "GET" | "PUT" = "GET") {
   });
 }
 
+const readyKitchenInput = { kitchenName: "Fixture kitchen", addressLine1: "Fixture house", city: "Hyderabad", state: "Telangana", phoneNumber: "+919999999999", areaName: "Madhapur", postalCode: "500081", latitude: 17.4483, longitude: 78.3915, status: "ACTIVE" };
+function kitchenWriteRequest(input: Record<string, unknown>) {
+  vi.stubEnv("CRAVES_API_BASE_URL", "https://api.craves.in/api/v1");
+  return new NextRequest("https://craves.in/api/chef/kitchen", {
+    method: "PUT", headers: { Origin: "https://craves.in", Cookie: "craves_access_token=fixture-only", "Content-Type": "application/json" }, body: JSON.stringify(input),
+  });
+}
+
+it.each(["phoneNumber", "areaName", "postalCode"])("rejects an ACTIVE kitchen missing %s before sending it upstream", async field => {
+  const response = await saveKitchen(kitchenWriteRequest({ ...readyKitchenInput, [field]: null }));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ code: "INVALID_KITCHEN_PROFILE", message: expect.stringContaining("pickup phone, area, pincode") });
+  expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+  expect(upstream).not.toHaveBeenCalled();
+});
+
+it.each(["ACTIVE", "DRAFT", "INACTIVE"])("preserves authenticated forwarding for a valid %s kitchen", async status => {
+  const input = { ...readyKitchenInput, status };
+  upstream.mockResolvedValue(Response.json({ ...input, id: "11111111-1111-4111-8111-111111111111", identityId: "22222222-2222-4222-8222-222222222222", createdAt: "2026-10-03T00:00:00Z", updatedAt: "2026-10-03T00:00:00Z" }));
+  const response = await saveKitchen(kitchenWriteRequest(input));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject(input);
+  expect(upstream).toHaveBeenCalledTimes(1);
+  expect(upstream).toHaveBeenCalledWith("https://api.craves.in/api/v1/kitchens/me", expect.objectContaining({ method: "PUT", headers: expect.objectContaining({ Authorization: "Bearer fixture-only" }) }), 40_000);
+  expect(JSON.parse(upstream.mock.calls[0][1].body)).toMatchObject(input);
+});
+
 it.each(["KITCHEN_PROFILE_NOT_FOUND", "ResourceNotFound", null] as const)("treats only the authoritative %s kitchen404 as missing setup", async code => {
   upstream.mockResolvedValue(Response.json({ code, message: "private diagnostics" }, { status: 404 }));
   const response = await readKitchen(kitchenRequest());

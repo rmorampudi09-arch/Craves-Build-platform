@@ -417,6 +417,62 @@ describe("Chef menu save and recovery", () => {
     expect(screen.getByText("₹190.00")).toBeTruthy();
     expect(screen.getByRole("switch", { name: "Availability for Fixture dish" }).getAttribute("aria-checked")).toBe("true");
   });
+  it.each(["phoneNumber", "areaName", "postalCode"] as const)("focuses missing pickup %s instead of opening an unorderable kitchen", async field => {
+    vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+    fetcher.mockImplementation(async input => {
+      if (String(input) === "/api/chef/kitchen") return Response.json(null);
+      if (String(input) === "/api/chef/application") return Response.json({ status: "APPROVED", firstName: "Fixture", lastName: "Chef", addressLine1: "Fixture house", city: "Hyderabad", state: "Telangana", postalCode: field === "postalCode" ? null : "500081", latitude: 17.4483, longitude: 78.3915 });
+      throw new Error(`Unexpected kitchen fixture route ${input}`);
+    });
+    render(createElement(ChefKitchenForm));
+    fireEvent.change(await screen.findByLabelText("Kitchen name"), { target: { value: "New kitchen" } });
+    expect((screen.getByLabelText(/Kitchen phone/) as HTMLInputElement).value).toBe(a.phoneNumber);
+    if (field === "phoneNumber") fireEvent.change(screen.getByLabelText(/Kitchen phone/), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    if (field !== "areaName") fireEvent.change(screen.getByLabelText(/^Area/), { target: { value: "Madhapur" } });
+    fireEvent.click(screen.getByRole("button", { name: "Yes, this is right" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Yes, get my kitchen ready/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save my kitchen" }));
+    const invalid = screen.getByLabelText(field === "phoneNumber" ? /Kitchen phone/ : field === "areaName" ? /^Area/ : /^Pincode/);
+    expect(invalid.getAttribute("aria-invalid")).toBe("true");
+    expect(document.activeElement).toBe(invalid);
+    expect(screen.getByRole("alert").textContent).toContain("before opening your kitchen");
+    expect(fetcher.mock.calls.some(([, options]) => options?.method === "PUT")).toBe(false);
+  });
+  it.each([null, "+919888888888"])("opens and persists a complete kitchen, preserving the saved pickup phone %s", async savedPhone => {
+    vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+    let saved: ChefKitchen = { ...kitchenFixture, phoneNumber: savedPhone, areaName: "Madhapur", postalCode: "500081", latitude: 17.4483, longitude: 78.3915 };
+    fetcher.mockImplementation(async (input, options) => {
+      if (String(input) === "/api/chef/kitchen" && options?.method === "PUT") {
+        saved = { ...saved, ...JSON.parse(String(options.body)) };
+        return Response.json(saved);
+      }
+      if (String(input) === "/api/chef/kitchen") return Response.json(saved);
+      if (String(input) === "/api/chef/application") return Response.json({ status: "APPROVED" });
+      throw new Error(`Unexpected kitchen fixture route ${input}`);
+    });
+    render(createElement(ChefKitchenForm));
+    fireEvent.click(await screen.findByRole("button", { name: "Change kitchen details" }));
+    expect((screen.getByLabelText(/Kitchen phone/) as HTMLInputElement).value).toBe(savedPhone ?? a.phoneNumber);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, this is right" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Yes, get my kitchen ready/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save my kitchen" }));
+    await screen.findByText("Open");
+    expect(saved).toMatchObject({ status: "ACTIVE", phoneNumber: savedPhone ?? a.phoneNumber, areaName: "Madhapur", postalCode: "500081", latitude: 17.4483, longitude: 78.3915 });
+    expect(fetcher.mock.calls.filter(([, options]) => options?.method === "PUT")).toHaveLength(1);
+    cleanup(); render(createElement(ChefKitchenForm));
+    await screen.findByText("Open");
+  });
+  it("does not combine a stale kitchen load with another signed-in chef's phone", async () => {
+    const late = deferred<Response>();
+    fetcher.mockImplementation(async input => String(input) === "/api/chef/kitchen" ? late.promise : Response.json({ status: "APPROVED", addressLine1: "Chef A private house" }));
+    render(createElement(ChefKitchenForm));
+    change({ ...b, phoneNumber: "+10000000002" });
+    await act(async () => late.resolve(Response.json(null)));
+    expect(screen.queryByDisplayValue("Chef A private house")).toBeNull();
+    expect(screen.queryByDisplayValue("+10000000002")).toBeNull();
+  });
   it.each(["unavailable", "invalid", "bad-json"])("does not mistake a %s kitchen read for a new or empty menu", async state => {
     const original = fetcher.getMockImplementation()!;
     fetcher.mockImplementation((input, options) => String(input) === "/api/chef/kitchen"

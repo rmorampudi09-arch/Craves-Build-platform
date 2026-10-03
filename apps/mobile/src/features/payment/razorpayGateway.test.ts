@@ -49,6 +49,18 @@ describe('production Razorpay native gateway adapter', () => {
     );
   });
 
+  it('rejects fractional subunit amounts before opening the native checkout', async () => {
+    await expect(
+      openRazorpayCheckout({
+        ...handoff,
+        amount: {amount: '130.005', currency: 'INR'},
+      }),
+    ).rejects.toMatchObject({
+      code: 'PAYMENT_AMOUNT_INVALID',
+    });
+    expect(mockRazorpayOpen).not.toHaveBeenCalled();
+  });
+
   it('rejects a success payload bound to a different provider order', async () => {
     mockRazorpayOpen.mockResolvedValue({
       razorpay_payment_id: 'pay_Razorpay456',
@@ -68,5 +80,50 @@ describe('production Razorpay native gateway adapter', () => {
       code: 'PAYMENT_PROVIDER_FAILED',
       message: 'Payment cancelled',
     });
+  });
+
+  it('fails as recoverable when the native Razorpay module is not callable', async () => {
+    const originalOpen = RazorpayCheckout.open;
+    (RazorpayCheckout as unknown as {open?: unknown}).open = undefined;
+
+    try {
+      await expect(openRazorpayCheckout(handoff)).rejects.toMatchObject({
+        code: 'PAYMENT_PROVIDER_UNAVAILABLE',
+        retriable: true,
+      });
+    } finally {
+      (RazorpayCheckout as unknown as {open?: unknown}).open = originalOpen;
+    }
+  });
+
+  it('supports native module builds that export open directly instead of under default', async () => {
+    const moduleShape = jest.requireMock('react-native-razorpay') as {
+      default?: unknown;
+      open?: jest.Mock;
+    };
+    const originalDefault = moduleShape.default;
+    const originalOpen = moduleShape.open;
+    const directOpen = jest.fn().mockResolvedValue({
+      razorpay_payment_id: 'pay_DirectExport',
+      razorpay_order_id: handoff.providerOrderId,
+      razorpay_signature: 'signed_payload_proof',
+    });
+
+    moduleShape.default = undefined;
+    moduleShape.open = directOpen;
+
+    try {
+      await expect(openRazorpayCheckout(handoff)).resolves.toEqual({
+        providerPaymentId: 'pay_DirectExport',
+        providerOrderId: handoff.providerOrderId,
+        providerSignature: 'signed_payload_proof',
+      });
+      expect(directOpen).toHaveBeenCalledWith(
+        expect.objectContaining({order_id: handoff.providerOrderId}),
+      );
+    } finally {
+      moduleShape.default = originalDefault;
+      moduleShape.open = originalOpen;
+    }
   });
 });

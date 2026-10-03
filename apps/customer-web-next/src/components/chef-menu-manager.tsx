@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/forms/input";
 import { Switch } from "@/components/ui/forms/switch";
 import { Skeleton } from "@/components/ui/feedback/skeleton";
 import { parseChefKitchen } from "@/lib/chef-kitchen-contract";
+import { chefMenuFailure } from "@/lib/chef-menu-errors";
 import {
   parseChefMenuItem,
   parseChefMenuItems,
@@ -95,7 +96,7 @@ function apiError(response: Response, body: unknown, fallback: string) {
       ? body.code
       : "";
   const reason =
-    requiresKitchen(response, body)
+    chefMenuFailure(response.status, body)?.message ?? (requiresKitchen(response, body)
       ? "Set up your kitchen before adding or managing dishes."
       : response.status === 401
       ? "Your session has expired. Sign in again to continue."
@@ -109,7 +110,7 @@ function apiError(response: Response, body: unknown, fallback: string) {
               ? "The photo is too large. Choose a photo of 8 MB or less."
               : response.status === 429
                 ? "Too many requests. Please wait a moment and try again."
-                : fallback;
+                : fallback);
   return `${reason} (${code || `HTTP ${response.status}`})`;
 }
 function FoodIndicator({ type }: { type: FoodType }) {
@@ -307,7 +308,10 @@ export function ChefMenuManager() {
       });
       const body: unknown = await response.json().catch(() => null);
       if (!response.ok) {
-        confirmedRejection = response.status >= 400 && response.status < 500;
+        // Catalog checks selling eligibility before any menu write. Other 5xx
+        // responses and interrupted requests still require a reload to avoid duplicates.
+        confirmedRejection = (response.status >= 400 && response.status < 500) ||
+          chefMenuFailure(response.status, body)?.code === "CATALOG_ELIGIBILITY_UNAVAILABLE";
         if (requiresKitchen(response, body)) {
           setItems([]);
           setKitchenRequired(true);
@@ -879,7 +883,7 @@ export function ChefMenuManager() {
               checked={form.available}
               onCheckedChange={(value) => {
                 update("available", value);
-                update("status", value ? "ACTIVE" : form.status);
+                update("status", value ? "ACTIVE" : items.find(item => item.id === form.id)?.status ?? "DRAFT");
               }}
             />
           </label>

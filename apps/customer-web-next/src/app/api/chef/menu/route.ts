@@ -3,6 +3,7 @@ import { boundBffRequest } from "@/lib/bff-request-limits";
 import { isSameOrigin } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefMenuItem, parseChefMenuItemInput, parseChefMenuItems } from "@/lib/chef-menu-contract";
+import { chefMenuFailure } from "@/lib/chef-menu-errors";
 
 export const dynamic = "force-dynamic";
 function apiBaseUrl(): string { const value = process.env.CRAVES_API_BASE_URL?.trim(); if (!value?.startsWith("https://")) throw new Error("CRAVES_API_BASE_URL must use HTTPS"); return value.replace(/\/$/, ""); }
@@ -14,11 +15,9 @@ async function requestUpstream(request: NextRequest, method: "GET" | "POST", bod
   try {
     const upstream = await boundedFetch(`${apiBaseUrl()}/kitchens/me/menu-items`, { method, headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(body === undefined ? {} : { "Content-Type": "application/json" }) }, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", signal: controller.signal }, 40_000);
     if (!upstream.ok) {
-      const failure = await upstream.json().catch(() => null) as { code?: unknown } | null;
-      const kitchenRequired = upstream.status === 400 && failure?.code === "KITCHEN_PROFILE_REQUIRED";
-      const response = NextResponse.json({
-        code: kitchenRequired ? "KITCHEN_PROFILE_REQUIRED" : upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "CHEF_ACCESS_REQUIRED" : "MENU_REQUEST_FAILED",
-        ...(kitchenRequired ? { message: "Set up your kitchen before adding or managing dishes." } : {}),
+      const failure = chefMenuFailure(upstream.status, await upstream.json().catch(() => null));
+      const response = NextResponse.json(failure ?? {
+        code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "CHEF_ACCESS_REQUIRED" : "MENU_REQUEST_FAILED",
       }, { status: upstream.status, headers: { "Cache-Control": "no-store" } });
       if (upstream.status === 401) response.cookies.delete("craves_access_token");
       return response;

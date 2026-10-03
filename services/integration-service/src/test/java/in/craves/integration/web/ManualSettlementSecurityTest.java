@@ -2,6 +2,7 @@ package in.craves.integration.web;
 
 import in.craves.integration.config.WebSecurityConfiguration;
 import in.craves.integration.payout.ManualChefSettlementService;
+import in.craves.integration.payout.ManualSettlementException;
 import in.craves.integration.security.CravesJwtAuthenticationFilter;
 import in.craves.integration.security.CravesPrincipal;
 import in.craves.integration.security.JwtVerifier;
@@ -57,5 +58,19 @@ class ManualSettlementSecurityTest {
     @Test void nonJsonIsRejectedBeforeReadingBody()throws Exception {
         actor("PAYMENTS_ADMIN");mvc.perform(post(reserve).header("Authorization","Bearer token").contentType(MediaType.TEXT_PLAIN).content("TEST"))
             .andExpect(status().isUnsupportedMediaType());verifyNoInteractions(service);
+    }
+    @Test void operationBlockerHasStableSafeGuidanceAndNoCache()throws Exception {
+        actor("PAYMENTS_ADMIN");when(service.list(any())).thenThrow(new ManualSettlementException(ManualSettlementException.Reason.JOURNAL_POSTING_DISABLED));
+        mvc.perform(get(route).header("Authorization","Bearer token"))
+            .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("JOURNAL_POSTING_DISABLED"))
+            .andExpect(jsonPath("$.detail").value(ManualSettlementException.Reason.JOURNAL_POSTING_DISABLED.detail()))
+            .andExpect(header().string("Cache-Control","no-store")).andExpect(header().string("Pragma","no-cache"));
+    }
+    @Test void unknownAccountingFailureNeverEchoesPrivateExceptionText()throws Exception {
+        actor("PAYMENTS_ADMIN");when(service.list(any())).thenThrow(new IllegalStateException("TEST_PRIVATE_BANK_REFERENCE_SQL"));
+        mvc.perform(get(route).header("Authorization","Bearer token"))
+            .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MANUAL_SETTLEMENT_CONTEXT_UNVERIFIED"))
+            .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("TEST_PRIVATE_BANK_REFERENCE_SQL"))))
+            .andExpect(header().string("Cache-Control","no-store"));
     }
 }

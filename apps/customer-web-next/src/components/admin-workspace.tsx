@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   BarChart3, Users, PackageSearch, ArrowRight, BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, GraduationCap,
-  LayoutDashboard, LogOut, Menu, ReceiptText, Search, SearchCheck, ShieldCheck, Truck, X
+  ChevronDown, LayoutDashboard, LogOut, Menu, ReceiptText, Search, SearchCheck, ShieldCheck, Truck, X
 } from "lucide-react";
-import { observeAdminSession, logoutAdminSession } from "@/lib/admin-renewal";
+import { observeAdminSession, logoutAdminSession, retryAdminSession } from "@/lib/admin-renewal";
 import { createAdminAuthorization, INITIAL_ADMIN_AUTHORIZATION } from "@/lib/admin-authorization";
 import { loadAdminIdentity } from "@/lib/admin-session";
 import { ADMIN_MODULES, matchesAdminRoute, searchAdminModules } from "@/lib/admin-navigation";
@@ -26,16 +26,26 @@ const icons = {
 };
 
 function Navigation({ pathname, close }: { pathname: string; close?: () => void }) {
-  const groups = [...new Set(ADMIN_MODULES.map(module => module.group))];
+  const primary = ADMIN_MODULES.filter(module => ["overview", "search", "analytics"].includes(module.id));
+  const grouped = ADMIN_MODULES.filter(module => !["overview", "search", "analytics", "modules"].includes(module.id));
+  const groups = [...new Set(grouped.map(module => module.group))];
+  function moduleLink(module: typeof ADMIN_MODULES[number]) {
+    const Icon = icons[module.id as keyof typeof icons] ?? LayoutDashboard;
+    return <AdminModuleLink key={module.id} module={module} className="cr-nav-link" current={matchesAdminRoute(pathname, module.href)} onNavigate={close}>
+      <Icon size={18} aria-hidden="true"/><span>{module.label}</span>{module.externalApp && <ArrowRight size={14} aria-hidden="true"/>}
+    </AdminModuleLink>;
+  }
   return <nav className="cr-navigation" aria-label="Administration modules">
-    {groups.map(group => <div className="cr-nav-group" key={group}><p className="cr-nav-label">{group}</p>
-      {ADMIN_MODULES.filter(module => module.group === group).map(module => {
-        const Icon = icons[module.id as keyof typeof icons] ?? LayoutDashboard;
-        return <AdminModuleLink key={module.id} module={module} className="cr-nav-link" current={matchesAdminRoute(pathname, module.href)} onNavigate={close}>
-          <Icon size={18} aria-hidden="true"/><span>{module.label}</span>{module.externalApp && <ArrowRight size={14} aria-hidden="true"/>}
-        </AdminModuleLink>;
-      })}
-    </div>)}
+    <div className="cr-primary-navigation">{primary.map(moduleLink)}</div>
+    {groups.map(group => {
+      const modules = grouped.filter(module => module.group === group);
+      const active = modules.some(module => matchesAdminRoute(pathname, module.href));
+      return <details className="cr-nav-group" key={`${pathname}:${group}`} open={active || (pathname === "/admin" && group === "Orders & delivery")}>
+        <summary className="cr-nav-label"><span>{group}</span><ChevronDown size={14} aria-hidden="true"/></summary>
+        {modules.map(moduleLink)}
+      </details>;
+    })}
+    <Link href="/admin/modules" className="cr-nav-link cr-all-modules" aria-current={pathname === "/admin/modules" ? "page" : undefined} onClick={close}><Menu size={18} aria-hidden="true"/><span>All modules</span><ArrowRight size={14} aria-hidden="true"/></Link>
   </nav>;
 }
 
@@ -48,6 +58,8 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
   const [{ identity, message, sessionState }, setAuthorization] = useState(INITIAL_ADMIN_AUTHORIZATION);
   const [query, setQuery] = useState("");
   const [signingOut, setSigningOut] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
   const [logoutError, setLogoutError] = useState("");
   const [logoutStarted, setLogoutStarted] = useState(false);
   const [logoutConfirmed, setLogoutConfirmed] = useState(false);
@@ -90,6 +102,15 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
     finally { logoutInFlight.current = false; setSigningOut(false); }
   }
 
+  async function retryConnection() {
+    if (retrying) return;
+    setRetrying(true);
+    setConnectionError("");
+    try { await retryAdminSession(); }
+    catch { setConnectionError("The connection could not be restored. Retry or sign in again."); }
+    finally { setRetrying(false); }
+  }
+
   // Keep the retry reachable after local authorization is cleared, including Academy.
   if (logoutStarted) return <main className="cr-admin cr-session-screen">
     <section className="cr-session-card"><CravesLogo size="lg" priority/><p className="cr-eyebrow">Craves administration</p>
@@ -111,11 +132,12 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
   const results = searchAdminModules(query);
   const accessScreen = <main className="cr-admin cr-session-screen">
     <section className="cr-session-card"><CravesLogo size="lg" priority/><p className="cr-eyebrow">Craves administration</p>
-      <h1>{sessionState === "reconnecting" ? "Reconnecting securely" : "Your control center starts here"}</h1>
+      <h1>{sessionState === "reconnecting" ? "Reconnecting securely" : sessionState === "checking" ? "Checking administrator access" : "Administrator sign in"}</h1>
       <p className="cr-muted" role="status">{message}</p>
+      {connectionError && <p className="cr-error-text" role="alert">{connectionError}</p>}
       <div className="cr-actions">
-        {sessionState !== "ended" && <button type="button" className="cr-button" onClick={() => window.location.reload()}>Retry connection</button>}
-        <Link className="cr-button cr-primary" href={`/sign-in?returnTo=${encodeURIComponent(pathname)}`}>Administrator sign in<ArrowRight size={16} aria-hidden="true"/></Link>
+        {sessionState !== "ended" && sessionState !== "checking" && <button type="button" className="cr-button" disabled={retrying} onClick={() => void retryConnection()}>{retrying ? "Reconnecting…" : "Retry connection"}</button>}
+        {sessionState !== "checking" && <Link className="cr-button cr-primary" href={`/sign-in?returnTo=${encodeURIComponent(pathname)}`}>Administrator sign in<ArrowRight size={16} aria-hidden="true"/></Link>}
       </div>
       <p className="cr-footnote">Only accounts approved by Craves can access administration.</p>
     </section>
@@ -143,7 +165,7 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
           <Link className="cr-icon-button" href="/admin/notifications" aria-label="Open notification recovery" title="Notification recovery"><BellRing size={19}/></Link>
         </header>
         <main id="cr-admin-content" tabIndex={-1} className="cr-content">{children}</main>
-        <footer className="cr-workspace-footer"><span>Craves administration</span><span>Authorized workflows · Timestamps labelled in IST</span></footer>
+        <footer className="cr-workspace-footer"><span>Craves administration</span><span>Times shown in IST</span></footer>
       </div>
       <dialog ref={menu} className="cr-dialog cr-menu-dialog" aria-label="Admin navigation" onClick={event => { if (event.target === event.currentTarget) menu.current?.close(); }}>
         <div className="cr-menu-inner"><div className="cr-dialog-heading"><Brand/><button className="cr-icon-button" onClick={() => menu.current?.close()} aria-label="Close navigation"><X size={20}/></button></div>

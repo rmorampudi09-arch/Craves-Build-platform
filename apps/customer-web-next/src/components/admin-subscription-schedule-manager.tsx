@@ -2,9 +2,9 @@
 
 import { adminFetch } from "@/lib/admin-renewal";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AdminSubscriptionPlan } from "@/lib/admin-subscription-plan-contract";
-import type { AdminSubscriptionSchedule, AdminSubscriptionScheduleItem } from "@/lib/admin-subscription-runtime-contract";
+import { parseAdminSchedule, type AdminSubscriptionSchedule, type AdminSubscriptionScheduleItem } from "@/lib/admin-subscription-runtime-contract";
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -22,20 +22,40 @@ function money(value: number, currency: string): string {
 }
 
 export function AdminSubscriptionScheduleManager({ plan }: { plan: AdminSubscriptionPlan }) {
-  const [schedule, setSchedule] = useState<AdminSubscriptionSchedule | null>(null);
+  const [schedule, setSchedule] = useState<(AdminSubscriptionSchedule & { items: ReviewScheduleItem[] }) | null>(null);
   const [message, setMessage] = useState("Loading Chef meal schedule…");
 
+  const [loading, setLoading] = useState(true);
+  const requestId = useRef(0);
   const load = useCallback(async () => {
-    const response = await adminFetch(`/api/admin/subscription-plans/${plan.id}/schedule`, { cache: "no-store" });
-    if (response.status === 404) { setSchedule(null); setMessage("Chef has not saved a meal schedule yet."); return; }
-    if (response.status === 401) throw new Error("Administrator session expired.");
-    if (response.status === 403) throw new Error("Subscription administrator access is required.");
-    if (!response.ok) throw new Error("Chef meal schedule is unavailable.");
-    setSchedule(await response.json() as AdminSubscriptionSchedule);
-    setMessage("");
+    const currentRequest = ++requestId.current;
+    setLoading(true); setMessage("Loading Chef meal schedule…"); setSchedule(null);
+    try {
+      const response = await adminFetch(`/api/admin/subscription-plans/${plan.id}/schedule`, { cache: "no-store" });
+      if (response.status === 404) {
+        if (currentRequest === requestId.current) setMessage("Chef has not saved a meal schedule yet.");
+        return;
+      }
+      if (response.status === 401) throw new Error("Administrator session expired.");
+      if (response.status === 403) throw new Error("Subscription administrator access is required.");
+      if (!response.ok) throw new Error("Chef meal schedule is unavailable. Please retry.");
+      const body = await response.json().catch(() => null);
+      const parsed = parseAdminSchedule(body);
+      if (!parsed || parsed.planId !== plan.id) throw new Error("Craves returned an invalid meal schedule.");
+      const snapshots = new Map<string, ReviewScheduleItem>((body.items as ReviewScheduleItem[]).map(item => [item.id, item]));
+      if (currentRequest !== requestId.current) return;
+      setSchedule({ ...parsed, items: parsed.items.map(item => ({ ...snapshots.get(item.id), ...item })) });
+      setMessage("");
+    } catch (error) {
+      if (currentRequest === requestId.current) setMessage(error instanceof Error ? error.message : "Chef meal schedule is unavailable.");
+    } finally { if (currentRequest === requestId.current) setLoading(false); }
   }, [plan.id]);
 
-  useEffect(() => { void load().catch(error => setMessage(error instanceof Error ? error.message : "Chef meal schedule is unavailable.")); }, [load]);
+  useEffect(() => {
+    const requests = requestId;
+    void load();
+    return () => { requests.current++; };
+  }, [load]);
 
   return <section className="rounded-[24px] bg-white p-5 text-slate-950">
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -43,6 +63,7 @@ export function AdminSubscriptionScheduleManager({ plan }: { plan: AdminSubscrip
         <h4 className="text-lg font-bold">Chef meal schedule</h4>
         <p className="mt-1 text-xs text-slate-500">Review-only. These dish details are snapshotted when the Chef saves the plan, and live availability is checked again during approval.</p>
       </div>
+      <button type="button" disabled={loading} onClick={() => void load()} className="rounded-xl border px-3 py-2 text-sm font-bold text-[#6930CA] disabled:opacity-50">{loading ? "Loading…" : "Refresh schedule"}</button>
       {schedule && <span className="rounded-full bg-[#FFF8EC] px-3 py-1 text-xs font-bold text-[#6930CA]">{schedule.status} · v{schedule.version}</span>}
     </div>
     {message && <p className="mt-4 rounded-xl bg-[#FFF8EC] p-3 text-sm text-slate-600" role="status">{message}</p>}
@@ -53,6 +74,7 @@ export function AdminSubscriptionScheduleManager({ plan }: { plan: AdminSubscrip
         <div className="rounded-xl bg-[#FFF8EC] p-3"><p className="text-xs font-bold uppercase text-slate-500">Meals</p><p className="mt-1 font-bold">{schedule.items.length}</p></div>
       </div>
       <div className="mt-4 space-y-2">
+        {schedule.items.length === 0 && <p className="text-sm text-slate-600">This schedule contains no meals.</p>}
         {schedule.items.map(rawItem => {
           const item = rawItem as ReviewScheduleItem;
           const day = schedule.recurrenceType === "WEEKLY"

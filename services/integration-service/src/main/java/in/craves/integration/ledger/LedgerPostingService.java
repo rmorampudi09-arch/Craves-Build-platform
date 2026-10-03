@@ -33,6 +33,8 @@ public class LedgerPostingService {
         this.jdbc=jdbc; this.json=json.copy().enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS); this.enabled=enabled;
     }
 
+    public boolean enabled() { return enabled; }
+
     @Transactional
     public Receipt post(Entry entry) {
         if (!enabled) throw new IllegalStateException("Financial journal posting is disabled");

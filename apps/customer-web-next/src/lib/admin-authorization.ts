@@ -1,5 +1,6 @@
 import type { AdminIdentity } from "./admin-contract.ts";
 import type { SessionState } from "./admin-renewal.ts";
+import { AdminSessionError } from "./admin-session.ts";
 
 export type AdminAuthorization = {
   identity: AdminIdentity | null;
@@ -55,6 +56,13 @@ export function createAdminAuthorization(deps: {
     } catch (error) {
       if (disposed || ended || started !== generation) return;
       deps.closeDialogs();
+      if (error instanceof AdminSessionError && (error.status === 429 || error.status >= 500)) {
+        // Keep forms mounted during a transport failure, but lock the workspace
+        // until live authorization succeeds again. A denial still clears access.
+        publish({ ...snapshot, sessionState: "reconnecting",
+          message: "Connection interrupted. Your open work is kept in this tab while we reconnect." });
+        return;
+      }
       publish({ identity: null, sessionState: state,
         message: error instanceof Error ? error.message : "Administrator access is unavailable." });
     }

@@ -11,13 +11,14 @@ import {
   Store,
 } from "lucide-react";
 import type { ChefApplication } from "@/lib/chef-application-contract";
-import { CHEF_KITCHEN_FIELD_LIMITS } from "@/lib/chef-kitchen-contract";
+import { CHEF_KITCHEN_FIELD_LIMITS, missingKitchenPickupField } from "@/lib/chef-kitchen-contract";
 import type {
   ChefKitchen,
   ChefKitchenInput,
   EditableKitchenStatus,
 } from "@/lib/chef-kitchen-types";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
+import { captureSessionContext, getSession, isSessionContextCurrent } from "@/services/auth/cravesAuth";
 
 type FormState = Record<
   keyof Omit<ChefKitchenInput, "latitude" | "longitude" | "status">,
@@ -51,13 +52,13 @@ const EMPTY: FormState = {
 const INPUT_CLASS =
   "mt-2 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-base text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10 disabled:bg-[#F1F3F5]";
 
-function fromKitchen(kitchen: ChefKitchen | null): FormState {
+function fromKitchen(kitchen: ChefKitchen | null, registeredPhone = ""): FormState {
   if (!kitchen) return EMPTY;
   return {
     kitchenName: kitchen.kitchenName,
     displayName: kitchen.displayName ?? "",
     description: kitchen.description ?? "",
-    phoneNumber: kitchen.phoneNumber ?? "",
+    phoneNumber: kitchen.phoneNumber?.trim() || registeredPhone,
     email: kitchen.email ?? "",
     addressLine1: kitchen.addressLine1,
     addressLine2: kitchen.addressLine2 ?? "",
@@ -72,11 +73,12 @@ function fromKitchen(kitchen: ChefKitchen | null): FormState {
   };
 }
 
-function fromApplication(application: ChefApplication | null): FormState {
+function fromApplication(application: ChefApplication | null, registeredPhone = ""): FormState {
   if (!application || application.status !== "APPROVED") return EMPTY;
   return {
     ...EMPTY,
     displayName: [application.firstName, application.lastName].filter(Boolean).join(" "),
+    phoneNumber: registeredPhone,
     email: application.email ?? "",
     addressLine1: application.addressLine1 ?? "",
     addressLine2: application.addressLine2 ?? "",
@@ -172,6 +174,7 @@ export function ChefKitchenForm() {
 
   useEffect(() => {
     let active = true;
+    const sessionContext = captureSessionContext();
     void Promise.all([
       fetch("/api/chef/kitchen", { cache: "no-store" }),
       fetch("/api/chef/application", { cache: "no-store" }),
@@ -181,7 +184,7 @@ export function ChefKitchenForm() {
         const applicationBody = applicationResponse.ok
           ? ((await applicationResponse.json().catch(() => null)) as ChefApplication | null)
           : null;
-        if (!active) return;
+        if (!active || !isSessionContextCurrent(sessionContext)) return;
         if (!kitchenResponse.ok) {
           throw new Error(
             kitchenResponse.status === 403
@@ -191,13 +194,14 @@ export function ChefKitchenForm() {
         }
         const nextKitchen = kitchenBody as ChefKitchen | null;
         setKitchen(nextKitchen);
-        setForm(nextKitchen ? fromKitchen(nextKitchen) : fromApplication(applicationBody));
+        const registeredPhone = getSession()?.phoneNumber ?? "";
+        setForm(nextKitchen ? fromKitchen(nextKitchen, registeredPhone) : fromApplication(applicationBody, registeredPhone));
         setStep(nextKitchen ? "summary" : "name");
         setMessage("");
         setLoaded(true);
       })
       .catch((error) => {
-        if (active) {
+        if (active && isSessionContextCurrent(sessionContext)) {
           setMessage(error instanceof Error ? error.message : "We couldn’t load your kitchen right now.");
           setLoaded(true);
         }
@@ -301,6 +305,13 @@ export function ChefKitchenForm() {
       return;
     }
     if (!checkFieldLengths(["kitchenName", "displayName", "city", "state", "postalCode"])) return;
+    const missingPickup = form.status === "ACTIVE" ? missingKitchenPickupField(form) : null;
+    if (missingPickup) {
+      setStep(missingPickup === "phoneNumber" ? "name" : "address");
+      const labels = { phoneNumber: "a kitchen phone", areaName: "the pickup area", postalCode: "the pickup pincode" };
+      invalidate(missingPickup, `Complete ${labels[missingPickup]} before opening your kitchen. Pickup partners need this to collect orders.`);
+      return;
+    }
     if (form.status === "ACTIVE" && (!form.latitude.trim() || !form.longitude.trim())) {
       setMessage(
         "Use current location before activating this kitchen. We need the pickup point before your kitchen can open.",
@@ -405,10 +416,10 @@ export function ChefKitchenForm() {
           <summary className="cursor-pointer text-sm font-semibold text-[#1A1A1A]">More kitchen details</summary>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-semibold text-[#1A1A1A]">Chef name customers see <span className="font-normal text-[#6B6B6B]">(optional)</span><input {...inputProps("displayName")} value={form.displayName} onChange={(event) => setField("displayName", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.displayName} /></label>
-            <label className="text-sm font-semibold text-[#1A1A1A]">Kitchen phone <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.phoneNumber} onChange={(event) => setField("phoneNumber", event.target.value)} className={INPUT_CLASS} inputMode="tel" /></label>
             <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Kitchen email <span className="font-normal text-[#6B6B6B]">(optional)</span><input type="email" value={form.email} onChange={(event) => setField("email", event.target.value)} className={INPUT_CLASS} /></label>
           </div>
         </details>
+        <label className="mt-5 block text-sm font-semibold text-[#1A1A1A]">Kitchen phone <span className="font-normal text-[#6B6B6B]">(required to accept orders)</span><input {...inputProps("phoneNumber")} value={form.phoneNumber} onChange={(event) => setField("phoneNumber", event.target.value)} className={INPUT_CLASS} inputMode="tel" maxLength={24} /></label>
         {message ? <p id="kitchen-field-error" role="alert" className="mt-4 text-sm font-medium text-[#F62E18]">{message}</p> : null}
         <button type="button" onClick={continueName} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white">Continue</button>
       </section>
@@ -428,11 +439,11 @@ export function ChefKitchenForm() {
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Flat / House / Building<input {...inputProps("addressLine1")} value={form.addressLine1} onChange={(event) => setField("addressLine1", event.target.value)} className={INPUT_CLASS} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Street / Road <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.addressLine2} onChange={(event) => setField("addressLine2", event.target.value)} className={INPUT_CLASS} /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A]">Area <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.areaName} onChange={(event) => setField("areaName", event.target.value)} className={INPUT_CLASS} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">Area <span className="font-normal text-[#6B6B6B]">(required to accept orders)</span><input {...inputProps("areaName")} value={form.areaName} onChange={(event) => setField("areaName", event.target.value)} className={INPUT_CLASS} maxLength={120} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A]">Landmark <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.landmark} onChange={(event) => setField("landmark", event.target.value)} className={INPUT_CLASS} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A]">City<input {...inputProps("city")} value={form.city} onChange={(event) => setField("city", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.city} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A]">State<input {...inputProps("state")} value={form.state} onChange={(event) => setField("state", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.state} /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A]">Pincode <span className="font-normal text-[#6B6B6B]">(optional)</span><input {...inputProps("postalCode")} value={form.postalCode} onChange={(event) => setField("postalCode", event.target.value)} className={INPUT_CLASS} inputMode="numeric" maxLength={CHEF_KITCHEN_FIELD_LIMITS.postalCode} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">Pincode <span className="font-normal text-[#6B6B6B]">(required to accept orders)</span><input {...inputProps("postalCode")} value={form.postalCode} onChange={(event) => setField("postalCode", event.target.value)} className={INPUT_CLASS} inputMode="numeric" maxLength={CHEF_KITCHEN_FIELD_LIMITS.postalCode} /></label>
         </div>
         <button type="button" onClick={continueAddress} disabled={locating} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white disabled:opacity-50">Yes, this is right</button>
       </section>

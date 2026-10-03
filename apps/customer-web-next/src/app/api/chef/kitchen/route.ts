@@ -107,7 +107,7 @@ export async function PUT(request: NextRequest) {
       {
         code: "INVALID_KITCHEN_PROFILE",
         message:
-          "Complete the required kitchen fields. ACTIVE kitchens also require valid latitude and longitude coordinates.",
+          "Complete the required kitchen fields. Open kitchens require a pickup phone, area, pincode, and valid map coordinates before they can accept orders.",
       },
       { status: 400, headers: PRIVATE_HEADERS },
     );

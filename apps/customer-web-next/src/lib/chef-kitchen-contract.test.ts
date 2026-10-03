@@ -31,6 +31,30 @@ test("requires paired coordinates", () => {
   assert.equal(parseChefKitchenInput({ ...kitchen, status: "DRAFT", latitude: 17.4, longitude: null }), null);
 });
 
+const pickupReadyKitchen = { ...kitchen, phoneNumber: "+919999999999", areaName: "Madhapur", postalCode: "500081", latitude: 17.4483, longitude: 78.3915 };
+
+test("accepts a complete active pickup profile without changing existing fields", () => {
+  const parsed = parseChefKitchenInput(pickupReadyKitchen);
+  assert.ok(parsed);
+  for (const field of ["phoneNumber", "areaName", "postalCode", "latitude", "longitude"] as const) {
+    assert.equal(parsed[field], pickupReadyKitchen[field]);
+  }
+});
+
+for (const field of ["phoneNumber", "areaName", "postalCode"] as const) {
+  for (const missing of [null, undefined, "", "   "]) {
+    test(`blocks opening a kitchen with missing ${field}: ${String(missing)}`, () => {
+      assert.equal(parseChefKitchenInput({ ...pickupReadyKitchen, [field]: missing }), null);
+      assert.ok(parseChefKitchenInput({ ...pickupReadyKitchen, [field]: missing, status: "DRAFT" }));
+      assert.ok(parseChefKitchenInput({ ...pickupReadyKitchen, [field]: missing, status: "INACTIVE" }));
+    });
+  }
+}
+
+test("keeps a legacy incomplete kitchen readable so its chef can repair it", () => {
+  assert.ok(parseChefKitchen({ ...pickupReadyKitchen, phoneNumber: null, areaName: null, postalCode: null }));
+});
+
 for (const [field, limit] of [["kitchenName", 160], ["displayName", 160], ["city", 80], ["state", 80], ["postalCode", 16]] as const) {
   test(`accepts ${field} at its database limit and rejects a longer write`, () => {
     const input = { ...kitchen, status: "DRAFT", [field]: "x".repeat(limit) };

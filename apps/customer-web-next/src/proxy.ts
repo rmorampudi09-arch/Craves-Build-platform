@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminDestination } from "@/lib/admin-navigation";
 import { safeReturnPath } from "@/lib/auth-contract";
+import { webLaunchGate } from "@/lib/web-launch-gate";
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  // Preserve the original handling of dotted paths when the gate is absent,
+  // and on the separately deployed admin portal. HTML aliases must be gated.
+  if (path.includes(".") && (process.env.CRAVES_ADMIN_PORTAL === "true" || !process.env.CRAVES_WEB_LAUNCH_BLOB_URL)) return NextResponse.next();
   if (process.env.CRAVES_ADMIN_PORTAL !== "true") {
     // Customer sessions cannot satisfy the dedicated administrator session policy.
     // Send old admin bookmarks to the owning portal before any OTP is requested.
@@ -25,7 +29,7 @@ export function proxy(request: NextRequest) {
         return response;
       }
     }
-    return NextResponse.next();
+    return process.env.CRAVES_WEB_LAUNCH_BLOB_URL ? webLaunchGate(request) : NextResponse.next();
   }
 
   const allowedPage = path === "/admin" || path.startsWith("/admin/") || path === "/sign-in";
@@ -39,5 +43,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"]
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"]
 };

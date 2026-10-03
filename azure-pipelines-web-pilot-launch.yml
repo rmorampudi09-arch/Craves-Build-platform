@@ -1,0 +1,74 @@
+# Manual web-only preparation. The launch click itself performs no deployment.
+trigger: none
+pr: none
+parameters:
+  - name: sourceSha
+    displayName: Exact tested merged GitHub main commit
+    type: string
+    default: SELECT_EXACT_MERGED_MAIN_SHA
+  - name: regressionRunId
+    displayName: Successful full exact-main regression run
+    type: string
+    default: SELECT_EXACT_MAIN_REGRESSION_RUN
+  - name: keySha256
+    displayName: SHA256 of the private launch key (never the private key)
+    type: string
+    default: SELECT_PRIVATE_KEY_HASH
+  - name: keyExpiresAt
+    displayName: Private launch link expiry in UTC
+    type: string
+    default: '2026-10-04T00:00:00.000Z'
+  - name: expectedLiveSha
+    type: string
+    default: f30d1e0a432a5f80421e31ee1a6f89fa09316a45
+  - name: confirmWebOnly
+    displayName: Prepare customer web launch only; preserve all other apps and data
+    type: boolean
+    default: false
+pool:
+  vmImage: ubuntu-22.04
+jobs:
+  - job: PrepareWebLaunch
+    displayName: Verify and deploy only the reviewed web launch addition
+    timeoutInMinutes: 45
+    condition: eq('${{ parameters.confirmWebOnly }}', 'True')
+    steps:
+      - checkout: none
+      - bash: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git clone --filter=blob:none https://github.com/rmorampudi09-arch/Craves-Build-platform.git "$SOURCE_DIR"
+          git -C "$SOURCE_DIR" checkout --detach "$SOURCE_SHA"
+          test "$(git -C "$SOURCE_DIR" rev-parse HEAD)" = "$SOURCE_SHA"
+          python3 "$SOURCE_DIR/scripts/release/verify-web-release-evidence.py" --sha "$SOURCE_SHA" --run-id "$REGRESSION_RUN"
+        displayName: Pin exact merged-main source and full regression evidence
+        env:
+          SOURCE_SHA: ${{ parameters.sourceSha }}
+          REGRESSION_RUN: ${{ parameters.regressionRunId }}
+          SOURCE_DIR: $(Agent.TempDirectory)/web-pilot-source
+      - task: AzureCLI@2
+        displayName: Preserve live runtime and prepare the web gate with access open
+        inputs:
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            python3 "$SOURCE_DIR/scripts/release/web_pilot_release.py" \
+              --source "$SOURCE_DIR" --sha "$SOURCE_SHA" --regression-run "$REGRESSION_RUN" \
+              --expected-live-sha "$EXPECTED_LIVE_SHA" --key-sha256 "$KEY_HASH" \
+              --key-expires-at "$KEY_EXPIRY" --receipt "$RECEIPT_DIR/web-pilot-release.json" --confirm-web-only
+        env:
+          SOURCE_DIR: $(Agent.TempDirectory)/web-pilot-source
+          SOURCE_SHA: ${{ parameters.sourceSha }}
+          REGRESSION_RUN: ${{ parameters.regressionRunId }}
+          EXPECTED_LIVE_SHA: ${{ parameters.expectedLiveSha }}
+          KEY_HASH: ${{ parameters.keySha256 }}
+          KEY_EXPIRY: ${{ parameters.keyExpiresAt }}
+          RECEIPT_DIR: $(Agent.TempDirectory)/web-pilot-receipt
+      - task: PublishPipelineArtifact@1
+        displayName: Publish sanitized web-only release and rollback receipt
+        condition: always()
+        inputs:
+          targetPath: $(Agent.TempDirectory)/web-pilot-receipt
+          artifact: web-pilot-release-receipt

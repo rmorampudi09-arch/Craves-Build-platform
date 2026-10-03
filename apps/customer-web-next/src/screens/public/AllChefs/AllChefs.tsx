@@ -71,7 +71,7 @@ export function AllChefsPage() {
       setDishImagesByKitchen({});
       setState("address-required");
       setMessage(
-        "Choose a default delivery address to see all active home chefs within 10 km.",
+        "Choose a default delivery address to see all active home chefs within 50 km.",
       );
       return;
     }
@@ -114,8 +114,8 @@ export function AllChefsPage() {
       setState("ready");
       setMessage(
         kitchenResult.value.kitchens.length > 0
-          ? "Showing active home chefs within 10 km of your delivery address."
-          : "No active home chefs are available within 10 km of your delivery address yet.",
+          ? "Showing active home chefs within 50 km of your delivery address."
+          : "No active home chefs are available within 50 km of your delivery address yet.",
       );
     } catch (error) {
       setKitchens([]);

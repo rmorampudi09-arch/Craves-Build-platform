@@ -91,22 +91,22 @@ test("profile treats meal subscription as its own destination", () => {
   assert.doesNotMatch(profile, /title="Membership"/);
 });
 
-test("customer discovery and detail recovery are fail-closed at 10 km", () => {
+test("customer discovery and detail recovery are fail-closed at 50 km", () => {
   const policy = source("./catalog-discovery-policy.ts");
   const home = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
   const dish = source("../screens/public/FoodDetails/FoodDetails.tsx");
   const kitchen = source("../screens/public/ChefProfile/ChefProfile.tsx");
 
-  assert.match(policy, /MAX_DISCOVERY_RADIUS_METERS = 10_000/);
-  assert.doesNotMatch(policy, /15_000|50_000/);
+  assert.match(policy, /MAX_DISCOVERY_RADIUS_METERS = 50_000/);
+  assert.doesNotMatch(policy, /10_000|15_000/);
   assert.match(home, /DEFAULT_DISCOVERY_RADIUS_METERS/);
   assert.match(home, /dishes: allDishes\(\)/);
   assert.match(home, /kitchens: allKitchens\(\)/);
   assert.match(home, /const hasInitialCatalog =/);
   assert.match(home, /const shouldPreserveCatalog =/);
   assert.match(home, /refreshDiscovery\(defaultAddress, false, shouldPreserveCatalog\)/);
-  assert.match(dish, /outside the 10 km Craves browsing area/);
-  assert.match(kitchen, /outside the 10 km Craves browsing area/);
+  assert.match(dish, /outside the 50 km Craves browsing area/);
+  assert.match(kitchen, /outside the 50 km Craves browsing area/);
 });
 
 test("review totals are optional and never block dish or kitchen rendering", () => {

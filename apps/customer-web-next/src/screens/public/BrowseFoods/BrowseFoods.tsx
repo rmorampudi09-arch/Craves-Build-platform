@@ -285,7 +285,7 @@ function BrowseFoodsPage() {
 
     setDiscoveryState("ready");
     if (loadedKitchens.length === 0 && loadedDishes.length === 0) {
-      setCatalogMessage("No active home kitchens or dishes are available within 10 km of your default address.");
+      setCatalogMessage("No active home kitchens or dishes are available within 50 km of your default address.");
     } else if (kitchenResult.status === "rejected" || dishResult.status === "rejected") {
       setCatalogMessage("Some nearby results are temporarily unavailable. Showing the live results we could load.");
     } else {

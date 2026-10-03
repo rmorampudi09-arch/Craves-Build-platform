@@ -1,5 +1,5 @@
-export const DEFAULT_DISCOVERY_RADIUS_METERS = 10_000;
-export const MAX_DISCOVERY_RADIUS_METERS = 10_000;
+export const DEFAULT_DISCOVERY_RADIUS_METERS = 50_000;
+export const MAX_DISCOVERY_RADIUS_METERS = 50_000;
 
 export function candidateDiscoveryRadii(
   requestedRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS,
@@ -10,7 +10,7 @@ export function candidateDiscoveryRadii(
     requestedRadiusMeters > MAX_DISCOVERY_RADIUS_METERS
   ) {
     throw new Error(
-      "Discovery radius must be a whole number between 1 and 10000 metres.",
+      "Discovery radius must be a whole number between 1 and 50000 metres.",
     );
   }
 

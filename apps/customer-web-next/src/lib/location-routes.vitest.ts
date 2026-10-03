@@ -25,7 +25,7 @@ describe("kitchen discovery request boundary", () => {
     "latitude=-90.001&longitude=0", "latitude=0&longitude=180.001", "latitude=0&longitude=-180.001",
     "latitude=0&latitude=1&longitude=0", "latitude=0&longitude=0&size=1&size=2",
     "latitude=0&longitude=0&unknown=1", "latitude=0&longitude=0&radiusMeters=",
-    "latitude=0&longitude=0&radiusMeters=0", "latitude=0&longitude=0&radiusMeters=100001",
+    "latitude=0&longitude=0&radiusMeters=0", "latitude=0&longitude=0&radiusMeters=50001",
     "latitude=0&longitude=0&page=-1", "latitude=0&longitude=0&page=1.5",
     "latitude=0&longitude=0&page=1001", "latitude=0&longitude=0&page=9007199254740992",
     "latitude=0&longitude=0&size=0", "latitude=0&longitude=0&size=51",
@@ -42,21 +42,45 @@ describe("kitchen discovery request boundary", () => {
   for (const [latitude, longitude] of [[0, 0], [-90, -180], [90, 180], [0.0000001, -0.0000001]]) {
     it(`preserves legitimate coordinates ${latitude},${longitude} and defaults`, async () => {
       const { GET } = await import("../app/api/discovery/kitchens/route");
-      mocks.catalog.mockResolvedValue(Response.json({ latitude, longitude, radiusMeters: 5_000,
+      mocks.catalog.mockResolvedValue(Response.json({ latitude, longitude, radiusMeters: 50_000,
         page: { page: 0, size: 20, totalElements: 0, totalPages: 0, hasNext: false }, kitchens: [] }));
       const params = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude) });
       expect((await GET(new NextRequest(`https://craves.in/api/discovery/kitchens?${params}`))).status).toBe(200);
-      expect(mocks.catalog).toHaveBeenCalledWith(`/discovery/kitchens?${new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), radiusMeters: "5000", page: "0", size: "20" })}`);
+      expect(mocks.catalog).toHaveBeenCalledWith(`/discovery/kitchens?${new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), radiusMeters: "50000", page: "0", size: "20" })}`);
     });
   }
   it("accepts the inclusive discovery bounds", async () => {
     const { GET } = await import("../app/api/discovery/kitchens/route");
-    mocks.catalog.mockResolvedValue(Response.json({ latitude: 0, longitude: 0, radiusMeters: 100_000,
+    mocks.catalog.mockResolvedValue(Response.json({ latitude: 0, longitude: 0, radiusMeters: 50_000,
       page: { page: 1_000, size: 50, totalElements: 0, totalPages: 0, hasNext: false }, kitchens: [] }));
-    const response = await GET(new NextRequest("https://craves.in/api/discovery/kitchens?latitude=0&longitude=0&radiusMeters=100000&page=1000&size=50"));
+    const response = await GET(new NextRequest("https://craves.in/api/discovery/kitchens?latitude=0&longitude=0&radiusMeters=50000&page=1000&size=50"));
     expect(response.status).toBe(200);
     expect(mocks.catalog).toHaveBeenCalledOnce();
   });
+});
+
+describe("dish discovery 50 km availability boundary", () => {
+  for (const radius of [undefined, "50000", "10000"]) {
+    it(`uses the requested customer location and radius ${radius ?? "default"}`, async () => {
+      const { GET } = await import("../app/api/discovery/menu-items/route");
+      const radiusMeters = Number(radius ?? "50000");
+      mocks.catalog.mockResolvedValue(Response.json({ latitude: 17.4483, longitude: 78.3915, radiusMeters,
+        page: { page: 0, size: 20, totalElements: 0, totalPages: 0, hasNext: false }, menuItems: [] }));
+      const params = new URLSearchParams({ latitude: "17.4483", longitude: "78.3915" });
+      if (radius !== undefined) params.set("radiusMeters", radius);
+      const response = await GET(new NextRequest(`https://craves.in/api/discovery/menu-items?${params}`));
+      expect(response.status).toBe(200);
+      expect(mocks.catalog).toHaveBeenCalledWith(`/discovery/menu-items?latitude=17.4483&longitude=78.3915&radiusMeters=${radiusMeters}&page=0&size=20`);
+    });
+  }
+  for (const radius of ["50001", "100000", "0", "50000.5"]) {
+    it(`rejects unsupported radius ${radius} before querying Catalog`, async () => {
+      const { GET } = await import("../app/api/discovery/menu-items/route");
+      const response = await GET(new NextRequest(`https://craves.in/api/discovery/menu-items?latitude=17.4483&longitude=78.3915&radiusMeters=${radius}`));
+      expect(response.status).toBe(400);
+      expect(mocks.catalog).not.toHaveBeenCalled();
+    });
+  }
 });
 
 describe("anonymous reverse geocoding bounded admission", () => {

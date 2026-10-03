@@ -313,6 +313,62 @@ describe("Chef menu save and recovery", () => {
     fireEvent.change(screen.getByLabelText(/Price/), { target: { value: "180" } });
     fireEvent.change(screen.getByLabelText(/Packed weight/), { target: { value: "500" } });
   }
+  it("saves a new dish as a draft after Currently Available is turned on and back off", async () => {
+    await openNew(); fillRequired();
+    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
+    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    await screen.findByText("Dish added successfully");
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({ status: "DRAFT", available: false });
+  });
+  it.each(["DRAFT", "INACTIVE"] as const)("preserves an existing %s dish after Currently Available is turned on and back off", async status => {
+    stored = [{ ...fixture, status, available: false }];
+    render(createElement(ChefMenuManager));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Fixture dish" }));
+    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
+    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    await screen.findByText("Dish updated successfully");
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({ status, available: false });
+  });
+  it.each([[409, "CHEF_SELLING_NOT_READY"], [503, "CATALOG_ELIGIBILITY_UNAVAILABLE"]] as const)("publishes a new Chef's first dish with its selected photo once %s %s is resolved", async (status, code) => {
+    let publishingReady = false;
+    const original = fetcher.getMockImplementation()!;
+    fetcher.mockImplementation(async (input, options) => {
+      if (!publishingReady && String(input) === "/api/chef/menu" && options?.method === "POST" && JSON.parse(String(options.body)).status === "ACTIVE")
+        return Response.json({ code }, { status });
+      if (String(input).endsWith("/images")) return Response.json({ uploaded: true });
+      return original(input, options);
+    });
+    vi.stubGlobal("URL", class extends URL { static createObjectURL() { return "blob:fixture"; } static revokeObjectURL() {} });
+    await openNew(); fillRequired();
+    fireEvent.change(screen.getByLabelText(/Dish photo/), { target: { files: [new File(["fixture"], "fixture.png", { type: "image/png" })] } });
+    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    expect((await screen.findByRole("alert")).textContent).toContain(code);
+    expect(screen.getByRole("alert").textContent?.toLowerCase()).toContain("publishing");
+    expect((screen.getByRole("button", { name: "Save Dish" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByRole("button", { name: "Reload menu to check the save" })).toBeNull();
+    expect((screen.getByLabelText(/Dish Name/) as HTMLInputElement).value).toBe("Fixture dish");
+    expect(screen.getByRole("img", { name: "Dish preview" }).getAttribute("src")).toBe("blob:fixture");
+    expect(stored).toHaveLength(0);
+    // The actual finance review/authority recovery happens outside this form.
+    publishingReady = true;
+    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    await screen.findByText("Dish added successfully");
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({ status: "ACTIVE", available: true });
+    expect(fetcher.mock.calls.filter(([url, options]) => url === "/api/chef/menu" && options?.method === "POST")).toHaveLength(2);
+    const uploads = fetcher.mock.calls.filter(([url]) => String(url).endsWith("/images"));
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0][0]).toBe(`/api/chef/menu/${stored[0].id}/images`);
+    expect((uploads[0][1]?.body as FormData).get("file")).toMatchObject({ name: "fixture.png" });
+    cleanup(); render(createElement(ChefMenuManager));
+    await screen.findByRole("heading", { name: "Fixture dish" });
+    expect(screen.getByRole("switch", { name: "Availability for Fixture dish" }).getAttribute("aria-checked")).toBe("true");
+  });
   it("takes a new approved Chef through kitchen setup, dish creation and persisted menu changes", async () => {
     let savedKitchen: ChefKitchen | null = null;
     const original = fetcher.getMockImplementation()!;

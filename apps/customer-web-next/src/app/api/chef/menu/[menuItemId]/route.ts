@@ -3,6 +3,7 @@ import { boundBffRequest } from "@/lib/bff-request-limits";
 import { isSameOrigin } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefMenuItem, parseChefMenuItemInput } from "@/lib/chef-menu-contract";
+import { chefMenuFailure } from "@/lib/chef-menu-errors";
 
 export const dynamic = "force-dynamic";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -24,9 +25,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ men
   try {
     const upstream = await boundedFetch(`${apiBaseUrl()}/kitchens/me/menu-items/${encodeURIComponent(menuItemId)}`, { method: "PUT", headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify(input), cache: "no-store", signal: controller.signal }, 40_000);
     if (!upstream.ok) {
-      const failure = await upstream.json().catch(() => null) as { code?: unknown } | null;
-      const kitchenRequired = upstream.status === 400 && failure?.code === "KITCHEN_PROFILE_REQUIRED";
-      const response = NextResponse.json({ code: kitchenRequired ? "KITCHEN_PROFILE_REQUIRED" : upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 404 ? "MENU_ITEM_NOT_FOUND" : "MENU_ITEM_UPDATE_FAILED", ...(kitchenRequired ? { message: "Set up your kitchen before adding or managing dishes." } : {}) }, { status: upstream.status, headers: { "Cache-Control": "no-store" } });
+      const failure = chefMenuFailure(upstream.status, await upstream.json().catch(() => null));
+      const response = NextResponse.json(failure ?? { code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 404 ? "MENU_ITEM_NOT_FOUND" : "MENU_ITEM_UPDATE_FAILED" }, { status: upstream.status, headers: { "Cache-Control": "no-store" } });
       if (upstream.status === 401) response.cookies.delete("craves_access_token");
       return response;
     }

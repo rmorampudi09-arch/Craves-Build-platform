@@ -57,6 +57,32 @@ it("does not reinterpret another menu rejection as a missing kitchen", async () 
   expect(await response.json()).toEqual({ code: "MENU_REQUEST_FAILED" });
 });
 
+it.each(["POST", "PUT", "PATCH"] as const)("preserves a confirmed finance hold for menu %s without exposing upstream diagnostics", async method => {
+  upstream.mockResolvedValue(Response.json({ code: "CHEF_SELLING_NOT_READY", message: "private finance diagnostics" }, { status: 409 }));
+  const context = { params: Promise.resolve({ menuItemId: "11111111-1111-4111-8111-111111111111" }) };
+  const response = await (method === "POST" ? createDish(menuRequest(method)) : method === "PUT" ? editDish(menuRequest(method), context) : updateAvailability(menuRequest(method), context));
+  expect(response.status).toBe(409);
+  const body = await response.json();
+  expect(body.code).toBe("CHEF_SELLING_NOT_READY");
+  expect(body.message.toLowerCase()).toContain("finance review");
+  expect(body.message).toContain("tax and fee-terms review");
+  expect(JSON.stringify(body)).not.toContain("private finance");
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  expect(upstream).toHaveBeenCalledTimes(1);
+});
+
+it.each(["POST", "PUT", "PATCH"] as const)("identifies the pre-write eligibility outage for menu %s without treating other service failures as confirmed", async method => {
+  upstream.mockResolvedValue(Response.json({ code: "CATALOG_ELIGIBILITY_UNAVAILABLE", message: "private signing diagnostics" }, { status: 503 }));
+  const context = { params: Promise.resolve({ menuItemId: "11111111-1111-4111-8111-111111111111" }) };
+  const response = await (method === "POST" ? createDish(menuRequest(method)) : method === "PUT" ? editDish(menuRequest(method), context) : updateAvailability(menuRequest(method), context));
+  expect(response.status).toBe(503);
+  const body = await response.json();
+  expect(body.code).toBe("CATALOG_ELIGIBILITY_UNAVAILABLE");
+  expect(body.message).toContain("Publishing could not be checked");
+  expect(JSON.stringify(body)).not.toContain("private signing");
+  expect(upstream).toHaveBeenCalledTimes(1);
+});
+
 function kitchenRequest(method: "GET" | "PUT" = "GET") {
   vi.stubEnv("CRAVES_API_BASE_URL", "https://api.craves.in/api/v1");
   return new NextRequest("https://craves.in/api/chef/kitchen", {

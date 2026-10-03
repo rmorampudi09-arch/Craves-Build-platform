@@ -117,7 +117,7 @@ function DishDetailPage() {
       const nearbyDish = nearby.find((candidate) => candidate.id === id);
       if (!nearbyDish) {
         throw new Error(
-          "This dish is outside the 10 km Craves browsing area for your selected address.",
+          "This dish is outside the 50 km Craves browsing area for your selected address.",
         );
       }
 

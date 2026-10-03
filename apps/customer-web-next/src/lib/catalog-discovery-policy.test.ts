@@ -7,19 +7,19 @@ import {
   MAX_DISCOVERY_RADIUS_METERS,
 } from "./catalog-discovery-policy.ts";
 
-test("customer discovery defaults to the 10 km browsing boundary", () => {
-  assert.equal(DEFAULT_DISCOVERY_RADIUS_METERS, 10_000);
-  assert.equal(MAX_DISCOVERY_RADIUS_METERS, 10_000);
-  assert.deepEqual(candidateDiscoveryRadii(), [10_000]);
+test("customer discovery defaults to the 50 km browsing boundary", () => {
+  assert.equal(DEFAULT_DISCOVERY_RADIUS_METERS, 50_000);
+  assert.equal(MAX_DISCOVERY_RADIUS_METERS, 50_000);
+  assert.deepEqual(candidateDiscoveryRadii(), [50_000]);
 });
 
 test("customer discovery never silently expands beyond the requested radius", () => {
   assert.deepEqual(candidateDiscoveryRadii(5_000), [5_000]);
-  assert.deepEqual(candidateDiscoveryRadii(10_000), [10_000]);
+  assert.deepEqual(candidateDiscoveryRadii(50_000), [50_000]);
 });
 
 test("rejects discovery radii outside the customer browsing boundary", () => {
   assert.throws(() => candidateDiscoveryRadii(0));
-  assert.throws(() => candidateDiscoveryRadii(10_001));
-  assert.equal(formatDiscoveryRadius(10_000), "10 km");
+  assert.throws(() => candidateDiscoveryRadii(50_001));
+  assert.equal(formatDiscoveryRadius(50_000), "50 km");
 });

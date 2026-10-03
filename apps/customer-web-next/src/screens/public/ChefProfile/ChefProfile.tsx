@@ -96,7 +96,7 @@ function ChefProfilePage() {
       );
       if (!nearbyKitchen) {
         throw new Error(
-          "This home kitchen is outside the 10 km Craves browsing area for your selected address.",
+          "This home kitchen is outside the 50 km Craves browsing area for your selected address.",
         );
       }
 

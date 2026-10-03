@@ -101,7 +101,7 @@ test("production catalogue has no demo dish fallback", () => {
   assert.match(contents, /\/api\/discovery\/menu-items/);
 });
 
-test("customer discovery remains inside the 10 km browsing boundary", () => {
+test("customer discovery remains inside the 50 km browsing boundary", () => {
   const dishes = source("../services/api/dishes.ts");
   const kitchens = source("../services/api/kitchens.ts");
   const policy = source("./catalog-discovery-policy.ts");
@@ -110,14 +110,14 @@ test("customer discovery remains inside the 10 km browsing boundary", () => {
 
   assert.match(dishes, /MAX_DISCOVERY_RADIUS_METERS/);
   assert.match(kitchens, /MAX_DISCOVERY_RADIUS_METERS/);
-  assert.match(policy, /DEFAULT_DISCOVERY_RADIUS_METERS = 10_000/);
-  assert.match(policy, /MAX_DISCOVERY_RADIUS_METERS = 10_000/);
-  assert.doesNotMatch(policy, /15_000|50_000/);
-  assert.match(kitchenRoute, /radiusMeters > 100_000/);
-  assert.match(kitchenRoute, /integer\(params\.get\("radiusMeters"\), 5_000\)/);
+  assert.match(policy, /DEFAULT_DISCOVERY_RADIUS_METERS = 50_000/);
+  assert.match(policy, /MAX_DISCOVERY_RADIUS_METERS = 50_000/);
+  assert.doesNotMatch(policy, /10_000|15_000/);
+  assert.match(kitchenRoute, /radiusMeters > MAX_DISCOVERY_RADIUS_METERS/);
+  assert.match(kitchenRoute, /integer\(params\.get\("radiusMeters"\), DEFAULT_DISCOVERY_RADIUS_METERS\)/);
   assert.match(
     dishRoute,
-    /numeric\(request, "radiusMeters", 1, 100_000, 5_000\)/,
+    /numeric\(request, "radiusMeters", 1, MAX_DISCOVERY_RADIUS_METERS, DEFAULT_DISCOVERY_RADIUS_METERS\)/,
   );
 });
 

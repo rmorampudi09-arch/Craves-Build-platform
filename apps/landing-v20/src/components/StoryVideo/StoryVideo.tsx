@@ -4,26 +4,26 @@ const STORY_CARDS = [
   {
     src: '/images/story-grid/prep-1.png',
     alt: 'Home chef preparing fresh vegetables in a home kitchen',
-    title: 'Good food starts fresh',
-    text: 'Fresh ingredients, thoughtfully prepared for the flavours that feel like home.',
+    title: 'Prepare',
+    text: 'It starts with the ingredients.',
   },
   {
     src: '/images/story-grid/cook-fresh-pot.png',
     alt: 'Home chef adding fresh vegetables into a pot on the stove',
-    title: 'Homestyle, from the first stir',
-    text: 'Familiar recipes come together, one small batch at a time.',
+    title: 'Cook',
+    text: 'Familiar recipes take shape.',
   },
   {
     src: '/images/story-grid/cook-pot.png',
     alt: 'Home chef cooking food in a pot on a stove',
-    title: 'Care in every simmer',
-    text: 'Patiently cooked for the comforting flavours you look forward to.',
+    title: 'Finish',
+    text: 'The final touches bring a meal together',
   },
   {
     src: '/images/story-grid/pack-delivery.png',
     alt: 'Home chef packing meals into containers for delivery',
-    title: 'Packed for your table',
-    text: 'Carefully packed to bring a little homemade happiness to your day.',
+    title: 'Pack',
+    text: 'The last step before delivery.',
   },
 ];
 
@@ -34,7 +34,7 @@ const StoryVideo = () => {
         <div className="story-video__frame">
           <div className="story-video__intro">
             <h2 id="home-chef-story-title" className="story-video__heading">
-              Meet the <span className="story-video__heading-accent">Home Chefs</span>
+              The Care Behind The <span className="story-video__heading-accent">Coking.</span>
             </h2>
           </div>
 

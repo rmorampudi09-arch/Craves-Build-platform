@@ -1,50 +1,49 @@
-import { ChefHat, MapPinned, Utensils } from "lucide-react";
+import Image from "next/image";
+
+import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
 
 interface WelcomeBannerProps {
   firstName: string;
   dishCount: number;
   radiusLabel: string | null;
-  hasAddress: boolean;
+  defaultAddressLabel: string;
+  hasDefaultAddress: boolean;
+  onManageDefaultAddress: () => void;
 }
 
 export function WelcomeBanner({
   firstName,
   dishCount,
-  radiusLabel,
-  hasAddress,
 }: WelcomeBannerProps) {
+  const greetingName = firstName.trim() || "there";
+
   return (
-    <section className="mx-auto max-w-7xl px-4 pt-6 md:px-6" aria-labelledby="discovery-heading">
-      <div className="rounded-2xl bg-[#C92716] px-6 py-8 text-white shadow-[var(--shadow-card)] md:px-8">
-        <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
-          <div>
-            <p className="craves-overline text-white">Welcome back, {firstName}</p>
-            <h1 id="discovery-heading" className="mt-3 max-w-3xl font-display text-3xl font-bold leading-tight tracking-[-0.04em] text-white md:text-4xl">
-              {hasAddress
-                ? dishCount > 0
-                  ? "Fresh dishes available around your delivery address."
-                  : "We’re checking nearby home kitchens for you."
-                : "Add a mapped delivery address to discover nearby food."}
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/85 md:text-base">
-              Kitchen names, dishes, availability and prices below are loaded from the live Craves catalog. Final delivery availability is confirmed during checkout.
-            </p>
-          </div>
-          <dl className="grid grid-cols-2 gap-3 sm:min-w-[20rem]">
-            <div className="rounded-xl border border-white/30 bg-white/10 p-4">
-              <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-white/80">
-                <Utensils className="h-4 w-4 text-white" aria-hidden="true" /> Dishes
-              </dt>
-              <dd className="mt-2 font-display text-2xl font-bold text-white">{dishCount}</dd>
-            </div>
-            <div className="rounded-xl border border-white/30 bg-white/10 p-4">
-              <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-white/80">
-                {hasAddress ? <MapPinned className="h-4 w-4 text-white" aria-hidden="true" /> : <ChefHat className="h-4 w-4 text-white" aria-hidden="true" />}
-                Radius
-              </dt>
-              <dd className="mt-2 font-display text-lg font-bold text-white">{radiusLabel ?? "Address needed"}</dd>
-            </div>
-          </dl>
+    <section
+      className={
+        styles.fadeUp +
+        " mx-auto max-w-[88rem] px-4 pt-3 md:px-5 md:pt-3 lg:px-10 lg:pt-4"
+      }
+      aria-label={`Hello ${greetingName} home food banner`}
+      data-live-dish-count={dishCount}
+    >
+      <div className="relative overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-[#FFF8EF] shadow-[0_18px_54px_rgba(26,26,26,0.075)] sm:rounded-[1.65rem] md:rounded-[1.7rem] lg:rounded-[2rem]">
+        <Image
+          src="/home/cravings/craves-home-banner.webp"
+          alt={`Hello ${greetingName}. Eat for Health. Taste the Comfort of Home. A home chef cooks with her child nearby in a warm family kitchen.`}
+          width={1983}
+          height={793}
+          priority
+          unoptimized
+          sizes="(min-width: 1440px) 1344px, (min-width: 1024px) calc(100vw - 80px), (min-width: 768px) calc(100vw - 40px), calc(100vw - 32px)"
+          className="block h-auto w-full"
+        />
+        <div
+          className="absolute left-[4.95%] top-[13.8%] min-w-[17rem] bg-[#fdfcfb] pb-[0.35%] pr-[1.2%] pt-[0.2%] sm:min-w-[19rem] md:min-w-[21rem]"
+          aria-hidden="true"
+        >
+          <p className="truncate text-[0.52rem] font-black uppercase leading-none tracking-[0.32em] text-[#111111] sm:text-[0.68rem] md:text-[0.8rem] lg:text-[0.92rem] xl:text-[1.04rem]">
+            Hello {greetingName}
+          </p>
         </div>
       </div>
     </section>

@@ -14,6 +14,7 @@ import type {ChefApplication, ChefApplicationStatus} from '../domain/types';
 import {accountResolutionService} from '../state/accountResolutionService';
 import {authActions} from '../state/authSlice';
 import {completeLogout} from '../state/logoutCoordinator';
+import {ChefReadinessPanel} from '../../chefBusinessInformation/screens/ChefReadinessPanel';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ChefAccountStatus'>;
 
@@ -66,7 +67,7 @@ export function ChefAccountStatusScreen({navigation, route}: Props) {
     status === 'APPROVED'
       ? {
           title: 'Chef account approved',
-          body: 'Your backend approval and Chef role are verified. Chef business screens are delivered in later implementation phases.',
+          body: 'Your Chef application is approved. Your account will open Chef mode once access is refreshed.',
         }
       : status === 'REJECTED'
         ? {
@@ -80,7 +81,7 @@ export function ChefAccountStatusScreen({navigation, route}: Props) {
             }
           : {
               title: 'Chef application under review',
-              body: 'Your application has been submitted. Chef mode stays locked until the backend grants the CHEF role after approval.',
+              body: 'Your application has been submitted. Check the required documents below while Craves reviews your application.',
             };
 
   const rejectionReason =
@@ -134,6 +135,7 @@ export function ChefAccountStatusScreen({navigation, route}: Props) {
           onPress={logout}
         />
       </AuthCard>
+      <ChefReadinessPanel />
     </AuthShell>
   );
 }

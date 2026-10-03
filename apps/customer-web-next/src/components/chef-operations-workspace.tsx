@@ -19,6 +19,10 @@ import {
   parseChefApplication,
   type ChefApplication,
 } from "@/lib/chef-application-contract";
+import {
+  parseChefApplicationReadiness,
+  type ChefApplicationReadiness,
+} from "@/lib/chef-readiness-contract";
 import { parseChefKitchen } from "@/lib/chef-kitchen-contract";
 import type { ChefKitchen } from "@/lib/chef-kitchen-types";
 import {
@@ -45,6 +49,7 @@ function statusTone(ready: boolean): string {
 
 export function ChefOperationsWorkspace() {
   const [application, setApplication] = useState<ChefApplication | null>(null);
+  const [readiness, setReadiness] = useState<ChefApplicationReadiness | null>(null);
   const [kitchen, setKitchen] = useState<ChefKitchen | null>(null);
   const [menu, setMenu] = useState<ChefMenuItem[]>([]);
   const [state, setState] = useState<LoadState>("loading");
@@ -57,7 +62,7 @@ export function ChefOperationsWorkspace() {
     else setState("loading");
     setError("");
     try {
-      const [applicationResponse, kitchenResponse, menuResponse] =
+      const [applicationResponse, kitchenResponse, menuResponse, readinessResponse] =
         await Promise.all([
           fetch("/api/chef/application", {
             cache: "no-store",
@@ -71,12 +76,17 @@ export function ChefOperationsWorkspace() {
             cache: "no-store",
             credentials: "same-origin",
           }),
+          fetch("/api/chef/application/readiness", {
+            cache: "no-store",
+            credentials: "same-origin",
+          }),
         ]);
 
-      const [applicationRaw, kitchenRaw, menuRaw] = await Promise.all([
+      const [applicationRaw, kitchenRaw, menuRaw, readinessRaw] = await Promise.all([
         applicationResponse.json().catch(() => null),
         kitchenResponse.json().catch(() => null),
         menuResponse.json().catch(() => null),
+        readinessResponse.json().catch(() => null),
       ]);
 
       if (!applicationResponse.ok) {
@@ -97,10 +107,16 @@ export function ChefOperationsWorkspace() {
           responseMessage(menuRaw, "Menu operations could not be loaded."),
         );
       }
+      if (!readinessResponse.ok) {
+        throw new Error(
+          responseMessage(readinessRaw, "Application readiness could not be loaded."),
+        );
+      }
 
       const parsedApplication = parseChefApplication(applicationRaw);
       const parsedKitchen = kitchenRaw === null ? null : parseChefKitchen(kitchenRaw);
       const parsedMenu = parseChefMenuItems(menuRaw);
+      const parsedReadiness = parseChefApplicationReadiness(readinessRaw);
       if (!parsedApplication) {
         throw new Error("Craves returned an invalid chef application response.");
       }
@@ -110,8 +126,12 @@ export function ChefOperationsWorkspace() {
       if (!parsedMenu) {
         throw new Error("Craves returned an invalid chef menu response.");
       }
+      if (!parsedReadiness) {
+        throw new Error("Craves returned an invalid application readiness response.");
+      }
 
       setApplication(parsedApplication);
+      setReadiness(parsedReadiness);
       setKitchen(parsedKitchen);
       setMenu(parsedMenu);
       setState("ready");
@@ -144,12 +164,9 @@ export function ChefOperationsWorkspace() {
   }, [menu]);
 
   const applicationApproved = application?.status === "APPROVED";
-  const requiredDocumentTypes = new Set(
-    application?.documents.map((document) => document.documentType) ?? [],
-  );
   const hasSupportedProofs =
-    requiredDocumentTypes.has("AADHAAR_CARD") &&
-    requiredDocumentTypes.has("PAN_CARD");
+    readiness !== null &&
+    readiness.approvedDocumentCount === readiness.requiredDocumentCount;
   const kitchenActive = kitchen?.status === "ACTIVE";
   const locationMapped =
     typeof kitchen?.latitude === "number" &&
@@ -270,18 +287,18 @@ export function ChefOperationsWorkspace() {
               <FileCheck2 className="h-5 w-5" aria-hidden="true" />
             </span>
             <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusTone(hasSupportedProofs)}`}>
-              {application?.documents.length ?? 0} uploaded
+              {readiness?.approvedDocumentCount ?? 0}/{readiness?.requiredDocumentCount ?? 4} approved
             </span>
           </div>
           <h3 className="mt-4 font-display text-lg font-bold text-ink">
             Supported proof evidence
           </h3>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Current backend evidence types are Aadhaar card and PAN card. Their document statuses are controlled by the chef-application service.
+            Approval readiness uses the four current evidence types reported by the backend: applicant photo, government ID front, government ID back and PAN / tax ID card.
           </p>
           <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
-            {(application?.documents ?? []).map((document) => (
-              <li key={document.id} className="flex items-center justify-between gap-3 rounded-lg bg-cream px-3 py-2">
+            {(readiness?.documents ?? []).map((document) => (
+              <li key={document.documentType} className="flex items-center justify-between gap-3 rounded-lg bg-cream px-3 py-2">
                 <span>{document.documentType.replaceAll("_", " ")}</span>
                 <strong className="text-ink">{document.status}</strong>
               </li>

@@ -1,33 +1,41 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
   Heart,
-  RefreshCw,
   ShoppingCart,
   Trash2,
 } from "lucide-react";
-import { loadSession } from "@/services/auth/cravesAuth";
-import { addToCart } from "@/services/api/cravesCart";
+
+import { addToCart, loadCart } from "@/services/api/cravesCart";
 import {
   loadCustomerFavoriteIds,
   removeCustomerFavorite,
 } from "@/services/api/customerFavorites";
 import { loadDish, type Dish } from "@/services/api/dishes";
+import { loadSession } from "@/services/auth/cravesAuth";
+import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
+import { CustomerFloatingCart } from "@/components/cart/CustomerFloatingCart";
+import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
 
-// Route metadata (head tags, etc.) consumed by src/routes/wishlist.tsx
 export const routeMeta = {
   head: () => ({
-    meta: [{ title: "My Wishlist – Craves" }, { name: "robots", content: "noindex" }],
+    meta: [
+      { title: "Saved Dishes – Craves" },
+      { name: "robots", content: "noindex" },
+    ],
   }),
 };
 
-/**
- * Server-backed saved dishes screen. This intentionally uses the same
- * customer favorites API as the dish-card heart so launch users see one
- * consistent saved state across reloads and devices.
- */
+function money(amount: number, currency = "INR"): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
 function WishlistPage() {
   const navigate = useNavigate();
   const [ready, setReady] = useState(false);
@@ -53,7 +61,11 @@ function WishlistPage() {
       setItems(dishes.filter((dish): dish is Dish => Boolean(dish)));
     } catch (error) {
       setItems([]);
-      setMessage(error instanceof Error ? error.message : "Saved dishes are temporarily unavailable.");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Saved dishes are temporarily unavailable.",
+      );
     } finally {
       setLoading(false);
     }
@@ -69,6 +81,7 @@ function WishlistPage() {
       }
       setReady(true);
       void loadFavorites();
+      void loadCart().catch(() => undefined);
     });
     return () => {
       active = false;
@@ -83,7 +96,11 @@ function WishlistPage() {
       await removeCustomerFavorite(dish.id);
       setItems((current) => current.filter((item) => item.id !== dish.id));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "This dish could not be removed from saved dishes.");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "This dish could not be removed from saved dishes.",
+      );
     } finally {
       setBusyId(null);
     }
@@ -101,151 +118,155 @@ function WishlistPage() {
           chef: dish.chef,
           price: dish.price,
           img: dish.img,
+          kitchenId: dish.kitchenId,
         },
         1,
       );
       setMessage(`${dish.name} was added to your cart.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "This dish could not be added to the cart.");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "This dish could not be added to the cart.",
+      );
     } finally {
       setBusyId(null);
     }
   }, [busyId]);
 
-  const itemCountLabel = useMemo(() => {
-    if (items.length === 1) return "1 saved dish";
-    return `${items.length} saved dishes`;
-  }, [items.length]);
-
-  if (!ready) return null;
+  if (!ready || loading) return <CustomerPageSkeleton label="Loading saved dishes" />;
 
   return (
-    <div className="min-h-screen bg-white pb-24 text-ink">
-      <header className="sticky top-0 z-30 border-b border-border bg-white/95 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4">
-          <Link to="/home" className="rounded-full p-2 hover:bg-black/5" aria-label="Back">
-            <ArrowLeft className="h-5 w-5 text-ink" />
+    <div className="min-h-screen bg-white pb-20 text-[#1A1A1A]">
+      <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4 md:px-6">
+          <Link
+            to="/home"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A] transition-all duration-200 hover:-translate-y-px hover:text-[#F62E18] hover:shadow-[0_6px_16px_rgba(26,26,26,0.08)]"
+            aria-label="Back to home"
+          >
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </Link>
-          <div>
-            <p className="craves-overline text-primary">Favorites</p>
-            <h1 className="font-display text-xl font-bold text-ink">Saved dishes</h1>
-          </div>
+          <h1 className="font-display text-xl font-black tracking-[-0.03em]">
+            Saved dishes
+          </h1>
         </div>
-      </header>
+      </AutoHideCustomerHeader>
 
-      {loading ? (
-        <main className="mx-auto max-w-3xl px-4 pt-10">
-          <p className="text-sm font-semibold text-muted-foreground" role="status">
-            Loading your saved dishes…
-          </p>
-          <div className="mt-5 space-y-3" aria-hidden="true">
+      <main className="mx-auto max-w-3xl px-4 py-6 md:px-6">
+        {loading ? (
+          <div className="space-y-3" aria-busy="true">
             {Array.from({ length: 3 }, (_, index) => (
-              <div key={index} className="h-28 animate-pulse rounded-2xl border border-border bg-grey-100" />
+              <div
+                key={index}
+                className="h-[104px] animate-pulse rounded-2xl border border-[#E5E7EB] bg-[#F1F3F5]"
+              />
             ))}
+            <span className="sr-only" role="status">Loading saved dishes</span>
           </div>
-        </main>
-      ) : message && items.length === 0 ? (
-        <main className="mx-auto max-w-3xl px-4 pt-10 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-error/10 text-error">
-            <AlertTriangle className="h-8 w-8" aria-hidden="true" />
-          </div>
-          <h2 className="mt-4 font-display text-xl font-bold text-ink">Saved dishes could not be loaded</h2>
-          <p className="mt-2 text-sm text-muted-foreground">{message}</p>
-          <button type="button" onClick={() => void loadFavorites()} className="btn-primary mt-6 inline-flex rounded-lg px-6 py-2.5 text-sm">
-            <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            Try again
-          </button>
-        </main>
-      ) : items.length === 0 ? (
-        <main className="mx-auto max-w-3xl px-4 pt-10 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <Heart className="h-8 w-8" aria-hidden="true" />
-          </div>
-          <h2 className="mt-4 font-display text-xl font-bold text-ink">No saved dishes yet</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Tap the heart on any live dish to keep it here for quick reordering.
-          </p>
-          <Link to="/home" className="btn-primary mt-6 inline-flex rounded-lg px-6 py-2.5 text-sm">
-            Browse dishes
-          </Link>
-        </main>
-      ) : (
-        <main className="mx-auto max-w-3xl px-4 py-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-muted-foreground" aria-live="polite">
-              {itemCountLabel}
-            </p>
+        ) : message && items.length === 0 ? (
+          <div className="rounded-2xl border border-[#E5E7EB] bg-white px-6 py-10 text-center shadow-sm">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+              <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <h2 className="mt-4 font-display text-lg font-black">Saved dishes could not be loaded</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">{message}</p>
             <button
               type="button"
               onClick={() => void loadFavorites()}
-              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-primary px-3 text-sm font-semibold text-contrast-red hover:bg-secondary"
+              className="mt-5 min-h-10 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white"
             >
-              <RefreshCw className="h-4 w-4" aria-hidden="true" />
-              Refresh
+              Try again
             </button>
           </div>
-          {message && (
-            <p className="mb-4 rounded-xl border border-border bg-secondary px-4 py-3 text-sm font-medium text-ink" role="status">
-              {message}
+        ) : items.length === 0 ? (
+          <div className="px-4 py-12 text-center">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+              <Heart className="h-6 w-6" aria-hidden="true" />
+            </span>
+            <h2 className="mt-4 font-display text-xl font-black">No saved dishes yet</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">
+              Tap the heart on a dish to keep it here for quick access.
             </p>
-          )}
-          <ul className="space-y-3">
-            {items.map((item) => {
-              return (
+            <Link
+              to="/home"
+              className="mt-5 inline-flex min-h-10 items-center rounded-full bg-[#F62E18] px-5 text-sm font-black text-white"
+            >
+              Browse dishes
+            </Link>
+          </div>
+        ) : (
+          <>
+            <p className="mb-3 text-sm font-semibold text-[#6B6B6B]" aria-live="polite">
+              {items.length} saved {items.length === 1 ? "dish" : "dishes"}
+            </p>
+
+            {message ? (
+              <p className="mb-3 rounded-xl bg-[#F1F3F5] px-4 py-2.5 text-sm font-semibold" role="status">
+                {message}
+              </p>
+            ) : null}
+
+            <ul className="space-y-3">
+              {items.map((item, index) => (
                 <li
                   key={item.id}
-                  className="flex items-center gap-3 rounded-2xl border border-border bg-white p-3 shadow-[var(--shadow-card)]"
+                  className="group flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-3 shadow-[0_4px_16px_rgba(26,26,26,0.04)] transition-[border-color,box-shadow] duration-200 hover:border-[#F62E18]/25 hover:shadow-[0_9px_24px_rgba(26,26,26,0.08)]"
                 >
-                  <Link to="/dish/$id" params={{ id: item.id }} className="shrink-0">
+                  <Link
+                    to="/dish/$id"
+                    params={{ id: item.id }}
+                    className="shrink-0 overflow-hidden rounded-xl bg-[#F1F3F5]"
+                  >
                     <img
                       src={item.img}
                       alt={item.name}
-                      width={72}
-                      height={72}
-                      className="h-[72px] w-[72px] rounded-xl object-cover"
+                      width={82}
+                      height={82}
+                      loading={index < 4 ? "eager" : "lazy"}
+                      decoding="async"
+                      fetchPriority={index < 4 ? "high" : "auto"}
+                      className="h-[82px] w-[82px] object-cover transition-transform duration-300 group-hover:scale-[1.035]"
                     />
                   </Link>
+
                   <div className="min-w-0 flex-1">
                     <Link to="/dish/$id" params={{ id: item.id }}>
-                      <h3 className="truncate font-display text-base font-bold text-ink">
+                      <h2 className="truncate font-display text-base font-black transition-colors hover:text-[#F62E18]">
                         {item.name}
-                      </h3>
+                      </h2>
                     </Link>
-                    <p className="text-xs text-muted-foreground">by {item.chef}</p>
-                    <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{item.desc}</p>
-                    <span className="mt-1 block font-display text-sm font-bold text-ink">
-                      {new Intl.NumberFormat("en-IN", {
-                        style: "currency",
-                        currency: item.currency ?? "INR",
-                        maximumFractionDigits: 2,
-                      }).format(item.price)}
-                    </span>
+                    <p className="mt-0.5 truncate text-xs font-semibold text-[#6B6B6B]">by {item.chef}</p>
+                    <p className="mt-2 font-display text-sm font-black">{money(item.price, item.currency)}</p>
                   </div>
+
                   <div className="flex shrink-0 flex-col items-end gap-2">
                     <button
                       type="button"
                       onClick={() => void removeSavedDish(item)}
                       disabled={busyId === item.id}
-                      className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-error disabled:cursor-wait disabled:opacity-60"
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-transparent text-[#6B6B6B] transition-colors hover:text-[#F62E18] disabled:cursor-wait disabled:opacity-50"
                       aria-label={`Remove ${item.name} from saved dishes`}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </button>
                     <button
                       type="button"
                       onClick={() => void addSavedDishToCart(item)}
                       disabled={busyId === item.id}
-                      className="flex min-h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-bold text-white disabled:cursor-wait disabled:opacity-60"
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#F1F3F5] px-3 text-xs font-black text-[#1A1A1A] transition-colors hover:text-[#F62E18] disabled:cursor-wait disabled:opacity-50"
                     >
-                      <ShoppingCart className="h-3.5 w-3.5" /> Add
+                      <ShoppingCart className="h-3.5 w-3.5" aria-hidden="true" />
+                      Add
                     </button>
                   </div>
                 </li>
-              );
-            })}
-          </ul>
-        </main>
-      )}
+              ))}
+            </ul>
+          </>
+        )}
+      </main>
+      <CustomerFloatingCart />
     </div>
   );
 }

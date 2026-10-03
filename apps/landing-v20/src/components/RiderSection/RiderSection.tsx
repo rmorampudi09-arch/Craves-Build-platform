@@ -6,16 +6,15 @@ const RiderSection = () => {
       <div className="container rider__container">
         <div className="rider__shell">
           <div className="rider__content">
-            <span className="rider__eyebrow">Reliable delivery</span>
+            <span className="rider__eyebrow">DELIVERY, WITH CARE</span>
             <h2 id="rider-section-title" className="rider__headline">
-              From kitchen to doorstep, handled with care.
+              <span className="rider__headline-text">From kitchen </span>{' '}
+                <span className="rider__headline-text"> to doorstep,</span>{' '}
+               <span className="rider__headline-text"> handled with care.</span>{' '}
             </h2>
-            <p className="rider__lead">
-              Fresh meals, careful handling, and reliable delivery - bringing every homemade meal safely to your door.
-            </p>
+
             <p className="rider__text">
-              Every order is picked up thoughtfully, transported responsibly, and delivered with the same attention that went
-              into cooking it - so the food reaches your home warm, neat and ready to enjoy.
+              Homemade meals, carefully packed and brought to your door - with the care that started in the kitchen.
             </p>
           </div>
 
@@ -32,9 +31,10 @@ const RiderSection = () => {
 
         <blockquote className="rider__caption">
           <p>
-            <span className="rider__quote-mark" aria-hidden="true">“</span>
-            Different kitchens. Different recipes. One feeling - home.{''}
-            <span className="rider__quote-mark" aria-hidden="true">”</span>
+            <span className="rider__quote-mark" aria-hidden="true"></span>
+            Different kitchens. Different recipes.{' '}
+            <em>One feeling — home.</em>
+            <span className="rider__quote-mark" aria-hidden="true"></span>
           </p>
         </blockquote>
       </div>

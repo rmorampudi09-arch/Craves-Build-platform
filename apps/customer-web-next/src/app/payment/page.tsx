@@ -1,5 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import PaymentPage from "@/screens/Checkout/Checkout";
-
-export default PaymentPage;
+export default function LegacyPaymentPage() {
+  redirect("/checkout");
+}

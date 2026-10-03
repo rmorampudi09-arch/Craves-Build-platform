@@ -94,4 +94,66 @@ class CatalogSellingDatabaseTest {
         assertThrows(ApiException.class,()->catalog.updateAvailability(principal,hiddenDish,new AvailabilityRequest(true,"Fixture reopen")));
         assertEquals("DRAFT",jdbc.queryForObject("SELECT status FROM catalog_schema.kitchen_profile WHERE id=?",String.class,hidden));
     }
+    @Test void newChefKitchenSetupUnlocksPersistentMenuWithoutChangingExistingChefs() {
+        UUID newcomerId=UUID.randomUUID();
+        var newcomer=new CravesPrincipal(newcomerId,"",Set.of("CHEF"));
+        var established=new CravesPrincipal(allowed,"",Set.of("CHEF"));
+        var oldKitchen=catalog.getMyKitchen(established);
+        var oldMenu=catalog.listMyMenuItems(established);
+        var first=new MenuItemRequest("New Chef fixture meal","Fresh fixture meal","Lunch",FoodType.VEG,new BigDecimal("180.00"),
+            "INR",1,30,SpiceLevel.MILD,500,false,true,MenuItemStatus.DRAFT);
+
+        ApiException missingKitchen=assertThrows(ApiException.class,()->catalog.getMyKitchen(newcomer));
+        assertEquals(404,missingKitchen.getStatus());
+        assertEquals("KITCHEN_PROFILE_NOT_FOUND",missingKitchen.getCode());
+        ApiException missingMenu=assertThrows(ApiException.class,()->catalog.listMyMenuItems(newcomer));
+        assertEquals(400,missingMenu.getStatus());
+        assertEquals("KITCHEN_PROFILE_REQUIRED",missingMenu.getCode());
+        assertEquals("KITCHEN_PROFILE_REQUIRED",assertThrows(ApiException.class,()->catalog.createMenuItem(newcomer,first)).getCode());
+
+        var setup=new KitchenProfileRequest("New Chef fixture",null,null,null,null,"Fixture kitchen address",null,null,null,
+            "Hyderabad","Telangana",null,latitude,longitude,null);
+        var createdKitchen=catalog.upsertMyKitchen(newcomer,setup);
+        assertEquals(newcomerId,createdKitchen.identityId());
+        assertEquals(KitchenStatus.DRAFT,createdKitchen.status());
+        assertNotEquals(oldKitchen.id(),createdKitchen.id());
+
+        // Construct fresh service/read connections to verify committed state, as a page reload would.
+        var reloaded=new CatalogService(new JdbcTemplate(jdbc.getDataSource()),mock(MediaStorageService.class),new CatalogDiscoveryProperties(),finance);
+        assertEquals(createdKitchen,reloaded.getMyKitchen(newcomer));
+        assertTrue(reloaded.listMyMenuItems(newcomer).isEmpty());
+        assertEquals(createdKitchen.id(),reloaded.upsertMyKitchen(newcomer,setup).id());
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM catalog_schema.kitchen_profile WHERE identity_id=?",Integer.class,newcomerId));
+
+        var added=reloaded.createMenuItem(newcomer,first);
+        assertEquals(createdKitchen.id(),added.kitchenId());
+        assertEquals(List.of(added.id()),catalog.listMyMenuItems(newcomer).stream().map(MenuItemResponse::id).toList());
+
+        var edited=new MenuItemRequest("Updated fixture meal",first.description(),first.category(),FoodType.EGG,new BigDecimal("195.00"),
+            "INR",2,40,SpiceLevel.MEDIUM,600,true,true,MenuItemStatus.DRAFT);
+        reloaded.updateMenuItem(newcomer,added.id(),edited);
+        var persisted=catalog.listMyMenuItems(newcomer).getFirst();
+        assertEquals(added.id(),persisted.id());
+        assertEquals(edited.itemName(),persisted.itemName());
+        assertEquals(edited.price(),persisted.price());
+        assertEquals(FoodType.EGG,persisted.foodType());
+        assertEquals(2,persisted.servesCount());
+        assertEquals(40,persisted.preparationTimeMinutes());
+        assertEquals(SpiceLevel.MEDIUM,persisted.spiceLevel());
+        assertEquals(600,persisted.unitPackageWeightGrams());
+        assertTrue(persisted.thermoboxRequired());
+        assertFalse(reloaded.updateAvailability(newcomer,added.id(),new AvailabilityRequest(false,"Fixture sold out")).available());
+        assertFalse(catalog.listMyMenuItems(newcomer).getFirst().available());
+        when(finance.current()).thenReturn(snapshot(List.of(allowed,newcomerId)));
+        assertTrue(catalog.updateAvailability(newcomer,added.id(),new AvailabilityRequest(true,"Fixture reopened")).available());
+        assertTrue(reloaded.listMyMenuItems(newcomer).getFirst().available());
+        assertEquals(2,jdbc.queryForObject("SELECT count(*) FROM catalog_schema.menu_item_availability_audit WHERE menu_item_id=?",Integer.class,added.id()));
+
+        assertEquals("MENU_ITEM_NOT_FOUND",assertThrows(ApiException.class,()->catalog.updateMenuItem(established,added.id(),edited)).getCode());
+        assertEquals("MENU_ITEM_NOT_FOUND",assertThrows(ApiException.class,()->catalog.updateAvailability(established,added.id(),new AvailabilityRequest(false,"Other owner"))).getCode());
+        assertEquals("CHEF_ROLE_REQUIRED",assertThrows(ApiException.class,()->catalog.listMyMenuItems(new CravesPrincipal(newcomerId,"",Set.of("CUSTOMER")))).getCode());
+        assertEquals(oldKitchen,catalog.getMyKitchen(established));
+        assertEquals(oldMenu,catalog.listMyMenuItems(established));
+        assertEquals(1,reloaded.listMyMenuItems(newcomer).size());
+    }
 }

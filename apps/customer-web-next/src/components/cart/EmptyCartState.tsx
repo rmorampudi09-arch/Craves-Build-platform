@@ -2,8 +2,8 @@ import { ArrowRight, ShoppingBag } from "lucide-react";
 
 export function EmptyCartState({ onBrowseMenu }: { onBrowseMenu: () => void }) {
   return (
-    <div className="rounded-2xl border border-dashed border-border bg-white p-8 text-center shadow-[var(--shadow-card)] md:p-12">
-      <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary text-primary">
+    <div className="rounded-[8px] border border-dashed border-border bg-white p-8 text-center shadow-[var(--shadow-card)] md:p-12">
+      <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-[8px] bg-secondary text-primary">
         <ShoppingBag className="h-8 w-8" aria-hidden="true" />
       </span>
       <h1 className="mt-5 font-display text-2xl font-bold tracking-[-0.035em] text-ink">

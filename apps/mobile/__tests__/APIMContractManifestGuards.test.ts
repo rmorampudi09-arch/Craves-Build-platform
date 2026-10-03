@@ -48,7 +48,7 @@ describe('mobile APIM contract manifest guards', () => {
       expect(manifest.phase).toBe('P119');
       expect(manifest.actions.length).toBeGreaterThan(0);
     }
-    expect(actions).toHaveLength(91);
+    expect(actions).toHaveLength(92);
   });
 
   it('rejects synthetic, partial, or unresolved route placeholders', () => {

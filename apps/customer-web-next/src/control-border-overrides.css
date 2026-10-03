@@ -24,10 +24,24 @@ body :is(
     a[class*="border-[#6930CA]"],
     a[class*="border-[#F6B545]"]
   ) {
-  border-color: transparent !important;
+  border-color: var(--color-grey-200) !important;
 }
 
 body .chef-panel-theme :is(button, a, [role="button"], [role="tab"]) {
+  border-color: var(--color-grey-200) !important;
+}
+
+button[data-craves-borderless="true"] {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body :is(
+    .btn-primary,
+    button[class*="bg-[#F62E18]"],
+    button[class*="bg-[#C92716]"]
+  ) {
   border-color: transparent !important;
 }
 
@@ -49,7 +63,7 @@ body .chef-panel-theme :is(button, a, [role="button"], [role="tab"]) {
 
 body .chef-panel-theme
   :is(button, a, [role="button"], [role="tab"]):focus-visible {
-  border-color: transparent !important;
+  border-color: var(--color-grey-400) !important;
   outline: 2px solid var(--color-grey-400) !important;
   outline-offset: 2px !important;
   --tw-ring-color: transparent !important;
@@ -67,4 +81,19 @@ input.craves-otp-field:focus-visible {
 
 .craves-otp-slot[data-active="true"] {
   border-color: var(--color-grey-400) !important;
+}
+
+/* Customer order filters keep a neutral tactile hover. */
+nav[aria-label="Filter orders"] button:hover,
+nav[aria-label="Filter orders"] button:focus-visible {
+  background: var(--color-grey-50) !important;
+  border-color: var(--color-grey-200) !important;
+  color: var(--color-black) !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07) !important;
+  transform: translateY(-1px) !important;
+}
+
+nav[aria-label="Filter orders"] button[aria-pressed="false"]:hover::after,
+nav[aria-label="Filter orders"] button[aria-pressed="false"]:focus-visible::after {
+  transform: scaleX(0) !important;
 }

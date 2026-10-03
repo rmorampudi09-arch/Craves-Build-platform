@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DeliveryStatusResponse } from '@/lib/delivery-status';
 import { presentationFor, shouldAutoRefresh } from '@/lib/delivery-status';
@@ -94,7 +95,7 @@ export function DeliveryTracking({ orderId }: DeliveryTrackingProps) {
         <h1 className="mt-2 text-2xl font-bold text-slate-950">We could not load this delivery.</h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">{state.message}</p>
         {state.status === 401 ? (
-          <a className="mt-6 inline-flex rounded-full bg-[#6930CA] px-5 py-3 text-sm font-semibold text-white" href="/sign-in">Sign in again</a>
+          <Link className="mt-6 inline-flex rounded-full bg-[#6930CA] px-5 py-3 text-sm font-semibold text-white" href="/sign-in">Sign in again</Link>
         ) : (
           <button className="mt-6 rounded-full bg-[#6930CA] px-5 py-3 text-sm font-semibold text-white" type="button" onClick={() => void load(false)}>Try again</button>
         )}

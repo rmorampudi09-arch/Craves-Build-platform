@@ -3,6 +3,7 @@ export type PublicMenuItemDetail = {
   kitchenId: string;
   kitchenName: string;
   kitchenDisplayName: string | null;
+  kitchenDescription: string | null;
   areaName: string | null;
   city: string | null;
   state: string | null;
@@ -16,6 +17,7 @@ export type PublicMenuItemDetail = {
   preparationTimeMinutes: number | null;
   spiceLevel: "MILD" | "MEDIUM" | "SPICY" | null;
   primaryImageUrl: string | null;
+  imageUrls: string[];
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -62,9 +64,10 @@ function httpsUrl(value: unknown): string | null {
   }
 }
 
-function primaryImage(images: unknown): string | null {
-  if (!Array.isArray(images) || images.length > 30) return null;
-  const parsed = images
+function menuImages(images: unknown): string[] {
+  if (!Array.isArray(images) || images.length > 30) return [];
+
+  const sorted = images
     .map((value) => object(value))
     .filter((value): value is Record<string, unknown> => value !== null)
     .map((value) => ({
@@ -72,9 +75,18 @@ function primaryImage(images: unknown): string | null {
       primary: value.primary === true,
       sortOrder: integer(value.sortOrder, 0, 10_000) ?? 10_000,
     }))
-    .filter((value) => value.url !== null)
-    .sort((left, right) => Number(right.primary) - Number(left.primary) || left.sortOrder - right.sortOrder);
-  return parsed[0]?.url ?? null;
+    .filter((value): value is { url: string; primary: boolean; sortOrder: number } =>
+      value.url !== null,
+    )
+    .sort(
+      (left, right) =>
+        Number(right.primary) - Number(left.primary) ||
+        left.sortOrder - right.sortOrder,
+    );
+
+  return sorted
+    .map((value) => value.url)
+    .filter((url, index, values) => values.indexOf(url) === index);
 }
 
 /**
@@ -118,11 +130,14 @@ export function parsePublicMenuItemDetail(
     return null;
   }
 
+  const imageUrls = menuImages(item.images);
+
   return {
     id,
     kitchenId,
     kitchenName,
     kitchenDisplayName: text(kitchen.displayName, 180),
+    kitchenDescription: text(kitchen.description, 1_000),
     areaName: text(kitchen.areaName, 120),
     city: text(kitchen.city, 120),
     state: text(kitchen.state, 120),
@@ -138,7 +153,8 @@ export function parsePublicMenuItemDetail(
       spice && SPICE_LEVELS.has(spice)
         ? (spice as PublicMenuItemDetail["spiceLevel"])
         : null,
-    primaryImageUrl: primaryImage(item.images),
+    primaryImageUrl: imageUrls[0] ?? null,
+    imageUrls,
   };
 }
 

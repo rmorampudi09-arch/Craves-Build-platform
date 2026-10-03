@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseKitchenDiscovery } from "@/lib/discovery-contract";
 import { publicApiFetch } from "@/lib/public-api";
+import { DEFAULT_DISCOVERY_RADIUS_METERS, MAX_DISCOVERY_RADIUS_METERS } from "@/lib/catalog-discovery-policy";
 
 const QUERY_KEYS = new Set(["latitude", "longitude", "radiusMeters", "page", "size"]);
 const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
@@ -25,14 +26,14 @@ export async function GET(request: NextRequest) {
   }
   const latitude = coordinate(params.get("latitude"));
   const longitude = coordinate(params.get("longitude"));
-  const radiusMeters = integer(params.get("radiusMeters"), 5_000);
+  const radiusMeters = integer(params.get("radiusMeters"), DEFAULT_DISCOVERY_RADIUS_METERS);
   const page = integer(params.get("page"), 0);
   const size = integer(params.get("size"), 20);
   if (
     invalidQuery
     || !Number.isFinite(latitude) || latitude < -90 || latitude > 90
     || !Number.isFinite(longitude) || longitude < -180 || longitude > 180
-    || !Number.isSafeInteger(radiusMeters) || radiusMeters < 1 || radiusMeters > 100_000
+    || !Number.isSafeInteger(radiusMeters) || radiusMeters < 1 || radiusMeters > MAX_DISCOVERY_RADIUS_METERS
     || !Number.isSafeInteger(page) || page < 0 || page > 1_000
     || !Number.isSafeInteger(size) || size < 1 || size > 50
   ) {

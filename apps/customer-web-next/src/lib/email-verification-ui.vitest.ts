@@ -16,6 +16,11 @@ vi.mock("firebase/auth", () => ({
   signInWithPhoneNumber: phoneSignIn,
 }));
 vi.mock("./firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
+// Registration and email assertions exercise the Firebase fallback independently of MSG91.
+vi.mock("@/lib/msg91-browser", () => ({
+  beginMsg91PhoneSignIn: vi.fn(async () => null),
+  parkMsg91Captcha: vi.fn(),
+}));
 
 const id = "11111111-1111-4111-8111-111111111111";
 const challenge = "22222222-2222-4222-8222-222222222222";
@@ -144,15 +149,24 @@ describe("registration and verify-later email UI", () => {
       return Response.json(current);
     });
     render(createElement(ChefApplicationWorkspace));
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    vi.stubGlobal("scrollTo", vi.fn());
+    fireEvent.click(await screen.findByRole("button", { name: "Become a Chef" }));
+    await screen.findByRole("heading", { name: "What’s your name?" });
+    fireEvent.click(button("Continue"));
     await waitFor(() => expect(button("Refresh verification status").disabled).toBe(false));
-    expect(button("Submit application").disabled).toBe(true);
-    fireEvent.submit(document.querySelector("form")!);
-    await screen.findByText("Verify your email before submitting your chef application.");
+    expect(button("Continue").disabled).toBe(true);
     expect(fetcher.mock.calls.some(([url, init]) => url === "/api/chef/application" && init?.method === "POST")).toBe(false);
+
     current = verified;
     fireEvent.click(button("Refresh verification status"));
-    await waitFor(() => expect(button("Submit application").disabled).toBe(false));
-    fireEvent.submit(document.querySelector("form")!);
+    await waitFor(() => expect(button("Continue").disabled).toBe(false));
+    for (const heading of ["Tell customers about your kitchen", "Where is your kitchen located?", "Show your kitchen", "Food Safety Details"]) {
+      fireEvent.click(button("Continue"));
+      await screen.findByRole("heading", { name: heading });
+    }
+    expect(button("Save details and continue").disabled).toBe(false);
+    fireEvent.submit(button("Save details and continue").closest("form")!);
     await waitFor(() => expect(fetcher.mock.calls.some(([url, init]) => url === "/api/chef/application" && init?.method === "POST")).toBe(true));
     const submitted = fetcher.mock.calls.find(([url, init]) => url === "/api/chef/application" && init?.method === "POST");
     expect(JSON.parse(String(submitted?.[1]?.body)).email).toBe(verified.email);

@@ -1,0 +1,106 @@
+.cartEnter {
+  animation: cartRise 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes cartRise {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.988);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.floatingCartButton,
+.floatingCartButton:focus,
+.floatingCartButton:focus-visible,
+.floatingCartButton:active {
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  background: rgba(255, 255, 255, 0.4) !important;
+  color: #1a1a1a !important;
+  -webkit-backdrop-filter: blur(8px) saturate(145%);
+  backdrop-filter: blur(8px) saturate(145%);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+.floatingCartButton:hover {
+  border-color: rgba(46, 125, 50, 0.35) !important;
+  background: rgba(255, 255, 255, 0.46) !important;
+  transform: translateY(-2px) !important;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    0 11px 30px rgba(46, 125, 50, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+.floatingCartGlass {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  background: transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.floatingCartGlass::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+}
+
+.floatingCartGlass::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), transparent, rgba(255, 255, 255, 0.3));
+}
+
+.floatingCartShine {
+  pointer-events: none;
+  position: absolute;
+  inset: 1px 4% auto;
+  z-index: 1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.94),
+    transparent
+  );
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .floatingCartButton,
+  .floatingCartButton:focus,
+  .floatingCartButton:focus-visible,
+  .floatingCartButton:active {
+    background: rgba(255, 255, 255, 0.9) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cartEnter {
+    animation: none;
+  }
+
+  .floatingCartButton:hover {
+    transform: none !important;
+  }
+}

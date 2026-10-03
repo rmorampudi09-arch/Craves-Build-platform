@@ -3,7 +3,6 @@ package in.craves.userchef.service;
 import in.craves.userchef.exception.ApiException;
 import in.craves.userchef.security.CurrentUser;
 import in.craves.userchef.web.ApiDtos.ActiveLocationType;
-import in.craves.userchef.web.ApiDtos.AddressLabel;
 import in.craves.userchef.web.ApiDtos.CustomerAddressRequest;
 import in.craves.userchef.web.ApiDtos.CustomerAddressResponse;
 import in.craves.userchef.web.ApiDtos.CustomerLocationRecommendationResponse;
@@ -171,7 +170,7 @@ public class CustomerProfileService {
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, now(), now())",
             id,
             user.identityId(),
-            labelOrDefault(request.addressLabel()).name(),
+            request.addressLabel(),
             request.recipientName().trim(),
             request.contactPhoneNumber().trim(),
             request.addressLine1().trim(),
@@ -202,7 +201,7 @@ public class CustomerProfileService {
                 "address_line1 = ?, address_line2 = ?, landmark = ?, area_name = ?, district_name = ?, city = ?, state = ?, " +
                 "postal_code = ?, latitude = ?, longitude = ?, is_default = ?, updated_at = now() " +
                 "WHERE id = ? AND identity_id = ? AND is_active = true",
-            labelOrDefault(request.addressLabel()).name(),
+            request.addressLabel(),
             request.recipientName().trim(),
             request.contactPhoneNumber().trim(),
             request.addressLine1().trim(),
@@ -317,7 +316,7 @@ public class CustomerProfileService {
         return new CustomerAddressResponse(
             rs.getObject("id", UUID.class),
             rs.getObject("identity_id", UUID.class),
-            AddressLabel.valueOf(rs.getString("address_label")),
+            rs.getString("address_label"),
             rs.getString("recipient_name"),
             rs.getString("contact_phone_number"),
             rs.getString("address_line1"),
@@ -340,6 +339,9 @@ public class CustomerProfileService {
     private static void validateAddress(CustomerAddressRequest request) {
         if (request == null) {
             throw ApiException.badRequest("CUSTOMER_ADDRESS_REQUIRED", "Customer address is required");
+        }
+        if (!StringUtils.hasText(request.addressLabel()) || request.addressLabel().length() > 80) {
+            throw ApiException.badRequest("ADDRESS_LABEL_INVALID", "Address label must contain 1 to 80 characters");
         }
         if (!StringUtils.hasText(request.recipientName())) {
             throw ApiException.badRequest("RECIPIENT_NAME_REQUIRED", "Recipient name is required");
@@ -366,10 +368,6 @@ public class CustomerProfileService {
         if (longitude.compareTo(MIN_LONGITUDE) < 0 || longitude.compareTo(MAX_LONGITUDE) > 0) {
             throw ApiException.badRequest("INVALID_LONGITUDE", "Longitude must be between -180 and 180");
         }
-    }
-
-    private static AddressLabel labelOrDefault(AddressLabel label) {
-        return label == null ? AddressLabel.HOME : label;
     }
 
     private static Instant instant(ResultSet rs, String column) throws SQLException {

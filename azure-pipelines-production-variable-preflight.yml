@@ -191,7 +191,32 @@ steps:
           valid_jdbc POSTGRES_AUTH_DB_URL "$POSTGRES_AUTH_DB_URL_VALUE"
           valid_jdbc POSTGRES_BUSINESS_DB_URL "$POSTGRES_BUSINESS_DB_URL_VALUE"
           valid_jdbc POSTGRES_INTEGRATION_DB_URL "$POSTGRES_INTEGRATION_DB_URL_VALUE"
-          valid_https CRAVES_STORAGE_ENDPOINT_VALUE "$CRAVES_STORAGE_ENDPOINT_VALUE_VALUE"
+          # BlobDocumentStorageService uses connectionString(), not an endpoint URL.
+          # Validate structure without printing any credential values.
+          python3 - <<'STORAGE_PY'
+          import os
+          import re
+          from urllib.parse import urlparse
+          value = os.environ["CRAVES_STORAGE_ENDPOINT_VALUE_VALUE"].strip()
+          pairs = [part.split("=", 1) for part in value.split(";") if part]
+          valid = bool(pairs) and all(len(pair) == 2 for pair in pairs)
+          fields = dict(pairs) if valid else {}
+          valid = valid and len(fields) == len(pairs)
+          account = fields.get("AccountName", "")
+          valid = valid and bool(re.fullmatch(r"[a-z0-9]{3,24}", account))
+          valid = valid and fields.get("DefaultEndpointsProtocol") == "https"
+          valid = valid and fields.get("EndpointSuffix", "core.windows.net") == "core.windows.net"
+          valid = valid and bool(fields.get("AccountKey") or fields.get("SharedAccessSignature"))
+          for kind in ("Blob", "Queue", "Table", "File"):
+              endpoint = fields.get(kind + "Endpoint")
+              if endpoint:
+                  parsed = urlparse(endpoint)
+                  valid = valid and parsed.scheme == "https" and parsed.netloc == account + "." + kind.lower() + ".core.windows.net"
+                  valid = valid and parsed.path in ("", "/") and not parsed.query and not parsed.fragment
+          if not valid:
+              raise SystemExit("ERROR: CRAVES_STORAGE_ENDPOINT_VALUE must be a secure Azure Storage connection string, not a bare URL. Store the value as a secret.")
+          print("Azure document-storage connection format validated; credentials suppressed.")
+          STORAGE_PY
           valid_https CRAVES_MEDIA_PUBLIC_BASE_URL "$CRAVES_MEDIA_PUBLIC_BASE_URL_VALUE"
 
           TMP=$(mktemp -d)

@@ -36,48 +36,54 @@ test("authentication asks for customer or chef mode", () => {
   assert.match(contents, /onAuthenticated\?\.\(user, accountMode\)/);
 });
 
-test("signed-in home loads backend address, cart, and nearby kitchens before menu items", () => {
+test("signed-in home loads live discovery and opens customer kitchen details without losing home context", () => {
   const contents = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
+  const search = source("../components/home/HomeSearchOverlay.tsx");
+  const returnState = source("./home-return-state.ts");
+  const signOut = source("../components/home/CustomerSignOutDialog.tsx");
+  const kitchensService = source("../services/api/kitchens.ts");
+
   assert.match(contents, /loadSelectedAddress\(\)/);
   assert.match(contents, /loadCart\(\)/);
   assert.match(
     contents,
-    /discoverKitchens\(activeAddress\.lat, activeAddress\.lng, 5_000\)/,
+    /discoverKitchens\([\s\S]{0,180}DEFAULT_DISCOVERY_RADIUS_METERS/,
   );
-  assert.match(contents, /loadKitchenMenu\(kitchen\.id\)/);
-  assert.match(contents, /<KitchensGrid/);
-  assert.match(contents, /selectedKitchen \?/);
-  assert.doesNotMatch(
-    contents,
-    /discoverDishes\(activeAddress\.lat, activeAddress\.lng, 5_000\)/,
-  );
-  assert.doesNotMatch(contents, /17\.4483|78\.3915/);
-});
-
-test("catalog discovery has one canonical Next.js route and working detail navigation", () => {
-  const legacyEntry = source("../app/discover/page.tsx");
-  const browse = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
-  const header = source("../components/home/BrowseHeader.tsx");
-  const card = source("../components/home/DishCard.tsx");
-  const kitchenCard = source("../components/order/ChefInfoCard.tsx");
-  const detail = source("../screens/public/FoodDetails/FoodDetails.tsx");
-  const chef = source("../screens/public/ChefProfile/ChefProfile.tsx");
-
-  assert.match(legacyEntry, /redirect\("\/home"\)/);
-  assert.match(browse, /useRouter\(\)/);
-  assert.match(header, /from "next\/link"/);
-  assert.match(card, /href=\{`\/dish\/\$\{encodeURIComponent\(dish\.id\)\}`\}/);
   assert.match(
-    kitchenCard,
-    /href=\{`\/kitchens\/\$\{encodeURIComponent\(chefId\)\}`\}/,
+    contents,
+    /discoverDishes\([\s\S]{0,180}DEFAULT_DISCOVERY_RADIUS_METERS/,
   );
-  assert.match(detail, /useParams<\{ id: string \}>\(\)/);
-  assert.match(chef, /useParams<\{ id: string \}>\(\)/);
-  assert.doesNotMatch(kitchenCard, /href=\{`\/chef\//);
+  assert.match(contents, /<HomeCategoryRail/);
+  assert.doesNotMatch(contents, /<TodaysSpecial/);
+  assert.match(contents, /<KitchensGrid/);
+  assert.match(contents, /<DishesGrid/);
+  assert.match(contents, /<HomeSearchOverlay/);
+  assert.match(contents, /<CustomerSignOutDialog/);
+  assert.match(contents, /<CartAddressAvailabilityDialog/);
+  assert.match(contents, /nearbyKitchenIds/);
+  assert.match(contents, /loadKitchenMenu\(kitchenId\)/);
+  assert.match(contents, /unavailableCartItems/);
+  assert.match(contents, /rememberHomeView\(\)/);
+  assert.match(contents, /to: "\/kitchen\/\$id"/);
+  assert.match(contents, /getSession\(\)/);
+  assert.match(contents, /getAddress\(\)/);
+  assert.match(contents, /allDishes\(\)/);
+  assert.match(contents, /allKitchens\(\)/);
+  assert.match(contents, /restoreHomeView\(\)/);
+  assert.doesNotMatch(contents, /selectedKitchen \?/);
+  assert.doesNotMatch(contents, /17\.4483|78\.3915/);
 
-  for (const contents of [browse, header, card, detail, chef]) {
-    assert.doesNotMatch(contents, /@tanstack\/react-router/);
-  }
+  assert.match(search, /to="\/dish\/\$id"/);
+  assert.match(search, /to="\/kitchen\/\$id"/);
+  assert.match(search, /fixed inset-0/);
+  assert.match(returnState, /window\.sessionStorage/);
+  assert.match(returnState, /scrollY/);
+  assert.match(returnState, /searchTerm/);
+  assert.match(returnState, /homeCategory/);
+  assert.match(signOut, /role="dialog"/);
+  assert.match(signOut, /Sign out of Craves\?/);
+  assert.match(signOut, /Stay signed in/);
+  assert.match(kitchensService, /export function allKitchens\(\)/);
 });
 
 test("profile exposes backend chef application status", () => {
@@ -95,16 +101,24 @@ test("production catalogue has no demo dish fallback", () => {
   assert.match(contents, /\/api\/discovery\/menu-items/);
 });
 
-test("empty nearby discovery expands without changing checkout serviceability", () => {
+test("customer discovery remains inside the 50 km browsing boundary", () => {
   const dishes = source("../services/api/dishes.ts");
+  const kitchens = source("../services/api/kitchens.ts");
   const policy = source("./catalog-discovery-policy.ts");
-  assert.match(dishes, /candidateDiscoveryRadii\(radiusMeters\)/);
-  assert.match(
-    dishes,
-    /if \(discoveredDishes\.length > 0\) return \[\.\.\.discoveredDishes\]/,
-  );
-  assert.match(policy, /15_000/);
+  const kitchenRoute = source("../app/api/discovery/kitchens/route.ts");
+  const dishRoute = source("../app/api/discovery/menu-items/route.ts");
+
+  assert.match(dishes, /MAX_DISCOVERY_RADIUS_METERS/);
+  assert.match(kitchens, /MAX_DISCOVERY_RADIUS_METERS/);
+  assert.match(policy, /DEFAULT_DISCOVERY_RADIUS_METERS = 50_000/);
   assert.match(policy, /MAX_DISCOVERY_RADIUS_METERS = 50_000/);
+  assert.doesNotMatch(policy, /10_000|15_000/);
+  assert.match(kitchenRoute, /radiusMeters > MAX_DISCOVERY_RADIUS_METERS/);
+  assert.match(kitchenRoute, /integer\(params\.get\("radiusMeters"\), DEFAULT_DISCOVERY_RADIUS_METERS\)/);
+  assert.match(
+    dishRoute,
+    /numeric\(request, "radiusMeters", 1, MAX_DISCOVERY_RADIUS_METERS, DEFAULT_DISCOVERY_RADIUS_METERS\)/,
+  );
 });
 
 test("real backend chefs remain available in production", () => {
@@ -114,15 +128,53 @@ test("real backend chefs remain available in production", () => {
   assert.doesNotMatch(contents, /reviewPool|LOCATIONS|NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK/);
 });
 
-test("dish and chef detail pages recover live data after a browser refresh", () => {
+test("dish and customer kitchen detail pages recover live data and return to saved home context", () => {
   const dishPage = source("../screens/public/FoodDetails/FoodDetails.tsx");
   const dishService = source("../services/api/dishes.ts");
-  const chef = source("../screens/public/ChefProfile/ChefProfile.tsx");
+  const kitchenPage = source("../screens/public/ChefProfile/ChefProfile.tsx");
+  const customerKitchenRoute = source("../app/kitchen/[id]/page.tsx");
+  const legacyChefRoute = source("../app/chef/[id]/page.tsx");
 
+  assert.match(dishPage, /discoverDishes\([\s\S]{0,180}DEFAULT_DISCOVERY_RADIUS_METERS/);
   assert.match(dishPage, /loadDish\(id\)/);
+  assert.match(dishPage, /const cachedDish = getDish\(id\)/);
+  assert.match(dishPage, /const detailPromise = cachedDish\?\.detailsLoaded/);
+  assert.match(dishPage, /Promise\.all\(\[[\s\S]{0,280}discoverDishes\(/);
+  assert.match(dishPage, /hasHomeReturnState\(\)/);
+  assert.match(dishPage, /window\.history\.back\(\)/);
   assert.match(dishService, /\/api\/catalog\/menu-items/);
-  assert.match(chef, /loadSelectedAddress\(\)/);
-  assert.match(chef, /discoverDishes\(address\.lat, address\.lng\)/);
+  assert.match(dishService, /const loadedIds = new Set/);
+  assert.match(kitchenPage, /getRouteApi\("\/kitchen\/\$id"\)/);
+  assert.match(kitchenPage, /loadSelectedAddress\(\)/);
+  assert.match(kitchenPage, /discoverKitchens\([\s\S]{0,180}DEFAULT_DISCOVERY_RADIUS_METERS/);
+  assert.match(kitchenPage, /hasHomeReturnState\(\)/);
+  assert.match(kitchenPage, /window\.history\.back\(\)/);
+  assert.match(customerKitchenRoute, /ChefProfilePage/);
+  assert.doesNotMatch(customerKitchenRoute, /ChefAccessBoundary|ChefWorkspaceNavigation/);
+  assert.match(legacyChefRoute, /redirect\(`\/kitchen\/\$\{encodeURIComponent\(id\)\}`\)/);
+});
+
+test("home kitchen and dish details share one live floating cart without forcing checkout", () => {
+  const sharedCart = source("../components/cart/CustomerFloatingCart.tsx");
+  const home = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
+  const kitchen = source("../screens/public/ChefProfile/ChefProfile.tsx");
+  const dish = source("../screens/public/FoodDetails/FoodDetails.tsx");
+
+  assert.match(sharedCart, /subscribeCart/);
+  assert.match(sharedCart, /cartCount\(\)/);
+  assert.match(sharedCart, /cartTotal\(\)/);
+  assert.match(sharedCart, /cartCurrency\(\)/);
+
+  for (const surface of [home, kitchen, dish]) {
+    assert.match(surface, /<CustomerFloatingCart \/>/);
+  }
+
+  assert.match(kitchen, /useCustomerCartSummary\(\)/);
+  assert.match(dish, /useCustomerCartSummary\(\)/);
+  assert.match(dish, /cartSummary\.itemCount === 0 \? \(/);
+  assert.match(dish, /messageKind === "success"/);
+  assert.match(dish, /was added to your cart/);
+  assert.doesNotMatch(dish, /navigate\(\{ to: "\/cart" \}\);/);
 });
 
 test("every home-chef call to action opens the live chef registration flow", () => {
@@ -146,6 +198,28 @@ test("every home-chef call to action opens the live chef registration flow", () 
   assert.match(
     kitchen,
     /Use current location before activating this kitchen/,
+  );
+});
+
+test("chef evidence UI imports components and contracts from their correct modules", () => {
+  const panel = source("../components/chef-application-document-panel.tsx");
+  const uploader = source("../components/chef-application-evidence-uploader.tsx");
+
+  assert.match(
+    panel,
+    /from "@\/components\/chef-application-evidence-uploader"/,
+  );
+  assert.match(
+    panel,
+    /parseChefEvidenceList/,
+  );
+  assert.doesNotMatch(
+    panel,
+    /import\s*\{[^}]*ChefApplicationEvidenceUploader[^}]*\}\s*from "@\/lib\/chef-application-evidence-contract"/,
+  );
+  assert.match(
+    uploader,
+    /parseChefEvidenceMetadata/,
   );
 });
 
@@ -197,51 +271,47 @@ test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   }
 });
 
-test("customer navigation stays in customer headers, with finalized notifications using its dedicated shell", () => {
-  const navigation = source(
-    "../components/navigation/PersistentCustomerServiceNav.tsx",
+test("customer headers stay lean and share the same responsive scroll behavior", () => {
+  const autoHide = source(
+    "../components/navigation/AutoHideCustomerHeader.tsx",
   );
-  const layout = source("../app/layout.tsx");
   const homeHeader = source("../components/home/BrowseHeader.tsx");
+  const detailHeader = source("../components/navigation/DetailBrowseHeader.tsx");
+  const cartHeader = source("../components/cart/CartHeader.tsx");
+  const checkoutHeader = source("../components/checkout/CheckoutHeader.tsx");
+  const profileHeader = source("../components/profile/ProfileHeader.tsx");
+  const trackingHeader = source("../components/tracking/TrackingHeader.tsx");
+  const orders = source("../screens/OrderHistory/OrderHistory.tsx");
+  const saved = source("../screens/Wishlist/Wishlist.tsx");
   const notifications = source("../screens/Notifications/Notifications.tsx");
+  const addresses = source("../screens/Profile/Addresses.tsx");
 
-  for (const route of [
-    "/home",
-    "/orders",
-    "/subscriptions",
-    "/notifications",
-    "/chef",
+  assert.doesNotMatch(homeHeader, /PersistentCustomerServiceNav/);
+  assert.doesNotMatch(detailHeader, /forceServiceNav/);
+
+  for (const surface of [
+    homeHeader,
+    cartHeader,
+    checkoutHeader,
+    profileHeader,
+    trackingHeader,
+    orders,
+    saved,
+    notifications,
+    addresses,
   ]) {
-    assert.match(navigation, new RegExp(route.replace("/", "\\/")));
+    assert.match(surface, /AutoHideCustomerHeader/);
   }
 
-  assert.doesNotMatch(layout, /PersistentCustomerServiceNav/);
-  assert.match(homeHeader, /lg:grid-cols-\[minmax\(18rem,1fr\)_auto\]/);
-  assert.match(homeHeader, /<PersistentCustomerServiceNav/);
-
-  for (const customerSurface of [
-    "../screens/OrderHistory/OrderHistory.tsx",
-    "../app/subscriptions/page.tsx",
-    "../components/profile/ProfileHeader.tsx",
-    "../components/cart/CartHeader.tsx",
-    "../components/checkout/CheckoutHeader.tsx",
-    "../components/tracking/TrackingHeader.tsx",
-    "../screens/public/FoodDetails/FoodDetails.tsx",
-    "../screens/public/ChefProfile/ChefProfile.tsx",
-    "../screens/OrderSuccess/OrderSuccess.tsx",
-  ]) {
-    assert.match(source(customerSurface), /PersistentCustomerServiceNav/, customerSurface);
-  }
-
-  assert.match(notifications, /notification-back-button/);
-  assert.match(notifications, /<CravesLogo size="lg" priority \/>/);
-  assert.doesNotMatch(notifications, /PersistentCustomerServiceNav/);
-
-  assert.match(navigation, /data-customer-service-navigation="embedded"/);
-  assert.match(navigation, /border-\[#F62E18\] bg-white/);
-  assert.match(navigation, /text-black/);
-  assert.match(navigation, /hover:bg-\[#F62E18\]/);
-  assert.match(navigation, /hover:font-bold/);
-  assert.match(navigation, /hover:text-white/);
-  assert.doesNotMatch(navigation, /bg-\[#C92716\]/);
+  assert.match(autoHide, /TOP_REVEAL_PX = 24/);
+  assert.match(autoHide, /HIDE_AFTER_PX = 96/);
+  assert.match(autoHide, /travel >= HIDE_DELTA_PX/);
+  assert.match(autoHide, /travel >= SHOW_DELTA_PX/);
+  assert.match(autoHide, /requestAnimationFrame/);
+  assert.match(autoHide, /duration-\[260ms\]/);
+  assert.match(autoHide, /--craves-desktop-header-offset-md/);
+  assert.match(autoHide, /--craves-desktop-header-offset-lg/);
+  assert.match(autoHide, /motion-reduce:transition-none/);
+  assert.match(autoHide, /onFocusCapture=\{\(\) => setHidden\(false\)\}/);
+  assert.match(homeHeader, /<AutoHideCustomerHeader mobileStatic/);
 });

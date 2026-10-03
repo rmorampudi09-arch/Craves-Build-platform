@@ -1,4 +1,4 @@
-name: Academy Azure read-only preflight
+name: Craves Azure DevOps read-only preflight
 
 on:
   push:
@@ -42,9 +42,13 @@ jobs:
       - name: Test read-only Azure DevOps access
         id: devops
         shell: bash
+        env:
+          DEVOPS_ORGANIZATION: ${{ vars.AZURE_DEVOPS_ORGANIZATION || 'rmorampudi09' }}
+          DEVOPS_PROJECT: ${{ vars.AZURE_DEVOPS_PROJECT || 'Craves' }}
         run: |
           set -euo pipefail
           set +x
+          [[ "$DEVOPS_ORGANIZATION" =~ ^[A-Za-z0-9-]+$ && "$DEVOPS_PROJECT" =~ ^[A-Za-z0-9_-]+$ ]] || { echo '::error::Invalid Azure DevOps organization/project setting.'; exit 1; }
           token=$(az account get-access-token \
             --resource 499b84ac-1321-427f-aa17-267ca6975798 \
             --query accessToken -o tsv 2>/dev/null || true)
@@ -57,7 +61,7 @@ jobs:
             -H 'Accept: application/json' \
             -o "$RUNNER_TEMP/pipelines.json" \
             -w '%{http_code}' \
-            'https://dev.azure.com/ravitejamorampudi7777/Craves/_apis/pipelines?api-version=7.1')
+            "https://dev.azure.com/${DEVOPS_ORGANIZATION}/${DEVOPS_PROJECT}/_apis/pipelines?api-version=7.1")
           unset token
           if [[ "$code" != 200 ]]; then
             rm -f "$RUNNER_TEMP/pipelines.json"
@@ -70,11 +74,10 @@ jobs:
           matches=[]
           for item in data.get('value', []):
               name=str(item.get('name',''))
-              if 'auth' in name.lower() or 'academy' in name.lower():
-                  matches.append({'id':item.get('id'),'name':name})
-          print(json.dumps({'authorized': True, 'matchingPipelines': matches}, indent=2))
+              matches.append({'id':item.get('id'),'name':name})
+          print(json.dumps({'authorized': True, 'visiblePipelines': matches}, indent=2))
           if not matches:
-              raise SystemExit('No Auth/Academy pipeline name was visible; no deployment can be queued safely.')
+              raise SystemExit('No pipeline was visible; inspect project permissions. No deployment was queued.')
           PY
           rm -f "$RUNNER_TEMP/pipelines.json"
           echo 'Read-only Azure DevOps access succeeded. No pipeline was queued or changed.'

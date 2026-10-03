@@ -1,19 +1,28 @@
 import { ArrowLeft } from "lucide-react";
 
-/** Simple back button header for the chef profile page. */
+import { CravesLogo } from "@/components/brand/CravesLogo";
+
 export function ChefProfileHeader({ onBack }: { onBack: () => void }) {
   return (
-    <header className="border-b border-border bg-cream/90">
-      <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4">
+    <header className="sticky top-0 z-30 border-b border-[#E5E7EB] bg-white/95 backdrop-blur-xl">
+      <div className="mx-auto flex min-h-[4.5rem] max-w-6xl items-center gap-3 px-4 md:px-6">
         <button
           type="button"
           onClick={onBack}
-          className="rounded-full p-2 hover:bg-black/5"
-          aria-label="Back"
+          className="!flex !h-10 !w-10 !items-center !justify-center !rounded-full !bg-[#F1F3F5] !p-0 !text-[#1A1A1A] hover:!text-[#F62E18]"
+          aria-label="Back to customer browsing"
         >
-          <ArrowLeft className="h-5 w-5 text-ink" />
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </button>
-        <span className="font-display text-lg font-bold text-primary">Chef Profile</span>
+        <CravesLogo size="sm" />
+        <div className="min-w-0">
+          <p className="text-[0.62rem] font-black uppercase tracking-[0.16em] text-[#F62E18]">
+            Craves customer
+          </p>
+          <span className="block truncate font-display text-base font-black text-[#261A15] sm:text-lg">
+            Home kitchen
+          </span>
+        </div>
       </div>
     </header>
   );

@@ -10,6 +10,18 @@ function request(body: BodyInit | null, headers: Record<string, string> = {}, pa
 }
 
 describe("BFF actual-stream request limits", () => {
+  it("allows multipart overhead around a full 10 MiB Chef proof file", async () => {
+    const form = new FormData();
+    form.set("file", new File([new Uint8Array(10 * 1024 * 1024)], "proof.png", { type: "image/png" }));
+    form.set("documentType", "APPLICANT_PHOTO");
+    const input = new NextRequest("https://craves.in/api/chef/application/proof-files", {
+      method: "POST", headers: { Origin: "https://craves.in" }, body: form,
+    });
+    const output = await boundBffRequest(input);
+    expect(output).toBeInstanceOf(NextRequest);
+    const file = (await output.formData()).get("file") as File;
+    expect(file.size).toBe(10 * 1024 * 1024);
+  });
   it("preserves JSON, URL and server cookie through the bounded request", async () => {
     const output = await boundBffRequest(request('{"quantity":2}'));
     expect(output).toBeInstanceOf(NextRequest);

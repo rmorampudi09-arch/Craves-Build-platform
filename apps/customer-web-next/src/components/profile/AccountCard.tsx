@@ -1,4 +1,9 @@
-import { Mail, Pencil, Phone, ShieldCheck } from "lucide-react";
+import {
+  FaEnvelope,
+  FaPen,
+  FaPhone,
+} from "react-icons/fa6";
+
 import type { CustomerProfile } from "@/lib/profile-contract";
 import type { CravesUser } from "@/services/auth/cravesAuth";
 
@@ -10,9 +15,14 @@ interface AccountCardProps {
   onEdit: () => void;
 }
 
-function initials(firstName: string | null, lastName: string | null) {
-  const value = `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.trim();
-  return value.toUpperCase() || "C";
+function initials(value: string): string {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return (
+      (words[0]?.[0] ?? "") + (words[1]?.[0] ?? "")
+    ).toUpperCase();
+  }
+  return value.slice(0, 2).toUpperCase() || "C";
 }
 
 export function AccountCard({
@@ -24,84 +34,94 @@ export function AccountCard({
 }: AccountCardProps) {
   const firstName = profile?.firstName ?? user.firstName;
   const lastName = profile?.lastName ?? user.lastName;
-  const name = `${firstName ?? ""} ${lastName ?? ""}`.trim();
-  const displayName = name || "Complete your Craves profile";
-  const phone = profile?.registeredPhoneNumber || user.phoneNumber;
-  const email = user.email;
+  const name = ((firstName ?? "") + " " + (lastName ?? "")).trim();
+  const displayName = name || user.username || "Craves customer";
+  const phone = (profile?.registeredPhoneNumber || user.phoneNumber || "").replace(/^\+91[\s-]?/, "");
+  const email = user.email ?? profile?.email ?? null;
 
   return (
     <section
       aria-labelledby="customer-profile-name"
-      className="craves-surface overflow-hidden p-6"
+      className="overflow-hidden rounded-[1.6rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_12px_34px_rgba(26,26,26,0.07)] sm:p-5 md:rounded-[1.8rem] md:p-6"
     >
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-4">
-          <div
-            aria-hidden="true"
-            className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-flame-red font-display text-2xl font-bold text-white"
-          >
-            {initials(firstName, lastName)}
-          </div>
-          <div className="min-w-0">
-            <p className="craves-overline">Customer account</p>
-            <h1
-              id="customer-profile-name"
-              className="mt-1 truncate font-display text-2xl font-semibold text-ink"
+      <div className="flex items-start gap-3.5 sm:gap-4">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#FFF1EF] text-xl font-black text-[#F62E18] sm:h-20 sm:w-20 sm:text-2xl">
+          {initials(displayName)}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">
+                Customer account
+              </p>
+              <h1
+                id="customer-profile-name"
+                className="mt-1.5 truncate text-xl font-black tracking-[-0.025em] text-[#1A1A1A] sm:text-2xl"
+              >
+                {displayName}
+              </h1>
+            </div>
+
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-[#F1F3F5] px-3 text-xs font-black !text-[#F62E18] transition-[background-color,box-shadow] hover:!bg-white hover:shadow-[0_6px_16px_rgba(26,26,26,0.08)]"
+              aria-label="Edit customer profile"
             >
-              {displayName}
-            </h1>
-            <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <Phone className="h-4 w-4" aria-hidden="true" />
-              <span>{phone}</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-1 text-xs font-semibold text-ink">
-                <ShieldCheck className="h-3.5 w-3.5 text-success" aria-hidden="true" />
-                Verified
-              </span>
+              <FaPen className="text-xs" aria-hidden="true" />
+              <span className="hidden sm:inline">Edit profile</span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-2.5 rounded-2xl bg-[#F8F9FA] p-3 sm:grid-cols-2">
+        <div className="flex min-w-0 items-center gap-2.5 rounded-xl bg-white px-3 py-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+            <FaPhone className="text-xs" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[0.62rem] font-bold text-[#6B6B6B]">
+              Phone number
             </p>
-            {email && (
-              <p className="mt-2 flex items-center gap-2 truncate text-sm text-muted-foreground">
-                <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">{email}</span>
-                <span className="shrink-0 text-xs font-semibold">{user.emailVerified ? "Verified" : "Not verified"}</span>
-              </p>
-            )}
-            {!profile && (
-              <p className="mt-3 max-w-md text-sm leading-6 text-contrast-red">
-                Add your first name and last name so checkout and
-                support use the correct details.
-              </p>
-            )}
+            <p className="truncate text-xs font-black text-[#1A1A1A]">
+              {phone}
+            </p>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onEdit}
-          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-contrast-red bg-white px-4 text-sm font-semibold text-contrast-red transition-colors hover:bg-secondary"
-          aria-label="Edit customer profile"
-        >
-          <Pencil className="h-4 w-4" aria-hidden="true" />
-          Edit profile
-        </button>
+        <div className="flex min-w-0 items-center gap-2.5 rounded-xl bg-white px-3 py-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+            <FaEnvelope className="text-xs" aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[0.62rem] font-bold text-[#6B6B6B]">
+              {user.emailVerified ? "Verified email" : "Email"}
+            </p>
+            <p className="truncate text-xs font-black text-[#1A1A1A]">
+              {email || "Add an email"}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <dl className="mt-6 grid grid-cols-3 gap-4 border-t border-border pt-4">
-        <div>
-          <dt className="text-xs text-muted-foreground">Orders</dt>
-          <dd className="mt-1 font-display text-xl font-semibold text-ink">
+      <dl className="mt-5 grid grid-cols-2 divide-x divide-[#E5E7EB] border-t border-[#E5E7EB] pt-4 text-center">
+        <div className="px-2">
+          <dt className="text-[0.68rem] font-semibold text-[#6B6B6B]">
+            Orders
+          </dt>
+          <dd className="mt-1 text-lg font-black text-[#1A1A1A]">
             {orderCount}
           </dd>
         </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">Addresses</dt>
-          <dd className="mt-1 font-display text-xl font-semibold text-ink">
+        <div className="px-2">
+          <dt className="text-[0.68rem] font-semibold text-[#6B6B6B]">
+            Addresses
+          </dt>
+          <dd className="mt-1 text-lg font-black text-[#1A1A1A]">
             {addressCount}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">Profile</dt>
-          <dd className="mt-1 text-sm font-semibold text-ink">
-            {profile ? "Complete" : "Action needed"}
           </dd>
         </div>
       </dl>

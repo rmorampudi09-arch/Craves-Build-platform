@@ -20,7 +20,7 @@ import {Icon} from '../../../shared/components/Icon';
 import {InputField} from '../../../shared/components/InputField';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {customerAddressesApi} from '../api/customerAddressesApi';
-import type {CustomerAddress, CustomerAddressLabel} from '../domain/customerAddressContract';
+import type {CustomerAddress, CustomerAddressCategory} from '../domain/customerAddressContract';
 import {
   CUSTOMER_ADDRESS_PINCODE_FALLBACK_COPY,
   applyDetectedCustomerAddress,
@@ -45,7 +45,7 @@ interface Props {
   onClose: () => void;
 }
 
-const LABELS: Array<{value: CustomerAddressLabel; label: string}> = [
+const LABELS: Array<{value: CustomerAddressCategory; label: string}> = [
   {value: 'HOME', label: 'Home'},
   {value: 'WORK', label: 'Work'},
   {value: 'OTHER', label: 'Other'},
@@ -194,13 +194,13 @@ export function CustomerAddressEditorModal({
               <Text style={styles.sectionTitle}>Address type</Text>
               <View style={styles.labelOptions}>
                 {LABELS.map(option => {
-                  const selected = draft.addressLabel === option.value;
+                  const selected = draft.addressCategory === option.value;
                   return (
                     <Pressable
                       accessibilityRole="button"
                       accessibilityState={{selected}}
                       key={option.value}
-                      onPress={() => setDraft(current => ({...current, addressLabel: option.value}))}
+                      onPress={() => setDraft(current => ({...current, addressCategory: option.value}))}
                       style={({pressed}) => [
                         styles.labelOption,
                         selected && styles.labelOptionSelected,
@@ -230,6 +230,17 @@ export function CustomerAddressEditorModal({
               ) : null}
 
               <View style={styles.fields}>
+                {draft.addressCategory === 'OTHER' ? (
+                  <InputField
+                    autoCapitalize="words"
+                    error={fieldErrors.customLabel}
+                    helperText="Up to 80 characters, for example Mom's House."
+                    label="Address name"
+                    maxLength={80}
+                    onChangeText={value => updateText('customLabel', value)}
+                    value={draft.customLabel}
+                  />
+                ) : null}
                 <InputField autoCapitalize="words" autoComplete="name" error={fieldErrors.recipientName} label="Recipient name" maxLength={160} onChangeText={value => updateText('recipientName', value)} value={draft.recipientName} />
                 <InputField autoComplete="tel" error={fieldErrors.contactPhoneNumber} keyboardType="phone-pad" label="Phone number" maxLength={32} onChangeText={value => updateText('contactPhoneNumber', value)} value={draft.contactPhoneNumber} />
                 <InputField autoCapitalize="words" error={fieldErrors.addressLine1} label="House / building / street" maxLength={250} onChangeText={value => updateText('addressLine1', value)} value={draft.addressLine1} />

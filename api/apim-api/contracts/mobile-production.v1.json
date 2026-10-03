@@ -181,6 +181,17 @@
       "responseValidator": "features-chefbusinessinformation-api-chefbusinessinformationapi-get-bearer-1.responseValidator"
     },
     {
+      "id": "features-chefbusinessinformation-screens-chefreadinesspanel-get-bearer-1",
+      "source": "src/features/chefBusinessInformation/screens/ChefReadinessPanel.tsx",
+      "method": "GET",
+      "path": "/api/v1/chef/application/readiness",
+      "auth": "bearer",
+      "requestModel": "features-chefbusinessinformation-screens-chefreadinesspanel-get-bearer-1.request",
+      "responseModel": "features-chefbusinessinformation-screens-chefreadinesspanel-get-bearer-1.response",
+      "requestValidator": "features-chefbusinessinformation-screens-chefreadinesspanel-get-bearer-1.requestValidator",
+      "responseValidator": "features-chefbusinessinformation-screens-chefreadinesspanel-get-bearer-1.responseValidator"
+    },
+    {
       "id": "features-chefmenu-api-chefmenuapi-get-bearer-1",
       "source": "src/features/chefMenu/api/chefMenuApi.ts",
       "method": "GET",

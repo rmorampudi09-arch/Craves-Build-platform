@@ -62,7 +62,7 @@ describe('P27/P31 customer shell', () => {
       {
         kind: 'SAVED_ADDRESS',
         addressId: '11111111-1111-4111-8111-111111111111',
-        label: 'HOME',
+        label: 'Home',
         displayName: 'Madhapur',
         latitude: 17.4483,
         longitude: 78.3915,
@@ -95,6 +95,17 @@ describe('P27/P31 customer shell', () => {
     ];
 
     expect(unreadNoticeCount(notices)).toBe(1);
+  });
+
+  it('preserves custom saved-location labels up to 80 characters and rejects invalid labels', async () => {
+    const base = {id: '11111111-1111-4111-8111-111111111111', areaName: 'Madhapur', latitude: 17.4483, longitude: 78.3915};
+    getMock.mockResolvedValueOnce([
+      {...base, addressLabel: "Mom's House"},
+      {...base, addressLabel: 'x'.repeat(80)},
+      {...base, addressLabel: 'x'.repeat(81)},
+      {...base, addressLabel: '  '},
+    ]);
+    expect((await customerShellApi.listSavedLocations()).map(location => location.label)).toEqual(["Mom's House", 'x'.repeat(80)]);
   });
 
   it('keeps the notification contract capped at one hundred items', async () => {

@@ -11,7 +11,11 @@ import { parseChefApplication } from "@/lib/chef-application-contract";
 type Loaded = { applicationReady: boolean; locked: boolean; documents: ChefEvidenceMetadata[] };
 class DocumentLoadError extends Error {}
 
-export function ChefApplicationDocumentPanel() {
+export function ChefApplicationDocumentPanel({
+  onComplete,
+}: {
+  onComplete?: () => void;
+}) {
   const [data, setData] = useState<Loaded | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -71,7 +75,13 @@ export function ChefApplicationDocumentPanel() {
 
   return (
     <>
-      <ChefApplicationEvidenceUploader key={version} applicationReady={data.applicationReady} locked={data.locked} initialDocuments={data.documents} />
+      <ChefApplicationEvidenceUploader
+        key={version}
+        applicationReady={data.applicationReady}
+        locked={data.locked}
+        initialDocuments={data.documents}
+        onComplete={onComplete}
+      />
       <button type="button" onClick={() => void load()} className="min-h-12 rounded-full border border-slate-300 px-5 font-semibold">{data.applicationReady ? "Refresh document history" : "I’ve submitted my details — refresh documents"}</button>
     </>
   );

@@ -36,9 +36,9 @@ steps:
       from pathlib import Path
       root = Path('apps/customer-web-next')
       package = json.loads((root / 'package.json').read_text(encoding='utf-8'))
-      assert package['dependencies']['next'] == '16.2.11'
-      assert package['dependencies']['react'] == '19.2.8'
-      assert package['dependencies']['react-dom'] == '19.2.8'
+      assert package['dependencies']['next'] == '16.3.5'
+      assert package['dependencies']['react'] == '19.2.0'
+      assert package['dependencies']['react-dom'] == '19.2.0'
       assert package['devDependencies']['tailwindcss'] == '4.3.3'
       assert (root / 'public/robots.txt').exists()
       assert (root / 'src/app/api/orders/[orderId]/delivery-status/route.ts').exists()

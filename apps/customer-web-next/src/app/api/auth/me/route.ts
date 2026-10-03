@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { clearSessionCookies } from "@/lib/auth-cookies";
 import { parseIdentity } from "@/lib/auth-contract";
 import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
 
@@ -8,9 +7,13 @@ export async function GET(request: NextRequest) {
     const upstream = await authenticatedApiFetch(request, "/auth/me", {}, 8_000);
     const raw = await upstream.json().catch(() => null) as { identity?: unknown } | null;
     if (!upstream.ok) {
-      const response = NextResponse.json({ code: upstream.status === 401 ? "SESSION_EXPIRED" : "IDENTITY_UNAVAILABLE" }, { status: upstream.status });
-      if (upstream.status === 401) clearSessionCookies(response);
-      return response;
+      // Do not clear the refresh cookie here. A 401 from /auth/me usually means
+      // the short-lived access token expired; the client immediately calls
+      // /api/auth/refresh and must still have the refresh cookie available.
+      return NextResponse.json(
+        { code: upstream.status === 401 ? "SESSION_EXPIRED" : "IDENTITY_UNAVAILABLE" },
+        { status: upstream.status, headers: { "Cache-Control": "no-store" } },
+      );
     }
     const identity = parseIdentity(raw?.identity);
     if (!identity) return NextResponse.json({ code: "INVALID_IDENTITY_RESPONSE" }, { status: 502 });

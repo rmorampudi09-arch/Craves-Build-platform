@@ -84,7 +84,8 @@ class SourceReviewTests(unittest.TestCase):
         return SimpleNamespace(source=Path("."), sha=SOURCE_SHA, expected_main_sha=MAIN_SHA,
                                expected_live_sha=LIVE_SHA, evidence=Path("evidence.json"), evidence_sha256="e" * 64)
 
-    def commands(self, dirty="", main=MAIN_SHA, remote=MAIN_SHA, changes=performance.APP_PATH + "/src/page.tsx"):
+    def commands(self, dirty="", main=MAIN_SHA, remote=MAIN_SHA,
+                 changes=performance.APP_PATH + "/src/page.tsx", main_landing_tree="d" * 40):
         def answer(source, *args):
             if args == ("rev-parse", "HEAD"):
                 return SOURCE_SHA
@@ -98,6 +99,8 @@ class SourceReviewTests(unittest.TestCase):
                 return ""
             if args[0] == "diff":
                 return changes
+            if args == ("rev-parse", MAIN_SHA + ":" + performance.LANDING_PATH):
+                return main_landing_tree
             if args[0] == "rev-parse" and args[1].startswith(SOURCE_SHA):
                 return "f" * 40
             return "d" * 40
@@ -116,6 +119,18 @@ class SourceReviewTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     performance.source_guard(self.args())
                 evidence.assert_not_called()
+
+    def test_landing_authoring_change_with_rebuilt_web_tree_is_allowed(self):
+        changes = performance.LANDING_PATH + "/src/App.tsx\n" + performance.APP_PATH + "/public/landing-v20/index.html"
+        with patch.object(performance, "git", side_effect=self.commands(changes=changes)), patch.object(performance, "local_evidence", return_value={}) as evidence:
+            performance.source_guard(self.args())
+            self.assertEqual(evidence.call_args.args[-1], "f" * 40)
+
+    def test_unreconciled_main_landing_authoring_changes_fail_before_evidence(self):
+        with patch.object(performance, "git", side_effect=self.commands(main_landing_tree="e" * 40)), patch.object(performance, "local_evidence") as evidence:
+            with self.assertRaisesRegex(ValueError, "unreconciled landing"):
+                performance.source_guard(self.args())
+            evidence.assert_not_called()
 
 
 class WindowsCommandTests(unittest.TestCase):

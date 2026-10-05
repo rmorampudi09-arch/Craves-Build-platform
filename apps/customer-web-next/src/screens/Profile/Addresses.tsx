@@ -104,7 +104,7 @@ export default function AddressesPage() {
 
   useEffect(() => {
     void (async () => {
-      const current = await loadSession();
+      const current = await loadSession({ hydrateCustomerProfile: "background" });
       if (!current) {
         navigate({ to: "/" });
         return;

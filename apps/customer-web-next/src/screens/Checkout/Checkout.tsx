@@ -257,7 +257,7 @@ export default function CheckoutPage() {
     setLoading(true);
     setError("");
     try {
-      const session = await loadSession();
+      const session = await loadSession({ hydrateCustomerProfile: "background" });
       if (!session) {
         navigate({ to: "/" });
         return;

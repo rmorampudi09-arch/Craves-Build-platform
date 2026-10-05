@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, ExternalLink, RefreshCw } from "lucide-react";
 import { FaArrowLeft, FaArrowsRotate } from "react-icons/fa6";
@@ -15,7 +15,7 @@ import {
   shouldAutoRefresh,
   type DeliveryStatusResponse,
 } from "@/lib/delivery-status";
-import { loadSession } from "@/services/auth/cravesAuth";
+import { captureSessionContext, isSessionContextCurrent, isSessionReady, loadSession, subscribeSession } from "@/services/auth/cravesAuth";
 import { trackingPresentation } from "@/lib/tracking-presentation";
 import { TrackingHeader } from "@/components/tracking/TrackingHeader";
 import { CurrentStatusCard } from "@/components/tracking/CurrentStatusCard";
@@ -35,9 +35,23 @@ function responseMessage(value: unknown, fallback: string): string {
     : fallback;
 }
 
+function sessionScope() {
+  const context = captureSessionContext();
+  return JSON.stringify([context.generation, context.identityId, isSessionReady()]);
+}
+
 export default function TrackingPage() {
+  const scope = useSyncExternalStore(subscribeSession, sessionScope, () => "server");
+  return <TrackingContent key={scope} />;
+}
+
+function TrackingContent() {
   const navigate = useNavigate();
   const { id } = routeApi.useSearch();
+  const activeRef = useRef(true);
+  const requestEpochRef = useRef(0);
+  const verifiedRef = useRef(false);
+  const [retry, setRetry] = useState(0);
   const [order, setOrder] = useState<CustomerOrder | null>(null);
   const [delivery, setDelivery] = useState<DeliveryStatusResponse | null>(null);
   const deliveryRef = useRef<DeliveryStatusResponse | null>(null);
@@ -50,7 +64,10 @@ export default function TrackingPage() {
 
   const refresh = useCallback(
     async (orderId: string, background = false) => {
-      if (refreshingRef.current) return;
+      if (refreshingRef.current || !verifiedRef.current) return;
+      const context = captureSessionContext();
+      const epoch = requestEpochRef.current;
+      const current = () => activeRef.current && epoch === requestEpochRef.current && isSessionContextCurrent(context) && isSessionReady();
       refreshingRef.current = true;
       if (background) setBusy(true);
       else setLoading(true);
@@ -68,6 +85,7 @@ export default function TrackingPage() {
         ]);
 
         const orderRaw = await orderResponse.json().catch(() => null);
+        if (!current()) return;
         if (!orderResponse.ok) {
           throw new Error(responseMessage(orderRaw, "Order could not be loaded."));
         }
@@ -79,6 +97,7 @@ export default function TrackingPage() {
 
         if (deliveryResponse.ok) {
           const deliveryRaw = await deliveryResponse.json().catch(() => null);
+          if (!current()) return;
           const parsedDelivery = parseDeliveryStatusResponse(deliveryRaw);
           if (parsedDelivery.orderId.toLowerCase() !== orderId.toLowerCase()) {
             throw new Error("Craves returned delivery tracking for another order.");
@@ -92,6 +111,7 @@ export default function TrackingPage() {
           );
         } else {
           const deliveryRaw = await deliveryResponse.json().catch(() => null);
+          if (!current()) return;
           deliveryRef.current = null;
           setDelivery(null);
           setMessage(
@@ -105,15 +125,18 @@ export default function TrackingPage() {
         }
         setLastUpdatedAt(new Date());
       } catch (caught) {
+        if (!current()) return;
         setError(
           caught instanceof Error
             ? caught.message
             : "Order tracking is unavailable.",
         );
       } finally {
-        refreshingRef.current = false;
-        setLoading(false);
-        setBusy(false);
+        if (epoch === requestEpochRef.current) refreshingRef.current = false;
+        if (current()) {
+          setLoading(false);
+          setBusy(false);
+        }
       }
     },
     [],
@@ -126,18 +149,37 @@ export default function TrackingPage() {
     }
 
     let cancelled = false;
-    void loadSession().then((session) => {
+    requestEpochRef.current += 1;
+    refreshingRef.current = false;
+    activeRef.current = true;
+    verifiedRef.current = false;
+    setLoading(true);
+    setOrder(null);
+    setDelivery(null);
+    deliveryRef.current = null;
+    setMessage("");
+    setLastUpdatedAt(null);
+    setError("");
+    void loadSession({ hydrateCustomerProfile: "background" }).then((session) => {
       if (cancelled) return;
-      if (!session) {
+      if (!session || !isSessionReady()) {
         navigate({ to: "/" });
         return;
       }
+      verifiedRef.current = true;
       void refresh(id);
+    }).catch((caught: unknown) => {
+      if (cancelled) return;
+      setOrder(null);
+      setDelivery(null);
+      setError(caught instanceof Error ? caught.message : "Your account could not be verified. Please try again.");
+      setLoading(false);
     });
 
     const timer = window.setInterval(() => {
       if (
         !cancelled &&
+        verifiedRef.current &&
         document.visibilityState === "visible" &&
         shouldAutoRefresh(deliveryRef.current?.status ?? null)
       ) {
@@ -147,9 +189,12 @@ export default function TrackingPage() {
 
     return () => {
       cancelled = true;
+      requestEpochRef.current += 1;
+      activeRef.current = false;
+      verifiedRef.current = false;
       window.clearInterval(timer);
     };
-  }, [id, navigate, refresh]);
+  }, [id, navigate, refresh, retry]);
 
   if (!id || !UUID.test(id)) return null;
 
@@ -191,7 +236,7 @@ export default function TrackingPage() {
       <TrackingHeader
         orderId={id}
         onBack={() => navigate({ to: "/orders" })}
-        onRefresh={() => void refresh(id, true)}
+        onRefresh={() => verifiedRef.current ? void refresh(id, true) : setRetry((value) => value + 1)}
         refreshing={busy}
       />
 
@@ -226,7 +271,7 @@ export default function TrackingPage() {
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <button
                 type="button"
-                onClick={() => void refresh(id)}
+                onClick={() => setRetry((value) => value + 1)}
                 className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#F62E18] px-4 text-sm font-semibold text-white transition-opacity hover:opacity-90"
               >
                 <RefreshCw className="h-4 w-4" aria-hidden="true" />

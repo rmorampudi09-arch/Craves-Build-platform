@@ -82,7 +82,7 @@ const ForHomeChefs = () => {
               <span className="chefs__headline-line chefs__headline-line--one">
                 <span className="chefs__letter-anchor chefs__letter-anchor--s">
                   S
-                  <img
+                  <img loading="lazy" decoding="async"
                     className="chefs__letter-friend chefs__letter-friend--tomato"
                     src="/images/chef-letters/tomato.png"
                     alt=""
@@ -93,7 +93,7 @@ const ForHomeChefs = () => {
                 <span className="chefs__letter-anchor chefs__letter-anchor--u">
                   u
                   {/* Optional sprig artwork was not supplied; do not request a missing file. */}
-                  <img
+                  <img loading="lazy" decoding="async"
                     className="chefs__letter-friend chefs__letter-friend--carrot"
                     src="/images/chef-letters/carrot.png"
                     alt=""
@@ -106,7 +106,7 @@ const ForHomeChefs = () => {
                 l
                 <span className="chefs__letter-anchor chefs__letter-anchor--o">
                   o
-                  <img
+                  <img loading="lazy" decoding="async"
                     className="chefs__letter-friend chefs__letter-friend--potato"
                     src="/images/chef-letters/potato.png"
                     alt=""
@@ -116,7 +116,7 @@ const ForHomeChefs = () => {
                 ve to coo
                 <span className="chefs__letter-anchor chefs__letter-anchor--k">
                   k
-                  <img
+                  <img loading="lazy" decoding="async"
                     className="chefs__letter-friend chefs__letter-friend--onion"
                     src="/images/chef-letters/onion.png"
                     alt=""

@@ -1,9 +1,9 @@
 "use client";
 
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AlertTriangle, Clock3, Plus, RefreshCw, Store, Undo2 } from "lucide-react";
-import { loadSession } from "@/services/auth/cravesAuth";
+import { captureSessionContext, isSessionContextCurrent, loadSession, subscribeSession } from "@/services/auth/cravesAuth";
 import {
   addToCart,
   cartCurrency,
@@ -60,9 +60,21 @@ async function resolveLeadMinutes(items: CartItem[]): Promise<number | null> {
   return minutes.length ? Math.max(...minutes) : null;
 }
 
+function sessionScope() {
+  const context = captureSessionContext();
+  return `${context.generation}:${context.identityId ?? ""}`;
+}
+
 function CartPage() {
+  const scope = useSyncExternalStore(subscribeSession, sessionScope, () => "server");
+  return <CartContent key={scope} />;
+}
+
+function CartContent() {
   const navigate = useNavigate();
   const undoTimerRef = useRef<number | null>(null);
+  const activeRef = useRef(false);
+  const refreshSequence = useRef(0);
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -73,10 +85,21 @@ function CartPage() {
   const [undoItem, setUndoItem] = useState<CartItem | null>(null);
 
   const refresh = useCallback(async () => {
+    const sequence = ++refreshSequence.current;
+    let context = captureSessionContext();
+    const isCurrent = () => activeRef.current && sequence === refreshSequence.current && isSessionContextCurrent(context);
     setLoading(true);
     setMessage("");
     try {
+      const session = await loadSession({ hydrateCustomerProfile: "background" });
+      if (!activeRef.current || sequence !== refreshSequence.current) return;
+      context = captureSessionContext();
+      if (!session) {
+        navigate({ to: "/" });
+        return;
+      }
       await loadCart();
+      if (!isCurrent()) return;
       const nextItems = getCart();
       setItems(nextItems);
 
@@ -88,9 +111,10 @@ function CartPage() {
 
       setLoading(false);
       void resolveLeadMinutes(nextItems)
-        .then(setLeadMinutes)
-        .catch(() => setLeadMinutes(null));
+        .then((value) => { if (isCurrent()) setLeadMinutes(value); })
+        .catch(() => { if (isCurrent()) setLeadMinutes(null); });
     } catch (error) {
+      if (!isCurrent()) return;
       setItems([]);
       setLeadMinutes(null);
       setMessage(
@@ -99,24 +123,17 @@ function CartPage() {
           : "Your cart could not be loaded from Craves.",
       );
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
-    let active = true;
+    activeRef.current = true;
     setInstructions(window.sessionStorage.getItem(INSTRUCTIONS_KEY) ?? "");
-    void loadSession().then((session) => {
-      if (!active) return;
-      if (!session) {
-        navigate({ to: "/" });
-        return;
-      }
-      void refresh();
-    });
+    void refresh();
     const unsubscribe = subscribeCart(() => setItems(getCart()));
     return () => {
-      active = false;
+      activeRef.current = false;
       unsubscribe();
       if (undoTimerRef.current !== null) {
         window.clearTimeout(undoTimerRef.current);

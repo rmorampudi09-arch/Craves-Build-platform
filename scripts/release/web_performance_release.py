@@ -27,11 +27,12 @@ release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
 require = release.require
 APP_PATH = "apps/customer-web-next"
+LANDING_PATH = "apps/landing-v20"
 REPO = "craves/customer-web-next"
 SHA = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 CHECKS = {"lint", "typecheck", "test", "build"}
-ALLOWED = (APP_PATH + "/", "docs/performance/")
+ALLOWED = (APP_PATH + "/", LANDING_PATH + "/", "docs/performance/")
 EXACT_FILES = {
     "scripts/release/web_performance_release.py",
     "scripts/release/tests/test_web_performance_release.py",
@@ -105,6 +106,10 @@ def source_guard(args):
     main_tree = git(args.source, "rev-parse", args.expected_main_sha + ":" + APP_PATH)
     live_tree = git(args.source, "rev-parse", args.expected_live_sha + ":" + APP_PATH)
     require(main_tree == live_tree, "Main contains unreconciled web changes since the live release")
+    main_landing_tree = git(args.source, "rev-parse", args.expected_main_sha + ":" + LANDING_PATH)
+    live_landing_tree = git(args.source, "rev-parse", args.expected_live_sha + ":" + LANDING_PATH)
+    require(main_landing_tree == live_landing_tree,
+            "Main contains unreconciled landing authoring changes since the live release")
     changes = git(args.source, "diff", "--name-only", args.expected_main_sha, args.sha).splitlines()
     require(all(name in EXACT_FILES or name.startswith(ALLOWED) for name in changes),
             "Candidate changes files outside the web performance scope")

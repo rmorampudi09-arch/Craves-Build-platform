@@ -30,7 +30,7 @@ export default function ConfirmationPage() {
 
   useEffect(() => {
     void (async () => {
-      if (!(await loadSession())) {
+      if (!(await loadSession({ hydrateCustomerProfile: "background" }))) {
         navigate({ to: "/" });
         return;
       }

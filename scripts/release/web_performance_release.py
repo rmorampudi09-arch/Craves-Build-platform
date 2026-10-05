@@ -105,17 +105,82 @@ def source_guard(args):
     git(args.source, "merge-base", "--is-ancestor", args.expected_main_sha, args.sha)
     main_tree = git(args.source, "rev-parse", args.expected_main_sha + ":" + APP_PATH)
     live_tree = git(args.source, "rev-parse", args.expected_live_sha + ":" + APP_PATH)
-    require(main_tree == live_tree, "Main contains unreconciled web changes since the live release")
     main_landing_tree = git(args.source, "rev-parse", args.expected_main_sha + ":" + LANDING_PATH)
     live_landing_tree = git(args.source, "rev-parse", args.expected_live_sha + ":" + LANDING_PATH)
-    require(main_landing_tree == live_landing_tree,
-            "Main contains unreconciled landing authoring changes since the live release")
+    successor = successor_review(args, live_tree)
+    if successor is None:
+        require(main_tree == live_tree, "Main contains unreconciled web changes since the live release")
+        require(main_landing_tree == live_landing_tree,
+                "Main contains unreconciled landing authoring changes since the live release")
+    else:
+        baseline = successor["baselineSourceSha"]
+        baseline_tree = git(args.source, "rev-parse", baseline + ":" + APP_PATH)
+        baseline_landing_tree = git(args.source, "rev-parse", baseline + ":" + LANDING_PATH)
+        require(main_tree == baseline_tree and main_landing_tree == baseline_landing_tree,
+                "Main frontend changed from the verified prior release baseline")
+        git(args.source, "merge-base", "--is-ancestor", args.expected_live_sha, args.sha)
+        patch = git(args.source, "diff", "--name-only", args.expected_live_sha, args.sha).splitlines()
+        require(all(name in EXACT_FILES or name.startswith(ALLOWED) for name in patch),
+                "Successor patch changes files outside the web performance scope")
+        successor.update(mainWebTree=main_tree, mainLandingTree=main_landing_tree,
+                         liveWebTree=live_tree, liveLandingTree=live_landing_tree)
     changes = git(args.source, "diff", "--name-only", args.expected_main_sha, args.sha).splitlines()
     require(all(name in EXACT_FILES or name.startswith(ALLOWED) for name in changes),
             "Candidate changes files outside the web performance scope")
     tree = git(args.source, "rev-parse", args.sha + ":" + APP_PATH)
     require(tree != live_tree, "Candidate contains no web performance changes")
-    return local_evidence(args.source, args.evidence, args.evidence_sha256, tree)
+    proof = local_evidence(args.source, args.evidence, args.evidence_sha256, tree)
+    if successor is not None:
+        proof["successor"] = successor
+    return proof
+
+
+def successor_review(args, live_tree):
+    path = getattr(args, "prior_release_receipt", None)
+    expected_hash = getattr(args, "prior_release_receipt_sha256", None)
+    require(bool(path) == bool(expected_hash), "Successor mode needs both prior receipt and its reviewed hash")
+    if path is None:
+        return None
+    output = getattr(args, "receipt", None)
+    require(output is None or (path.resolve() != output.resolve()
+            and (not output.exists() or not path.samefile(output))),
+            "Successor receipt must not overwrite the verified prior receipt")
+    raw = path.read_bytes()
+    require(re.fullmatch(r"[0-9a-f]{64}", expected_hash or "") and sha256(raw) == expected_hash,
+            "Prior release receipt differs from its reviewed hash")
+    value = json.loads(raw)
+    require(isinstance(value, dict) and value.get("operation") == "deploy" and value.get("verified") is True,
+            "Successor mode requires a verified prior deployment receipt")
+    require(value.get("sourceSha") == args.expected_live_sha and value.get("image") == args.expected_live_image,
+            "Prior deployment receipt does not match the expected live source and image")
+    image_reference(value["image"])
+    baseline, prior_main = value.get("previousSourceSha"), value.get("mainSha")
+    require(isinstance(baseline, str) and SHA.fullmatch(baseline)
+            and isinstance(prior_main, str) and SHA.fullmatch(prior_main),
+            "Prior receipt must identify exact historical source and main SHAs")
+    prior_proof = value.get("localEvidence", {})
+    require(isinstance(prior_proof, dict) and prior_proof.get("webTree") == live_tree
+            and prior_proof.get("checks") == sorted(CHECKS),
+            "Prior receipt did not verify the exact deployed web tree")
+    protected = value.get("protectedApps")
+    require(isinstance(protected, dict) and bool(protected)
+            and all(isinstance(name, str) and isinstance(fingerprint, str)
+                    and re.fullmatch(r"[0-9a-f]{64}", fingerprint)
+                    for name, fingerprint in protected.items()),
+            "Prior receipt has no valid protected app fingerprints")
+    for ancestor, descendant in ((baseline, prior_main), (baseline, args.expected_live_sha),
+                                 (prior_main, args.expected_live_sha), (prior_main, args.expected_main_sha)):
+        git(args.source, "merge-base", "--is-ancestor", ancestor, descendant)
+    for app_path in (APP_PATH, LANDING_PATH):
+        require(git(args.source, "rev-parse", prior_main + ":" + app_path)
+                == git(args.source, "rev-parse", baseline + ":" + app_path),
+                "Prior receipt main frontend differs from its documented baseline")
+    prior_changes = git(args.source, "diff", "--name-only", prior_main, args.expected_live_sha).splitlines()
+    require(all(name in EXACT_FILES or name.startswith(ALLOWED) for name in prior_changes),
+            "Prior deployment source chain changes files outside the web performance scope")
+    return {"priorReceiptSha256": expected_hash, "priorSourceSha": args.expected_live_sha,
+            "priorImage": args.expected_live_image, "priorMainSha": prior_main,
+            "baselineSourceSha": baseline, "protectedApps": protected}
 
 
 def image_reference(image):
@@ -309,6 +374,9 @@ def execute(args):
     old_image = release.resolve_image(args.expected_live_image)
     require(old_image == args.expected_live_image, "Previous web image digest changed")
     protected = protected_apps()
+    if "successor" in proof:
+        require(protected == proof["successor"]["protectedApps"],
+                "Protected apps changed since the reviewed prior deployment")
     receipt = {"operation": "deploy" if args.deploy else "inspect", "sourceSha": args.sha,
                "mainSha": args.expected_main_sha, "localEvidence": proof,
                "previousImage": old_image, "previousSourceSha": args.expected_live_sha,
@@ -367,6 +435,10 @@ def main():
     parser.add_argument("--evidence-sha256", required=True)
     parser.add_argument("--receipt", required=True, type=Path)
     parser.add_argument("--candidate-image", help="Reuse a previously built immutable image after independent verification")
+    parser.add_argument("--prior-release-receipt", type=Path,
+                        help="Explicit successor mode: exact verified earlier deployment receipt")
+    parser.add_argument("--prior-release-receipt-sha256",
+                        help="Independently reviewed SHA256 of the successor mode receipt")
     parser.add_argument("--deploy", action="store_true", help="Explicitly update only the existing customer web")
     try:
         execute(parser.parse_args())

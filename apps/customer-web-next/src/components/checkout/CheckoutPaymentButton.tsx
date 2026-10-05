@@ -245,7 +245,7 @@ export function CheckoutPaymentButton({
     onFailure(null);
 
     try {
-      const session = await loadSession();
+      const session = await loadSession({ hydrateCustomerProfile: "background" });
       if (!session) {
         throw new Error("Your session expired. Sign in and try payment again.");
       }

@@ -34,7 +34,7 @@ beforeEach(async () => {
   auth = await import("../services/auth/cravesAuth");
   auth.setSessionIdentity(identity);
 });
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe("session navigation request sharing", () => {
   it("shares identity and profile requests while background callers can render before awaited hydration", async () => {
@@ -196,6 +196,72 @@ describe("session navigation request sharing", () => {
 });
 
 describe("shared request session boundaries", () => {
+  it("releases an aborted role refresh so retry can verify current roles", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(AbortSignal, "timeout").mockImplementation(milliseconds => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(new DOMException("Timed out", "TimeoutError")), milliseconds);
+      return controller.signal;
+    });
+    const fetcher = vi.fn<typeof fetch>().mockImplementationOnce((_, init) => new Promise<Response>((__, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+    })).mockResolvedValueOnce(Response.json({ identity: { ...identity, roles: ["CHEF"] } }));
+    vi.stubGlobal("fetch", fetcher);
+    const stalled = auth.synchronizeSessionRoles({ hydrateCustomerProfile: "skip" });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(await stalled).toBeNull();
+    expect((await auth.synchronizeSessionRoles({ hydrateCustomerProfile: "skip" }))?.roles).toEqual(["CHEF"]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("shares fresh role checks while background and skipped callers do not wait for another caller's profile", async () => {
+    const renewal = deferred<Response>();
+    const display = deferred<Response>();
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(input => String(input) === "/api/auth/refresh" ? renewal.promise : display.promise);
+    vi.stubGlobal("fetch", fetcher);
+    const awaited = auth.synchronizeSessionRoles();
+    let awaitedFinished = false;
+    void awaited.then(() => { awaitedFinished = true; });
+    const skipped = auth.synchronizeSessionRoles({ hydrateCustomerProfile: "skip" });
+    const background = auth.synchronizeSessionRoles({ hydrateCustomerProfile: "background" });
+    renewal.resolve(Response.json({ identity: { ...identity, roles: ["CUSTOMER", "CHEF"] } }));
+    expect((await skipped)?.roles).toContain("CHEF");
+    expect((await background)?.roles).toContain("CHEF");
+    expect(awaitedFinished).toBe(false);
+    expect(fetcher.mock.calls.filter(([url]) => url === "/api/auth/refresh")).toHaveLength(1);
+    expect(fetcher.mock.calls.filter(([url]) => url === "/api/customer/profile")).toHaveLength(1);
+    display.resolve(Response.json(profile));
+    expect((await awaited)?.username).toBe("Customer Name");
+  });
+
+  it("checks roles again after a settled refresh and rejects an invalid refresh instead of accepting saved CHEF roles", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({ identity: { ...identity, roles: ["CHEF"] } }))
+      .mockResolvedValueOnce(Response.json({ identity: { ...identity, roles: ["CUSTOMER"] } }))
+      .mockResolvedValueOnce(Response.json({}));
+    vi.stubGlobal("fetch", fetcher);
+    expect((await auth.synchronizeSessionRoles({ hydrateCustomerProfile: "skip" }))?.roles).toEqual(["CHEF"]);
+    expect((await auth.synchronizeSessionRoles({ hydrateCustomerProfile: "skip" }))?.roles).toEqual(["CUSTOMER"]);
+    expect(await auth.synchronizeSessionRoles({ hydrateCustomerProfile: "skip" })).toBeNull();
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it("ignores an old role response and keeps the replacement owner's independent refresh in flight", async () => {
+    const old = deferred<Response>();
+    const fresh = deferred<Response>();
+    const fetcher = vi.fn<typeof fetch>().mockReturnValueOnce(old.promise).mockReturnValueOnce(fresh.promise);
+    vi.stubGlobal("fetch", fetcher);
+    const before = auth.synchronizeSessionRoles({ hydrateCustomerProfile: "skip" });
+    const other = { ...identity, id: "22222222-2222-4222-8222-222222222222", roles: ["CUSTOMER"] };
+    auth.setSessionIdentity(other);
+    const after = auth.synchronizeSessionRoles({ hydrateCustomerProfile: "skip" });
+    old.resolve(Response.json({ identity: { ...identity, roles: ["CHEF"] } }));
+    await before;
+    const shared = auth.synchronizeSessionRoles({ hydrateCustomerProfile: "skip" });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    fresh.resolve(Response.json({ identity: other }));
+    expect((await after)?.id).toBe(other.id);
+    expect((await shared)?.roles).toEqual(["CUSTOMER"]);
+    expect(auth.getSession()?.id).toBe(other.id);
+  });
   it("does not refresh an earlier session after its delayed unauthorized body crosses a login", async () => {
     const failureBody = deferred<unknown>();
     const parsing = deferred<void>();

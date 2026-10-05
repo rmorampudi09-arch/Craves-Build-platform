@@ -157,7 +157,7 @@ test("address manager owns default selection and the shared location-first edito
   assert.match(addresses, /invalidateSelectedAddress/);
   assert.match(addresses, /clearDishDiscoveryCache/);
   assert.match(addresses, /clearKitchenDiscoveryCache/);
-  assert.match(addresses, /<AddressEditorFlow/);
+  assert.match(addresses, /editorOpen \? <LazyAddressEditorFlow/);
   assert.match(addresses, /initialLoadState/);
   assert.match(addresses, /aria-label="Loading saved addresses"/);
   assert.match(
@@ -217,7 +217,7 @@ test("checkout is one page with saved addresses, ASAP delivery and the shared ad
   assert.match(checkout, /As soon as possible/);
   assert.match(checkout, /Bill details/);
   assert.match(checkout, /<CheckoutPaymentButton/);
-  assert.match(checkout, /<AddressEditorFlow/);
+  assert.match(checkout, /editorOpen \? <LazyAddressEditorFlow/);
   assert.match(checkout, /\/api\/checkout\/operations\//);
   assert.match(checkout, /checkoutCartSnapshot\(validatedCart\)/);
   assert.match(checkout, /parseCheckoutOperationResponse/);

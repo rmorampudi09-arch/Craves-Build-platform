@@ -3,6 +3,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -133,6 +134,174 @@ class SourceReviewTests(unittest.TestCase):
             evidence.assert_not_called()
 
 
+class SuccessorSourceReviewTests(unittest.TestCase):
+    BASELINE_SHA = "e" * 40
+    PRIOR_MAIN_SHA = "6" * 40
+    LIVE_TREE = "d" * 40
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.path = Path(self.directory.name) / "prior.json"
+        self.value = {"operation": "deploy", "verified": True, "sourceSha": LIVE_SHA,
+                      "image": OLD_IMAGE, "previousSourceSha": self.BASELINE_SHA, "mainSha": self.PRIOR_MAIN_SHA,
+                      "localEvidence": {"webTree": self.LIVE_TREE, "checks": sorted(performance.CHECKS)},
+                      "protectedApps": {"chef": "1" * 64}}
+        self.args = SimpleNamespace(source=Path(self.directory.name), sha=SOURCE_SHA,
+            expected_main_sha=MAIN_SHA, expected_live_sha=LIVE_SHA, expected_live_image=OLD_IMAGE,
+            evidence=Path("evidence.json"), evidence_sha256="0" * 64,
+            prior_release_receipt=self.path, prior_release_receipt_sha256=None)
+        self.write_receipt()
+
+    def write_receipt(self):
+        self.path.write_text(json.dumps(self.value), encoding="utf-8")
+        self.args.prior_release_receipt_sha256 = performance.sha256(self.path.read_bytes())
+
+    def commands(self, wrong_main=None, wrong_prior=None, patch=None, prior_patch=None,
+                 main_patch=None, failed_ancestor=None):
+        def answer(source, *args):
+            if args == ("rev-parse", "HEAD"):
+                return SOURCE_SHA
+            if args[0] == "status":
+                return ""
+            if args == ("rev-parse", "origin/main"):
+                return MAIN_SHA
+            if args[0] == "ls-remote":
+                return MAIN_SHA + "\trefs/heads/main"
+            if args[0] == "merge-base":
+                if args[-2:] == failed_ancestor:
+                    raise ValueError("Reviewed source ancestry changed")
+                return ""
+            if args[0] == "diff":
+                if args[2:] == (self.PRIOR_MAIN_SHA, LIVE_SHA):
+                    return prior_patch if prior_patch is not None else performance.APP_PATH + "/src/old.tsx"
+                if args[2:] == (LIVE_SHA, SOURCE_SHA):
+                    return patch if patch is not None else performance.APP_PATH + "/src/new.tsx"
+                return main_patch if main_patch is not None else performance.APP_PATH + "/src/old.tsx\n" + performance.APP_PATH + "/src/new.tsx"
+            if args[0] == "rev-parse":
+                sha, app_path = args[1].split(":")
+                if sha == SOURCE_SHA:
+                    return "f" * 40
+                if sha == LIVE_SHA:
+                    return self.LIVE_TREE if app_path == performance.APP_PATH else "7" * 40
+                if sha == MAIN_SHA and app_path == wrong_main:
+                    return "0" * 40
+                if sha == self.PRIOR_MAIN_SHA and app_path == wrong_prior:
+                    return "0" * 40
+                return "2" * 40 if app_path == performance.APP_PATH else "3" * 40
+            self.fail("Unexpected Git invocation")
+        return answer
+
+    def review(self, **kwargs):
+        with patch.object(performance, "git", side_effect=self.commands(**kwargs)), \
+                patch.object(performance, "local_evidence", return_value={"checks": sorted(performance.CHECKS)}):
+            return performance.source_guard(self.args)
+
+    def test_explicit_verified_successor_accepts_documented_main_divergence(self):
+        proof = self.review()
+        self.assertEqual(proof["successor"]["baselineSourceSha"], self.BASELINE_SHA)
+        self.assertEqual(proof["successor"]["priorReceiptSha256"], self.args.prior_release_receipt_sha256)
+        self.assertEqual(proof["successor"]["liveWebTree"], self.LIVE_TREE)
+        self.assertNotEqual(proof["successor"]["mainWebTree"], proof["successor"]["liveWebTree"])
+        self.assertNotIn(str(self.path), json.dumps(proof))
+
+    def test_default_guard_does_not_fall_back_to_successor_mode(self):
+        self.args.prior_release_receipt = None
+        self.args.prior_release_receipt_sha256 = None
+        with self.assertRaisesRegex(ValueError, "unreconciled web"):
+            self.review()
+
+    def test_missing_hash_or_receipt_and_tampering_are_rejected(self):
+        original_hash = self.args.prior_release_receipt_sha256
+        self.args.prior_release_receipt_sha256 = None
+        with self.assertRaisesRegex(ValueError, "both prior"):
+            self.review()
+        self.args.prior_release_receipt_sha256 = original_hash
+        self.args.prior_release_receipt = None
+        with self.assertRaisesRegex(ValueError, "both prior"):
+            self.review()
+        self.args.prior_release_receipt = self.path
+        self.path.write_text(self.path.read_text() + " ", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "reviewed hash"):
+            self.review()
+
+    def test_output_receipt_cannot_replace_the_historical_input(self):
+        self.args.receipt = self.path.parent / "nested" / ".." / self.path.name
+        with self.assertRaisesRegex(ValueError, "must not overwrite"):
+            self.review()
+        self.args.receipt = self.path.parent / "new-release.json"
+        self.assertIn("successor", self.review())
+
+    def test_unverified_wrong_live_image_or_prior_evidence_are_rejected(self):
+        original = copy.deepcopy(self.value)
+        cases = [("verified", False), ("operation", "inspect"), ("sourceSha", SOURCE_SHA),
+                 ("image", NEW_IMAGE), ("previousSourceSha", "short"),
+                 ("localEvidence", {"webTree": "0" * 40, "checks": sorted(performance.CHECKS)}),
+                 ("localEvidence", {"webTree": self.LIVE_TREE, "checks": ["build"]}),
+                 ("protectedApps", {}), ("protectedApps", {"chef": "not-a-fingerprint"})]
+        for name, value in cases:
+            self.value = copy.deepcopy(original)
+            self.value[name] = value
+            self.write_receipt()
+            with self.subTest(field=name, value=value), self.assertRaises(ValueError):
+                self.review()
+
+    def test_main_frontend_changes_and_out_of_scope_successor_or_prior_patch_fail(self):
+        for app_path in (performance.APP_PATH, performance.LANDING_PATH):
+            with self.subTest(app=app_path), self.assertRaisesRegex(ValueError, "frontend.*baseline"):
+                self.review(wrong_main=app_path)
+            with self.subTest(prior_app=app_path), self.assertRaisesRegex(ValueError, "frontend.*baseline"):
+                self.review(wrong_prior=app_path)
+        for parameter in ("patch", "prior_patch", "main_patch"):
+            with self.subTest(parameter=parameter), self.assertRaisesRegex(ValueError, "outside.*scope"):
+                self.review(**{parameter: "services/order-service/src/Order.java"})
+
+    def test_each_required_ancestry_relationship_is_enforced(self):
+        for relationship in ((self.BASELINE_SHA, self.PRIOR_MAIN_SHA), (self.BASELINE_SHA, LIVE_SHA),
+                             (self.PRIOR_MAIN_SHA, LIVE_SHA), (self.PRIOR_MAIN_SHA, MAIN_SHA),
+                             (MAIN_SHA, SOURCE_SHA), (LIVE_SHA, SOURCE_SHA)):
+            with self.subTest(relationship=relationship), self.assertRaisesRegex(ValueError, "ancestry"):
+                self.review(failed_ancestor=relationship)
+
+    def test_real_git_history_accepts_successor_but_rejects_candidate_dropping_live_patch(self):
+        source = self.args.source
+        def command(*args):
+            result = subprocess.run(["git", *args], cwd=source, capture_output=True, text=True)
+            if result.returncode:
+                raise ValueError("Git source ancestry or command failed")
+            return result.stdout.strip()
+        command("init", "-q")
+        command("config", "user.name", "Release guard test")
+        command("config", "user.email", "release-guard@example.invalid")
+        def commit_file(name, content):
+            path = source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            command("add", name)
+            command("commit", "-qm", content)
+            return command("rev-parse", "HEAD")
+        commit_file(performance.APP_PATH + "/src/page.tsx", "baseline web")
+        baseline = commit_file(performance.LANDING_PATH + "/src/App.tsx", "baseline landing")
+        main = commit_file("services/orders/source.java", "existing main backend")
+        live = commit_file(performance.APP_PATH + "/src/page.tsx", "first deployed improvement")
+        candidate = commit_file(performance.APP_PATH + "/src/page.tsx", "second reviewed improvement")
+        command("update-ref", "refs/remotes/origin/main", main)
+        self.args.sha, self.args.expected_main_sha, self.args.expected_live_sha = candidate, main, live
+        self.value.update(sourceSha=live, previousSourceSha=baseline, mainSha=main)
+        self.value["localEvidence"]["webTree"] = command("rev-parse", live + ":" + performance.APP_PATH)
+        self.write_receipt()
+        def real_git(source, *args):
+            if args[0] == "ls-remote":
+                return main + "\trefs/heads/main"
+            return command(*args)
+        with patch.object(performance, "git", side_effect=real_git), patch.object(performance, "local_evidence", return_value={}):
+            self.assertEqual(performance.source_guard(self.args)["successor"]["baselineSourceSha"], baseline)
+            command("checkout", "-q", "--detach", main)
+            self.args.sha = commit_file(performance.APP_PATH + "/src/page.tsx", "sibling drops deployed improvement")
+            with self.assertRaisesRegex(ValueError, "ancestry"):
+                performance.source_guard(self.args)
+
+
 class WindowsCommandTests(unittest.TestCase):
     def test_azure_cmd_uses_bundled_python_with_argument_boundaries(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -234,6 +403,16 @@ class ReleaseSafetyTests(unittest.TestCase):
         build.assert_not_called()
         verify.assert_not_called()
         self.assertNotIn("PRIVATE_SETTING", self.args.receipt.read_text())
+
+    def test_successor_protected_drift_stops_inspection_before_build_or_update(self):
+        proof = {"successor": {"protectedApps": {"chef": "1" * 64}}}
+        self.args.deploy = True
+        with patch.object(performance, "source_guard", return_value=proof), patch.object(release, "azure", return_value={"id": release.SUBSCRIPTION, "tenantId": release.inspect.TENANT}) as azure, patch.object(release, "app", return_value=app()), patch.object(release, "ready_web"), patch.object(release, "resolve_image", return_value=OLD_IMAGE), patch.object(performance, "protected_apps", return_value={"chef": "2" * 64}), patch.object(performance, "build_image") as build, patch.object(performance, "verify_registry_image") as verify:
+            with self.assertRaisesRegex(ValueError, "changed since.*prior deployment"):
+                performance.execute(self.args)
+        self.assertEqual(azure.call_count, 1)
+        build.assert_not_called()
+        verify.assert_not_called()
 
     def test_concurrent_source_image_secret_scale_or_identity_blocks_recovery(self):
         before = app()

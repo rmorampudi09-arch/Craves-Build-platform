@@ -42,7 +42,7 @@ import {
   CheckoutPaymentButton,
   type CheckoutPaymentFailure,
 } from "@/components/checkout/CheckoutPaymentButton";
-import { AddressEditorFlow } from "@/components/profile/AddressEditorFlow";
+import { LazyAddressEditorFlow } from "@/components/profile/LazyAddressEditorFlow";
 import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
 
 const ADDRESS_KEY = "craves.checkout.addressId";
@@ -862,13 +862,13 @@ export default function CheckoutPage() {
         ) : null}
       </main>
 
-      <AddressEditorFlow
+      {editorOpen ? <LazyAddressEditorFlow
         open={editorOpen}
         initialAddress={null}
         profileDefaults={profileDefaults}
         onClose={() => setEditorOpen(false)}
         onSaved={handleAddressSaved}
-      />
+      /> : null}
     </div>
   );
 }

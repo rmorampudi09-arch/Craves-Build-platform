@@ -7,7 +7,7 @@ function source(relativePath: string): string {
 }
 
 test("mobile customer nav morphs the Cart tab right-to-left while browsing down", () => {
-  const nav = source("../components/layout/BottomNav.tsx");
+  const nav = source("../components/layout/BottomNavContent.tsx");
 
   assert.match(nav, /FaHome/);
   assert.match(nav, /CalendarDays/);
@@ -65,7 +65,7 @@ test("mobile browse keeps dish proportions and cart glass with larger craving im
   const card = source("../components/home/DishCard.tsx");
   const grid = source("../components/home/DishesGrid.tsx");
   const cravings = source("../components/home/HomeCategoryRail.tsx");
-  const nav = source("../components/layout/BottomNav.tsx");
+  const nav = source("../components/layout/BottomNavContent.tsx");
   const homeStyles = source("../screens/public/BrowseFoods/HomeReference.module.css");
 
   assert.match(card, /aspect-\[16\/9\] sm:aspect-\[16\/10\]/);

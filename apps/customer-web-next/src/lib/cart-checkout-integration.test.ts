@@ -83,7 +83,7 @@ test("Razorpay payment is contract validated and backend verified", () => {
   assert.match(payment, /parsePaymentVerification\(raw\)/);
   assert.match(payment, /\/api\/payments\/orders/);
   assert.match(payment, /sessionFetch/);
-  assert.match(payment, /const session = await loadSession\(\)/);
+  assert.match(payment, /const session = await loadSession\(\{ hydrateCustomerProfile: "background" \}\)/);
   assert.match(payment, /if \(!checkout\) \{[\s\S]*await ensureCheckout\(\);[\s\S]*return;/);
   assert.match(payment, /Preparing total/);
   assert.match(payment, /bg-\[#16A34A\]/);

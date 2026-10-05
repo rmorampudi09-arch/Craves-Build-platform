@@ -1,11 +1,5 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import "@syncfusion/ej2-tailwind3-theme/styles/base/base.css";
-import "@syncfusion/ej2-tailwind3-theme/styles/grid/grid.css";
-import "@syncfusion/ej2-tailwind3-theme/styles/pager/pager.css";
-import "@syncfusion/ej2-tailwind3-theme/styles/popup/popup.css";
-import "@syncfusion/ej2-tailwind3-theme/styles/spinner/spinner.css";
-import "@syncfusion/ej2-tailwind3-theme/styles/tooltip/tooltip.css";
 import { AdminExplorerSession } from "@/components/admin-explorer-session";
 import { AdminWorkspace } from "@/components/admin-workspace";
 

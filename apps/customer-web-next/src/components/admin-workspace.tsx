@@ -12,7 +12,6 @@ import { createAdminAuthorization, INITIAL_ADMIN_AUTHORIZATION } from "@/lib/adm
 import { loadAdminIdentity } from "@/lib/admin-session";
 import { ADMIN_MODULES, matchesAdminRoute, searchAdminModules } from "@/lib/admin-navigation";
 import { AdminModuleLink } from "@/components/admin-module-link";
-import { SyncfusionLicense } from "@/components/syncfusion-license";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { AcademyWorkspace } from "@/components/academy-workspace";
 import "@/styles/admin-control.css";
@@ -125,7 +124,6 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
 
   return <>
     <div className="cr-admin cr-admin-shell" hidden={!allowInteraction}>
-      <SyncfusionLicense/>
       <a className="cr-skip" href="#cr-admin-content">Skip to workspace</a>
       <aside className="cr-sidebar">
         <Brand/><Navigation pathname={pathname}/>

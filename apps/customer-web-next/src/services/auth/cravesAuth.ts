@@ -1,6 +1,6 @@
 "use client";
 
-import type { CravesIdentity } from "@/lib/auth-contract";
+import { parseIdentity, type CravesIdentity } from "@/lib/auth-contract";
 import { emailVerificationStateSchema, type EmailVerificationState } from "@/lib/email-verification-contract";
 import type {
   CustomerAddress,
@@ -152,7 +152,7 @@ function forgetSession() {
   invalidatePendingSessionWork(); sessionEnding = false; session = null; sessionEmailRevision = -1; selectedLocation = null; persistSessionSnapshot(null); persistAddressSnapshot(null); notify();
 }
 let selectedLocation: CravesAddress | null = null;
-let roleSynchronization: Promise<CravesUser | null> | null = null;
+let roleSynchronization: Promise<SessionLookupResult> | null = null;
 const sessionRefreshes = new Map<number, Promise<Response | null>>();
 type SessionLookupResult = { user: CravesUser | null; profileContext?: SessionContext };
 const identityLookups = new Map<string, Promise<SessionLookupResult>>();
@@ -171,6 +171,7 @@ function refreshSessionForGeneration(generation: number): Promise<Response | nul
     method: "POST",
     credentials: "same-origin",
     cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
   })
     .catch(() => null)
     .finally(() => {
@@ -338,6 +339,7 @@ async function lookupSessionIdentity(options: LoadSessionOptions, context: Sessi
     fetch("/api/auth/me", {
       cache: "no-store",
       credentials: "same-origin",
+      signal: AbortSignal.timeout(15_000),
     });
 
   let response = await lookup();
@@ -370,8 +372,9 @@ async function lookupSessionIdentity(options: LoadSessionOptions, context: Sessi
     return { user: null };
   }
 
-  const identity = (await response.json().catch(() => null)) as CravesIdentity | null;
-  if (!identity?.id || !isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) return { user: session };
+  const identity = parseIdentity(await response.json().catch(() => null));
+  if (!isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) return { user: session };
+  if (!identity?.id) return { user: null };
   const current = applyIdentityLookup(identity, context, sequence);
   return { user: current, profileContext: captureSessionContext() };
 }
@@ -405,26 +408,41 @@ export async function loadSession(options: LoadSessionOptions = {}): Promise<Cra
   return hydrateCustomerProfile(current, result.profileContext);
 }
 
-export async function synchronizeSessionRoles(): Promise<CravesUser | null> {
+export async function synchronizeSessionRoles(options: Pick<LoadSessionOptions, "hydrateCustomerProfile"> = {}): Promise<CravesUser | null> {
   if (sessionEnding) return null;
-  if (roleSynchronization) return roleSynchronization;
-  const context = captureSessionContext();
-  const sequence = ++identityRequestSequence;
-  const pending = (async () => {
-    const response = await refreshSessionForGeneration(context.generation);
-    if (!isSessionContextCurrent(context)) return session;
-    if (!response?.ok) return null;
-
-    const body = (await response.json().catch(() => null)) as {
-      identity?: CravesIdentity;
-    } | null;
-    if (!body?.identity?.id || !isSessionContextCurrent(context)) return session;
-    const current = applyIdentityLookup(body.identity, context, sequence);
-    return current ? hydrateCustomerProfile(current) : null;
-  })();
-  roleSynchronization = pending;
-  try { return await pending; }
-  finally { if (roleSynchronization === pending) roleSynchronization = null; }
+  let pending = roleSynchronization;
+  if (!pending) {
+    const context = captureSessionContext();
+    const sequence = ++identityRequestSequence;
+    const lookup = (async (): Promise<SessionLookupResult> => {
+      const response = await refreshSessionForGeneration(context.generation);
+      if (!isSessionContextCurrent(context)) return { user: session };
+      if (!response?.ok) return { user: null };
+      const body = (await response.json().catch(() => null)) as { identity?: CravesIdentity } | null;
+      if (!isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) return { user: session };
+      if (!body?.identity?.id) return { user: null };
+      const identity = parseIdentity(body.identity);
+      if (!identity) return { user: null };
+      const current = applyIdentityLookup(identity, context, sequence);
+      return { user: current, profileContext: captureSessionContext() };
+    })();
+    const tracked = lookup.finally(() => {
+      if (roleSynchronization === tracked) roleSynchronization = null;
+    });
+    roleSynchronization = tracked;
+    pending = tracked;
+  }
+  // Share the fresh role/token check, rather than any caller's optional display wait.
+  const result = await pending;
+  const current = result.user;
+  if (!current || !result.profileContext) return current;
+  if (!isSessionContextCurrent(result.profileContext) || sessionEnding) return session;
+  if (options.hydrateCustomerProfile === "skip") return current;
+  if (options.hydrateCustomerProfile === "background") {
+    void hydrateCustomerProfile(current, result.profileContext).catch(() => null);
+    return current;
+  }
+  return hydrateCustomerProfile(current, result.profileContext);
 }
 
 /** A retry belongs only to the session this failed logout restored, never a later sign-in. */

@@ -13,7 +13,7 @@ import {
   type CravesUser,
 } from "@/services/auth/cravesAuth";
 
-type AccessState = "synchronizing" | "ready" | "sign-in" | "not-approved";
+type AccessState = "synchronizing" | "ready" | "sign-in" | "not-approved" | "unavailable";
 
 function hasChefRole(user: CravesUser | null): boolean {
   return Boolean(user?.status === "ACTIVE" && user.roles.some((role) => role.toUpperCase() === "CHEF"));
@@ -28,19 +28,23 @@ const serverScope = () => "server";
 export function ChefAccessBoundary({ children }: { children: ReactNode }) {
   const scope = useSyncExternalStore(subscribeSession, accessScope, serverScope);
   const [access, setAccess] = useState<{ scope: string; state: AccessState }>({ scope: "server", state: "synchronizing" });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
+    const timeout = window.setTimeout(() => {
+      if (active) { active = false; setAccess({ scope, state: "unavailable" }); }
+    }, 15_000);
 
     void (async () => {
       const initial = captureSessionContext();
-      const current = await loadSession();
+      const current = await loadSession({ hydrateCustomerProfile: "skip" });
       if (!active) return;
       // Initial /me may establish an owner. An existing owner's logout or
       // replacement invalidates all work started under that session generation.
       if (initial.identityId !== null && !isSessionContextCurrent(initial)) return;
       if (!current) {
-        setAccess({ scope: accessScope(), state: "sign-in" });
+        setAccess({ scope: accessScope(), state: isSessionReady() ? "unavailable" : "sign-in" });
         return;
       }
       if (getSession()?.id !== current.id) return;
@@ -57,17 +61,18 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
       // Auth /me reads the current database roles. Rotate the HTTP-only token
       // before calling Catalog or Order so its signed JWT carries CHEF too.
       const established = captureSessionContext();
-      const synchronized = await synchronizeSessionRoles();
+      const synchronized = await synchronizeSessionRoles({ hydrateCustomerProfile: "skip" });
       if (!active || !isSessionContextCurrent(established) || getSession()?.id !== current.id) return;
-      setAccess({ scope: accessScope(), state: isSessionReady() && synchronized?.id === current.id && hasChefRole(synchronized) ? "ready" : "sign-in" });
+      setAccess({ scope: accessScope(), state: !synchronized ? "unavailable" : isSessionReady() && synchronized.id === current.id && hasChefRole(synchronized) ? "ready" : "not-approved" });
     })().catch(() => {
-      if (active) setAccess({ scope, state: "sign-in" });
-    });
+      if (active) setAccess({ scope, state: "unavailable" });
+    }).finally(() => window.clearTimeout(timeout));
 
     return () => {
       active = false;
+      window.clearTimeout(timeout);
     };
-  }, [scope]);
+  }, [scope, attempt]);
 
   const state = access.scope === scope ? access.state : "synchronizing";
   if (state === "ready" && isSessionReady() && hasChefRole(getSession())) {
@@ -86,15 +91,20 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
           ? "Synchronizing your approved chef role…"
           : state === "not-approved"
             ? "Chef approval is still required"
+            : state === "unavailable"
+              ? "We couldn’t check your chef access"
             : "Sign in again to continue"}
       </h2>
       {state !== "synchronizing" && (
         <p className="mt-3 text-sm leading-6 text-slate-600">
           {state === "not-approved"
             ? "You are signed in. Submit or review your chef application; Craves admin approval remains authoritative."
+            : state === "unavailable"
+              ? "Check your connection and try again. Your chef tools stay closed until access is confirmed."
             : "Complete mobile OTP sign-in again so Catalog and Order services receive your current roles."}
         </p>
       )}
+      {state === "unavailable" ? <button type="button" className="mt-7 min-h-12 rounded-full bg-[#F62E18] px-6 font-semibold text-white" onClick={() => { setAccess({ scope, state: "synchronizing" }); setAttempt(value => value + 1); }}>Try again</button> : null}
       {state === "sign-in" ? (
         <Link
           href="/sign-in?returnTo=/chef"

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/buttons/button";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   AlertTriangle,
   BadgeIndianRupee,
@@ -33,7 +33,12 @@ import {
   type ChefEarning,
 } from "@/lib/chef-earnings-contract";
 import {
+  captureSessionContext,
+  getSession,
+  isSessionContextCurrent,
+  isSessionReady,
   loadSession,
+  subscribeSession,
   synchronizeSessionRoles,
   type CravesUser,
 } from "@/services/auth/cravesAuth";
@@ -53,6 +58,7 @@ type Snapshot = {
   orders: ChefOrder[];
   earnings: ChefEarning[];
   unavailable: string[];
+  pending: string[];
 };
 
 type PriorityAction = {
@@ -72,10 +78,11 @@ const EMPTY: Snapshot = {
   orders: [],
   earnings: [],
   unavailable: [],
+  pending: [],
 };
 
 function hasChefRole(user: CravesUser | null): boolean {
-  return Boolean(user?.roles.some((role) => role.toUpperCase() === "CHEF"));
+  return Boolean(user?.status === "ACTIVE" && user.roles.some((role) => role.toUpperCase() === "CHEF"));
 }
 
 function hasRequiredEvidence(application: ChefApplication): boolean {
@@ -164,7 +171,18 @@ function applicantCopy(application: ChefApplication | null) {
   };
 }
 
+function dashboardScope() {
+  const context = captureSessionContext();
+  return JSON.stringify([context.generation, context.identityId, hasChefRole(getSession()), isSessionReady()]);
+}
+const serverScope = () => "server";
+
 export function ChefModeDashboard() {
+  const scope = useSyncExternalStore(subscribeSession, dashboardScope, serverScope);
+  return <ChefModeDashboardContent key={scope} />;
+}
+
+function ChefModeDashboardContent() {
   const [state, setState] = useState<DashboardState>("loading");
   const [user, setUser] = useState<CravesUser | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY);
@@ -175,152 +193,141 @@ export function ChefModeDashboard() {
 
   useEffect(() => {
     let active = true;
-
-    async function loadApprovedSnapshot(current: CravesUser) {
-      const kitchenRequest = fetch("/api/chef/kitchen", {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const menuRequest = kitchenRequest.then(async response => {
-        if (!response.ok) return null;
-        const raw = await response.clone().json().catch(() => undefined);
-        if (raw === null || !parseChefKitchen(raw)) return null;
-        return fetch("/api/chef/menu", { cache: "no-store", credentials: "same-origin" });
-      });
-      const requests = await Promise.allSettled([
-        fetch("/api/chef/application", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        kitchenRequest,
-        menuRequest,
-        fetch("/api/chef/orders", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        fetch("/api/chef/earnings", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-      ]);
-
-      if (!active) return;
-      const unavailable: string[] = [];
-      let application: ChefApplication | null = null;
-      let kitchen: ChefKitchen | null = null;
-      let menu: ChefMenuItem[] = [];
-      let orders: ChefOrder[] = [];
-      let earnings: ChefEarning[] = [];
-
-      for (let index = 0; index < requests.length; index += 1) {
-        const result = requests[index];
-        const label = ["application", "kitchen", "menu", "orders", "earnings"][index]!;
-        if (index === 2 && result.status === "fulfilled" && result.value === null) continue;
-        if (result.status !== "fulfilled" || !result.value?.ok) {
-          unavailable.push(label);
-          continue;
-        }
-        const raw = await result.value.json().catch(() => undefined);
-        if (index === 0) application = parseChefApplication(raw);
-        if (index === 1) {
-          kitchen = raw === null ? null : parseChefKitchen(raw);
-          if (raw !== null && !kitchen) unavailable.push(label);
-        }
-        if (index === 2) {
-          const parsedMenu = parseChefMenuItems(raw);
-          if (parsedMenu) menu = parsedMenu;
-          else unavailable.push(label);
-        }
-        if (index === 3) orders = parseChefOrdersResponse(raw) ?? [];
-        if (index === 4) earnings = parseChefEarnings(raw) ?? [];
+    const initial = captureSessionContext();
+    let context = initial;
+    const controller = new AbortController();
+    const currentRequest = () => active && isSessionContextCurrent(context);
+    const options = () => ({
+      cache: "no-store" as const,
+      credentials: "same-origin" as const,
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
+    });
+    const gateTimeout = window.setTimeout(() => {
+      if (active) {
+        active = false;
+        controller.abort();
+        setState("error");
+        setMessage("Checking Chef access took too long. Please try again.");
       }
+    }, 15_000);
 
-      if (!active) return;
+    async function loadApprovedSnapshot(current: CravesUser, knownApplication?: ChefApplication) {
+      window.clearTimeout(gateTimeout);
       setUser(current);
-      setSnapshot({ application, kitchen, menu, orders, earnings, unavailable });
-      if (application?.status === "APPROVED" && !unavailable.includes("kitchen")) {
-        const noticeKey = `craves-chef-approved:${application.id ?? current.id}:${application.reviewedAt ?? "approved"}`;
-        setApprovalNoticeKey(noticeKey);
-        try {
-          if (!window.localStorage.getItem(noticeKey)) setShowApprovalNotice(true);
-        } catch {
-          setShowApprovalNotice(true);
-        }
-      }
+      setSnapshot({ ...EMPTY, application: knownApplication ?? null, pending: ["kitchen", "menu", "orders", "earnings", ...(knownApplication ? [] : ["application"])] });
       setState("approved");
       setMessage("");
+      function settle(label: string, patch: Partial<Snapshot> = {}, failed = false) {
+        if (!currentRequest()) return;
+        setSnapshot(previous => !currentRequest() ? previous : ({
+          ...previous, ...patch,
+          pending: previous.pending.filter(value => value !== label),
+          unavailable: failed ? [...new Set([...previous.unavailable, label])] : previous.unavailable.filter(value => value !== label),
+        }));
+      }
+      async function read<T>(label: string, url: string, parse: (raw: unknown) => T | null, key: "application" | "orders" | "earnings") {
+        try {
+          const response = await fetch(url, options());
+          if (!response.ok) throw new Error("SUMMARY_UNAVAILABLE");
+          const parsed = parse(await responseBody(response));
+          if (parsed === null) throw new Error("SUMMARY_INVALID");
+          settle(label, { [key]: parsed });
+        } catch { settle(label, {}, true); }
+      }
+      async function kitchenAndMenu() {
+        try {
+          const response = await fetch("/api/chef/kitchen", options());
+          if (!response.ok) throw new Error("KITCHEN_UNAVAILABLE");
+          const raw = await response.json();
+          const kitchen = raw === null ? null : parseChefKitchen(raw);
+          if (raw !== null && !kitchen) throw new Error("KITCHEN_INVALID");
+          settle("kitchen", { kitchen });
+          if (!currentRequest()) return;
+          // A missing kitchen is an authoritative setup state. Never call its menu.
+          if (!kitchen) { settle("menu", { menu: [] }); return; }
+          try {
+            const menuResponse = await fetch("/api/chef/menu", options());
+            if (!menuResponse.ok) throw new Error("MENU_UNAVAILABLE");
+            const menu = parseChefMenuItems(await responseBody(menuResponse));
+            if (!menu) throw new Error("MENU_INVALID");
+            settle("menu", { menu });
+          } catch { settle("menu", {}, true); }
+        } catch { settle("kitchen", {}, true); settle("menu", {}, true); }
+      }
+      await Promise.allSettled([
+        knownApplication ? Promise.resolve() : read("application", "/api/chef/application", parseChefApplication, "application"),
+        kitchenAndMenu(),
+        read("orders", "/api/chef/orders", parseChefOrdersResponse, "orders"),
+        read("earnings", "/api/chef/earnings", parseChefEarnings, "earnings"),
+      ]);
     }
 
     void (async () => {
-      const current = await loadSession();
-      if (!active) return;
+      const current = await loadSession({ hydrateCustomerProfile: "skip" });
+      if (!active || (initial.identityId !== null && !isSessionContextCurrent(initial))) return;
+      context = captureSessionContext();
       setUser(current);
-      if (!current) {
-        setState("signed-out");
-        setMessage("Sign in to continue to Chef Mode.");
+      if (!current || !isSessionReady()) {
+        window.clearTimeout(gateTimeout);
+        setState(current || !getSession() ? "signed-out" : "error");
+        setMessage(getSession() && isSessionReady() ? "We couldn’t check your sign-in. Please try again." : "Sign in to continue to Chef Mode.");
         return;
       }
+      if (current.id !== getSession()?.id) return;
 
+      let application: ChefApplication | undefined;
       if (!hasChefRole(current)) {
-        const response = await fetch("/api/chef/application", {
-          cache: "no-store",
-          credentials: "same-origin",
-        });
-        if (!active) return;
-        if (!response.ok) {
-          if (response.status === 401) {
-            setState("signed-out");
-            setMessage("Your session expired. Sign in to continue to Chef Mode.");
-          } else {
-            setState("error");
-            setMessage("We couldn’t check your chef application right now.");
-          }
+        const response = await fetch("/api/chef/application", options());
+        const parsed = parseChefApplication(await responseBody(response));
+        if (!currentRequest()) return;
+        if (!response.ok || !parsed) {
+          window.clearTimeout(gateTimeout);
+          setState(response.status === 401 ? "signed-out" : "error");
+          setMessage("We couldn’t check your chef application right now.");
           return;
         }
-        const application = parseChefApplication(await responseBody(response));
-        if (!application) {
-          setState("error");
-          setMessage("Craves returned an invalid chef application response.");
-          return;
-        }
+        application = parsed;
         setSnapshot({ ...EMPTY, application });
-
         if (application.status !== "APPROVED") {
+          window.clearTimeout(gateTimeout);
           setState("applicant");
           setMessage("");
           return;
         }
-
         setMessage("Activating your approved Chef access…");
-        const synchronized = await synchronizeSessionRoles();
-        if (!active) return;
-        if (!hasChefRole(synchronized)) {
-          setState("verification");
-          setMessage("Your chef application is approved. Verify your mobile number once so your secure Chef session can be refreshed.");
-          return;
-        }
-        await loadApprovedSnapshot(synchronized!);
-        return;
       }
 
-      const synchronized = await synchronizeSessionRoles();
-      if (!active) return;
-      if (!hasChefRole(synchronized)) {
+      const synchronized = await synchronizeSessionRoles({ hydrateCustomerProfile: "skip" });
+      if (!currentRequest() || synchronized?.id !== current.id && synchronized !== null) return;
+      if (!synchronized) throw new Error("ROLE_CHECK_UNAVAILABLE");
+      if (!isSessionReady() || !hasChefRole(synchronized)) {
+        window.clearTimeout(gateTimeout);
         setState("verification");
         setMessage("Verify your mobile number once to refresh secure Chef access.");
         return;
       }
-      await loadApprovedSnapshot(synchronized!);
+      await loadApprovedSnapshot(synchronized, application);
     })().catch(() => {
-      if (!active) return;
+      if (!currentRequest()) return;
+      window.clearTimeout(gateTimeout);
       setState("error");
       setMessage("We couldn’t load Chef Mode right now. Please try again.");
     });
 
     return () => {
       active = false;
+      window.clearTimeout(gateTimeout);
+      controller.abort();
     };
   }, [refreshTick]);
+
+  useEffect(() => {
+    if (state !== "approved" || snapshot.application?.status !== "APPROVED" || snapshot.pending.includes("kitchen") || snapshot.unavailable.includes("kitchen")) return;
+    const noticeKey = `craves-chef-approved:${snapshot.application.id ?? user?.id}:${snapshot.application.reviewedAt ?? "approved"}`;
+    setApprovalNoticeKey(noticeKey);
+    try { if (!window.localStorage.getItem(noticeKey)) setShowApprovalNotice(true); }
+    catch { setShowApprovalNotice(true); }
+  }, [state, snapshot.application, snapshot.pending, snapshot.unavailable, user?.id]);
 
   const stats = useMemo(() => {
     const actionOrders = snapshot.orders.filter(
@@ -450,7 +457,7 @@ export function ChefModeDashboard() {
         <p className="mt-2 text-sm text-[#6B6B6B]">{message}</p>
         <button
           type="button"
-          onClick={() => setRefreshTick((value) => value + 1)}
+          onClick={() => { setState("loading"); setRefreshTick((value) => value + 1); }}
           className="mt-6 inline-flex min-h-12 items-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white"
         >
           <RefreshCw className="h-4 w-4" aria-hidden="true" />
@@ -461,7 +468,9 @@ export function ChefModeDashboard() {
   }
 
   let priority: PriorityAction;
-  if (snapshot.unavailable.includes("kitchen") || snapshot.unavailable.includes("menu")) {
+  if (snapshot.pending.includes("kitchen") || snapshot.pending.includes("menu")) {
+    priority = { eyebrow: "Checking your kitchen", title: "Your kitchen details are loading", description: "Your summaries will appear as they arrive.", action: "Loading…", icon: Store };
+  } else if (snapshot.unavailable.includes("kitchen") || snapshot.unavailable.includes("menu")) {
     priority = {
       eyebrow: "Try again",
       title: "Check your kitchen and menu",
@@ -488,6 +497,8 @@ export function ChefModeDashboard() {
       href: "/chef/menu",
       icon: Utensils,
     };
+  } else if (snapshot.pending.includes("orders") || snapshot.unavailable.includes("orders")) {
+    priority = { eyebrow: "Orders", title: snapshot.pending.includes("orders") ? "Checking your orders" : "Your orders couldn’t refresh", description: "Open your orders to check the current status.", action: "Open orders", href: "/chef/orders", icon: ClipboardList };
   } else if (stats.actionOrders.length > 0) {
     const first = stats.actionOrders[0]!;
     priority = {
@@ -520,10 +531,10 @@ export function ChefModeDashboard() {
   }
 
   const kitchenOpen = snapshot.kitchen?.status === "ACTIVE";
-  const menuSummary = snapshot.menu.length
+  const menuSummary = snapshot.pending.includes("menu") ? "Loading…" : snapshot.unavailable.includes("menu") ? "Unavailable" : snapshot.menu.length
     ? `${snapshot.menu.length} dish${snapshot.menu.length === 1 ? "" : "es"}`
     : "Add your first dish";
-  const earningsSummary = stats.weekAmount > 0
+  const earningsSummary = snapshot.pending.includes("earnings") ? "Loading…" : snapshot.unavailable.includes("earnings") ? "Unavailable" : stats.weekAmount > 0
     ? money(stats.weekAmount, stats.weekCurrency)
     : "Appears after your first earning";
 
@@ -596,7 +607,8 @@ export function ChefModeDashboard() {
           ) : (
             <button
               type="button"
-              onClick={() => priority.refresh && setRefreshTick((value) => value + 1)}
+              disabled={!priority.refresh}
+              onClick={() => { if (priority.refresh) { setState("loading"); setRefreshTick((value) => value + 1); } }}
               className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto"
             >
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
@@ -606,13 +618,13 @@ export function ChefModeDashboard() {
         </section>
 
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Kitchen summary">
-          <Link href="/chef/orders" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)]"><ClipboardList className="h-5 w-5 text-primary" /><p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Today’s orders</p><p className="mt-1 text-2xl font-bold">{snapshot.unavailable.includes("orders") ? "—" : stats.todayOrders}</p></Link>
+          <Link href="/chef/orders" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)]"><ClipboardList className="h-5 w-5 text-primary" /><p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Today’s orders</p><p className="mt-1 text-2xl font-bold">{snapshot.pending.includes("orders") ? "Loading…" : snapshot.unavailable.includes("orders") ? "—" : stats.todayOrders}</p></Link>
           <Link href="/chef/kitchen" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
               <Store className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
             </span>
             <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Your kitchen</p>
-            <p className="mt-1 font-bold text-[#1A1A1A]">{kitchenOpen ? "Accepting orders" : "Not accepting orders"}</p>
+            <p className="mt-1 font-bold text-[#1A1A1A]">{snapshot.pending.includes("kitchen") ? "Loading…" : snapshot.unavailable.includes("kitchen") ? "Unavailable" : kitchenOpen ? "Accepting orders" : "Not accepting orders"}</p>
           </Link>
           <Link href="/chef/menu" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">

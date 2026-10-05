@@ -225,9 +225,32 @@ def build_image(args, before):
     return image
 
 
+def protected_fingerprint(app):
+    props = app["properties"]
+    value = {
+        "runtime": release.runtime.stable(app),
+        "images": [{"name": container.get("name"), "image": container.get("image")}
+                   for container in props["template"]["containers"]],
+        "traffic": props["configuration"].get("ingress", {}).get("traffic"),
+    }
+    return sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode())
+
+
 def protected_apps():
-    return {app["name"]: release.runtime.stable(app)
+    return {app["name"]: protected_fingerprint(app)
             for app in release.azure("containerapp", "list", "-g", release.RG) if app["name"] != release.WEB}
+
+
+def web_guard(before, current, image=None, sha=None):
+    # The live app follows its latest revision automatically. Explicit traffic
+    # pins or splits are concurrent changes, including during failed rollouts.
+    # Existing runtime guards intentionally omit this revision-sensitive field.
+    for app in (before, current):
+        traffic = app["properties"]["configuration"].get("ingress", {}).get("traffic", [])
+        require(traffic == [] or (isinstance(traffic, list) and len(traffic) == 1
+                and traffic[0] == {"latestRevision": True, "weight": 100}),
+                "Web traffic no longer follows the automatic latest revision; stop")
+    release.web_guard(before, current, image, sha)
 
 
 def save_receipt(path, value):
@@ -242,22 +265,22 @@ def recover(before, image, sha, receipt, output):
     previous_image = receipt["previousImage"]
     previous_sha = receipt["previousSourceSha"]
     if release.build_sha(current) == previous_sha:
-        release.web_guard(before, current, previous_image, previous_sha)
+        web_guard(before, current, previous_image, previous_sha)
         release.ready_web(current)
         release.public_status(previous_sha)
         receipt.update(recoveryRequired=False, recoveryVerified=True)
         save_receipt(output, receipt)
         return
-    release.web_guard(before, current, image, sha)
+    web_guard(before, current, image, sha)
     receipt["recoveryRequired"] = True
     release.azure("containerapp", "update", "-g", release.RG, "-n", release.WEB,
                   "--image", previous_image, "--set-env-vars", "CRAVES_BUILD_SHA=" + previous_sha, "--no-wait")
     for _ in range(120):
         current = release.app(release.WEB)
         if release.build_sha(current) == sha:
-            release.web_guard(before, current, image, sha)
+            web_guard(before, current, image, sha)
         else:
-            release.web_guard(before, current, previous_image, previous_sha)
+            web_guard(before, current, previous_image, previous_sha)
             try:
                 release.ready_web(current)
                 release.public_status(previous_sha)
@@ -278,6 +301,7 @@ def execute(args):
     require(account.get("id") == release.SUBSCRIPTION and account.get("tenantId") == release.inspect.TENANT,
             "Wrong Azure account")
     before = release.app(release.WEB)
+    web_guard(before, before)
     release.ready_web(before)
     require(release.build_sha(before) == args.expected_live_sha
             and before["properties"]["template"]["containers"][0]["image"] == args.expected_live_image,
@@ -297,7 +321,7 @@ def execute(args):
     verify_registry_image(old_image, args.expected_live_sha)
     image = build_image(args, before)
     source_guard(args)
-    release.web_guard(before, release.app(release.WEB))
+    web_guard(before, release.app(release.WEB))
     release.ready_web(release.app(release.WEB))
     require(protected == protected_apps(), "Another app changed during preparation; stop")
     receipt["image"] = image
@@ -308,20 +332,22 @@ def execute(args):
                       "--image", image, "--set-env-vars", "CRAVES_BUILD_SHA=" + args.sha, "--no-wait")
         for _ in range(120):
             current = release.app(release.WEB)
+            require(protected == protected_apps(), "A protected app changed during release")
             if release.build_sha(current) == args.expected_live_sha:
-                release.web_guard(before, current)
+                web_guard(before, current)
             else:
-                release.web_guard(before, current, image, args.sha)
+                web_guard(before, current, image, args.sha)
                 try:
                     revision = release.ready_web(current)
                     public = release.public_status(args.sha)
+                except ValueError:
+                    pass
+                else:
                     require(protected == protected_apps(), "A protected app changed during release")
                     receipt.update(verified=True, revision=revision, public=public)
                     save_receipt(args.receipt, receipt)
                     print(json.dumps(receipt), flush=True)
                     return receipt
-                except ValueError:
-                    pass
             print("Waiting for the reviewed web revision and public source readback.", flush=True)
             time.sleep(10)
         raise ValueError("Web performance release could not be verified within twenty minutes")

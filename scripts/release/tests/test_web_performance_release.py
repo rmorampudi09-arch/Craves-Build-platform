@@ -255,6 +255,68 @@ class ReleaseSafetyTests(unittest.TestCase):
                     performance.recover(before, NEW_IMAGE, SOURCE_SHA, receipt, self.args.receipt)
                 azure.assert_not_called()
 
+    def test_protected_app_image_and_traffic_drift_changes_fingerprint(self):
+        backend = app()
+        backend["name"] = release.CHEF
+        backend["properties"]["configuration"]["ingress"] = {"traffic": [{"latestRevision": True, "weight": 100}]}
+        web = app()
+        web["name"] = release.WEB
+        with patch.object(release, "azure", return_value=[web, backend]):
+            baseline = performance.protected_apps()
+        self.assertEqual(set(baseline), {release.CHEF})
+        for kind in ("image", "traffic"):
+            changed = copy.deepcopy(backend)
+            if kind == "image":
+                changed["properties"]["template"]["containers"][0]["image"] = NEW_IMAGE
+            else:
+                changed["properties"]["configuration"]["ingress"] = {"traffic": [{"revisionName": "other", "weight": 100}]}
+            self.assertEqual(release.runtime.stable(backend), release.runtime.stable(changed))
+            with self.subTest(kind=kind), patch.object(release, "azure", return_value=[web, changed]):
+                self.assertNotEqual(baseline, performance.protected_apps())
+
+    def test_automatic_latest_traffic_is_preserved(self):
+        before = app()
+        before["properties"]["configuration"]["ingress"] = {"traffic": [{"latestRevision": True, "weight": 100}]}
+        current = app(NEW_IMAGE, SOURCE_SHA)
+        for selector in ([], [{"latestRevision": True, "weight": 100}]):
+            current["properties"]["configuration"]["ingress"] = {"traffic": selector}
+            performance.web_guard(before, current, NEW_IMAGE, SOURCE_SHA)
+
+    def test_protected_drift_before_image_selection_prevents_runtime_update(self):
+        self.args.deploy = True
+        before = app()
+        with patch.object(performance, "source_guard", return_value={}), patch.object(release, "azure", return_value={"id": release.SUBSCRIPTION, "tenantId": release.inspect.TENANT}) as azure, patch.object(release, "app", return_value=before), patch.object(release, "ready_web"), patch.object(release, "resolve_image", return_value=OLD_IMAGE), patch.object(performance, "protected_apps", side_effect=[{"chef": "before"}, {"chef": "changed"}]), patch.object(performance, "verify_registry_image"), patch.object(performance, "build_image", return_value=NEW_IMAGE):
+            with self.assertRaisesRegex(ValueError, "Another app changed"):
+                performance.execute(self.args)
+        self.assertEqual(azure.call_args_list[0].args, ("account", "show"))
+        self.assertEqual(azure.call_count, 1)
+
+    def test_protected_drift_during_release_recovers_only_web_without_waiting(self):
+        self.args.deploy = True
+        before = app()
+        candidate = app(NEW_IMAGE, SOURCE_SHA)
+        with patch.object(performance, "source_guard", return_value={}), patch.object(release, "azure", return_value={"id": release.SUBSCRIPTION, "tenantId": release.inspect.TENANT}) as azure, patch.object(release, "app", side_effect=[before, before, before, candidate, candidate, before]), patch.object(release, "ready_web"), patch.object(release, "resolve_image", return_value=OLD_IMAGE), patch.object(performance, "protected_apps", side_effect=[{"chef": "before"}, {"chef": "before"}, {"chef": "changed"}]), patch.object(performance, "verify_registry_image"), patch.object(performance, "build_image", return_value=NEW_IMAGE), patch.object(release, "public_status"), patch.object(performance.time, "sleep") as sleep:
+            with self.assertRaisesRegex(ValueError, "previous web image and source were restored"):
+                performance.execute(self.args)
+        sleep.assert_not_called()
+        self.assertEqual(azure.call_count, 3)
+        for call in azure.call_args_list[1:]:
+            self.assertEqual(call.args[:7], ("containerapp", "update", "-g", release.RG, "-n", release.WEB, "--image"))
+        self.assertEqual(azure.call_args.args[7], OLD_IMAGE)
+
+    def test_concurrent_traffic_pin_or_split_blocks_recovery_before_mutation(self):
+        before = app()
+        before["properties"]["configuration"]["ingress"] = {"traffic": [{"latestRevision": True, "weight": 100}]}
+        receipt = {"previousImage": OLD_IMAGE, "previousSourceSha": LIVE_SHA}
+        for selector in ([{"revisionName": "pinned", "weight": 100}],
+                         [{"latestRevision": True, "weight": 90}, {"revisionName": "old", "weight": 10}]):
+            current = app(NEW_IMAGE, SOURCE_SHA)
+            current["properties"]["configuration"]["ingress"] = {"traffic": selector}
+            with self.subTest(selector=selector), patch.object(release, "app", return_value=current), patch.object(release, "azure") as azure:
+                with self.assertRaisesRegex(ValueError, "traffic no longer"):
+                    performance.recover(before, NEW_IMAGE, SOURCE_SHA, receipt, self.args.receipt)
+                azure.assert_not_called()
+
     def test_unchanged_old_runtime_is_verified_without_redundant_rollback(self):
         receipt = {"previousImage": OLD_IMAGE, "previousSourceSha": LIVE_SHA}
         with patch.object(release, "app", return_value=app()), patch.object(release, "ready_web"), patch.object(release, "public_status"), patch.object(release, "azure") as azure:

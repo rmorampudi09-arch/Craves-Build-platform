@@ -65,7 +65,7 @@ the additive migration and historical financial records are preserved.
    the previous healthy revisions for rollback; never repair or rewrite applied
    migrations or immutable financial history.
 
-Required new tests: `ChefFinanceApprovalControllerTest`,
+Required new tests: `ChefFinanceApprovalControllerTest`, `ChefFinanceApprovalDatabaseTest`,
 `ChefFinanceApprovalSourceTest`, `SharedChefFinanceDatabaseTest` and
 `SharedChefFinanceMigrationDatabaseTest`. They cover newly approved chefs with no
 individual finance record, missing/revoked approval, jurisdiction, outage,

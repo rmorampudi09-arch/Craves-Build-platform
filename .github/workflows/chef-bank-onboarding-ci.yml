@@ -72,7 +72,7 @@ jobs:
           required={'BankOnboardingDatabaseTest':19,'BankAutomationSafetyDatabaseTest':9,
                     'BankDataCipherTest':6,'RazorpayBankValidationClientTest':14,
                     'BankOnboardingSecurityTest':5,'BankIdentitySignatureTest':5,
-                    'ChefFinanceApprovalControllerTest':6,'ChefFinanceApprovalSourceTest':6,
+                    'ChefFinanceApprovalControllerTest':6,'ChefFinanceApprovalDatabaseTest':3,'ChefFinanceApprovalSourceTest':6,
                     'SharedChefFinanceDatabaseTest':8,'SharedChefFinanceMigrationDatabaseTest':3}
           for name,minimum in required.items():
               files=list(pathlib.Path('services').glob('*/target/surefire-reports/TEST-*.'+name+'.xml'))

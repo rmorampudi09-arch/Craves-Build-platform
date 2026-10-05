@@ -133,6 +133,7 @@ SHARED_FINANCE_REQUIRED={'.github/workflows/chef-bank-onboarding-ci.yml': 'M',
  'services/user-chef-service/src/main/java/in/craves/userchef/web/ChefFinanceApprovalController.java': 'A',
  'services/user-chef-service/src/main/java/in/craves/userchef/web/ChefFinanceApprovalProtocol.java': 'A',
  'services/user-chef-service/src/test/java/in/craves/userchef/web/ChefFinanceApprovalControllerTest.java': 'A',
+ 'services/user-chef-service/src/test/java/in/craves/userchef/web/ChefFinanceApprovalDatabaseTest.java': 'A',
  'tests/finance/FinanceSourceRoundTrip.java': 'M'}
 
 def reviewed_shared_chef_finance_scope():

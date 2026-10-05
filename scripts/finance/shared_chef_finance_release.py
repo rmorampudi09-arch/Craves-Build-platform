@@ -216,14 +216,17 @@ def preflight():
     integration = apps[APPS["integration-service"]]
     for name in APPS.values():
         app = apps[name]; props = app["properties"]
+        require(not any(k.startswith("SPRING_FLYWAY") for k in environment(app)), "Unexpected Flyway runtime override")
         require(props["latestRevisionName"] == props["latestReadyRevisionName"], "Existing rollout is unsettled")
         require(props["configuration"]["activeRevisionsMode"] == "Single" and props["template"]["scale"]["maxReplicas"] == 1, "Existing revision/replica bounds differ")
         require(props["template"]["containers"][0]["image"].startswith(LOGIN + "/craves/"), "Current registry binding differs")
+    chef_rows = database(apps[APPS["user-chef-service"]], "SELECT coalesce(json_agg(row_to_json(t)),'[]'::json) FROM (SELECT version,script,checksum,success,type FROM public.flyway_schema_history ORDER BY installed_rank LIMIT 251)t;")
+    active.compare_history(chef_rows, active.history_module().expected("user-chef-service"))
     rows = database(integration, "SELECT coalesce(json_agg(row_to_json(t)),'[]'::json) FROM (SELECT version,script,checksum,success,type FROM payment_schema.flyway_schema_history ORDER BY installed_rank LIMIT 251)t;")
     applied = validate_history(rows); terms = policy_and_terms(integration, deployed="147" in applied)
     secret(integration, "CRAVES_CATALOG_FINANCE_READ_KEY")
     require(inventory() == apps, "Azure runtime changed during inspection")
-    return {"sourceSha": sha(), "readOnly": True, **terms,
+    return {"sourceSha": sha(), "readOnly": True, "chefMigrationHistoryVerified": True, **terms,
         "apps": {name: {"signature": signature(app), "image": app["properties"]["template"]["containers"][0]["image"]} for name, app in apps.items()}}
 
 

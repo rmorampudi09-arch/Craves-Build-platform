@@ -19,7 +19,7 @@ const ICON_WHITE = '#FFFFFF';
    HOME CHEF
    ========================= */
 const ChefIcon = () => (
-  <img
+  <img loading="lazy" decoding="async"
     className="specials__icon-image specials__icon-image--chef"
     src="/images/icons/home-chef-user.png"
     alt=""
@@ -181,7 +181,7 @@ const PinIcon = () => (
    DOORSTEP DELIVERY
    ========================= */
 const DeliveryIcon = () => (
-  <img
+  <img loading="lazy" decoding="async"
     className="specials__icon-image specials__icon-image--delivery"
     src="/images/icons/delivery-scooter-user.png"
     alt=""
@@ -415,7 +415,7 @@ const DeliveredWithCare = () => {
                 {/* TOP BAR */}
                 <div className="specials__topbar">
 
-                  <img
+                  <img loading="lazy" decoding="async"
                     className="specials__brand-logo"
                     src="/images/craves-logo.png"
                     alt="Craves"
@@ -461,7 +461,7 @@ const DeliveredWithCare = () => {
 
                   <div className="specials__meal-image">
 
-                    <img
+                    <img loading="lazy" decoding="async"
                       src="/images/hero-poster.jpg"
                       alt="Featured homemade meal in the Craves app"
                     />

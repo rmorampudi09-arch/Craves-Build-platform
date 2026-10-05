@@ -1,0 +1,11 @@
+{
+  "observedAtUtc": "2026-10-05T21:59:39.398963+00:00",
+  "ruleExactApprovedAfterState": true,
+  "routeExactApprovedAfterState": true,
+  "allOtherRoutesPreserved": true,
+  "all12ProtectedAppFingerprintsUnchanged": true,
+  "routeProvisioningState": "Succeeded",
+  "ruleProvisioningState": "Succeeded",
+  "newResources": 0,
+  "appMutationsByAuditAgent": 0
+}

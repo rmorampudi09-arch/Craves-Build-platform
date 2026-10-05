@@ -1,0 +1,55 @@
+[
+  {
+    "name": "HostName",
+    "parameters": {
+      "operator": "Equal",
+      "negateCondition": false,
+      "matchValues": [
+        "admin.craves.in"
+      ],
+      "transforms": [
+        "Lowercase"
+      ],
+      "typeName": "DeliveryRuleHostNameConditionParameters"
+    }
+  },
+  {
+    "name": "UrlPath",
+    "parameters": {
+      "operator": "BeginsWith",
+      "negateCondition": false,
+      "matchValues": [
+        "_next/static/"
+      ],
+      "transforms": [],
+      "typeName": "DeliveryRuleUrlPathMatchConditionParameters"
+    }
+  },
+  {
+    "name": "UrlFileExtension",
+    "parameters": {
+      "operator": "Equal",
+      "negateCondition": false,
+      "matchValues": [
+        "js",
+        "css"
+      ],
+      "transforms": [
+        "Lowercase"
+      ],
+      "typeName": "DeliveryRuleUrlFileExtensionMatchConditionParameters"
+    }
+  },
+  {
+    "name": "RequestMethod",
+    "parameters": {
+      "operator": "Equal",
+      "negateCondition": false,
+      "matchValues": [
+        "GET",
+        "HEAD"
+      ],
+      "typeName": "DeliveryRuleRequestMethodConditionParameters"
+    }
+  }
+]

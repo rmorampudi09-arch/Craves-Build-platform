@@ -1,0 +1,17 @@
+{
+  "source": "assets/landing-v20/hero-bg-3.mp4.part01 through part10",
+  "originalBytes": 77733727,
+  "originalVideo": "3840x2160 H.264, 24 fps, 22 seconds, AAC audio",
+  "optimizedFile": "apps/customer-web-next/public/landing-v20/videos/hero-bg-fast.mp4",
+  "optimizedBytes": 4183971,
+  "optimizedSha256": "e6c03673ecd02fb8ba56c237a4bbac0b6692ed3d52865abdf8ee9e3563d025e0",
+  "optimizedVideo": "1280x720 H.264, 24 fps, 22 seconds, no audio, MP4 faststart",
+  "byteReductionPercent": 94.62,
+  "encodeArguments": "-map 0:v:0 -vf scale=1280:720:flags=lanczos -c:v libx264 -preset medium -crf 26 -pix_fmt yuv420p -an -movflags +faststart",
+  "sampledQualityCheck": {
+    "method": "SSIM against original scaled to 1280x720, one frame per second for 22 seconds",
+    "all": 0.981579,
+    "limitation": "A sampled image similarity check, not a guarantee of subjective quality on every device."
+  },
+  "preserved": "The full original media source and reconstruction manifest remain available. The page uses the optimized derivative."
+}

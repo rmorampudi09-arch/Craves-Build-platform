@@ -85,7 +85,8 @@ test("landing precision fixes remove baked rider text, align steps and normalize
 
 test("public landing keeps the approved semantic reference experience and wired flows", () => {
   assert.match(landing, /min-h-screen bg-white text-ink/);
-  assert.match(landing, /items-center justify-center bg-white px-4/);
+  assert.match(landing, /loadSession\(\{ hydrateCustomerProfile: "background" \}\)/);
+  assert.doesNotMatch(landing, /if \(checkingSession\)/);
   assert.match(landing, /<ReferenceHeroDesktop/);
   assert.match(landing, /<ReferenceArtworkSection variant="how"/);
   assert.match(landing, /<ReferenceArtworkSection variant="why"/);
@@ -156,7 +157,7 @@ test("address manager owns default selection and the shared location-first edito
   assert.match(addresses, /invalidateSelectedAddress/);
   assert.match(addresses, /clearDishDiscoveryCache/);
   assert.match(addresses, /clearKitchenDiscoveryCache/);
-  assert.match(addresses, /<AddressEditorFlow/);
+  assert.match(addresses, /editorOpen \? <LazyAddressEditorFlow/);
   assert.match(addresses, /initialLoadState/);
   assert.match(addresses, /aria-label="Loading saved addresses"/);
   assert.match(
@@ -216,7 +217,7 @@ test("checkout is one page with saved addresses, ASAP delivery and the shared ad
   assert.match(checkout, /As soon as possible/);
   assert.match(checkout, /Bill details/);
   assert.match(checkout, /<CheckoutPaymentButton/);
-  assert.match(checkout, /<AddressEditorFlow/);
+  assert.match(checkout, /editorOpen \? <LazyAddressEditorFlow/);
   assert.match(checkout, /\/api\/checkout\/operations\//);
   assert.match(checkout, /checkoutCartSnapshot\(validatedCart\)/);
   assert.match(checkout, /parseCheckoutOperationResponse/);

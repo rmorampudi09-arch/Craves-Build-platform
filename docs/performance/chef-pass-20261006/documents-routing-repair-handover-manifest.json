@@ -1,0 +1,186 @@
+{
+  "createdAtUtc": "2026-10-05T22:27:10.973958+00:00",
+  "scope": "Separately reviewed existing seven-operation documents routing correction; no frontend or backend source changes",
+  "sourceShaUnchanged": "739650f223f2edc0dd8914b28e23916b421da9f1",
+  "frozenAppHelperDiffEmpty": true,
+  "configurationVerified": true,
+  "functionalVerified": true,
+  "configurationFiles": [
+    "documents-routing-existing-only-repair.py",
+    "documents-routing-capabilities-policy-before.xml",
+    "documents-routing-capabilities-proposed-policy-put.json",
+    "documents-routing-create-document-policy-before.xml",
+    "documents-routing-create-document-proposed-policy-put.json",
+    "documents-routing-list-documents-policy-before.xml",
+    "documents-routing-list-documents-proposed-policy-put.json",
+    "documents-routing-get-document-policy-before.xml",
+    "documents-routing-get-document-proposed-policy-put.json",
+    "documents-routing-download-document-policy-before.xml",
+    "documents-routing-download-document-proposed-policy-put.json",
+    "documents-routing-email-document-policy-before.xml",
+    "documents-routing-email-document-proposed-policy-put.json",
+    "documents-routing-email-history-policy-before.xml",
+    "documents-routing-email-history-proposed-policy-put.json"
+  ],
+  "configurationFileCount": 15,
+  "newResources": 0,
+  "containerChanges": 0,
+  "authorizationChanges": 0,
+  "documentsGeneratedDownloadedEmailed": 0,
+  "files": [
+    {
+      "file": "documents-boundary-apim-operation-policy-evidence.json",
+      "bytes": 8814,
+      "sha256": "894ea3c9e05ef02de8a121a113ef349e048ff0b6ce0537eb8cb4da714fb2cacd"
+    },
+    {
+      "file": "documents-boundary-diagnostics-availability.json",
+      "bytes": 760,
+      "sha256": "f3c35628505e5d815d01e8e9f79e91ebf0d437f0e64ff6c51d4c91d0197f96f4"
+    },
+    {
+      "file": "documents-boundary-existing-apim-api-paths.json",
+      "bytes": 25050,
+      "sha256": "603e1256da07279cc09de99bc88645c144b9beb58eaf4f9271f9f710fee1aae9"
+    },
+    {
+      "file": "documents-boundary-live-metadata.json",
+      "bytes": 1401,
+      "sha256": "22be61d2f3e6c39e9ab807386669f5a431486ad88fcd3302330a9fb45da8f173"
+    },
+    {
+      "file": "documents-boundary-notification-image-selected-provenance.json",
+      "bytes": 725,
+      "sha256": "7bb5618dafc3d736766503db4ad089de235cf43ac3af6fb1e5b4ade1c1b5ea06"
+    },
+    {
+      "file": "documents-routing-all-operation-policy-preflight.json",
+      "bytes": 11346,
+      "sha256": "fdb30064355308830918b3120f0a27b325504989cc13b1cf5c868c1a3b096ea9"
+    },
+    {
+      "file": "documents-routing-anonymous-boundaries-before.json",
+      "bytes": 1237,
+      "sha256": "ffd0029b01c3dba78fd99a8d977e6fbffec6e246d01927396e3daac0c04eaadf"
+    },
+    {
+      "file": "documents-routing-capabilities-policy-before.xml",
+      "bytes": 297,
+      "sha256": "561cc824bff2a69171e9df6ff117027e555dca878dafad67ac5ea5769e795c42"
+    },
+    {
+      "file": "documents-routing-capabilities-proposed-policy-put.json",
+      "bytes": 523,
+      "sha256": "31c774c8bbd111642d75716c16c913db8e5f2862f8c743c93814a4fe524e0dfb"
+    },
+    {
+      "file": "documents-routing-create-document-policy-before.xml",
+      "bytes": 504,
+      "sha256": "7a4d4e3310d033bd6fd655f0fa189114a5d424479c8a9b0924e8eed0d6aa412a"
+    },
+    {
+      "file": "documents-routing-create-document-proposed-policy-put.json",
+      "bytes": 745,
+      "sha256": "b27abf1d287cb3fc06e1c84aa586d090c6107bcf719235bc267a4e5e8ff4b0a5"
+    },
+    {
+      "file": "documents-routing-download-document-policy-before.xml",
+      "bytes": 298,
+      "sha256": "e387b3c3568c6092d8e40c6febe908456be8a1f6f0f327916ffa3399d4070ef8"
+    },
+    {
+      "file": "documents-routing-download-document-proposed-policy-put.json",
+      "bytes": 524,
+      "sha256": "c16d95a74a4342d3751626c4ee8a3579e8fda6b598eaafba2ff3d150db60efc5"
+    },
+    {
+      "file": "documents-routing-email-document-policy-before.xml",
+      "bytes": 295,
+      "sha256": "98b7b8bd3427fc2eb6defe0c82d99694bf94f57495e1ad299ff90497c40efbfe"
+    },
+    {
+      "file": "documents-routing-email-document-proposed-policy-put.json",
+      "bytes": 521,
+      "sha256": "ae994aa39c94ee9580f2d3d99a80b0b12be0356d4d29ae830945161b069575e5"
+    },
+    {
+      "file": "documents-routing-email-history-policy-before.xml",
+      "bytes": 296,
+      "sha256": "baed1f2febf55b9899cd283cc0c874e5943ab3fba02d49b88d9bd761c56d7fa3"
+    },
+    {
+      "file": "documents-routing-email-history-proposed-policy-put.json",
+      "bytes": 522,
+      "sha256": "3fbc816c6a4b54e1aae5023f2790c1be570d47da892a24b8c22bcc0a2b528392"
+    },
+    {
+      "file": "documents-routing-existing-only-repair.py",
+      "bytes": 24716,
+      "sha256": "393dc85566e5beac3a152d9f1f618dcda54a18a0bf7f94f93eda739ddaa65d39"
+    },
+    {
+      "file": "documents-routing-get-document-policy-before.xml",
+      "bytes": 289,
+      "sha256": "b6382fa3532f4bfe0e6dd6da46be39352a7d0f673d78184162b80dc3b7715e34"
+    },
+    {
+      "file": "documents-routing-get-document-proposed-policy-put.json",
+      "bytes": 515,
+      "sha256": "a426f6dd6afca7003ec0a55b96cb83c8068d33f9f09a53ae0b6be30e95f94195"
+    },
+    {
+      "file": "documents-routing-list-documents-policy-before.xml",
+      "bytes": 284,
+      "sha256": "5be3c1f992d914e1ffb22e989beef6f10ad7703fadd60880abf2b2cde36975a5"
+    },
+    {
+      "file": "documents-routing-list-documents-proposed-policy-put.json",
+      "bytes": 510,
+      "sha256": "3bbb97a6903214cf4c624603b0cddf528f26fb4ddc884815cbe83d21ba377bab"
+    },
+    {
+      "file": "documents-routing-repair-applied-receipt.json",
+      "bytes": 45884,
+      "sha256": "109dd22f797048ad3781ec6fa11f1ff01a32c4904efe8070a7b7e7c71c0ee44c"
+    },
+    {
+      "file": "documents-routing-repair-executed-script-metadata.json",
+      "bytes": 849,
+      "sha256": "2fd7130e2679a279ab953d4df2eab639104b57ac68076230dd641fd5a26564cb"
+    },
+    {
+      "file": "documents-routing-repair-functional-proof.json",
+      "bytes": 3798,
+      "sha256": "9e316bfba82a6c73f1b8b8878ede5b777ad4f13da2eef3fd08b86c0a477c84f2"
+    },
+    {
+      "file": "documents-routing-repair-inspection.json",
+      "bytes": 8297,
+      "sha256": "e8f42be245a43e096bfcc0c3e6ea0804a4e1fe6fa6b99218dc3c6caf21782cc8"
+    },
+    {
+      "file": "documents-routing-repair-readonly-proposal.json",
+      "bytes": 15747,
+      "sha256": "90f4cbc597cf1bdf41621cd8df3112042ccccd5758e7c3f6aadd7187fe35b8a9"
+    },
+    {
+      "file": "DOCUMENTS-ROUTING-REPAIR-RUNBOOK.md",
+      "bytes": 9192,
+      "sha256": "4e7a77ae4bf56a442f08cbf9d552983543e84314eae3d42f5cbc1a5b937e7bef"
+    },
+    {
+      "file": "native-chrome-statements-after-routing.json",
+      "bytes": 3200,
+      "sha256": "0eb3ae3bfded849403752838add15f7cb65366aa177001ce292e1ffeee197b65"
+    }
+  ],
+  "finalizedAtUtc": "2026-10-05T22:29:51.782821+00:00",
+  "finalReady": true,
+  "functionalScope": "Native signed-in capability and saved-list GET/UI only; generation/download/email untested",
+  "functionalProofReceipt": "documents-routing-repair-functional-proof.json",
+  "functionalProofSha256": "9e316bfba82a6c73f1b8b8878ede5b777ad4f13da2eef3fd08b86c0a477c84f2",
+  "nativeReceipt": "native-chrome-statements-after-routing.json",
+  "nativeReceiptSha256": "0eb3ae3bfded849403752838add15f7cb65366aa177001ce292e1ffeee197b65",
+  "frozenHistoricalReceiptsUnchanged": true,
+  "executedDeliveredScriptSha256": "393dc85566e5beac3a152d9f1f618dcda54a18a0bf7f94f93eda739ddaa65d39"
+}

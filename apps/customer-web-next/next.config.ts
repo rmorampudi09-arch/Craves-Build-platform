@@ -21,6 +21,10 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/landing-auth/manifest.json", headers: [{ key: "Cache-Control", value: "no-store, max-age=0" }] },
+      ...["/landing-v20/assets/:path*", "/landing-auth/assets/:path*"].map((source) => ({
+        source,
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      })),
       {
         source: "/api/:path*",
         headers: [

@@ -128,7 +128,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
     setError("");
     setMessage("");
     try {
-      const session = await loadSession();
+      const session = await loadSession({ hydrateCustomerProfile: "background" });
       if (!session) {
         router.replace("/");
         return;

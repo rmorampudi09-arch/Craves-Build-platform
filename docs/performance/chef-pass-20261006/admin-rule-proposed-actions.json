@@ -1,0 +1,16 @@
+[
+  {
+    "name": "RouteConfigurationOverride",
+    "parameters": {
+      "cacheConfiguration": {
+        "queryStringCachingBehavior": "IgnoreQueryString",
+        "queryParameters": null,
+        "isCompressionEnabled": "Enabled",
+        "cacheBehavior": "HonorOrigin",
+        "cacheDuration": null
+      },
+      "originGroupOverride": null,
+      "typeName": "DeliveryRuleRouteConfigurationOverrideActionParameters"
+    }
+  }
+]

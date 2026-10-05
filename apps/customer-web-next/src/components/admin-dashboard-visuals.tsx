@@ -1,5 +1,12 @@
 "use client";
 
+import "@syncfusion/ej2-tailwind3-theme/styles/base/base.css";
+import "@syncfusion/ej2-tailwind3-theme/styles/grid/grid.css";
+import "@syncfusion/ej2-tailwind3-theme/styles/pager/pager.css";
+import "@syncfusion/ej2-tailwind3-theme/styles/popup/popup.css";
+import "@syncfusion/ej2-tailwind3-theme/styles/spinner/spinner.css";
+import "@syncfusion/ej2-tailwind3-theme/styles/tooltip/tooltip.css";
+import { SyncfusionLicense } from "@/components/syncfusion-license";
 import {
   Category, ChartComponent, ColumnSeries, DataLabel, Inject,
   SeriesCollectionDirective, SeriesDirective, Tooltip
@@ -30,6 +37,7 @@ export function AdminDashboardVisuals({ summary }: { summary: AdminDashboardSumm
   }));
 
   return <div className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
+    <SyncfusionLicense />
     <section className="overflow-hidden rounded-[28px] border border-[#ebe5ef] bg-white p-5 shadow-[0_20px_60px_-45px_rgba(61,43,79,0.45)] sm:p-7">
       <div className="mb-5"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#8b7b97]">Order volume</p><h2 className="mt-1 text-xl font-bold">Last seven days</h2></div>
       <ChartComponent

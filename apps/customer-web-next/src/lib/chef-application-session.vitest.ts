@@ -58,7 +58,7 @@ it("shows repeated load failures after retry without an unhandled rejection", as
   fetcher.mockResolvedValue(Response.json({}, { status: 503 }));
   render(createElement(ChefApplicationWorkspace));
   fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
-  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(6));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
   await screen.findByText("We couldn’t load your application right now.");
   expect(screen.getByRole("button", { name: "Try again" }).hasAttribute("disabled")).toBe(false);
 });
@@ -98,6 +98,35 @@ it("resubmits corrected rejected applications and does not fake a pending state 
 
 it("allows an active CUSTOMER to apply before chef approval", async () => {
   boundary(); await screen.findByLabelText("Private chef draft");
+});
+
+it("discards a pending application's save receipt after the account is replaced", async () => {
+  verifiedEmail = true;
+  setSessionIdentity(owner);
+  const saving = deferred<Response>();
+  const rejected = {
+    id: owner.id, status: "REJECTED", email: "a@example.invalid", firstName: "Fixture", lastName: "Chef",
+    addressLine1: "1 Test Road", city: "Hyderabad", state: "Telangana", rejectionReason: "Please replace the ID photo",
+    documents: ["APPLICANT_PHOTO", "GOVERNMENT_ID_FRONT", "GOVERNMENT_ID_BACK", "TAX_ID_CARD"].map(documentType => ({
+      id: owner.id, documentType, originalFileName: "fixture.png", contentType: "image/png", fileSizeBytes: 100,
+      status: "UPLOADED", createdAt: "2026-10-02T00:00:00Z",
+    })),
+  };
+  fetcher.mockImplementation((input, init) => {
+    if (String(input) !== "/api/chef/application") return normal(input);
+    if (init?.method === "POST") return saving.promise;
+    return Promise.resolve(Response.json(current?.id === owner.id ? rejected : { status: "APPROVED", documents: [] }));
+  });
+  render(createElement(ChefApplicationSessionBoundary, null, createElement(ChefApplicationWorkspace)));
+  const submit = await screen.findByRole("button", { name: "Resubmit for verification" });
+  await waitFor(() => expect(submit.hasAttribute("disabled")).toBe(false));
+  fireEvent.click(submit);
+  await waitFor(() => expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
+  await act(async () => { current = { ...owner, id: "22222222-2222-4222-8222-222222222222" }; setSessionIdentity(current); });
+  await screen.findByText("You’re approved");
+  await act(async () => { saving.resolve(Response.json({ ...rejected, status: "PENDING" })); });
+  expect(screen.getByText("You’re approved")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "View verification status" })).toBeNull();
 });
 
 it("saves a new application through the guided flow and restores its saved state after remount", async () => {

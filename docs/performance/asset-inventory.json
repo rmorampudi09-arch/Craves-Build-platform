@@ -1,0 +1,10 @@
+{
+  "source_commit": "dc74bfa3880b18278b015f57ae393fb25133acdf",
+  "binary_media": [
+    {
+      "path": "apps/customer-web-next/public/landing-v20/videos/hero-bg-fast.mp4",
+      "bytes": 4183971,
+      "sha256": "e6c03673ecd02fb8ba56c237a4bbac0b6692ed3d52865abdf8ee9e3563d025e0"
+    }
+  ]
+}

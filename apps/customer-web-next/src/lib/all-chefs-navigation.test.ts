@@ -7,7 +7,7 @@ function source(relativePath: string): string {
 }
 
 test("mobile Chefs navigation opens the dedicated all-chefs page", () => {
-  const nav = source("../components/layout/BottomNav.tsx");
+  const nav = source("../components/layout/BottomNavContent.tsx");
   const route = source("../app/chefs/page.tsx");
   const page = source("../screens/public/AllChefs/AllChefs.tsx");
   const returnNavigation = source("./return-navigation.ts");

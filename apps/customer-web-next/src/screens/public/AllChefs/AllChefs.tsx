@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { useNavigate } from "@tanstack/react-router";
 
@@ -21,8 +21,12 @@ import { discoverDishes } from "@/services/api/dishes";
 import { discoverKitchens } from "@/services/api/kitchens";
 import {
   clearSession,
+  captureSessionContext,
+  isSessionContextCurrent,
+  isSessionReady,
   loadSelectedAddress,
   loadSession,
+  subscribeSession,
   type CravesAddress,
   type CravesUser,
 } from "@/services/auth/cravesAuth";
@@ -49,8 +53,21 @@ function locationTypeLabel(address: CravesAddress | null): string {
   return raw || "Location";
 }
 
+function sessionScope() {
+  const context = captureSessionContext();
+  return JSON.stringify([context.generation, context.identityId, isSessionReady()]);
+}
+
 export function AllChefsPage() {
+  const scope = useSyncExternalStore(subscribeSession, sessionScope, () => "server");
+  return <AllChefsContent key={scope} />;
+}
+
+function AllChefsContent() {
   const navigate = useNavigate();
+  const activeRef = useRef(true);
+  const requestEpochRef = useRef(0);
+  const [retry, setRetry] = useState(0);
   const [user, setUser] = useState<CravesUser | null>(null);
   const [address, setAddress] = useState<CravesAddress | null>(null);
   const [kitchens, setKitchens] = useState<NearbyKitchen[]>([]);
@@ -63,6 +80,10 @@ export function AllChefsPage() {
   const [signingOut, setSigningOut] = useState(false);
 
   const refresh = useCallback(async (nextAddress: CravesAddress | null) => {
+    const context = captureSessionContext();
+    const epoch = requestEpochRef.current;
+    const current = () => activeRef.current && epoch === requestEpochRef.current && isSessionContextCurrent(context) && isSessionReady();
+    if (!current()) return;
     if (
       typeof nextAddress?.lat !== "number" ||
       typeof nextAddress.lng !== "number"
@@ -93,6 +114,7 @@ export function AllChefsPage() {
           DEFAULT_DISCOVERY_RADIUS_METERS,
         ),
       ]);
+      if (!current()) return;
 
       if (kitchenResult.status !== "fulfilled") {
         throw kitchenResult.reason;
@@ -118,6 +140,7 @@ export function AllChefsPage() {
           : "No active home chefs are available within 50 km of your delivery address yet.",
       );
     } catch (error) {
+      if (!current()) return;
       setKitchens([]);
       setDishImagesByKitchen({});
       setState("error");
@@ -131,6 +154,14 @@ export function AllChefsPage() {
 
   useEffect(() => {
     let active = true;
+    activeRef.current = true;
+    requestEpochRef.current += 1;
+    setState("loading");
+    setMessage("Loading home chefs near your delivery address…");
+    setUser(null);
+    setAddress(null);
+    setKitchens([]);
+    setDishImagesByKitchen({});
 
     const syncCart = () => {
       if (active) setCartItemCount(cartCount());
@@ -138,44 +169,51 @@ export function AllChefsPage() {
     const unsubscribeCart = subscribeCart(syncCart);
 
     void (async () => {
-      const current = await loadSession();
-      if (!active) return;
-      if (!current) {
-        navigate({ to: "/", replace: true });
-        return;
-      }
-      setUser(current);
-
       try {
-        const selected = await loadSelectedAddress();
+        const current = await loadSession({ hydrateCustomerProfile: "background" });
         if (!active) return;
-        setAddress(selected);
-        await refresh(selected);
+        if (!current || !isSessionReady()) {
+          navigate({ to: "/", replace: true });
+          return;
+        }
+        const context = captureSessionContext();
+        const ownsRequest = () => active && isSessionContextCurrent(context) && isSessionReady();
+        setUser(current);
+        // The optional cart badge need not wait for address-based discovery.
+        void loadCart().then(() => { if (ownsRequest()) syncCart(); }).catch(() => {
+          if (ownsRequest()) setCartItemCount(0);
+        });
+
+        try {
+          const selected = await loadSelectedAddress();
+          if (!ownsRequest()) return;
+          setAddress(selected);
+          await refresh(selected);
+        } catch (error) {
+          if (!ownsRequest()) return;
+          setAddress(null);
+          setKitchens([]);
+          setState("error");
+          setMessage(
+            error instanceof Error
+              ? error.message
+              : "Your delivery address could not be loaded.",
+          );
+        }
       } catch (error) {
         if (!active) return;
-        setAddress(null);
-        setKitchens([]);
         setState("error");
-        setMessage(
-          error instanceof Error
-            ? error.message
-            : "Your delivery address could not be loaded.",
-        );
-      }
-
-      try {
-        await loadCart();
-        syncCart();
-      } catch {
-        if (active) setCartItemCount(0);
+        setMessage(error instanceof Error ? error.message : "Your account could not be verified. Please try again.");
       }
     })();
 
     return () => {
       active = false;
+      activeRef.current = false;
+      requestEpochRef.current += 1;
       unsubscribeCart();
     };
-  }, [navigate, refresh]);
+  }, [navigate, refresh, retry]);
 
   const filteredKitchens = useMemo(() => {
     const query = searchTerm.trim().toLocaleLowerCase("en-IN");
@@ -215,6 +253,15 @@ export function AllChefsPage() {
   };
 
   if (!user) {
+    if (state === "error") {
+      return (
+        <main className="mx-auto max-w-xl px-4 py-16 text-center">
+          <h1 className="font-display text-xl font-black">Home chefs could not be loaded</h1>
+          <p role="alert" className="mt-3 text-sm text-[#6B6B6B]">{message}</p>
+          <button type="button" onClick={() => setRetry((value) => value + 1)} className="mt-5 min-h-11 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white">Try again</button>
+        </main>
+      );
+    }
     return <CustomerPageSkeleton label="Loading nearby home chefs" />;
   }
 
@@ -243,7 +290,7 @@ export function AllChefsPage() {
           onSelectKitchen={(kitchen) =>
             navigate({ to: "/kitchen/$id", params: { id: kitchen.id } })
           }
-          onRetry={() => void refresh(address)}
+          onRetry={() => setRetry((value) => value + 1)}
           onManageAddress={openAddressManager}
           dishImagesByKitchen={dishImagesByKitchen}
         />

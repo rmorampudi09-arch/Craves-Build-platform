@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Navbar from './components/Navbar/Navbar';
 import CustomerAuth from './components/CustomerAuth';
 import LandingNotice from './components/LandingNotice';
@@ -9,29 +9,16 @@ import DeliveredWithCare from './components/DeliveredWithCare/DeliveredWithCare'
 import StoryVideo from './components/StoryVideo/StoryVideo';
 import WhyCraves from './components/WhyCraves/WhyCraves';
 import Footer from './components/Footer/Footer';
-import SplashScreen from './components/SplashScreen/SplashScreen';
 import { usePremiumScroll } from './hooks/usePremiumScroll';
 import './App.css';
 
 function App() {
-  const [landingReady, setLandingReady] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
-
-  // Prepare scrolling during the reveal, before the splash releases its lock.
-  // Wheel input stays blocked while splash-active is present.
-  usePremiumScroll(landingReady);
-
-  const startLandingReveal = useCallback(() => {
-    setLandingReady(true);
-  }, []);
-
-  const finishSplash = useCallback(() => {
-    setLandingReady(true);
-    setShowSplash(false);
-  }, []);
+  usePremiumScroll(true);
 
   useEffect(() => {
-    if (!landingReady) return;
+    // Release the first-paint cover after the page commits. Optional images,
+    // fonts and video must never impose an animation minimum on navigation.
+    document.dispatchEvent(new Event('craves:boot-release'));
 
     const sections = Array.from(document.querySelectorAll<HTMLElement>('main section'));
 
@@ -87,10 +74,10 @@ function App() {
       }
       window.removeEventListener('pageshow', onPageShow);
     };
-  }, [landingReady]);
+  }, []);
 
   return (
-    <div className={`app ${landingReady ? 'app--ready' : 'app--intro'}`}>
+    <div className="app app--ready">
       <Navbar />
       <main>
         <Hero />
@@ -105,9 +92,6 @@ function App() {
       <LandingNotice />
       <CustomerAuth />
 
-      {showSplash && (
-        <SplashScreen onRevealStart={startLandingReveal} onComplete={finishSplash} />
-      )}
     </div>
   );
 }

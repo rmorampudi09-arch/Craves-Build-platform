@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { captureSessionContext, getSession, isSessionReady, loadSession, subscribeSession } from "@/services/auth/cravesAuth";
+import { captureSessionContext, getSession, isSessionContextCurrent, isSessionReady, loadSession, subscribeSession } from "@/services/auth/cravesAuth";
 
 function sessionScope() {
   const context = captureSessionContext();
@@ -17,10 +17,12 @@ export function ChefApplicationSessionBoundary({ children }: { children: ReactNo
   const [check, setCheck] = useState<{ scope: string; state: "ready" | "unavailable" }>({ scope: "", state: "unavailable" });
   useEffect(() => {
     let active = true;
+    const initial = captureSessionContext();
     const timeout = window.setTimeout(() => {
       if (active) { active = false; setCheck({ scope, state: "unavailable" }); }
     }, 15_000);
-    void loadSession().then(user => {
+    void loadSession({ hydrateCustomerProfile: "skip" }).then(user => {
+      if (initial.identityId !== null && !isSessionContextCurrent(initial)) return;
       if (active) setCheck({ scope: sessionScope(), state: user && isSessionReady() && getSession()?.id === user.id ? "ready" : "unavailable" });
     }).catch(() => {
       if (active) setCheck({ scope, state: "unavailable" });

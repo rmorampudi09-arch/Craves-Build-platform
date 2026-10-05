@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   FaArrowLeft,
@@ -16,7 +16,7 @@ import {
   parseCustomerOrders,
   type CustomerOrder,
 } from "@/lib/order-contract";
-import { loadSession } from "@/services/auth/cravesAuth";
+import { captureSessionContext, isSessionContextCurrent, loadSession, subscribeSession } from "@/services/auth/cravesAuth";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 
@@ -121,7 +121,17 @@ function OrderSkeleton() {
   );
 }
 
+function sessionScope() {
+  const context = captureSessionContext();
+  return `${context.generation}:${context.identityId ?? ""}`;
+}
+
 export default function OrdersPage() {
+  const scope = useSyncExternalStore(subscribeSession, sessionScope, () => "server");
+  return <OrdersContent key={scope} />;
+}
+
+function OrdersContent() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [view, setView] = useState<OrderView>("ACTIVE");
@@ -129,17 +139,30 @@ export default function OrdersPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const activeRef = useRef(false);
+  const loadSequence = useRef(0);
 
   const load = useCallback(async (background = false) => {
+    const sequence = ++loadSequence.current;
+    let context = captureSessionContext();
+    const isCurrent = () => activeRef.current && sequence === loadSequence.current && isSessionContextCurrent(context);
     if (background) setRefreshing(true);
     else setLoading(true);
     setError("");
     try {
+      const session = await loadSession({ hydrateCustomerProfile: "background" });
+      if (!activeRef.current || sequence !== loadSequence.current) return;
+      context = captureSessionContext();
+      if (!session) {
+        navigate({ to: "/" });
+        return;
+      }
       const response = await fetch("/api/orders", {
         cache: "no-store",
         credentials: "same-origin",
       });
       const raw = await response.json().catch(() => null);
+      if (!isCurrent()) return;
       if (!response.ok) {
         const message =
           raw &&
@@ -160,29 +183,25 @@ export default function OrdersPage() {
       );
       setLastUpdatedAt(new Date());
     } catch (caught) {
+      if (!isCurrent()) return;
       setError(
         caught instanceof Error
           ? caught.message
           : "Your orders could not be loaded.",
       );
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isCurrent()) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
-    let active = true;
-    void loadSession().then((session) => {
-      if (!active) return;
-      if (!session) {
-        navigate({ to: "/" });
-        return;
-      }
-      void load();
-    });
+    activeRef.current = true;
+    void load();
     return () => {
-      active = false;
+      activeRef.current = false;
     };
   }, [load, navigate]);
 

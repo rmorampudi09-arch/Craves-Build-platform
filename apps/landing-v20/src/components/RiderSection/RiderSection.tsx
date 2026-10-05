@@ -20,7 +20,7 @@ const RiderSection = () => {
 
           <div className="rider__media">
             <div className="rider__image-card">
-              <img
+              <img loading="lazy" decoding="async"
                 className="rider__image"
                 src="/images/rider-delivery.png"
                 alt="Craves delivery rider on a motorcycle carrying an insulated delivery box"

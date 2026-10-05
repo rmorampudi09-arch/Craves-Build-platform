@@ -1,0 +1,223 @@
+{
+  "observedAtUtc": "2026-10-05T22:07:55.263109+00:00",
+  "scope": "Read-only management metadata; policy hashes/node types/route paths/statuses only; sensitive expressions/header values/claims/cookie/JWT values excluded",
+  "operations": [
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/capabilities",
+      "method": "GET",
+      "name": "capabilities",
+      "urlTemplate": "/capabilities"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/craves-documents-v1-delete-wildcard",
+      "method": "DELETE",
+      "name": "craves-documents-v1-delete-wildcard",
+      "urlTemplate": "/*"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/craves-documents-v1-get-wildcard",
+      "method": "GET",
+      "name": "craves-documents-v1-get-wildcard",
+      "urlTemplate": "/*"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/craves-documents-v1-head-wildcard",
+      "method": "HEAD",
+      "name": "craves-documents-v1-head-wildcard",
+      "urlTemplate": "/*"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/craves-documents-v1-options-wildcard",
+      "method": "OPTIONS",
+      "name": "craves-documents-v1-options-wildcard",
+      "urlTemplate": "/*"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/craves-documents-v1-patch-wildcard",
+      "method": "PATCH",
+      "name": "craves-documents-v1-patch-wildcard",
+      "urlTemplate": "/*"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/craves-documents-v1-post-wildcard",
+      "method": "POST",
+      "name": "craves-documents-v1-post-wildcard",
+      "urlTemplate": "/*"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/craves-documents-v1-put-wildcard",
+      "method": "PUT",
+      "name": "craves-documents-v1-put-wildcard",
+      "urlTemplate": "/*"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/create-document",
+      "method": "POST",
+      "name": "create-document",
+      "urlTemplate": "/"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/download-document",
+      "method": "GET",
+      "name": "download-document",
+      "urlTemplate": "/{id}/download"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/email-document",
+      "method": "POST",
+      "name": "email-document",
+      "urlTemplate": "/{id}/email"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/email-history",
+      "method": "GET",
+      "name": "email-history",
+      "urlTemplate": "/{id}/emails"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/get-document",
+      "method": "GET",
+      "name": "get-document",
+      "urlTemplate": "/{id}"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/list-documents",
+      "method": "GET",
+      "name": "list-documents",
+      "urlTemplate": "/"
+    }
+  ],
+  "policies": [
+    {
+      "scope": "global",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/policies/policy",
+      "sha256": "8e678113f285cd7bef4e758a8f7d3ca893310d891d6301e791b0537132fbedc5",
+      "structure": [
+        {
+          "tag": "policies"
+        },
+        {
+          "tag": "inbound"
+        },
+        {
+          "tag": "backend"
+        },
+        {
+          "tag": "forward-request"
+        },
+        {
+          "tag": "outbound"
+        }
+      ]
+    },
+    {
+      "scope": "documents-api",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/policies/policy",
+      "sha256": "7d00999b76610263c1650d021245d42a7ba5478676a5867109e372fe011e48b3",
+      "structure": [
+        {
+          "tag": "policies"
+        },
+        {
+          "tag": "inbound"
+        },
+        {
+          "tag": "base"
+        },
+        {
+          "tag": "check-header",
+          "failed-check-httpcode": "401",
+          "name": "Authorization",
+          "ignore-case": "true"
+        },
+        {
+          "tag": "backend"
+        },
+        {
+          "tag": "limit-concurrency"
+        },
+        {
+          "tag": "forward-request"
+        },
+        {
+          "tag": "outbound"
+        },
+        {
+          "tag": "base"
+        },
+        {
+          "tag": "set-header",
+          "name": "Cache-Control",
+          "exists-action": "override"
+        },
+        {
+          "tag": "value",
+          "textSha256": "c002372bd5aad0579f04176a599a8a1072620c1b0497988da22914dbc822094b"
+        },
+        {
+          "tag": "set-header",
+          "name": "X-Content-Type-Options",
+          "exists-action": "override"
+        },
+        {
+          "tag": "value",
+          "textSha256": "f495210addd4c5882999afa5e924569823b6f504f3c95c760b36a0e1ba9e633e"
+        },
+        {
+          "tag": "on-error"
+        },
+        {
+          "tag": "base"
+        },
+        {
+          "tag": "set-header",
+          "name": "Cache-Control",
+          "exists-action": "override"
+        },
+        {
+          "tag": "value",
+          "textSha256": "a7cce5e08dbba56b725caec434e9ec5804b8b82a9537dd5db1af18850426c79d"
+        }
+      ]
+    },
+    {
+      "scope": "capabilities-operation",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/capabilities/policies/policy",
+      "sha256": "e22e03e94027900dcbda61ea69dc450c537cd2c2eeb667496c1343476931e16e",
+      "structure": [
+        {
+          "tag": "policies"
+        },
+        {
+          "tag": "inbound"
+        },
+        {
+          "tag": "base"
+        },
+        {
+          "tag": "rewrite-uri",
+          "template": "/api/v1/documents/capabilities",
+          "copy-unmatched-params": "true"
+        },
+        {
+          "tag": "backend"
+        },
+        {
+          "tag": "base"
+        },
+        {
+          "tag": "outbound"
+        },
+        {
+          "tag": "base"
+        },
+        {
+          "tag": "on-error"
+        },
+        {
+          "tag": "base"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "observedAtUtc": "2026-10-05T21:23:03.302102+00:00",
+  "apps": [
+    {
+      "name": "ca-craves-admin-web-prodlow",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.App/containerapps/ca-craves-admin-web-prodlow",
+      "image": "cravesrm09prodlow6bf632.azurecr.io/craves/admin-web@sha256:7a5689ee19ce935b691f6ad83cda7165c98b5ad63f14db05d57b506475ead7cc",
+      "source": null,
+      "portalFlag": "true",
+      "latest": "ca-craves-admin-web-prodlow--0000002",
+      "ready": "ca-craves-admin-web-prodlow--0000002",
+      "mode": "Single",
+      "traffic": [
+        {
+          "latestRevision": true,
+          "weight": 100
+        }
+      ],
+      "running": "Running"
+    },
+    {
+      "name": "ca-craves-admin-r92-ffe80e7c",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.App/containerapps/ca-craves-admin-r92-ffe80e7c",
+      "image": "cravesrm09prodlow6bf632.azurecr.io/craves/admin-web@sha256:750cccb048743cf4e15d118e53d9ec9af93c15793eadbe3296460c9a3aa8574c",
+      "source": null,
+      "portalFlag": "true",
+      "latest": "ca-craves-admin-r92-ffe80e7c--home-banners-1002",
+      "ready": "ca-craves-admin-r92-ffe80e7c--home-banners-1002",
+      "mode": "Single",
+      "traffic": [
+        {
+          "latestRevision": true,
+          "weight": 100
+        }
+      ],
+      "running": "Running"
+    }
+  ]
+}

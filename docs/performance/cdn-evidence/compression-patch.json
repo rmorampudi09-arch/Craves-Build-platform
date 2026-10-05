@@ -1,0 +1,19 @@
+{
+  "properties": {
+    "cacheConfiguration": {
+      "compressionSettings": {
+        "contentTypesToCompress": [
+          "text/css",
+          "text/javascript",
+          "application/javascript",
+          "application/json",
+          "image/svg+xml",
+          "font/woff2",
+          "font/woff"
+        ],
+        "isCompressionEnabled": true
+      },
+      "queryStringCachingBehavior": "IgnoreQueryString"
+    }
+  }
+}

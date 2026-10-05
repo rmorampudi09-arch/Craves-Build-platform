@@ -1,0 +1,14 @@
+{
+  "requestedAtUtc": "2026-10-05T17:42:56.1714938Z",
+  "profile": "afd-craves-prodlow",
+  "endpoint": "craves-prodlow-721906c9",
+  "contentPaths": [
+    "/_next/static/*"
+  ],
+  "domains": [
+    "craves.in",
+    "www.craves.in"
+  ],
+  "accepted": true,
+  "purpose": "Refill pre-propagation identity variants after gzip and Brotli delivery became independently verified"
+}

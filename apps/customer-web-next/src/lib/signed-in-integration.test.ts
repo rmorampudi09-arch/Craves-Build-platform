@@ -88,7 +88,7 @@ test("signed-in home loads live discovery and opens customer kitchen details wit
 
 test("profile exposes backend chef application status", () => {
   const contents = source("../screens/Profile/Profile.tsx");
-  assert.match(contents, /fetch\("\/api\/chef\/application"/);
+  assert.match(contents, /fetchWidget\("\/api\/chef\/application"/);
   assert.match(contents, /Chef application pending/);
   assert.match(contents, /Become a home chef/);
 });
@@ -237,7 +237,7 @@ test("pending chef applications remain editable exactly as the backend permits",
 test("chef dashboard reuses the working Craves session for applicants and chefs", () => {
   const dashboard = source("../components/chef-mode-dashboard.tsx");
   const phoneAuth = source("../components/phone-auth-form.tsx");
-  assert.match(dashboard, /loadSession\(\)/);
+  assert.match(dashboard, /loadSession\(\{ hydrateCustomerProfile: "skip" \}\)/);
   assert.match(dashboard, /state === "applicant"/);
   assert.match(dashboard, /Open chef application/);
   assert.doesNotMatch(dashboard, /fetch\("\/api\/chef\/me"/);
@@ -256,8 +256,8 @@ test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   const boundary = source("../components/chef-access-boundary.tsx");
   assert.match(auth, /synchronizeSessionRoles/);
   assert.match(auth, /fetch\("\/api\/auth\/refresh"/);
-  assert.match(boundary, /loadSession\(\)/);
-  assert.match(boundary, /synchronizeSessionRoles\(\)/);
+  assert.match(boundary, /loadSession\(\{ hydrateCustomerProfile: "skip" \}\)/);
+  assert.match(boundary, /synchronizeSessionRoles\(\{ hydrateCustomerProfile: "skip" \}\)/);
   // Role denial and session races are exercised by rendered components in chef-profile-session.vitest.ts.
 
   for (const page of [

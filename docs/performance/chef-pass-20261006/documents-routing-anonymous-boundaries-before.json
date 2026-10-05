@@ -1,0 +1,43 @@
+{
+  "observedAtUtc": "2026-10-05T22:19:08.414743+00:00",
+  "operation": "READ-ONLY anonymous pre-repair boundary observation",
+  "rows": [
+    {
+      "url": "https://craves.in/api/documents/capabilities",
+      "status": 401,
+      "cacheControl": "private, no-store, max-age=0",
+      "xCache": "CONFIG_NOCACHE",
+      "seconds": 0.178064,
+      "authenticated": false,
+      "bodyRead": false
+    },
+    {
+      "url": "https://craves.in/api/documents",
+      "status": 401,
+      "cacheControl": "private, no-store, max-age=0",
+      "xCache": "CONFIG_NOCACHE",
+      "seconds": 0.16202,
+      "authenticated": false,
+      "bodyRead": false
+    },
+    {
+      "url": "https://craves.in/api/documents/00000000-0000-0000-0000-000000000000",
+      "status": 404,
+      "cacheControl": "private, no-store, max-age=0",
+      "xCache": "CONFIG_NOCACHE",
+      "seconds": 0.151654,
+      "authenticated": false,
+      "bodyRead": false
+    },
+    {
+      "url": "https://apim-craves-prodlow-kmqgfy.azure-api.net/api/v1/documents/capabilities",
+      "status": 401,
+      "cacheControl": "private, no-store",
+      "xCache": "",
+      "seconds": 0.290641,
+      "authenticated": false,
+      "bodyRead": false
+    }
+  ],
+  "mutations": 0
+}

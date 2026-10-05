@@ -1,0 +1,86 @@
+{
+  "differences": [
+    {
+      "field": ".conditions[3].parameters.transforms",
+      "expected": "[absent]",
+      "observed": []
+    }
+  ],
+  "current": {
+    "actions": [
+      {
+        "name": "RouteConfigurationOverride",
+        "parameters": {
+          "cacheConfiguration": {
+            "cacheBehavior": "HonorOrigin",
+            "isCompressionEnabled": "Enabled",
+            "queryStringCachingBehavior": "IgnoreQueryString"
+          },
+          "typeName": "DeliveryRuleRouteConfigurationOverrideActionParameters"
+        }
+      }
+    ],
+    "conditions": [
+      {
+        "name": "HostName",
+        "parameters": {
+          "matchValues": [
+            "admin.craves.in"
+          ],
+          "negateCondition": false,
+          "operator": "Equal",
+          "transforms": [
+            "Lowercase"
+          ],
+          "typeName": "DeliveryRuleHostNameConditionParameters"
+        }
+      },
+      {
+        "name": "UrlPath",
+        "parameters": {
+          "matchValues": [
+            "_next/static/"
+          ],
+          "negateCondition": false,
+          "operator": "BeginsWith",
+          "transforms": [],
+          "typeName": "DeliveryRuleUrlPathMatchConditionParameters"
+        }
+      },
+      {
+        "name": "UrlFileExtension",
+        "parameters": {
+          "matchValues": [
+            "js",
+            "css"
+          ],
+          "negateCondition": false,
+          "operator": "Equal",
+          "transforms": [
+            "Lowercase"
+          ],
+          "typeName": "DeliveryRuleUrlFileExtensionMatchConditionParameters"
+        }
+      },
+      {
+        "name": "RequestMethod",
+        "parameters": {
+          "matchValues": [
+            "GET",
+            "HEAD"
+          ],
+          "negateCondition": false,
+          "operator": "Equal",
+          "transforms": [],
+          "typeName": "DeliveryRuleRequestMethodConditionParameters"
+        }
+      }
+    ],
+    "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravesstaticidentity/rules/forceidentityencoding",
+    "matchProcessingBehavior": "Continue",
+    "name": "forceidentityencoding",
+    "order": 1,
+    "ruleSetName": "cravesstaticidentity",
+    "type": "Microsoft.Cdn/profiles/rulesets/rules"
+  }
+}

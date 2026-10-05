@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -14,7 +14,7 @@ import {
   removeCustomerFavorite,
 } from "@/services/api/customerFavorites";
 import { loadDish, type Dish } from "@/services/api/dishes";
-import { loadSession } from "@/services/auth/cravesAuth";
+import { captureSessionContext, isSessionContextCurrent, isSessionReady, loadSession, subscribeSession } from "@/services/auth/cravesAuth";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 import { CustomerFloatingCart } from "@/components/cart/CustomerFloatingCart";
 import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
@@ -36,8 +36,20 @@ function money(amount: number, currency = "INR"): string {
   }).format(amount);
 }
 
+function sessionScope() {
+  const context = captureSessionContext();
+  return JSON.stringify([context.generation, context.identityId, isSessionReady()]);
+}
+
 function WishlistPage() {
+  const scope = useSyncExternalStore(subscribeSession, sessionScope, () => "server");
+  return <WishlistContent key={scope} />;
+}
+
+function WishlistContent() {
   const navigate = useNavigate();
+  const activeRef = useRef(true);
+  const [retry, setRetry] = useState(0);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Dish[]>([]);
@@ -45,10 +57,13 @@ function WishlistPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const loadFavorites = useCallback(async () => {
+    const context = captureSessionContext();
+    const current = () => activeRef.current && isSessionContextCurrent(context) && isSessionReady();
     setLoading(true);
     setMessage(null);
     try {
       const ids = await loadCustomerFavoriteIds();
+      if (!current()) return;
       const dishes = await Promise.all(
         Array.from(ids).map(async (id) => {
           try {
@@ -58,8 +73,10 @@ function WishlistPage() {
           }
         }),
       );
+      if (!current()) return;
       setItems(dishes.filter((dish): dish is Dish => Boolean(dish)));
     } catch (error) {
+      if (!current()) return;
       setItems([]);
       setMessage(
         error instanceof Error
@@ -67,47 +84,63 @@ function WishlistPage() {
           : "Saved dishes are temporarily unavailable.",
       );
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     let active = true;
-    void loadSession().then((session) => {
+    activeRef.current = true;
+    setLoading(true);
+    setReady(false);
+    setMessage(null);
+    void loadSession({ hydrateCustomerProfile: "background" }).then((session) => {
       if (!active) return;
-      if (!session) {
+      if (!session || !isSessionReady()) {
         navigate({ to: "/" });
         return;
       }
       setReady(true);
       void loadFavorites();
       void loadCart().catch(() => undefined);
+    }).catch((error: unknown) => {
+      if (!active) return;
+      setItems([]);
+      setMessage(error instanceof Error ? error.message : "Your account could not be verified. Please try again.");
+      setLoading(false);
     });
     return () => {
       active = false;
+      activeRef.current = false;
     };
-  }, [loadFavorites, navigate]);
+  }, [loadFavorites, navigate, retry]);
 
   const removeSavedDish = useCallback(async (dish: Dish) => {
     if (busyId) return;
+    const context = captureSessionContext();
+    const current = () => activeRef.current && isSessionContextCurrent(context) && isSessionReady();
     setBusyId(dish.id);
     setMessage(null);
     try {
       await removeCustomerFavorite(dish.id);
+      if (!current()) return;
       setItems((current) => current.filter((item) => item.id !== dish.id));
     } catch (error) {
+      if (!current()) return;
       setMessage(
         error instanceof Error
           ? error.message
           : "This dish could not be removed from saved dishes.",
       );
     } finally {
-      setBusyId(null);
+      if (current()) setBusyId(null);
     }
   }, [busyId]);
 
   const addSavedDishToCart = useCallback(async (dish: Dish) => {
     if (busyId) return;
+    const context = captureSessionContext();
+    const current = () => activeRef.current && isSessionContextCurrent(context) && isSessionReady();
     setBusyId(dish.id);
     setMessage(null);
     try {
@@ -122,19 +155,21 @@ function WishlistPage() {
         },
         1,
       );
+      if (!current()) return;
       setMessage(`${dish.name} was added to your cart.`);
     } catch (error) {
+      if (!current()) return;
       setMessage(
         error instanceof Error
           ? error.message
           : "This dish could not be added to the cart.",
       );
     } finally {
-      setBusyId(null);
+      if (current()) setBusyId(null);
     }
   }, [busyId]);
 
-  if (!ready || loading) return <CustomerPageSkeleton label="Loading saved dishes" />;
+  if (loading || (!ready && !message)) return <CustomerPageSkeleton label="Loading saved dishes" />;
 
   return (
     <div className="min-h-screen bg-white pb-20 text-[#1A1A1A]">
@@ -173,7 +208,7 @@ function WishlistPage() {
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">{message}</p>
             <button
               type="button"
-              onClick={() => void loadFavorites()}
+              onClick={() => setRetry((value) => value + 1)}
               className="mt-5 min-h-10 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white"
             >
               Try again
@@ -266,7 +301,7 @@ function WishlistPage() {
           </>
         )}
       </main>
-      <CustomerFloatingCart />
+      {ready && <CustomerFloatingCart />}
     </div>
   );
 }

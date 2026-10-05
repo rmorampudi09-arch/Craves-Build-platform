@@ -10,8 +10,9 @@ import type { CravesUser } from "@/services/auth/cravesAuth";
 interface AccountCardProps {
   user: CravesUser;
   profile: CustomerProfile | null;
-  orderCount: number;
-  addressCount: number;
+  orderCount: number | string;
+  addressCount: number | string;
+  editDisabled?: boolean;
   onEdit: () => void;
 }
 
@@ -30,6 +31,7 @@ export function AccountCard({
   profile,
   orderCount,
   addressCount,
+  editDisabled = false,
   onEdit,
 }: AccountCardProps) {
   const firstName = profile?.firstName ?? user.firstName;
@@ -66,7 +68,8 @@ export function AccountCard({
             <button
               type="button"
               onClick={onEdit}
-              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-[#F1F3F5] px-3 text-xs font-black !text-[#F62E18] transition-[background-color,box-shadow] hover:!bg-white hover:shadow-[0_6px_16px_rgba(26,26,26,0.08)]"
+              disabled={editDisabled}
+              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-[#F1F3F5] px-3 text-xs font-black !text-[#F62E18] transition-[background-color,box-shadow] hover:!bg-white hover:shadow-[0_6px_16px_rgba(26,26,26,0.08)] disabled:cursor-wait disabled:opacity-50"
               aria-label="Edit customer profile"
             >
               <FaPen className="text-xs" aria-hidden="true" />

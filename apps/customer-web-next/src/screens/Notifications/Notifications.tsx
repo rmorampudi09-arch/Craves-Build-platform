@@ -73,7 +73,7 @@ export default function NotificationsPage() {
     let active = true;
 
     void (async () => {
-      const session = await loadSession();
+      const session = await loadSession({ hydrateCustomerProfile: "background" });
       if (!session) {
         if (active) navigate({ to: "/" });
         return;

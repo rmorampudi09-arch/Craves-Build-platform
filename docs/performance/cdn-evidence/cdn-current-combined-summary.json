@@ -1,0 +1,65 @@
+{
+  "updatedAtUtc": "2026-10-05T18:25:58.8762539Z",
+  "webSourceSha": "dc74bfa3880b18278b015f57ae393fb25133acdf",
+  "webReleaseVerified": true,
+  "webRevision": "ca-craves-web-prodlow--0000076",
+  "webImage": "cravesrm09prodlow6bf632.azurecr.io/craves/customer-web-next@sha256:bca745e52636105532b78b42d552e9e516f5074d72938f0ab8c4090ca8d636dc",
+  "route": "craves-static-route",
+  "currentAuthorizedPatterns": [
+    "/_next/static/*",
+    "/landing-v20/assets/*"
+  ],
+  "originCompressionEnabled": false,
+  "edgeCompressionEnabled": true,
+  "retainedRuleset": "cravessecurityheaders",
+  "nextStatic": {
+    "decodedHashEqualityVerified": true,
+    "allResponses200": true,
+    "brotliVerified": true,
+    "evidence": [
+      "cdn-compression-verified.json",
+      "edge-warm-cache-verification.json"
+    ],
+    "warmCacheVerified": true,
+    "gzipVerified": true
+  },
+  "landingAssets": {
+    "patternUpdateVerified": true,
+    "originImmutableAndCookieFreeVerified": true,
+    "evidence": [
+      "landing-origin-cache-eligibility.json",
+      "landing-assets-pattern-update-receipt.json",
+      "landing-assets-route-final-bounded-probe.json",
+      "retained-security-rules-after-landing-delay.json"
+    ],
+    "decodedHashEqualityBeforePatternVerified": true,
+    "gzipVerified": false,
+    "brotliVerified": false,
+    "lastDecodedProbe": "landing-assets-route-final-bounded-probe.json",
+    "lastDomainProbe": "landing-route-domain-propagation-diagnostic.json",
+    "lastStatus": "Configuration succeeded and source assets are correct: all origin/edge gzip,br,identity requests200 with exact decoded SHA256 equality. At lastCheckedAtUtc, the edge still returned identity with CONFIG_NOCACHE after the bounded20-minute check. Landing gzip/Brotli delivery and warm-cache verification remain pending propagation and are not reported as achieved.",
+    "lastRuleInspection": "retained-security-rules-after-landing-delay.json",
+    "retainedRulesHaveNoConditionsOrCacheOverride": true,
+    "configurationSucceeded": true,
+    "allResponses200": true,
+    "decodedHashEqualityVerified": true,
+    "warmCacheVerified": false,
+    "routingAtEdgeVerified": false,
+    "lastCheckedAtUtc": "2026-10-05T18:25:18.4249796Z",
+    "lastEdgeCacheStatus": "CONFIG_NOCACHE"
+  },
+  "protectedCacheBoundaries": {
+    "authManifestCachingUnchanged": true,
+    "evidence": "protected-cache-boundaries-after-landing-pattern.json",
+    "apiCachingUnchanged": true,
+    "generalHtmlCachingUnchanged": true
+  },
+  "authAssetsExtensionAuthorized": false,
+  "authAssetsExtensionPending": false,
+  "remainingVerification": [
+    "Verify gzip/Brotli delivery, decoded SHA256 equality and warm cache for landing-v20 assets after Azure edge propagation. No auth-assets extension is authorized or pending."
+  ],
+  "historicalReceiptsPreserved": true,
+  "rollbackRequired": false,
+  "lastCheckedAtUtc": "2026-10-05T18:25:18.4249796Z"
+}

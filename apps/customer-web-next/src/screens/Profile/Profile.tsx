@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import dynamic from "next/dynamic";
 import {
   FaBagShopping,
   FaBell,
@@ -16,14 +17,12 @@ import { GiChefToque } from "react-icons/gi";
 
 import { AccountCard } from "@/components/profile/AccountCard";
 import { AddressCard } from "@/components/profile/AddressCard";
-import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { ProfileLinkCard } from "@/components/profile/ProfileLinkCard";
 import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
 import type { CustomerAddress } from "@/lib/address-contract";
-import type { ChefApplication } from "@/lib/chef-application-contract";
-import type { CustomerOrder } from "@/lib/order-contract";
-import type { CustomerProfile } from "@/lib/profile-contract";
+import { parseChefApplication, type ChefApplication } from "@/lib/chef-application-contract";
+import { parseCustomerProfile, type CustomerProfile } from "@/lib/profile-contract";
 import {
   captureSessionContext,
   clearSession,
@@ -32,12 +31,21 @@ import {
   isSessionReady,
   loadSession,
   LogoutUnconfirmedError,
+  setSessionProfile,
   subscribeSession,
   type CravesUser,
   type SessionContext,
 } from "@/services/auth/cravesAuth";
 import { cartCount, loadCart } from "@/services/api/cravesCart";
 import { loadCustomerFavoriteIds } from "@/services/api/customerFavorites";
+
+const EditProfileModal = dynamic(
+  () => import("@/components/profile/EditProfileModal").then((module) => module.EditProfileModal),
+  { ssr: false },
+);
+
+type ProfileWidget = "profile" | "addresses" | "orders" | "favorites" | "cart" | "application";
+type WidgetLoadState = "loading" | "ready" | "error";
 
 function chefLink(user: CravesUser, application: ChefApplication | null) {
   if (user.roles.some((role) => role.toUpperCase() === "CHEF")) {
@@ -202,18 +210,30 @@ function ProfileContent({
   const navigate = useNavigate();
   const [user, setUser] = useState<CravesUser | null>(null);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
-  const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
-  const [orderCount, setOrderCount] = useState(0);
-  const [favoriteCount, setFavoriteCount] = useState(0);
-  const [cartItemCount, setCartItemCount] = useState(0);
+  const [addresses, setAddresses] = useState<CustomerAddress[] | null>(null);
+  const [orderCount, setOrderCount] = useState<number | null>(null);
+  const [favoriteCount, setFavoriteCount] = useState<number | null>(null);
+  const [cartItemCount, setCartItemCount] = useState<number | null>(null);
   const [application, setApplication] = useState<ChefApplication | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [widgetStates, setWidgetStates] = useState<Record<ProfileWidget, WidgetLoadState>>({
+    profile: "loading",
+    addresses: "loading",
+    orders: "loading",
+    favorites: "loading",
+    cart: "loading",
+    application: "loading",
+  });
 
   useEffect(() => {
     let active = true;
+    let requestContext: SessionContext | null = null;
+    const controller = new AbortController();
+    const isCurrent = () => active && requestContext !== null &&
+      isSessionContextCurrent(requestContext) && isSessionReady();
 
     void (async () => {
       if (getSession() && !isSessionReady()) {
@@ -224,7 +244,7 @@ function ProfileContent({
         return;
       }
 
-      const session = await loadSession();
+      const session = await loadSession({ hydrateCustomerProfile: "skip" });
       if (!active) return;
 
       if (!session) {
@@ -242,80 +262,77 @@ function ProfileContent({
       if (!isSessionReady() || getSession()?.id !== session.id) return;
 
       const context = captureSessionContext();
+      requestContext = context;
       setUser(session);
-
-      const [
-        profileResponse,
-        addressResponse,
-        ordersResponse,
-        chefResponse,
-        favoriteIds,
-        loadedCart,
-      ] = await Promise.all([
-        fetch("/api/customer/profile", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        fetch("/api/customer/addresses", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        fetch("/api/orders", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        fetch("/api/chef/application", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        loadCustomerFavoriteIds().catch(() => new Set<string>()),
-        loadCart().catch(() => []),
-      ]);
-
-      if (
-        !active ||
-        !isSessionContextCurrent(context) ||
-        !isSessionReady()
-      ) {
-        return;
-      }
-
-      if (profileResponse.ok) {
-        setProfile((await profileResponse.json()) as CustomerProfile);
-      }
-
-      if (addressResponse.ok) {
-        const body = await addressResponse.json().catch(() => []);
-        setAddresses(
-          Array.isArray(body) ? (body as CustomerAddress[]) : [],
-        );
-      }
-
-      if (ordersResponse.ok) {
-        const body = await ordersResponse.json().catch(() => []);
-        setOrderCount(
-          Array.isArray(body) ? (body as CustomerOrder[]).length : 0,
-        );
-      }
-
-      if (chefResponse.ok) {
-        setApplication((await chefResponse.json()) as ChefApplication);
-      }
-
-      setFavoriteCount(favoriteIds.size);
-      setCartItemCount(loadedCart.length ? cartCount() : 0);
-
-      if (!profileResponse.ok && profileResponse.status !== 404) {
-        setError(
-          "Your profile details could not be loaded. Try refreshing the page.",
-        );
-      } else {
-        setMessage("");
-      }
-
       setLoading(false);
+
+      async function loadWidget<T>(
+        name: ProfileWidget,
+        request: () => Promise<T>,
+        apply: (value: T) => void,
+      ) {
+        try {
+          const value = await request();
+          if (!isCurrent()) return;
+          apply(value);
+          setWidgetStates((states) => ({ ...states, [name]: "ready" }));
+        } catch {
+          if (!isCurrent()) return;
+          setWidgetStates((states) => ({ ...states, [name]: "error" }));
+        }
+      }
+
+      async function fetchWidget(path: string, allowMissing = false): Promise<unknown> {
+        const response = await fetch(path, {
+          cache: "no-store",
+          credentials: "same-origin",
+          signal: controller.signal,
+        });
+        if (allowMissing && response.status === 404) return null;
+        if (!response.ok) throw new Error("Account details are temporarily unavailable.");
+        return response.json();
+      }
+
+      // Each section becomes usable as soon as its own request completes.
+      // A slow cart or order service never holds back the verified account.
+      void loadWidget("profile", async () => {
+        const body = await fetchWidget("/api/customer/profile", true);
+        if (body === null) return null;
+        // The profile record has its own UUID. Ownership comes from the BFF
+        // and the current session context, not equality with the identity UUID.
+        const parsed = parseCustomerProfile(body);
+        if (!parsed) throw new Error("Invalid customer profile.");
+        return parsed;
+      }, (loadedProfile) => {
+        setProfile(loadedProfile);
+        if (loadedProfile) {
+          const updated = setSessionProfile(loadedProfile, context);
+          if (updated) setUser(updated);
+        }
+      });
+
+      void loadWidget("addresses", async () => {
+        const body = await fetchWidget("/api/customer/addresses");
+        if (!Array.isArray(body)) throw new Error("Invalid saved addresses.");
+        return body as CustomerAddress[];
+      }, setAddresses);
+
+      void loadWidget("orders", async () => {
+        const body = await fetchWidget("/api/orders");
+        if (!Array.isArray(body)) throw new Error("Invalid order history.");
+        return body.length;
+      }, setOrderCount);
+
+      void loadWidget("application", async () => {
+        const parsed = parseChefApplication(await fetchWidget("/api/chef/application"));
+        if (!parsed) throw new Error("Invalid chef application.");
+        return parsed;
+      }, setApplication);
+
+      void loadWidget("favorites", loadCustomerFavoriteIds, (ids) => setFavoriteCount(ids.size));
+      void loadWidget("cart", loadCart, () => setCartItemCount(cartCount()));
     })().catch(() => {
-      if (!active) return;
+      if (!active || (requestContext && !isCurrent())) return;
       setError(
         getSession()
           ? "Your account details are temporarily unavailable. Sign-out controls remain available below."
@@ -326,6 +343,7 @@ function ProfileContent({
 
     return () => {
       active = false;
+      controller.abort();
     };
   }, [navigate]);
 
@@ -379,7 +397,7 @@ function ProfileContent({
   }
 
   const preferred =
-    addresses.find((address) => address.isDefault) ?? addresses[0];
+    addresses?.find((address) => address.isDefault) ?? addresses?.[0];
 
   const addressLine = preferred
     ? [
@@ -392,9 +410,23 @@ function ProfileContent({
       ]
         .filter(Boolean)
         .join(", ")
-    : "No delivery address saved yet.";
+    : widgetStates.addresses === "loading"
+      ? "Loading delivery addresses…"
+      : widgetStates.addresses === "error"
+        ? "Delivery addresses are temporarily unavailable."
+        : "No delivery address saved yet.";
 
-  const chef = chefLink(user, application);
+  const chef = widgetStates.application === "ready" || user.roles.some((role) => role.toUpperCase() === "CHEF")
+    ? chefLink(user, application)
+    : {
+        to: "/chef/application",
+        title: "Home chef tools",
+        subtitle: widgetStates.application === "loading"
+          ? "Loading chef application…"
+          : "Open your chef application",
+      };
+  const countLabel = (count: number | null, state: WidgetLoadState) =>
+    count ?? (state === "error" ? "Unavailable" : "Loading…");
   return (
     <div className="min-h-screen bg-[#FAFAFA] pb-8 text-[#1A1A1A] md:pb-12">
       <ProfileHeader />
@@ -403,10 +435,17 @@ function ProfileContent({
         <AccountCard
           user={user}
           profile={profile}
-          orderCount={orderCount}
-          addressCount={addresses.length}
+          orderCount={countLabel(orderCount, widgetStates.orders)}
+          addressCount={countLabel(addresses?.length ?? null, widgetStates.addresses)}
+          editDisabled={widgetStates.profile === "loading"}
           onEdit={() => setEditOpen(true)}
         />
+
+        {widgetStates.profile === "error" ? (
+          <p role="status" className="mt-4 rounded-xl bg-[#FFF8F7] p-3 text-xs font-semibold text-[#C92716]">
+            Your profile details are temporarily unavailable. Your account controls remain available.
+          </p>
+        ) : null}
 
         {error ? (
           <p
@@ -467,7 +506,11 @@ function ProfileContent({
               icon={FaBagShopping}
               title="My orders"
               subtitle={
-                orderCount +
+                orderCount === null
+                  ? widgetStates.orders === "error"
+                    ? "Order history is temporarily unavailable"
+                    : "Loading order history…"
+                  : orderCount +
                 " " +
                 (orderCount === 1 ? "order" : "orders") +
                 " in your history"
@@ -478,11 +521,15 @@ function ProfileContent({
               icon={FaHeart}
               title="Favorites"
               subtitle={
-                favoriteCount +
+                favoriteCount === null
+                  ? widgetStates.favorites === "error"
+                    ? "Favorites are temporarily unavailable"
+                    : "Loading saved dishes…"
+                  : favoriteCount +
                 " " +
                 (favoriteCount === 1 ? "saved dish" : "saved dishes")
               }
-              badge={String(favoriteCount)}
+              badge={favoriteCount === null ? undefined : String(favoriteCount)}
             />
             <ProfileLinkCard
               to="/notifications"
@@ -533,11 +580,15 @@ function ProfileContent({
               icon={FaCreditCard}
               title="Cart & checkout"
               subtitle={
-                cartItemCount +
+                cartItemCount === null
+                  ? widgetStates.cart === "error"
+                    ? "Your cart is temporarily unavailable"
+                    : "Loading your cart…"
+                  : cartItemCount +
                 " " +
                 (cartItemCount === 1 ? "item ready in your cart" : "items ready in your cart")
               }
-              badge={String(cartItemCount)}
+              badge={cartItemCount === null ? undefined : String(cartItemCount)}
             />
             <ProfileLinkCard
               icon={FaGift}
@@ -595,17 +646,18 @@ function ProfileContent({
         </section>
       </main>
 
-      <EditProfileModal
+      {editOpen ? <EditProfileModal
         open={editOpen}
         profile={profile}
         initialEmail={user.email ?? profile?.email ?? ""}
         onClose={() => setEditOpen(false)}
         onSaved={(savedProfile) => {
           setProfile(savedProfile);
+          setWidgetStates((states) => ({ ...states, profile: "ready" }));
           setMessage("Your profile changes were saved.");
           setError("");
         }}
-      />
+      /> : null}
     </div>
   );
 }

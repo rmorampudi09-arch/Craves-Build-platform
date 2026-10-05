@@ -24,7 +24,7 @@ import {
   loadSession,
 } from "@/services/auth/cravesAuth";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
-import { AddressEditorFlow } from "@/components/profile/AddressEditorFlow";
+import { LazyAddressEditorFlow } from "@/components/profile/LazyAddressEditorFlow";
 
 function addressLine(address: CustomerAddress): string {
   return [
@@ -104,7 +104,7 @@ export default function AddressesPage() {
 
   useEffect(() => {
     void (async () => {
-      const current = await loadSession();
+      const current = await loadSession({ hydrateCustomerProfile: "background" });
       if (!current) {
         navigate({ to: "/" });
         return;
@@ -390,7 +390,7 @@ export default function AddressesPage() {
         </p>
       </main>
 
-      <AddressEditorFlow
+      {editorOpen ? <LazyAddressEditorFlow
         open={editorOpen}
         initialAddress={editorAddress}
         profileDefaults={profileDefaults}
@@ -409,7 +409,7 @@ export default function AddressesPage() {
               : "Address saved. Select it as default from your saved addresses when you want Home to use it.",
           );
         }}
-      />
+      /> : null}
 
       <AlertDialog.Root
         open={Boolean(deleteTarget)}

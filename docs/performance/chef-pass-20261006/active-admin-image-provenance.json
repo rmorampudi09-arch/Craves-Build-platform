@@ -1,0 +1,16 @@
+{
+  "observedAtUtc": "2026-10-05T21:24:26.634031+00:00",
+  "image": "cravesrm09prodlow6bf632.azurecr.io/craves/admin-web@sha256:750cccb048743cf4e15d118e53d9ec9af93c15793eadbe3296460c9a3aa8574c",
+  "manifestDigestVerified": true,
+  "configDigestVerified": true,
+  "os": "linux",
+  "architecture": "amd64",
+  "sourceRevisionLabel": null,
+  "revisionLabelPresent": false,
+  "registryTags": [
+    "home-banners-r92-20261002-v1"
+  ],
+  "registryCreatedAt": "2026-10-02T01:25:03.5721865Z",
+  "registryUpdatedAt": "2026-10-02T01:25:03.5721865Z",
+  "scope": "Scoped admin-web pull, selected provenance only; no tokens, image environment, build history or signed URLs retained"
+}

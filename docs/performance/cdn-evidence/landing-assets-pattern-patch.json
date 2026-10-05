@@ -1,0 +1,8 @@
+{
+  "properties": {
+    "patternsToMatch": [
+      "/_next/static/*",
+      "/landing-v20/assets/*"
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "observedAtUtc": "2026-10-05T21:50:23.776815+00:00",
+  "expectedSourceSha": "739650f223f2edc0dd8914b28e23916b421da9f1",
+  "publicVersion": {
+    "commitSha": "739650f223f2edc0dd8914b28e23916b421da9f1"
+  },
+  "web": {
+    "name": "ca-craves-web-prodlow",
+    "image": "cravesrm09prodlow6bf632.azurecr.io/craves/customer-web-next@sha256:9d96c9ffa88196aae401cad066d7c5d637bb971a6ce7b510a4a9f8ccd603a128",
+    "buildSha": "739650f223f2edc0dd8914b28e23916b421da9f1",
+    "ready": "ca-craves-web-prodlow--0000077",
+    "latest": "ca-craves-web-prodlow--0000077",
+    "running": "Running",
+    "provisioning": "Succeeded",
+    "cpu": 0.25,
+    "memory": "0.5Gi",
+    "min": 1,
+    "max": 1,
+    "mode": "Single",
+    "traffic": [
+      {
+        "latestRevision": true,
+        "weight": 100
+      }
+    ]
+  },
+  "readyWebGuardPassed": true,
+  "protectedAppsCount": 12,
+  "allProtectedFingerprintsUnchanged": true
+}

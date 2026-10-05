@@ -1,0 +1,151 @@
+{
+  "observedAtUtc": "2026-10-05T21:25:50.569889+00:00",
+  "operation": "PROPOSAL ONLY - NOT APPLIED",
+  "scope": "Existing admin Front Door route, detached existing rule set and existing rule reused; no new resources, domains, tiers or app changes",
+  "beforeSnapshotSha256": "d1a67881a25109e8b7e7865b300caefc0f229c1d9004eda8a040cd69aaee8b92",
+  "affectedExistingRuleId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravesstaticidentity/rules/forceidentityencoding",
+  "proposedExistingRuleProperties": {
+    "actions": [
+      {
+        "name": "RouteConfigurationOverride",
+        "parameters": {
+          "cacheConfiguration": {
+            "queryStringCachingBehavior": "IgnoreQueryString",
+            "queryParameters": null,
+            "isCompressionEnabled": "Enabled",
+            "cacheBehavior": "HonorOrigin",
+            "cacheDuration": null
+          },
+          "originGroupOverride": null,
+          "typeName": "DeliveryRuleRouteConfigurationOverrideActionParameters"
+        }
+      }
+    ],
+    "conditions": [
+      {
+        "name": "HostName",
+        "parameters": {
+          "operator": "Equal",
+          "negateCondition": false,
+          "matchValues": [
+            "admin.craves.in"
+          ],
+          "transforms": [
+            "Lowercase"
+          ],
+          "typeName": "DeliveryRuleHostNameConditionParameters"
+        }
+      },
+      {
+        "name": "UrlPath",
+        "parameters": {
+          "operator": "BeginsWith",
+          "negateCondition": false,
+          "matchValues": [
+            "_next/static/"
+          ],
+          "transforms": [],
+          "typeName": "DeliveryRuleUrlPathMatchConditionParameters"
+        }
+      },
+      {
+        "name": "UrlFileExtension",
+        "parameters": {
+          "operator": "Equal",
+          "negateCondition": false,
+          "matchValues": [
+            "js",
+            "css"
+          ],
+          "transforms": [
+            "Lowercase"
+          ],
+          "typeName": "DeliveryRuleUrlFileExtensionMatchConditionParameters"
+        }
+      },
+      {
+        "name": "RequestMethod",
+        "parameters": {
+          "operator": "Equal",
+          "negateCondition": false,
+          "matchValues": [
+            "GET",
+            "HEAD"
+          ],
+          "typeName": "DeliveryRuleRequestMethodConditionParameters"
+        }
+      }
+    ],
+    "order": 1,
+    "matchProcessingBehavior": "Continue"
+  },
+  "affectedExistingRouteId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/afdendpoints/craves-prodlow-721906c9/routes/craves-admin-route",
+  "proposedSelectiveRoutePatch": {
+    "properties": {
+      "ruleSets": [
+        {
+          "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravesadminsecurityheaders"
+        },
+        {
+          "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravesstaticidentity"
+        }
+      ]
+    }
+  },
+  "routeCacheConfigurationRemains": null,
+  "routeOriginGroupRemains": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/origingroups/craves-admin-origin-group",
+  "preserve": "All existing admin security headers, custom domain association, route patterns, forwarding, TLS, APIs/HTML cache disabled; all customer routes and12protected ContainerApp fingerprints unchanged",
+  "rollbackSequence": [
+    {
+      "target": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/afdendpoints/craves-prodlow-721906c9/routes/craves-admin-route",
+      "selectivePatch": {
+        "properties": {
+          "ruleSets": [
+            {
+              "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravesadminsecurityheaders"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "target": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravesstaticidentity/rules/forceidentityencoding",
+      "restoreProperties": {
+        "actions": [
+          {
+            "name": "ModifyRequestHeader",
+            "parameters": {
+              "headerAction": "Overwrite",
+              "headerName": "Accept-Encoding",
+              "typeName": "DeliveryRuleHeaderActionParameters",
+              "value": "identity"
+            }
+          }
+        ],
+        "conditions": [],
+        "order": 1,
+        "matchProcessingBehavior": "Continue"
+      }
+    }
+  ],
+  "preApplyRequirements": [
+    "Re-read exact route/rule snapshot, ensure existing spare ruleset still detached everywhere",
+    "Every current admin HTML referenced JS/CSS must have public,max-age31536000,immutable without Set-Cookie",
+    "Direct-origin gzip/br/identity200 same decoded bytes, identity Content-Length and no chunked origin responses",
+    "Anonymous admin HTML remains CONFIG_NOCACHE; sign-in and auth/admin identity APIs remain private/no-store and CONFIG_NOCACHE",
+    "HostName and all AND condition schemas verified against official Azure docs; recheck all private boundaries before mutation"
+  ],
+  "postApplyRequirements": [
+    "Repeat gzip and Brotli decoded SHA256 equality against captured origin and200 statuses",
+    "Repeat warm-cache TCP_HIT and timings after propagation",
+    "Admin HTML remains CONFIG_NOCACHE with its unchanged origin policy; sign-in and unauthenticated APIs remain private/no-store and uncached",
+    "Verify customer compression unchanged and12protected app fingerprints unchanged",
+    "Rollback own selective route attachment and spare rule properties if503/stalls/hash mismatch/private cache change"
+  ],
+  "namingNote": "Existing detached rule keeps historical name forceidentityencoding to avoid creating or renaming any Azure resource; proposed action no longer modifies Accept-Encoding. This reuse must be documented.",
+  "officialSources": [
+    "https://learn.microsoft.com/en-us/azure/frontdoor/front-door-rules-engine-actions",
+    "https://learn.microsoft.com/en-us/azure/frontdoor/rules-match-conditions",
+    "https://learn.microsoft.com/en-us/azure/frontdoor/standard-premium/how-to-compression"
+  ]
+}

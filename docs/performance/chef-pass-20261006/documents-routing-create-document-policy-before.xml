@@ -1,0 +1,18 @@
+<policies>
+  <inbound>
+    <base />
+    <rewrite-uri template="/api/v1/documents" copy-unmatched-params="true" />
+    <validate-content unspecified-content-type-action="prevent" max-size="2048" size-exceeded-action="prevent">
+      <content type="application/json" validate-as="json" action="prevent" />
+    </validate-content>
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

@@ -1,0 +1,14 @@
+{
+  "requestedAtUtc": "2026-10-05T17:29:24.9662205Z",
+  "profile": "afd-craves-prodlow",
+  "endpoint": "craves-prodlow-721906c9",
+  "contentPaths": [
+    "/_next/static/*"
+  ],
+  "domains": [
+    "craves.in",
+    "www.craves.in"
+  ],
+  "accepted": true,
+  "purpose": "Rebuild only immutable static asset variants after edge compression changes"
+}

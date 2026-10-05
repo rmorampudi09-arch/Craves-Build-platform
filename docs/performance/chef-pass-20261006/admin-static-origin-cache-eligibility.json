@@ -1,0 +1,46 @@
+[
+  {
+    "observedAtUtc": "2026-10-05T21:26:08.0255493Z",
+    "host": "ca-craves-admin-r92-ffe80e7c.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+    "path": "/_next/static/chunks/21kzlhfktwm2o.css",
+    "status": 200,
+    "curlExit": 0,
+    "cacheControl": "cache-control: public, max-age=31536000, immutable",
+    "setCookiePresent": false,
+    "transferEncoding": null,
+    "contentLength": "content-length: 511059"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:26:08.3731086Z",
+    "host": "ca-craves-admin-r92-ffe80e7c.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+    "path": "/_next/static/chunks/3kmozkq6tgqnz.js",
+    "status": 200,
+    "curlExit": 0,
+    "cacheControl": "cache-control: public, max-age=31536000, immutable",
+    "setCookiePresent": false,
+    "transferEncoding": null,
+    "contentLength": "content-length: 228922"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:26:08.7159010Z",
+    "host": "admin.craves.in",
+    "path": "/_next/static/chunks/21kzlhfktwm2o.css",
+    "status": 200,
+    "curlExit": 0,
+    "cacheControl": "cache-control: public, max-age=31536000, immutable",
+    "setCookiePresent": false,
+    "transferEncoding": null,
+    "contentLength": "Content-Length: 511059"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:26:09.0079278Z",
+    "host": "admin.craves.in",
+    "path": "/_next/static/chunks/3kmozkq6tgqnz.js",
+    "status": 200,
+    "curlExit": 0,
+    "cacheControl": "cache-control: public, max-age=31536000, immutable",
+    "setCookiePresent": false,
+    "transferEncoding": null,
+    "contentLength": "Content-Length: 228922"
+  }
+]

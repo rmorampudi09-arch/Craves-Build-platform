@@ -1,0 +1,18 @@
+{
+  "capturedAtUtc": "2026-10-05T22:23:49.112038+00:00",
+  "scriptFile": "documents-routing-existing-only-repair.py",
+  "scriptSha256": "393dc85566e5beac3a152d9f1f618dcda54a18a0bf7f94f93eda739ddaa65d39",
+  "scriptLastWriteAtUtc": "2026-10-05T22:20:08.252234+00:00",
+  "applyStartedAtUtc": "2026-10-05T22:21:12.654474+00:00",
+  "transportHandlerPresent": true,
+  "scriptEditsAfterApplyInvocation": 0,
+  "hashCaptureTiming": "Captured during apply; file had its final write before invocation and has not been edited during execution",
+  "offlineChecks": {
+    "frozenOperations": 7,
+    "unsafeVariationsRejected": 4
+  },
+  "finalFileHashCheckPending": false,
+  "finalFileSha256": "393dc85566e5beac3a152d9f1f618dcda54a18a0bf7f94f93eda739ddaa65d39",
+  "executedDeliveredFileUnchanged": true,
+  "finalCheckedAtUtc": "2026-10-05T22:27:10.727924+00:00"
+}

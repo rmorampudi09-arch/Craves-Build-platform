@@ -1,0 +1,46 @@
+[
+  {
+    "observedAtUtc": "2026-10-05T21:25:11.9064235Z",
+    "host": "admin.craves.in",
+    "path": "/admin",
+    "status": 200,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: s-maxage=31536000",
+    "encoding": null,
+    "contentType": "Content-Type: text/html; charset=utf-8"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:25:12.1612704Z",
+    "host": "admin.craves.in",
+    "path": "/sign-in",
+    "status": 200,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: private, no-cache, no-store, max-age=0, must-revalidate",
+    "encoding": null,
+    "contentType": "Content-Type: text/html; charset=utf-8"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:25:12.3873293Z",
+    "host": "admin.craves.in",
+    "path": "/api/auth/me",
+    "status": 401,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: private, no-store, max-age=0",
+    "encoding": null,
+    "contentType": "Content-Type: application/json"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:25:12.5945199Z",
+    "host": "admin.craves.in",
+    "path": "/api/admin/me",
+    "status": 401,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: private, no-store, max-age=0",
+    "encoding": null,
+    "contentType": "Content-Type: application/json"
+  }
+]

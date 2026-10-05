@@ -1,8 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
-import { AuthModal, type AccountMode } from "@/components/auth/AuthModal";
-import { LocationModal } from "@/components/layout/LocationModal";
+import type { AccountMode } from "@/components/auth/AuthModal";
 import { FooterSection } from "@/components/sections/FooterSection";
 import { ReferenceArtworkSection } from "@/components/sections/landing-reference/ReferenceArtworkSection";
 import { ReferenceHeroDesktop } from "@/components/sections/landing-reference/ReferenceHeroDesktop";
@@ -13,6 +13,16 @@ import {
   type CravesUser,
 } from "@/services/auth/cravesAuth";
 import styles from "./LandingV2.module.css";
+
+const AuthModal = dynamic(
+  () => import("@/components/auth/AuthModal").then((module) => module.AuthModal),
+  { ssr: false },
+);
+
+const LocationModal = dynamic(
+  () => import("@/components/layout/LocationModal").then((module) => module.LocationModal),
+  { ssr: false },
+);
 
 export const routeMeta = {};
 
@@ -29,19 +39,17 @@ function LandingPage() {
   const [authAccountLocked, setAuthAccountLocked] = useState(false);
   const [locOpen, setLocOpen] = useState(false);
   const [address, setAddress] = useState<CravesAddress | null>(null);
-  const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
     let active = true;
-    void loadSession().then((current) => {
-      if (!active) return;
-      if (current) {
-        navigate({ to: "/home", replace: true });
-        return;
-      }
-      setAddress(getAddress());
-      setCheckingSession(false);
-    });
+    setAddress(getAddress());
+    void loadSession({ hydrateCustomerProfile: "background" })
+      .then((current) => {
+        if (active && current) navigate({ to: "/home", replace: true });
+      })
+      .catch(() => {
+        // The public page remains usable while the session service reconnects.
+      });
     return () => {
       active = false;
     };
@@ -61,19 +69,6 @@ function LandingPage() {
   const locationLabel = address
     ? [address.mandal, address.city].filter(Boolean).join(", ")
     : "Choose your delivery location";
-
-  if (checkingSession) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-white px-4">
-        <div className="text-center" role="status" aria-live="polite">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[#E6E8EA] border-t-[#F62E18]" />
-          <p className="mt-4 text-sm font-medium text-[#6E7378]">
-            Opening Craves…
-          </p>
-        </div>
-      </main>
-    );
-  }
 
   return (
     <div className={`${styles.page} min-h-screen bg-white text-ink`}>
@@ -117,7 +112,7 @@ function LandingPage() {
         data-auth-context={authAccountMode}
         className="[&>div]:bg-black/25 [&>div]:backdrop-blur-xl [&>div]:backdrop-saturate-150 [&_[role=dialog]]:border-white/70 [&_[role=dialog]]:bg-white [&_[role=dialog]]:shadow-[0_28px_90px_rgba(17,17,17,0.24)] [&_[role=dialog]]:backdrop-blur-2xl [&_[role=dialog]]:backdrop-saturate-150 [&_[aria-pressed=true]]:!border-[#F62E18] [&_[aria-pressed=true]]:!bg-[#F62E18] [&_[aria-pressed=true]]:!text-white"
       >
-        <AuthModal
+        {authOpen ? <AuthModal
           open={authOpen}
           mode={authMode}
           initialAccountMode={authAccountMode}
@@ -134,17 +129,17 @@ function LandingPage() {
                   : "/home",
             });
           }}
-        />
+        /> : null}
       </div>
 
-      <LocationModal
+      {locOpen ? <LocationModal
         open={locOpen}
         onClose={() => setLocOpen(false)}
         onSaved={(savedAddress) => {
           setAddress(savedAddress);
           setLocOpen(false);
         }}
-      />
+      /> : null}
     </div>
   );
 }

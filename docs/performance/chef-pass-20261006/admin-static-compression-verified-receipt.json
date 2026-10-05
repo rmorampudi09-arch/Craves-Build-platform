@@ -1,0 +1,33 @@
+{
+  "observedAtUtc": "2026-10-05T22:01:50.608318+00:00",
+  "operation": "Verify authorized existing-only admin static cache/compression change",
+  "verified": true,
+  "configurationReceipt": "admin-static-configuration-receipt.json",
+  "compressedByteProof": "admin-static-propagation-06.json",
+  "warmCacheReceipt": "admin-static-repeated-warm-cache-final.json",
+  "privateBoundaryReceipt": "admin-private-boundaries-after-compression-verified.json",
+  "finalConfigurationReadback": "admin-static-final-configuration-readback.json",
+  "appliedAtUtc": "2026-10-05T21:34:41.280026+00:00",
+  "firstCompressedProofUtc": "2026-10-05T21:58:39.8119351Z",
+  "lastCompressedProofUtc": "2026-10-05T21:58:45.9089439Z",
+  "lastWarmProbeUtc": "2026-10-05T21:59:59.6101514Z",
+  "allRepresentativeOriginEdge200AndDecodedHashesEqual": true,
+  "edgeGzipAndBrotliVerified": true,
+  "warmSamples": 12,
+  "warmAll200TCPHitsAndExpectedEncoding": true,
+  "warmSecondsRange": [
+    0.158024,
+    0.301442
+  ],
+  "HTMLAndAPIsUncachedAfterActivation": true,
+  "configurationExactApprovedOnlyChanges": true,
+  "protectedAppFingerprintsCount": 12,
+  "allProtectedAppFingerprintsUnchanged": true,
+  "cacheBehavior": "HonorOrigin",
+  "ttlOverride": null,
+  "originGroupOverride": null,
+  "newResources": 0,
+  "containerAppChangesByAuditAgent": 0,
+  "gzipBrotliWarmCacheProofPending": false,
+  "historicalPendingSnapshotsPreserved": true
+}

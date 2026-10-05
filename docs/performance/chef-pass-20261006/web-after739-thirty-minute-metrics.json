@@ -1,0 +1,288 @@
+{
+  "observedAtUtc": "2026-10-05T21:50:23.774796+00:00",
+  "requestedStartUtc": "2026-10-05T21:20:21Z",
+  "requestedEndUtc": "2026-10-05T21:50:21Z",
+  "scope": "Observed Azure traffic across pre/post rollout; no stress/capacity claim",
+  "data": {
+    "interval": "PT5M",
+    "metrics": [
+      {
+        "name": "CpuPercentage",
+        "timeseries": [
+          {
+            "data": [
+              {
+                "average": 0.7,
+                "maximum": 3.0,
+                "time": "2026-10-05T21:20:00Z",
+                "total": 7.0
+              },
+              {
+                "average": 0.0,
+                "maximum": 0.0,
+                "time": "2026-10-05T21:25:00Z",
+                "total": 0.0
+              },
+              {
+                "average": 0.0,
+                "maximum": 0.0,
+                "time": "2026-10-05T21:30:00Z",
+                "total": 0.0
+              },
+              {
+                "average": 0.0,
+                "maximum": 0.0,
+                "time": "2026-10-05T21:35:00Z",
+                "total": 0.0
+              },
+              {
+                "average": 0.1,
+                "maximum": 1.0,
+                "time": "2026-10-05T21:40:00Z",
+                "total": 1.0
+              },
+              {
+                "average": 0.0,
+                "maximum": 0.0,
+                "time": "2026-10-05T21:45:00Z",
+                "total": 0.0
+              }
+            ]
+          }
+        ],
+        "unit": "Percent"
+      },
+      {
+        "name": "MemoryPercentage",
+        "timeseries": [
+          {
+            "data": [
+              {
+                "average": 31.0,
+                "maximum": 31.0,
+                "time": "2026-10-05T21:20:00Z",
+                "total": 310.0
+              },
+              {
+                "average": 31.0,
+                "maximum": 31.0,
+                "time": "2026-10-05T21:25:00Z",
+                "total": 310.0
+              },
+              {
+                "average": 31.0,
+                "maximum": 31.0,
+                "time": "2026-10-05T21:30:00Z",
+                "total": 310.0
+              },
+              {
+                "average": 31.0,
+                "maximum": 31.0,
+                "time": "2026-10-05T21:35:00Z",
+                "total": 310.0
+              },
+              {
+                "average": 31.0,
+                "maximum": 31.0,
+                "time": "2026-10-05T21:40:00Z",
+                "total": 310.0
+              },
+              {
+                "average": 29.0,
+                "maximum": 31.0,
+                "time": "2026-10-05T21:45:00Z",
+                "total": 319.0
+              }
+            ]
+          }
+        ],
+        "unit": "Percent"
+      },
+      {
+        "name": "RestartCount",
+        "timeseries": [
+          {
+            "data": [
+              {
+                "average": 0.0,
+                "maximum": 0.0,
+                "time": "2026-10-05T21:20:00Z",
+                "total": 0.0
+              },
+              {
+                "average": 0.0,
+                "maximum": 0.0,
+                "time": "2026-10-05T21:25:00Z",
+                "total": 0.0
+              },
+              {
+                "average": 0.0,
+                "maximum": 0.0,
+                "time": "2026-10-05T21:30:00Z",
+                "total": 0.0
+              },
+              {
+                "average": 0.0,
+                "maximum": 0.0,
+                "time": "2026-10-05T21:35:00Z",
+                "total": 0.0
+              },
+              {
+                "average": 0.0,
+                "maximum": 0.0,
+                "time": "2026-10-05T21:40:00Z",
+                "total": 0.0
+              },
+              {
+                "average": 0.0,
+                "maximum": 0.0,
+                "time": "2026-10-05T21:45:00Z",
+                "total": 0.0
+              }
+            ]
+          }
+        ],
+        "unit": "Count"
+      },
+      {
+        "name": "Replicas",
+        "timeseries": [
+          {
+            "data": [
+              {
+                "average": 1.0,
+                "maximum": 1.0,
+                "time": "2026-10-05T21:20:00Z",
+                "total": 10.0
+              },
+              {
+                "average": 1.0,
+                "maximum": 1.0,
+                "time": "2026-10-05T21:25:00Z",
+                "total": 10.0
+              },
+              {
+                "average": 1.0,
+                "maximum": 1.0,
+                "time": "2026-10-05T21:30:00Z",
+                "total": 10.0
+              },
+              {
+                "average": 1.0,
+                "maximum": 1.0,
+                "time": "2026-10-05T21:35:00Z",
+                "total": 10.0
+              },
+              {
+                "average": 1.0,
+                "maximum": 1.0,
+                "time": "2026-10-05T21:40:00Z",
+                "total": 10.0
+              },
+              {
+                "average": 1.0,
+                "maximum": 1.0,
+                "time": "2026-10-05T21:45:00Z",
+                "total": 12.0
+              }
+            ]
+          }
+        ],
+        "unit": "Count"
+      },
+      {
+        "name": "Requests",
+        "timeseries": [
+          {
+            "data": [
+              {
+                "average": 10.083333333333334,
+                "maximum": 33.0,
+                "time": "2026-10-05T21:20:00Z",
+                "total": 121.0
+              },
+              {
+                "average": 3.625,
+                "maximum": 8.0,
+                "time": "2026-10-05T21:25:00Z",
+                "total": 29.0
+              },
+              {
+                "average": 3.4444444444444446,
+                "maximum": 7.0,
+                "time": "2026-10-05T21:30:00Z",
+                "total": 31.0
+              },
+              {
+                "average": 3.75,
+                "maximum": 6.0,
+                "time": "2026-10-05T21:35:00Z",
+                "total": 30.0
+              },
+              {
+                "average": 3.7777777777777777,
+                "maximum": 7.0,
+                "time": "2026-10-05T21:40:00Z",
+                "total": 34.0
+              },
+              {
+                "average": 3.0,
+                "maximum": 6.0,
+                "time": "2026-10-05T21:45:00Z",
+                "total": 30.0
+              }
+            ]
+          }
+        ],
+        "unit": "Count"
+      },
+      {
+        "name": "ResponseTime",
+        "timeseries": [
+          {
+            "data": [
+              {
+                "average": 36.0,
+                "maximum": 211.0,
+                "time": "2026-10-05T21:20:00Z",
+                "total": 432.0
+              },
+              {
+                "average": 4.75,
+                "maximum": 7.0,
+                "time": "2026-10-05T21:25:00Z",
+                "total": 38.0
+              },
+              {
+                "average": 6.555555555555555,
+                "maximum": 19.0,
+                "time": "2026-10-05T21:30:00Z",
+                "total": 59.0
+              },
+              {
+                "average": 11.25,
+                "maximum": 50.0,
+                "time": "2026-10-05T21:35:00Z",
+                "total": 90.0
+              },
+              {
+                "average": 5.0,
+                "maximum": 6.0,
+                "time": "2026-10-05T21:40:00Z",
+                "total": 45.0
+              },
+              {
+                "average": 12.1,
+                "maximum": 73.0,
+                "time": "2026-10-05T21:45:00Z",
+                "total": 121.0
+              }
+            ]
+          }
+        ],
+        "unit": "MilliSeconds"
+      }
+    ],
+    "timespan": "2026-10-05T21:20:21Z/2026-10-05T21:50:21Z"
+  }
+}

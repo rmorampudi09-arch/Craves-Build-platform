@@ -19,7 +19,8 @@ import { ChefApplicationDocumentPanel } from "@/components/chef-application-docu
 import type { CustomerAddress } from "@/lib/address-contract";
 import { selectActiveDeliveryAddress } from "@/lib/address-selection";
 import { parseChefApplication, type ChefApplication } from "@/lib/chef-application-contract";
-import type { CustomerProfile } from "@/lib/profile-contract";
+import { parseCustomerProfile, type CustomerProfile } from "@/lib/profile-contract";
+import { captureSessionContext, isSessionContextCurrent } from "@/services/auth/cravesAuth";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
 import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel";
 import { chefEmailEligible, type EmailVerificationState } from "@/lib/email-verification-contract";
@@ -210,6 +211,15 @@ export function ChefApplicationWorkspace() {
   const [invalidField, setInvalidField] = useState<keyof FormState | null>(null);
   const [validationAttempt, setValidationAttempt] = useState(0);
   const locationRequest = useRef(0);
+  const mounted = useRef(false);
+  const readRevision = useRef(0);
+  const pendingRead = useRef<AbortController | null>(null);
+  const editedFields = useRef(new Set<keyof FormState>());
+  const addressFields: (keyof FormState)[] = ["addressLine1", "addressLine2", "landmark", "city", "state", "postalCode", "latitude", "longitude"];
+
+  function markAddressEdited() {
+    for (const name of addressFields) editedFields.current.add(name);
+  }
 
   useEffect(() => {
     if (!invalidField) return;
@@ -230,79 +240,108 @@ export function ChefApplicationWorkspace() {
   }
   async function moveKitchenPin(next: { latitude: number; longitude: number }) {
     const version = ++locationRequest.current;
+    const context = captureSessionContext();
+    const currentPin = () => mounted.current && version === locationRequest.current && isSessionContextCurrent(context);
+    markAddressEdited();
     setForm(current => ({ ...current, latitude: String(next.latitude), longitude: String(next.longitude) }));
     setLocating(true);
     try {
       const address = await reverseGeocodeCurrentLocation(next.latitude, next.longitude);
-      if (version !== locationRequest.current) return;
+      if (!currentPin()) return;
       setForm(current => ({ ...current, addressLine1: address.houseNumber || address.formattedAddress, addressLine2: [address.street, address.area].filter(Boolean).join(", "), city: address.city || current.city, state: address.state || current.state, postalCode: address.postalCode || current.postalCode }));
       setMessage("Pin updated. Check your house and address details below.");
     } catch {
-      if (version === locationRequest.current) setMessage("Pin updated. Please enter the address details below.");
-    } finally { if (version === locationRequest.current) setLocating(false); }
+      if (currentPin()) setMessage("Pin updated. Please enter the address details below.");
+    } finally { if (currentPin()) setLocating(false); }
   }
   async function openReview() {
     setBusy(true);
-    try { await load(); setStep("review"); }
-    catch { setMessage("We couldn’t refresh your application. Please try again."); }
-    finally { setBusy(false); }
+    try { if (await load()) setStep("review"); }
+    catch { /* load preserves the current request error. */ }
+    finally { if (mounted.current) setBusy(false); }
   }
 
-  async function load() {
+  async function load(): Promise<boolean> {
+    const revision = ++readRevision.current;
+    const context = captureSessionContext();
+    pendingRead.current?.abort();
+    const controller = new AbortController();
+    pendingRead.current = controller;
+    const currentRead = () => mounted.current && revision === readRevision.current && isSessionContextCurrent(context);
+    const options = { cache: "no-store" as const, credentials: "same-origin" as const, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]) };
     setLoadFailed(false);
-    const signal = AbortSignal.timeout(45_000);
-    const [applicationResult, profileResult, addressesResult] = await Promise.allSettled([
-      fetch("/api/chef/application", { cache: "no-store", signal }),
-      fetch("/api/customer/profile", { cache: "no-store", signal }),
-      fetch("/api/customer/addresses", { cache: "no-store", signal }),
-    ]);
-    if (applicationResult.status === "rejected") throw new Error("We couldn’t load your application right now. Please try again.");
-    const applicationResponse = applicationResult.value;
-    const rawApplication = await applicationResponse.json().catch(() => null);
-    const applicationBody = parseChefApplication(rawApplication);
-    if (!applicationResponse.ok || !applicationBody) {
-      throw new Error(
-        applicationResponse.status === 401
+    try {
+      // Saved application status is authoritative; display prefills never hold it up.
+      const applicationResponse = await fetch("/api/chef/application", options);
+      const rawApplication = await applicationResponse.json().catch(() => null);
+      if (!currentRead()) return false;
+      const applicationBody = parseChefApplication(rawApplication);
+      if (!applicationResponse.ok || !applicationBody) {
+        throw new Error(applicationResponse.status === 401
           ? "Sign in to continue your chef application."
-          : applicationError(rawApplication, "We couldn’t load your application right now."),
-      );
-    }
-
-    const nextProfile = profileResult.status === "fulfilled" && profileResult.value.ok
-      ? ((await profileResult.value.json().catch(() => null)) as CustomerProfile | null)
-      : null;
-    const addresses = addressesResult.status === "fulfilled" && addressesResult.value.ok
-      ? ((await addressesResult.value.json().catch(() => [])) as CustomerAddress[])
-      : [];
-
-    setApplication(applicationBody);
-    setProfile(nextProfile);
-    if (applicationBody.status === "NOT_SUBMITTED") {
-      setForm(prefillNewApplication(applicationBody, nextProfile, Array.isArray(addresses) ? addresses : []));
-      setStep("welcome");
-    } else {
-      setForm(fromApplication(applicationBody));
-      if (applicationBody.status === "APPROVED") setStep("approved");
+          : applicationError(rawApplication, "We couldn’t load your application right now."));
+      }
+      editedFields.current.clear();
+      setApplication(applicationBody);
+      setProfile(null);
+      setForm(applicationBody.status === "NOT_SUBMITTED" ? prefillNewApplication(applicationBody, null, []) : fromApplication(applicationBody));
+      if (applicationBody.status === "NOT_SUBMITTED") {
+        setStep("welcome");
+        // Fill each optional response independently, without replacing local edits
+        // (including fields the applicant deliberately cleared).
+        function mergePrefill(profile: CustomerProfile | null, addresses: CustomerAddress[]) {
+          if (!currentRead()) return;
+          const suggested = prefillNewApplication(applicationBody!, profile, addresses);
+          setForm(previous => {
+            if (!currentRead()) return previous;
+            const next = { ...previous };
+            for (const name of Object.keys(next) as (keyof FormState)[]) {
+              if (!editedFields.current.has(name) && !previous[name]) next[name] = suggested[name];
+            }
+            return next;
+          });
+        }
+        void fetch("/api/customer/profile", options).then(async response => {
+          const profile = response.ok ? parseCustomerProfile(await response.json().catch(() => null)) : null;
+          if (!currentRead()) return;
+          setProfile(profile);
+          mergePrefill(profile, []);
+        }).catch(() => undefined);
+        void fetch("/api/customer/addresses", options).then(async response => {
+          const addresses = response.ok ? await response.json().catch(() => []) : [];
+          mergePrefill(null, Array.isArray(addresses) ? addresses : []);
+        }).catch(() => undefined);
+      } else if (applicationBody.status === "APPROVED") setStep("approved");
       else if (needsPhotoCorrection(applicationBody) && !hasRequiredEvidence(applicationBody)) setStep("documents-intro");
       else if (applicationBody.status === "REJECTED") setStep("review");
       else if (hasRequiredEvidence(applicationBody)) setStep("waiting");
       else setStep("documents-intro");
+      setMessage("");
+      return true;
+    } catch (error) {
+      if (!currentRead()) return false;
+      setLoadFailed(true);
+      setMessage(options.signal.aborted || error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")
+        ? "Loading took too long. Please try again."
+        : error instanceof Error ? error.message : "We couldn’t load your application right now.");
+      throw error;
     }
-    setMessage("");
   }
 
   useEffect(() => {
-    void load().catch((error) => {
-      setLoadFailed(true);
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "We couldn’t load your application right now.",
-      );
-    });
+    mounted.current = true;
+    void load().catch(() => undefined);
+    return () => {
+      mounted.current = false;
+      readRevision.current += 1;
+      locationRequest.current += 1;
+      pendingRead.current?.abort();
+    };
   }, []);
 
   function field<K extends keyof FormState>(name: K, value: FormState[K]) {
+    editedFields.current.add(name);
+    if (addressFields.includes(name)) { markAddressEdited(); locationRequest.current += 1; setLocating(false); }
     setForm((current) => ({ ...current, [name]: value }));
     if (invalidField === name) { setInvalidField(null); setMessage(""); }
   }
@@ -335,14 +374,20 @@ export function ChefApplicationWorkspace() {
       setMessage("This browser can’t use your current location. You can type the address below instead.");
       return;
     }
+    const version = ++locationRequest.current;
+    const context = captureSessionContext();
+    const currentLocation = () => mounted.current && version === locationRequest.current && isSessionContextCurrent(context);
+    markAddressEdited();
     setLocating(true);
     setMessage("Finding your kitchen address…");
     navigator.geolocation.getCurrentPosition(
       async (position) => {
+        if (!currentLocation()) return;
         const latitude = Number(position.coords.latitude.toFixed(7));
         const longitude = Number(position.coords.longitude.toFixed(7));
         try {
           const detected = await reverseGeocodeCurrentLocation(latitude, longitude);
+          if (!currentLocation()) return;
           const areaDetails = [detected.street, detected.area, detected.district]
             .filter(Boolean)
             .join(", ");
@@ -362,6 +407,7 @@ export function ChefApplicationWorkspace() {
               : "We found the area. Please add or check your house or building details below.",
           );
         } catch {
+          if (!currentLocation()) return;
           setForm((current) => ({
             ...current,
             latitude: String(latitude),
@@ -369,10 +415,11 @@ export function ChefApplicationWorkspace() {
           }));
           setMessage("We found your location, but not the full written address. Please type the missing details below.");
         } finally {
-          setLocating(false);
+          if (currentLocation()) setLocating(false);
         }
       },
       () => {
+        if (!currentLocation()) return;
         setLocating(false);
         setMessage("Location wasn’t shared. That’s okay — type your kitchen address below.");
       },
@@ -400,6 +447,12 @@ export function ChefApplicationWorkspace() {
       return;
     }
 
+    const revision = ++readRevision.current;
+    const context = captureSessionContext();
+    const currentSave = () => mounted.current && revision === readRevision.current && isSessionContextCurrent(context);
+    pendingRead.current?.abort();
+    locationRequest.current += 1;
+    setLocating(false);
     const updating = application?.status === "PENDING";
     setBusy(true);
     setMessage(updating ? "Saving your changes…" : "Saving your details…");
@@ -420,6 +473,7 @@ export function ChefApplicationWorkspace() {
       });
       const raw = await response.json().catch(() => null);
       const body = parseChefApplication(raw);
+      if (!currentSave()) return;
       if (!response.ok || !body) {
         throw new Error(
           applicationError(raw, response.status === 400
@@ -434,11 +488,12 @@ export function ChefApplicationWorkspace() {
       else if (hasRequiredEvidence(body)) setStep("review");
       else setStep("documents-intro");
     } catch (error) {
+      if (!currentSave()) return;
       setMessage(error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")
         ? "Saving took too long. Check your application status before trying again."
         : error instanceof Error ? error.message : "We couldn’t save your details. Please try again.");
     } finally {
-      setBusy(false);
+      if (currentSave()) setBusy(false);
     }
   }
 
@@ -447,17 +502,17 @@ export function ChefApplicationWorkspace() {
     setMessage("Checking your application status…");
     try {
       await load();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "We couldn’t check your status right now.");
+    } catch {
+      // load already shows the current failure and keeps editing disabled.
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   }
 
   const locked = !application || loadFailed || application.status === "APPROVED";
 
 
-  if (message.startsWith("Loading") && !application) {
+  if (!loadFailed && message.startsWith("Loading") && !application) {
     return <div className="h-72 animate-pulse rounded-3xl bg-[#F1F3F5]" aria-label="Loading your application" />;
   }
 

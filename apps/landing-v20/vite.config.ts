@@ -85,7 +85,7 @@ function preserveLandingAuthBridge(): Plugin {
       if (!existsSync(filename)) throw new Error('The released landing authentication bridge is missing.')
       const matches = readFileSync(filename, 'utf8').match(bridgePattern) ?? []
       if (matches.length !== 1) throw new Error('Exactly one released landing authentication bridge is required.')
-      bridge = matches[0]
+      bridge = matches[0].replace(/\r\n?/g, '\n')
     },
     transformIndexHtml: {
       order: 'post',
@@ -142,6 +142,7 @@ function cravesFirstPaintSplash(): Plugin {
     transformIndexHtml: {
       order: 'post',
       handler(input) {
+        input = input.replace(/\r\n?/g, '\n')
         if (input.includes('id="craves-boot-style"')) return input
         const filename = path.join(publicDirectory, 'images', 'craves-wordmark-white.png')
         const info = statSync(filename)
@@ -153,15 +154,17 @@ function cravesFirstPaintSplash(): Plugin {
           }
           imageWidth = bytes.readUInt32BE(16)
           imageHeight = bytes.readUInt32BE(20)
-          cachedWordmark = `data:image/png;base64,${bytes.toString('base64')}`
+          const version = createHash('sha256').update(bytes).digest('hex').slice(0, 16)
+          cachedWordmark = `${assetBase}/images/craves-wordmark-white.png?craves_rev=${version}`
           cachedStamp = stamp
         }
 
-        // Fetch existing CSS without blocking the first splash paint. Restore
-        // each original media value on load, before the React splash starts.
-        // No font face, stylesheet content or rendered page styling is replaced.
+        // The compact application stylesheet keeps normal first-paint styling.
+        // Font declarations can load later without holding the page behind a
+        // splash or delaying the poster and navigation controls.
         const html = input.replace(/<link\b[^>]*>/gi, (tag) => {
           if (!/\brel\s*=\s*["']stylesheet["']/i.test(tag) || /\bdisabled\b/i.test(tag)) return tag
+          if (!/\bhref\s*=\s*["'][^"']*font-loading\.css(?:\?[^"']*)?["']/i.test(tag)) return tag
           const media = tag.match(/\bmedia\s*=\s*(["'])(.*?)\1/i)
           const original = media ? media[2] : 'all'
           const escaped = original.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
@@ -264,8 +267,8 @@ function cravesFirstPaintSplash(): Plugin {
               if (released) return;
               released = true;
               clearTimeout(safety);
-              // Restore all existing stylesheet semantics, even on failure.
-              document.querySelectorAll('link[data-craves-css]').forEach(restore);
+              // Pending font declarations stay nonblocking until load/error;
+              // releasing the page does not turn their download into a gate.
               parsed = true;
               checkStyles();
               var cover = document.getElementById('craves-boot');

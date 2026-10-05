@@ -44,7 +44,7 @@ test("operations readiness uses supported backend controls only", () => {
   assert.match(operations, /parseChefApplicationReadiness/);
   assert.match(operations, /approvedDocumentCount/);
   assert.match(operations, /\/api\/chef\/application\/readiness/);
-  assert.match(operations, /no reviewed weekly opening-hours contract/i);
+  assert.match(operations, /no\s+reviewed\s+weekly\s+opening-hours\s+contract/i);
   assert.doesNotMatch(operations, /FSSAI.*required|commissionRate|deliveryRadius\s*=/i);
 });
 

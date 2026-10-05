@@ -1,0 +1,122 @@
+[
+  {
+    "route": "/chef",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.15869999999999998,
+    "maxTotalSeconds": 0.173789,
+    "nextChunkCount": 20
+  },
+  {
+    "route": "/chef/[id]",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.2720376666666667,
+    "maxTotalSeconds": 0.29752,
+    "nextChunkCount": 19
+  },
+  {
+    "route": "/chef/application",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.15768000000000001,
+    "maxTotalSeconds": 0.166041,
+    "nextChunkCount": 21
+  },
+  {
+    "route": "/chef/capacity",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.258812,
+    "maxTotalSeconds": 0.429255,
+    "nextChunkCount": 19
+  },
+  {
+    "route": "/chef/earnings",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.17032,
+    "maxTotalSeconds": 0.182511,
+    "nextChunkCount": 19
+  },
+  {
+    "route": "/chef/finance",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.20651733333333333,
+    "maxTotalSeconds": 0.26325,
+    "nextChunkCount": 19
+  },
+  {
+    "route": "/chef/kitchen",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.20829033333333333,
+    "maxTotalSeconds": 0.299612,
+    "nextChunkCount": 19
+  },
+  {
+    "route": "/chef/meal-plans",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.17937233333333333,
+    "maxTotalSeconds": 0.204864,
+    "nextChunkCount": 20
+  },
+  {
+    "route": "/chef/menu",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.17645766666666665,
+    "maxTotalSeconds": 0.195333,
+    "nextChunkCount": 20
+  },
+  {
+    "route": "/chef/menu/media",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.17372933333333332,
+    "maxTotalSeconds": 0.180769,
+    "nextChunkCount": 20
+  },
+  {
+    "route": "/chef/operations",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.1760373333333333,
+    "maxTotalSeconds": 0.192239,
+    "nextChunkCount": 19
+  },
+  {
+    "route": "/chef/orders",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.1667793333333333,
+    "maxTotalSeconds": 0.176074,
+    "nextChunkCount": 19
+  },
+  {
+    "route": "/chef/orders/[orderId]",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.17872566666666667,
+    "maxTotalSeconds": 0.201461,
+    "nextChunkCount": 19
+  },
+  {
+    "route": "/chef/profile",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.1685966666666667,
+    "maxTotalSeconds": 0.193674,
+    "nextChunkCount": 19
+  },
+  {
+    "route": "/chef/statements",
+    "samples": 3,
+    "statuses": 200,
+    "averageTotalSeconds": 0.21487200000000004,
+    "maxTotalSeconds": 0.271679,
+    "nextChunkCount": 19
+  }
+]

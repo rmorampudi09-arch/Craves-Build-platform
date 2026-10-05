@@ -5,11 +5,11 @@ This is the user's uploaded landing design, integrated into the existing Next.js
 ## Source and output
 
 - `src/`, `index.html`, and `vite.config.ts`: editable landing source.
-- `../customer-web-next/public/landing-v20/`: original referenced images and committed production output. The original hero video is assembled from ten checked binary parts in `../customer-web-next/assets/landing-v20/` by `scripts/restore-landing-media.mjs` during the existing prebuild/predev step; SHA-256 checks guarantee identical served bytes. No compression or visual change is applied.
+- `../customer-web-next/public/landing-v20/`: original referenced images and committed production output. The original hero video is assembled from ten checked binary parts in `../customer-web-next/assets/landing-v20/` by `scripts/restore-landing-media.mjs` during prebuild/predev; SHA-256 checks guarantee identical reference bytes. The served hero uses the separate `videos/hero-bg-fast.mp4` derivative (1280×720 H.264, muted, fast-start, 4.18 MB), with the existing poster visible first. Keep this derivative alongside the preserved original.
 - `../customer-web-next/next.config.ts`: exact root rewrite; every other route retains the existing implementation.
 - `../customer-web-next/eslint.config.mjs`: generated landing bundles excluded from Next.js source lint. The landing source has its own lint command.
 
-The uploaded ZIP SHA-256 is `f228311ec018ddfa6958cb0b6c7808b855a56f866331f41d9b0c897a9881e290`. Image bytes, hero video, page content, splash timing and scroll behavior are preserved. The September 17 correction removes screen-height-dependent empty space from the features section and the closing quote. Only two unused duplicate video exports, Windows dependency caches and temporary build files are omitted from the repository import.
+The uploaded ZIP SHA-256 is `f228311ec018ddfa6958cb0b6c7808b855a56f866331f41d9b0c897a9881e290`. Original image/media references, page content and scroll behavior remain available. The October 5 performance correction releases the branded startup cover on the first committed React page, removing the 2.7-second splash minimum and image/font wait. The main CSS retains normal first-paint styling; font declarations load asynchronously. Hero video starts only after a visible page paint and idle scheduling, and remains a poster on reduced-motion or data-saving connections. The September 17 correction removes screen-height-dependent empty space from the features section and the closing quote.
 
 ## Links
 
@@ -44,7 +44,7 @@ npm run build
 
 The Vite build writes only the landing output into the existing customer-web `public/landing-v20` directory. Static asset URLs include content fingerprints. Preserve referenced media there. Commit source and regenerated HTML/JS/CSS together. Old unreferenced generated bundle files may be removed after checking `index.html`.
 
-From `../customer-web-next`, run the existing `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. Start the existing web app and verify `/`, section scrolling, splash reload, dialog open/close, auth destination, chef destination, legal links, and browser Back. Compare `/home`, `/cart`, `/checkout`, and admin routing against the baseline.
+From `../customer-web-next`, run the existing `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. Start the existing web app and verify `/`, immediate poster/navigation after reload, delayed compact video, reduced-motion/data-saving poster, section scrolling, dialog open/close, auth destination, chef destination, legal links, and browser Back. Compare `/home`, `/cart`, `/checkout`, and admin routing against the baseline.
 
 ## Deployment and manual work
 

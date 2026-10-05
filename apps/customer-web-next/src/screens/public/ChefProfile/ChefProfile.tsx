@@ -19,8 +19,11 @@ import { loadKitchenMenu } from "@/services/api/dishes";
 import { discoverKitchens } from "@/services/api/kitchens";
 import { loadKitchenReviewSummary } from "@/services/api/reviews";
 import {
+  captureSessionContext,
+  isSessionContextCurrent,
   loadSelectedAddress,
   loadSession,
+  type SessionContext,
 } from "@/services/auth/cravesAuth";
 import { DetailBrowseHeader } from "@/components/navigation/DetailBrowseHeader";
 import { ChefDishesGrid } from "@/components/chef/ChefDishesGrid";
@@ -63,6 +66,7 @@ function ChefProfilePage() {
 
   useEffect(() => {
     let active = true;
+    let requestContext: SessionContext | null = null;
     setChef(undefined);
     setLoading(true);
     setMessage("");
@@ -70,13 +74,18 @@ function ChefProfilePage() {
     setReviewSummary(null);
 
     void (async () => {
-      const session = await loadSession();
+      const session = await loadSession({ hydrateCustomerProfile: "background" });
+      if (!active) return;
       if (!session) {
         navigate({ to: "/" });
         return;
       }
 
+      const context = captureSessionContext();
+      requestContext = context;
+      const isCurrent = () => active && isSessionContextCurrent(context);
       const address = await loadSelectedAddress();
+      if (!isCurrent()) return;
       if (
         typeof address?.lat !== "number" ||
         typeof address.lng !== "number"
@@ -91,6 +100,7 @@ function ChefProfilePage() {
         address.lng,
         DEFAULT_DISCOVERY_RADIUS_METERS,
       );
+      if (!isCurrent()) return;
       const nearbyKitchen = discovery.kitchens.find(
         (kitchen) => kitchen.id === id,
       );
@@ -100,7 +110,10 @@ function ChefProfilePage() {
         );
       }
 
+      // Menu loading updates the shared catalog. Keep it behind the radius
+      // gate so an unavailable kitchen cannot enter the home discovery cache.
       await loadKitchenMenu(id);
+      if (!isCurrent()) return;
       const resolved = getChef(id);
       if (!resolved) {
         throw new Error(
@@ -108,19 +121,18 @@ function ChefProfilePage() {
         );
       }
 
-      if (!active) return;
       setChef(resolved);
       setLoading(false);
 
       void loadKitchenReviewSummary(resolved.id)
         .then((summary) => {
-          if (active) setReviewSummary(summary);
+          if (isCurrent()) setReviewSummary(summary);
         })
         .catch(() => {
-          if (active) setReviewSummary(null);
+          if (isCurrent()) setReviewSummary(null);
         });
     })().catch((error) => {
-      if (!active) return;
+      if (!active || (requestContext && !isSessionContextCurrent(requestContext))) return;
       setChef(undefined);
       setMessage(
         error instanceof Error

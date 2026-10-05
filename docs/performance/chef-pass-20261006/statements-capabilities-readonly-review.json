@@ -1,0 +1,164 @@
+{
+  "scope": "Read-only source comparison and root-reported native observation; no cookies, JWTs, account details, response bodies or financial/document mutations inspected or copied.",
+  "sourceBefore": "dc74bfa3880b18278b015f57ae393fb25133acdf",
+  "sourceAfter": "739650f223f2edc0dd8914b28e23916b421da9f1",
+  "nativeObservation": {
+    "route": "/chef/statements",
+    "DOMContentLoadedMs": 333,
+    "loadMs": 468,
+    "finishMs": 2270,
+    "capabilitiesPath": "/api/documents/capabilities",
+    "capabilitiesStatus": 403,
+    "capabilitiesMsApprox": 1010,
+    "rootCorrection": "Initial status was misread as401; corrected screenshot observation is403Forbidden.",
+    "freshAuthMeAndRefresh200": true,
+    "documentHeaderFormRendered": true,
+    "generatePdfDisabled": true,
+    "exportsOrEmailsAttempted": false,
+    "responseBodyRead": false
+  },
+  "unchangedFiles": [
+    {
+      "path": "apps/customer-web-next/src/app/api/documents/[[...segments]]/route.ts",
+      "beforeBlob": "ecb0157674ec1c7df8497c513afb21747cd47334",
+      "afterBlob": "ecb0157674ec1c7df8497c513afb21747cd47334",
+      "unchanged": true
+    },
+    {
+      "path": "apps/customer-web-next/src/components/document-center.tsx",
+      "beforeBlob": "1b0ad5d933ed3186992f367ceb6c39c46aeb45ec",
+      "afterBlob": "1b0ad5d933ed3186992f367ceb6c39c46aeb45ec",
+      "unchanged": true
+    },
+    {
+      "path": "apps/customer-web-next/src/app/chef/statements/page.tsx",
+      "beforeBlob": "3d61b792d0fa92705dfc8035be9614338855be8c",
+      "afterBlob": "3d61b792d0fa92705dfc8035be9614338855be8c",
+      "unchanged": true
+    },
+    {
+      "path": "apps/customer-web-next/src/app/api/auth/refresh/route.ts",
+      "beforeBlob": "929773bf694c02a0c325f12c483329ef82bdc775",
+      "afterBlob": "929773bf694c02a0c325f12c483329ef82bdc775",
+      "unchanged": true
+    },
+    {
+      "path": "apps/customer-web-next/src/lib/auth-cookies.ts",
+      "beforeBlob": "a14a1a9e11a2132abb1b8f8a77f3a9fafc15c968",
+      "afterBlob": "a14a1a9e11a2132abb1b8f8a77f3a9fafc15c968",
+      "unchanged": true
+    },
+    {
+      "path": "apps/customer-web-next/src/lib/refresh-server.ts",
+      "beforeBlob": "f43eaeec66b34a8118a0698e9acc34b49502f83f",
+      "afterBlob": "f43eaeec66b34a8118a0698e9acc34b49502f83f",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/documents/configure-apim.py",
+      "beforeBlob": "053f5f933077aa8baecd163ead30bcc1ab55f62c",
+      "afterBlob": "053f5f933077aa8baecd163ead30bcc1ab55f62c",
+      "unchanged": true
+    },
+    {
+      "path": "services/notification-service/src/main/java/in/craves/notification/documents/DocumentController.java",
+      "beforeBlob": "d5e53405efe6a92fa0c7fbce432b8ca27dfc31fc",
+      "afterBlob": "d5e53405efe6a92fa0c7fbce432b8ca27dfc31fc",
+      "unchanged": true
+    },
+    {
+      "path": "services/notification-service/src/main/java/in/craves/notification/config/WebAccessConfig.java",
+      "beforeBlob": "c6d9217e191b3f1bffb4e41853a2eb341b2526e8",
+      "afterBlob": "c6d9217e191b3f1bffb4e41853a2eb341b2526e8",
+      "unchanged": true
+    },
+    {
+      "path": "services/notification-service/src/main/java/in/craves/notification/security/CravesJwtAuthenticationFilter.java",
+      "beforeBlob": "b104a6c4015a37e8755bddb9b16c5fd346a94385",
+      "afterBlob": "b104a6c4015a37e8755bddb9b16c5fd346a94385",
+      "unchanged": true
+    },
+    {
+      "path": "services/notification-service/src/main/java/in/craves/notification/security/JwtVerifier.java",
+      "beforeBlob": "811e24a34bebfdc8363f6a5017fbcd62891802c1",
+      "afterBlob": "811e24a34bebfdc8363f6a5017fbcd62891802c1",
+      "unchanged": true
+    }
+  ],
+  "handlerFacts": [
+    {
+      "path": "apps/customer-web-next/src/app/api/documents/[[...segments]]/route.ts",
+      "lines": [
+        19,
+        24
+      ],
+      "fact": "Missing accesscookie returns401; oversized cookie returns401. POST origin rejection is403. Disabled web feature returns200 capabilities enabled:false."
+    },
+    {
+      "path": "apps/customer-web-next/src/app/api/documents/[[...segments]]/route.ts",
+      "lines": [
+        54,
+        64
+      ],
+      "fact": "GET capabilities forwards HTTP-only accesscookie as Bearer to apiBaseUrl()/documents/capabilities. Its route-local403 return is a preserved upstream403; no local GET role authorization gate."
+    },
+    {
+      "path": "apps/customer-web-next/src/components/document-center.tsx",
+      "lines": [
+        50,
+        56,
+        134,
+        140,
+        143
+      ],
+      "fact": "Capabilities failure shows error, leaves capabilitiesnull and disables GeneratePDF/Refresh. Existing Refresh only refreshes history; it is not a capability-retry control."
+    },
+    {
+      "path": "services/notification-service/src/main/java/in/craves/notification/documents/DocumentController.java",
+      "lines": [
+        31,
+        35,
+        88,
+        92
+      ],
+      "fact": "Backend source capabilities requires authenticated principal with CUSTOMER or CHEF. Disabled documents setting is reported in200 capabilities object; an absent allowed role would403."
+    },
+    {
+      "path": "scripts/documents/configure-apim.py",
+      "lines": [
+        75,
+        100,
+        120,
+        135
+      ],
+      "fact": "Expected dedicated APIM path api/v1/documents routes capabilities to notification /api/v1/documents/capabilities; inherited policy checks Authorization presence401, private no-store and boundedconcurrency. This is expected source configuration, not live configuration proof."
+    },
+    {
+      "path": "apps/customer-web-next/src/services/auth/cravesAuth.ts",
+      "lines": [
+        166,
+        184,
+        210,
+        220,
+        411,
+        445
+      ],
+      "fact": "Role synchronization still awaits same-origin POST /api/auth/refresh before mounting approved tools. Optional customer hydration changes display names/phone only, not accesscookie/JWT/roles. Skipping it cannot add a new local403 capability gate."
+    }
+  ],
+  "verdict": "No inspected second-pass frontend source change explains the403. Current document-service/APIM authorization or routing rejection remains unresolved; exact component/code cannot be determined without safe live route/policy evidence or a public failure code. Do not claim it is confirmed pre-existing or regression-free from source equality alone: no old signed-in capability sample is available.",
+  "functionalCoverageLimit": "Statements header/form rendering and fail-closed PDF disablement observed. Full document generation/history/download/email and all15chef workflows are not proven passed. Do not bypass authorization or featureflags.",
+  "followUp": "Root requested deployment agent read-only APIM documents routing/policy and non-secret featureflag checks. Keep source frozen and report the exact remaining limitation.",
+  "sourceEdits": false,
+  "nativeRetake": {
+    "round": 2,
+    "DOMContentLoadedMs": 294,
+    "loadMs": 436,
+    "finishMs": 1670,
+    "capabilitiesStatus": 403,
+    "capabilitiesMsApprox": 76,
+    "normalCustomerProfileAndAddressReadsCompleted": true,
+    "limit": "Continued forbidden result after optional hydration does not support skipping optional profile as the cause. Exact upstream authorization/routing failure is still unresolved."
+  },
+  "nativeReceipt": "docs/performance/chef-pass-20261006/native-chrome-after.json"
+}

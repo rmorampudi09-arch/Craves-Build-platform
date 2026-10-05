@@ -1,0 +1,466 @@
+{
+  "observedAtUtc": "2026-10-05T22:06:51.457625+00:00",
+  "scope": "Existing APIM API route IDs/paths/non-secret backend URLs only",
+  "apis": [
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-admin-charge-policy-v1",
+      "name": "craves-admin-charge-policy-v1",
+      "path": "api/v1/admin/charge-policy",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-order-service-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/admin/charge-policy",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-admin-dashboard-v1",
+      "name": "craves-admin-dashboard-v1",
+      "path": "api/v1/admin/dashboard",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-order-service-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/admin/dashboard",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-admin-delivery-provider-contracts",
+      "name": "craves-admin-delivery-provider-contracts",
+      "path": "api/v1/admin/operations/delivery-provider-contracts",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/admin/operations/delivery-provider-contracts",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-admin-delivery-providers",
+      "name": "craves-admin-delivery-providers",
+      "path": "api/v1/admin/operations/delivery-providers",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/admin/operations/delivery-providers",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-admin-directory-v1",
+      "name": "craves-admin-directory-v1",
+      "path": "api/v1/admin/directory",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-user-chef-service-prod.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/admin/directory",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-finance-admin-v1",
+      "name": "craves-finance-admin-v1",
+      "path": "api/v1/admin/finance",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/admin/finance",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-admin-operational-investigations-v1",
+      "name": "craves-admin-operational-investigations-v1",
+      "path": "api/v1/admin/operations",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/admin/operations",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-admin-explorer-v1",
+      "name": "craves-admin-explorer-v1",
+      "path": "api/v1/admin/explorer",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-auth-service-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/admin/explorer",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-admin-subscription-capacity-v1",
+      "name": "craves-admin-subscription-capacity-v1",
+      "path": "api/v1/admin/subscription-capacity",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-subscription-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/admin/subscription-capacity",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-admin-subscription-plans-v1",
+      "name": "craves-admin-subscription-plans-v1",
+      "path": "api/v1/admin/subscription-plans",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-subscription-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/admin/subscription-plans",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-admin-subscriptions-v1",
+      "name": "craves-admin-subscriptions-v1",
+      "path": "api/v1/admin/subscriptions",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-subscription-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/admin/subscriptions",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-auth-v1",
+      "name": "craves-auth-v1",
+      "path": "api/v1/auth",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-auth-service-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/auth",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-backoffice-chef-reviews-v1",
+      "name": "craves-backoffice-chef-reviews-v1",
+      "path": "api/v1/backoffice/chef-reviews",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-user-chef-service-prod.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/backoffice/chef-reviews",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-cart-v1",
+      "name": "craves-cart-v1",
+      "path": "api/v1/cart",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-order-service-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/cart",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-catalog-v1",
+      "name": "craves-catalog-v1",
+      "path": "api/v1/catalog",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-catalog-service-prodlo.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/catalog",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-catalog-discovery-v1",
+      "name": "craves-catalog-discovery-v1",
+      "path": "api/v1/discovery",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-catalog-service-prodlo.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/discovery",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-checkout-v1",
+      "name": "craves-checkout-v1",
+      "path": "api/v1/checkout",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-order-service-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/checkout",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-chef-finance-v1",
+      "name": "craves-chef-finance-v1",
+      "path": "api/v1/chef/finance",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/chef/finance",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-chef-financial-v1",
+      "name": "craves-chef-financial-v1",
+      "path": "api/v1/chef/earnings",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-chef-menu",
+      "name": "craves-chef-menu",
+      "path": "api/v1/chef/menu",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-user-chef-service-prod.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/chef/menu",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-chef-onboarding",
+      "name": "craves-chef-onboarding",
+      "path": "api/v1/chef-onboarding",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/chef-onboarding",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-chef-orders-v1",
+      "name": "craves-chef-orders-v1",
+      "path": "api/v1/chef/orders",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-order-service-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/chef/orders",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-chef-application-v1",
+      "name": "craves-chef-application-v1",
+      "path": "api/v1/chef/application",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-user-chef-service-prod.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/chef/application",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-chef-subscription-capacity-v1",
+      "name": "craves-chef-subscription-capacity-v1",
+      "path": "api/v1/chef/subscription-capacity",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-subscription-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/chef/subscription-capacity",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-chef-subscription-plans-v1",
+      "name": "craves-chef-subscription-plans-v1",
+      "path": "api/v1/chef/subscription-plans",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-subscription-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/chef/subscription-plans",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-chef-v1",
+      "name": "craves-chef-v1",
+      "path": "api/v1/chef",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-user-chef-service-prod.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/chef",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-customer-v1",
+      "name": "craves-customer-v1",
+      "path": "api/v1/customer",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-user-chef-service-prod.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/customer",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-customer-support-v1",
+      "name": "craves-customer-support-v1",
+      "path": "api/v1/support/cases",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-user-chef-service-prod.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/support/cases",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-delivery-webhooks-v1",
+      "name": "craves-delivery-webhooks-v1",
+      "path": "api/v1/webhooks/delivery",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/webhooks/delivery",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1",
+      "name": "craves-documents-v1",
+      "path": "api/v1/documents",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-notification-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/documents",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-academy-v1",
+      "name": "craves-academy-v1",
+      "path": "academy",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-auth-service-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/admin/academy",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-internal-admin-rbac-v1",
+      "name": "craves-internal-admin-rbac-v1",
+      "path": "api/v1/admin/internal-access",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-auth-service-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/admin/internal-access",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-kitchens-v1",
+      "name": "craves-kitchens-v1",
+      "path": "api/v1/kitchens",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-catalog-service-prodlo.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/kitchens",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-notifications-v1",
+      "name": "craves-notifications-v1",
+      "path": "api/v1/notifications",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-notification-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/notifications",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-orders-v1",
+      "name": "craves-orders-v1",
+      "path": "api/v1/orders",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-order-service-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/orders",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-payments-v1",
+      "name": "craves-payments-v1",
+      "path": "api/v1/payments",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/payments",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-public",
+      "name": "craves-public",
+      "path": "api/v1/public",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-order-service-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/public",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-referral-members-v1",
+      "name": "craves-referral-members-v1",
+      "path": "api/v1/referrals",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://craves-referral-members.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/referrals",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-customer-reviews-v1",
+      "name": "craves-customer-reviews-v1",
+      "path": "api/v1/reviews",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-order-service-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/reviews",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-subscriptions-v1",
+      "name": "craves-subscriptions-v1",
+      "path": "api/v1/subscriptions",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-subscription-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/subscriptions",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-subscription-payments-v1",
+      "name": "craves-subscription-payments-v1",
+      "path": "api/v1/subscription-payments",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/subscription-payments",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-webhooks",
+      "name": "craves-webhooks",
+      "path": "api/v1/webhooks",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/webhooks",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-bank-automation-v1",
+      "name": "craves-bank-automation-v1",
+      "path": "api/v1/admin/finance/bank-onboarding",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-bank-enrollment-v1",
+      "name": "craves-bank-enrollment-v1",
+      "path": "api/v1/chef-onboarding/bank",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-chef-finance-document-sources-v1",
+      "name": "craves-chef-finance-document-sources-v1",
+      "path": "api/v1/document-sources/chef",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+      "subscriptionRequired": false
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-razorpayx-payout-webhook-v1",
+      "name": "craves-razorpayx-payout-webhook-v1",
+      "path": "api/v1/webhooks/razorpayx/payouts",
+      "protocols": [
+        "https"
+      ],
+      "serviceUrl": "https://ca-craves-integration-service-pr.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+      "subscriptionRequired": false
+    }
+  ]
+}

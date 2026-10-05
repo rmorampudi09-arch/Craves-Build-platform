@@ -1,0 +1,11 @@
+{
+  "observedAtUtc": "2026-10-05T22:01:08.852574+00:00",
+  "operation": "Extra all-customer compressed-variant audit first attempt",
+  "status": "Incomplete; not a passing sweep",
+  "failure": "curl exit28 connection timed out after20001ms before an HTTP response; original helper then could not find a body file",
+  "exactFailedAssetPathRetained": false,
+  "partialSamplesRetained": false,
+  "existingCompleteReceiptsAffected": false,
+  "appOrCDNConfigurationChanged": false,
+  "followup": "Run a separate per-request-retained gzip decoded-byte audit against all75 customer assets; preserve any errors and label any single retry"
+}

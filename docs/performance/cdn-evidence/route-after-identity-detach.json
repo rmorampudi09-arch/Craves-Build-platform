@@ -1,0 +1,56 @@
+{
+  "cacheConfiguration": {
+    "compressionSettings": {
+      "contentTypesToCompress": [
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "application/json",
+        "image/svg+xml",
+        "font/woff2",
+        "font/woff"
+      ],
+      "isCompressionEnabled": true
+    },
+    "queryStringCachingBehavior": "IgnoreQueryString"
+  },
+  "customDomains": [
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/customdomains/craves-in",
+      "isActive": true,
+      "resourceGroup": "rg-craves-prodlow-centralindia"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/customdomains/www-craves-in",
+      "isActive": true,
+      "resourceGroup": "rg-craves-prodlow-centralindia"
+    }
+  ],
+  "deploymentStatus": "NotStarted",
+  "enabledState": "Enabled",
+  "forwardingProtocol": "HttpsOnly",
+  "httpsRedirect": "Enabled",
+  "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/afdendpoints/craves-prodlow-721906c9/routes/craves-static-route",
+  "linkToDefaultDomain": "Enabled",
+  "name": "craves-static-route",
+  "originGroup": {
+    "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/origingroups/craves-web-origin-group",
+    "resourceGroup": "rg-craves-prodlow-centralindia"
+  },
+  "patternsToMatch": [
+    "/_next/static/*"
+  ],
+  "provisioningState": "Updating",
+  "resourceGroup": "rg-craves-prodlow-centralindia",
+  "ruleSets": [
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravessecurityheaders",
+      "resourceGroup": "rg-craves-prodlow-centralindia"
+    }
+  ],
+  "supportedProtocols": [
+    "Http",
+    "Https"
+  ],
+  "type": "Microsoft.Cdn/profiles/afdendpoints/routes"
+}

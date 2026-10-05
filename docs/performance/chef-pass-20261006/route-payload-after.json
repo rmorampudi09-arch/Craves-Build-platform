@@ -1,0 +1,2782 @@
+{
+  "label": "validated-second-pass-production-build",
+  "capturedAt": "2026-10-05T21:39:10.647Z",
+  "buildId": "VvkesMzFGGIoPjAuTQxOn",
+  "method": "Unique production page-entry referenced JS and CSS chunks from each App Router client-reference manifest. Gzip level 9 is a comparable compression estimate, not measured network traffic. Shared framework runtime and later dynamic imports may be additional. Motion/Syncfusion bytes are whole chunks containing recognizable library markers, not exact library byte counts.",
+  "rows": [
+    {
+      "route": "/admin",
+      "manifestModifiedAt": "2026-10-05T21:37:27.408Z",
+      "js": {
+        "bytes": 111231,
+        "gzipBytes": 35220,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/1qe3gcrwhlqwf.js",
+            "bytes": 18279,
+            "gzipBytes": 5755,
+            "sha256": "d14b75be1c8cb08693fb16461e632ced08f7b767c1a614dfb59dc38587eddd1a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 294992,
+        "gzipBytes": 47705,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/admin/academy",
+      "manifestModifiedAt": "2026-10-05T21:37:33.709Z",
+      "js": {
+        "bytes": 131015,
+        "gzipBytes": 41105,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/18yc3bffnants.js",
+            "bytes": 1172,
+            "gzipBytes": 550,
+            "sha256": "f56a6ddc163ac229ea635a434d6f177f0dc8b7377037f55406e61db4469b927f",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/1px5fexj6btzj.js",
+            "bytes": 36891,
+            "gzipBytes": 11090,
+            "sha256": "f3805631f4e6ebd17b66deedd01d51da9bebb719b01a8b70e3c145faddf1feea",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 294992,
+        "gzipBytes": 47705,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/admin/accounts",
+      "manifestModifiedAt": "2026-10-05T21:37:27.098Z",
+      "js": {
+        "bytes": 100966,
+        "gzipBytes": 32306,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3yrz7t08td3yz.js",
+            "bytes": 8014,
+            "gzipBytes": 2841,
+            "sha256": "1016ee2a1524b0e0d45062cfba34f0d9b846b313584a45c6347c8cd150ef5417",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 294992,
+        "gzipBytes": 47705,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/admin/analytics",
+      "manifestModifiedAt": "2026-10-05T21:37:32.118Z",
+      "js": {
+        "bytes": 109105,
+        "gzipBytes": 35660,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/43l5g9o5-i74u.js",
+            "bytes": 16153,
+            "gzipBytes": 6195,
+            "sha256": "448b66673016d7dbbe84ef9f9b9b0f8c669f5a658e36730c3fb9787a838a8dae",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 309366,
+        "gzipBytes": 50663,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0w-opox4n8-oz.css",
+            "bytes": 14374,
+            "gzipBytes": 2958,
+            "sha256": "8cffcf475033076034b899ef8c925af8f27760d432d3dff89f03743e7d668f55",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/admin/chef-reviews",
+      "manifestModifiedAt": "2026-10-05T21:37:28.782Z",
+      "js": {
+        "bytes": 95135,
+        "gzipBytes": 30533,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3_0645pxtg6e5.js",
+            "bytes": 2183,
+            "gzipBytes": 1068,
+            "sha256": "08f8fa9a1826c2b7e0fb66afbbeabc7a0354876d98f9980b84ea466dcefc8c92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 294992,
+        "gzipBytes": 47705,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/admin/chef-reviews/[applicationId]",
+      "manifestModifiedAt": "2026-10-05T21:37:33.369Z",
+      "js": {
+        "bytes": 105859,
+        "gzipBytes": 33589,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/2k4fyrcui3i3r.js",
+            "bytes": 12907,
+            "gzipBytes": 4124,
+            "sha256": "15c237b0a05a0d841b80850f95be2ee7af0f3e3504d3e117322e158e9d402f60",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 294992,
+        "gzipBytes": 47705,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/admin/explorer/[dataset]",
+      "manifestModifiedAt": "2026-10-05T21:37:27.033Z",
+      "js": {
+        "bytes": 122267,
+        "gzipBytes": 39290,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/2zx7ak7qo0uvy.js",
+            "bytes": 29315,
+            "gzipBytes": 9825,
+            "sha256": "0cdb15ce541d22a94204d632e6f7b3634f126975d4cad16e9f6e864567eb864c",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 309366,
+        "gzipBytes": 50663,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0w-opox4n8-oz.css",
+            "bytes": 14374,
+            "gzipBytes": 2958,
+            "sha256": "8cffcf475033076034b899ef8c925af8f27760d432d3dff89f03743e7d668f55",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/admin/finance",
+      "manifestModifiedAt": "2026-10-05T21:37:31.028Z",
+      "js": {
+        "bytes": 209855,
+        "gzipBytes": 59177,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/263jioxt5fos-.js",
+            "bytes": 10967,
+            "gzipBytes": 3827,
+            "sha256": "7f4651fa2b2ab2cd22118f17aef9878e07752560bc208e3784087ef8c1780f9a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/2_b5il0k0h84z.js",
+            "bytes": 44581,
+            "gzipBytes": 11584,
+            "sha256": "ca75c8c83545791426b8ce221270c19bea0e80672a3f047a10c945362780d4c7",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 294992,
+        "gzipBytes": 47705,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/admin/modules",
+      "manifestModifiedAt": "2026-10-05T21:37:31.446Z",
+      "js": {
+        "bytes": 95091,
+        "gzipBytes": 30439,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0sabnzvjlk46o.js",
+            "bytes": 2139,
+            "gzipBytes": 974,
+            "sha256": "8df08ade66afdf77ec1c6537444f269718e3016bcc0286a3e8a13356d33fc7e1",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 294992,
+        "gzipBytes": 47705,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/admin/notifications",
+      "manifestModifiedAt": "2026-10-05T21:37:27.752Z",
+      "js": {
+        "bytes": 101962,
+        "gzipBytes": 32690,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/2nnro584tqs16.js",
+            "bytes": 9010,
+            "gzipBytes": 3225,
+            "sha256": "a259d58f7ec49c2732775d974727602639302baacb478e7b8d8773f48e6a01da",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 294992,
+        "gzipBytes": 47705,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/admin/operations",
+      "manifestModifiedAt": "2026-10-05T21:37:33.700Z",
+      "js": {
+        "bytes": 99690,
+        "gzipBytes": 32035,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3go2zpoic9v88.js",
+            "bytes": 6738,
+            "gzipBytes": 2570,
+            "sha256": "f419fe6a6668c693bb806fff98710873da150d867b3aaa34ca5f2fa3a4014236",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 294992,
+        "gzipBytes": 47705,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/admin/search",
+      "manifestModifiedAt": "2026-10-05T21:37:27.095Z",
+      "js": {
+        "bytes": 145273,
+        "gzipBytes": 42907,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0-zjvurkfrgha.js",
+            "bytes": 43601,
+            "gzipBytes": 10123,
+            "sha256": "27c8e2087623ad582cdee333b1a03f4062fe2b8b56acc771122c637664bf2c3f",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/1zqh972tz8oqh.js",
+            "bytes": 8720,
+            "gzipBytes": 3319,
+            "sha256": "dc7e93eaf22d10cf17ec02098d81e7b1ee98e931629c5f595a909dfcffdbcad8",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 294992,
+        "gzipBytes": 47705,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/admin/subscription-capacity",
+      "manifestModifiedAt": "2026-10-05T21:37:30.997Z",
+      "js": {
+        "bytes": 110921,
+        "gzipBytes": 34420,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/18w19b-frtzt4.js",
+            "bytes": 17969,
+            "gzipBytes": 4955,
+            "sha256": "6ec2baa85da4d575371568808b3c19fe0e99138a676ddb3632f2a529b54d8966",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 294992,
+        "gzipBytes": 47705,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/admin/subscription-plans",
+      "manifestModifiedAt": "2026-10-05T21:37:28.993Z",
+      "js": {
+        "bytes": 117995,
+        "gzipBytes": 36597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/34pzb8hrrjkfi.js",
+            "bytes": 25043,
+            "gzipBytes": 7132,
+            "sha256": "bdbecaadbacc50ba17665fa8a9315f04c7c688f38c349c30f5ec190965b0b0d4",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 294992,
+        "gzipBytes": 47705,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/admin/subscriptions",
+      "manifestModifiedAt": "2026-10-05T21:37:31.146Z",
+      "js": {
+        "bytes": 101623,
+        "gzipBytes": 32109,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/124o443ees8fj.js",
+            "bytes": 67732,
+            "gzipBytes": 22135,
+            "sha256": "66881763f7d06df2bb41a87854e95f4bc50ac8e7fde1637f8d3435787f17e5e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/2k7iwh5-xuuhl.js",
+            "bytes": 8671,
+            "gzipBytes": 2644,
+            "sha256": "97ea49b7e76c6b87fe7709086dd03ae948275a82fcf031aac009ac525008fae1",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 294992,
+        "gzipBytes": 47705,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0aknx1jbbkts2.css",
+            "bytes": 20242,
+            "gzipBytes": 4535,
+            "sha256": "08cc59ed991f2240efffd298a6111843ac6514c252ca15bc731f410ea88f3fd3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3at6t-r86v2vd.css",
+            "bytes": 35321,
+            "gzipBytes": 7169,
+            "sha256": "e3ccccfc6c43328355bef747adb71166de5babf7bb39c5cb0540677769116aea",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/chef",
+      "manifestModifiedAt": "2026-10-05T21:37:32.405Z",
+      "js": {
+        "bytes": 210415,
+        "gzipBytes": 62780,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0i-7v95c8ub9e.js",
+            "bytes": 25332,
+            "gzipBytes": 9040,
+            "sha256": "a14e66ef7a8e3de1c6d595ff3a8ed301ba7db8e25240f02e3ed9e7d12f648f21",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/1upj4nta3et0p.js",
+            "bytes": 36799,
+            "gzipBytes": 10915,
+            "sha256": "8eac7245136d65ceb0d3cc17a165844af2ff222caba0e4d475fc3915e80440dd",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3m1gd3sw2u9gf.js",
+            "bytes": 23920,
+            "gzipBytes": 8674,
+            "sha256": "8eca6bf73e7ac53b5f881cde5c1a4885bfa9e07de70da507f88a60b8f4fa4193",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3rjyqrbjh10tr.js",
+            "bytes": 8444,
+            "gzipBytes": 3096,
+            "sha256": "87e50ee76bf02565a24328a994659853ec4774b65539301050d2659a709903b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3zrr7r6ya_mkq.js",
+            "bytes": 29345,
+            "gzipBytes": 9424,
+            "sha256": "f77beeda410aa24e27392c1b8bbb646a152909b88bfe87cf2205520846a64ffb",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 244518,
+        "gzipBytes": 37597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3ns982bndl2d7.css",
+            "bytes": 5089,
+            "gzipBytes": 1596,
+            "sha256": "841393b8ef9af1135566d2e341ae675084e12abb90e76b3daa183744db22c397",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/chef/[id]",
+      "manifestModifiedAt": "2026-10-05T21:37:31.389Z",
+      "js": {
+        "bytes": 0,
+        "gzipBytes": 0,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": []
+      },
+      "css": {
+        "bytes": 0,
+        "gzipBytes": 0,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": []
+      }
+    },
+    {
+      "route": "/chef/application",
+      "manifestModifiedAt": "2026-10-05T21:37:31.335Z",
+      "js": {
+        "bytes": 252258,
+        "gzipBytes": 74830,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0i-7v95c8ub9e.js",
+            "bytes": 25332,
+            "gzipBytes": 9040,
+            "sha256": "a14e66ef7a8e3de1c6d595ff3a8ed301ba7db8e25240f02e3ed9e7d12f648f21",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3_gbvl2cvkhtd.js",
+            "bytes": 48568,
+            "gzipBytes": 13187,
+            "sha256": "2ac6f5ec8d580b3f559a73302406262ba39c7595cffea851fefe261e0af14f2f",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3m1gd3sw2u9gf.js",
+            "bytes": 23920,
+            "gzipBytes": 8674,
+            "sha256": "8eca6bf73e7ac53b5f881cde5c1a4885bfa9e07de70da507f88a60b8f4fa4193",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3rjyqrbjh10tr.js",
+            "bytes": 8444,
+            "gzipBytes": 3096,
+            "sha256": "87e50ee76bf02565a24328a994659853ec4774b65539301050d2659a709903b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3zrr7r6ya_mkq.js",
+            "bytes": 29345,
+            "gzipBytes": 9424,
+            "sha256": "f77beeda410aa24e27392c1b8bbb646a152909b88bfe87cf2205520846a64ffb",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/43edq6qmsy9aj.js",
+            "bytes": 30074,
+            "gzipBytes": 9778,
+            "sha256": "f8d9a902a25756f306e3c9559446322b405ad311526bd7749972984606669311",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 244518,
+        "gzipBytes": 37597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3ns982bndl2d7.css",
+            "bytes": 5089,
+            "gzipBytes": 1596,
+            "sha256": "841393b8ef9af1135566d2e341ae675084e12abb90e76b3daa183744db22c397",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/chef/capacity",
+      "manifestModifiedAt": "2026-10-05T21:37:30.145Z",
+      "js": {
+        "bytes": 165972,
+        "gzipBytes": 48844,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0i-7v95c8ub9e.js",
+            "bytes": 25332,
+            "gzipBytes": 9040,
+            "sha256": "a14e66ef7a8e3de1c6d595ff3a8ed301ba7db8e25240f02e3ed9e7d12f648f21",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3-7rjdo_-u1ph.js",
+            "bytes": 21701,
+            "gzipBytes": 6403,
+            "sha256": "9af187bd7a9c057642561ac06950d7d7ff64343d06539e6e698e8594c769cf17",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3m1gd3sw2u9gf.js",
+            "bytes": 23920,
+            "gzipBytes": 8674,
+            "sha256": "8eca6bf73e7ac53b5f881cde5c1a4885bfa9e07de70da507f88a60b8f4fa4193",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3rjyqrbjh10tr.js",
+            "bytes": 8444,
+            "gzipBytes": 3096,
+            "sha256": "87e50ee76bf02565a24328a994659853ec4774b65539301050d2659a709903b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 244518,
+        "gzipBytes": 37597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3ns982bndl2d7.css",
+            "bytes": 5089,
+            "gzipBytes": 1596,
+            "sha256": "841393b8ef9af1135566d2e341ae675084e12abb90e76b3daa183744db22c397",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/chef/earnings",
+      "manifestModifiedAt": "2026-10-05T21:37:33.540Z",
+      "js": {
+        "bytes": 159708,
+        "gzipBytes": 47646,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0i-7v95c8ub9e.js",
+            "bytes": 25332,
+            "gzipBytes": 9040,
+            "sha256": "a14e66ef7a8e3de1c6d595ff3a8ed301ba7db8e25240f02e3ed9e7d12f648f21",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/2at2yuguzqqu6.js",
+            "bytes": 15437,
+            "gzipBytes": 5205,
+            "sha256": "01bccd6b1fe3788d17b067bae174c1c6b8e5924df0c3a882d51b01e553367d85",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3m1gd3sw2u9gf.js",
+            "bytes": 23920,
+            "gzipBytes": 8674,
+            "sha256": "8eca6bf73e7ac53b5f881cde5c1a4885bfa9e07de70da507f88a60b8f4fa4193",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3rjyqrbjh10tr.js",
+            "bytes": 8444,
+            "gzipBytes": 3096,
+            "sha256": "87e50ee76bf02565a24328a994659853ec4774b65539301050d2659a709903b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 244518,
+        "gzipBytes": 37597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3ns982bndl2d7.css",
+            "bytes": 5089,
+            "gzipBytes": 1596,
+            "sha256": "841393b8ef9af1135566d2e341ae675084e12abb90e76b3daa183744db22c397",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/chef/finance",
+      "manifestModifiedAt": "2026-10-05T21:37:25.769Z",
+      "js": {
+        "bytes": 187583,
+        "gzipBytes": 54805,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0i-7v95c8ub9e.js",
+            "bytes": 25332,
+            "gzipBytes": 9040,
+            "sha256": "a14e66ef7a8e3de1c6d595ff3a8ed301ba7db8e25240f02e3ed9e7d12f648f21",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/2io0_98l5iivg.js",
+            "bytes": 43312,
+            "gzipBytes": 12364,
+            "sha256": "6af3f98ac48ae4a3867310b7aece11eece5d855c0ad690e98f9e4b7020a54618",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3m1gd3sw2u9gf.js",
+            "bytes": 23920,
+            "gzipBytes": 8674,
+            "sha256": "8eca6bf73e7ac53b5f881cde5c1a4885bfa9e07de70da507f88a60b8f4fa4193",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3rjyqrbjh10tr.js",
+            "bytes": 8444,
+            "gzipBytes": 3096,
+            "sha256": "87e50ee76bf02565a24328a994659853ec4774b65539301050d2659a709903b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 244518,
+        "gzipBytes": 37597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3ns982bndl2d7.css",
+            "bytes": 5089,
+            "gzipBytes": 1596,
+            "sha256": "841393b8ef9af1135566d2e341ae675084e12abb90e76b3daa183744db22c397",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/chef/kitchen",
+      "manifestModifiedAt": "2026-10-05T21:37:27.476Z",
+      "js": {
+        "bytes": 177511,
+        "gzipBytes": 51781,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0i-7v95c8ub9e.js",
+            "bytes": 25332,
+            "gzipBytes": 9040,
+            "sha256": "a14e66ef7a8e3de1c6d595ff3a8ed301ba7db8e25240f02e3ed9e7d12f648f21",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0xp0_dbp7nduz.js",
+            "bytes": 33240,
+            "gzipBytes": 9340,
+            "sha256": "06c6f9ceb74ee97d53ae023e22620163c6e1ae1bafc1ba468ccad1b2da01421b",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3m1gd3sw2u9gf.js",
+            "bytes": 23920,
+            "gzipBytes": 8674,
+            "sha256": "8eca6bf73e7ac53b5f881cde5c1a4885bfa9e07de70da507f88a60b8f4fa4193",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3rjyqrbjh10tr.js",
+            "bytes": 8444,
+            "gzipBytes": 3096,
+            "sha256": "87e50ee76bf02565a24328a994659853ec4774b65539301050d2659a709903b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 244518,
+        "gzipBytes": 37597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3ns982bndl2d7.css",
+            "bytes": 5089,
+            "gzipBytes": 1596,
+            "sha256": "841393b8ef9af1135566d2e341ae675084e12abb90e76b3daa183744db22c397",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/chef/meal-plans",
+      "manifestModifiedAt": "2026-10-05T21:37:28.391Z",
+      "js": {
+        "bytes": 207557,
+        "gzipBytes": 56790,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0hbe3wvzlylgq.js",
+            "bytes": 11014,
+            "gzipBytes": 3730,
+            "sha256": "aa7164c2329a18ec557bdc285742de3934759b91662a3e260ab6a13b58ee4c2e",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0i-7v95c8ub9e.js",
+            "bytes": 25332,
+            "gzipBytes": 9040,
+            "sha256": "a14e66ef7a8e3de1c6d595ff3a8ed301ba7db8e25240f02e3ed9e7d12f648f21",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/1vu12h5gcwjnk.js",
+            "bytes": 52272,
+            "gzipBytes": 10619,
+            "sha256": "39c2b12a4c4b74d35d8b39010344f70fd5f076510fd9b5e6f009b3d4a0c9c6e3",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3m1gd3sw2u9gf.js",
+            "bytes": 23920,
+            "gzipBytes": 8674,
+            "sha256": "8eca6bf73e7ac53b5f881cde5c1a4885bfa9e07de70da507f88a60b8f4fa4193",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3rjyqrbjh10tr.js",
+            "bytes": 8444,
+            "gzipBytes": 3096,
+            "sha256": "87e50ee76bf02565a24328a994659853ec4774b65539301050d2659a709903b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 244518,
+        "gzipBytes": 37597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3ns982bndl2d7.css",
+            "bytes": 5089,
+            "gzipBytes": 1596,
+            "sha256": "841393b8ef9af1135566d2e341ae675084e12abb90e76b3daa183744db22c397",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/chef/menu",
+      "manifestModifiedAt": "2026-10-05T21:37:28.035Z",
+      "js": {
+        "bytes": 214325,
+        "gzipBytes": 64917,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0i-7v95c8ub9e.js",
+            "bytes": 25332,
+            "gzipBytes": 9040,
+            "sha256": "a14e66ef7a8e3de1c6d595ff3a8ed301ba7db8e25240f02e3ed9e7d12f648f21",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0sd3su6gwlfjv.js",
+            "bytes": 40709,
+            "gzipBytes": 13052,
+            "sha256": "83e0a59f89134a67987c36d1a1377eacf3021980980d5ee6971bf7ff68fa75e0",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3m1gd3sw2u9gf.js",
+            "bytes": 23920,
+            "gzipBytes": 8674,
+            "sha256": "8eca6bf73e7ac53b5f881cde5c1a4885bfa9e07de70da507f88a60b8f4fa4193",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3rjyqrbjh10tr.js",
+            "bytes": 8444,
+            "gzipBytes": 3096,
+            "sha256": "87e50ee76bf02565a24328a994659853ec4774b65539301050d2659a709903b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3zrr7r6ya_mkq.js",
+            "bytes": 29345,
+            "gzipBytes": 9424,
+            "sha256": "f77beeda410aa24e27392c1b8bbb646a152909b88bfe87cf2205520846a64ffb",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 244518,
+        "gzipBytes": 37597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3ns982bndl2d7.css",
+            "bytes": 5089,
+            "gzipBytes": 1596,
+            "sha256": "841393b8ef9af1135566d2e341ae675084e12abb90e76b3daa183744db22c397",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/chef/menu/media",
+      "manifestModifiedAt": "2026-10-05T21:37:33.546Z",
+      "js": {
+        "bytes": 214325,
+        "gzipBytes": 64917,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0i-7v95c8ub9e.js",
+            "bytes": 25332,
+            "gzipBytes": 9040,
+            "sha256": "a14e66ef7a8e3de1c6d595ff3a8ed301ba7db8e25240f02e3ed9e7d12f648f21",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0sd3su6gwlfjv.js",
+            "bytes": 40709,
+            "gzipBytes": 13052,
+            "sha256": "83e0a59f89134a67987c36d1a1377eacf3021980980d5ee6971bf7ff68fa75e0",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3m1gd3sw2u9gf.js",
+            "bytes": 23920,
+            "gzipBytes": 8674,
+            "sha256": "8eca6bf73e7ac53b5f881cde5c1a4885bfa9e07de70da507f88a60b8f4fa4193",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3rjyqrbjh10tr.js",
+            "bytes": 8444,
+            "gzipBytes": 3096,
+            "sha256": "87e50ee76bf02565a24328a994659853ec4774b65539301050d2659a709903b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3zrr7r6ya_mkq.js",
+            "bytes": 29345,
+            "gzipBytes": 9424,
+            "sha256": "f77beeda410aa24e27392c1b8bbb646a152909b88bfe87cf2205520846a64ffb",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 244518,
+        "gzipBytes": 37597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3ns982bndl2d7.css",
+            "bytes": 5089,
+            "gzipBytes": 1596,
+            "sha256": "841393b8ef9af1135566d2e341ae675084e12abb90e76b3daa183744db22c397",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/chef/operations",
+      "manifestModifiedAt": "2026-10-05T21:37:28.079Z",
+      "js": {
+        "bytes": 171659,
+        "gzipBytes": 50497,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0i-7v95c8ub9e.js",
+            "bytes": 25332,
+            "gzipBytes": 9040,
+            "sha256": "a14e66ef7a8e3de1c6d595ff3a8ed301ba7db8e25240f02e3ed9e7d12f648f21",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/2o_0-pa2v9gdw.js",
+            "bytes": 27388,
+            "gzipBytes": 8056,
+            "sha256": "d22a6a696cdb2f22f22e16803007b256d9fd9811b5cfcea6ed32bdd72d26cdff",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3m1gd3sw2u9gf.js",
+            "bytes": 23920,
+            "gzipBytes": 8674,
+            "sha256": "8eca6bf73e7ac53b5f881cde5c1a4885bfa9e07de70da507f88a60b8f4fa4193",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3rjyqrbjh10tr.js",
+            "bytes": 8444,
+            "gzipBytes": 3096,
+            "sha256": "87e50ee76bf02565a24328a994659853ec4774b65539301050d2659a709903b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 244518,
+        "gzipBytes": 37597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3ns982bndl2d7.css",
+            "bytes": 5089,
+            "gzipBytes": 1596,
+            "sha256": "841393b8ef9af1135566d2e341ae675084e12abb90e76b3daa183744db22c397",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/chef/orders",
+      "manifestModifiedAt": "2026-10-05T21:37:26.100Z",
+      "js": {
+        "bytes": 160144,
+        "gzipBytes": 47923,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0i-7v95c8ub9e.js",
+            "bytes": 25332,
+            "gzipBytes": 9040,
+            "sha256": "a14e66ef7a8e3de1c6d595ff3a8ed301ba7db8e25240f02e3ed9e7d12f648f21",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/24xlf_vb-x40t.js",
+            "bytes": 15873,
+            "gzipBytes": 5482,
+            "sha256": "bd70101b274f6e1bdb9dcaac3ed3b6857d674bda7356d2548c02d588e0df2a70",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3m1gd3sw2u9gf.js",
+            "bytes": 23920,
+            "gzipBytes": 8674,
+            "sha256": "8eca6bf73e7ac53b5f881cde5c1a4885bfa9e07de70da507f88a60b8f4fa4193",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3rjyqrbjh10tr.js",
+            "bytes": 8444,
+            "gzipBytes": 3096,
+            "sha256": "87e50ee76bf02565a24328a994659853ec4774b65539301050d2659a709903b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 244518,
+        "gzipBytes": 37597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3ns982bndl2d7.css",
+            "bytes": 5089,
+            "gzipBytes": 1596,
+            "sha256": "841393b8ef9af1135566d2e341ae675084e12abb90e76b3daa183744db22c397",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/chef/orders/[orderId]",
+      "manifestModifiedAt": "2026-10-05T21:37:33.405Z",
+      "js": {
+        "bytes": 172647,
+        "gzipBytes": 50079,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0i-7v95c8ub9e.js",
+            "bytes": 25332,
+            "gzipBytes": 9040,
+            "sha256": "a14e66ef7a8e3de1c6d595ff3a8ed301ba7db8e25240f02e3ed9e7d12f648f21",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/26ul7zs-enums.js",
+            "bytes": 28376,
+            "gzipBytes": 7638,
+            "sha256": "0173d127b0cb218d6c40e8f20e9e248d277d9a0e231ca4bdfecbecbc80211ac7",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3m1gd3sw2u9gf.js",
+            "bytes": 23920,
+            "gzipBytes": 8674,
+            "sha256": "8eca6bf73e7ac53b5f881cde5c1a4885bfa9e07de70da507f88a60b8f4fa4193",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3rjyqrbjh10tr.js",
+            "bytes": 8444,
+            "gzipBytes": 3096,
+            "sha256": "87e50ee76bf02565a24328a994659853ec4774b65539301050d2659a709903b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 244518,
+        "gzipBytes": 37597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3ns982bndl2d7.css",
+            "bytes": 5089,
+            "gzipBytes": 1596,
+            "sha256": "841393b8ef9af1135566d2e341ae675084e12abb90e76b3daa183744db22c397",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/chef/profile",
+      "manifestModifiedAt": "2026-10-05T21:37:25.808Z",
+      "js": {
+        "bytes": 160926,
+        "gzipBytes": 48071,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0i-7v95c8ub9e.js",
+            "bytes": 25332,
+            "gzipBytes": 9040,
+            "sha256": "a14e66ef7a8e3de1c6d595ff3a8ed301ba7db8e25240f02e3ed9e7d12f648f21",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/27w_dg5b6-q9g.js",
+            "bytes": 16655,
+            "gzipBytes": 5630,
+            "sha256": "f5b44338a21fd7f5daf6e745c2378c119944bf93e15614b163ec289fcc503749",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3m1gd3sw2u9gf.js",
+            "bytes": 23920,
+            "gzipBytes": 8674,
+            "sha256": "8eca6bf73e7ac53b5f881cde5c1a4885bfa9e07de70da507f88a60b8f4fa4193",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3rjyqrbjh10tr.js",
+            "bytes": 8444,
+            "gzipBytes": 3096,
+            "sha256": "87e50ee76bf02565a24328a994659853ec4774b65539301050d2659a709903b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 244518,
+        "gzipBytes": 37597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3ns982bndl2d7.css",
+            "bytes": 5089,
+            "gzipBytes": 1596,
+            "sha256": "841393b8ef9af1135566d2e341ae675084e12abb90e76b3daa183744db22c397",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    },
+    {
+      "route": "/chef/statements",
+      "manifestModifiedAt": "2026-10-05T21:37:31.362Z",
+      "js": {
+        "bytes": 163514,
+        "gzipBytes": 49514,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/0i-7v95c8ub9e.js",
+            "bytes": 25332,
+            "gzipBytes": 9040,
+            "sha256": "a14e66ef7a8e3de1c6d595ff3a8ed301ba7db8e25240f02e3ed9e7d12f648f21",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/38lyi4r2jgioy.js",
+            "bytes": 61355,
+            "gzipBytes": 14301,
+            "sha256": "110dd556c4f5ddfdcb8d5aebcc0b6ab031cf0b7098bf87a5a789567bd2971c98",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3fgvai9ikd14l.js",
+            "bytes": 19243,
+            "gzipBytes": 7073,
+            "sha256": "709f5812844800253b88113ecf83a5c4996004c7ac84fec5391f4bf0a68ae1b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3m1gd3sw2u9gf.js",
+            "bytes": 23920,
+            "gzipBytes": 8674,
+            "sha256": "8eca6bf73e7ac53b5f881cde5c1a4885bfa9e07de70da507f88a60b8f4fa4193",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3rjyqrbjh10tr.js",
+            "bytes": 8444,
+            "gzipBytes": 3096,
+            "sha256": "87e50ee76bf02565a24328a994659853ec4774b65539301050d2659a709903b5",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/41_epb6f7u7_y.js",
+            "bytes": 25220,
+            "gzipBytes": 7330,
+            "sha256": "ae00865d9e16e5e5a08f03f500882c5a8e98b98fc5cefe7e19937a94afd52f58",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      },
+      "css": {
+        "bytes": 244518,
+        "gzipBytes": 37597,
+        "motionBearingBytes": 0,
+        "syncfusionBearingBytes": 0,
+        "chunks": [
+          {
+            "path": "static/chunks/06wa412t6f0tj.css",
+            "bytes": 3750,
+            "gzipBytes": 1000,
+            "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/0z6kawmhiu7cd.css",
+            "bytes": 222706,
+            "gzipBytes": 32385,
+            "sha256": "52872f6bb97b0a92cef81047263f3775122db53fbff0e8f66b91684b2ff7bd2a",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/255mgbaz1x6xc.css",
+            "bytes": 12973,
+            "gzipBytes": 2616,
+            "sha256": "0b833182ce2885b92e450b2c21ee3d09711878afe64c8b7f789f1537128d6e07",
+            "motionCode": false,
+            "syncfusionCode": false
+          },
+          {
+            "path": "static/chunks/3ns982bndl2d7.css",
+            "bytes": 5089,
+            "gzipBytes": 1596,
+            "sha256": "841393b8ef9af1135566d2e341ae675084e12abb90e76b3daa183744db22c397",
+            "motionCode": false,
+            "syncfusionCode": false
+          }
+        ]
+      }
+    }
+  ]
+}

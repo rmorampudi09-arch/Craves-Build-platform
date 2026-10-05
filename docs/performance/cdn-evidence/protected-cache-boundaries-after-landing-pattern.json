@@ -1,0 +1,38 @@
+[
+  {
+    "observedAtUtc": "2026-10-05T18:05:31.4091758Z",
+    "path": "/api/auth/me",
+    "status": 401,
+    "headers": [
+      "Content-Type: application/json",
+      "cache-control: private, no-store, max-age=0",
+      "X-Cache: CONFIG_NOCACHE"
+    ],
+    "ttfbSeconds": 0.50356,
+    "totalSeconds": 0.503698
+  },
+  {
+    "observedAtUtc": "2026-10-05T18:05:31.6503064Z",
+    "path": "/landing-auth/manifest.json",
+    "status": 200,
+    "headers": [
+      "Content-Type: application/json; charset=UTF-8",
+      "cache-control: no-store, max-age=0",
+      "X-Cache: CONFIG_NOCACHE"
+    ],
+    "ttfbSeconds": 0.142934,
+    "totalSeconds": 0.143051
+  },
+  {
+    "observedAtUtc": "2026-10-05T18:05:31.8696778Z",
+    "path": "/sign-in",
+    "status": 200,
+    "headers": [
+      "Content-Type: text/html; charset=utf-8",
+      "cache-control: private, no-store, no-cache, max-age=0, must-revalidate",
+      "X-Cache: CONFIG_NOCACHE"
+    ],
+    "ttfbSeconds": 0.162473,
+    "totalSeconds": 0.168588
+  }
+]

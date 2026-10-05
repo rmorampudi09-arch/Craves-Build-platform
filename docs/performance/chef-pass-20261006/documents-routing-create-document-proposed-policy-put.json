@@ -1,0 +1,6 @@
+{
+  "properties": {
+    "format": "rawxml",
+    "value": "<policies>\r\n  <inbound>\r\n    <base />\r\n    <set-backend-service base-url=\"https://ca-craves-notification-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io\" />\n<rewrite-uri template=\"/api/v1/documents\" copy-unmatched-params=\"true\" />\r\n    <validate-content unspecified-content-type-action=\"prevent\" max-size=\"2048\" size-exceeded-action=\"prevent\">\r\n      <content type=\"application/json\" validate-as=\"json\" action=\"prevent\" />\r\n    </validate-content>\r\n  </inbound>\r\n  <backend>\r\n    <base />\r\n  </backend>\r\n  <outbound>\r\n    <base />\r\n  </outbound>\r\n  <on-error>\r\n    <base />\r\n  </on-error>\r\n</policies>"
+  }
+}

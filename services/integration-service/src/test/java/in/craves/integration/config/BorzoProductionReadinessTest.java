@@ -31,6 +31,20 @@ class BorzoProductionReadinessTest {
         BorzoProperties properties = productionProperties();
         properties.validate();
         assertThat(properties.productionReady()).isTrue();
+        assertThat(properties.productionCreateReady()).isFalse();
+        properties.setCreateEnabled(true);
+        assertThat(properties.productionCreateReady()).isTrue();
+    }
+
+    @Test
+    void newCreateCannotBeEnabledWithoutMaintenanceApi() {
+        BorzoProperties properties = productionProperties();
+        properties.setEnabled(false);
+        properties.setCreateEnabled(true);
+
+        assertThatThrownBy(properties::validate)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("BORZO_CREATE_ENABLED requires BORZO_API_ENABLED");
     }
 
     private static BorzoProperties productionProperties() {

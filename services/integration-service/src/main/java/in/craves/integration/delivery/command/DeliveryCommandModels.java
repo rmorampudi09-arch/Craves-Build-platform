@@ -1,5 +1,6 @@
 package in.craves.integration.delivery.command;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentResponse;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderQuote;
@@ -84,6 +85,7 @@ public final class DeliveryCommandModels {
         List<CreateAudit> createAudit
     ) {}
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record DeliveryStatusChangedData(
         UUID deliveryJobId,
         UUID orderId,
@@ -92,6 +94,26 @@ public final class DeliveryCommandModels {
         String providerDeliveryId,
         String status,
         String trackingUrl,
-        Instant observedAt
-    ) {}
+        Instant observedAt,
+        String handoffFromProviderId,
+        String handoffFromProviderDeliveryId,
+        Boolean handoffContinuation
+    ) {
+        public DeliveryStatusChangedData(UUID deliveryJobId, UUID orderId, UUID chefSubOrderId,
+                                         String providerId, String providerDeliveryId, String status,
+                                         String trackingUrl, Instant observedAt,
+                                         String handoffFromProviderId,
+                                         String handoffFromProviderDeliveryId) {
+            this(deliveryJobId, orderId, chefSubOrderId, providerId,
+                providerDeliveryId, status, trackingUrl, observedAt,
+                handoffFromProviderId, handoffFromProviderDeliveryId, null);
+        }
+
+        public DeliveryStatusChangedData(UUID deliveryJobId, UUID orderId, UUID chefSubOrderId,
+                                         String providerId, String providerDeliveryId, String status,
+                                         String trackingUrl, Instant observedAt) {
+            this(deliveryJobId, orderId, chefSubOrderId, providerId, providerDeliveryId,
+                status, trackingUrl, observedAt, null, null, null);
+        }
+    }
 }

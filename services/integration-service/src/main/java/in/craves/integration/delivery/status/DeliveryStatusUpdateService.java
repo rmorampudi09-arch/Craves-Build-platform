@@ -6,6 +6,8 @@ import in.craves.integration.delivery.command.DeliveryCommandModels;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryStatusChangedData;
 import in.craves.integration.delivery.command.DeliveryCommandModels.EventEnvelope;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
+import in.craves.integration.delivery.command.BorzoPidgeHandoffRepository;
+import in.craves.integration.delivery.command.BorzoPidgeHandoffWorker;
 import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderStatusUpdate;
@@ -25,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -35,17 +38,29 @@ public class DeliveryStatusUpdateService {
     private final DeliveryOutboxRepository outbox;
     private final DeliveryCommandProperties properties;
     private final ObjectMapper objectMapper;
+    private final BorzoPidgeHandoffRepository handoffs;
 
+    @Autowired
     public DeliveryStatusUpdateService(List<DeliveryWebhookNormalizer> normalizers,
                                        DeliveryStatusRepository repository,
                                        DeliveryOutboxRepository outbox,
                                        DeliveryCommandProperties properties,
-                                       ObjectMapper objectMapper) {
+                                       ObjectMapper objectMapper,
+                                       BorzoPidgeHandoffRepository handoffs) {
         this.normalizers = indexNormalizers(normalizers);
         this.repository = repository;
         this.outbox = outbox;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.handoffs = handoffs;
+    }
+
+    DeliveryStatusUpdateService(List<DeliveryWebhookNormalizer> normalizers,
+                                DeliveryStatusRepository repository,
+                                DeliveryOutboxRepository outbox,
+                                DeliveryCommandProperties properties,
+                                ObjectMapper objectMapper) {
+        this(normalizers, repository, outbox, properties, objectMapper, null);
     }
 
     @Transactional
@@ -53,6 +68,27 @@ public class DeliveryStatusUpdateService {
         DeliveryWebhookNormalizer normalizer = normalizer(workItem.providerId());
         ProviderStatusUpdate update = normalizer.normalize(workItem.rawPayload());
         requireProviderMatch(workItem.providerId(), update.providerId());
+
+        if ("borzo".equals(update.providerId()) && handoffs != null) {
+            var handoff = handoffs.lockByBorzoOrderId(update.providerOrderId()).orElse(null);
+            if (handoff != null && ("PROCESSING_BORZO".equals(handoff.state())
+                || ("WAITING".equals(handoff.state())
+                    && update.status() == DeliveryStatus.DELAYED))) {
+                repository.deferWebhookForHandoff(workItem.id());
+                return new ProcessingResult(handoff.deliveryJobId(), false, false,
+                    "HANDOFF_DECISION_PENDING");
+            }
+            if (handoff != null && (isSuperseded(handoff)
+                || (update.status() == DeliveryStatus.CANCELLED
+                    && !"RETAINED_BORZO".equals(handoff.state())
+                    && !"MANUAL_REVIEW".equals(handoff.state())))) {
+                repository.markWebhookProcessed(workItem.id(), handoff.deliveryJobId(),
+                    update.providerOrderId(), update.providerDeliveryId(),
+                    update.status().name(), "BORZO_HANDOFF_SUPERSEDED");
+                return new ProcessingResult(handoff.deliveryJobId(), false, false,
+                    "BORZO_HANDOFF_SUPERSEDED");
+            }
+        }
 
         DeliveryJobState discovered = repository.findJobByProviderOrder(
             update.providerId(),
@@ -97,6 +133,7 @@ public class DeliveryStatusUpdateService {
 
         if (decision.applied()) {
             applyAndPublish(job, update, "WEBHOOK");
+            retainBorzoIfAccepted(job, update);
         }
 
         repository.markWebhookProcessed(
@@ -126,10 +163,40 @@ public class DeliveryStatusUpdateService {
             );
         }
 
+        // Webhooks lock the handoff before the job. Tracking must use the same order so
+        // a courier callback cannot deadlock the timed cancellation decision.
+        BorzoPidgeHandoffRepository.Handoff borzoHandoff =
+            "borzo".equals(update.providerId()) && handoffs != null
+                ? handoffs.lockByBorzoOrderId(update.providerOrderId()).orElse(null)
+                : null;
+
         DeliveryJobState job = repository.lockJob(workItem.deliveryJobId())
             .orElseThrow(() -> new UnmatchedDeliveryJobException(
                 "Tracked delivery job no longer exists"
             ));
+        if (!job.providerId().equalsIgnoreCase(update.providerId())
+            || !job.providerDeliveryId().equals(update.providerOrderId())) {
+            repository.markTrackingNoChange(job.id(), nextTrackingAt(parseStatus(job.status())));
+            return new ProcessingResult(job.id(), false, false, "PROVIDER_HANDOFF_SUPERSEDED");
+        }
+        if (borzoHandoff != null) {
+            var handoff = borzoHandoff;
+            if (handoff != null && ("PROCESSING_BORZO".equals(handoff.state())
+                || ("WAITING".equals(handoff.state())
+                    && update.status() == DeliveryStatus.DELAYED))) {
+                repository.markTrackingNoChange(job.id(), Instant.now().plusSeconds(5));
+                return new ProcessingResult(job.id(), false, false,
+                    "HANDOFF_DECISION_PENDING");
+            }
+            if (handoff != null && (isSuperseded(handoff)
+                || (update.status() == DeliveryStatus.CANCELLED
+                    && !"RETAINED_BORZO".equals(handoff.state())
+                    && !"MANUAL_REVIEW".equals(handoff.state())))) {
+                repository.markTrackingNoChange(job.id(), nextTrackingAt(parseStatus(job.status())));
+                return new ProcessingResult(job.id(), false, false,
+                    "BORZO_HANDOFF_SUPERSEDED");
+            }
+        }
         Decision decision = decide(job, update);
         Instant nextTrackingAt = nextTrackingAt(update.status());
 
@@ -169,7 +236,23 @@ public class DeliveryStatusUpdateService {
         }
 
         applyAndPublish(job, update, "TRACK");
+        retainBorzoIfAccepted(job, update);
         return new ProcessingResult(job.id(), true, false, "APPLIED");
+    }
+
+    private void retainBorzoIfAccepted(DeliveryJobState job, ProviderStatusUpdate update) {
+        if (handoffs != null && "borzo".equals(update.providerId())
+            && BorzoPidgeHandoffWorker.isAccepted(update.status())) {
+            handoffs.markRetained(job.id());
+        }
+    }
+
+    private static boolean isSuperseded(BorzoPidgeHandoffRepository.Handoff handoff) {
+        return "BORZO_CANCELLED".equals(handoff.state())
+            || "PROCESSING_PIDGE".equals(handoff.state())
+            || "PIDGE_RECONCILIATION_PENDING".equals(handoff.state())
+            || "COMPLETED".equals(handoff.state())
+            || ("MANUAL_REVIEW".equals(handoff.state()) && handoff.borzoCancelled());
     }
 
     private void applyAndPublish(DeliveryJobState job,
@@ -185,6 +268,11 @@ public class DeliveryStatusUpdateService {
             nextTrackingAt(update.status())
         );
 
+        var completedHandoff = "pidge".equals(update.providerId()) && handoffs != null
+            ? handoffs.findByDeliveryJobId(job.id())
+                .filter(handoff -> "COMPLETED".equals(handoff.state())
+                    && handoff.borzoCancelled()).orElse(null)
+            : null;
         DeliveryStatusChangedData data = new DeliveryStatusChangedData(
             job.id(),
             job.orderId(),
@@ -193,7 +281,10 @@ public class DeliveryStatusUpdateService {
             update.providerOrderId(),
             update.status().name(),
             update.trackingUrl(),
-            update.observedAt()
+            update.observedAt(),
+            completedHandoff == null ? null : "borzo",
+            completedHandoff == null ? null : completedHandoff.borzoProviderDeliveryId(),
+            completedHandoff == null ? null : Boolean.TRUE
         );
         EventEnvelope<DeliveryStatusChangedData> event = new EventEnvelope<>(
             UUID.randomUUID(),

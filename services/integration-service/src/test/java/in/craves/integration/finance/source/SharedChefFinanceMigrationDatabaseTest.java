@@ -23,7 +23,7 @@ class SharedChefFinanceMigrationDatabaseTest {
         assertTrue(url.matches("jdbc:postgresql://localhost:[0-9]+/chef_ledger_test"));
         ds=new DriverManagerDataSource(url,System.getenv("LEDGER_TEST_DB_USER"),System.getenv("LEDGER_TEST_DB_PASSWORD"));
         jdbc=new JdbcTemplate(ds);jdbc.execute("DROP SCHEMA IF EXISTS payment_schema CASCADE");jdbc.execute("DROP SCHEMA IF EXISTS delivery_schema CASCADE");
-        migration("146").migrate();profiles=new ChefTaxProfileService(jdbc,new ObjectMapper().findAndRegisterModules());
+        migration("147").migrate();profiles=new ChefTaxProfileService(jdbc,new ObjectMapper().findAndRegisterModules());
     }
     Flyway migration(String target) {
         var config=Flyway.configure().dataSource(ds).schemas("payment_schema").defaultSchema("payment_schema").locations("classpath:db/migration");
@@ -38,7 +38,10 @@ class SharedChefFinanceMigrationDatabaseTest {
         var one=profile("0",LocalDate.now(FinancePolicy.ZONE));var two=profile("0.0",LocalDate.now(FinancePolicy.ZONE));
         String before=jdbc.queryForObject("SELECT jsonb_agg(payload ORDER BY id)::text FROM payment_schema.finance_chef_tax_version",String.class);
         long revision=jdbc.queryForObject("SELECT revision FROM payment_schema.finance_policy_head",Long.class);
+        int deliveryChecksum=jdbc.queryForObject("SELECT checksum FROM payment_schema.flyway_schema_history WHERE version='147'",Integer.class);
+        assertEquals(-837191910,deliveryChecksum);
         var migration=migration(null);assertEquals(1,migration.migrate().migrationsExecuted);migration.validate();assertEquals(0,migration.migrate().migrationsExecuted);
+        assertEquals(deliveryChecksum,jdbc.queryForObject("SELECT checksum FROM payment_schema.flyway_schema_history WHERE version='147'",Integer.class));
         assertEquals("0.000000",jdbc.queryForObject("SELECT withholding_rate::text FROM payment_schema.finance_shared_chef_terms_version",String.class));
         var sources=jdbc.queryForObject("SELECT source_profile_ids::text FROM payment_schema.finance_shared_chef_terms_version",String.class);
         assertTrue(sources.contains(one.id().toString()));assertTrue(sources.contains(two.id().toString()));

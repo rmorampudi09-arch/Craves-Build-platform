@@ -1,12 +1,14 @@
 package in.craves.integration.delivery.borzo;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.config.BorzoProperties;
@@ -29,11 +31,13 @@ class BorzoApiClientTest {
     private static final String BASE_URL = "https://robotapitest-in.borzodelivery.com/api/business/1.8";
     private MockRestServiceServer server;
     private BorzoApiClient client;
+    private BorzoProperties properties;
 
     @BeforeEach
     void setUp() {
-        BorzoProperties properties = new BorzoProperties();
+        properties = new BorzoProperties();
         properties.setEnabled(true);
+        properties.setCreateEnabled(true);
         properties.setBaseUrl(BASE_URL);
         properties.setAuthToken("sandbox-token");
 
@@ -46,6 +50,49 @@ class BorzoApiClientTest {
             new BorzoStatusMapper(),
             builder.build()
         );
+    }
+
+    @Test
+    void rollbackBlocksNewBookingsButKeepsExistingOrdersManageable() {
+        properties.setCreateEnabled(false);
+
+        assertThatThrownBy(() -> client.quote(quoteRequest()))
+            .isInstanceOf(BorzoApiClient.BorzoApiException.class)
+            .hasMessageContaining("new bookings are disabled");
+        assertThatThrownBy(() -> client.create(
+            new CreateDeliveryRequest("CRV-SUBORDER-123", quoteRequest())))
+            .isInstanceOf(BorzoApiClient.BorzoApiException.class)
+            .hasMessageContaining("new bookings are disabled");
+
+        server.expect(requestTo(BASE_URL + "/orders?order_id=1250032&count=1"))
+            .andRespond(withSuccess("""
+                {"is_successful":true,"orders":[{"order_id":1250032,"status":"available"}]}
+                """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/courier?order_id=1250032"))
+            .andRespond(withSuccess("{\"is_successful\":true,\"courier\":null}",
+                MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/cancel-order"))
+            .andRespond(withSuccess("""
+                {"is_successful":true,"order":{"order_id":1250032,"status":"canceled"}}
+                """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/orders?offset=0&count=50"))
+            .andRespond(withSuccess("""
+                {"is_successful":true,"orders_count":1,"orders":[
+                  {"order_id":1250032,"created_datetime":"2026-07-24T08:30:00+05:30",
+                   "status":"available","points":[{},
+                     {"client_order_id":"CRV-SUBORDER-123","delivery":{"status":"planned"}}]}
+                ]}
+                """, MediaType.APPLICATION_JSON));
+
+        assertThat(client.readOrder("1250032").providerDeliveryId()).isEqualTo("1250032");
+        assertThat(client.readCourier("1250032")).isNull();
+        assertThat(client.cancel("1250032").status())
+            .isEqualTo(in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus.CANCELLED);
+        assertThat(client.reconcileCreate("CRV-SUBORDER-123",
+            Instant.parse("2026-07-24T02:59:00Z")).status())
+            .isEqualTo(CreateReconciliationStatus.FOUND);
+
+        server.verify();
     }
 
     @Test
@@ -181,6 +228,36 @@ class BorzoApiClientTest {
         assertThat(error.providerId()).isEqualTo("borzo");
         assertThat(error.clientReference()).isEqualTo("CRV-SUBORDER-123");
         assertThat(error.attemptedAt()).isNotNull();
+        server.verify();
+    }
+
+    @Test
+    void serverErrorAfterCreateRequestRequiresReconciliation() {
+        server.expect(requestTo(BASE_URL + "/create-order"))
+            .andExpect(method(HttpMethod.POST))
+            .andRespond(withServerError());
+
+        ProviderCreateUncertainException error = catchThrowableOfType(
+            () -> client.create(new CreateDeliveryRequest("CRV-SUBORDER-123", quoteRequest())),
+            ProviderCreateUncertainException.class
+        );
+
+        assertThat(error.providerId()).isEqualTo("borzo");
+        server.verify();
+    }
+
+    @Test
+    void malformedSuccessAfterCreateRequestRequiresReconciliation() {
+        server.expect(requestTo(BASE_URL + "/create-order"))
+            .andExpect(method(HttpMethod.POST))
+            .andRespond(withSuccess("{\"is_successful\":true}", MediaType.APPLICATION_JSON));
+
+        ProviderCreateUncertainException error = catchThrowableOfType(
+            () -> client.create(new CreateDeliveryRequest("CRV-SUBORDER-123", quoteRequest())),
+            ProviderCreateUncertainException.class
+        );
+
+        assertThat(error.providerId()).isEqualTo("borzo");
         server.verify();
     }
 

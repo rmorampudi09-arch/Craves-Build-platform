@@ -14,6 +14,7 @@ public class BorzoProperties {
     private static final Set<String> ENVIRONMENTS = Set.of("SANDBOX", "PRODUCTION");
 
     private boolean enabled = false;
+    private boolean createEnabled = false;
     private String environment = "SANDBOX";
     private boolean productionActivationApproved = false;
     private String baseUrl = "https://robotapitest-in.borzodelivery.com/api/business/1.8";
@@ -50,6 +51,9 @@ public class BorzoProperties {
         }
         if (enabled && !StringUtils.hasText(authToken)) {
             throw new IllegalStateException("BORZO_API_AUTH_TOKEN is required when Borzo API is enabled");
+        }
+        if (createEnabled && !enabled) {
+            throw new IllegalStateException("BORZO_CREATE_ENABLED requires BORZO_API_ENABLED");
         }
         if (enabled && !StringUtils.hasText(callbackSecret)) {
             throw new IllegalStateException("BORZO_CALLBACK_TOKEN is required when Borzo API is enabled");
@@ -91,6 +95,10 @@ public class BorzoProperties {
             && !normalizedBaseUrl().toLowerCase(Locale.ROOT).contains("sandbox");
     }
 
+    public boolean productionCreateReady() {
+        return enabled && createEnabled && productionReady();
+    }
+
     private static URI parseHttps(String value, String name) {
         URI uri;
         try {
@@ -106,6 +114,8 @@ public class BorzoProperties {
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public boolean isCreateEnabled() { return createEnabled; }
+    public void setCreateEnabled(boolean createEnabled) { this.createEnabled = createEnabled; }
     public String getEnvironment() { return environment; }
     public void setEnvironment(String environment) { this.environment = environment; }
     public boolean isProductionActivationApproved() { return productionActivationApproved; }

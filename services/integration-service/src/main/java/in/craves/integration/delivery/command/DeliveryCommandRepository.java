@@ -136,6 +136,29 @@ public class DeliveryCommandRepository {
         return rows.stream().findFirst();
     }
 
+    public Instant startBorzoWindow(UUID commandId) {
+        OffsetDateTime startedAt = jdbc.queryForObject("""
+            UPDATE delivery_schema.delivery_command
+            SET borzo_window_started_at = COALESCE(borzo_window_started_at, now()),
+                updated_at = now()
+            WHERE id = ? AND status = 'PROCESSING'
+            RETURNING borzo_window_started_at
+            """, OffsetDateTime.class, commandId);
+        if (startedAt == null) {
+            throw new IllegalStateException("Borzo selection window has no start time");
+        }
+        return startedAt.toInstant();
+    }
+
+    public Optional<Instant> borzoWindowStartedAt(UUID commandId) {
+        return jdbc.query("""
+            SELECT borzo_window_started_at
+            FROM delivery_schema.delivery_command
+            WHERE id = ? AND borzo_window_started_at IS NOT NULL
+            """, (rs, row) -> rs.getObject("borzo_window_started_at",
+                OffsetDateTime.class).toInstant(), commandId).stream().findFirst();
+    }
+
     public boolean markProviderWait(UUID commandId,
                                     Instant nextRetryAt,
                                     String safeError) {

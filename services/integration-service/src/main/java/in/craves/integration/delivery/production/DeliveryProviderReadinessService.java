@@ -103,6 +103,9 @@ public class DeliveryProviderReadinessService {
         if (!borzo.isProductionActivationApproved()) {
             blockers.add("PRODUCTION_ACTIVATION_NOT_APPROVED");
         }
+        if (!borzo.isCreateEnabled()) {
+            blockers.add("BORZO_CREATE_DISABLED");
+        }
         if (!StringUtils.hasText(borzo.getAuthToken())) {
             blockers.add("AUTH_TOKEN_SECRET_NOT_BOUND");
         }
@@ -133,8 +136,9 @@ public class DeliveryProviderReadinessService {
         }
         blockers.addAll(sharedDownstreamBlockers());
 
-        boolean createEnabled = borzo.isEnabled() && delivery.isEnabled() && catalogActive("borzo");
-        boolean productionReady = blockers.isEmpty() && borzo.productionReady();
+        boolean createEnabled = borzo.productionCreateReady()
+            && delivery.isEnabled() && catalogActive("borzo");
+        boolean productionReady = blockers.isEmpty() && createEnabled;
         return new ProviderReadiness(
             "BORZO",
             borzo.normalizedEnvironment(),

@@ -10,6 +10,7 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResul
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,17 +21,33 @@ public class DeliveryCommandCompletionService {
     private final DeliveryOutboxRepository outbox;
     private final DeliveryCommandRepository commands;
     private final ObjectMapper objectMapper;
+    private final BorzoPidgeHandoffRepository handoffs;
+    private final DeliveryCommandProperties properties;
 
+    @Autowired
     public DeliveryCommandCompletionService(DeliveryAssignmentRepository assignments,
                                              DeliveryJobRepository deliveryJobs,
                                              DeliveryOutboxRepository outbox,
                                              DeliveryCommandRepository commands,
-                                             ObjectMapper objectMapper) {
+                                             ObjectMapper objectMapper,
+                                             BorzoPidgeHandoffRepository handoffs,
+                                             DeliveryCommandProperties properties) {
         this.assignments = assignments;
         this.deliveryJobs = deliveryJobs;
         this.outbox = outbox;
         this.commands = commands;
         this.objectMapper = objectMapper;
+        this.handoffs = handoffs;
+        this.properties = properties;
+    }
+
+    DeliveryCommandCompletionService(DeliveryAssignmentRepository assignments,
+                                     DeliveryJobRepository deliveryJobs,
+                                     DeliveryOutboxRepository outbox,
+                                     DeliveryCommandRepository commands,
+                                     ObjectMapper objectMapper) {
+        this(assignments, deliveryJobs, outbox, commands, objectMapper,
+            null, new DeliveryCommandProperties());
     }
 
     @Transactional
@@ -55,6 +72,18 @@ public class DeliveryCommandCompletionService {
         UUID deliveryJobId = deliveryJobs.insert(
             command.orderId(), command.chefSubOrderId(), routingResult
         );
+        Instant borzoWindowStartedAt = "borzo".equals(routingResult.providerId())
+            ? commands.borzoWindowStartedAt(command.commandId()).orElse(null) : null;
+        if (borzoWindowStartedAt != null
+            && (routingResult.delivery().status()
+                    == in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus.PENDING
+                || routingResult.delivery().status()
+                    == in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus.SEARCHING
+                || routingResult.delivery().status()
+                    == in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus.DELAYED)) {
+            handoffs.enroll(deliveryJobId, routingResult.delivery().providerDeliveryId(),
+                borzoWindowStartedAt);
+        }
         Instant observedAt = routingResult.delivery().observedAt() == null
             ? Instant.now()
             : routingResult.delivery().observedAt();

@@ -55,7 +55,9 @@ public class DeliveryCommandWorker {
         }
 
         try {
-            RoutingResult routingResult = router.route(command.message());
+            RoutingResult routingResult = router.borzoTimedPolicyReady()
+                ? router.route(command.message(), commands.startBorzoWindow(command.id()))
+                : router.route(command.message());
             CompletionReceipt receipt = completionService.complete(command.message(), routingResult);
             return new WorkerReceipt(
                 receipt.deliveryJobId(), receipt.duplicate(), routingResult.providerId()
@@ -79,6 +81,10 @@ public class DeliveryCommandWorker {
         } catch (DeliveryProviderTemporarilyUnavailableException ex) {
             int providerWaitAttempt = command.providerWaitAttemptCount() + 1;
             Instant retryAt = Instant.now().plus(retryProperties.delay(providerWaitAttempt));
+            if (ex.policyDeadline() != null && retryAt.isAfter(ex.policyDeadline())) {
+                retryAt = ex.policyDeadline().isAfter(Instant.now())
+                    ? ex.policyDeadline() : Instant.now().plusSeconds(1);
+            }
             boolean stored = commands.markProviderWait(command.id(), retryAt, safeMessage(ex));
             if (!stored) {
                 throw new DeliveryCommandTransientException(

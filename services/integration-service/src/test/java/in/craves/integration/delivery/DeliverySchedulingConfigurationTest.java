@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
 import in.craves.integration.delivery.command.DeliveryProviderCatalogRepository;
 import in.craves.integration.delivery.command.DeliveryProviderRouter;
+import in.craves.integration.config.BorzoProperties;
 import java.time.Clock;
 import java.util.concurrent.ExecutorService;
 import org.junit.jupiter.api.Test;
@@ -42,6 +43,11 @@ class DeliverySchedulingConfigurationTest {
         @Bean
         DeliveryCommandProperties deliveryCommandProperties() {
             return new DeliveryCommandProperties();
+        }
+
+        @Bean
+        BorzoProperties borzoProperties() {
+            return new BorzoProperties();
         }
 
         @Bean

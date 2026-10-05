@@ -90,6 +90,8 @@ jobs:
                     'ChefPayoutWebhookDatabaseTest':8,'FinanceArithmeticPropertyTest':2,'FinanceRecoveryDatabaseTest':10,
                     'OrderFinancialFinalizationDatabaseTest':18,'FinancialSourceSignatureTest':3,
                     'FinancialCheckoutDatabaseTest':7,'FinancialSourceCompletionDatabaseTest':8,
+                    'ChefFinanceApprovalSourceTest':6,'SharedChefFinanceDatabaseTest':8,
+                    'SharedChefFinanceMigrationDatabaseTest':3,
                     'CartLimitsTest':2,'CartConcurrencyDatabaseTest':6}
           roots=[pathlib.Path('services/'+s+'/target/surefire-reports') for s in ['integration-service','order-service']]
           for name, minimum in required.items():

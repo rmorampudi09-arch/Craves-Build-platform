@@ -90,6 +90,11 @@ public final class FinanceSourceRoundTrip {
             context.registerBean(DataSourceTransactionManager.class,()->manager);context.registerBean(CatalogClient.class,()->catalog);
             context.registerBean(CustomerAddressClient.class,()->addresses);context.registerBean(FinanceSourceClient.class,()->transport);
             context.registerBean(RazorpayXPayoutClient.class,()->provider);context.registerBean(CheckoutSnapshotFactory.class,CheckoutSnapshotFactory::new);
+            var approvals=mock(in.craves.integration.finance.source.ChefFinanceApprovalSource.class);
+            when(approvals.current()).thenAnswer(i->new in.craves.integration.finance.source.ChefFinanceApprovalSource.Snapshot(
+                UUID.randomUUID(),Instant.now(),true,List.of(new in.craves.integration.finance.source.ChefFinanceApprovalSource.Approval(
+                    chef,UUID.nameUUIDFromBytes(chef.toString().getBytes(StandardCharsets.UTF_8)),"36",Instant.now().minusSeconds(300)))));
+            context.registerBean(in.craves.integration.finance.source.ChefFinanceApprovalSource.class,()->approvals);
             context.registerBean(NotificationInternalClient.class,()->new NotificationInternalClient(new NotificationClientProperties(),RestClient.builder(),notificationOutbox));
             context.register(OrderService.class,OrderFinancialBindingService.class,FinancialCheckoutTransactionAspect.class,
                 FinancePolicyService.class,ChefTaxProfileService.class,OrderFinancialQuoteService.class,LedgerPostingService.class,

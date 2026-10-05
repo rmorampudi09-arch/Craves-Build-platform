@@ -1,0 +1,68 @@
+name: Approved chef shared finance release
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/chef-shared-finance-release.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: craves-shared-chef-finance-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: prodlow
+    timeout-minutes: 70
+    env:
+      EXPECTED_RELEASE_SHA: ${{ github.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: Require complete exact-main regression before Azure access
+        run: python3 scripts/finance/shared_chef_finance_release.py evidence --output target/shared-finance-release/evidence.json
+      - name: Require existing OIDC configuration for the active rebuilt subscription
+        env:
+          CLIENT: ${{ secrets.AZURE_CLIENT_ID }}
+          TENANT: ${{ secrets.AZURE_TENANT_ID }}
+          SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -euo pipefail
+          set +x
+          test -n "$CLIENT" && test "$TENANT" = '1e7e43ac-c7f5-4d47-a74f-289a7cc21508' && test "$SUBSCRIPTION" = '721906c9-4a72-4606-830b-d3e7ace093ff' || {
+            echo '::error::Existing GitHub OIDC binding does not identify the active Craves tenant/subscription. No Azure change was attempted.'
+            exit 1
+          }
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Read-only live policy, approval-source, withholding and migration preflight
+        run: python3 scripts/finance/shared_chef_finance_release.py preflight --output target/shared-finance-release/baseline.json
+      - name: Build immutable User/Chef and Integration images
+        run: |
+          set -euo pipefail
+          set +x
+          az acr login --name cravesrm09prodlow6bf632 --only-show-errors
+          for service in user-chef-service integration-service; do
+            image="cravesrm09prodlow6bf632.azurecr.io/craves/$service:finance-$EXPECTED_RELEASE_SHA"
+            docker build --pull --label "org.opencontainers.image.revision=$EXPECTED_RELEASE_SHA" -t "$image" "services/$service"
+            docker push "$image"
+          done
+      - name: Deploy approval source before finance resolver and verify live authority
+        run: python3 scripts/finance/shared_chef_finance_release.py deploy --baseline target/shared-finance-release/baseline.json --output target/shared-finance-release/receipt.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shared-chef-finance-release-${{ github.sha }}
+          path: target/shared-finance-release/
+          if-no-files-found: warn
+          retention-days: 30

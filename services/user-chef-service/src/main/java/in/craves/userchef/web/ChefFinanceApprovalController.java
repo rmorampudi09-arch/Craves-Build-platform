@@ -58,7 +58,7 @@ public class ChefFinanceApprovalController {
                 .header(ChefFinanceApprovalProtocol.TIME, responseTime)
                 .header(ChefFinanceApprovalProtocol.SIGNATURE,
                     ChefFinanceApprovalProtocol.sign(key, "RESPONSE", responseTime, response)).body(response);
-        } catch (IllegalArgumentException ex) { return failure(HttpStatus.BAD_REQUEST); }
+        } catch (IllegalArgumentException | com.fasterxml.jackson.core.JsonProcessingException ex) { return failure(HttpStatus.BAD_REQUEST); }
         catch (Exception ex) { return failure(HttpStatus.SERVICE_UNAVAILABLE); }
     }
     static String stateCode(String state) {

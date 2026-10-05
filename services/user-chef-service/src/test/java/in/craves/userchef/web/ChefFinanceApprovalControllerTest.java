@@ -28,7 +28,7 @@ class ChefFinanceApprovalControllerTest {
     void rows(List<ChefFinanceApprovalController.Approval> rows) {
         when(jdbc.query(anyString(),org.mockito.ArgumentMatchers.<RowMapper<Object>>any(),any(Object.class))).thenAnswer(i->{
             String sql=i.getArgument(0);assertTrue(sql.contains("WHERE status='APPROVED'"));
-            assertFalse(sql.contains("finance_chef_tax"));assertEquals(1001,i.getArgument(2));return rows;
+            assertFalse(sql.contains("finance_chef_tax"));assertEquals(1001,(Integer)i.getArgument(2));return rows;
         });
     }
     @Test void signedApprovedChefsAreReturnedWithoutTaxBankOrContactData()throws Exception {

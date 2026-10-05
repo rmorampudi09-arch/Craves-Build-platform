@@ -91,9 +91,10 @@ public final class FinanceSourceRoundTrip {
             context.registerBean(CustomerAddressClient.class,()->addresses);context.registerBean(FinanceSourceClient.class,()->transport);
             context.registerBean(RazorpayXPayoutClient.class,()->provider);context.registerBean(CheckoutSnapshotFactory.class,CheckoutSnapshotFactory::new);
             var approvals=mock(in.craves.integration.finance.source.ChefFinanceApprovalSource.class);
+            var chefApproval=new in.craves.integration.finance.source.ChefFinanceApprovalSource.Approval(
+                chef,UUID.nameUUIDFromBytes(chef.toString().getBytes(StandardCharsets.UTF_8)),"36",Instant.now().minusSeconds(300));
             when(approvals.current()).thenAnswer(i->new in.craves.integration.finance.source.ChefFinanceApprovalSource.Snapshot(
-                UUID.randomUUID(),Instant.now(),true,List.of(new in.craves.integration.finance.source.ChefFinanceApprovalSource.Approval(
-                    chef,UUID.nameUUIDFromBytes(chef.toString().getBytes(StandardCharsets.UTF_8)),"36",Instant.now().minusSeconds(300)))));
+                UUID.randomUUID(),Instant.now(),true,List.of(chefApproval)));
             context.registerBean(in.craves.integration.finance.source.ChefFinanceApprovalSource.class,()->approvals);
             context.registerBean(NotificationInternalClient.class,()->new NotificationInternalClient(new NotificationClientProperties(),RestClient.builder(),notificationOutbox));
             context.register(OrderService.class,OrderFinancialBindingService.class,FinancialCheckoutTransactionAspect.class,
@@ -111,8 +112,14 @@ public final class FinanceSourceRoundTrip {
             var draft=policies.draft(admin,new FinancePolicyService.DraftRequest(policy,"Test-only reviewed policy"));
             policies.activate(admin,draft.id(),new FinancePolicyService.ActivateRequest(0,draft.contentHash(),"Test-only certification, not merchant approval"));
             LocalDate today=LocalDate.now(FinancePolicy.ZONE);int start=today.getMonthValue()<4?today.getYear()-1:today.getYear();
-            profiles.save(admin,chef,new ChefTaxProfileService.Profile("36","RESTAURANT_ECO_9_5","UNREGISTERED",null,"800000.00",
+            var reviewedTerms=profiles.save(admin,UUID.randomUUID(),new ChefTaxProfileService.Profile("36","RESTAURANT_ECO_9_5","UNREGISTERED",null,"800000.00",
                 start+"-"+String.format("%02d",(start+1)%100),today,"0","TEST_WITHHOLDING_ASSESSMENT","TEST_RESTAURANT_ASSESSMENT","TEST_ACCEPTED_FEE_PLUS_GST"),"Test profile");
+            UUID commonTerms=UUID.randomUUID();
+            jdbc.update("INSERT INTO payment_schema.finance_shared_chef_terms_version(id,withholding_rate,source_profile_ids,reason) VALUES (?,0,CAST(? AS jsonb),'Test common reviewed terms')",
+                commonTerms,"[\""+reviewedTerms.id()+"\"]");
+            jdbc.update("UPDATE payment_schema.finance_shared_chef_terms_head SET version_id=? WHERE singleton=true",commonTerms);
+            check(jdbc.queryForObject("SELECT count(*) FROM payment_schema.finance_chef_tax_head WHERE chef_identity_id=?",Integer.class,chef)==0,
+                "Admin-approved checkout chef requires no separate individual finance approval record");
             var orders=context.getBean(OrderService.class);orders.addCartItem(customerActor,new AddCartItemRequest(menu,1));
             var checkout=orders.checkout(customerActor,new CheckoutRequest(address,"Round-trip test only"));UUID order=checkout.orders().getFirst().id();
             check(checkout.grandTotal().compareTo(new BigDecimal("433.47"))==0,"Actual checkout returns the bound customer total including component taxes");

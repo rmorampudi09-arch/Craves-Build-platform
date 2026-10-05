@@ -94,7 +94,10 @@ class SharedChefFinanceDatabaseTest {
     }
     @Test void deliveredCapturedOrderForChefWithOnlyAdminApprovalPostsOnce() {
         UUID chef=UUID.randomUUID();approve(chef,"36");f.quote=quote(chef);var snapshot=f.quote.snapshots().getFirst();
-        f.payment(f.quote.total(),"PAID",f.customer);var delivered=f.event(snapshot,"DELIVERED");
+        UUID payment=UUID.randomUUID();
+        f.jdbc.update("INSERT INTO payment_schema.payment_order(id,checkout_id,customer_identity_id,craves_payment_order_ref,amount,currency,status,provider,provider_status,provider_payment_id) VALUES (?,?,?,?,?,'INR','PAID','RAZORPAY','captured',?)",
+            payment,f.quote.checkoutId(),f.customer,"shared-test/"+payment,new BigDecimal(f.quote.total()),"pay_"+payment.toString().replace("-",""));
+        var delivered=f.event(snapshot,"DELIVERED");
         assertEquals("POSTED",f.accept(delivered).result());assertEquals("POSTED",f.accept(delivered).result());
         assertEquals(new BigDecimal("338.52"),f.jdbc.queryForObject("SELECT amount FROM payment_schema.finance_payable WHERE chef_identity_id=?",BigDecimal.class,chef));
         assertEquals(1,f.count("finance_earning_projection"));assertEquals(1,f.count("finance_payable"));

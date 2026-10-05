@@ -9,26 +9,32 @@ import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Real application-table authority in its own disposable schema; no financial or public schema is reset. */
-@EnabledIfEnvironmentVariable(named="LEDGER_TEST_JDBC_URL",matches=".+")
+@EnabledIf("databaseConfigured")
 class ChefFinanceApprovalDatabaseTest {
     final String key="SYNTHETIC_APPROVAL_DATABASE_SIGNING_KEY_20261005";
     final ObjectMapper json=new ObjectMapper().findAndRegisterModules().disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     JdbcTemplate jdbc; ChefFinanceApprovalController controller;
+    static boolean databaseConfigured() {
+        return System.getenv("LEDGER_TEST_JDBC_URL")!=null || System.getenv("EMAIL_TEST_DB_URL")!=null;
+    }
     @BeforeEach void setup() {
-        String url=System.getenv("LEDGER_TEST_JDBC_URL");
-        assertEquals("true",System.getenv("CRAVES_DISPOSABLE_TEST_DATABASE"));
+        boolean ledger=System.getenv("LEDGER_TEST_JDBC_URL")!=null;
+        String url=System.getenv(ledger?"LEDGER_TEST_JDBC_URL":"EMAIL_TEST_DB_URL");
+        assertEquals("true",System.getenv(ledger?"CRAVES_DISPOSABLE_TEST_DATABASE":"EMAIL_TEST_DISPOSABLE"));
         assertTrue("true".equals(System.getenv("GITHUB_ACTIONS")) || "true".equalsIgnoreCase(System.getenv("TF_BUILD")));
-        assertTrue(url.matches("jdbc:postgresql://localhost:[0-9]+/chef_ledger_test"));
-        String user=System.getenv("LEDGER_TEST_DB_USER"),password=System.getenv("LEDGER_TEST_DB_PASSWORD");
+        String name=ledger?"chef_ledger_test":"craves_email_test";
+        assertTrue(url.matches("jdbc:postgresql://(?:localhost|127\\.0\\.0\\.1):[0-9]+/"+name));
+        String user=System.getenv(ledger?"LEDGER_TEST_DB_USER":"EMAIL_TEST_DB_USER");
+        String password=System.getenv(ledger?"LEDGER_TEST_DB_PASSWORD":"EMAIL_TEST_DB_PASSWORD");
         var admin=new JdbcTemplate(new DriverManagerDataSource(url,user,password));
-        assertEquals("chef_ledger_test",admin.queryForObject("SELECT current_database()",String.class));
+        assertEquals(name,admin.queryForObject("SELECT current_database()",String.class));
         admin.execute("DROP SCHEMA IF EXISTS chef_finance_approval_test CASCADE");
         admin.execute("CREATE SCHEMA chef_finance_approval_test");
         var data=new DriverManagerDataSource(url+"?currentSchema=chef_finance_approval_test,public",user,password);

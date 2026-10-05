@@ -131,7 +131,7 @@ describe("email verification racing actual session requests", () => {
     const newer = deferred<Response>();
     vi.stubGlobal("fetch", vi.fn().mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise));
     const oldLoading = loadSession();
-    const newLoading = loadSession();
+    const newLoading = loadSession({ forceIdentityRefresh: true });
     newer.resolve(Response.json({ ...identity, displayName: "Fresh lookup", roles: ["CHEF", "SUPPORT"] }));
     const current = await newLoading;
     older.resolve(Response.json({}, { status: 403 }));
@@ -149,7 +149,7 @@ describe("email verification racing actual session requests", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(oldResponse).mockResolvedValueOnce(Response.json({ ...identity, roles: ["CHEF", "SUPPORT"] })));
     const oldLoading = loadSession();
     await bodyStarted.promise;
-    const current = await loadSession();
+    const current = await loadSession({ forceIdentityRefresh: true });
     body.resolve({ ...identity, roles: ["CHEF", "ADMIN"] });
     expect(await oldLoading).toBe(current);
     expect(getSession()?.roles).toEqual(["CHEF", "SUPPORT"]);

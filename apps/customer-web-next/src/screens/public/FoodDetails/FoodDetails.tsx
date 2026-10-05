@@ -4,7 +4,13 @@ import { MapPin, Minus, Plus } from "lucide-react";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/lib/catalog-discovery-policy";
 import { hasHomeReturnState } from "@/lib/home-return-state";
 import type { KitchenReviewSummary } from "@/lib/review-summary-contract";
-import { loadSelectedAddress, loadSession } from "@/services/auth/cravesAuth";
+import {
+  captureSessionContext,
+  isSessionContextCurrent,
+  loadSelectedAddress,
+  loadSession,
+  type SessionContext,
+} from "@/services/auth/cravesAuth";
 import {
   discoverDishes,
   getDish,
@@ -78,6 +84,7 @@ function DishDetailPage() {
 
   useEffect(() => {
     let active = true;
+    let requestContext: SessionContext | null = null;
     setDish(undefined);
     setLoading(true);
     setQty(1);
@@ -86,13 +93,18 @@ function DishDetailPage() {
     setReviewSummary(null);
 
     void (async () => {
-      const session = await loadSession();
+      const session = await loadSession({ hydrateCustomerProfile: "background" });
+      if (!active) return;
       if (!session) {
         navigate({ to: "/" });
         return;
       }
 
+      const context = captureSessionContext();
+      requestContext = context;
+      const isCurrent = () => active && isSessionContextCurrent(context);
       const address = await loadSelectedAddress();
+      if (!isCurrent()) return;
       if (
         typeof address?.lat !== "number" ||
         typeof address.lng !== "number"
@@ -114,6 +126,7 @@ function DishDetailPage() {
         ),
         detailPromise,
       ]);
+      if (!isCurrent()) return;
       const nearbyDish = nearby.find((candidate) => candidate.id === id);
       if (!nearbyDish) {
         throw new Error(
@@ -129,21 +142,20 @@ function DishDetailPage() {
         state: detail.state ?? nearbyDish.state,
       };
 
-      if (!active) return;
       setDish(resolved);
       setLoading(false);
 
       if (resolved.kitchenId) {
         void loadKitchenReviewSummary(resolved.kitchenId)
           .then((summary) => {
-            if (active) setReviewSummary(summary);
+            if (isCurrent()) setReviewSummary(summary);
           })
           .catch(() => {
-            if (active) setReviewSummary(null);
+            if (isCurrent()) setReviewSummary(null);
           });
       }
     })().catch((error) => {
-      if (!active) return;
+      if (!active || (requestContext && !isSessionContextCurrent(requestContext))) return;
       setDish(undefined);
       setMessage(
         error instanceof Error

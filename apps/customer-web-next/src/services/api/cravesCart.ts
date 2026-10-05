@@ -4,6 +4,13 @@ import type { CustomerCart, ServerCartItem } from "@/lib/cart-contract";
 import { requestCartKitchenReplacement } from "@/lib/cart-kitchen-replacement";
 import type { CustomerOrder } from "@/lib/order-contract";
 import { sessionFetch } from "@/services/auth/sessionFetch";
+import {
+  captureSessionContext,
+  isSessionContextCurrent,
+  isSessionReady,
+  subscribeSession,
+  type SessionContext,
+} from "@/services/auth/cravesAuth";
 import { getDish, loadDish } from "./dishes";
 
 export type CartItem = {
@@ -43,6 +50,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const PLACEHOLDER_IMAGE = "/brand/craves-logo.svg";
 let cart: CustomerCart | null = null;
 let visualItems: CartItem[] = [];
+let cartScope = captureSessionContext();
+let cartRevision = 0;
+let cartLoad: { context: SessionContext; revision: number; pending: Promise<CartItem[]> } | null = null;
+let cartMutationTail: Promise<void> = Promise.resolve();
 const listeners = new Set<() => void>();
 
 function mapItem(item: ServerCartItem): CartItem {
@@ -78,6 +89,26 @@ function reset() {
   notify();
 }
 
+subscribeSession(() => {
+  const next = captureSessionContext();
+  if (next.generation === cartScope.generation && next.identityId === cartScope.identityId) return;
+  cartScope = next;
+  cartRevision += 1;
+  cartLoad = null;
+  cartMutationTail = Promise.resolve();
+  reset();
+});
+
+class CartRequestSupersededError extends Error {
+  constructor() {
+    super("Your cart changed while this request was running. Please try again.");
+  }
+}
+
+function requireCartSession(context: SessionContext): void {
+  if (!isSessionContextCurrent(context) || !isSessionReady()) throw new CartRequestSupersededError();
+}
+
 function checkoutCartItems(orders: CustomerOrder[]): CheckoutCartItem[] {
   const quantities = new Map<string, number>();
   for (const order of orders) {
@@ -105,7 +136,15 @@ function cartMatchesCheckout(items: CheckoutCartItem[]): boolean {
   );
 }
 
-async function cartRequest(path: string, init?: RequestInit): Promise<CustomerCart> {
+async function performCartRequest(
+  path: string,
+  init: RequestInit | undefined,
+  context: SessionContext,
+  mutation: boolean,
+): Promise<CustomerCart> {
+  requireCartSession(context);
+  const revision = mutation ? ++cartRevision : cartRevision;
+  if (mutation) cartLoad = null;
   const response = await sessionFetch(path, {
     ...init,
     credentials: "same-origin",
@@ -118,6 +157,8 @@ async function cartRequest(path: string, init?: RequestInit): Promise<CustomerCa
     | CustomerCart
     | { message?: string }
     | null;
+  requireCartSession(context);
+  if (revision !== cartRevision) throw new CartRequestSupersededError();
   if (!response.ok || !body || !("items" in body)) {
     throw new Error(
       body && "message" in body && typeof body.message === "string"
@@ -125,8 +166,25 @@ async function cartRequest(path: string, init?: RequestInit): Promise<CustomerCa
         : "Your cart could not be loaded from Craves.",
     );
   }
+  if (mutation) {
+    // A read started while the write was pending must not replace its receipt.
+    cartRevision += 1;
+    cartLoad = null;
+  }
   update(body);
   return body;
+}
+
+function cartRequest(path: string, init?: RequestInit): Promise<CustomerCart> {
+  const context = captureSessionContext();
+  const mutation = (init?.method ?? "GET").toUpperCase() !== "GET";
+  if (!mutation) return performCartRequest(path, init, context, false);
+
+  // A queued write keeps its original owner. Starting the next write only
+  // after the prior receipt avoids treating accepted writes as stale failures.
+  const pending = cartMutationTail.then(() => performCartRequest(path, init, context, true));
+  cartMutationTail = pending.then(() => undefined, () => undefined);
+  return pending;
 }
 
 function normalizeKitchenName(value: string): string {
@@ -169,13 +227,26 @@ function differentKitchen(target: KitchenReference): boolean {
 }
 
 export async function loadCart(): Promise<CartItem[]> {
-  try {
-    await cartRequest("/api/cart", { cache: "no-store" });
-    return [...visualItems];
-  } catch (error) {
-    reset();
-    throw error;
+  const context = captureSessionContext();
+  const revision = cartRevision;
+  if (cartLoad && isSessionContextCurrent(cartLoad.context) && cartLoad.revision === revision) {
+    return [...await cartLoad.pending];
   }
+  const pending = (async () => {
+    try {
+      await cartRequest("/api/cart", { cache: "no-store" });
+      return [...visualItems];
+    } catch (error) {
+      if (!isSessionContextCurrent(context)) return [];
+      if (revision !== cartRevision) return [...visualItems];
+      reset();
+      throw error;
+    }
+  })().finally(() => {
+    if (cartLoad?.pending === pending) cartLoad = null;
+  });
+  cartLoad = { context, revision, pending };
+  return [...await pending];
 }
 
 export function getCart(): CartItem[] {
@@ -201,6 +272,8 @@ export async function addToCart(
   item: AddCartItem,
   quantity = 1,
 ): Promise<void> {
+  const context = captureSessionContext();
+  requireCartSession(context);
   if (!UUID.test(item.id)) {
     throw new Error("This menu item is not valid for the Craves cart.");
   }
@@ -209,20 +282,24 @@ export async function addToCart(
   }
 
   if (cart === null) {
-    await cartRequest("/api/cart", { cache: "no-store" });
+    await loadCart();
+    requireCartSession(context);
   }
 
   const targetKitchen = await resolveKitchen(item);
+  requireCartSession(context);
   if (differentKitchen(targetKitchen)) {
     const currentKitchen = cart?.items[0]?.kitchenName ?? "your current kitchen";
     const replaceCart = await requestCartKitchenReplacement(
       currentKitchen,
       targetKitchen.name,
     );
+    requireCartSession(context);
     if (!replaceCart) {
       throw new Error("Your current cart is unchanged.");
     }
     await cartRequest("/api/cart", { method: "DELETE" });
+    requireCartSession(context);
   }
 
   await cartRequest("/api/cart/items", {
@@ -257,8 +334,11 @@ export async function clearCart(): Promise<void> {
 export async function ensureCheckoutCart(
   orders: CustomerOrder[],
 ): Promise<boolean> {
+  const context = captureSessionContext();
+  requireCartSession(context);
   const expected = checkoutCartItems(orders);
   await cartRequest("/api/cart", { cache: "no-store" });
+  requireCartSession(context);
 
   if (cartMatchesCheckout(expected)) return true;
 
@@ -266,6 +346,7 @@ export async function ensureCheckoutCart(
   // from the checkout snapshot instead of blocking navigation when any stale
   // cart rows remain.
   await cartRequest("/api/cart", { method: "DELETE" });
+  requireCartSession(context);
 
   for (const item of expected) {
     await cartRequest("/api/cart/items", {
@@ -275,9 +356,11 @@ export async function ensureCheckoutCart(
         quantity: item.quantity,
       }),
     });
+    requireCartSession(context);
   }
 
   await cartRequest("/api/cart", { cache: "no-store" });
+  requireCartSession(context);
   return cartMatchesCheckout(expected);
 }
 

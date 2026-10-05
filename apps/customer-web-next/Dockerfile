@@ -29,6 +29,8 @@ RUN npm run build
 
 FROM node:24-alpine AS runner
 WORKDIR /app
+ARG CRAVES_SOURCE_SHA
+LABEL org.opencontainers.image.revision=$CRAVES_SOURCE_SHA
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \

@@ -88,7 +88,7 @@ test("signed-in home loads live discovery and opens customer kitchen details wit
 
 test("profile exposes backend chef application status", () => {
   const contents = source("../screens/Profile/Profile.tsx");
-  assert.match(contents, /fetch\("\/api\/chef\/application"/);
+  assert.match(contents, /fetchWidget\("\/api\/chef\/application"/);
   assert.match(contents, /Chef application pending/);
   assert.match(contents, /Become a home chef/);
 });

@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "observedOn": "2026-10-05",
+  "timezone": "Asia/Calcutta",
+  "browser": "User's existing local Google Chrome",
+  "origin": "https://craves.in",
+  "sourceSha": "eb5b6e6413a700f849de7bacf9b695cf6a14333a",
+  "navigation": { "ttfbMs": 54, "loadEventMs": 332 },
+  "historicalResourceTimings": [
+    { "path": "/api/auth/me", "durationMs": 55 },
+    { "path": "/api/customer/profile", "durationMs": 199 },
+    { "path": "/api/cart", "durationMs": 6746 },
+    { "path": "/api/auth/me", "durationMs": 96 },
+    { "path": "/api/customer/profile", "durationMs": 46 },
+    { "path": "/api/customer/profile", "durationMs": 113 },
+    { "path": "/api/customer/addresses", "durationMs": 642 },
+    { "path": "/api/chef/application", "durationMs": 1051 },
+    { "path": "/api/customer/favorites", "durationMs": 543 },
+    { "path": "/api/cart", "durationMs": 10048 }
+  ],
+  "consoleFailuresObserved": [
+    { "path": "/api/customer/addresses", "status": 503 },
+    { "path": "/api/orders", "status": 504 },
+    { "path": "/api/cart", "status": 503 }
+  ],
+  "laterParallelReadSample": [
+    { "path": "/api/auth/me", "status": 200, "durationMs": 400 },
+    { "path": "/api/customer/profile", "status": 200, "durationMs": 399 },
+    { "path": "/api/customer/addresses", "status": 200, "durationMs": 417 },
+    { "path": "/api/cart", "status": 200, "durationMs": 398 },
+    { "path": "/api/orders", "status": 200, "durationMs": 604 }
+  ],
+  "interpretation": "Intermittent slow/error API requests were observed. The original Profile page waited for all optional requests. The later healthy sample is a separate observation, not a controlled improvement measurement.",
+  "privacy": "Only route paths, timings and HTTP statuses were recorded. No customer bodies, cookies, access tokens, personal contact details or location coordinates are included."
+}

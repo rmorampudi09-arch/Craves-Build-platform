@@ -85,7 +85,8 @@ test("landing precision fixes remove baked rider text, align steps and normalize
 
 test("public landing keeps the approved semantic reference experience and wired flows", () => {
   assert.match(landing, /min-h-screen bg-white text-ink/);
-  assert.match(landing, /items-center justify-center bg-white px-4/);
+  assert.match(landing, /loadSession\(\{ hydrateCustomerProfile: "background" \}\)/);
+  assert.doesNotMatch(landing, /if \(checkingSession\)/);
   assert.match(landing, /<ReferenceHeroDesktop/);
   assert.match(landing, /<ReferenceArtworkSection variant="how"/);
   assert.match(landing, /<ReferenceArtworkSection variant="why"/);

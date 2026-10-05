@@ -172,6 +172,85 @@ describe("chef finance owner boundaries", () => {
 });
 
 describe("profile owner privacy", () => {
+  it("clears the failed profile-load message after a later successful profile edit", async () => {
+    fetcher.mockImplementation((input, init) => {
+      if (String(input) === "/api/customer/profile") {
+        return Promise.resolve(init?.method === "PUT"
+          ? Response.json({ ...profile(a), ...JSON.parse(String(init.body)), id: b.id })
+          : Response.json({}, { status: 503 }));
+      }
+      return normal(input);
+    });
+    render(createElement(ProfilePage));
+    await screen.findByText("Your profile details are temporarily unavailable. Your account controls remain available.");
+    fireEvent.click(screen.getByRole("button", { name: "Edit customer profile" }));
+    fireEvent.change(await screen.findByLabelText(/First name/), { target: { value: "Updated" } });
+    fireEvent.change(screen.getByLabelText(/Last name/), { target: { value: "Fixture" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await screen.findByText("Your profile changes were saved.");
+    expect(screen.getByRole("heading", { name: "Updated Fixture" })).toBeTruthy();
+    expect(screen.queryByText("Your profile details are temporarily unavailable. Your account controls remain available.")).toBeNull();
+  });
+
+  it("loads a profile whose record UUID differs from the authenticated identity UUID", async () => {
+    const customerProfile = { ...profile(a), id: b.id };
+    fetcher.mockImplementation(input => String(input) === "/api/customer/profile"
+      ? Promise.resolve(Response.json(customerProfile)) : normal(input));
+    render(createElement(ProfilePage));
+    await screen.findByRole("heading", { name: "Chef A Fixture" });
+    expect(screen.queryByText("Your profile details are temporarily unavailable. Your account controls remain available.")).toBeNull();
+    expect(getSession()?.id).toBe(a.id);
+  });
+
+  it("shows the verified account and sign-out while optional profile services are still pending", async () => {
+    const late = deferred<Response>();
+    const paths = new Set(["/api/customer/profile", "/api/customer/addresses", "/api/orders", "/api/cart"]);
+    fetcher.mockImplementation(input => paths.has(String(input)) ? late.promise : normal(input));
+    render(createElement(ProfilePage));
+    await screen.findByRole("heading", { name: "Chef A" });
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(screen.getByText("Loading delivery addresses…")).toBeTruthy();
+    expect(screen.getByText("Loading order history…")).toBeTruthy();
+    expect(screen.getByText("Loading your cart…")).toBeTruthy();
+    expect(screen.queryByText("No delivery address saved yet.")).toBeNull();
+    expect(screen.queryByText("0 orders in your history")).toBeNull();
+    await act(async () => { late.resolve(Response.json({}, { status: 503 })); });
+    await screen.findByText("Your cart is temporarily unavailable");
+    expect(screen.getByRole("heading", { name: "Chef A" })).toBeTruthy();
+    expect(screen.getByText("Delivery addresses are temporarily unavailable.")).toBeTruthy();
+  });
+
+  it("finishes healthy profile sections without waiting for a slow cart or order history", async () => {
+    const late = deferred<Response>();
+    fetcher.mockImplementation(input => ["/api/cart", "/api/orders"].includes(String(input)) ? late.promise : normal(input));
+    render(createElement(ProfilePage));
+    await screen.findByRole("heading", { name: "Chef A Fixture" });
+    await screen.findByText(/Chef A private address/);
+    expect(screen.getByRole("button", { name: "Edit customer profile" })).toHaveProperty("disabled", false);
+    expect(screen.getByText("Loading order history…")).toBeTruthy();
+    expect(screen.getByText("Loading your cart…")).toBeTruthy();
+    await act(async () => { late.resolve(Response.json({}, { status: 504 })); });
+    await screen.findByText("Order history is temporarily unavailable");
+    expect(screen.getByRole("heading", { name: "Chef A Fixture" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+  });
+
+  it("ignores private address data whose response body completes after the owner changes", async () => {
+    const late = deferred<unknown>();
+    const response = Response.json([]);
+    vi.spyOn(response, "json").mockReturnValue(late.promise);
+    fetcher.mockImplementation(input => String(input) === "/api/customer/addresses" && identity?.id === a.id
+      ? Promise.resolve(response) : normal(input));
+    render(createElement(ProfilePage));
+    await screen.findByRole("heading", { name: "Chef A Fixture" });
+    await waitFor(() => expect(response.json).toHaveBeenCalled());
+    change(b);
+    await screen.findByText(/Chef B private address/);
+    await act(async () => { late.resolve([{ id: a.id, isDefault: true, addressLine1: "Prior owner private address", city: "Fixture", state: "Fixture" }]); });
+    expect(screen.queryByText(/Prior owner private address/)).toBeNull();
+    expect(screen.getByText(/Chef B private address/)).toBeTruthy();
+  });
+
   it("replaces loaded profile, addresses and history for a new owner", async () => {
     render(createElement(ProfilePage));
     await screen.findByRole("heading", { name: "Chef A Fixture" });

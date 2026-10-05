@@ -139,7 +139,14 @@ export function isSessionContextCurrent(context: SessionContext): boolean {
 }
 export function getSessionEmailRevision(): number { return sessionEmailRevision; }
 export function isSessionReady(): boolean { return !sessionEnding && session?.status === "ACTIVE"; }
-function invalidatePendingSessionWork() { sessionGeneration += 1; roleSynchronization = null; }
+function invalidatePendingSessionWork() {
+  sessionGeneration += 1;
+  roleSynchronization = null;
+  identityLookups.clear();
+  profileHydrations.clear();
+  profileFreshAt = null;
+  profileRevision += 1;
+}
 export function invalidateSession(context: SessionContext): void { if (isSessionContextCurrent(context)) forgetSession(); }
 function forgetSession() {
   invalidatePendingSessionWork(); sessionEnding = false; session = null; sessionEmailRevision = -1; selectedLocation = null; persistSessionSnapshot(null); persistAddressSnapshot(null); notify();
@@ -147,6 +154,13 @@ function forgetSession() {
 let selectedLocation: CravesAddress | null = null;
 let roleSynchronization: Promise<CravesUser | null> | null = null;
 const sessionRefreshes = new Map<number, Promise<Response | null>>();
+type SessionLookupResult = { user: CravesUser | null; profileContext?: SessionContext };
+const identityLookups = new Map<string, Promise<SessionLookupResult>>();
+const profileHydrations = new Map<number, Promise<CravesUser | null>>();
+// Names are display data only. Roles/status still require a fresh Auth lookup.
+const PROFILE_FRESHNESS_MS = 30_000;
+let profileFreshAt: number | null = null;
+let profileRevision = 0;
 const listeners = new Set<() => void>();
 
 function refreshSessionForGeneration(generation: number): Promise<Response | null> {
@@ -206,22 +220,36 @@ function withCustomerProfile(current: CravesUser, profile: CustomerProfile): Cra
 }
 
 async function hydrateCustomerProfile(current: CravesUser, context = captureSessionContext()): Promise<CravesUser | null> {
+  if (!isSessionContextCurrent(context) || sessionEnding) return session;
   const isCustomer = current.roles.some((role) => role.toUpperCase() === "CUSTOMER");
   if (!isCustomer) return current;
+  const age = profileFreshAt === null ? null : Date.now() - profileFreshAt;
+  if (age !== null && age >= 0 && age < PROFILE_FRESHNESS_MS) return session;
+  const existing = profileHydrations.get(context.generation);
+  if (existing) return existing;
 
-  const response = await sessionFetch("/api/customer/profile", {
-    cache: "no-store",
-    credentials: "same-origin",
-  }).catch(() => null);
-  if (!isSessionContextCurrent(context)) return session;
-  if (!response?.ok) return session;
+  const revision = profileRevision;
+  const pending = (async () => {
+    const response = await sessionFetch("/api/customer/profile", {
+      cache: "no-store",
+      credentials: "same-origin",
+    }).catch(() => null);
+    if (!isSessionContextCurrent(context) || !response?.ok) return session;
 
-  const profile = parseCustomerProfile(await response.json().catch(() => null));
-  if (!profile || !isSessionContextCurrent(context) || session?.id !== current.id) return session;
-  session = withCustomerProfile(session, profile);
-  persistSessionSnapshot(session);
-  notify();
-  return session;
+    const profile = parseCustomerProfile(await response.json().catch(() => null));
+    if (!profile || !isSessionContextCurrent(context) || session?.id !== current.id || revision !== profileRevision) return session;
+    session = withCustomerProfile(session, profile);
+    profileFreshAt = Date.now();
+    persistSessionSnapshot(session);
+    notify();
+    return session;
+  })().finally(() => {
+    if (profileHydrations.get(context.generation) === pending) {
+      profileHydrations.delete(context.generation);
+    }
+  });
+  profileHydrations.set(context.generation, pending);
+  return pending;
 }
 
 export function setSessionIdentity(identity: CravesIdentity): CravesUser {
@@ -239,6 +267,9 @@ export function setSessionIdentity(identity: CravesIdentity): CravesUser {
 export function setSessionProfile(profile: CustomerProfile, context = captureSessionContext()): CravesUser | null {
   if (!session || !isSessionContextCurrent(context)) return session;
   session = withCustomerProfile(session, profile);
+  profileRevision += 1;
+  profileFreshAt = Date.now();
+  persistSessionSnapshot(session);
   notify();
   return session;
 }
@@ -275,6 +306,18 @@ function applyIdentityLookup(identity: CravesIdentity, context: SessionContext, 
     invalidatePendingSessionWork(); sessionEmailRevision = -1;
   } else if (previous.status !== identity.status) invalidatePendingSessionWork();
   session = fromIdentity(identity);
+  if (previous?.id === identity.id) {
+    session = { ...session, createdAt: previous.createdAt };
+    if (previous.profileComplete) {
+      session = {
+        ...session,
+        username: previous.username,
+        firstName: previous.firstName,
+        lastName: previous.lastName,
+        profileComplete: true,
+      };
+    }
+  }
   if (previous?.id === identity.id && sessionEmailRevision >= 0) {
     session = { ...session, email: previous.email, emailVerified: previous.emailVerified };
   }
@@ -283,11 +326,13 @@ function applyIdentityLookup(identity: CravesIdentity, context: SessionContext, 
   return session;
 }
 
-export async function loadSession(
-  options: { failFastUnauthenticated?: boolean; hydrateCustomerProfile?: "await" | "background" } = {},
-): Promise<CravesUser | null> {
-  if (sessionEnding) return null;
-  const context = captureSessionContext();
+type LoadSessionOptions = {
+  failFastUnauthenticated?: boolean;
+  hydrateCustomerProfile?: "await" | "background" | "skip";
+  forceIdentityRefresh?: boolean;
+};
+
+async function lookupSessionIdentity(options: LoadSessionOptions, context: SessionContext): Promise<SessionLookupResult> {
   const sequence = ++identityRequestSequence;
   const lookup = async () =>
     fetch("/api/auth/me", {
@@ -296,10 +341,11 @@ export async function loadSession(
     });
 
   let response = await lookup();
-  if (!isSessionContextCurrent(context)) return session;
+  if (!isSessionContextCurrent(context)) return { user: session };
 
   if (response.status === 401) {
     const failure = await response.clone().json().catch(() => null) as { code?: unknown } | null;
+    if (!isSessionContextCurrent(context)) return { user: session };
     if (
       options.failFastUnauthenticated === true &&
       failure?.code === "AUTHENTICATION_REQUIRED" &&
@@ -309,30 +355,54 @@ export async function loadSession(
       throw new AuthenticationRequiredError();
     }
     const refreshed = await refreshSessionForGeneration(context.generation);
-    if (!isSessionContextCurrent(context)) return session;
+    if (!isSessionContextCurrent(context)) return { user: session };
     if (refreshed?.ok) response = await lookup();
   }
 
   if (!isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) {
-    return session;
+    return { user: session };
   }
 
   if (!response.ok) {
     if ((response.status === 401 || response.status === 403) && session) {
       forgetSession();
     }
-    return null;
+    return { user: null };
   }
 
   const identity = (await response.json().catch(() => null)) as CravesIdentity | null;
-  if (!identity?.id || !isSessionContextCurrent(context)) return session;
+  if (!identity?.id || !isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) return { user: session };
   const current = applyIdentityLookup(identity, context, sequence);
-  if (!current) return null;
+  return { user: current, profileContext: captureSessionContext() };
+}
+
+export async function loadSession(options: LoadSessionOptions = {}): Promise<CravesUser | null> {
+  if (sessionEnding) return null;
+  const context = captureSessionContext();
+  // Keep fail-fast callers separate: sharing their rejection with a normal
+  // lookup would prevent that caller from attempting its refresh-cookie flow.
+  const key = `${context.generation}:${context.identityId ?? ""}:${options.failFastUnauthenticated === true}`;
+  let pending = options.forceIdentityRefresh ? undefined : identityLookups.get(key);
+  if (!pending) {
+    pending = lookupSessionIdentity(options, context);
+    if (!options.forceIdentityRefresh) {
+      const tracked = pending.finally(() => {
+        if (identityLookups.get(key) === tracked) identityLookups.delete(key);
+      });
+      identityLookups.set(key, tracked);
+      pending = tracked;
+    }
+  }
+  const result = await pending;
+  const current = result.user;
+  if (!current || !result.profileContext) return current;
+  if (!isSessionContextCurrent(result.profileContext) || sessionEnding) return session;
+  if (options.hydrateCustomerProfile === "skip") return current;
   if (options.hydrateCustomerProfile === "background") {
-    void hydrateCustomerProfile(current, captureSessionContext()).catch(() => null);
+    void hydrateCustomerProfile(current, result.profileContext).catch(() => null);
     return current;
   }
-  return hydrateCustomerProfile(current);
+  return hydrateCustomerProfile(current, result.profileContext);
 }
 
 export async function synchronizeSessionRoles(): Promise<CravesUser | null> {

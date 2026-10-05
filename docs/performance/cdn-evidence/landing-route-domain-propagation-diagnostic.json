@@ -1,0 +1,32 @@
+[
+  {
+    "observedAtUtc": "2026-10-05T18:17:34.8110045Z",
+    "domain": "craves.in",
+    "path": "/landing-v20/assets/index-BXlAgL_V.css",
+    "status": 200,
+    "contentEncoding": "",
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "wireBytes": 47249,
+    "totalSeconds": 0.266989
+  },
+  {
+    "observedAtUtc": "2026-10-05T18:17:35.1915587Z",
+    "domain": "www.craves.in",
+    "path": "/landing-v20/assets/index-BXlAgL_V.css",
+    "status": 200,
+    "contentEncoding": "",
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "wireBytes": 47249,
+    "totalSeconds": 0.270725
+  },
+  {
+    "observedAtUtc": "2026-10-05T18:17:35.4912058Z",
+    "domain": "craves-prodlow-721906c9-cfb3dyb2b7hnhee2.z02.azurefd.net",
+    "path": "/landing-v20/assets/index-BXlAgL_V.css",
+    "status": 200,
+    "contentEncoding": "",
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "wireBytes": 47249,
+    "totalSeconds": 0.237174
+  }
+]

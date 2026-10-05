@@ -1,0 +1,111 @@
+{
+  "status": "Production release verified; post-change local Chrome visual verification and additional landing-asset edge compression verification remain pending",
+  "source_commit": "dc74bfa3880b18278b015f57ae393fb25133acdf",
+  "review_url": "https://github.com/rmorampudi09-arch/Craves-Build-platform/pull/423",
+  "validation": [
+    "An earlier source snapshot passed 649 Vitest tests across 48 files and 365 Node checks (1,014 total); this is intermediate evidence, not the final frozen-source result.",
+    "Landing source lint, type check and build passed. Startup behavior checks are covered by the final 1,034 application checks. Release helper independent-review checks passed 25 focused tests plus 6 existing tests, including backend-image and traffic guards; these are additional helper checks and are not added to the application count.",
+    "Final frozen-source application lint and type check passed.",
+    "Final full tests passed: 669 Vitest tests across 51 files and 365 Node checks (1,034 total in the final full application run).",
+    "Final production build passed and generated 123 static pages. Customer web tree: a708a893c609277d4bd851f1c57817c862c40f29. This is a build result, not a load-test or browser visual performance claim."
+  ],
+  "deployment": "Production release VERIFIED from docs/performance/validation/release-deploy.json. Source dc74bfa3880b18278b015f57ae393fb25133acdf is active in ready/latest revision ca-craves-web-prodlow--0000076. Immutable image: cravesrm09prodlow6bf632.azurecr.io/craves/customer-web-next@sha256:bca745e52636105532b78b42d552e9e516f5074d72938f0ab8c4090ca8d636dc. Public version matches that source, merchant readiness is true, and the four unauthenticated email API checks returned 401 with private no-store headers; mailboxAccepted is false and no emails were sent. Fingerprints for the images, runtime and traffic of 12 other apps were preserved. Release verification does not claim signed-in UI or browser-paint timing coverage.",
+  "manual_steps": "No pending Azure Portal, credentials, DNS, Firebase or payment setup actions are required for the verified release. A post-change visual check in a known local Chrome window remains pending because native control stopped at its automatic URL-confidence safety check. This is the remaining browser-verification limitation, not a production deployment blocker.",
+  "cart_mutations": "Cart writes serialize within their captured session so overlapping accepted writes do not appear as false failures. Rejected writes do not block the queue; queued work from an older login cannot write under a new account. GET reads share only while in flight and cannot replace newer write receipts.",
+  "static_landing": "The active root landing is maintained under apps/landing-v20 and served from apps/customer-web-next/public/landing-v20. The forced 1.22-second reveal / 2.7-second finish timing and splash image/font wait are removed; the earlier timers began after image/style readiness, so total old startup could exceed 2.7 seconds. Below-the-fold images load lazily, and optional profile hydration runs in the background on nine customer pages. The generated HTML is 10,458 bytes instead of 269,166 bytes, about 96% smaller. The muted hero keeps the 22-second scene at 24 fps, using a 1280x720 H.264 faststart derivative with no audio: 4,183,971 bytes instead of 77,733,727 bytes, a 94.62% reduction. The original full-resolution source is preserved. The derivative SHA-256 is e6c03673ecd02fb8ba56c237a4bbac0b6692ed3d52865abdf8ee9e3563d025e0. The recorded one-frame-per-second SSIM sample is 0.981579; it is not a guarantee of subjective quality on every device.",
+  "compression": "Existing Azure Front Door Next.js public static asset compression is verified through HTTP 200 responses and matching decoded hashes. The earlier measured JavaScript sample reduced transfer bytes from 228,922 to 66,534 with Brotli (70.9% less), and the sampled largest CSS asset from 221,765 to 27,921 bytes (87.4% less). Gzip, Brotli and warm-cache checks for Next.js static assets are recorded as verified in the current summary. The static route now contains only /_next/static/* and /landing-v20/assets/*; the landing-assets configuration update succeeded. At the final bounded probe on 2026-10-05 at 18:25:18 UTC, about 20 minutes after the pattern update, all 12 origin/edge gzip, Brotli and identity requests for the current landing JavaScript and CSS returned HTTP 200 with exact decoded SHA-256 equality. The landing edge still returned identity encoding and CONFIG_NOCACHE. Landing gzip/Brotli delivery, warm cache and routing-at-edge verification remain pending propagation and are not reported as achieved. The retained security rules contain response-security-header actions and no cache override. API, sign-in/general HTML and auth-manifest cache boundaries were checked unchanged; no auth-assets extension is authorized or pending. Private API/customer data keeps no-store behavior. The generic pre-rendered /notifications HTML shell reports a shared cache header and is distinct from its private data requests. No private HTTP cache is introduced. These are asset transfer checks, not Chrome visual performance measurements. Historical receipts retain their original timestamps; the current final state is recorded in cdn-current-combined-summary.json and route-final-configured.json. No request errors or content mismatch required rollback.",
+  "final_timings": "Post-release anonymous HTTP checks sampled 16 routes: all returned HTTP 200, with response headers in 111-304 ms. Live root HTML was 10,669 bytes (the source build artifact was 10,458 bytes), referenced the verified index-jSsHrZ3d.js bundle and contained no inline PNG. These are one-sample HTTP shell checks including connection setup, not signed-in customer API, first-paint, interaction or load-test measurements. No post-change Chrome visual timings are available. Initial Chrome measurements were TTFB 37 ms, FCP 288 ms and load event 332 ms. Native control stopped when it could not reliably identify the current Windows Chrome URL after opening a tab. No further browser UI or cloud browser was used, and the local Vite preview was stopped without opening it.",
+  "runtime_result": "Verified release runtime is unchanged at 0.25 CPU, 0.5 GiB memory, and minimum/maximum replicas both 1. The recorded pre-release memory observation was approximately 88%; no post-release memory utilization value is inferred. No paid capacity increase was made.",
+  "next_steps": [
+    "Complete post-change visual checks in a known local Chrome window when native safety can confirm its URL.",
+    "Verify gzip/Brotli delivery, decoded SHA-256 equality and warm cache for /landing-v20/assets/* after Azure edge propagation. This is the only pending compression verification; no auth-assets expansion is pending.",
+    "Monitor real response times and error rates after release.",
+    "Plan a separate representative load test before making any 1M concurrent-user capacity claim."
+  ],
+  "sanitized_evidence_files": [
+    "docs/performance/cdn-evidence/compression-patch.json",
+    "docs/performance/cdn-evidence/current-asset-paths.json",
+    "docs/performance/cdn-evidence/edge-check-after-propagation.json",
+    "docs/performance/cdn-evidence/edge-check-early.json",
+    "docs/performance/cdn-evidence/identity-rules-before.json",
+    "docs/performance/cdn-evidence/origin-compression-baseline.json",
+    "docs/performance/cdn-evidence/route-after-propagation.json",
+    "docs/performance/cdn-evidence/route-after-update.json",
+    "docs/performance/cdn-evidence/route-before.json",
+    "docs/performance/cdn-evidence/update-receipt.json",
+    "docs/performance/cdn-evidence/cdn-current-combined-summary.json",
+    "docs/performance/cdn-evidence/cdn-compression-verified.json",
+    "docs/performance/cdn-evidence/edge-warm-cache-verification.json",
+    "docs/performance/cdn-evidence/landing-origin-cache-eligibility.json",
+    "docs/performance/cdn-evidence/landing-assets-pattern-patch.json",
+    "docs/performance/cdn-evidence/landing-assets-pattern-update-receipt.json",
+    "docs/performance/cdn-evidence/landing-assets-route-final-bounded-probe.json",
+    "docs/performance/cdn-evidence/protected-cache-boundaries-after-landing-pattern.json",
+    "docs/performance/cdn-evidence/retained-security-rules-after-landing-delay.json",
+    "docs/performance/cdn-evidence/route-final-configured.json"
+  ],
+  "sanitized_receipt_files": [
+    "docs/performance/validation/evidence.json",
+    "docs/performance/validation/release-deploy.json",
+    "docs/performance/validation/http-smoke.json"
+  ],
+  "retained_reference_files": [
+    "azure-pipelines-customer-web-next-integration-ci.yml"
+  ],
+  "additional_changed_files": [
+    "apps/customer-web-next/Dockerfile",
+    "apps/customer-web-next/next.config.ts",
+    "apps/customer-web-next/public/landing-v20/assets/index-BXlAgL_V.css",
+    "apps/customer-web-next/public/landing-v20/assets/index-jSsHrZ3d.js",
+    "apps/customer-web-next/public/landing-v20/index.html",
+    "apps/customer-web-next/src/components/profile/AccountCard.tsx",
+    "apps/customer-web-next/src/lib/cart-performance.vitest.ts",
+    "apps/customer-web-next/src/lib/chef-profile-session.vitest.ts",
+    "apps/customer-web-next/src/lib/customer-page-startup.vitest.ts",
+    "apps/customer-web-next/src/lib/email-session-races.vitest.ts",
+    "apps/customer-web-next/src/lib/landing-auth-entrypoints.test.ts",
+    "apps/customer-web-next/src/lib/landing-startup.vitest.ts",
+    "apps/customer-web-next/src/lib/precise-customer-chef-ui.test.ts",
+    "apps/customer-web-next/src/lib/protected-page-startup.vitest.ts",
+    "apps/customer-web-next/src/lib/session-performance.vitest.ts",
+    "apps/customer-web-next/src/lib/signed-in-integration.test.ts",
+    "apps/customer-web-next/src/lib/tracking-progress.vitest.ts",
+    "apps/customer-web-next/src/screens/Cart/Cart.tsx",
+    "apps/customer-web-next/src/screens/Checkout/Checkout.tsx",
+    "apps/customer-web-next/src/screens/Notifications/Notifications.tsx",
+    "apps/customer-web-next/src/screens/OrderHistory/OrderHistory.tsx",
+    "apps/customer-web-next/src/screens/OrderSuccess/OrderSuccess.tsx",
+    "apps/customer-web-next/src/screens/OrderTracking/OrderTracking.tsx",
+    "apps/customer-web-next/src/screens/Profile/Addresses.tsx",
+    "apps/customer-web-next/src/screens/Profile/Profile.tsx",
+    "apps/customer-web-next/src/screens/Wishlist/Wishlist.tsx",
+    "apps/customer-web-next/src/screens/public/AllChefs/AllChefs.tsx",
+    "apps/customer-web-next/src/screens/public/ChefProfile/ChefProfile.tsx",
+    "apps/customer-web-next/src/screens/public/FoodDetails/FoodDetails.tsx",
+    "apps/customer-web-next/src/screens/public/LandingPage/LandingPage.tsx",
+    "apps/customer-web-next/src/services/api/cravesCart.ts",
+    "apps/customer-web-next/src/services/auth/cravesAuth.ts",
+    "apps/landing-v20/README.md",
+    "apps/landing-v20/src/App.tsx",
+    "apps/landing-v20/src/components/DeliveredWithCare/DeliveredWithCare.tsx",
+    "apps/landing-v20/src/components/ForHomeChefs/ForHomeChefs.tsx",
+    "apps/landing-v20/src/components/Hero/Hero.tsx",
+    "apps/landing-v20/src/components/RiderSection/RiderSection.tsx",
+    "apps/landing-v20/vite.config.ts",
+    "scripts/release/tests/test_web_performance_release.py",
+    "scripts/release/web_performance_release.py",
+    "docs/performance/landing-media.json"
+  ],
+  "binary_files": [
+    "apps/customer-web-next/public/landing-v20/videos/hero-bg-fast.mp4"
+  ],
+  "read_only_test_reference_files": [
+    "azure-pipelines-customer-web-next-delivery-tracking.yml",
+    "azure-pipelines-customer-addresses-apim.yml",
+    "scripts/apim/configure-customer-addresses-apim.sh"
+  ],
+  "additional_verification_checklist": [
+    "- [ ] Verify landing-assets gzip/Brotli delivery, decoded hashes and warm cache after Azure edge propagation. Configuration succeeded, but the final edge probe still used identity encoding with CONFIG_NOCACHE."
+  ],
+  "cdn_final_checked_at_utc": "2026-10-05T18:25:18.4249796Z"
+}

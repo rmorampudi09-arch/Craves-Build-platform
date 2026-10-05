@@ -1,0 +1,50 @@
+[
+  {
+    "observedAtUtc": "2026-10-05T17:46:00.4877861Z",
+    "path": "/_next/static/chunks/06wa412t6f0tj.css",
+    "acceptEncoding": "gzip",
+    "status": 200,
+    "curlExit": 0,
+    "contentEncoding": "Content-Encoding: gzip",
+    "cache": "X-Cache: TCP_HIT",
+    "wireBytes": 1004,
+    "ttfbSeconds": 0.140565,
+    "totalSeconds": 0.140709
+  },
+  {
+    "observedAtUtc": "2026-10-05T17:46:00.7129724Z",
+    "path": "/_next/static/chunks/06wa412t6f0tj.css",
+    "acceptEncoding": "br",
+    "status": 200,
+    "curlExit": 0,
+    "contentEncoding": "Content-Encoding: br",
+    "cache": "X-Cache: TCP_HIT",
+    "wireBytes": 956,
+    "ttfbSeconds": 0.13621,
+    "totalSeconds": 0.136359
+  },
+  {
+    "observedAtUtc": "2026-10-05T17:46:00.9418114Z",
+    "path": "/_next/static/chunks/196x_tfexoucg.js",
+    "acceptEncoding": "gzip",
+    "status": 200,
+    "curlExit": 0,
+    "contentEncoding": "Content-Encoding: gzip",
+    "cache": "X-Cache: TCP_HIT",
+    "wireBytes": 71591,
+    "ttfbSeconds": 0.126958,
+    "totalSeconds": 0.174544
+  },
+  {
+    "observedAtUtc": "2026-10-05T17:46:01.1781818Z",
+    "path": "/_next/static/chunks/196x_tfexoucg.js",
+    "acceptEncoding": "br",
+    "status": 200,
+    "curlExit": 0,
+    "contentEncoding": "Content-Encoding: br",
+    "cache": "X-Cache: TCP_HIT",
+    "wireBytes": 66534,
+    "ttfbSeconds": 0.129824,
+    "totalSeconds": 0.167489
+  }
+]

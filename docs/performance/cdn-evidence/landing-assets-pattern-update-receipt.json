@@ -1,0 +1,19 @@
+{
+  "updatedAtUtc": "2026-10-05T18:04:47.3745809Z",
+  "sourceSha": "dc74bfa3880b18278b015f57ae393fb25133acdf",
+  "route": "craves-static-route",
+  "previousPatterns": [
+    "/_next/static/*"
+  ],
+  "patterns": [
+    "/_next/static/*",
+    "/landing-v20/assets/*"
+  ],
+  "addedOnlyLandingAssets": true,
+  "allOtherPropertiesPreserved": true,
+  "compressionEnabled": true,
+  "rulesets": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravessecurityheaders",
+  "provisioningState": "Updating",
+  "rollbackSnapshot": "route-before-landing-assets.json",
+  "rollbackRequired": false
+}

@@ -1,0 +1,28 @@
+{
+  "sourceSha": "dc74bfa3880b18278b015f57ae393fb25133acdf",
+  "originEligible": true,
+  "assets": [
+    {
+      "observedAtUtc": "2026-10-05T18:03:45.4908764Z",
+      "path": "/landing-v20/assets/index-jSsHrZ3d.js",
+      "headers": [
+        "HTTP/1.1 200 OK",
+        "cache-control: public, max-age=31536000, immutable",
+        "content-type: application/javascript; charset=UTF-8",
+        "content-length: 230425"
+      ],
+      "hasSetCookie": false
+    },
+    {
+      "observedAtUtc": "2026-10-05T18:03:45.6819789Z",
+      "path": "/landing-v20/assets/index-BXlAgL_V.css",
+      "headers": [
+        "HTTP/1.1 200 OK",
+        "cache-control: public, max-age=31536000, immutable",
+        "content-type: text/css; charset=UTF-8",
+        "content-length: 47249"
+      ],
+      "hasSetCookie": false
+    }
+  ]
+}

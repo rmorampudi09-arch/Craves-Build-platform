@@ -1,0 +1,46 @@
+{
+  "observedAtUtc": "2026-10-05T18:21:16.6543770Z",
+  "ruleSet": "cravessecurityheaders",
+  "rules": [
+    {
+      "name": "securityheaders",
+      "order": 1,
+      "matchProcessingBehavior": "Continue",
+      "conditions": [],
+      "actions": [
+        {
+          "name": "ModifyResponseHeader",
+          "typeName": "DeliveryRuleHeaderActionParameters",
+          "headerName": "Strict-Transport-Security",
+          "headerAction": "Overwrite"
+        },
+        {
+          "name": "ModifyResponseHeader",
+          "typeName": "DeliveryRuleHeaderActionParameters",
+          "headerName": "X-Content-Type-Options",
+          "headerAction": "Overwrite"
+        },
+        {
+          "name": "ModifyResponseHeader",
+          "typeName": "DeliveryRuleHeaderActionParameters",
+          "headerName": "Referrer-Policy",
+          "headerAction": "Overwrite"
+        },
+        {
+          "name": "ModifyResponseHeader",
+          "typeName": "DeliveryRuleHeaderActionParameters",
+          "headerName": "X-Frame-Options",
+          "headerAction": "Overwrite"
+        },
+        {
+          "name": "ModifyResponseHeader",
+          "typeName": "DeliveryRuleHeaderActionParameters",
+          "headerName": "Permissions-Policy",
+          "headerAction": "Overwrite"
+        }
+      ],
+      "routeConfigurationOverridePresent": false,
+      "responseCacheControlModificationPresent": false
+    }
+  ]
+}

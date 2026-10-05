@@ -1,0 +1,7 @@
+{
+  "observedAtUtc": "2026-10-05T17:27:51.0533852Z",
+  "compressionEnabled": true,
+  "removedOnlyIdentityRuleset": true,
+  "remainingRulesets": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravessecurityheaders",
+  "provisioningState": "Updating"
+}

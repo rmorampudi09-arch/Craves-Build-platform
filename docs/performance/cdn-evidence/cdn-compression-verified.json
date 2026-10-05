@@ -1,0 +1,64 @@
+{
+  "verifiedAtUtc": "2026-10-05T17:45:21.6976966Z",
+  "route": "craves-static-route",
+  "patterns": [
+    "/_next/static/*"
+  ],
+  "edgeCompressionEnabled": true,
+  "originCompressionEnabled": false,
+  "identityRuleDetachedOnlyFromStaticRoute": true,
+  "retainedRuleset": "cravessecurityheaders",
+  "protectedGeneralRouteCachingUnchanged": true,
+  "assets": [
+    {
+      "path": "/_next/static/chunks/2nvv773o6wx5l.js",
+      "allResponses200": true,
+      "decodedBytesIdentical": true,
+      "gzipVerified": true,
+      "brotliVerified": true,
+      "decodedBytes": 138255,
+      "gzipBytes": 45924,
+      "brotliBytes": 43120,
+      "sha256": "4ef9fff57d383dd36790de64cdd407d7769ebf531f7a2dc6080214776e2254bf",
+      "evidence": "edge-new-chunk-compression-arrived.json"
+    },
+    {
+      "path": "/_next/static/chunks/1xq8nxh7obu6f.css",
+      "allResponses200": true,
+      "decodedBytesIdentical": true,
+      "gzipVerified": true,
+      "brotliVerified": true,
+      "decodedBytes": 221765,
+      "gzipBytes": 32647,
+      "brotliBytes": 27921,
+      "sha256": "d93173a4231a69a993baa747fe4c152b1f00a65ae26b10536f3196c732440f23",
+      "evidence": "edge-large-css-compression-arrived.json"
+    },
+    {
+      "path": "/_next/static/chunks/06wa412t6f0tj.css",
+      "allResponses200": true,
+      "decodedBytesIdentical": true,
+      "gzipVerified": true,
+      "brotliVerified": true,
+      "decodedBytes": 3750,
+      "gzipBytes": 1004,
+      "brotliBytes": 956,
+      "sha256": "3fb6b62e5687e215a5af564e3f99cfcfcad5d359084d962c0f660644a64e5f92",
+      "evidence": "edge-original-chunks-after-second-purge.json"
+    },
+    {
+      "path": "/_next/static/chunks/196x_tfexoucg.js",
+      "allResponses200": true,
+      "decodedBytesIdentical": true,
+      "gzipVerified": true,
+      "brotliVerified": true,
+      "decodedBytes": 228922,
+      "gzipBytes": 71591,
+      "brotliBytes": 66534,
+      "sha256": "757262dbe5913a77e1b4f0f901bc5f7823b3064b9d1a41b2aa62edb871751419",
+      "evidence": "edge-original-chunks-after-second-purge.json"
+    }
+  ],
+  "rollbackRequired": false,
+  "pending": "Authorized extension to landing-v20/assets and landing-auth/assets will be checked after origin immutable Cache-Control headers are deployed."
+}

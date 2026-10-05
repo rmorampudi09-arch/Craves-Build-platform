@@ -1,0 +1,182 @@
+{
+  "observedAtUtc": "2026-10-05T18:03:31.870317+00:00",
+  "sourceSha": "dc74bfa3880b18278b015f57ae393fb25133acdf",
+  "version": {
+    "path": "/api/version",
+    "status": 200,
+    "headersMs": 174,
+    "totalMs": 174,
+    "bodyBytes": 56,
+    "bodySha256": "a3375607134fb5dd775affd486e39158b65cfb32ebfc8b5e0382b91ff0626447",
+    "cacheControl": "private, no-store, max-age=0",
+    "contentType": "application/json"
+  },
+  "samples": [
+    {
+      "path": "/",
+      "status": 200,
+      "headersMs": 154,
+      "totalMs": 154,
+      "bodyBytes": 10669,
+      "bodySha256": "b115c8a9c551a2c185e850365aa508d896f2a93b14ddff5a62ccbf3bd994f5e6",
+      "cacheControl": "public, max-age=0",
+      "contentType": "text/html; charset=UTF-8"
+    },
+    {
+      "path": "/home",
+      "status": 200,
+      "headersMs": 153,
+      "totalMs": 188,
+      "bodyBytes": 37131,
+      "bodySha256": "b7369129530af9a74e11089f75252e3109c20e9b9de9835cbe3845e2d80ecffd",
+      "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/discover",
+      "status": 200,
+      "headersMs": 304,
+      "totalMs": 330,
+      "bodyBytes": 37131,
+      "bodySha256": "b7369129530af9a74e11089f75252e3109c20e9b9de9835cbe3845e2d80ecffd",
+      "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/profile",
+      "status": 200,
+      "headersMs": 162,
+      "totalMs": 187,
+      "bodyBytes": 37143,
+      "bodySha256": "644c2cc4388d1af36d9f91f29ff3f08c023e95c735f74786cabc9fb26f4048e5",
+      "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/cart",
+      "status": 200,
+      "headersMs": 122,
+      "totalMs": 142,
+      "bodyBytes": 31711,
+      "bodySha256": "e5b7cfcb0b345c9cce2bf9cc9a42b54a7630c061c260b11a8679138cfe288f80",
+      "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/orders",
+      "status": 200,
+      "headersMs": 114,
+      "totalMs": 129,
+      "bodyBytes": 28214,
+      "bodySha256": "8f242abe00f383aa534eebdbf8c107434fa248c5aeee89abc5f4363f3492a5a7",
+      "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/tracking",
+      "status": 200,
+      "headersMs": 135,
+      "totalMs": 147,
+      "bodyBytes": 23572,
+      "bodySha256": "ae281f47f499abcbebaea7f07a3a6ef336f5e288ca2e4c53c59a6347200ccdf2",
+      "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/wishlist",
+      "status": 200,
+      "headersMs": 196,
+      "totalMs": 222,
+      "bodyBytes": 36645,
+      "bodySha256": "db61d51f5a54c4894806308fa1851970d185053a24a22b9c7dd129dc56ea8b60",
+      "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/checkout",
+      "status": 200,
+      "headersMs": 116,
+      "totalMs": 142,
+      "bodyBytes": 31953,
+      "bodySha256": "6bc6ecd1e5f61a924fb928c37b9601e793981476a13bf2bb4c7d9bdec3e128fb",
+      "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/notifications",
+      "status": 200,
+      "headersMs": 144,
+      "totalMs": 178,
+      "bodyBytes": 36906,
+      "bodySha256": "6ff2d95456b4d171229b4855504b233530ae61f053e8f662185731057bdb588c",
+      "cacheControl": "s-maxage=31536000",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/addresses",
+      "status": 200,
+      "headersMs": 141,
+      "totalMs": 158,
+      "bodyBytes": 28180,
+      "bodySha256": "b68a854fb7924c7dd3981d4e3d4e26263760600b23cd03fdadf03fce2b7ca738",
+      "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/chef",
+      "status": 200,
+      "headersMs": 122,
+      "totalMs": 134,
+      "bodyBytes": 25080,
+      "bodySha256": "10cd1f93c25503f3525998cce14b01a4ba0c295af5b2ca61c201b315545f634d",
+      "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/subscriptions/plans",
+      "status": 200,
+      "headersMs": 111,
+      "totalMs": 125,
+      "bodyBytes": 26902,
+      "bodySha256": "8c7313b15260d66b610157a64c541aace0c32948fde3a3e741d55763e3de4867",
+      "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/contact",
+      "status": 200,
+      "headersMs": 144,
+      "totalMs": 153,
+      "bodyBytes": 23846,
+      "bodySha256": "74793e4a537d2b29e18af7c9aedc4762241f5c159616880519e985fbc62db88b",
+      "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/terms",
+      "status": 200,
+      "headersMs": 136,
+      "totalMs": 164,
+      "bodyBytes": 31816,
+      "bodySha256": "adc4ba21b353a3bb85bab288616fe340896b9a09e8b55ed9b8651c3a251ca22f",
+      "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/privacy",
+      "status": 200,
+      "headersMs": 175,
+      "totalMs": 198,
+      "bodyBytes": 27087,
+      "bodySha256": "7179312ec4a54a5b03f77729943edfd8e4d18b33cf62893960d3c051a116b78f",
+      "cacheControl": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "contentType": "text/html; charset=utf-8"
+    }
+  ],
+  "allRoutesHttp200": true,
+  "landingBundle": [
+    "/landing-v20/assets/index-jSsHrZ3d.js"
+  ],
+  "scope": "Anonymous HTTP response checks; no browser execution or authenticated customer API requests.",
+  "limitations": "One sample per route; timings include connection setup. These are not first-paint, interaction or load-test measurements."
+}

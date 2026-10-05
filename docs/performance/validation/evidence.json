@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "checks": [
+    {
+      "logFile": "lint.log",
+      "name": "lint",
+      "logSha256": "05fe9d21011ae9676cc14d84165617cd4636af495d0f12756ee1c43cfab5c47e",
+      "exitCode": 0
+    },
+    {
+      "logFile": "typecheck.log",
+      "name": "typecheck",
+      "logSha256": "d08347126b8e986a67c03da741594515e4fecaba7dda0b45b13f41eecf08ae03",
+      "exitCode": 0
+    },
+    {
+      "logFile": "test.log",
+      "name": "test",
+      "logSha256": "c124851eb88d2d9488fbb7a0daa52fca280f9048f6b0fe99b50d38b9262a2251",
+      "exitCode": 0
+    },
+    {
+      "logFile": "build.log",
+      "name": "build",
+      "logSha256": "b472fe728e069296e15821be646b10562ecb1df7635526076245e608a9eed993",
+      "exitCode": 0
+    }
+  ],
+  "webTree": "a708a893c609277d4bd851f1c57817c862c40f29"
+}

@@ -1,0 +1,277 @@
+{
+  "baseline": "eb5b6e641",
+  "source_commit": "dc74bfa3880b18278b015f57ae393fb25133acdf",
+  "files": [
+    {
+      "path": "apps/customer-web-next/Dockerfile",
+      "kind": "changed_file",
+      "lines": 44,
+      "sha256": "1a4bac8c6d964e4d96f03219fa0803372a1135ca72e5f442550ca0a1b9ee58ce"
+    },
+    {
+      "path": "apps/customer-web-next/src/services/auth/cravesAuth.ts",
+      "kind": "changed_file",
+      "lines": 512,
+      "sha256": "8df2a9c1189b3dfa8017d60c5e4beb0f139605e718c93f09f4e8825f7f9231bc"
+    },
+    {
+      "path": "apps/customer-web-next/src/services/api/cravesCart.ts",
+      "kind": "changed_file",
+      "lines": 374,
+      "sha256": "e5bb2986edef9c3a3e2829213ed7d4ef8e7abc0845865ea999c736991d71e7bb"
+    },
+    {
+      "path": "apps/customer-web-next/src/screens/public/LandingPage/LandingPage.tsx",
+      "kind": "changed_file",
+      "lines": 147,
+      "sha256": "eb495b3a842eec29c44e74fe263482678b541173b9d8edaec61f6e012e9eb2e0"
+    },
+    {
+      "path": "apps/customer-web-next/src/screens/Profile/Profile.tsx",
+      "kind": "changed_file",
+      "lines": 663,
+      "sha256": "c48659662f0e5688d38304bc4ae0a982123d7ac33660412fdf6e0886a0f727af"
+    },
+    {
+      "path": "apps/customer-web-next/src/components/profile/AccountCard.tsx",
+      "kind": "changed_file",
+      "lines": 135,
+      "sha256": "a74e5c82f5f30b7eeebd860ac1ffa3ed32e74a7cd936138ffb89d854043fb8a2"
+    },
+    {
+      "path": "apps/customer-web-next/src/screens/public/FoodDetails/FoodDetails.tsx",
+      "kind": "changed_file",
+      "lines": 421,
+      "sha256": "648a12abd4dcea2919bba147d5c9fc9f8cf2bcaa11cf75f42d820a57b7250bca"
+    },
+    {
+      "path": "apps/customer-web-next/src/screens/public/ChefProfile/ChefProfile.tsx",
+      "kind": "changed_file",
+      "lines": 291,
+      "sha256": "69666dfc4862779135ac01a592d971e7d2ee32e2c6edfb8c98325528ef9ca9ae"
+    },
+    {
+      "path": "apps/customer-web-next/src/lib/session-performance.vitest.ts",
+      "kind": "changed_file",
+      "lines": 270,
+      "sha256": "3bbd232ba0ec89155071cece1545ac33b92dbc7efb11403760689d8e7872f88b"
+    },
+    {
+      "path": "apps/customer-web-next/src/lib/cart-performance.vitest.ts",
+      "kind": "changed_file",
+      "lines": 241,
+      "sha256": "82a2523a52036a23079a9b9dfdf2afdcbc39a84d569adf2ffa50f977058dc79c"
+    },
+    {
+      "path": "apps/customer-web-next/src/lib/chef-profile-session.vitest.ts",
+      "kind": "changed_file",
+      "lines": 808,
+      "sha256": "c75dc822d6f4e0cd15fc51bae3bfa97b2dc146531ff0356d42a1e5508d264d27"
+    },
+    {
+      "path": "apps/customer-web-next/src/lib/email-session-races.vitest.ts",
+      "kind": "changed_file",
+      "lines": 377,
+      "sha256": "de25aa1fd407f19cf9f96374ef4e0e1b4da637ad9300a576d541ebf9c8a206b1"
+    },
+    {
+      "path": "apps/customer-web-next/src/lib/precise-customer-chef-ui.test.ts",
+      "kind": "changed_file",
+      "lines": 273,
+      "sha256": "05da0579c5cbb24918e965451992a66486c001179c09d5d1c86ad2f150462edf"
+    },
+    {
+      "path": "apps/customer-web-next/src/lib/signed-in-integration.test.ts",
+      "kind": "changed_file",
+      "lines": 317,
+      "sha256": "407dfc4192afba4c2ce3b7f75c0598ade333b9e227eb591b56f5b7b87da907ee"
+    },
+    {
+      "path": "apps/customer-web-next/next.config.ts",
+      "kind": "changed_file",
+      "lines": 59,
+      "sha256": "8d844555df7a7266a77d286f45cd3c19fe53f79672724d3b99886df7e745b1fb"
+    },
+    {
+      "path": "apps/customer-web-next/public/landing-v20/assets/index-BXlAgL_V.css",
+      "kind": "changed_file",
+      "lines": 1,
+      "sha256": "974dd96d98140e53a6c627445a104cfda2b87aa5728ccc00ea193cc6e38704c9"
+    },
+    {
+      "path": "apps/customer-web-next/public/landing-v20/assets/index-jSsHrZ3d.js",
+      "kind": "changed_file",
+      "lines": 11,
+      "sha256": "93c75eea14efd1ac05e1933adb2ce51c7d9aa3fef0f12f55c7a581910b9d3c68"
+    },
+    {
+      "path": "apps/customer-web-next/public/landing-v20/index.html",
+      "kind": "changed_file",
+      "lines": 211,
+      "sha256": "9804f6fbc054ae274278fe0cd00c101f99aa9937e63e7ad214beb3538c3fa1c7"
+    },
+    {
+      "path": "apps/customer-web-next/src/lib/customer-page-startup.vitest.ts",
+      "kind": "changed_file",
+      "lines": 95,
+      "sha256": "8d2519b147dec08e5d895a8ba0b0a560368a13e54d29d0dadc47eae5ffe26a35"
+    },
+    {
+      "path": "apps/customer-web-next/src/lib/landing-auth-entrypoints.test.ts",
+      "kind": "changed_file",
+      "lines": 137,
+      "sha256": "387bb687968fe3b99d95e63e5acaba489d82b66b5afa63ffa9bfe3c05ab3f7f3"
+    },
+    {
+      "path": "apps/customer-web-next/src/lib/landing-startup.vitest.ts",
+      "kind": "changed_file",
+      "lines": 72,
+      "sha256": "bc443d07929dee0fc6aa05cc6354ee207babd6e61fad32ecb7448d7ddfcc8bb7"
+    },
+    {
+      "path": "apps/customer-web-next/src/lib/protected-page-startup.vitest.ts",
+      "kind": "changed_file",
+      "lines": 153,
+      "sha256": "04e8378df37bdcd468835cd20f84f7bdd65e4d673773ac8dff2437154b2034b5"
+    },
+    {
+      "path": "apps/customer-web-next/src/lib/tracking-progress.vitest.ts",
+      "kind": "changed_file",
+      "lines": 38,
+      "sha256": "ce05c4df92388f8a74fa293d4c8b33a2f6f2ba8825b3e2cc291fed1bac31b02a"
+    },
+    {
+      "path": "apps/customer-web-next/src/screens/Cart/Cart.tsx",
+      "kind": "changed_file",
+      "lines": 389,
+      "sha256": "5d4dccfd2197a8af3962496580c50802f1f232ed5bb24de08bfaeca337070430"
+    },
+    {
+      "path": "apps/customer-web-next/src/screens/Checkout/Checkout.tsx",
+      "kind": "changed_file",
+      "lines": 874,
+      "sha256": "975553b76337df726ff54056d4ac0924a00142ee0de9686b2f9ec608ed536e69"
+    },
+    {
+      "path": "apps/customer-web-next/src/screens/Notifications/Notifications.tsx",
+      "kind": "changed_file",
+      "lines": 387,
+      "sha256": "8b66669872d8b9877454539148ef23bf4df14c17fc3807f11304fc1bbdc369f2"
+    },
+    {
+      "path": "apps/customer-web-next/src/screens/OrderHistory/OrderHistory.tsx",
+      "kind": "changed_file",
+      "lines": 442,
+      "sha256": "3cc41d927ecbb29aa08a1c6473edd33dafa4544faa56358b07ca69ad2b96ac63"
+    },
+    {
+      "path": "apps/customer-web-next/src/screens/OrderSuccess/OrderSuccess.tsx",
+      "kind": "changed_file",
+      "lines": 136,
+      "sha256": "18214973c4f0ec417ea5804ffe92a41e29bc73245f95cd1208d823f770de53b3"
+    },
+    {
+      "path": "apps/customer-web-next/src/screens/OrderTracking/OrderTracking.tsx",
+      "kind": "changed_file",
+      "lines": 386,
+      "sha256": "52bef13c1fd3fa690e319cfd2410d946a8283720bd20dda71a6b713db08cd4ce"
+    },
+    {
+      "path": "apps/customer-web-next/src/screens/Profile/Addresses.tsx",
+      "kind": "changed_file",
+      "lines": 478,
+      "sha256": "b008bd36bd0a65d1f37a2734f3be586d1c3518d0a7192eded6e4c2338a1e3e3d"
+    },
+    {
+      "path": "apps/customer-web-next/src/screens/Wishlist/Wishlist.tsx",
+      "kind": "changed_file",
+      "lines": 309,
+      "sha256": "7447bf16594c723b916336dd849a8a92fe2617f1dfc6bbc82a503ff8dae1c2a9"
+    },
+    {
+      "path": "apps/customer-web-next/src/screens/public/AllChefs/AllChefs.tsx",
+      "kind": "changed_file",
+      "lines": 311,
+      "sha256": "f63aab5b9e958eb22a672cf6ce427ed5b7f7f45acf56be9618bf4a9f515cbe5d"
+    },
+    {
+      "path": "apps/landing-v20/README.md",
+      "kind": "changed_file",
+      "lines": 65,
+      "sha256": "a4c658b7d3c995d4c6d9ef84bc007e86a1e4ed424c77c1b6729e229d423c2353"
+    },
+    {
+      "path": "apps/landing-v20/src/App.tsx",
+      "kind": "changed_file",
+      "lines": 99,
+      "sha256": "2307a449d6783c04216812a5ee275782ed82db93b4485c750e544d915e8e196c"
+    },
+    {
+      "path": "apps/landing-v20/src/components/DeliveredWithCare/DeliveredWithCare.tsx",
+      "kind": "changed_file",
+      "lines": 578,
+      "sha256": "24a47bf8312185db5bcc422adecf00667cd2c35f79db3058473a7222822044c2"
+    },
+    {
+      "path": "apps/landing-v20/src/components/ForHomeChefs/ForHomeChefs.tsx",
+      "kind": "changed_file",
+      "lines": 196,
+      "sha256": "9591dcf1b908d5b4e13973726051d4db95fcd0d63f05c833596b05abaf227544"
+    },
+    {
+      "path": "apps/landing-v20/src/components/Hero/Hero.tsx",
+      "kind": "changed_file",
+      "lines": 89,
+      "sha256": "6aef93980071d491036b2f618d7f4156deab7b6fa3ad8edb9b5aa71e9b5d1306"
+    },
+    {
+      "path": "apps/landing-v20/src/components/RiderSection/RiderSection.tsx",
+      "kind": "changed_file",
+      "lines": 45,
+      "sha256": "25d5622875de9e615cc920d4566300d745386963c7cd0e5056ca69bfb426db0a"
+    },
+    {
+      "path": "apps/landing-v20/vite.config.ts",
+      "kind": "changed_file",
+      "lines": 319,
+      "sha256": "949a2cc840c5eb9186b8bd5d8a71314955e6737003430fd50e238e00efd6d9c5"
+    },
+    {
+      "path": "scripts/release/tests/test_web_performance_release.py",
+      "kind": "changed_file",
+      "lines": 347,
+      "sha256": "5679902c1bee66199777f1f786fb14069c228294bc3b5e5838327d4c79180e7e"
+    },
+    {
+      "path": "scripts/release/web_performance_release.py",
+      "kind": "changed_file",
+      "lines": 378,
+      "sha256": "202920ad47fe3c745f687649a8f4a3994a35f402642a86084c89b64963d052be"
+    },
+    {
+      "path": "docs/performance/landing-media.json",
+      "kind": "changed_file",
+      "lines": 17,
+      "sha256": "d0cbf05f7a073516a789e4d20e7126d258410e4d45458ee84bd78b69da8db0e1"
+    },
+    {
+      "path": "azure-pipelines-customer-web-next-integration-ci.yml",
+      "kind": "retained_ci_reference",
+      "lines": 47,
+      "sha256": "f9c1d960bf547489a560bea451a4f83fa65031ff46bd266a4b39b586f2126ac9"
+    },
+    {
+      "path": "output/performance/local-configuration.template.txt",
+      "kind": "safe_local_configuration_template",
+      "lines": 21,
+      "sha256": "e3d488d40c27799a8883e50c7722e240fcbb9f6746c81a0b1a5203577113333b"
+    }
+  ],
+  "binary_media": [
+    {
+      "path": "apps/customer-web-next/public/landing-v20/videos/hero-bg-fast.mp4",
+      "bytes": 4183971,
+      "sha256": "e6c03673ecd02fb8ba56c237a4bbac0b6692ed3d52865abdf8ee9e3563d025e0"
+    }
+  ]
+}

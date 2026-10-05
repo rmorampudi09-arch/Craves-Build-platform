@@ -1,0 +1,32 @@
+{
+  "observedAtUtc": "2026-10-05T17:40:32.3335723Z",
+  "staticRoute": "craves-static-route",
+  "patterns": [
+    "/_next/static/*"
+  ],
+  "compressionConfigured": true,
+  "removedRuleSet": "cravesstaticidentity",
+  "retainedRuleSet": "cravessecurityheaders",
+  "originCompressionEnabled": false,
+  "cacheQueryBehavior": "IgnoreQueryString",
+  "purgedPaths": [
+    "/_next/static/*"
+  ],
+  "edgeDeliveryConfirmed": true,
+  "edgeResponsesHealthy": true,
+  "decodedBytesIdentical": true,
+  "gzipDeliveryVerified": false,
+  "brotliDeliveryVerified": false,
+  "latestProbeEvidence": "edge-gzip-brotli-large-after-detach-propagation.json",
+  "dnsAndRouteEvidence": "dns-route-cache-verification.json",
+  "compressionConfiguredAtUtc": "2026-10-05T17:16:53.8498377Z",
+  "identityRuleDetachedAtUtc": "2026-10-05T17:27:51.0533852Z",
+  "staticPurgeAcceptedAtUtc": "2026-10-05T17:29:24.9662205Z",
+  "limitation": "Existing and fresh-miss immutable chunks still returned identity encoding after the standard propagation window; do not report compression as proven. First-time compression can require one to two hours according to Microsoft documentation.",
+  "nextVerification": "Probe newly hashed CSS and JS after the separately guarded web release; require Content-Encoding gzip/br and decoded SHA256 equality.",
+  "documentation": [
+    "https://learn.microsoft.com/en-us/azure/frontdoor/standard-premium/how-to-compression",
+    "https://learn.microsoft.com/en-us/azure/frontdoor/front-door-caching",
+    "https://learn.microsoft.com/en-us/azure/frontdoor/front-door-route-matching"
+  ]
+}

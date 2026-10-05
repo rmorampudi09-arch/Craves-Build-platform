@@ -1,0 +1,23 @@
+{
+  "actions": [
+    {
+      "name": "ModifyRequestHeader",
+      "parameters": {
+        "headerAction": "Overwrite",
+        "headerName": "Accept-Encoding",
+        "typeName": "DeliveryRuleHeaderActionParameters",
+        "value": "identity"
+      }
+    }
+  ],
+  "conditions": [],
+  "deploymentStatus": "NotStarted",
+  "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravesstaticidentity/rules/forceidentityencoding",
+  "matchProcessingBehavior": "Continue",
+  "name": "forceidentityencoding",
+  "order": 1,
+  "provisioningState": "Succeeded",
+  "resourceGroup": "rg-craves-prodlow-centralindia",
+  "ruleSetName": "cravesstaticidentity",
+  "type": "Microsoft.Cdn/profiles/rulesets/rules"
+}

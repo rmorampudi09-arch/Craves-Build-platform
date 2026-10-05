@@ -11,7 +11,13 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => fixture.navigate,
   Link: ({ children, to }: { children: ReactNode; to: string }) => createElement('a', { href: to }, children),
 }));
-vi.mock('../services/auth/cravesAuth', () => ({ loadSession: async () => ({ identityId: fixture.id }) }));
+vi.mock('../services/auth/cravesAuth', () => ({
+  loadSession: async () => ({ identityId: fixture.id }),
+  captureSessionContext: () => ({ generation: 1, identityId: fixture.id }),
+  isSessionContextCurrent: () => true,
+  isSessionReady: () => true,
+  subscribeSession: () => () => {},
+}));
 vi.mock('../components/tracking/TrackingHeader', () => ({ TrackingHeader: () => createElement('header', null, 'Track order') }));
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });

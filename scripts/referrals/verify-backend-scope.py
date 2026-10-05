@@ -111,6 +111,7 @@ def reviewed_chef_minimum_scope():
 # Exact approved-chef common-finance follow-up; referral runtime and applied migrations stay protected.
 SHARED_FINANCE_BASE='eb5b6e6413a700f849de7bacf9b695cf6a14333a'
 SHARED_FINANCE_REQUIRED={'.github/workflows/chef-bank-onboarding-ci.yml': 'M',
+ 'services/integration-service/src/test/java/in/craves/integration/delivery/feedback/DeliveryFeedbackDatabaseTest.java': 'M',
  '.github/workflows/chef-ledger-ci.yml': 'M',
  'azure-pipelines-rmorampudi09-shared-finance.yml': 'A',
  'docs/finance/ADMIN_APPROVAL_SHARED_FINANCE.md': 'A',

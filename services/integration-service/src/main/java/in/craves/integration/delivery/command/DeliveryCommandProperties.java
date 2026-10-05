@@ -14,6 +14,7 @@ public class DeliveryCommandProperties {
     private boolean webhookProcessingEnabled = false;
     private boolean trackingReconciliationEnabled = false;
     private boolean statusPublisherEnabled = false;
+    private boolean borzoPidgeHandoffEnabled = false;
     private String fullyQualifiedNamespace = "";
     private String connectionString = "";
     private String topicName = "craves-domain-events";
@@ -166,6 +167,8 @@ public class DeliveryCommandProperties {
     public void setTrackingReconciliationEnabled(boolean trackingReconciliationEnabled) { this.trackingReconciliationEnabled = trackingReconciliationEnabled; }
     public boolean isStatusPublisherEnabled() { return statusPublisherEnabled; }
     public void setStatusPublisherEnabled(boolean statusPublisherEnabled) { this.statusPublisherEnabled = statusPublisherEnabled; }
+    public boolean isBorzoPidgeHandoffEnabled() { return borzoPidgeHandoffEnabled; }
+    public void setBorzoPidgeHandoffEnabled(boolean enabled) { this.borzoPidgeHandoffEnabled = enabled; }
     public String getFullyQualifiedNamespace() { return fullyQualifiedNamespace; }
     public void setFullyQualifiedNamespace(String fullyQualifiedNamespace) { this.fullyQualifiedNamespace = fullyQualifiedNamespace; }
     public String getConnectionString() { return connectionString; }

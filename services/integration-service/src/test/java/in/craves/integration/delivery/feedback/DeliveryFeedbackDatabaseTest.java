@@ -46,6 +46,7 @@ class DeliveryFeedbackDatabaseTest {
             in.craves.integration.delivery.status.DeliveryStatusUpdateService.class,
             in.craves.integration.delivery.command.DeliveryOutboxRepository.class,
             in.craves.integration.delivery.command.DeliveryCommandProperties.class,
+            in.craves.integration.delivery.command.BorzoPidgeHandoffRepository.class,
             in.craves.integration.delivery.pidge.PidgeWebhookNormalizer.class);
         app.refresh(); repo=app.getBean(DeliveryFeedbackRepository.class); processor=app.getBean(DeliveryFeedbackProcessor.class);
         metrics=app.getBean(DeliveryMetricsRepository.class); tx=new TransactionTemplate(app.getBean(DataSourceTransactionManager.class));
@@ -54,7 +55,7 @@ class DeliveryFeedbackDatabaseTest {
     @BeforeEach void schema() throws Exception {
         jdbc.execute("DROP SCHEMA IF EXISTS delivery_schema CASCADE");
         for (String file:List.of("V2__delivery_intelligence_foundation.sql","V102__delivery_webhook_status_reconciliation.sql",
-                "V120__delivery_outcome_feedback.sql")) {
+                "V120__delivery_outcome_feedback.sql", "V147__borzo_pidge_timed_handoff.sql")) {
             try(var in=getClass().getResourceAsStream("/db/migration/"+file)) {
                 String sql=new String(Objects.requireNonNull(in).readAllBytes(),StandardCharsets.UTF_8);
                 tx.executeWithoutResult(s->jdbc.execute(sql));

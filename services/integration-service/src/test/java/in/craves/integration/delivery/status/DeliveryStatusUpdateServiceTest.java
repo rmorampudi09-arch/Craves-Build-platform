@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
+import in.craves.integration.delivery.command.BorzoPidgeHandoffRepository;
 import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderStatusUpdate;
@@ -23,9 +24,53 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class DeliveryStatusUpdateServiceTest {
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+
+    @Test
+    void marksPidgeStatusAfterCompletedHandoffForOutOfOrderOrderProjection() {
+        var repository = mock(DeliveryStatusRepository.class);
+        var outbox = mock(DeliveryOutboxRepository.class);
+        var handoffs = mock(BorzoPidgeHandoffRepository.class);
+        var normalizer = mock(DeliveryWebhookNormalizer.class);
+        when(normalizer.providerId()).thenReturn("pidge");
+        UUID jobId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        UUID subOrderId = UUID.randomUUID();
+        Instant observed = Instant.parse("2026-07-24T03:05:00Z");
+        var update = new ProviderStatusUpdate("pidge", "pidge-42", "pidge-42",
+            DeliveryStatus.IN_TRANSIT, "in_transit", null, observed,
+            objectMapper.createObjectNode());
+        var work = new WebhookWorkItem(UUID.randomUUID(), "pidge", "event-42",
+            objectMapper.createObjectNode(), 1);
+        var job = new DeliveryJobState(jobId, orderId, subOrderId, "pidge",
+            "pidge-42", "SEARCHING", "searching", null, observed.minusSeconds(30));
+        var handoff = new BorzoPidgeHandoffRepository.Handoff(jobId, "borzo-24",
+            "COMPLETED", 2, observed.minusSeconds(60), true, true);
+        when(normalizer.normalize(work.rawPayload())).thenReturn(update);
+        when(repository.findJobByProviderOrder("pidge", "pidge-42"))
+            .thenReturn(Optional.of(job));
+        when(repository.lockJob(jobId)).thenReturn(Optional.of(job));
+        when(repository.insertEventIfAbsent(any(), any(), any(), any(), any(), any(),
+            any(), any(), any(), eq(true), isNull())).thenReturn(true);
+        when(handoffs.findByDeliveryJobId(jobId)).thenReturn(Optional.of(handoff));
+        var service = new DeliveryStatusUpdateService(List.of(normalizer), repository,
+            outbox, new DeliveryCommandProperties(), objectMapper, handoffs);
+
+        assertThat(service.processWebhook(work).applied()).isTrue();
+
+        ArgumentCaptor<com.fasterxml.jackson.databind.JsonNode> payload =
+            ArgumentCaptor.forClass(com.fasterxml.jackson.databind.JsonNode.class);
+        verify(outbox).enqueue(eq("DELIVERY_STATUS_CHANGED"), eq(jobId),
+            eq(orderId), payload.capture());
+        var data = payload.getValue().path("data");
+        assertThat(data.path("handoffFromProviderId").asText()).isEqualTo("borzo");
+        assertThat(data.path("handoffFromProviderDeliveryId").asText())
+            .isEqualTo("borzo-24");
+        assertThat(data.path("handoffContinuation").asBoolean()).isTrue();
+    }
 
     @Test
     void appliesNewerWebhookAndEnqueuesStatusOutboxTransactionally() {

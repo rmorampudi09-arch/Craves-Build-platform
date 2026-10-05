@@ -231,6 +231,17 @@ public class DeliveryStatusRepository {
         );
     }
 
+    public void deferWebhookForHandoff(UUID inboxId) {
+        jdbc.update("""
+            UPDATE delivery_schema.delivery_webhook_inbox
+            SET processing_status = 'FAILED', next_attempt_at = now() + interval '3 seconds',
+                attempt_count = GREATEST(0, attempt_count - 1),
+                processing_started_at = NULL, processing_result = 'HANDOFF_DECISION_PENDING',
+                error_message = NULL
+            WHERE id = ? AND processing_status = 'PROCESSING'
+            """, inboxId);
+    }
+
     public void markWebhookDuplicate(UUID inboxId,
                                      String processingResult) {
         jdbc.update("""

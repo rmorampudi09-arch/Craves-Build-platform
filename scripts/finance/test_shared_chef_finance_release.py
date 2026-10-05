@@ -54,8 +54,8 @@ class SharedFinanceReleaseTests(unittest.TestCase):
 
     def test_only_final_additive_migration_may_be_pending(self):
         rows = self.history(); release.validate_history(rows)
-        pending = [r for r in rows if r["version"] != "147"]; self.assertNotIn("147", release.validate_history(pending))
-        with self.assertRaisesRegex(ValueError, "Only additive V147"): release.validate_history([r for r in pending if r["version"] != "146"])
+        pending = [r for r in rows if r["version"] != "148"]; self.assertNotIn("148", release.validate_history(pending))
+        with self.assertRaisesRegex(ValueError, "Only additive V148"): release.validate_history([r for r in pending if r["version"] != "146"])
 
     def test_changed_applied_migration_checksum_is_rejected(self):
         rows = self.history(); rows[0]["checksum"] += 1

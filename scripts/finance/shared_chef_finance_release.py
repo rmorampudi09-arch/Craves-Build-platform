@@ -163,7 +163,7 @@ def validate_history(rows):
         require(row["version"] not in applied, "Duplicate applied migration")
         applied.add(row["version"]); candidate = expected.get(row["version"])
         require(candidate and row["script"] == candidate["script"] and row["checksum"] == candidate["checksum"], "Applied migration checksum differs")
-    require(set(expected) - applied in (set(), {"147"}), "Only additive V147 may be pending")
+    require(set(expected) - applied in (set(), {"148"}), "Only additive V148 may be pending")
     return applied
 
 
@@ -211,6 +211,16 @@ def source_bindings(apps):
     return first
 
 
+def validate_database_state(apps):
+    """Check migration and existing common terms before any binding or image write."""
+    integration = apps[APPS["integration-service"]]
+    chef_rows = database(apps[APPS["user-chef-service"]], "SELECT coalesce(json_agg(row_to_json(t)),'[]'::json) FROM (SELECT version,script,checksum,success,type FROM public.flyway_schema_history ORDER BY installed_rank LIMIT 251)t;")
+    active.compare_history(chef_rows, active.history_module().expected("user-chef-service"))
+    rows = database(integration, "SELECT coalesce(json_agg(row_to_json(t)),'[]'::json) FROM (SELECT version,script,checksum,success,type FROM payment_schema.flyway_schema_history ORDER BY installed_rank LIMIT 251)t;")
+    applied = validate_history(rows); terms = policy_and_terms(integration, deployed="148" in applied)
+    return {"chefMigrationHistoryVerified": True, **terms}
+
+
 def preflight():
     apps = inventory(); source_bindings(apps)
     integration = apps[APPS["integration-service"]]
@@ -220,13 +230,10 @@ def preflight():
         require(props["latestRevisionName"] == props["latestReadyRevisionName"], "Existing rollout is unsettled")
         require(props["configuration"]["activeRevisionsMode"] == "Single" and props["template"]["scale"]["maxReplicas"] == 1, "Existing revision/replica bounds differ")
         require(props["template"]["containers"][0]["image"].startswith(LOGIN + "/craves/"), "Current registry binding differs")
-    chef_rows = database(apps[APPS["user-chef-service"]], "SELECT coalesce(json_agg(row_to_json(t)),'[]'::json) FROM (SELECT version,script,checksum,success,type FROM public.flyway_schema_history ORDER BY installed_rank LIMIT 251)t;")
-    active.compare_history(chef_rows, active.history_module().expected("user-chef-service"))
-    rows = database(integration, "SELECT coalesce(json_agg(row_to_json(t)),'[]'::json) FROM (SELECT version,script,checksum,success,type FROM payment_schema.flyway_schema_history ORDER BY installed_rank LIMIT 251)t;")
-    applied = validate_history(rows); terms = policy_and_terms(integration, deployed="147" in applied)
+    terms = validate_database_state(apps)
     secret(integration, "CRAVES_CATALOG_FINANCE_READ_KEY")
     require(inventory() == apps, "Azure runtime changed during inspection")
-    return {"sourceSha": sha(), "readOnly": True, "chefMigrationHistoryVerified": True, **terms,
+    return {"sourceSha": sha(), "readOnly": True, **terms,
         "apps": {name: {"signature": signature(app), "image": app["properties"]["template"]["containers"][0]["image"]} for name, app in apps.items()}}
 
 

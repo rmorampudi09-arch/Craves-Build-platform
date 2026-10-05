@@ -79,7 +79,7 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
 
     @Override
     public ProviderQuote quote(QuoteRequest request) {
-        requireApiReady();
+        requireCreateReady();
         validateQuoteRequest(request);
         JsonNode response = post("/calculate-order", buildOrderRequest(request, null));
         requireSuccessful(response, "Borzo quote");
@@ -106,31 +106,27 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
 
     @Override
     public ProviderDelivery create(CreateDeliveryRequest request) {
-        requireApiReady();
+        requireCreateReady();
         Objects.requireNonNull(request, "request is required");
         String clientReference = toBorzoClientReference(request.clientReference());
         validateQuoteRequest(request.quoteRequest());
+        ObjectNode orderRequest = buildOrderRequest(request.quoteRequest(), clientReference);
 
         Instant attemptedAt = Instant.now();
-        JsonNode response;
         try {
-            response = post(
+            JsonNode response = post(
                 "/create-order",
-                buildOrderRequest(request.quoteRequest(), clientReference)
+                orderRequest
             );
-        } catch (BorzoApiException ex) {
-            if (ex.getCause() instanceof ResourceAccessException) {
-                throw new ProviderCreateUncertainException(
-                    PROVIDER_ID,
-                    clientReference,
-                    attemptedAt,
-                    ex
-                );
-            }
-            throw ex;
+            requireSuccessful(response, "Borzo create-order");
+            return mapOrder(response.path("order"));
+        } catch (RuntimeException ex) {
+            // The request may have reached Borzo even when the reply is 5xx, empty,
+            // malformed, or times out. Reconcile the client reference before any retry.
+            throw new ProviderCreateUncertainException(
+                PROVIDER_ID, clientReference, attemptedAt, ex
+            );
         }
-        requireSuccessful(response, "Borzo create-order");
-        return mapOrder(response.path("order"));
     }
 
     @Override
@@ -201,6 +197,21 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
 
     @Override
     public TrackingSnapshot track(String providerDeliveryId) {
+        ProviderDelivery delivery = readOrder(providerDeliveryId);
+        Courier courier = readCourier(providerDeliveryId);
+        return new TrackingSnapshot(delivery, courier, Instant.now());
+    }
+
+    public Courier readCourier(String providerDeliveryId) {
+        requireApiReady();
+        long orderId = parseOrderId(providerDeliveryId);
+        JsonNode courierResponse = get("/courier", orderId);
+        requireSuccessful(courierResponse, "Borzo courier");
+        return mapCourier(courierResponse.path("courier"));
+    }
+
+    /** Reads assignment state without requiring a courier to exist yet. */
+    public ProviderDelivery readOrder(String providerDeliveryId) {
         requireApiReady();
         long orderId = parseOrderId(providerDeliveryId);
         JsonNode ordersResponse = get("/orders", orderId);
@@ -211,10 +222,7 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
         }
 
         ProviderDelivery delivery = mapOrder(orders.get(0));
-        JsonNode courierResponse = get("/courier", orderId);
-        requireSuccessful(courierResponse, "Borzo courier");
-        Courier courier = mapCourier(courierResponse.path("courier"));
-        return new TrackingSnapshot(delivery, courier, Instant.now());
+        return delivery;
     }
 
     private ObjectNode buildOrderRequest(QuoteRequest request, String clientReference) {
@@ -364,6 +372,13 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
         }
         if (!StringUtils.hasText(properties.getAuthToken())) {
             throw new BorzoApiException(null, "Borzo API auth token is not configured", null);
+        }
+    }
+
+    private void requireCreateReady() {
+        requireApiReady();
+        if (!properties.isCreateEnabled()) {
+            throw new BorzoApiException(null, "Borzo new bookings are disabled", null);
         }
     }
 

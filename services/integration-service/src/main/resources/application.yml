@@ -44,6 +44,7 @@ craves:
     webhook-processing-enabled: ${CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED:false}
     tracking-reconciliation-enabled: ${CRAVES_DELIVERY_TRACKING_RECONCILIATION_ENABLED:false}
     status-publisher-enabled: ${CRAVES_DELIVERY_STATUS_PUBLISHER_ENABLED:false}
+    borzo-pidge-handoff-enabled: ${CRAVES_BORZO_PIDGE_HANDOFF_ENABLED:false}
     fully-qualified-namespace: ${SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
     connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
     topic-name: ${SERVICE_BUS_TOPIC_NAME:craves-domain-events}
@@ -140,6 +141,7 @@ craves:
       default-volumetric-weight-grams: ${PIDGE_DEFAULT_VOLUMETRIC_WEIGHT_GRAMS:900}
     borzo:
       enabled: ${BORZO_API_ENABLED:false}
+      create-enabled: ${BORZO_CREATE_ENABLED:false}
       environment: ${BORZO_API_ENVIRONMENT:SANDBOX}
       production-activation-approved: ${BORZO_PRODUCTION_ACTIVATION_APPROVED:false}
       base-url: ${BORZO_API_BASE_URL:https://robotapitest-in.borzodelivery.com/api/business/1.8}

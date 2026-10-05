@@ -1,7 +1,9 @@
 package in.craves.integration.delivery.command;
 
 import in.craves.integration.delivery.DeliveryAssignmentRepository;
+import in.craves.integration.config.BorzoProperties;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentCandidateInput;
+import in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateInput;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentRequest;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentResponse;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateScore;
@@ -37,6 +39,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -48,14 +51,17 @@ public class DeliveryProviderRouter {
     private final DeliveryCommandProperties properties;
     private final ExecutorService quoteExecutor;
     private final Clock clock;
+    private final BorzoProperties borzoProperties;
 
+    @Autowired
     public DeliveryProviderRouter(List<DeliveryProviderAdapter> adapters,
                                   DeliveryProviderCatalogRepository providerCatalog,
                                   DeliveryIntelligenceService intelligenceService,
                                   DeliveryAssignmentRepository assignmentRepository,
                                   DeliveryCommandProperties properties,
                                   @Qualifier("deliveryQuoteExecutor") ExecutorService quoteExecutor,
-                                  Clock clock) {
+                                  Clock clock,
+                                  BorzoProperties borzoProperties) {
         Map<String, DeliveryProviderAdapter> indexed = new LinkedHashMap<>();
         for (DeliveryProviderAdapter adapter : adapters) {
             String providerId = normalize(adapter.providerId());
@@ -70,9 +76,33 @@ public class DeliveryProviderRouter {
         this.properties = properties;
         this.quoteExecutor = quoteExecutor;
         this.clock = clock;
+        this.borzoProperties = borzoProperties;
+    }
+
+    DeliveryProviderRouter(List<DeliveryProviderAdapter> adapters,
+                           DeliveryProviderCatalogRepository providerCatalog,
+                           DeliveryIntelligenceService intelligenceService,
+                           DeliveryAssignmentRepository assignmentRepository,
+                           DeliveryCommandProperties properties,
+                           ExecutorService quoteExecutor,
+                           Clock clock) {
+        this(adapters, providerCatalog, intelligenceService, assignmentRepository,
+            properties, quoteExecutor, clock, null);
+    }
+
+    public boolean borzoTimedPolicyReady() {
+        return properties.isBorzoPidgeHandoffEnabled()
+            && providerCatalog.activeProviderIds().stream()
+                .map(DeliveryProviderRouter::normalize).anyMatch("borzo"::equals)
+            && adapters.containsKey("borzo")
+            && (borzoProperties == null || borzoProperties.productionCreateReady());
     }
 
     public RoutingResult route(DeliveryCommandMessage command) {
+        return route(command, null);
+    }
+
+    public RoutingResult route(DeliveryCommandMessage command, Instant borzoWindowStartedAt) {
         Objects.requireNonNull(command, "delivery command is required");
         List<String> activeProviderIds = providerCatalog.activeProviderIds();
         if (activeProviderIds.isEmpty()) {
@@ -80,12 +110,27 @@ public class DeliveryProviderRouter {
                 "No active delivery providers are configured"
             );
         }
+        boolean timedPolicy = properties.isBorzoPidgeHandoffEnabled();
+        boolean borzoReady = timedPolicy
+            && activeProviderIds.stream().map(DeliveryProviderRouter::normalize)
+                .anyMatch("borzo"::equals)
+            && adapters.containsKey("borzo")
+            && (borzoProperties == null || borzoProperties.productionCreateReady());
+        if (borzoReady && borzoWindowStartedAt == null) {
+            throw new DeliveryProviderTemporarilyUnavailableException(
+                "Borzo selection window has not been durably initialized");
+        }
+        boolean borzoWindowOpen = borzoReady && borzoWindowStartedAt != null
+            && clock.instant().isBefore(borzoWindowStartedAt.plusSeconds(120));
 
         List<QuoteAudit> quoteAudit = new ArrayList<>();
         List<Callable<QuoteOutcome>> tasks = new ArrayList<>();
 
         for (String configuredProviderId : activeProviderIds) {
             String providerId = normalize(configuredProviderId);
+            if (timedPolicy && !(borzoWindowOpen ? "borzo" : "pidge").equals(providerId)) {
+                continue;
+            }
             DeliveryProviderAdapter adapter = adapters.get(providerId);
             if (adapter == null) {
                 quoteAudit.add(new QuoteAudit(
@@ -98,6 +143,16 @@ public class DeliveryProviderRouter {
         }
 
         List<QuoteOutcome> outcomes = invokeQuotes(tasks, quoteAudit);
+        if (timedPolicy) {
+            String required = borzoWindowOpen ? "borzo" : "pidge";
+            if (outcomes.stream().noneMatch(outcome -> required.equals(outcome.providerId())
+                && outcome.quote() != null && outcome.quote().available())) {
+                throw new DeliveryProviderTemporarilyUnavailableException(
+                    required + " has no available quote in its selection window",
+                    borzoWindowOpen ? borzoWindowStartedAt.plusSeconds(120) : null
+                );
+            }
+        }
         boolean anyAvailableQuote = outcomes.stream()
             .anyMatch(outcome -> outcome.quote() != null && outcome.quote().available());
         if (!anyAvailableQuote) {
@@ -113,9 +168,29 @@ public class DeliveryProviderRouter {
         }
 
         AssignmentResponse assignment = intelligenceService.assign(
-            assignmentRequest(command, outcomes)
+            assignmentRequest(command, outcomes, timedPolicy)
         );
+        if (timedPolicy && !borzoWindowOpen) {
+            ProviderQuote pidgeQuote = outcomes.stream()
+                .filter(outcome -> "pidge".equals(outcome.providerId()))
+                .map(QuoteOutcome::quote).filter(Objects::nonNull)
+                .filter(ProviderQuote::available).findFirst().orElseThrow();
+            boolean hasPidge = assignment.rankedCandidates().stream()
+                .anyMatch(candidate -> "pidge".equals(normalize(candidate.providerId())));
+            assignmentRepository.ensureTimedPidgeCandidate(assignment.assignmentId(), pidgeQuote);
+            if (!hasPidge) {
+                assignment = assignmentRepository.find(assignment.assignmentId())
+                    .orElseThrow(() -> new DeliveryRoutingException(
+                        "The timed Pidge candidate could not be loaded"));
+            }
+        }
         List<RankedQuoteOutcome> candidates = orderByIntelligence(assignment, outcomes);
+        if (timedPolicy) {
+            String required = borzoWindowOpen ? "borzo" : "pidge";
+            candidates = candidates.stream()
+                .filter(candidate -> required.equals(candidate.outcome().providerId()))
+                .toList();
+        }
         if (candidates.isEmpty()) {
             throw new DeliveryRoutingException(
                 "The persisted intelligent assignment has no currently available provider quote"
@@ -129,6 +204,12 @@ public class DeliveryProviderRouter {
         for (int index = 0; index < maximumAttempts; index++) {
             RankedQuoteOutcome ranked = candidates.get(index);
             QuoteOutcome candidate = ranked.outcome();
+            if (borzoWindowOpen
+                && !clock.instant().isBefore(borzoWindowStartedAt.plusSeconds(120))) {
+                throw new DeliveryProviderTemporarilyUnavailableException(
+                    "Borzo selection window expired before booking",
+                    borzoWindowStartedAt.plusSeconds(120));
+            }
             try {
                 ProviderDelivery delivery = candidate.adapter().create(
                     new CreateDeliveryRequest(
@@ -337,14 +418,17 @@ public class DeliveryProviderRouter {
     }
 
     private AssignmentRequest assignmentRequest(DeliveryCommandMessage command,
-                                                List<QuoteOutcome> outcomes) {
-        List<AssignmentCandidateInput> candidates = new ArrayList<>();
+                                                List<QuoteOutcome> outcomes,
+                                                boolean includePidgePlaceholder) {
+        List<CandidateInput> candidates = new ArrayList<>();
+        boolean pidgeIncluded = false;
         for (QuoteOutcome outcome : outcomes) {
             ProviderQuote quote = outcome.quote();
             if (quote == null || !quote.available()) {
                 continue;
             }
-            candidates.add(new AssignmentCandidateInput(
+            pidgeIncluded |= "pidge".equals(outcome.providerId());
+            candidates.add(new CandidateInput(
                 outcome.providerId(),
                 providerQuoteId(quote),
                 agentId(quote),
@@ -352,24 +436,22 @@ public class DeliveryProviderRouter {
                 pickupEtaMinutes(quote),
                 quote.deliveryFeeAmount(),
                 quote.currency(),
-                providerSuccessProbability(quote),
-                new ProviderQuoteSnapshot(
-                    quote.paymentAmount(),
-                    quote.deliveryFeeAmount(),
-                    quote.currency(),
-                    quote.warnings(),
-                    quote.providerMetadata(),
-                    quote.quotedAt()
-                )
+                true,
+                quote.providerMetadata()
             ));
+        }
+        if (includePidgePlaceholder && !pidgeIncluded) {
+            candidates.add(new CandidateInput("pidge", null, null, null, null,
+                null, "INR", false, null));
         }
         return new AssignmentRequest(
             command.chefSubOrderId(),
             command.orderId(),
-            command.area(),
             command.distanceKm(),
             command.orderHour(),
             command.dayOfWeek(),
+            command.area(),
+            null,
             candidates
         );
     }
@@ -387,7 +469,10 @@ public class DeliveryProviderRouter {
         for (CandidateScore candidate : assignment.rankedCandidates()) {
             if (candidate.status() != in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateStatus.SELECTED
                 && candidate.status() != in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateStatus.RANKED
-                && candidate.status() != in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateStatus.ACCEPTED)
+                && candidate.status() != in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateStatus.ACCEPTED
+                && !(properties.isBorzoPidgeHandoffEnabled()
+                    && "pidge".equals(normalize(candidate.providerId()))
+                    && candidate.status() == in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateStatus.SKIPPED))
                 continue;
             QuoteOutcome outcome = byProvider.get(normalize(candidate.providerId()));
             if (outcome != null) {
@@ -501,8 +586,20 @@ public class DeliveryProviderRouter {
     }
 
     public static class DeliveryProviderTemporarilyUnavailableException extends DeliveryRoutingException {
+        private final Instant policyDeadline;
+
         public DeliveryProviderTemporarilyUnavailableException(String message) {
+            this(message, null);
+        }
+
+        public DeliveryProviderTemporarilyUnavailableException(String message,
+                                                               Instant policyDeadline) {
             super(message);
+            this.policyDeadline = policyDeadline;
+        }
+
+        public Instant policyDeadline() {
+            return policyDeadline;
         }
     }
 

@@ -6,6 +6,7 @@ import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentStrat
 import in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateScore;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateStatus;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.Momentum;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderQuote;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Collection;
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -132,6 +134,93 @@ public class DeliveryAssignmentRepository {
             """, assignmentId, acceptedCandidateId);
         if (updated != 1) {
             throw new IllegalStateException("Delivery assignment could not be marked assigned");
+        }
+    }
+
+    /**
+     * A command created before the timed policy may have an assignment without Pidge.
+     * Attach a candidate backed by the fresh quote, without inventing an ML score.
+     */
+    @Transactional
+    public void ensureTimedPidgeCandidate(UUID assignmentId, ProviderQuote quote) {
+        List<String> states = jdbc.queryForList("""
+            SELECT status FROM delivery_schema.delivery_assignment
+            WHERE id = ? FOR UPDATE
+            """, String.class, assignmentId);
+        if (states.size() != 1 || !"RANKED".equals(states.getFirst())) {
+            throw new IllegalStateException("Timed fallback requires an unfinished assignment");
+        }
+        List<UUID> existing = jdbc.query("""
+            SELECT id FROM delivery_schema.delivery_assignment_candidate
+            WHERE assignment_id = ? AND provider_id = 'pidge'
+            """, (rs, row) -> rs.getObject("id", UUID.class), assignmentId);
+        if (existing.size() > 1) {
+            throw new IllegalStateException("Assignment has duplicate Pidge candidates");
+        }
+        if (!existing.isEmpty()) {
+            jdbc.update("""
+                UPDATE delivery_schema.delivery_assignment_candidate
+                SET status = 'RANKED', quoted_cost = ?, currency = ?,
+                    provider_metadata = ?::jsonb, updated_at = now()
+                WHERE id = ? AND status = 'SKIPPED'
+                """, quote.deliveryFeeAmount(), quote.currency(),
+                json.writeNode(quote.providerMetadata()), existing.getFirst());
+            return;
+        }
+        Integer rank = jdbc.queryForObject("""
+            SELECT COALESCE(MAX(candidate_rank), 0) + 1
+            FROM delivery_schema.delivery_assignment_candidate WHERE assignment_id = ?
+            """, Integer.class, assignmentId);
+        jdbc.update("""
+            INSERT INTO delivery_schema.delivery_assignment_candidate
+                (id, assignment_id, provider_id, candidate_rank, quoted_cost, currency,
+                 predicted_success_probability, combined_score, stored_avg, momentum,
+                 exploration_sample, provider_quality_score, proximity_score, final_score,
+                 status, provider_metadata)
+            VALUES (?, ?, 'pidge', ?, ?, ?, 0, 0, 0, 'INSUFFICIENT_DATA',
+                    0, 0, 0, 0, 'RANKED', ?::jsonb)
+            """, UUID.randomUUID(), assignmentId, rank, quote.deliveryFeeAmount(),
+            quote.currency(), json.writeNode(quote.providerMetadata()));
+    }
+
+    /** Changes only the persisted provider choice after a confirmed, timed Borzo cancellation. */
+    public void markBorzoPidgeHandoff(UUID assignmentId) {
+        int selected = jdbc.update("""
+            UPDATE delivery_schema.delivery_assignment_candidate
+            SET status = 'ACCEPTED', updated_at = now()
+            WHERE assignment_id = ? AND provider_id = 'pidge'
+              AND status IN ('RANKED', 'SELECTED', 'ACCEPTED')
+            """, assignmentId);
+        if (selected > 1) throw new IllegalStateException("Assignment has duplicate Pidge candidates");
+        jdbc.update("""
+            UPDATE delivery_schema.delivery_assignment_candidate
+            SET status = 'DECLINED', updated_at = now()
+            WHERE assignment_id = ? AND provider_id = 'borzo' AND status = 'ACCEPTED'
+            """, assignmentId);
+        int updated;
+        if (selected == 1) {
+            updated = jdbc.update("""
+            UPDATE delivery_schema.delivery_assignment AS assignment
+            SET selected_candidate_id = candidate.id,
+                selected_provider_id = 'pidge',
+                selected_agent_id = candidate.agent_id,
+                updated_at = now()
+            FROM delivery_schema.delivery_assignment_candidate AS candidate
+            WHERE assignment.id = ? AND candidate.assignment_id = assignment.id
+              AND candidate.provider_id = 'pidge'
+            """, assignmentId);
+        } else {
+            // Pidge was unavailable during the original quote fan-out. The timed handoff
+            // has a fresh quote, but no truthful original intelligence score to attach.
+            updated = jdbc.update("""
+                UPDATE delivery_schema.delivery_assignment
+                SET selected_candidate_id = NULL, selected_provider_id = 'pidge',
+                    selected_agent_id = NULL, updated_at = now()
+                WHERE id = ? AND status = 'ASSIGNED'
+                """, assignmentId);
+        }
+        if (updated != 1) {
+            throw new IllegalStateException("Delivery assignment handoff could not be persisted");
         }
     }
 

@@ -96,6 +96,53 @@ class DeliveryCommandCompletionServiceTest {
         );
     }
 
+    @Test
+    void borzoBookingNearExpiryKeepsTheOriginalSelectionDeadline() {
+        var assignments = mock(DeliveryAssignmentRepository.class);
+        var jobs = mock(DeliveryJobRepository.class);
+        var outbox = mock(DeliveryOutboxRepository.class);
+        var commands = mock(DeliveryCommandRepository.class);
+        var handoffs = mock(BorzoPidgeHandoffRepository.class);
+        var properties = new DeliveryCommandProperties();
+        properties.setBorzoPidgeHandoffEnabled(false);
+        var mapper = new ObjectMapper().findAndRegisterModules();
+        var service = new DeliveryCommandCompletionService(assignments, jobs, outbox,
+            commands, mapper, handoffs, properties);
+        var command = command();
+        UUID borzoCandidate = UUID.randomUUID();
+        var assignment = assignment(command, UUID.randomUUID(), borzoCandidate, UUID.randomUUID());
+        Instant windowStartedAt = Instant.now().minusSeconds(119);
+        var delivery = new ProviderDelivery("borzo", "borzo-77", null,
+            DeliveryStatus.DELAYED, "delayed", null, null, null,
+            mapper.createObjectNode(), Instant.now());
+        var routing = new RoutingResult("borzo", delivery, assignment, borzoCandidate,
+            List.of(), List.of());
+        UUID jobId = UUID.randomUUID();
+        when(jobs.findIdByChefSubOrderId(command.chefSubOrderId()))
+            .thenReturn(Optional.empty());
+        when(jobs.insert(command.orderId(), command.chefSubOrderId(), routing))
+            .thenReturn(jobId);
+        when(commands.borzoWindowStartedAt(command.commandId()))
+            .thenReturn(Optional.of(windowStartedAt));
+
+        service.complete(command, routing);
+
+        verify(handoffs).enroll(jobId, "borzo-77", windowStartedAt);
+    }
+
+    @Test
+    void ordinaryStatusOmitsOptionalHandoffFieldsInStrictEventSchema() {
+        var mapper = new ObjectMapper().findAndRegisterModules();
+        var ordinary = new DeliveryCommandModels.DeliveryStatusChangedData(
+            UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+            "pidge", "pidge-1", "SEARCHING", null, Instant.now());
+        var json = mapper.valueToTree(ordinary);
+
+        assertThat(json.has("handoffFromProviderId")).isFalse();
+        assertThat(json.has("handoffFromProviderDeliveryId")).isFalse();
+        assertThat(json.has("handoffContinuation")).isFalse();
+    }
+
     private static AssignmentResponse assignment(DeliveryCommandMessage command,
                                                    UUID assignmentId,
                                                    UUID fastCandidateId,

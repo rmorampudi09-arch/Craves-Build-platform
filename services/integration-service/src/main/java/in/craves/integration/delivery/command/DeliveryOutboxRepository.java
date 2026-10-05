@@ -33,6 +33,18 @@ public class DeliveryOutboxRepository {
         return id;
     }
 
+    public boolean hasPublishedBorzoStatus(UUID deliveryJobId) {
+        Boolean published = jdbc.queryForObject("""
+            SELECT EXISTS (
+                SELECT 1 FROM delivery_schema.delivery_outbox
+                WHERE aggregate_id = ? AND event_type = 'DELIVERY_STATUS_CHANGED'
+                  AND payload->'data'->>'providerId' = 'borzo'
+                  AND status = 'PUBLISHED'
+            )
+            """, Boolean.class, deliveryJobId);
+        return Boolean.TRUE.equals(published);
+    }
+
     @Transactional
     public List<OutboxRecord> claimBatch(int limit) {
         return jdbc.query("""

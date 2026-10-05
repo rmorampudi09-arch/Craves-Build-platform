@@ -19,7 +19,7 @@ Keep the operation outside public APIM products. Request and response HMACs bind
 the exact path, direction, timestamp and bytes. Freshness, strict JSON, identity,
 response-size and complete-list checks fail closed. There is no approval cache.
 
-V147 adds one immutable shared-withholding version and a global head. Upgrade
+V148 adds one immutable shared-withholding version and a global head. Upgrade
 promotes only an existing, unanimous, current-year reviewed withholding rate and
 preserves the original profile references. An absent or conflicting global basis
 is an explicit rollout blocker, never a guessed tax rate. This is one common
@@ -52,7 +52,7 @@ the additive migration and historical financial records are preserved.
 
 1. Confirm the active common policy, existing unanimous withholding basis and
    existing source URL/Key Vault credential references through read-only checks.
-2. Run exact-commit User/Chef, Catalog, Order and Integration regression, V147
+2. Run exact-commit User/Chef, Catalog, Order and Integration regression, V148
    upgrade/replay, approval/signature tests and the signed financial round trip.
    The new acceptance suites must have no failures, errors or skipped cases.
 3. Deploy User/Chef first, using the runtime-preserving image deployment. Verify

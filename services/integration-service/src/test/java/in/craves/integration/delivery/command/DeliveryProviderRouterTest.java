@@ -3,6 +3,7 @@ package in.craves.integration.delivery.command;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.DeliveryAssignmentRepository;
+import in.craves.integration.config.BorzoProperties;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentRequest;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentResponse;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentStatus;
@@ -95,6 +97,139 @@ class DeliveryProviderRouterTest {
         assertThat(request.getValue().area()).isEqualTo("Madhapur");
         assertThat(request.getValue().distanceKm()).isEqualTo(4.6);
         assertThat(request.getValue().candidates()).hasSize(2);
+    }
+
+    @Test
+    void timedPolicyAttemptsOnlyBorzoBeforeTwoMinutesAndOnlyPidgeAfterward() {
+        var catalog = mock(DeliveryProviderCatalogRepository.class);
+        var intelligence = mock(DeliveryIntelligenceService.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("borzo", "pidge"));
+        var borzo = new FakeAdapter("borzo", 7, "100.00", CreateBehavior.SUCCESS);
+        var pidge = new FakeAdapter("pidge", 5, "90.00", CreateBehavior.SUCCESS);
+        var properties = new DeliveryCommandProperties();
+        properties.setBorzoPidgeHandoffEnabled(true);
+        when(intelligence.assign(any())).thenReturn(timedAssignment());
+        var router = new DeliveryProviderRouter(List.of(borzo, pidge), catalog,
+            intelligence, mock(DeliveryAssignmentRepository.class), properties,
+            quoteExecutor, clock);
+
+        assertThatThrownBy(() -> router.route(command()))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+
+        assertThat(router.route(command(), clock.instant()).providerId()).isEqualTo("borzo");
+        assertThat(borzo.quoteCalls()).isEqualTo(1);
+        assertThat(pidge.quoteCalls()).isZero();
+        assertThat(pidge.createCalls()).isZero();
+
+        assertThat(router.route(command(), clock.instant().minusSeconds(120)).providerId())
+            .isEqualTo("pidge");
+        assertThat(borzo.quoteCalls()).isEqualTo(1);
+        assertThat(pidge.quoteCalls()).isEqualTo(1);
+        assertThat(pidge.createCalls()).isEqualTo(1);
+    }
+
+    @Test
+    void doesNotCreateBorzoWhenTheWindowExpiresDuringQuoteAndAssignment() {
+        var catalog = mock(DeliveryProviderCatalogRepository.class);
+        var intelligence = mock(DeliveryIntelligenceService.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("borzo", "pidge"));
+        var borzo = new FakeAdapter("borzo", 7, "100.00", CreateBehavior.SUCCESS);
+        var pidge = new FakeAdapter("pidge", 5, "90.00", CreateBehavior.SUCCESS);
+        var properties = new DeliveryCommandProperties();
+        properties.setBorzoPidgeHandoffEnabled(true);
+        when(intelligence.assign(any())).thenReturn(timedAssignment());
+        Clock advancingClock = mock(Clock.class);
+        Instant startedAt = clock.instant();
+        when(advancingClock.instant()).thenReturn(startedAt.plusSeconds(119),
+            startedAt.plusSeconds(120));
+        var router = new DeliveryProviderRouter(List.of(borzo, pidge), catalog,
+            intelligence, mock(DeliveryAssignmentRepository.class), properties,
+            quoteExecutor, advancingClock);
+
+        assertThatThrownBy(() -> router.route(command(), startedAt))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class)
+            .hasMessageContaining("expired before booking");
+        assertThat(borzo.quoteCalls()).isEqualTo(1);
+        assertThat(borzo.createCalls()).isZero();
+        assertThat(pidge.createCalls()).isZero();
+    }
+
+    @Test
+    void disabledBorzoDispatchesPidgeWithoutStartingTheWindow() {
+        var catalog = mock(DeliveryProviderCatalogRepository.class);
+        var intelligence = mock(DeliveryIntelligenceService.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("borzo", "pidge"));
+        var pidge = new FakeAdapter("pidge", 5, "90.00", CreateBehavior.SUCCESS);
+        var properties = new DeliveryCommandProperties();
+        properties.setBorzoPidgeHandoffEnabled(true);
+        when(intelligence.assign(any())).thenReturn(timedAssignment());
+        var router = new DeliveryProviderRouter(List.of(pidge), catalog,
+            intelligence, mock(DeliveryAssignmentRepository.class), properties,
+            quoteExecutor, clock);
+
+        assertThat(router.borzoTimedPolicyReady()).isFalse();
+        assertThat(router.route(command(), clock.instant()).providerId()).isEqualTo("pidge");
+        assertThat(pidge.quoteCalls()).isEqualTo(1);
+        assertThat(pidge.createCalls()).isEqualTo(1);
+    }
+
+    @Test
+    void rollbackCreateGateSelectsPidgeWhileBorzoMaintenanceApiStaysEnabled() {
+        var catalog = mock(DeliveryProviderCatalogRepository.class);
+        var intelligence = mock(DeliveryIntelligenceService.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("borzo", "pidge"));
+        when(intelligence.assign(any())).thenReturn(timedAssignment());
+        var borzo = new FakeAdapter("borzo", 7, "100.00", CreateBehavior.SUCCESS);
+        var pidge = new FakeAdapter("pidge", 5, "90.00", CreateBehavior.SUCCESS);
+        var policy = new DeliveryCommandProperties();
+        policy.setBorzoPidgeHandoffEnabled(true);
+        var runtime = new BorzoProperties();
+        runtime.setEnabled(true);
+        runtime.setEnvironment("PRODUCTION");
+        runtime.setProductionActivationApproved(true);
+        runtime.setBaseUrl("https://robot-in.borzodelivery.com/api/business/1.8");
+        runtime.setAuthToken("test-token");
+        runtime.setCallbackSecret("test-callback-token");
+        runtime.setCallbackUrl("https://api.craves.in/api/v1/delivery/webhooks/borzo");
+        var router = new DeliveryProviderRouter(List.of(borzo, pidge), catalog,
+            intelligence, mock(DeliveryAssignmentRepository.class), policy,
+            quoteExecutor, clock, runtime);
+
+        assertThat(runtime.productionReady()).isTrue();
+        assertThat(router.borzoTimedPolicyReady()).isFalse();
+        assertThat(router.route(command(), clock.instant()).providerId()).isEqualTo("pidge");
+        assertThat(borzo.quoteCalls()).isZero();
+        assertThat(borzo.createCalls()).isZero();
+    }
+
+    @Test
+    void oldUnfinishedAssignmentGetsPidgeCandidateWhenWindowExpires() {
+        var catalog = mock(DeliveryProviderCatalogRepository.class);
+        var intelligence = mock(DeliveryIntelligenceService.class);
+        var assignments = mock(DeliveryAssignmentRepository.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("borzo", "pidge"));
+        var borzo = new FakeAdapter("borzo", 7, "100.00", CreateBehavior.SUCCESS);
+        var pidge = new FakeAdapter("pidge", 5, "90.00", CreateBehavior.SUCCESS);
+        var properties = new DeliveryCommandProperties();
+        properties.setBorzoPidgeHandoffEnabled(true);
+        var command = command();
+        var old = singleProviderAssignment(command.chefSubOrderId(), command.orderId(),
+            UUID.randomUUID());
+        var pidgeCandidate = timedAssignment().rankedCandidates().get(1);
+        var updated = new AssignmentResponse(old.assignmentId(), old.chefSubOrderId(),
+            old.orderId(), old.strategy(), old.status(), old.scoringVersion(),
+            old.selectedCandidateId(), old.selectedProviderId(), null,
+            List.of(old.rankedCandidates().getFirst(), pidgeCandidate), old.createdAt());
+        when(intelligence.assign(any())).thenReturn(old);
+        when(assignments.find(old.assignmentId())).thenReturn(Optional.of(updated));
+        var router = new DeliveryProviderRouter(List.of(borzo, pidge), catalog,
+            intelligence, assignments, properties, quoteExecutor, clock);
+
+        assertThat(router.route(command, clock.instant().minusSeconds(120)).providerId())
+            .isEqualTo("pidge");
+        verify(assignments).ensureTimedPidgeCandidate(eq(old.assignmentId()), any());
+        assertThat(borzo.createCalls()).isZero();
+        assertThat(pidge.createCalls()).isEqualTo(1);
     }
 
     @Test
@@ -262,6 +397,25 @@ class DeliveryProviderRouterTest {
             List.of(fast, backup),
             Instant.now()
         );
+    }
+
+    private static AssignmentResponse timedAssignment() {
+        UUID borzoId = UUID.randomUUID();
+        UUID pidgeId = UUID.randomUUID();
+        ObjectMapper mapper = new ObjectMapper();
+        CandidateScore borzo = new CandidateScore(
+            borzoId, 1, "borzo", "borzo-quote", null, null, 7.0,
+            new BigDecimal("100.00"), "INR", 0.9, 90.0, 90.0, 90.0,
+            Momentum.STABLE, 0.5, 90.0, 80.0, 85.0,
+            CandidateStatus.SELECTED, mapper.createObjectNode());
+        CandidateScore pidge = new CandidateScore(
+            pidgeId, 2, "pidge", null, null, null, null,
+            null, "INR", 0.0, 0.0, null, 50.0,
+            Momentum.INSUFFICIENT_DATA, 0.0, 0.0, 0.0, 0.0,
+            CandidateStatus.SKIPPED, mapper.createObjectNode());
+        return new AssignmentResponse(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+            AssignmentStrategy.STOCHASTIC, AssignmentStatus.RANKED, "TEST",
+            borzoId, "borzo", null, List.of(borzo, pidge), Instant.now());
     }
 
     private static AssignmentResponse singleProviderAssignment(UUID subOrderId,

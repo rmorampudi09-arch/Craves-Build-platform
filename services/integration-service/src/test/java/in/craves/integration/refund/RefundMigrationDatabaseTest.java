@@ -34,7 +34,7 @@ class RefundMigrationDatabaseTest {
         var pending=java.util.Arrays.stream(latest.info().pending()).map(m->m.getVersion().getVersion()).toList();
         // V134 is the separately reviewed manual channel; V135 has never existed.
         // V146 adds empty review storage; it must never auto-classify historical rows.
-        assertEquals(java.util.List.of("134","136","137","138","139","140","141","142","143","144","145","146","147"),pending);
+        assertEquals(java.util.List.of("134","136","137","138","139","140","141","142","143","144","145","146","147","148"),pending);
         assertEquals(pending.size(),latest.migrate().migrationsExecuted);latest.validate();assertEquals(0,latest.migrate().migrationsExecuted);
         assertEquals(before,jdbc.queryForMap("SELECT status,attempt_count,last_error,provider_payload,created_at,updated_at FROM payment_schema.refund WHERE id=?",id));
         assertEquals(beforeEvent,jdbc.queryForMap("SELECT * FROM payment_schema.refund_status_outbox WHERE id=?",event));

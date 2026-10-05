@@ -27,7 +27,9 @@ function ownerScope(): string {
 const serverScope = () => "server";
 
 function canReadChef(): boolean {
-  return isSessionReady() && getSession()?.roles.includes("CHEF") === true;
+  return (
+    isSessionReady() && getSession()?.roles.some((role) => role.toUpperCase() === "CHEF") === true
+  );
 }
 
 function emptyPanels<S extends Sources>(sources: S): Panels<S> {

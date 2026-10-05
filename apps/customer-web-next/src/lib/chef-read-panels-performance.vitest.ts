@@ -214,3 +214,14 @@ it("reports invalid profile data honestly and recovers with fresh data on retry"
     expect(screen.getByRole("heading", { name: "Private A Fixture" })).toBeTruthy(),
   );
 });
+
+it("uses the existing chef boundary's role case handling and clears panels after revocation", async () => {
+  setSessionIdentity({ ...a, roles: ["chef"] });
+  render(createElement(ChefOperationsWorkspace));
+  expect(await screen.findByText("1 available")).toBeTruthy();
+  act(() => {
+    setSessionIdentity({ ...a, roles: ["CUSTOMER"] });
+  });
+  expect(screen.queryByText("1 available")).toBeNull();
+  expect(screen.queryByText("Kitchen is operationally discoverable")).toBeNull();
+});

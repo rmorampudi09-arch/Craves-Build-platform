@@ -1,0 +1,137 @@
+[
+  {
+    "template": "/admin",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  },
+  {
+    "template": "/admin/academy",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin/academy",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  },
+  {
+    "template": "/admin/accounts",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin/accounts",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  },
+  {
+    "template": "/admin/analytics",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin/analytics",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  },
+  {
+    "template": "/admin/chef-reviews",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin/chef-reviews",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  },
+  {
+    "template": "/admin/chef-reviews/[applicationId]",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin/chef-reviews/00000000-0000-0000-0000-000000000000",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  },
+  {
+    "template": "/admin/explorer/[dataset]",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin/explorer/orders",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  },
+  {
+    "template": "/admin/finance",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin/finance",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  },
+  {
+    "template": "/admin/modules",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin/modules",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  },
+  {
+    "template": "/admin/notifications",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin/notifications",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  },
+  {
+    "template": "/admin/operations",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin/operations",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  },
+  {
+    "template": "/admin/search",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin/search",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  },
+  {
+    "template": "/admin/subscription-capacity",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin/subscription-capacity",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  },
+  {
+    "template": "/admin/subscription-plans",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin/subscription-plans",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  },
+  {
+    "template": "/admin/subscriptions",
+    "requestHost": "craves.in",
+    "finalHost": "admin.craves.in",
+    "finalPath": "/admin/subscriptions",
+    "status": 200,
+    "redirects": 1,
+    "curlExit": 0
+  }
+]

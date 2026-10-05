@@ -1,0 +1,15 @@
+{
+  "observedAtUtc": "2026-10-05T22:09:03.649674+00:00",
+  "scope": "Existing diagnostic availability and current API routing status only; no trace/log enablement or credential reads",
+  "diagnosticSettings": [],
+  "documentApiDiagnostics": [],
+  "currentApi": {
+    "apiRevision": "1",
+    "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1",
+    "isCurrent": true,
+    "isOnline": null,
+    "path": "api/v1/documents",
+    "serviceUrl": "https://ca-craves-notification-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/documents",
+    "subscriptionRequired": false
+  }
+}

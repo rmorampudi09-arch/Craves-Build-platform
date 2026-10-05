@@ -1,0 +1,632 @@
+{
+  "startedAtUtc": "2026-10-05T22:21:12.654474+00:00",
+  "operation": "apply exact reviewed seven existing operation policies",
+  "proposalSha256": "90f4cbc597cf1bdf41621cd8df3112042ccccd5758e7c3f6aadd7187fe35b8a9",
+  "supplementSha256": "fdb30064355308830918b3120f0a27b325504989cc13b1cf5c868c1a3b096ea9",
+  "configurationVerified": true,
+  "functionalVerified": false,
+  "functionalProofPending": "Root's existing signed-in native browser capability GET",
+  "changes": [
+    {
+      "operation": "create-document",
+      "method": "POST",
+      "urlTemplate": "/",
+      "policyResourceId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/create-document/policies/policy",
+      "originalPolicySha256": "2436ab3c7eb0f00b913beee413aa1c30685453ac8d1f6c4d36196e6fddd8829c",
+      "reviewedProposedPolicySha256": "3769941e973b0f823083893016a294488fd45648af93c4861c797834a7f39289",
+      "readbackPolicySha256": "387235a61223137b360c9dbb2e37b227362c7f960185550efa25b3b1aac6864c",
+      "etagConditionalUpdate": true,
+      "putStatus": 200,
+      "onlyReviewedNodeInserted": true,
+      "appliedAtUtc": "2026-10-05T22:22:30.147766+00:00",
+      "preflight": {
+        "observedAtUtc": "2026-10-05T22:22:26.191059+00:00",
+        "apiResourceSha256": "ab28f2ec8bd0bcc4e1a8da2f8289345d3316e96b21af598e766fd091ddcc2c55",
+        "operationsInventorySha256": "af8f09a71cb5a8ffca346fff438594236daab85d02007331750624c69cb4c22f",
+        "serviceTier": {
+          "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy",
+          "location": "Central India",
+          "sku": {
+            "capacity": 0,
+            "name": "Consumption"
+          }
+        },
+        "protectedApps": {
+          "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+          "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+          "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+          "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+          "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+          "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+          "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+          "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+          "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+          "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+          "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+          "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+        },
+        "allApps": {
+          "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+          "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+          "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+          "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+          "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+          "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+          "ca-craves-web-prodlow": "4aea9c03eb292841575cd30c382e436cfdb82512b5c855da8771fe7e1116eda9",
+          "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+          "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+          "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+          "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+          "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+          "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+        }
+      }
+    },
+    {
+      "operation": "list-documents",
+      "method": "GET",
+      "urlTemplate": "/",
+      "policyResourceId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/list-documents/policies/policy",
+      "originalPolicySha256": "a0f9d893154374f54f868e1c19decbd87e17075c868d7e175190cb57ff66733d",
+      "reviewedProposedPolicySha256": "c1f7daca6376519c66bb20817f0256157a6e82dadd956fe5d24be48f6cb3c11d",
+      "readbackPolicySha256": "7497a91dde4680adcf426bfd70df49ce7e9a65235e3179a06b4617198c823526",
+      "etagConditionalUpdate": true,
+      "putStatus": 200,
+      "onlyReviewedNodeInserted": true,
+      "appliedAtUtc": "2026-10-05T22:23:02.295664+00:00",
+      "preflight": {
+        "observedAtUtc": "2026-10-05T22:22:59.969706+00:00",
+        "apiResourceSha256": "ab28f2ec8bd0bcc4e1a8da2f8289345d3316e96b21af598e766fd091ddcc2c55",
+        "operationsInventorySha256": "af8f09a71cb5a8ffca346fff438594236daab85d02007331750624c69cb4c22f",
+        "serviceTier": {
+          "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy",
+          "location": "Central India",
+          "sku": {
+            "capacity": 0,
+            "name": "Consumption"
+          }
+        },
+        "protectedApps": {
+          "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+          "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+          "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+          "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+          "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+          "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+          "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+          "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+          "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+          "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+          "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+          "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+        },
+        "allApps": {
+          "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+          "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+          "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+          "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+          "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+          "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+          "ca-craves-web-prodlow": "4aea9c03eb292841575cd30c382e436cfdb82512b5c855da8771fe7e1116eda9",
+          "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+          "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+          "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+          "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+          "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+          "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+        }
+      }
+    },
+    {
+      "operation": "get-document",
+      "method": "GET",
+      "urlTemplate": "/{id}",
+      "policyResourceId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/get-document/policies/policy",
+      "originalPolicySha256": "9af26edd3f41121ce212872faafb2c46f4dea3cb752ee669d89bbbef41ba8ae9",
+      "reviewedProposedPolicySha256": "26f49f275301126947173d6a64e3807e7adccff4da073b50f9c4281434c3e4ef",
+      "readbackPolicySha256": "4908ac6a48eb951a5af5471a434808477638fae2bef01c00cc24f6135e5b9378",
+      "etagConditionalUpdate": true,
+      "putStatus": 200,
+      "onlyReviewedNodeInserted": true,
+      "appliedAtUtc": "2026-10-05T22:23:35.083849+00:00",
+      "preflight": {
+        "observedAtUtc": "2026-10-05T22:23:32.798434+00:00",
+        "apiResourceSha256": "ab28f2ec8bd0bcc4e1a8da2f8289345d3316e96b21af598e766fd091ddcc2c55",
+        "operationsInventorySha256": "af8f09a71cb5a8ffca346fff438594236daab85d02007331750624c69cb4c22f",
+        "serviceTier": {
+          "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy",
+          "location": "Central India",
+          "sku": {
+            "capacity": 0,
+            "name": "Consumption"
+          }
+        },
+        "protectedApps": {
+          "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+          "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+          "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+          "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+          "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+          "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+          "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+          "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+          "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+          "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+          "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+          "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+        },
+        "allApps": {
+          "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+          "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+          "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+          "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+          "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+          "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+          "ca-craves-web-prodlow": "4aea9c03eb292841575cd30c382e436cfdb82512b5c855da8771fe7e1116eda9",
+          "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+          "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+          "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+          "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+          "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+          "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+        }
+      }
+    },
+    {
+      "operation": "download-document",
+      "method": "GET",
+      "urlTemplate": "/{id}/download",
+      "policyResourceId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/download-document/policies/policy",
+      "originalPolicySha256": "a65dca9ae39cc69b378cbc6d73a6e42c2097ad983741ba95f52ee13740867021",
+      "reviewedProposedPolicySha256": "b4c1208c419925c1695c58f42789869918246b35fc45251e3616a34e377d9f59",
+      "readbackPolicySha256": "f57cb0ff24f63d5c7ca462dfcccab7472995782bb8810bdf6d9403c050394d54",
+      "etagConditionalUpdate": true,
+      "putStatus": 200,
+      "onlyReviewedNodeInserted": true,
+      "appliedAtUtc": "2026-10-05T22:24:09.219283+00:00",
+      "preflight": {
+        "observedAtUtc": "2026-10-05T22:24:07.136605+00:00",
+        "apiResourceSha256": "ab28f2ec8bd0bcc4e1a8da2f8289345d3316e96b21af598e766fd091ddcc2c55",
+        "operationsInventorySha256": "af8f09a71cb5a8ffca346fff438594236daab85d02007331750624c69cb4c22f",
+        "serviceTier": {
+          "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy",
+          "location": "Central India",
+          "sku": {
+            "capacity": 0,
+            "name": "Consumption"
+          }
+        },
+        "protectedApps": {
+          "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+          "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+          "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+          "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+          "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+          "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+          "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+          "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+          "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+          "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+          "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+          "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+        },
+        "allApps": {
+          "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+          "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+          "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+          "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+          "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+          "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+          "ca-craves-web-prodlow": "4aea9c03eb292841575cd30c382e436cfdb82512b5c855da8771fe7e1116eda9",
+          "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+          "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+          "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+          "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+          "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+          "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+        }
+      }
+    },
+    {
+      "operation": "email-document",
+      "method": "POST",
+      "urlTemplate": "/{id}/email",
+      "policyResourceId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/email-document/policies/policy",
+      "originalPolicySha256": "2b0a0b5286cb4aca85c778f89badebc82a487799e1431a8172dcb523359f58f9",
+      "reviewedProposedPolicySha256": "239218125c7922414b330506c3b45c9677206699c17e9d4fba50211a6cc42a70",
+      "readbackPolicySha256": "bc508ad9552eb7dc45e47946b3e1d5b75c8e9eac9dcd63e6c852eb795d368874",
+      "etagConditionalUpdate": true,
+      "putStatus": 200,
+      "onlyReviewedNodeInserted": true,
+      "appliedAtUtc": "2026-10-05T22:24:40.686554+00:00",
+      "preflight": {
+        "observedAtUtc": "2026-10-05T22:24:38.853941+00:00",
+        "apiResourceSha256": "ab28f2ec8bd0bcc4e1a8da2f8289345d3316e96b21af598e766fd091ddcc2c55",
+        "operationsInventorySha256": "af8f09a71cb5a8ffca346fff438594236daab85d02007331750624c69cb4c22f",
+        "serviceTier": {
+          "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy",
+          "location": "Central India",
+          "sku": {
+            "capacity": 0,
+            "name": "Consumption"
+          }
+        },
+        "protectedApps": {
+          "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+          "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+          "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+          "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+          "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+          "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+          "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+          "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+          "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+          "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+          "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+          "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+        },
+        "allApps": {
+          "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+          "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+          "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+          "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+          "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+          "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+          "ca-craves-web-prodlow": "4aea9c03eb292841575cd30c382e436cfdb82512b5c855da8771fe7e1116eda9",
+          "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+          "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+          "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+          "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+          "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+          "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+        }
+      }
+    },
+    {
+      "operation": "email-history",
+      "method": "GET",
+      "urlTemplate": "/{id}/emails",
+      "policyResourceId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/email-history/policies/policy",
+      "originalPolicySha256": "fb50512dd9a583966da47277da3b81ba84abf650616bc7abcc21022fcffe61d6",
+      "reviewedProposedPolicySha256": "86d931e67bcec4f67de6293702c1e09aa343f06334426a79236e38efbf21634d",
+      "readbackPolicySha256": "2022d6f5825a23edbb35936c2e7244d5cc07c92bcb8f996f409273615e8ceab4",
+      "etagConditionalUpdate": true,
+      "putStatus": 200,
+      "onlyReviewedNodeInserted": true,
+      "appliedAtUtc": "2026-10-05T22:25:11.284425+00:00",
+      "preflight": {
+        "observedAtUtc": "2026-10-05T22:25:09.279431+00:00",
+        "apiResourceSha256": "ab28f2ec8bd0bcc4e1a8da2f8289345d3316e96b21af598e766fd091ddcc2c55",
+        "operationsInventorySha256": "af8f09a71cb5a8ffca346fff438594236daab85d02007331750624c69cb4c22f",
+        "serviceTier": {
+          "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy",
+          "location": "Central India",
+          "sku": {
+            "capacity": 0,
+            "name": "Consumption"
+          }
+        },
+        "protectedApps": {
+          "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+          "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+          "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+          "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+          "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+          "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+          "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+          "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+          "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+          "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+          "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+          "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+        },
+        "allApps": {
+          "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+          "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+          "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+          "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+          "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+          "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+          "ca-craves-web-prodlow": "4aea9c03eb292841575cd30c382e436cfdb82512b5c855da8771fe7e1116eda9",
+          "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+          "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+          "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+          "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+          "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+          "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+        }
+      }
+    },
+    {
+      "operation": "capabilities",
+      "method": "GET",
+      "urlTemplate": "/capabilities",
+      "policyResourceId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/capabilities/policies/policy",
+      "originalPolicySha256": "e22e03e94027900dcbda61ea69dc450c537cd2c2eeb667496c1343476931e16e",
+      "reviewedProposedPolicySha256": "9e12959bfc9801a291f61b44da9f8e5c21088ec5cee6a3072a75de4a6ec7d624",
+      "readbackPolicySha256": "5341a6c380ae123dcde618d03b106197a064e28aae314250bdcdf9ab2fd5082e",
+      "etagConditionalUpdate": true,
+      "putStatus": 200,
+      "onlyReviewedNodeInserted": true,
+      "appliedAtUtc": "2026-10-05T22:25:40.865244+00:00",
+      "preflight": {
+        "observedAtUtc": "2026-10-05T22:25:38.856794+00:00",
+        "apiResourceSha256": "ab28f2ec8bd0bcc4e1a8da2f8289345d3316e96b21af598e766fd091ddcc2c55",
+        "operationsInventorySha256": "af8f09a71cb5a8ffca346fff438594236daab85d02007331750624c69cb4c22f",
+        "serviceTier": {
+          "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy",
+          "location": "Central India",
+          "sku": {
+            "capacity": 0,
+            "name": "Consumption"
+          }
+        },
+        "protectedApps": {
+          "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+          "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+          "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+          "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+          "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+          "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+          "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+          "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+          "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+          "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+          "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+          "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+        },
+        "allApps": {
+          "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+          "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+          "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+          "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+          "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+          "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+          "ca-craves-web-prodlow": "4aea9c03eb292841575cd30c382e436cfdb82512b5c855da8771fe7e1116eda9",
+          "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+          "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+          "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+          "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+          "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+          "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+        }
+      }
+    }
+  ],
+  "rollback": [],
+  "newResources": 0,
+  "containerChanges": 0,
+  "authorizationChanges": 0,
+  "documentsGeneratedDownloadedEmailed": 0,
+  "serviceTierBefore": {
+    "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy",
+    "location": "Central India",
+    "sku": {
+      "capacity": 0,
+      "name": "Consumption"
+    }
+  },
+  "account": {
+    "subscriptionId": "721906c9-4a72-4606-830b-d3e7ace093ff",
+    "tenantId": "1e7e43ac-c7f5-4d47-a74f-289a7cc21508"
+  },
+  "protectedAppsBefore": {
+    "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+    "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+    "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+    "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+    "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+    "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+    "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+    "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+    "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+    "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+    "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+    "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+  },
+  "allAppsBefore": {
+    "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+    "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+    "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+    "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+    "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+    "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+    "ca-craves-web-prodlow": "4aea9c03eb292841575cd30c382e436cfdb82512b5c855da8771fe7e1116eda9",
+    "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+    "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+    "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+    "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+    "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+    "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+  },
+  "before": {
+    "observedAtUtc": "2026-10-05T22:21:49.030142+00:00",
+    "apiResourceSha256": "ab28f2ec8bd0bcc4e1a8da2f8289345d3316e96b21af598e766fd091ddcc2c55",
+    "operationsInventorySha256": "af8f09a71cb5a8ffca346fff438594236daab85d02007331750624c69cb4c22f",
+    "serviceTier": {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy",
+      "location": "Central India",
+      "sku": {
+        "capacity": 0,
+        "name": "Consumption"
+      }
+    },
+    "protectedApps": {
+      "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+      "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+      "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+      "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+      "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+      "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+      "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+      "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+      "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+      "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+      "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+      "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+    },
+    "allApps": {
+      "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+      "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+      "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+      "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+      "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+      "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+      "ca-craves-web-prodlow": "4aea9c03eb292841575cd30c382e436cfdb82512b5c855da8771fe7e1116eda9",
+      "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+      "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+      "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+      "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+      "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+      "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+    }
+  },
+  "anonymousBoundariesBefore": [
+    {
+      "url": "https://craves.in/api/documents/capabilities",
+      "status": 401,
+      "cacheControl": "private, no-store, max-age=0",
+      "xCache": "CONFIG_NOCACHE",
+      "seconds": 0.246454,
+      "authenticated": false,
+      "responseBodyRead": false
+    },
+    {
+      "url": "https://craves.in/api/documents",
+      "status": 401,
+      "cacheControl": "private, no-store, max-age=0",
+      "xCache": "CONFIG_NOCACHE",
+      "seconds": 0.158598,
+      "authenticated": false,
+      "responseBodyRead": false
+    },
+    {
+      "url": "https://craves.in/api/documents/00000000-0000-0000-0000-000000000000",
+      "status": 404,
+      "cacheControl": "private, no-store, max-age=0",
+      "xCache": "CONFIG_NOCACHE",
+      "seconds": 0.14588,
+      "authenticated": false,
+      "responseBodyRead": false
+    },
+    {
+      "url": "https://apim-craves-prodlow-kmqgfy.azure-api.net/api/v1/documents/capabilities",
+      "status": 401,
+      "cacheControl": "private, no-store",
+      "xCache": "",
+      "seconds": 0.198716,
+      "authenticated": false,
+      "responseBodyRead": false
+    }
+  ],
+  "lastUpdatedAtUtc": "2026-10-05T22:26:11.552878+00:00",
+  "after": {
+    "observedAtUtc": "2026-10-05T22:26:10.730808+00:00",
+    "apiResourceSha256": "ab28f2ec8bd0bcc4e1a8da2f8289345d3316e96b21af598e766fd091ddcc2c55",
+    "operationsInventorySha256": "af8f09a71cb5a8ffca346fff438594236daab85d02007331750624c69cb4c22f",
+    "serviceTier": {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy",
+      "location": "Central India",
+      "sku": {
+        "capacity": 0,
+        "name": "Consumption"
+      }
+    },
+    "protectedApps": {
+      "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+      "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+      "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+      "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+      "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+      "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+      "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+      "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+      "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+      "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+      "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+      "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+    },
+    "allApps": {
+      "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+      "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+      "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+      "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+      "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+      "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+      "ca-craves-web-prodlow": "4aea9c03eb292841575cd30c382e436cfdb82512b5c855da8771fe7e1116eda9",
+      "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+      "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+      "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+      "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+      "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+      "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+    }
+  },
+  "anonymousBoundariesAfter": [
+    {
+      "url": "https://craves.in/api/documents/capabilities",
+      "status": 401,
+      "cacheControl": "private, no-store, max-age=0",
+      "xCache": "CONFIG_NOCACHE",
+      "seconds": 0.2737,
+      "authenticated": false,
+      "responseBodyRead": false
+    },
+    {
+      "url": "https://craves.in/api/documents",
+      "status": 401,
+      "cacheControl": "private, no-store, max-age=0",
+      "xCache": "CONFIG_NOCACHE",
+      "seconds": 0.160585,
+      "authenticated": false,
+      "responseBodyRead": false
+    },
+    {
+      "url": "https://craves.in/api/documents/00000000-0000-0000-0000-000000000000",
+      "status": 404,
+      "cacheControl": "private, no-store, max-age=0",
+      "xCache": "CONFIG_NOCACHE",
+      "seconds": 0.131222,
+      "authenticated": false,
+      "responseBodyRead": false
+    },
+    {
+      "url": "https://apim-craves-prodlow-kmqgfy.azure-api.net/api/v1/documents/capabilities",
+      "status": 401,
+      "cacheControl": "private, no-store",
+      "xCache": "",
+      "seconds": 0.229431,
+      "authenticated": false,
+      "responseBodyRead": false
+    }
+  ],
+  "protectedAppsAfter": {
+    "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+    "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+    "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+    "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+    "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+    "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+    "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+    "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+    "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+    "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+    "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+    "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+  },
+  "allAppsAfter": {
+    "ca-craves-referral-prodlow": "ab4c0fdbafbca0d8581d78eb7cc2dad48034a78fcdd1a0fe8ed176ba00e81e4b",
+    "ca-craves-notification-service-p": "4a61c145da66d28786edec5c261ca069ba63e7b119817933cda0cd861bf6f0c0",
+    "ca-craves-catalog-service-prodlo": "31b74b8fb195ca4e2d8d4687a474604e09c600c1f59a6aa8f601f90cd3539627",
+    "ca-craves-delivery-intel-prodlow": "b01783dd890835acbe991e9aeed2750567831d48bbf768c81992902e01891eb1",
+    "ca-craves-order-service-prodlow": "1e80c9ff75cc2b200ecf884a245cd93526a3ac84801c8ff67e076ea6dd0164be",
+    "ca-craves-subscription-service-p": "450de6888a479eda84ba1617501c9bc903872149fd4cd6cd4eacb8ea6b88183d",
+    "ca-craves-web-prodlow": "4aea9c03eb292841575cd30c382e436cfdb82512b5c855da8771fe7e1116eda9",
+    "ca-craves-admin-web-prodlow": "c8a189eaa63fccc25edba4d0014d709ff84a2188f7ff5085e711362e05ec993f",
+    "ca-craves-integration-service-pr": "526695858a78ac8e89e1f6bb8affb6af9b68b623a0a87e013e96b8b83eec60d1",
+    "ca-craves-user-chef-service-prod": "d632a0f939979f4cd5943d17b42d83a3245a3f2de52c3b5f28a7e3edea200569",
+    "ca-craves-auth-service-prodlow": "daa9007bdd212ecbcfa519d193e493206f4433d44adebc10948b63e28316621a",
+    "ca-craves-admin-r92-ffe80e7c": "6e3a0822b4a77165e42b8ee72dc76973020d3eef5439c7125a927bcf10dda78f",
+    "ca-craves-referral-member-read": "3f952e416bf902f7912be83a95497864f00ff2c0c15e1bd52774da8478a15de0"
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "verdict": "pass",
+  "scope": "Independent offline artifact QA. No source, PDF, ZIP, deployment, browser, API, or Azure changes.",
+  "sourceSha": "739650f223f2edc0dd8914b28e23916b421da9f1",
+  "pdf": {
+    "name": "Craves_Chef_All_Pages_Performance_Handover_20261006.pdf",
+    "bytes": 528111,
+    "sha256": "9fccddf156d6f8ae46caa975e5b76fc347d804456bc0d7b6f5d7ac16dd0ecf99",
+    "pages": 219,
+    "renderedPages": 219,
+    "renderDpi": 90,
+    "textErrors": 0,
+    "footerErrors": 0,
+    "boundsErrors": 0,
+    "contactSheetsInspected": 19,
+    "contactSheetPagesInspected": 219,
+    "fullSizeSamplesInspected": 14,
+    "fullSizeSampleDpi": 140,
+    "fullSizeSamplePages": [1, 4, 11, 12, 19, 20, 27, 30, 94, 169, 201, 211, 213, 219],
+    "blockingVisualDefects": 0,
+    "visualNotes": "All contact sheets were inspected. Full-size samples cover narrative, quantitative evidence, setup, source/test code, wrapped paths/policies, XML snapshots, and executor transitions. Headings, code wrapping, footer separation, and safe margins are intact. Literal Markdown tokens in the practical README section remain readable."
+  },
+  "zip": {
+    "name": "Craves_Chef_All_Pages_Performance_Source_20261006.zip",
+    "bytes": 129316793,
+    "sha256": "3cf0eb9cd1568c937b561c560c883ef1b3d802fc7003042430b5f16801a83cb5",
+    "entries": 1108,
+    "crcPassed": true,
+    "uniqueEntries": true,
+    "inventoryPassed": true,
+    "pathSafetyPassed": true,
+    "privacyPassed": true,
+    "moduleFiles": 976,
+    "moduleCompletenessPassed": true,
+    "fullFileAppendixEntries": 51,
+    "changedSourceAndTestFiles": 36,
+    "reviewedConfigurationAndExecutorFiles": 15,
+    "appendixMatchesReviewedBytes": true,
+    "completeMarkdownMatchesAllAppendixFiles": true,
+    "originalXmlSnapshotBytesPreserved": true,
+    "embeddedPdfMatches": true,
+    "sourceTreesMatchRelease": true
+  },
+  "packagedOfflineTests": {
+    "releaseHelperTests": 34,
+    "releaseHelperFailures": 0,
+    "documentRepairSelfTestPassed": true,
+    "frozenOperationsValidated": 7,
+    "unsafePolicyVariationsRejected": 4,
+    "repairExecutorSha256": "393dc85566e5beac3a152d9f1f618dcda54a18a0bf7f94f93eda739ddaa65d39",
+    "scopeNote": "These are the runnable focused tests supplied in the ZIP. The checkout's separate 40-test helper total includes six inherited tests beyond this packaged focused suite."
+  },
+  "firstPassArtifacts": {
+    "pdfSha256": "584799b34e120d4ab83ad6a41d809e125fcf3b09dce85398e70c70a657d926a8",
+    "zipSha256": "3b30b6ed9385a5d097a7befed009ed17a7b0d8e6dad27f4b8eba8c2afade5a32",
+    "bothUnchanged": true
+  },
+  "detailReceipts": ["page-verification.json", "package-verification.json", "appendix-verification.json"],
+  "postPackagingMetadataNote": "The repository-only docs/.gitattributes byte-preservation safeguard changes no reviewed artifact or source bytes and does not require rebuilding the verified ZIP."
+}

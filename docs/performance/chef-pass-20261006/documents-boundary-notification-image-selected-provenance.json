@@ -1,0 +1,17 @@
+{
+  "observedAtUtc": "2026-10-05T22:06:57.761600+00:00",
+  "image": "cravesrm09prodlow6bf632.azurecr.io/craves/notification-service:activate-69",
+  "imageMetadata": {
+    "createdAt": "2026-09-26T18:18:33.6075794Z",
+    "digest": "sha256:914d4d17f24bd4942a564470962642c7f94b1c48914865498c8415f34dfb649c",
+    "tags": null,
+    "updatedAt": "2026-09-26T18:18:33.6075794Z"
+  },
+  "runtimeExactCommitVersions": {},
+  "documentBooleanFlags": {
+    "CRAVES_DOCUMENTS_ENABLED": "true",
+    "CRAVES_DOCUMENTS_WORKER_ENABLED": "true",
+    "CRAVES_DOCUMENTS_EMAIL_ENABLED": "true"
+  },
+  "scope": "Selected image metadata/exact40hex commit values/boolean flags only; no application HTTP calls or credential values"
+}

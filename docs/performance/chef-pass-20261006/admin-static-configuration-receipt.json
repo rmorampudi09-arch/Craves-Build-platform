@@ -1,0 +1,19 @@
+{
+  "observedAtUtc": "2026-10-05T21:34:11.133434+00:00",
+  "operation": "apply",
+  "configurationVerified": true,
+  "proposalSha256": "c54ffe5b94dc1eae54e141259cf4ff94b77c21e109f532eed5709d3fa4b763a0",
+  "newResources": 0,
+  "containerAppChanges": 0,
+  "rollbackVerified": false,
+  "appliedAtUtc": "2026-10-05T21:34:41.280026+00:00",
+  "changedRouteFields": [
+    "ruleSets"
+  ],
+  "changedRuleFields": [
+    "actions",
+    "conditions"
+  ],
+  "originSecurityAndDefaultCachePreserved": true,
+  "gzipBrotliWarmCacheProofPending": true
+}

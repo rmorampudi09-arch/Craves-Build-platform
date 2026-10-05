@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "scope": "Native Windows Chrome, existing approved chef session; read-only reload. No cloud browser, no credentials or personal content recorded.",
+  "sourceSha": "dc74bfa3880b18278b015f57ae393fb25133acdf",
+  "dateAsiaKolkata": "2026-10-06",
+  "conditions": "Chrome DevTools Network, Disable cache checked, No throttling. Existing network/settings preserved. Finish includes post-load requests and route prefetch, not useful-content timing or a Core Web Vitals score.",
+  "samples": [
+    {
+      "route": "/chef",
+      "DOMContentLoadedMs": 345,
+      "loadMs": 688,
+      "finishMs": 7290,
+      "requests": 62,
+      "transferBytes": 655583,
+      "resourceBytesApprox": 1700000,
+      "observedApi": {
+        "authRefreshMsApprox": 2000,
+        "ordersMsApprox": 1840,
+        "applicationMs": 137,
+        "kitchenMs": 105,
+        "menuMs": 112,
+        "earningsMs": 597
+      },
+      "screen": "Approved chef dashboard with live menu count and no-orders state rendered"
+    },
+    {
+      "route": "/chef/profile",
+      "DOMContentLoadedMs": 143,
+      "loadMs": 241,
+      "finishMs": 1850,
+      "requests": 57,
+      "transferBytes": 637832,
+      "resourceBytesApprox": 1700000,
+      "observedApi": {
+        "authRefreshMs": 250,
+        "applicationMs": 134,
+        "kitchenMs": 134
+      },
+      "screen": "Approved chef profile and kitchen details rendered"
+    },
+    {
+      "route": "/chef/operations",
+      "DOMContentLoadedMs": 269,
+      "loadMs": 445,
+      "finishMs": 2710,
+      "requests": 53,
+      "transferBytes": 575674,
+      "resourceBytesApprox": 1600000,
+      "observedApi": {
+        "authRefreshMs": 237,
+        "applicationMs": 131,
+        "kitchenMs": 122,
+        "menuMs": 127,
+        "readinessMsApprox": 1550
+      },
+      "screen": "Kitchen operational readiness rendered"
+    }
+  ]
+}

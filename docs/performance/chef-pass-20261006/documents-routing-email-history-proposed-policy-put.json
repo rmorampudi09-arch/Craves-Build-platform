@@ -1,0 +1,6 @@
+{
+  "properties": {
+    "format": "rawxml",
+    "value": "<policies>\r\n  <inbound>\r\n    <base />\r\n    <set-backend-service base-url=\"https://ca-craves-notification-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io\" />\n<rewrite-uri template=\"/api/v1/documents/{id}/emails\" copy-unmatched-params=\"true\" />\r\n  </inbound>\r\n  <backend>\r\n    <base />\r\n  </backend>\r\n  <outbound>\r\n    <base />\r\n  </outbound>\r\n  <on-error>\r\n    <base />\r\n  </on-error>\r\n</policies>"
+  }
+}

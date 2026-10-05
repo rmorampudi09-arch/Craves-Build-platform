@@ -1,0 +1,243 @@
+{
+  "schema": 1,
+  "sourceSha": "739650f223f2edc0dd8914b28e23916b421da9f1",
+  "observedAtUtc": "2026-10-05T22:05:53.591Z",
+  "scope": "Native Windows Chrome existing approved chef session; no cloud browser; read-only page navigation/reload, no credentials or personal contents saved",
+  "conditions": "DevTools Network Disable cache checked, No throttling; same existing conditions as baseline. Network Finish includes API/prefetch and is not LCP/FCP or useful-content timing. Finance repeats are ongoing background polling and not comparable page latency.",
+  "baselineSamplesPerComparativeRoute": 1,
+  "postSamplesPerComparativeRoute": 3,
+  "samples": [
+    {
+      "route": "/chef",
+      "round": 1,
+      "DOMContentLoadedMs": 438,
+      "loadMs": 878,
+      "finishMs": 4830,
+      "requests": 63,
+      "transferBytes": 620530,
+      "screen": "Approved chef dashboard and empty-order summary rendered; account values not recorded"
+    },
+    {
+      "route": "/chef/profile",
+      "round": 1,
+      "DOMContentLoadedMs": 131,
+      "loadMs": 280,
+      "finishMs": 2010,
+      "requests": 57,
+      "transferBytes": 623207,
+      "screen": "Approved profile and kitchen sections rendered independently; account values not recorded"
+    },
+    {
+      "route": "/chef/operations",
+      "round": 1,
+      "DOMContentLoadedMs": 140,
+      "loadMs": 334,
+      "finishMs": 1180,
+      "requests": 53,
+      "transferBytes": 579672,
+      "screen": "Operational readiness and kitchen sections rendered; no writes submitted"
+    },
+    {
+      "route": "/chef/operations",
+      "round": 2,
+      "DOMContentLoadedMs": 116,
+      "loadMs": 275,
+      "finishMs": 1330,
+      "requests": 55,
+      "transferBytes": 602715
+    },
+    {
+      "route": "/chef/operations",
+      "round": 3,
+      "DOMContentLoadedMs": 113,
+      "loadMs": 294,
+      "finishMs": 1220,
+      "requests": 55,
+      "transferBytes": 602740
+    },
+    {
+      "route": "/chef/profile",
+      "round": 2,
+      "DOMContentLoadedMs": 247,
+      "loadMs": 247,
+      "finishMs": 1100,
+      "requests": 57,
+      "transferBytes": 623115
+    },
+    {
+      "route": "/chef/profile",
+      "round": 3,
+      "DOMContentLoadedMs": 113,
+      "loadMs": 220,
+      "finishMs": 1570,
+      "requests": 59,
+      "transferBytes": 646160
+    },
+    {
+      "route": "/chef",
+      "round": 2,
+      "DOMContentLoadedMs": 128,
+      "loadMs": 235,
+      "finishMs": 2830,
+      "requests": 61,
+      "transferBytes": 618622
+    },
+    {
+      "route": "/chef",
+      "round": 3,
+      "DOMContentLoadedMs": 153,
+      "loadMs": 252,
+      "finishMs": 2180,
+      "requests": 63,
+      "transferBytes": 641672
+    }
+  ],
+  "routeChecks": [
+    {
+      "route": "/chef",
+      "state": "Approved dashboard rendered",
+      "samples": 3
+    },
+    {
+      "route": "/chef/profile",
+      "state": "Approved profile and kitchen sections rendered",
+      "samples": 3
+    },
+    {
+      "route": "/chef/operations",
+      "state": "Operational readiness and independent panels rendered",
+      "samples": 3
+    },
+    {
+      "route": "/chef/application",
+      "DOMContentLoadedMs": 258,
+      "loadMs": 394,
+      "finishMs": 879,
+      "state": "Saved approved application rendered; no form submitted"
+    },
+    {
+      "route": "/chef/capacity",
+      "DOMContentLoadedMs": 148,
+      "loadMs": 310,
+      "finishMs": 3800,
+      "state": "Capacity workspace rendered; first mandatory capacity API about2640ms, repeat required"
+    },
+    {
+      "route": "/chef/capacity",
+      "DOMContentLoadedMs": 146,
+      "loadMs": 272,
+      "finishMs": 1300,
+      "round": 2,
+      "state": "Capacity repeat completed normally; no availability edited"
+    },
+    {
+      "route": "/chef/earnings",
+      "DOMContentLoadedMs": 149,
+      "loadMs": 246,
+      "finishMs": 1220,
+      "state": "Earnings and payment history rendered; values not recorded and no transaction initiated"
+    },
+    {
+      "route": "/chef/finance",
+      "DOMContentLoadedMs": 331,
+      "loadMs": 458,
+      "finishMs": 3010,
+      "state": "Finance and existing verified-email/bank/balance reads rendered; no financial action submitted"
+    },
+    {
+      "route": "/chef/finance",
+      "DOMContentLoadedMs": 103,
+      "loadMs": 193,
+      "finishMs": 31430,
+      "round": 2,
+      "state": "Finance verified state rendered; initial private reads about 117-163 ms; bank/application background polling every 15 seconds",
+      "finishComparable": false
+    },
+    {
+      "route": "/chef/kitchen",
+      "DOMContentLoadedMs": 150,
+      "loadMs": 395,
+      "finishMs": 903,
+      "state": "Saved kitchen displayed; address/details not recorded or edited"
+    },
+    {
+      "route": "/chef/meal-plans",
+      "DOMContentLoadedMs": 397,
+      "loadMs": 417,
+      "finishMs": 2180,
+      "state": "Meal-plan workspace rendered with current menu/capacity/plans/schedule reads; no plan submitted"
+    },
+    {
+      "route": "/chef/menu",
+      "DOMContentLoadedMs": 125,
+      "loadMs": 224,
+      "finishMs": 1760,
+      "state": "Existing dishes rendered; no price, availability or media changed; images add to total payload"
+    },
+    {
+      "route": "/chef/menu/media",
+      "DOMContentLoadedMs": 320,
+      "loadMs": 486,
+      "finishMs": 1360,
+      "state": "Menu/media workspace rendered; no media uploaded"
+    },
+    {
+      "route": "/chef/orders",
+      "DOMContentLoadedMs": 121,
+      "loadMs": 214,
+      "finishMs": 2110,
+      "state": "Chef order inbox rendered with real empty-order state; no order created or changed"
+    },
+    {
+      "route": "/chef/orders/[orderId]",
+      "DOMContentLoadedMs": 171,
+      "loadMs": 354,
+      "finishMs": 864,
+      "state": "Intentional all-zero nonexistent order returned403 and readable unavailable state; no real order record benchmark",
+      "scope": "invalid-record boundary only"
+    },
+    {
+      "route": "/chef/statements",
+      "DOMContentLoadedMs": 333,
+      "loadMs": 468,
+      "finishMs": 2270,
+      "state": "Statement center/form rendered; documents capabilities returned403 and PDF generation stays disabled; cause under source audit",
+      "scope": "page-load plus existing permission boundary, no document generated"
+    },
+    {
+      "route": "/chef/[id]",
+      "DOMContentLoadedMs": 211,
+      "loadMs": 417,
+      "finishMs": 1570,
+      "state": "Public chef alias redirected to/kitchen/all-zero-ID and readable not-found state; no real public record benchmark",
+      "scope": "invalid-record alias boundary only"
+    },
+    {
+      "route": "/chef/statements",
+      "DOMContentLoadedMs": 294,
+      "loadMs": 436,
+      "finishMs": 1670,
+      "round": 2,
+      "state": "Capabilities403 repeats after normal optional customer-profile read; no document generated",
+      "scope": "upstream permission/routing issue, source audit pending"
+    }
+  ],
+  "uniqueRoutePatterns": 15,
+  "limitations": [
+    "First new-release cold CDN fills and variable API latency affect these small samples; they are not a population performance or mobile measurement.",
+    "Two all-zero ID routes only test missing-record boundaries; no real order/public-chef record benchmark.",
+    "Initial code size reductions do not equal total transferred bytes including shared runtime/images/prefetch.",
+    "Statement document capabilities403 remains separate pending investigation.",
+    "Finance bank/application rereads occur every15seconds; its growing Network Finish is not load time."
+  ],
+  "finalBrowserState": "Chef home restored, DevTools closed; fresh Console snapshot had no Uncaught, TypeError, ReferenceError or Hydration failed message; no private content copied",
+  "statementsRoutingResolution": {
+    "observedAtUtc": "2026-10-05T22:28:15.778Z",
+    "receipt": "native-chrome-statements-after-routing.json",
+    "capabilityGetStatus": 200,
+    "documentListGetStatus": 200,
+    "repeatedRounds": 3,
+    "generateButtonEnabled": true,
+    "scope": "Read-only capability and document-list acceptance after the reviewed route correction. No document generation, download, email, real-order flow, Core Web Vitals, causal speed guarantee or high-concurrency load acceptance."
+  }
+}

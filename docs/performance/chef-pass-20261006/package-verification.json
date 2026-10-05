@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "scope": "Offline source-package QA; no Azure, API, browser, or deployment operation.",
+  "zipEntries": 1108,
+  "duplicateEntries": [],
+  "zipCrcError": null,
+  "excludedOrUnsafePaths": [],
+  "inventoryMismatches": [],
+  "inventorySelfEntry": false,
+  "unlistedZipEntries": [],
+  "missingDocumentPolicyEvidence": [],
+  "expectedModuleFiles": 976,
+  "recordedModuleFiles": 976,
+  "moduleMissingOrChanged": [],
+  "releaseSourceSha": "739650f223f2edc0dd8914b28e23916b421da9f1",
+  "webTreeMatchesRelease": true,
+  "currentWebTreeMatchesRelease": true,
+  "currentLandingTreeMatchesRelease": true,
+  "pdfInZipMatches": true,
+  "historicalReadOnlyTestReferences": [
+    "azure-pipelines-customer-web-next-delivery-tracking.yml",
+    "azure-pipelines-customer-addresses-apim.yml",
+    "scripts/apim/configure-customer-addresses-apim.sh"
+  ],
+  "packagedPythonFiles": 7,
+  "packagedReleaseHelperTests": {
+    "exitCode": 0,
+    "tests": 34
+  },
+  "packagedDocumentRepairOfflineSelfTest": {
+    "exitCode": 0,
+    "offlineSelfTestVerified": true,
+    "frozenOperationsValidated": 7,
+    "unsafeVariationsRejected": 4
+  },
+  "firstPassPreserved": {
+    "pdf": true,
+    "zip": true
+  },
+  "newPdf": {
+    "bytes": 528111,
+    "sha256": "9fccddf156d6f8ae46caa975e5b76fc347d804456bc0d7b6f5d7ac16dd0ecf99"
+  },
+  "newZip": {
+    "bytes": 129316793,
+    "sha256": "3cf0eb9cd1568c937b561c560c883ef1b3d802fc7003042430b5f16801a83cb5"
+  }
+}

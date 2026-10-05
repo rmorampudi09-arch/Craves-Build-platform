@@ -1,0 +1,58 @@
+{
+  "observedAtUtc": "2026-10-05T21:58:37.9978455Z",
+  "scope": "Public DNS ownership check only; no DNS modification",
+  "queries": [
+    {
+      "queriedName": "admin.craves.in",
+      "records": [
+        {
+          "Name": "admin.craves.in",
+          "Type": 5,
+          "NameHost": "craves-prodlow-721906c9-cfb3dyb2b7hnhee2.z02.azurefd.net",
+          "IPAddress": null
+        },
+        {
+          "Name": "craves-prodlow-721906c9-cfb3dyb2b7hnhee2.z02.azurefd.net",
+          "Type": 5,
+          "NameHost": "mr-z02.tm-azurefd.net",
+          "IPAddress": null
+        },
+        {
+          "Name": "mr-z02.tm-azurefd.net",
+          "Type": 28,
+          "NameHost": null,
+          "IPAddress": "2603:1061:14:82::1"
+        },
+        {
+          "Name": "mr-z02.tm-azurefd.net",
+          "Type": 1,
+          "NameHost": null,
+          "IPAddress": "150.171.110.86"
+        }
+      ]
+    },
+    {
+      "queriedName": "craves-prodlow-721906c9-cfb3dyb2b7hnhee2.z02.azurefd.net",
+      "records": [
+        {
+          "Name": "craves-prodlow-721906c9-cfb3dyb2b7hnhee2.z02.azurefd.net",
+          "Type": 5,
+          "NameHost": "mr-z02.tm-azurefd.net",
+          "IPAddress": null
+        },
+        {
+          "Name": "mr-z02.tm-azurefd.net",
+          "Type": 28,
+          "NameHost": null,
+          "IPAddress": "2603:1061:14:82::1"
+        },
+        {
+          "Name": "mr-z02.tm-azurefd.net",
+          "Type": 1,
+          "NameHost": null,
+          "IPAddress": "150.171.110.86"
+        }
+      ]
+    }
+  ]
+}

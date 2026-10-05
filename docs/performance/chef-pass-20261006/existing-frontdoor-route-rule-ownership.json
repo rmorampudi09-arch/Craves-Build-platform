@@ -1,0 +1,279 @@
+{
+  "observedAtUtc": "2026-10-05T21:21:17.1073612Z",
+  "routes": [
+    {
+      "cache": {
+        "compressionSettings": {
+          "contentTypesToCompress": [
+            "text/css",
+            "text/javascript",
+            "application/javascript",
+            "application/json",
+            "image/svg+xml",
+            "font/woff2",
+            "font/woff"
+          ],
+          "isCompressionEnabled": true
+        },
+        "queryStringCachingBehavior": "IgnoreQueryString"
+      },
+      "customDomains": [
+        "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/customdomains/craves-in",
+        "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/customdomains/www-craves-in"
+      ],
+      "enabled": "Enabled",
+      "forwarding": "HttpsOnly",
+      "httpsRedirect": "Enabled",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/afdendpoints/craves-prodlow-721906c9/routes/craves-static-route",
+      "linkDefaultDomain": "Enabled",
+      "name": "craves-static-route",
+      "originGroup": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/origingroups/craves-web-origin-group",
+      "patterns": [
+        "/_next/static/*",
+        "/landing-v20/assets/*"
+      ],
+      "ruleSets": [
+        "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravessecurityheaders"
+      ]
+    },
+    {
+      "cache": null,
+      "customDomains": [
+        "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/customdomains/craves-in",
+        "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/customdomains/www-craves-in"
+      ],
+      "enabled": "Enabled",
+      "forwarding": "HttpsOnly",
+      "httpsRedirect": "Enabled",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/afdendpoints/craves-prodlow-721906c9/routes/craves-web-route",
+      "linkDefaultDomain": "Enabled",
+      "name": "craves-web-route",
+      "originGroup": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/origingroups/craves-web-origin-group",
+      "patterns": [
+        "/*"
+      ],
+      "ruleSets": [
+        "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravessecurityheaders"
+      ]
+    },
+    {
+      "cache": null,
+      "customDomains": [
+        "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/customdomains/admin-craves-in"
+      ],
+      "enabled": "Enabled",
+      "forwarding": "HttpsOnly",
+      "httpsRedirect": "Enabled",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/afdendpoints/craves-prodlow-721906c9/routes/craves-delivery-intel-route",
+      "linkDefaultDomain": "Disabled",
+      "name": "craves-delivery-intel-route",
+      "originGroup": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/origingroups/craves-delivery-intel-origin-group",
+      "patterns": [
+        "/delivery-intelligence",
+        "/delivery-intelligence/*"
+      ],
+      "ruleSets": [
+        "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravesadminsecurityheaders"
+      ]
+    },
+    {
+      "cache": null,
+      "customDomains": [
+        "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/customdomains/admin-craves-in"
+      ],
+      "enabled": "Enabled",
+      "forwarding": "HttpsOnly",
+      "httpsRedirect": "Enabled",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/afdendpoints/craves-prodlow-721906c9/routes/craves-admin-route",
+      "linkDefaultDomain": "Disabled",
+      "name": "craves-admin-route",
+      "originGroup": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/origingroups/craves-admin-origin-group",
+      "patterns": [
+        "/*"
+      ],
+      "ruleSets": [
+        "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravesadminsecurityheaders"
+      ]
+    },
+    {
+      "cache": null,
+      "customDomains": [
+        "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/customdomains/api-craves-in"
+      ],
+      "enabled": "Enabled",
+      "forwarding": "HttpsOnly",
+      "httpsRedirect": "Enabled",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/afdendpoints/craves-prodlow-721906c9/routes/craves-api-route",
+      "linkDefaultDomain": "Disabled",
+      "name": "craves-api-route",
+      "originGroup": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/origingroups/craves-api-origin-group",
+      "patterns": [
+        "/*"
+      ],
+      "ruleSets": []
+    }
+  ],
+  "domains": [
+    {
+      "host": "craves.in",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/customdomains/craves-in",
+      "name": "craves-in",
+      "state": "Approved"
+    },
+    {
+      "host": "admin.craves.in",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/customdomains/admin-craves-in",
+      "name": "admin-craves-in",
+      "state": "Approved"
+    },
+    {
+      "host": "www.craves.in",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/customdomains/www-craves-in",
+      "name": "www-craves-in",
+      "state": "Approved"
+    },
+    {
+      "host": "api.craves.in",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/customdomains/api-craves-in",
+      "name": "api-craves-in",
+      "state": "Approved"
+    }
+  ],
+  "ruleSets": [
+    {
+      "ruleSet": "cravesadminsecurityheaders",
+      "rules": {
+        "actions": [
+          {
+            "name": "ModifyResponseHeader",
+            "parameters": {
+              "headerAction": "Overwrite",
+              "headerName": "Strict-Transport-Security",
+              "typeName": "DeliveryRuleHeaderActionParameters",
+              "value": "max-age=31536000; includeSubDomains"
+            }
+          },
+          {
+            "name": "ModifyResponseHeader",
+            "parameters": {
+              "headerAction": "Overwrite",
+              "headerName": "X-Content-Type-Options",
+              "typeName": "DeliveryRuleHeaderActionParameters",
+              "value": "nosniff"
+            }
+          },
+          {
+            "name": "ModifyResponseHeader",
+            "parameters": {
+              "headerAction": "Overwrite",
+              "headerName": "X-Frame-Options",
+              "typeName": "DeliveryRuleHeaderActionParameters",
+              "value": "DENY"
+            }
+          },
+          {
+            "name": "ModifyResponseHeader",
+            "parameters": {
+              "headerAction": "Overwrite",
+              "headerName": "Referrer-Policy",
+              "typeName": "DeliveryRuleHeaderActionParameters",
+              "value": "no-referrer"
+            }
+          },
+          {
+            "name": "ModifyResponseHeader",
+            "parameters": {
+              "headerAction": "Overwrite",
+              "headerName": "Permissions-Policy",
+              "typeName": "DeliveryRuleHeaderActionParameters",
+              "value": "camera=(), microphone=(), geolocation=()"
+            }
+          }
+        ],
+        "behavior": "Continue",
+        "conditions": [],
+        "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravesadminsecurityheaders/rules/adminsecurityheaders",
+        "name": "adminsecurityheaders",
+        "order": 1
+      }
+    },
+    {
+      "ruleSet": "cravessecurityheaders",
+      "rules": {
+        "actions": [
+          {
+            "name": "ModifyResponseHeader",
+            "parameters": {
+              "headerAction": "Overwrite",
+              "headerName": "Strict-Transport-Security",
+              "typeName": "DeliveryRuleHeaderActionParameters",
+              "value": "max-age=31536000; includeSubDomains"
+            }
+          },
+          {
+            "name": "ModifyResponseHeader",
+            "parameters": {
+              "headerAction": "Overwrite",
+              "headerName": "X-Content-Type-Options",
+              "typeName": "DeliveryRuleHeaderActionParameters",
+              "value": "nosniff"
+            }
+          },
+          {
+            "name": "ModifyResponseHeader",
+            "parameters": {
+              "headerAction": "Overwrite",
+              "headerName": "Referrer-Policy",
+              "typeName": "DeliveryRuleHeaderActionParameters",
+              "value": "strict-origin-when-cross-origin"
+            }
+          },
+          {
+            "name": "ModifyResponseHeader",
+            "parameters": {
+              "headerAction": "Overwrite",
+              "headerName": "X-Frame-Options",
+              "typeName": "DeliveryRuleHeaderActionParameters",
+              "value": "SAMEORIGIN"
+            }
+          },
+          {
+            "name": "ModifyResponseHeader",
+            "parameters": {
+              "headerAction": "Overwrite",
+              "headerName": "Permissions-Policy",
+              "typeName": "DeliveryRuleHeaderActionParameters",
+              "value": "camera=(), microphone=(), geolocation=(self)"
+            }
+          }
+        ],
+        "behavior": "Continue",
+        "conditions": [],
+        "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravessecurityheaders/rules/securityheaders",
+        "name": "securityheaders",
+        "order": 1
+      }
+    },
+    {
+      "ruleSet": "cravesstaticidentity",
+      "rules": {
+        "actions": [
+          {
+            "name": "ModifyRequestHeader",
+            "parameters": {
+              "headerAction": "Overwrite",
+              "headerName": "Accept-Encoding",
+              "typeName": "DeliveryRuleHeaderActionParameters",
+              "value": "identity"
+            }
+          }
+        ],
+        "behavior": "Continue",
+        "conditions": [],
+        "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourcegroups/rg-craves-prodlow-centralindia/providers/Microsoft.Cdn/profiles/afd-craves-prodlow/rulesets/cravesstaticidentity/rules/forceidentityencoding",
+        "name": "forceidentityencoding",
+        "order": 1
+      }
+    }
+  ]
+}

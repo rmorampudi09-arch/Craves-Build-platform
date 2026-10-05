@@ -1,0 +1,283 @@
+{
+  "endTime": null,
+  "interval": "PT5M",
+  "metrics": [
+    {
+      "name": "CpuPercentage",
+      "timeseries": [
+        {
+          "data": [
+            {
+              "average": 0.0,
+              "maximum": 0.0,
+              "time": "2026-10-05T20:40:00Z",
+              "total": 0.0
+            },
+            {
+              "average": 0.0,
+              "maximum": 0.0,
+              "time": "2026-10-05T20:45:00Z",
+              "total": 0.0
+            },
+            {
+              "average": 3.2,
+              "maximum": 27.0,
+              "time": "2026-10-05T20:50:00Z",
+              "total": 32.0
+            },
+            {
+              "average": 0.3,
+              "maximum": 2.0,
+              "time": "2026-10-05T20:55:00Z",
+              "total": 3.0
+            },
+            {
+              "average": 3.7,
+              "maximum": 33.0,
+              "time": "2026-10-05T21:00:00Z",
+              "total": 37.0
+            },
+            {
+              "average": 0.0,
+              "maximum": 0.0,
+              "time": "2026-10-05T21:05:00Z",
+              "total": 0.0
+            }
+          ]
+        }
+      ],
+      "unit": "Percent"
+    },
+    {
+      "name": "MemoryPercentage",
+      "timeseries": [
+        {
+          "data": [
+            {
+              "average": 16.0,
+              "maximum": 16.0,
+              "time": "2026-10-05T20:40:00Z",
+              "total": 160.0
+            },
+            {
+              "average": 16.0,
+              "maximum": 16.0,
+              "time": "2026-10-05T20:45:00Z",
+              "total": 160.0
+            },
+            {
+              "average": 16.4,
+              "maximum": 19.0,
+              "time": "2026-10-05T20:50:00Z",
+              "total": 164.0
+            },
+            {
+              "average": 20.0,
+              "maximum": 20.0,
+              "time": "2026-10-05T20:55:00Z",
+              "total": 200.0
+            },
+            {
+              "average": 24.0,
+              "maximum": 25.0,
+              "time": "2026-10-05T21:00:00Z",
+              "total": 240.0
+            },
+            {
+              "average": 23.0,
+              "maximum": 23.0,
+              "time": "2026-10-05T21:05:00Z",
+              "total": 230.0
+            }
+          ]
+        }
+      ],
+      "unit": "Percent"
+    },
+    {
+      "name": "RestartCount",
+      "timeseries": [
+        {
+          "data": [
+            {
+              "average": 0.0,
+              "maximum": 0.0,
+              "time": "2026-10-05T20:40:00Z",
+              "total": 0.0
+            },
+            {
+              "average": 0.0,
+              "maximum": 0.0,
+              "time": "2026-10-05T20:45:00Z",
+              "total": 0.0
+            },
+            {
+              "average": 0.0,
+              "maximum": 0.0,
+              "time": "2026-10-05T20:50:00Z",
+              "total": 0.0
+            },
+            {
+              "average": 0.0,
+              "maximum": 0.0,
+              "time": "2026-10-05T20:55:00Z",
+              "total": 0.0
+            },
+            {
+              "average": 0.0,
+              "maximum": 0.0,
+              "time": "2026-10-05T21:00:00Z",
+              "total": 0.0
+            },
+            {
+              "average": 0.0,
+              "maximum": 0.0,
+              "time": "2026-10-05T21:05:00Z",
+              "total": 0.0
+            }
+          ]
+        }
+      ],
+      "unit": "Count"
+    },
+    {
+      "name": "Replicas",
+      "timeseries": [
+        {
+          "data": [
+            {
+              "average": 1.0,
+              "maximum": 1.0,
+              "time": "2026-10-05T20:40:00Z",
+              "total": 10.0
+            },
+            {
+              "average": 1.0,
+              "maximum": 1.0,
+              "time": "2026-10-05T20:45:00Z",
+              "total": 10.0
+            },
+            {
+              "average": 1.0,
+              "maximum": 1.0,
+              "time": "2026-10-05T20:50:00Z",
+              "total": 10.0
+            },
+            {
+              "average": 1.0,
+              "maximum": 1.0,
+              "time": "2026-10-05T20:55:00Z",
+              "total": 10.0
+            },
+            {
+              "average": 1.0,
+              "maximum": 1.0,
+              "time": "2026-10-05T21:00:00Z",
+              "total": 10.0
+            },
+            {
+              "average": 1.0,
+              "maximum": 1.0,
+              "time": "2026-10-05T21:05:00Z",
+              "total": 10.0
+            }
+          ]
+        }
+      ],
+      "unit": "Count"
+    },
+    {
+      "name": "Requests",
+      "timeseries": [
+        {
+          "data": [
+            {
+              "average": 4.0,
+              "maximum": 7.0,
+              "time": "2026-10-05T20:40:00Z",
+              "total": 24.0
+            },
+            {
+              "average": 3.0,
+              "maximum": 5.0,
+              "time": "2026-10-05T20:45:00Z",
+              "total": 27.0
+            },
+            {
+              "average": 16.454545454545453,
+              "maximum": 67.0,
+              "time": "2026-10-05T20:50:00Z",
+              "total": 181.0
+            },
+            {
+              "average": 12.545454545454545,
+              "maximum": 107.0,
+              "time": "2026-10-05T20:55:00Z",
+              "total": 138.0
+            },
+            {
+              "average": 5.1,
+              "maximum": 28.0,
+              "time": "2026-10-05T21:00:00Z",
+              "total": 51.0
+            },
+            {
+              "average": 4.7272727272727275,
+              "maximum": 11.0,
+              "time": "2026-10-05T21:05:00Z",
+              "total": 52.0
+            }
+          ]
+        }
+      ],
+      "unit": "Count"
+    },
+    {
+      "name": "ResponseTime",
+      "timeseries": [
+        {
+          "data": [
+            {
+              "average": 5.0,
+              "maximum": 6.0,
+              "time": "2026-10-05T20:40:00Z",
+              "total": 30.0
+            },
+            {
+              "average": 5.222222222222222,
+              "maximum": 7.0,
+              "time": "2026-10-05T20:45:00Z",
+              "total": 47.0
+            },
+            {
+              "average": 9.545454545454545,
+              "maximum": 36.0,
+              "time": "2026-10-05T20:50:00Z",
+              "total": 105.0
+            },
+            {
+              "average": 6.545454545454546,
+              "maximum": 24.0,
+              "time": "2026-10-05T20:55:00Z",
+              "total": 72.0
+            },
+            {
+              "average": 6.9,
+              "maximum": 25.0,
+              "time": "2026-10-05T21:00:00Z",
+              "total": 69.0
+            },
+            {
+              "average": 32.81818181818182,
+              "maximum": 255.0,
+              "time": "2026-10-05T21:05:00Z",
+              "total": 361.0
+            }
+          ]
+        }
+      ],
+      "unit": "MilliSeconds"
+    }
+  ],
+  "startTime": null
+}

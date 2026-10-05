@@ -1,0 +1,671 @@
+{
+  "sourceSha": "739650f223f2edc0dd8914b28e23916b421da9f1",
+  "webTree": "65a58cb71a83b5e67c8a541153a4164050d2410a",
+  "method": "Comparable local production page-entry manifest references; gzip estimates are not measured HTTP payloads. Shared framework runtime and later dynamic imports may add bytes. Motion/Syncfusion markers identify containing chunks, not exact library attribution. Admin comparison is source-build only, not active admin source upgrade.",
+  "chefRoutes": 15,
+  "chefJsReductionMinPercent": 0,
+  "chefJsReductionMaxPercent": 49.21,
+  "chefAllMotionBearingInitialChunksRemoved": true,
+  "rows": [
+    {
+      "route": "/admin",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 616523,
+        "afterBytes": 111231,
+        "beforeGzipEstimate": 201453,
+        "afterGzipEstimate": 35220,
+        "rawReductionPercent": 81.96,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1031032,
+        "afterBytes": 294992,
+        "beforeGzipEstimate": 214034,
+        "afterGzipEstimate": 47705,
+        "rawReductionPercent": 71.39,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/admin/academy",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 636307,
+        "afterBytes": 131015,
+        "beforeGzipEstimate": 207338,
+        "afterGzipEstimate": 41105,
+        "rawReductionPercent": 79.41,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1031032,
+        "afterBytes": 294992,
+        "beforeGzipEstimate": 214034,
+        "afterGzipEstimate": 47705,
+        "rawReductionPercent": 71.39,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/admin/accounts",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 606258,
+        "afterBytes": 100966,
+        "beforeGzipEstimate": 198539,
+        "afterGzipEstimate": 32306,
+        "rawReductionPercent": 83.35,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1031032,
+        "afterBytes": 294992,
+        "beforeGzipEstimate": 214034,
+        "afterGzipEstimate": 47705,
+        "rawReductionPercent": 71.39,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/admin/analytics",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 614397,
+        "afterBytes": 109105,
+        "beforeGzipEstimate": 201893,
+        "afterGzipEstimate": 35660,
+        "rawReductionPercent": 82.24,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1045406,
+        "afterBytes": 309366,
+        "beforeGzipEstimate": 216992,
+        "afterGzipEstimate": 50663,
+        "rawReductionPercent": 70.41,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/admin/chef-reviews",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 600427,
+        "afterBytes": 95135,
+        "beforeGzipEstimate": 196766,
+        "afterGzipEstimate": 30533,
+        "rawReductionPercent": 84.16,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1031032,
+        "afterBytes": 294992,
+        "beforeGzipEstimate": 214034,
+        "afterGzipEstimate": 47705,
+        "rawReductionPercent": 71.39,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/admin/chef-reviews/[applicationId]",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 611151,
+        "afterBytes": 105859,
+        "beforeGzipEstimate": 199822,
+        "afterGzipEstimate": 33589,
+        "rawReductionPercent": 82.68,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1031032,
+        "afterBytes": 294992,
+        "beforeGzipEstimate": 214034,
+        "afterGzipEstimate": 47705,
+        "rawReductionPercent": 71.39,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/admin/explorer/[dataset]",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 627559,
+        "afterBytes": 122267,
+        "beforeGzipEstimate": 205523,
+        "afterGzipEstimate": 39290,
+        "rawReductionPercent": 80.52,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1045406,
+        "afterBytes": 309366,
+        "beforeGzipEstimate": 216992,
+        "afterGzipEstimate": 50663,
+        "rawReductionPercent": 70.41,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/admin/finance",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 653792,
+        "afterBytes": 209855,
+        "beforeGzipEstimate": 211109,
+        "afterGzipEstimate": 59177,
+        "rawReductionPercent": 67.9,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1031032,
+        "afterBytes": 294992,
+        "beforeGzipEstimate": 214034,
+        "afterGzipEstimate": 47705,
+        "rawReductionPercent": 71.39,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/admin/modules",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 600383,
+        "afterBytes": 95091,
+        "beforeGzipEstimate": 196672,
+        "afterGzipEstimate": 30439,
+        "rawReductionPercent": 84.16,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1031032,
+        "afterBytes": 294992,
+        "beforeGzipEstimate": 214034,
+        "afterGzipEstimate": 47705,
+        "rawReductionPercent": 71.39,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/admin/notifications",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 607254,
+        "afterBytes": 101962,
+        "beforeGzipEstimate": 198923,
+        "afterGzipEstimate": 32690,
+        "rawReductionPercent": 83.21,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1031032,
+        "afterBytes": 294992,
+        "beforeGzipEstimate": 214034,
+        "afterGzipEstimate": 47705,
+        "rawReductionPercent": 71.39,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/admin/operations",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 604982,
+        "afterBytes": 99690,
+        "beforeGzipEstimate": 198268,
+        "afterGzipEstimate": 32035,
+        "rawReductionPercent": 83.52,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1031032,
+        "afterBytes": 294992,
+        "beforeGzipEstimate": 214034,
+        "afterGzipEstimate": 47705,
+        "rawReductionPercent": 71.39,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/admin/search",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 650565,
+        "afterBytes": 145273,
+        "beforeGzipEstimate": 209140,
+        "afterGzipEstimate": 42907,
+        "rawReductionPercent": 77.67,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1031032,
+        "afterBytes": 294992,
+        "beforeGzipEstimate": 214034,
+        "afterGzipEstimate": 47705,
+        "rawReductionPercent": 71.39,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/admin/subscription-capacity",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 616213,
+        "afterBytes": 110921,
+        "beforeGzipEstimate": 200653,
+        "afterGzipEstimate": 34420,
+        "rawReductionPercent": 82.0,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1031032,
+        "afterBytes": 294992,
+        "beforeGzipEstimate": 214034,
+        "afterGzipEstimate": 47705,
+        "rawReductionPercent": 71.39,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/admin/subscription-plans",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 623287,
+        "afterBytes": 117995,
+        "beforeGzipEstimate": 202830,
+        "afterGzipEstimate": 36597,
+        "rawReductionPercent": 81.07,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1031032,
+        "afterBytes": 294992,
+        "beforeGzipEstimate": 214034,
+        "afterGzipEstimate": 47705,
+        "rawReductionPercent": 71.39,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/admin/subscriptions",
+      "scope": "admin source-build only, separate live source unproven",
+      "js": {
+        "beforeBytes": 606915,
+        "afterBytes": 101623,
+        "beforeGzipEstimate": 198342,
+        "afterGzipEstimate": 32109,
+        "rawReductionPercent": 83.26,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 1031032,
+        "afterBytes": 294992,
+        "beforeGzipEstimate": 214034,
+        "afterGzipEstimate": 47705,
+        "rawReductionPercent": 71.39,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 363567,
+        "afterBytes": 210415,
+        "beforeGzipEstimate": 113983,
+        "afterGzipEstimate": 62780,
+        "rawReductionPercent": 42.12,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 243730,
+        "afterBytes": 244518,
+        "beforeGzipEstimate": 37590,
+        "afterGzipEstimate": 37597,
+        "rawReductionPercent": -0.32,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef/[id]",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 0,
+        "afterBytes": 0,
+        "beforeGzipEstimate": 0,
+        "afterGzipEstimate": 0,
+        "rawReductionPercent": 0,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 0,
+        "afterBytes": 0,
+        "beforeGzipEstimate": 0,
+        "afterGzipEstimate": 0,
+        "rawReductionPercent": 0,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef/application",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 406296,
+        "afterBytes": 252258,
+        "beforeGzipEstimate": 126365,
+        "afterGzipEstimate": 74830,
+        "rawReductionPercent": 37.91,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 243730,
+        "afterBytes": 244518,
+        "beforeGzipEstimate": 37590,
+        "afterGzipEstimate": 37597,
+        "rawReductionPercent": -0.32,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef/capacity",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 320740,
+        "afterBytes": 165972,
+        "beforeGzipEstimate": 100572,
+        "afterGzipEstimate": 48844,
+        "rawReductionPercent": 48.25,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 243730,
+        "afterBytes": 244518,
+        "beforeGzipEstimate": 37590,
+        "afterGzipEstimate": 37597,
+        "rawReductionPercent": -0.32,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef/earnings",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 314476,
+        "afterBytes": 159708,
+        "beforeGzipEstimate": 99374,
+        "afterGzipEstimate": 47646,
+        "rawReductionPercent": 49.21,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 243730,
+        "afterBytes": 244518,
+        "beforeGzipEstimate": 37590,
+        "afterGzipEstimate": 37597,
+        "rawReductionPercent": -0.32,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef/finance",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 342351,
+        "afterBytes": 187583,
+        "beforeGzipEstimate": 106556,
+        "afterGzipEstimate": 54805,
+        "rawReductionPercent": 45.21,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 243730,
+        "afterBytes": 244518,
+        "beforeGzipEstimate": 37590,
+        "afterGzipEstimate": 37597,
+        "rawReductionPercent": -0.32,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef/kitchen",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 332279,
+        "afterBytes": 177511,
+        "beforeGzipEstimate": 103535,
+        "afterGzipEstimate": 51781,
+        "rawReductionPercent": 46.58,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 243730,
+        "afterBytes": 244518,
+        "beforeGzipEstimate": 37590,
+        "afterGzipEstimate": 37597,
+        "rawReductionPercent": -0.32,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef/meal-plans",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 362325,
+        "afterBytes": 207557,
+        "beforeGzipEstimate": 108495,
+        "afterGzipEstimate": 56790,
+        "rawReductionPercent": 42.72,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 243730,
+        "afterBytes": 244518,
+        "beforeGzipEstimate": 37590,
+        "afterGzipEstimate": 37597,
+        "rawReductionPercent": -0.32,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef/menu",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 369093,
+        "afterBytes": 214325,
+        "beforeGzipEstimate": 116654,
+        "afterGzipEstimate": 64917,
+        "rawReductionPercent": 41.93,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 243730,
+        "afterBytes": 244518,
+        "beforeGzipEstimate": 37590,
+        "afterGzipEstimate": 37597,
+        "rawReductionPercent": -0.32,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef/menu/media",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 369093,
+        "afterBytes": 214325,
+        "beforeGzipEstimate": 116654,
+        "afterGzipEstimate": 64917,
+        "rawReductionPercent": 41.93,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 243730,
+        "afterBytes": 244518,
+        "beforeGzipEstimate": 37590,
+        "afterGzipEstimate": 37597,
+        "rawReductionPercent": -0.32,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef/operations",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 325618,
+        "afterBytes": 171659,
+        "beforeGzipEstimate": 101850,
+        "afterGzipEstimate": 50497,
+        "rawReductionPercent": 47.28,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 243730,
+        "afterBytes": 244518,
+        "beforeGzipEstimate": 37590,
+        "afterGzipEstimate": 37597,
+        "rawReductionPercent": -0.32,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef/orders",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 314593,
+        "afterBytes": 160144,
+        "beforeGzipEstimate": 99537,
+        "afterGzipEstimate": 47923,
+        "rawReductionPercent": 49.09,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 243730,
+        "afterBytes": 244518,
+        "beforeGzipEstimate": 37590,
+        "afterGzipEstimate": 37597,
+        "rawReductionPercent": -0.32,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef/orders/[orderId]",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 327415,
+        "afterBytes": 172647,
+        "beforeGzipEstimate": 101832,
+        "afterGzipEstimate": 50079,
+        "rawReductionPercent": 47.27,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 243730,
+        "afterBytes": 244518,
+        "beforeGzipEstimate": 37590,
+        "afterGzipEstimate": 37597,
+        "rawReductionPercent": -0.32,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef/profile",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 310199,
+        "afterBytes": 160926,
+        "beforeGzipEstimate": 98036,
+        "afterGzipEstimate": 48071,
+        "rawReductionPercent": 48.12,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 243730,
+        "afterBytes": 244518,
+        "beforeGzipEstimate": 37590,
+        "afterGzipEstimate": 37597,
+        "rawReductionPercent": -0.32,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    },
+    {
+      "route": "/chef/statements",
+      "scope": "chef deployed candidate",
+      "js": {
+        "beforeBytes": 318282,
+        "afterBytes": 163514,
+        "beforeGzipEstimate": 101250,
+        "afterGzipEstimate": 49514,
+        "rawReductionPercent": 48.63,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      },
+      "css": {
+        "beforeBytes": 243730,
+        "afterBytes": 244518,
+        "beforeGzipEstimate": 37590,
+        "afterGzipEstimate": 37597,
+        "rawReductionPercent": -0.32,
+        "afterMotionBearingBytes": 0,
+        "afterSyncfusionBearingBytes": 0
+      }
+    }
+  ]
+}

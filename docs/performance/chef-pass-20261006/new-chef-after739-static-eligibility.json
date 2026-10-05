@@ -1,0 +1,92 @@
+[
+  {
+    "observedAtUtc": "2026-10-05T21:50:53.5312015Z",
+    "path": "/_next/static/chunks/0_ffc3v-ydglq.css",
+    "curlExit": 0,
+    "status": "HTTP/1.1 200 OK",
+    "bytes": 222600,
+    "cacheControl": "cache-control: public, max-age=31536000, immutable",
+    "cache": "X-Cache: TCP_MISS"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:50:53.9196481Z",
+    "path": "/_next/static/chunks/0-xjmq0-uwgcy.css",
+    "curlExit": 0,
+    "status": "HTTP/1.1 200 OK",
+    "bytes": 3750,
+    "cacheControl": "cache-control: public, max-age=31536000, immutable",
+    "cache": "X-Cache: TCP_MISS"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:50:54.2405150Z",
+    "path": "/_next/static/chunks/0i-7v95c8ub9e.js",
+    "curlExit": 0,
+    "status": "HTTP/1.1 200 OK",
+    "bytes": 25332,
+    "cacheControl": "cache-control: public, max-age=31536000, immutable",
+    "cache": "X-Cache: TCP_MISS"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:50:54.5172123Z",
+    "path": "/_next/static/chunks/11jq0c2_zavac.js",
+    "curlExit": 0,
+    "status": "HTTP/1.1 200 OK",
+    "bytes": 31917,
+    "cacheControl": "cache-control: public, max-age=31536000, immutable",
+    "cache": "X-Cache: TCP_MISS"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:50:54.7820961Z",
+    "path": "/_next/static/chunks/1upj4nta3et0p.js",
+    "curlExit": 0,
+    "status": "HTTP/1.1 200 OK",
+    "bytes": 36799,
+    "cacheControl": "cache-control: public, max-age=31536000, immutable",
+    "cache": "X-Cache: TCP_MISS"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:50:55.0956324Z",
+    "path": "/_next/static/chunks/3jg84jwj6s1uj.js",
+    "curlExit": 0,
+    "status": "HTTP/1.1 200 OK",
+    "bytes": 155444,
+    "cacheControl": "cache-control: public, max-age=31536000, immutable",
+    "cache": "X-Cache: TCP_MISS"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:50:55.3829914Z",
+    "path": "/_next/static/chunks/3m1gd3sw2u9gf.js",
+    "curlExit": 0,
+    "status": "HTTP/1.1 200 OK",
+    "bytes": 23920,
+    "cacheControl": "cache-control: public, max-age=31536000, immutable",
+    "cache": "X-Cache: TCP_MISS"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:50:55.6676970Z",
+    "path": "/_next/static/chunks/3yfl9fgvivx3-.js",
+    "curlExit": 0,
+    "status": "HTTP/1.1 200 OK",
+    "bytes": 12887,
+    "cacheControl": "cache-control: public, max-age=31536000, immutable",
+    "cache": "X-Cache: TCP_MISS"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:50:55.9700057Z",
+    "path": "/_next/static/chunks/41_epb6f7u7_y.js",
+    "curlExit": 0,
+    "status": "HTTP/1.1 200 OK",
+    "bytes": 25220,
+    "cacheControl": "cache-control: public, max-age=31536000, immutable",
+    "cache": "X-Cache: TCP_MISS"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:50:56.2508566Z",
+    "path": "/_next/static/chunks/turbopack-1h9hnkswx55yj.js",
+    "curlExit": 0,
+    "status": "HTTP/1.1 200 OK",
+    "bytes": 9721,
+    "cacheControl": "cache-control: public, max-age=31536000, immutable",
+    "cache": "X-Cache: TCP_MISS"
+  }
+]

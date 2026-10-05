@@ -1,0 +1,538 @@
+{
+  "observedAtUtc": "2026-10-05T22:02:19.210089+00:00",
+  "pass": "Second exhaustive anonymous shell/CDN/capacity/release-path audit",
+  "live": {
+    "observedAtUtc": "2026-10-05T21:50:23.776815+00:00",
+    "expectedSourceSha": "739650f223f2edc0dd8914b28e23916b421da9f1",
+    "publicVersion": {
+      "commitSha": "739650f223f2edc0dd8914b28e23916b421da9f1"
+    },
+    "web": {
+      "name": "ca-craves-web-prodlow",
+      "image": "cravesrm09prodlow6bf632.azurecr.io/craves/customer-web-next@sha256:9d96c9ffa88196aae401cad066d7c5d637bb971a6ce7b510a4a9f8ccd603a128",
+      "buildSha": "739650f223f2edc0dd8914b28e23916b421da9f1",
+      "ready": "ca-craves-web-prodlow--0000077",
+      "latest": "ca-craves-web-prodlow--0000077",
+      "running": "Running",
+      "provisioning": "Succeeded",
+      "cpu": 0.25,
+      "memory": "0.5Gi",
+      "min": 1,
+      "max": 1,
+      "mode": "Single",
+      "traffic": [
+        {
+          "latestRevision": true,
+          "weight": 100
+        }
+      ]
+    },
+    "readyWebGuardPassed": true,
+    "protectedAppsCount": 12,
+    "allProtectedFingerprintsUnchanged": true
+  },
+  "landingCompression": {
+    "representativeDecodedBytesMatch": true,
+    "gzipAndBrotliVerified": true,
+    "warmCacheAllHits": true,
+    "previousPassPropagationPendingNowResolved": true,
+    "authorizedRoutePrefix": "/landing-v20/assets/*",
+    "authPrefixExtensionAuthorized": false
+  },
+  "nextCompression": {
+    "currentHtmlAssetCss": "/_next/static/chunks/42ygkh1xy6ma7.css",
+    "representativeDecodedBytesMatch": true,
+    "gzipAndBrotliVerified": true,
+    "warmCacheAllHits": true
+  },
+  "anonymousShells": {
+    "routes": 66,
+    "rounds": 3,
+    "samples": 198,
+    "scope": "Anonymous HTTPS GET page-shell timing only; no authenticated UI/data/rendering claims",
+    "chefAll200": true,
+    "chefMaxTotalSeconds": 0.429255,
+    "expected404Samples": "Six requests to two all-zero invalid order detail/tracking IDs; not authenticated order performance results",
+    "isolatedOver1SecondSamples": [
+      {
+        "route": "/products-pricing",
+        "round": 1,
+        "totalSeconds": 2.028855
+      },
+      {
+        "route": "/[city]/[food]",
+        "round": 2,
+        "totalSeconds": 1.194476
+      }
+    ],
+    "noSamplesOver3Seconds": true
+  },
+  "chunkHostCorrection": "Admin page requests follow 307 redirects to admin.craves.in. The first aggregate probe queried all paths at craves.in and 26 admin-onlypaths returned 404  there; this was a probe host mismatch, not an admin defect. All 43 admin  assets subsequently returned 200  on their owning host; all 74 customer/chef  owned paths returned 200  on craves.in.",
+  "protectedApps": {
+    "count": 12,
+    "unchangedSinceFirstPass": true
+  },
+  "capacity": {
+    "noResourceMutationsOrScaling": true,
+    "windowStart": null,
+    "windowEnd": null,
+    "scope": "Azure metrics reflect current observed traffic, not a load/capacity stress test",
+    "originalMetricBucketSummary": [
+      {
+        "metric": "CpuPercentage",
+        "unit": "Percent",
+        "firstBucketUtc": "2026-10-05T20:40:00Z",
+        "lastBucketUtc": "2026-10-05T21:05:00Z",
+        "meanOfBucketAverages": 1.2,
+        "peakMaximum": 33.0
+      },
+      {
+        "metric": "MemoryPercentage",
+        "unit": "Percent",
+        "firstBucketUtc": "2026-10-05T20:40:00Z",
+        "lastBucketUtc": "2026-10-05T21:05:00Z",
+        "meanOfBucketAverages": 19.233333333333334,
+        "peakMaximum": 25.0
+      },
+      {
+        "metric": "RestartCount",
+        "unit": "Count",
+        "firstBucketUtc": "2026-10-05T20:40:00Z",
+        "lastBucketUtc": "2026-10-05T21:05:00Z",
+        "meanOfBucketAverages": 0.0,
+        "peakMaximum": 0.0
+      },
+      {
+        "metric": "Replicas",
+        "unit": "Count",
+        "firstBucketUtc": "2026-10-05T20:40:00Z",
+        "lastBucketUtc": "2026-10-05T21:05:00Z",
+        "meanOfBucketAverages": 1.0,
+        "peakMaximum": 1.0
+      },
+      {
+        "metric": "Requests",
+        "unit": "Count",
+        "firstBucketUtc": "2026-10-05T20:40:00Z",
+        "lastBucketUtc": "2026-10-05T21:05:00Z",
+        "meanOfBucketAverages": 7.637878787878788,
+        "peakMaximum": 107.0
+      },
+      {
+        "metric": "ResponseTime",
+        "unit": "MilliSeconds",
+        "firstBucketUtc": "2026-10-05T20:40:00Z",
+        "lastBucketUtc": "2026-10-05T21:05:00Z",
+        "meanOfBucketAverages": 11.005218855218857,
+        "peakMaximum": 255.0
+      }
+    ]
+  },
+  "releasePath": {
+    "currentMainSha": "3895cf7f97d28cf50491d736f7eec701aef46d33",
+    "strictDefaultGuardPreserved": true,
+    "explicitSuccessorReceipt": "docs/performance/validation/release-deploy.json",
+    "reviewedPriorReceiptSha256": "ef4bae500c240c6d1aa9087aaaaa51683ea8fa873dda19d9708dd62f88be1797",
+    "baselineSourceSha": "eb5b6e6413a700f849de7bacf9b695cf6a14333a",
+    "expectedLiveSourceSha": "dc74bfa3880b18278b015f57ae393fb25133acdf",
+    "successorArguments": [
+      "--prior-release-receipt",
+      "--prior-release-receipt-sha256"
+    ],
+    "frontendCandidateNotDeployedByAuditAgent": true,
+    "requiredBeforeRelease": "Exact reviewed commit, clean tracked checkout, successful saved lint/typecheck/test/build evidence for its webtree and independent image digest/source label; all runtime/traffic/protected app/recovery guards preserved",
+    "helperTestsPassed": 34,
+    "inheritedHelperTestsPassed": 6
+  },
+  "limitations": [
+    "No authenticated chef/customer browser workflow or interactive rendering claim from HTTP shell checks",
+    "A single local network/edge path was sampled; other geographies and concurrent traffic need separate measurements",
+    "Historical first-pass PDF/ZIP/evidence were preserved; this new summary supersedes the old landing compression propagation-pending status"
+  ],
+  "receipts": {
+    "active-admin-image-provenance.json": "73a986f9f69a360d0de11a94e433d581d8b5a9f4890817e07a065f246cff2102",
+    "admin-dns-edge-ownership-after-rule.json": "5b33e848f82d0d5bcb7e5a935b7f6b8bfb94631165ba0572734873d07f81ad18",
+    "admin-html-api-cache-after-static-rule.json": "2f1af2c9e00e7514880eaba88e6896475ed9fb6fef52e28c2141fdb8e6d0d1a4",
+    "admin-origin-edge-decoded-byte-baseline.json": "2f006eb20343d70327143ae1287f8e32ace6fbbbbe6687596140a50da9a85bab",
+    "admin-private-boundaries-after-compression-verified.json": "7023fd5329cea7307d4436634b9d947fb185894ad21ee141771fc485f9914b53",
+    "admin-private-boundary-propagation-04.json": "48e2a072d886d37131af49b124d25d42729375e6700a84b98e66f1db268e3b81",
+    "admin-private-html-api-cache-baseline.json": "c659f7da4166abf92960356f8a30a814ed4dcd1078b1be0baf399467fd07444a",
+    "admin-redirect-owning-host.json": "a46c52051475dd523aecde3862e05f54be0898acb017aac57e4e51ce84ac4c87",
+    "admin-referenced-chunks-owning-host.json": "7d8907997f00ac61041c9bfd1b32a231737c4f4412bac8eb3bfc98f1d889de75",
+    "admin-route-after-static-attachment.json": "497059f7c25370bb05be8745b859793a6cbea47baacb9786b5d589eb5794837b",
+    "admin-route-before-static-attachment.json": "65a47e3a619397106c8d1a22ba51f4004489b60f6a8171f2fb1435fc07a2b279",
+    "admin-route-proposed-patch.json": "dff9c04e06010605b30cf75e56119d9e2cdb14e792d71415c87b2e77e9653dc0",
+    "admin-rule-proposed-actions.json": "f54ae2eec6cc4eb7e6b39b9ecd0c8b15c0e8bafc80fd1e6ad136a368c9a7207d",
+    "admin-rule-proposed-conditions.json": "05587dcad05cb8405fce37b7eeb00b99708da3e60438d679d6f7a928dd28059a",
+    "admin-rule-proposed-rule-put.json": "f14e1d1674660ed07562366b29181e326594c8411bba82617733b301b234459b",
+    "admin-rule-service-normalization-readback.json": "34d7749244eae1b5ded57d29b206f3dda5e913f15082c86ecbb6b1e934b33dc6",
+    "admin-static-after-config-first-byte-probe.json": "3a96dbf8563806fa3d6f28ea58a8f2f0d315807b2447500a695cb319e4d0247e",
+    "admin-static-cli-attempt-diagnostic.json": "d6e389119ce238cbfdb49bcb17d9f15e4ebdb87f56ab0316599dc1d44d30b964",
+    "admin-static-compression-proposal.json": "c54ffe5b94dc1eae54e141259cf4ff94b77c21e109f532eed5709d3fa4b763a0",
+    "admin-static-compression-verified-receipt.json": "2ec39bf3d223d4cc1605e4bff5e0393321c6145de90295fcad04019ac691f5a2",
+    "admin-static-configuration-first-attempt.json": "a029bcba68e565a5b5478228368328ef66dc92f4b186218d38ee8c8d58e43ce3",
+    "admin-static-configuration-receipt.json": "f4a9cef56b17e7b2ca6785bd93c42e5ff57cc9feaa756e6f4b34c9a6d81beeae",
+    "admin-static-configuration-second-attempt.json": "c7505128d1dfec75317a68de938d7ace4839c15e33b8334dfe3422021fbf435f",
+    "admin-static-final-configuration-readback.json": "2b47b3702747a97306c37b61d3699ed2d15b2a53ec7a62399d5aa8415d7bb0df",
+    "admin-static-origin-cache-eligibility.json": "a3f9c7b1216fe28b0cb3f90be60d980eeebd02a996a17c0f3165e2461f035014",
+    "admin-static-propagation-03.json": "80adbb9dccb389b5d0cf3592d13e5d7d931cc494dc89e787712dc6e8fd7f488e",
+    "admin-static-propagation-04.json": "9ea94350803fb9a31ca49287f60b038ee67584849830c6c32e0da9859db240aa",
+    "admin-static-propagation-05.json": "cb3f0e7b2cb01630792e75f949680557e2120d8987dc99e9a2e4b4b75dd123d4",
+    "admin-static-propagation-06.json": "3918208edc93f97673135200ef0885613f41f101a43afb29b43606aac40d418b",
+    "admin-static-propagation-readback-03.json": "169e6ab43ae5ab90755bb1e3e5e7f5facfc5722df370cef42d1893b5e76ae6f9",
+    "admin-static-quick-probe-02.json": "8a8113d8eff2ff8bb2cf949aef70fe82cf2bd0b9ac4c961c11467a59d76f00f6",
+    "admin-static-quick-probe-04.json": "afb9acd4bac9ca797bd73fb281db2fb753e20917f42fc43f4732779c23fdd6ca",
+    "admin-static-quick-probe-05.json": "bbddba75a1e580afde75d76a7192bc82c6d80fa998512b8c21ba32bd9386701e",
+    "admin-static-quick-probe-21-37.json": "1ade237a552b368f0013f0666057d945db77c609ffaa5727e9a2bf9095144507",
+    "admin-static-repeated-warm-cache-final.json": "a330efc938f25a5ef5ae9534167204fb76193153bde1ac8496fce2c1b7cdb010",
+    "admin-static-rule-after-apply.json": "303b8bd276217834cd2223a2dc7a85f8ca160b464c1aa51fa4f700419347974f",
+    "admin-static-rule-before-apply.json": "ef03f2c5f4974646cc2f2459f023f7631f27b8138e7bf73769e65a30497855c6",
+    "admin-static-warm-cache-verified.json": "bf75017a6b626ca651d07d21dc5ca6355a7b2083fe1f04039fb6eefb1c4a71d0",
+    "after739-cold-miss-followup-byte-equality.json": "114cb26fa36804b8c38f985331b37e3c2be1e5c41b060829b59cb91e8c6493f0",
+    "after739-cold-miss-followup-warm-cache.json": "5543b6555fae46a8068b2eb9db945c20c528f2ba3603f2e33d497d66b5c8de87",
+    "all-admin-origin-static-cache-eligibility.json": "755a72517809f0937c47f502f624ddaa2459dbe87e7acc54e3f5c9f297eb0636",
+    "all-current-after739-referenced-next-assets.json": "01a9c60a0316359257a6a7c38479280643924dadbccc32abf2f0d3beec6decc9",
+    "all-current-referenced-next-chunks.json": "11ccb680de1d26798640c9d86dfbfc6b989d2582d1ab129cdf1dd808323ca31a",
+    "all-customer-next-after739-gzip-retained-recheck.json": "f0c5e42795ab3112ee870574ae0b904d63d4d16eb31b249e135a69df48fe4ad6",
+    "all-customer-variant-audit-first-attempt-incomplete.json": "96b067c75bed767e3e189cb5001d65c05d62960cf6830901a0e92503b14a9c65",
+    "all-routes-before-admin-static-attachment.json": "37a4246679e04a9984bccbc29040f864c4bc02d4f702ad65ea5db94e328a9901",
+    "anonymous-page-shells-after739-three-rounds.json": "73eb1638538bc9187600c5a862522b926dce04d08458438b026bfaf3b79e8fb3",
+    "anonymous-page-shells-three-rounds.json": "c9f662e519ec0d3e171da4f0caefba876596608b047b58671ea7169f5d42ebcd",
+    "changed-files.md": "bbc646d484bb2d59f1398446c417737c857eae1f97a186bf0ac70b80d4680507",
+    "CHANGELOG.md": "a2f153acf615b1890a6ef3e528973502f6a0e6da73a034ab5ed418d0ba3b38f0",
+    "chef-current-after739-chunk-manifest.json": "d95e4c5a124b1d42e16aee1567c5260187f449016fa4091da473b58690bb9c4f",
+    "chef-shell-summary.json": "c73546df8f51cc11c1d6723e50bcfb71e9409befeabfc004b9a01374ea4ed7e8",
+    "current-after739-origin-edge-compression.json": "23b16c49240bfc30ceabe9552c6d45632f713b0e0c04193b6bb6a72cc95d4d14",
+    "current-after739-static-warm-cache.json": "bc53b3a03a43c095166d4d360e84e0a3855c7a92ffffaf8a5a6f05d917c610c6",
+    "existing-admin-app-images.json": "3f7c728be59aae2bd9688148ab689f61d72ebaa7c0fa917901f326a5947293de",
+    "existing-app-capacity.json": "82419947c4e3813a104f3145ca25c1350f936c8c4746918baeae80823a572dcb",
+    "existing-frontdoor-access-log-availability.json": "6220931ba6a31724f6cbc19e0b12057aeaeccaa784f189b4d0eb3431b17faa0f",
+    "existing-frontdoor-endpoint-names.json": "0762fa92b701948200f2f7675b7879dad77e627e5ab61f88ce3a438fdd9dc43f",
+    "existing-frontdoor-route-rule-ownership.json": "d1a67881a25109e8b7e7865b300caefc0f229c1d9004eda8a040cd69aaee8b92",
+    "inherited-release-helper-tests.log": "f59b7d9aeb20b985b75db8372b6ba1f869fc559f90bc5be84cc8c94e1b3555d7",
+    "isolated-slow-shell-followup-five-rounds.json": "e19ed418427b69f84edc567e8488a6ba8e2d93262ddb51bca0a549824a716ff4",
+    "landing-compression-check.json": "fa94998daa1caaa85195babd36aed124c9903811b4132f6c60885ceb5a70bb51",
+    "landing-warm-cache-check.json": "eabb50a534e5c7c8d603863664855f8156ee8600e328fbf402234b7bdff44805",
+    "live-web-after739-health-capacity.json": "b6de6e94d8c184d2c6d3844898a2560297d331f3c55b84e348eb14416188dee4",
+    "live-web-health-capacity.json": "d185675fe7310756809c23e0dc28a5bab9c9f6d6cc4a47fda2a819a4c2dd6bb5",
+    "missing-next-chunk-route-mapping.json": "b7a6b7174daf39f5974a184e91e500c8f6027bb238498d0f249880bf1bb7198f",
+    "native-chrome-baseline.json": "bdec03bb0f5f970d26b853d78af993a2c794eb8efa8496e652c07c07b8e16839",
+    "new-chef-after739-static-eligibility.json": "5cf0b605241f76e21fee3fef008f107d0476a0acb6f44e9c00c9b3f5e767d87d",
+    "next-current-compression-check.json": "d4243542c411868fb2865ad4632933a9f69f9da96835a7fcca6826acf8900350",
+    "post-release-audit-freeze-summary.json": "c2d0b91e23038e315e991adbf2741a4751af7dd1072feb106df97a216363f215",
+    "protected-app-fingerprints.json": "576c8e1d588d164093f954c2984ea192adc73312e504965ff65b4e7a4b87a210",
+    "README.md": "20136ea5dbd766ebd80eecf96735e7f77cde70e1f7ff7bce058d75ab0dc9ff11",
+    "release-deploy.json": "1db087272525ae03bea2a2da8468f14af852c31b0562921383676b8d98bde11a",
+    "release-inspect.json": "33ab32107a979316cbbd74dc0e4dd5cb30823c6669d97b72a5fe65a1ce1b0454",
+    "route-inventory.json": "f3499d49785c5c6b810d8a147ac11326f9bf473adfaa0faff57874eb6f745f4a",
+    "route-payload-after.json": "98f80232665d91892c78af38dc182f88da111c0943ddb101288aa52975202b84",
+    "route-payload-baseline.json": "c45f498aa5bdea717626ddc22ff2d2bad04ad20195df7ec28d34f747985dcba3",
+    "route-payload-comparison.json": "dc142a15ee28bbdb5625707af3f4bb0e862be92d6fd4d0b186de113f38d5de59",
+    "stale-next-reference-check.json": "6cae4742ad84f2b63ae8b741dda736fd28e01ebd82966a77c390915763beb52a",
+    "static-cache-repeat-timings.json": "114ba56ef5d39fee8b53538a118a337345683e6d2858803581fc73e160cea438",
+    "successor-release-helper-tests.log": "98b7b9dd5a477f8ac776dda27b00b8a5a9e3aa967d63a3db0c2cbd197fcf0891",
+    "web-after739-thirty-minute-metrics.json": "2557e627acdd4627de1a565184e06de6960a5f9ae6cb6de843a60dd718be8c43",
+    "web-thirty-minute-metrics.json": "412ce494ed82ebc4022069213508da54ed93c1501684646a81cf248680551376"
+  },
+  "assetsByOwningHost": {
+    "customerChefHost": "craves.in",
+    "customerChefReferencedAssets": 74,
+    "customerChefAll200": true,
+    "adminHost": "admin.craves.in",
+    "adminReferencedAssets": 43,
+    "adminAll200": true,
+    "adminBaselineIdentityAndUncached": true
+  },
+  "adminImageBaseline": {
+    "observedAtUtc": "2026-10-05T21:24:26.634031+00:00",
+    "image": "cravesrm09prodlow6bf632.azurecr.io/craves/admin-web@sha256:750cccb048743cf4e15d118e53d9ec9af93c15793eadbe3296460c9a3aa8574c",
+    "manifestDigestVerified": true,
+    "configDigestVerified": true,
+    "os": "linux",
+    "architecture": "amd64",
+    "sourceRevisionLabel": null,
+    "revisionLabelPresent": false,
+    "registryTags": [
+      "home-banners-r92-20261002-v1"
+    ],
+    "registryCreatedAt": "2026-10-02T01:25:03.5721865Z",
+    "registryUpdatedAt": "2026-10-02T01:25:03.5721865Z",
+    "scope": "Scoped admin-web pull, selected provenance only; no tokens, image environment, build history or signed URLs retained",
+    "exactSourceLineageProven": false
+  },
+  "additionalOutlierShellFollowup": {
+    "rounds": 5,
+    "all200": true,
+    "pricingTotalSecondsRange": [
+      0.292979,
+      0.585237
+    ],
+    "hyderabadBiryaniTotalSecondsRange": [
+      0.182609,
+      0.259102
+    ]
+  },
+  "adminStaticConfiguration": {
+    "configurationAppliedAndVerified": true,
+    "appliedAtUtc": "2026-10-05T21:34:41.280026+00:00",
+    "finalVerificationReceipt": "admin-static-compression-verified-receipt.json",
+    "verifiedAtUtc": "2026-10-05T22:01:50.608318+00:00",
+    "gzipBrotliWarmCacheProofPending": false,
+    "onlyChangedFields": {
+      "rule": [
+        "actions",
+        "conditions"
+      ],
+      "adminRoute": [
+        "ruleSets"
+      ]
+    },
+    "allOtherRoutesAnd12ProtectedAppsUnchanged": true,
+    "newResources": 0,
+    "containerAppChanges": 0
+  },
+  "adminStaticCompression": {
+    "configurationAppliedAndVerified": true,
+    "appliedAtUtc": "2026-10-05T21:34:41.280026+00:00",
+    "lastEdgeProbeUtc": "2026-10-05T21:58:45.9089439Z",
+    "allRepresentativeResponses200": true,
+    "allRepresentativeDecodedHashesEqual": true,
+    "edgeGzipAndBrotliVerified": true,
+    "warmCacheVerified": true,
+    "status": "Verified gzip/Brotli and decoded byte equality, repeated warm TCP_HIT responses; private HTML/API boundaries unchanged",
+    "HTMLAndAPIsStillUncached": true,
+    "cacheBehavior": "HonorOrigin",
+    "TTLOverride": null,
+    "originGroupOverride": null,
+    "newResources": 0,
+    "containerAppChanges": 0,
+    "lastConfigurationReadback": {
+      "observedAtUtc": "2026-10-05T21:59:39.398963+00:00",
+      "ruleExactApprovedAfterState": true,
+      "routeExactApprovedAfterState": true,
+      "allOtherRoutesPreserved": true,
+      "all12ProtectedAppFingerprintsUnchanged": true,
+      "routeProvisioningState": "Succeeded",
+      "ruleProvisioningState": "Succeeded",
+      "newResources": 0,
+      "appMutationsByAuditAgent": 0
+    },
+    "latestPrivateBoundaryReceipt": "admin-private-boundaries-after-compression-verified.json",
+    "latestPrivateBoundaryUtc": "2026-10-05T21:59:27.7970476Z",
+    "lastWarmProbeUtc": "2026-10-05T21:59:59.6101514Z",
+    "warmSecondsRange": [
+      0.158024,
+      0.301442
+    ],
+    "verifiedReceipt": "admin-static-compression-verified-receipt.json"
+  },
+  "liveBeforeSecondRelease": {
+    "observedAtUtc": "2026-10-05T21:09:31.3873655Z",
+    "web": {
+      "cpu": 0.25,
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.App/containerapps/ca-craves-web-prodlow",
+      "image": "cravesrm09prodlow6bf632.azurecr.io/craves/customer-web-next@sha256:bca745e52636105532b78b42d552e9e516f5074d72938f0ab8c4090ca8d636dc",
+      "latest": "ca-craves-web-prodlow--0000076",
+      "max": 1,
+      "memory": "0.5Gi",
+      "min": 1,
+      "mode": "Single",
+      "name": "ca-craves-web-prodlow",
+      "provisioning": "Succeeded",
+      "ready": "ca-craves-web-prodlow--0000076",
+      "running": "Running",
+      "traffic": [
+        {
+          "latestRevision": true,
+          "weight": 100
+        }
+      ]
+    },
+    "revision": {
+      "active": true,
+      "health": "Healthy",
+      "name": "ca-craves-web-prodlow--0000076",
+      "provisioning": "Provisioned",
+      "replicas": 1,
+      "running": "RunningAtMaxScale"
+    },
+    "publicVersion": {
+      "commitSha": "dc74bfa3880b18278b015f57ae393fb25133acdf"
+    }
+  },
+  "secondPassRelease": {
+    "operation": "deploy",
+    "verified": true,
+    "sourceSha": "739650f223f2edc0dd8914b28e23916b421da9f1",
+    "image": "cravesrm09prodlow6bf632.azurecr.io/craves/customer-web-next@sha256:9d96c9ffa88196aae401cad066d7c5d637bb971a6ce7b510a4a9f8ccd603a128",
+    "previousSourceSha": "dc74bfa3880b18278b015f57ae393fb25133acdf",
+    "previousImage": "cravesrm09prodlow6bf632.azurecr.io/craves/customer-web-next@sha256:bca745e52636105532b78b42d552e9e516f5074d72938f0ab8c4090ca8d636dc",
+    "receipt": "release-deploy.json",
+    "containerAppDeploymentPerformedByAuditAgent": false
+  },
+  "after739AnonymousShells": {
+    "scope": "Anonymous HTTPS GET page-shell timing only; no authenticated UI/data/rendering claims",
+    "sourceSha": "739650f223f2edc0dd8914b28e23916b421da9f1",
+    "sourceConsistentThroughout": true,
+    "routes": 66,
+    "rounds": 3,
+    "samples": 198,
+    "groups": [
+      {
+        "kind": "admin",
+        "samples": 45,
+        "statuses": {
+          "200": 45
+        },
+        "maximumTotalSeconds": 0.608666,
+        "meanTtfbSeconds": 0.29280995555555556
+      },
+      {
+        "kind": "chef",
+        "samples": 45,
+        "statuses": {
+          "200": 45
+        },
+        "maximumTotalSeconds": 0.849739,
+        "meanTtfbSeconds": 0.17137706666666666
+      },
+      {
+        "kind": "customer",
+        "samples": 108,
+        "statuses": {
+          "200": 102,
+          "404": 6
+        },
+        "maximumTotalSeconds": 0.569934,
+        "meanTtfbSeconds": 0.1781029722222222
+      }
+    ],
+    "expectedInvalidOrderId404Count": 6,
+    "allValidPages200": true,
+    "no5xxOrIncompleteRequests": true
+  },
+  "after739StaticAssets": {
+    "owningHostSummaries": [
+      {
+        "host": "admin.craves.in",
+        "count": 43,
+        "all200": true,
+        "maximumSeconds": 0.444029
+      },
+      {
+        "host": "craves.in",
+        "count": 75,
+        "all200": true,
+        "maximumSeconds": 3.30181
+      }
+    ],
+    "representativeOriginEdgeAll200AndDecodedBytesEqual": true,
+    "representativeGzipBrotliVerified": true,
+    "warmSamples": 24,
+    "warmAll200": true,
+    "warmAllHits": true,
+    "warmAllExpectedEncoding": true,
+    "warmSecondsRange": [
+      0.133763,
+      1.185465
+    ],
+    "initialIdentityMissesOver1Second": [
+      {
+        "observedAtUtc": "2026-10-05T21:52:45.9142960Z",
+        "host": "craves.in",
+        "path": "/_next/static/chunks/0vp9gm9g2uxie.js",
+        "status": 200,
+        "curlExit": 0,
+        "cache": "X-Cache: TCP_MISS",
+        "cacheControl": "cache-control: public, max-age=31536000, immutable",
+        "contentType": "Content-Type: application/javascript; charset=UTF-8",
+        "setCookiePresent": false,
+        "wireBytes": 117764,
+        "bodySha256": "3f9d9ddc737c3a3146c28fbba65ee284c86a400498a064a2f8b334f129517f4e",
+        "totalSeconds": 2.504699
+      },
+      {
+        "observedAtUtc": "2026-10-05T21:53:13.7785699Z",
+        "host": "craves.in",
+        "path": "/_next/static/chunks/43edq6qmsy9aj.js",
+        "status": 200,
+        "curlExit": 0,
+        "cache": "X-Cache: TCP_MISS",
+        "cacheControl": "cache-control: public, max-age=31536000, immutable",
+        "contentType": "Content-Type: application/javascript; charset=UTF-8",
+        "setCookiePresent": false,
+        "wireBytes": 30074,
+        "bodySha256": "f8d9a902a25756f306e3c9559446322b405ad311526bd7749972984606669311",
+        "totalSeconds": 3.30181
+      }
+    ],
+    "isolatedMissFollowup": {
+      "receipt": "after739-cold-miss-followup-warm-cache.json",
+      "samples": 12,
+      "all200": true,
+      "allHits": true,
+      "allExpectedEncoding": true,
+      "secondsRange": [
+        0.111958,
+        0.178689
+      ]
+    },
+    "all75CustomerGzipDecodedByteRecheck": {
+      "receipt": "all-customer-next-after739-gzip-retained-recheck.json",
+      "status": "Complete separate gzip recheck; first broad variant attempt remains incomplete and preserved",
+      "sourceSha": "739650f223f2edc0dd8914b28e23916b421da9f1",
+      "paths": 75,
+      "attempts": 75,
+      "failedAttempts": 0,
+      "retryAttempts": 0,
+      "all75Responses200AndDecodedShaEqualsPriorIdentity": true,
+      "allEligibleGzipEncodingVerified": true,
+      "eligiblePaths": 72,
+      "maxTotalSeconds": 0.31987,
+      "minTotalSeconds": 0.124988,
+      "lastObservedAtUtc": "2026-10-05T22:01:33.8373004Z",
+      "sourceConsistentAtStartAndEnd": true
+    }
+  },
+  "adminStaticConfigurationAtApplyReceipt": {
+    "observedAtUtc": "2026-10-05T21:34:11.133434+00:00",
+    "operation": "apply",
+    "configurationVerified": true,
+    "proposalSha256": "c54ffe5b94dc1eae54e141259cf4ff94b77c21e109f532eed5709d3fa4b763a0",
+    "newResources": 0,
+    "containerAppChanges": 0,
+    "rollbackVerified": false,
+    "appliedAtUtc": "2026-10-05T21:34:41.280026+00:00",
+    "changedRouteFields": [
+      "ruleSets"
+    ],
+    "changedRuleFields": [
+      "actions",
+      "conditions"
+    ],
+    "originSecurityAndDefaultCachePreserved": true,
+    "gzipBrotliWarmCacheProofPending": true
+  },
+  "additionalCompressedSweep": {
+    "firstVariantAttempt": "all-customer-variant-audit-first-attempt-incomplete.json",
+    "firstAttemptStatus": "Incomplete due one local curl connection timeout; not a pass",
+    "retainedGzipRecheck": "all-customer-next-after739-gzip-retained-recheck.json",
+    "retainedGzipRecheckStatus": "Complete;75 requests, no error or retry, all decoded SHA matches",
+    "retainedGzipSummary": {
+      "receipt": "all-customer-next-after739-gzip-retained-recheck.json",
+      "status": "Complete separate gzip recheck; first broad variant attempt remains incomplete and preserved",
+      "sourceSha": "739650f223f2edc0dd8914b28e23916b421da9f1",
+      "paths": 75,
+      "attempts": 75,
+      "failedAttempts": 0,
+      "retryAttempts": 0,
+      "all75Responses200AndDecodedShaEqualsPriorIdentity": true,
+      "allEligibleGzipEncodingVerified": true,
+      "eligiblePaths": 72,
+      "maxTotalSeconds": 0.31987,
+      "minTotalSeconds": 0.124988,
+      "lastObservedAtUtc": "2026-10-05T22:01:33.8373004Z",
+      "sourceConsistentAtStartAndEnd": true
+    }
+  }
+}

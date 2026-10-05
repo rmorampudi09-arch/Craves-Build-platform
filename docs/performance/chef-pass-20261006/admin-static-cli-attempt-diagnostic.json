@@ -1,0 +1,5 @@
+{
+  "exitCode": 1,
+  "stderr": "ERROR: Failed to parse '--actions' argument: \"Model 'AAZObjectArg' has no field named 'name'\"\n",
+  "scope": "Existing detached rule only, exact reviewed public matching/cache payload; no tokens or environment"
+}

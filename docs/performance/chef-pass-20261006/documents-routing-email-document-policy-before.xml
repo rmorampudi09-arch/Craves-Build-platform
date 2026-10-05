@@ -1,0 +1,15 @@
+<policies>
+  <inbound>
+    <base />
+    <rewrite-uri template="/api/v1/documents/{id}/email" copy-unmatched-params="true" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

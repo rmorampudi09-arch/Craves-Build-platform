@@ -1,0 +1,57 @@
+[
+  {
+    "observedAtUtc": "2026-10-05T21:35:26.9559558Z",
+    "host": "admin.craves.in",
+    "path": "/admin",
+    "status": 200,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: s-maxage=31536000",
+    "encoding": null,
+    "contentType": "Content-Type: text/html; charset=utf-8"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:35:27.2893289Z",
+    "host": "admin.craves.in",
+    "path": "/sign-in",
+    "status": 200,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: private, no-cache, no-store, max-age=0, must-revalidate",
+    "encoding": null,
+    "contentType": "Content-Type: text/html; charset=utf-8"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:35:27.5381915Z",
+    "host": "admin.craves.in",
+    "path": "/api/auth/me",
+    "status": 401,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: private, no-store, max-age=0",
+    "encoding": null,
+    "contentType": "Content-Type: application/json"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:35:27.7773161Z",
+    "host": "admin.craves.in",
+    "path": "/api/admin/me",
+    "status": 401,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: private, no-store, max-age=0",
+    "encoding": null,
+    "contentType": "Content-Type: application/json"
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:35:28.0145866Z",
+    "host": "admin.craves.in",
+    "path": "/api/admin/finance/ledger.js",
+    "status": 404,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: private, no-store, max-age=0",
+    "encoding": null,
+    "contentType": "Content-Type: application/json"
+  }
+]

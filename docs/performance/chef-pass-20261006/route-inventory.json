@@ -1,0 +1,332 @@
+[
+  {
+    "template": "/",
+    "sample": "/",
+    "kind": "customer"
+  },
+  {
+    "template": "/[city]",
+    "sample": "/hyderabad",
+    "kind": "customer"
+  },
+  {
+    "template": "/[city]/[food]",
+    "sample": "/hyderabad/biryani",
+    "kind": "customer"
+  },
+  {
+    "template": "/addresses",
+    "sample": "/addresses",
+    "kind": "customer"
+  },
+  {
+    "template": "/admin",
+    "sample": "/admin",
+    "kind": "admin"
+  },
+  {
+    "template": "/admin/academy",
+    "sample": "/admin/academy",
+    "kind": "admin"
+  },
+  {
+    "template": "/admin/accounts",
+    "sample": "/admin/accounts",
+    "kind": "admin"
+  },
+  {
+    "template": "/admin/analytics",
+    "sample": "/admin/analytics",
+    "kind": "admin"
+  },
+  {
+    "template": "/admin/chef-reviews",
+    "sample": "/admin/chef-reviews",
+    "kind": "admin"
+  },
+  {
+    "template": "/admin/chef-reviews/[applicationId]",
+    "sample": "/admin/chef-reviews/00000000-0000-0000-0000-000000000000",
+    "kind": "admin"
+  },
+  {
+    "template": "/admin/explorer/[dataset]",
+    "sample": "/admin/explorer/orders",
+    "kind": "admin"
+  },
+  {
+    "template": "/admin/finance",
+    "sample": "/admin/finance",
+    "kind": "admin"
+  },
+  {
+    "template": "/admin/modules",
+    "sample": "/admin/modules",
+    "kind": "admin"
+  },
+  {
+    "template": "/admin/notifications",
+    "sample": "/admin/notifications",
+    "kind": "admin"
+  },
+  {
+    "template": "/admin/operations",
+    "sample": "/admin/operations",
+    "kind": "admin"
+  },
+  {
+    "template": "/admin/search",
+    "sample": "/admin/search",
+    "kind": "admin"
+  },
+  {
+    "template": "/admin/subscription-capacity",
+    "sample": "/admin/subscription-capacity",
+    "kind": "admin"
+  },
+  {
+    "template": "/admin/subscription-plans",
+    "sample": "/admin/subscription-plans",
+    "kind": "admin"
+  },
+  {
+    "template": "/admin/subscriptions",
+    "sample": "/admin/subscriptions",
+    "kind": "admin"
+  },
+  {
+    "template": "/cart",
+    "sample": "/cart",
+    "kind": "customer"
+  },
+  {
+    "template": "/checkout",
+    "sample": "/checkout",
+    "kind": "customer"
+  },
+  {
+    "template": "/checkout/[checkoutId]",
+    "sample": "/checkout/00000000-0000-0000-0000-000000000000",
+    "kind": "customer"
+  },
+  {
+    "template": "/checkout/[checkoutId]/payment",
+    "sample": "/checkout/00000000-0000-0000-0000-000000000000/payment",
+    "kind": "customer"
+  },
+  {
+    "template": "/chef",
+    "sample": "/chef",
+    "kind": "chef"
+  },
+  {
+    "template": "/chef/[id]",
+    "sample": "/chef/00000000-0000-0000-0000-000000000000",
+    "kind": "chef"
+  },
+  {
+    "template": "/chef/application",
+    "sample": "/chef/application",
+    "kind": "chef"
+  },
+  {
+    "template": "/chef/capacity",
+    "sample": "/chef/capacity",
+    "kind": "chef"
+  },
+  {
+    "template": "/chef/earnings",
+    "sample": "/chef/earnings",
+    "kind": "chef"
+  },
+  {
+    "template": "/chef/finance",
+    "sample": "/chef/finance",
+    "kind": "chef"
+  },
+  {
+    "template": "/chef/kitchen",
+    "sample": "/chef/kitchen",
+    "kind": "chef"
+  },
+  {
+    "template": "/chef/meal-plans",
+    "sample": "/chef/meal-plans",
+    "kind": "chef"
+  },
+  {
+    "template": "/chef/menu",
+    "sample": "/chef/menu",
+    "kind": "chef"
+  },
+  {
+    "template": "/chef/menu/media",
+    "sample": "/chef/menu/media",
+    "kind": "chef"
+  },
+  {
+    "template": "/chef/operations",
+    "sample": "/chef/operations",
+    "kind": "chef"
+  },
+  {
+    "template": "/chef/orders",
+    "sample": "/chef/orders",
+    "kind": "chef"
+  },
+  {
+    "template": "/chef/orders/[orderId]",
+    "sample": "/chef/orders/00000000-0000-0000-0000-000000000000",
+    "kind": "chef"
+  },
+  {
+    "template": "/chef/profile",
+    "sample": "/chef/profile",
+    "kind": "chef"
+  },
+  {
+    "template": "/chef/statements",
+    "sample": "/chef/statements",
+    "kind": "chef"
+  },
+  {
+    "template": "/chefs",
+    "sample": "/chefs",
+    "kind": "customer"
+  },
+  {
+    "template": "/confirmation",
+    "sample": "/confirmation",
+    "kind": "customer"
+  },
+  {
+    "template": "/contact",
+    "sample": "/contact",
+    "kind": "customer"
+  },
+  {
+    "template": "/discover",
+    "sample": "/discover",
+    "kind": "customer"
+  },
+  {
+    "template": "/dish/[id]",
+    "sample": "/dish/00000000-0000-0000-0000-000000000000",
+    "kind": "customer"
+  },
+  {
+    "template": "/food/[food]",
+    "sample": "/food/biryani",
+    "kind": "customer"
+  },
+  {
+    "template": "/home",
+    "sample": "/home",
+    "kind": "customer"
+  },
+  {
+    "template": "/kitchen/[id]",
+    "sample": "/kitchen/00000000-0000-0000-0000-000000000000",
+    "kind": "customer"
+  },
+  {
+    "template": "/kitchens/[id]",
+    "sample": "/kitchens/00000000-0000-0000-0000-000000000000",
+    "kind": "customer"
+  },
+  {
+    "template": "/notifications",
+    "sample": "/notifications",
+    "kind": "customer"
+  },
+  {
+    "template": "/orders",
+    "sample": "/orders",
+    "kind": "customer"
+  },
+  {
+    "template": "/orders/[orderId]",
+    "sample": "/orders/00000000-0000-0000-0000-000000000000",
+    "kind": "customer"
+  },
+  {
+    "template": "/orders/[orderId]/tracking",
+    "sample": "/orders/00000000-0000-0000-0000-000000000000/tracking",
+    "kind": "customer"
+  },
+  {
+    "template": "/payment",
+    "sample": "/payment",
+    "kind": "customer"
+  },
+  {
+    "template": "/privacy",
+    "sample": "/privacy",
+    "kind": "customer"
+  },
+  {
+    "template": "/products-pricing",
+    "sample": "/products-pricing",
+    "kind": "customer"
+  },
+  {
+    "template": "/profile",
+    "sample": "/profile",
+    "kind": "customer"
+  },
+  {
+    "template": "/refunds-cancellations",
+    "sample": "/refunds-cancellations",
+    "kind": "customer"
+  },
+  {
+    "template": "/security",
+    "sample": "/security",
+    "kind": "customer"
+  },
+  {
+    "template": "/sign-in",
+    "sample": "/sign-in",
+    "kind": "customer"
+  },
+  {
+    "template": "/subscriptions",
+    "sample": "/subscriptions",
+    "kind": "customer"
+  },
+  {
+    "template": "/subscriptions/[subscriptionId]",
+    "sample": "/subscriptions/00000000-0000-0000-0000-000000000000",
+    "kind": "customer"
+  },
+  {
+    "template": "/subscriptions/[subscriptionId]/payment",
+    "sample": "/subscriptions/00000000-0000-0000-0000-000000000000/payment",
+    "kind": "customer"
+  },
+  {
+    "template": "/subscriptions/new",
+    "sample": "/subscriptions/new",
+    "kind": "customer"
+  },
+  {
+    "template": "/subscriptions/plans",
+    "sample": "/subscriptions/plans",
+    "kind": "customer"
+  },
+  {
+    "template": "/terms",
+    "sample": "/terms",
+    "kind": "customer"
+  },
+  {
+    "template": "/tracking",
+    "sample": "/tracking",
+    "kind": "customer"
+  },
+  {
+    "template": "/wishlist",
+    "sample": "/wishlist",
+    "kind": "customer"
+  }
+]

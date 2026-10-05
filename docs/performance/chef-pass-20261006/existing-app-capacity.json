@@ -1,0 +1,122 @@
+{
+  "observedAtUtc": "2026-10-05T21:09:35.8247339Z",
+  "apps": [
+    {
+      "cpu": 1,
+      "max": 1,
+      "memory": "2Gi",
+      "min": 1,
+      "name": "ca-craves-referral-prodlow",
+      "ready": "ca-craves-referral-prodlow--disabled-baseline-20261001",
+      "running": "Running"
+    },
+    {
+      "cpu": 0.25,
+      "max": 1,
+      "memory": "0.5Gi",
+      "min": 1,
+      "name": "ca-craves-notification-service-p",
+      "ready": "ca-craves-notification-service-p--0000011",
+      "running": "Running"
+    },
+    {
+      "cpu": 0.25,
+      "max": 1,
+      "memory": "0.5Gi",
+      "min": 1,
+      "name": "ca-craves-catalog-service-prodlo",
+      "ready": "ca-craves-catalog-service-prodlo--home-banners-1002",
+      "running": "Running"
+    },
+    {
+      "cpu": 0.5,
+      "max": 1,
+      "memory": "1Gi",
+      "min": 1,
+      "name": "ca-craves-delivery-intel-prodlow",
+      "ready": "ca-craves-delivery-intel-prodlow--0000002",
+      "running": "Running"
+    },
+    {
+      "cpu": 0.5,
+      "max": 1,
+      "memory": "1Gi",
+      "min": 1,
+      "name": "ca-craves-order-service-prodlow",
+      "ready": "ca-craves-order-service-prodlow--0000015",
+      "running": "Running"
+    },
+    {
+      "cpu": 0.25,
+      "max": 1,
+      "memory": "0.5Gi",
+      "min": 1,
+      "name": "ca-craves-subscription-service-p",
+      "ready": "ca-craves-subscription-service-p--0000006",
+      "running": "Running"
+    },
+    {
+      "cpu": 0.25,
+      "max": 1,
+      "memory": "0.5Gi",
+      "min": 1,
+      "name": "ca-craves-web-prodlow",
+      "ready": "ca-craves-web-prodlow--0000076",
+      "running": "Running"
+    },
+    {
+      "cpu": 0.25,
+      "max": 1,
+      "memory": "0.5Gi",
+      "min": 1,
+      "name": "ca-craves-admin-web-prodlow",
+      "ready": "ca-craves-admin-web-prodlow--0000002",
+      "running": "Running"
+    },
+    {
+      "cpu": 0.5,
+      "max": 1,
+      "memory": "1Gi",
+      "min": 1,
+      "name": "ca-craves-integration-service-pr",
+      "ready": "ca-craves-integration-service-pr--0000031",
+      "running": "Running"
+    },
+    {
+      "cpu": 0.25,
+      "max": 1,
+      "memory": "0.5Gi",
+      "min": 1,
+      "name": "ca-craves-user-chef-service-prod",
+      "ready": "ca-craves-user-chef-service-prod--0000015",
+      "running": "Running"
+    },
+    {
+      "cpu": 0.25,
+      "max": 1,
+      "memory": "0.5Gi",
+      "min": 1,
+      "name": "ca-craves-auth-service-prodlow",
+      "ready": "ca-craves-auth-service-prodlow--central-otp-rt-1002",
+      "running": "Running"
+    },
+    {
+      "cpu": 0.25,
+      "max": 1,
+      "memory": "0.5Gi",
+      "min": 1,
+      "name": "ca-craves-admin-r92-ffe80e7c",
+      "ready": "ca-craves-admin-r92-ffe80e7c--home-banners-1002",
+      "running": "Running"
+    },
+    {
+      "cpu": 0.25,
+      "max": 1,
+      "memory": "0.5Gi",
+      "min": 1,
+      "name": "ca-craves-referral-member-read",
+      "ready": "ca-craves-referral-member-read--memberread-v1",
+      "running": "Running"
+    }
+  ]
+}

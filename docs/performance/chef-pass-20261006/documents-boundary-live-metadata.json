@@ -1,0 +1,30 @@
+{
+  "observedAtUtc": "2026-10-05T22:06:08.338793+00:00",
+  "scope": "Read-only APIM/notification metadata and non-secret API URLs/document boolean flags; no tokens/cookies/secret values or API permission changes",
+  "apimServices": [
+    {
+      "gatewayUrl": "https://apim-craves-prodlow-kmqgfy.azure-api.net",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy",
+      "name": "apim-craves-prodlow-kmqgfy"
+    }
+  ],
+  "notificationApps": [
+    {
+      "buildSha": [],
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.App/containerapps/ca-craves-notification-service-p",
+      "image": "cravesrm09prodlow6bf632.azurecr.io/craves/notification-service:activate-69",
+      "latest": "ca-craves-notification-service-p--0000011",
+      "name": "ca-craves-notification-service-p",
+      "provisioning": "Succeeded",
+      "ready": "ca-craves-notification-service-p--0000011",
+      "running": "Running"
+    }
+  ],
+  "webSourceSha": "739650f223f2edc0dd8914b28e23916b421da9f1",
+  "webApiUrls": {
+    "CRAVES_API_BASE_URL": "https://apim-craves-prodlow-kmqgfy.azure-api.net/api/v1"
+  },
+  "webDocumentBooleanFlags": {
+    "CRAVES_DOCUMENTS_WEB_ENABLED": "true"
+  }
+}

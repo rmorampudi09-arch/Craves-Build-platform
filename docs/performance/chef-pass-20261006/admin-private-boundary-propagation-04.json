@@ -1,0 +1,80 @@
+[
+  {
+    "observedAtUtc": "2026-10-05T21:47:15.9616743Z",
+    "host": "admin.craves.in",
+    "path": "/admin",
+    "status": 200,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: s-maxage=31536000",
+    "encoding": null,
+    "contentType": "Content-Type: text/html; charset=utf-8",
+    "setCookiePresent": false,
+    "totalSeconds": 0.267166
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:47:16.2825440Z",
+    "host": "admin.craves.in",
+    "path": "/sign-in",
+    "status": 200,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: private, no-cache, no-store, max-age=0, must-revalidate",
+    "encoding": null,
+    "contentType": "Content-Type: text/html; charset=utf-8",
+    "setCookiePresent": false,
+    "totalSeconds": 0.181345
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:47:16.5336129Z",
+    "host": "admin.craves.in",
+    "path": "/api/auth/me",
+    "status": 401,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: private, no-store, max-age=0",
+    "encoding": null,
+    "contentType": "Content-Type: application/json",
+    "setCookiePresent": false,
+    "totalSeconds": 0.17349
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:47:16.8128536Z",
+    "host": "admin.craves.in",
+    "path": "/api/admin/me",
+    "status": 401,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: private, no-store, max-age=0",
+    "encoding": null,
+    "contentType": "Content-Type: application/json",
+    "setCookiePresent": false,
+    "totalSeconds": 0.186119
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:47:17.0210137Z",
+    "host": "admin.craves.in",
+    "path": "/api/admin/finance/ledger.js",
+    "status": 404,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: private, no-store, max-age=0",
+    "encoding": null,
+    "contentType": "Content-Type: application/json",
+    "setCookiePresent": false,
+    "totalSeconds": 0.131368
+  },
+  {
+    "observedAtUtc": "2026-10-05T21:47:17.2215860Z",
+    "host": "admin.craves.in",
+    "path": "/_next/static/chunks/non-static.html",
+    "status": 404,
+    "curlExit": 0,
+    "cache": "X-Cache: CONFIG_NOCACHE",
+    "cacheControl": "cache-control: private, no-cache, no-store, max-age=0, must-revalidate",
+    "encoding": null,
+    "contentType": "Content-Type: text/plain; charset=utf-8",
+    "setCookiePresent": false,
+    "totalSeconds": 0.128545
+  }
+]

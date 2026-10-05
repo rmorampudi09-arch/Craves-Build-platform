@@ -1,0 +1,34 @@
+{
+  "observedAtUtc": "2026-10-05T21:09:31.3873655Z",
+  "web": {
+    "cpu": 0.25,
+    "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.App/containerapps/ca-craves-web-prodlow",
+    "image": "cravesrm09prodlow6bf632.azurecr.io/craves/customer-web-next@sha256:bca745e52636105532b78b42d552e9e516f5074d72938f0ab8c4090ca8d636dc",
+    "latest": "ca-craves-web-prodlow--0000076",
+    "max": 1,
+    "memory": "0.5Gi",
+    "min": 1,
+    "mode": "Single",
+    "name": "ca-craves-web-prodlow",
+    "provisioning": "Succeeded",
+    "ready": "ca-craves-web-prodlow--0000076",
+    "running": "Running",
+    "traffic": [
+      {
+        "latestRevision": true,
+        "weight": 100
+      }
+    ]
+  },
+  "revision": {
+    "active": true,
+    "health": "Healthy",
+    "name": "ca-craves-web-prodlow--0000076",
+    "provisioning": "Provisioned",
+    "replicas": 1,
+    "running": "RunningAtMaxScale"
+  },
+  "publicVersion": {
+    "commitSha": "dc74bfa3880b18278b015f57ae393fb25133acdf"
+  }
+}

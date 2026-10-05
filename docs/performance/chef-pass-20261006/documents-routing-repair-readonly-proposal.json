@@ -1,0 +1,213 @@
+{
+  "observedAtUtc": "2026-10-05T22:11:03.557308+00:00",
+  "operation": "READ-ONLY PROPOSAL; no changes applied",
+  "sourceSha": "739650f223f2edc0dd8914b28e23916b421da9f1",
+  "affectedExistingApiId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1",
+  "apiResourceSelectedProperties": {
+    "path": "api/v1/documents",
+    "serviceUrl": "https://ca-craves-notification-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/documents",
+    "subscriptionRequired": false,
+    "apiRevision": "1"
+  },
+  "apiResourceSha256": "ab28f2ec8bd0bcc4e1a8da2f8289345d3316e96b21af598e766fd091ddcc2c55",
+  "operationsInventorySha256": "af8f09a71cb5a8ffca346fff438594236daab85d02007331750624c69cb4c22f",
+  "all14OperationDefinitionsPreserved": true,
+  "inheritedPolicies": [
+    {
+      "scope": "global",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/policies/policy",
+      "policySha256": "8e678113f285cd7bef4e758a8f7d3ca893310d891d6301e791b0537132fbedc5",
+      "setBackendServiceCount": 0
+    },
+    {
+      "scope": "documents-api",
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/policies/policy",
+      "policySha256": "7d00999b76610263c1650d021245d42a7ba5478676a5867109e372fe011e48b3",
+      "setBackendServiceCount": 0
+    }
+  ],
+  "associatedProducts": [],
+  "wildcardOperationsPreserved": [
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/craves-documents-v1-delete-wildcard",
+      "method": "DELETE",
+      "urlTemplate": "/*"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/craves-documents-v1-get-wildcard",
+      "method": "GET",
+      "urlTemplate": "/*"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/craves-documents-v1-head-wildcard",
+      "method": "HEAD",
+      "urlTemplate": "/*"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/craves-documents-v1-options-wildcard",
+      "method": "OPTIONS",
+      "urlTemplate": "/*"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/craves-documents-v1-patch-wildcard",
+      "method": "PATCH",
+      "urlTemplate": "/*"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/craves-documents-v1-post-wildcard",
+      "method": "POST",
+      "urlTemplate": "/*"
+    },
+    {
+      "id": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/craves-documents-v1-put-wildcard",
+      "method": "PUT",
+      "urlTemplate": "/*"
+    }
+  ],
+  "changes": [
+    {
+      "operationId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/capabilities",
+      "name": "capabilities",
+      "method": "GET",
+      "urlTemplate": "/capabilities",
+      "currentRewrite": "/api/v1/documents/capabilities",
+      "currentPolicySha256": "e22e03e94027900dcbda61ea69dc450c537cd2c2eeb667496c1343476931e16e",
+      "proposedPolicySha256": "9e12959bfc9801a291f61b44da9f8e5c21088ec5cee6a3072a75de4a6ec7d624",
+      "policyResourceId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/capabilities/policies/policy",
+      "proposedBackendRootUrl": "https://ca-craves-notification-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+      "proposedBackendPath": "/api/v1/documents/capabilities",
+      "changedProperty": "properties.value",
+      "onlyInsertion": "set-backend-service base-url at existing notification host root before the existing full rewrite-uri",
+      "beforePolicyFile": "documents-routing-capabilities-policy-before.xml",
+      "proposedPolicyPutFile": "documents-routing-capabilities-proposed-policy-put.json"
+    },
+    {
+      "operationId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/create-document",
+      "name": "create-document",
+      "method": "POST",
+      "urlTemplate": "/",
+      "currentRewrite": "/api/v1/documents",
+      "currentPolicySha256": "2436ab3c7eb0f00b913beee413aa1c30685453ac8d1f6c4d36196e6fddd8829c",
+      "proposedPolicySha256": "3769941e973b0f823083893016a294488fd45648af93c4861c797834a7f39289",
+      "policyResourceId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/create-document/policies/policy",
+      "proposedBackendRootUrl": "https://ca-craves-notification-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+      "proposedBackendPath": "/api/v1/documents",
+      "changedProperty": "properties.value",
+      "onlyInsertion": "set-backend-service base-url at existing notification host root before the existing full rewrite-uri",
+      "beforePolicyFile": "documents-routing-create-document-policy-before.xml",
+      "proposedPolicyPutFile": "documents-routing-create-document-proposed-policy-put.json"
+    },
+    {
+      "operationId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/list-documents",
+      "name": "list-documents",
+      "method": "GET",
+      "urlTemplate": "/",
+      "currentRewrite": "/api/v1/documents",
+      "currentPolicySha256": "a0f9d893154374f54f868e1c19decbd87e17075c868d7e175190cb57ff66733d",
+      "proposedPolicySha256": "c1f7daca6376519c66bb20817f0256157a6e82dadd956fe5d24be48f6cb3c11d",
+      "policyResourceId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/list-documents/policies/policy",
+      "proposedBackendRootUrl": "https://ca-craves-notification-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+      "proposedBackendPath": "/api/v1/documents",
+      "changedProperty": "properties.value",
+      "onlyInsertion": "set-backend-service base-url at existing notification host root before the existing full rewrite-uri",
+      "beforePolicyFile": "documents-routing-list-documents-policy-before.xml",
+      "proposedPolicyPutFile": "documents-routing-list-documents-proposed-policy-put.json"
+    },
+    {
+      "operationId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/get-document",
+      "name": "get-document",
+      "method": "GET",
+      "urlTemplate": "/{id}",
+      "currentRewrite": "/api/v1/documents/{id}",
+      "currentPolicySha256": "9af26edd3f41121ce212872faafb2c46f4dea3cb752ee669d89bbbef41ba8ae9",
+      "proposedPolicySha256": "26f49f275301126947173d6a64e3807e7adccff4da073b50f9c4281434c3e4ef",
+      "policyResourceId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/get-document/policies/policy",
+      "proposedBackendRootUrl": "https://ca-craves-notification-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+      "proposedBackendPath": "/api/v1/documents/{id}",
+      "changedProperty": "properties.value",
+      "onlyInsertion": "set-backend-service base-url at existing notification host root before the existing full rewrite-uri",
+      "beforePolicyFile": "documents-routing-get-document-policy-before.xml",
+      "proposedPolicyPutFile": "documents-routing-get-document-proposed-policy-put.json"
+    },
+    {
+      "operationId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/download-document",
+      "name": "download-document",
+      "method": "GET",
+      "urlTemplate": "/{id}/download",
+      "currentRewrite": "/api/v1/documents/{id}/download",
+      "currentPolicySha256": "a65dca9ae39cc69b378cbc6d73a6e42c2097ad983741ba95f52ee13740867021",
+      "proposedPolicySha256": "b4c1208c419925c1695c58f42789869918246b35fc45251e3616a34e377d9f59",
+      "policyResourceId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/download-document/policies/policy",
+      "proposedBackendRootUrl": "https://ca-craves-notification-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+      "proposedBackendPath": "/api/v1/documents/{id}/download",
+      "changedProperty": "properties.value",
+      "onlyInsertion": "set-backend-service base-url at existing notification host root before the existing full rewrite-uri",
+      "beforePolicyFile": "documents-routing-download-document-policy-before.xml",
+      "proposedPolicyPutFile": "documents-routing-download-document-proposed-policy-put.json"
+    },
+    {
+      "operationId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/email-document",
+      "name": "email-document",
+      "method": "POST",
+      "urlTemplate": "/{id}/email",
+      "currentRewrite": "/api/v1/documents/{id}/email",
+      "currentPolicySha256": "2b0a0b5286cb4aca85c778f89badebc82a487799e1431a8172dcb523359f58f9",
+      "proposedPolicySha256": "239218125c7922414b330506c3b45c9677206699c17e9d4fba50211a6cc42a70",
+      "policyResourceId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/email-document/policies/policy",
+      "proposedBackendRootUrl": "https://ca-craves-notification-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+      "proposedBackendPath": "/api/v1/documents/{id}/email",
+      "changedProperty": "properties.value",
+      "onlyInsertion": "set-backend-service base-url at existing notification host root before the existing full rewrite-uri",
+      "beforePolicyFile": "documents-routing-email-document-policy-before.xml",
+      "proposedPolicyPutFile": "documents-routing-email-document-proposed-policy-put.json"
+    },
+    {
+      "operationId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/email-history",
+      "name": "email-history",
+      "method": "GET",
+      "urlTemplate": "/{id}/emails",
+      "currentRewrite": "/api/v1/documents/{id}/emails",
+      "currentPolicySha256": "fb50512dd9a583966da47277da3b81ba84abf650616bc7abcc21022fcffe61d6",
+      "proposedPolicySha256": "86d931e67bcec4f67de6293702c1e09aa343f06334426a79236e38efbf21634d",
+      "policyResourceId": "/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy/apis/craves-documents-v1/operations/email-history/policies/policy",
+      "proposedBackendRootUrl": "https://ca-craves-notification-service-p.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+      "proposedBackendPath": "/api/v1/documents/{id}/emails",
+      "changedProperty": "properties.value",
+      "onlyInsertion": "set-backend-service base-url at existing notification host root before the existing full rewrite-uri",
+      "beforePolicyFile": "documents-routing-email-history-policy-before.xml",
+      "proposedPolicyPutFile": "documents-routing-email-history-proposed-policy-put.json"
+    }
+  ],
+  "sourceKnownOperationCount": 7,
+  "actualBackendRequestUrlObserved": false,
+  "diagnosticsAvailable": false,
+  "causeAssessment": "Live backend base path plus full operation rewrite differs from source plan; duplicated prefix is a likely routing cause, not an authenticated trace-confirmed cause",
+  "officialReferences": [
+    "https://learn.microsoft.com/en-us/azure/api-management/import-and-publish",
+    "https://learn.microsoft.com/en-us/azure/api-management/rewrite-uri-policy",
+    "https://learn.microsoft.com/en-us/azure/api-management/set-backend-service-policy"
+  ],
+  "preserve": [
+    "API serviceUrl/path/revision/subscription requirement",
+    "all seven wildcard operations and policies",
+    "global/API/product policies",
+    "authentication, roles, headers, concurrency, feature flags",
+    "all container images/runtimes and resource tiers"
+  ],
+  "applyOrderIfAuthorized": [
+    "create-document",
+    "list-documents",
+    "get-document",
+    "download-document",
+    "email-document",
+    "email-history",
+    "capabilities"
+  ],
+  "reasonCapabilitiesLast": "Do not advertise enabled document capability before all source-known write/read operations have matching root backend mapping",
+  "validationIfAuthorized": "Exact account and all snapshot hashes before each update; only seven existing policy values; readback remove inserted node equals original structure, all other metadata/policies unchanged; then existing approved native browser GET capabilities, no token extraction or document generation/export/email",
+  "rollbackIfNeeded": "Restore each own original policy value only if current equals its exact proposed value and other reviewed resource state has no drift; stop for concurrent changes",
+  "newResources": 0,
+  "plannedContainerChanges": 0,
+  "plannedAuthorizationChanges": 0,
+  "applied": false
+}

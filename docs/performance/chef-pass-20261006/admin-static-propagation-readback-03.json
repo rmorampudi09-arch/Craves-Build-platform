@@ -1,0 +1,10 @@
+{
+  "observedAtUtc": "2026-10-05T21:42:03.190783+00:00",
+  "routeDeploymentStatus": "NotStarted",
+  "routeProvisioningState": "Succeeded",
+  "ruleDeploymentStatus": "NotStarted",
+  "ruleProvisioningState": "Succeeded",
+  "ruleExactApprovedAfterState": true,
+  "routeExactApprovedAfterState": true,
+  "all12ProtectedAppFingerprintsUnchanged": true
+}

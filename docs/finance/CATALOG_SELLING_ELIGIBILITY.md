@@ -1,5 +1,11 @@
 # Catalog finance selling eligibility
 
+Current common eligibility rule: [Finance access after admin chef approval](ADMIN_APPROVAL_SHARED_FINANCE.md).
+The signed User/Chef approval source now supplies approved chefs to the common
+finance resolver. An individual tax/fee-terms profile is no longer a prerequisite
+for each approved chef; genuine recorded exceptions and global policy gates
+remain. The profile-only description below documents the preceding rollout.
+
 Catalog obtains fresh finance selling authority before serving public kitchens,
 menus, nearby discovery, cart resolution, saved meals, favorites or public kitchen
 availability. SQL predicates apply before both the total count and pagination.

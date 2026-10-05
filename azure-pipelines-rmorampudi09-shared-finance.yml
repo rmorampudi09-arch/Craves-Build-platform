@@ -1,0 +1,65 @@
+# Use the existing rmorampudi09 / Craves service connection. No infrastructure rebuild.
+trigger: none
+pr: none
+pool:
+  vmImage: ubuntu-22.04
+parameters:
+  - name: operation
+    type: string
+    default: preflight
+    values: [preflight, deploy]
+  - name: releaseSha
+    type: string
+    default: SELECT_MERGED_MAIN_COMMIT
+  - name: regressionRunId
+    type: string
+    default: SELECT_SUCCESSFUL_MAIN_REGRESSION_RUN
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+steps:
+  - checkout: none
+  - task: AzureCLI@2
+    displayName: Approved chef shared finance release
+    timeoutInMinutes: 90
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -Eeuo pipefail
+        set +x
+        [[ "$EXPECTED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ && "$REGRESSION_RUN_ID" =~ ^[0-9]+$ ]] || { echo 'Exact merged source and successful main regression run are required.' >&2; exit 2; }
+        [[ "$OPERATION" == preflight || "$OPERATION" == deploy ]] || exit 2
+        RELEASE_SOURCE=$(mktemp -d)
+        git -C "$RELEASE_SOURCE" init --quiet
+        git -C "$RELEASE_SOURCE" remote add origin https://github.com/rmorampudi09-arch/Craves-Build-platform.git
+        git -C "$RELEASE_SOURCE" fetch --quiet --depth 1 origin "$EXPECTED_RELEASE_SHA"
+        git -C "$RELEASE_SOURCE" checkout --quiet --detach FETCH_HEAD
+        cd "$RELEASE_SOURCE"
+        test "$(git rev-parse HEAD)" = "$EXPECTED_RELEASE_SHA"
+        mkdir -p "$RELEASE_EVIDENCE"
+        python3 -m unittest discover -s scripts/finance -p test_shared_chef_finance_release.py -v
+        python3 scripts/release/verify-web-release-evidence.py --sha "$EXPECTED_RELEASE_SHA" --run-id "$REGRESSION_RUN_ID" > "$RELEASE_EVIDENCE/evidence.json"
+        python3 scripts/finance/shared_chef_finance_release.py preflight --output "$RELEASE_EVIDENCE/baseline.json"
+        if [[ "$OPERATION" == deploy ]]; then
+          az acr login --name cravesrm09prodlow6bf632 --only-show-errors
+          for service in user-chef-service integration-service; do
+            image="cravesrm09prodlow6bf632.azurecr.io/craves/$service:finance-$EXPECTED_RELEASE_SHA"
+            docker build --pull --label "org.opencontainers.image.revision=$EXPECTED_RELEASE_SHA" -t "$image" "services/$service"
+            docker push "$image"
+          done
+          # Recheck merged main evidence after builds and before the first image change.
+          python3 scripts/release/verify-web-release-evidence.py --sha "$EXPECTED_RELEASE_SHA" --run-id "$REGRESSION_RUN_ID" > "$RELEASE_EVIDENCE/evidence.json"
+          python3 scripts/finance/shared_chef_finance_release.py deploy --baseline "$RELEASE_EVIDENCE/baseline.json" --output "$RELEASE_EVIDENCE/receipt.json"
+        fi
+    env:
+      OPERATION: ${{ parameters.operation }}
+      EXPECTED_RELEASE_SHA: ${{ parameters.releaseSha }}
+      REGRESSION_RUN_ID: ${{ parameters.regressionRunId }}
+      RELEASE_EVIDENCE: $(Build.ArtifactStagingDirectory)/shared-chef-finance-release
+  - task: PublishPipelineArtifact@1
+    displayName: Publish sanitized finance release evidence
+    condition: always()
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)/shared-chef-finance-release
+      artifact: shared-chef-finance-release

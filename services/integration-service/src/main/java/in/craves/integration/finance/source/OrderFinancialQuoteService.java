@@ -56,8 +56,9 @@ public class OrderFinancialQuoteService {
         var platform=LedgerMoney.allocate(LedgerMoney.parse(policy.platformFee()),weights);
         var platformGst=LedgerMoney.allocate(FinanceCalculations.percent(LedgerMoney.parse(policy.platformFee()),policy.platformGstPercent()),platform);
         var snapshots=new ArrayList<JsonNode>();BigDecimal total=LedgerMoney.ZERO;
+        var chefProfiles=taxProfiles.resolveForQuotes(request.orders().stream().map(OrderInput::chefIdentityId).distinct().toList());
         for(OrderInput order:request.orders()) {
-            var profile=taxProfiles.resolved(order.chefIdentityId());
+            var profile=chefProfiles.get(order.chefIdentityId());
             if("REGISTRATION_REVIEW_REQUIRED".equals(profile.registrationReview()))throw conflict("Chef registration requires review; turnover does not authorize a GST deduction");
             if(!profile.profile().stateCode().equals(order.pickupStateCode()))throw conflict("Tax profile does not match kitchen jurisdiction");
             BigDecimal base=sum(order.items(),true),food=sum(order.items(),false),delivery=LedgerMoney.parse(order.deliveryBeforeTax());
@@ -87,7 +88,11 @@ public class OrderFinancialQuoteService {
                 .put("customerTotal",LedgerMoney.text(gross)).put("chefServiceFee",chef.serviceFee()).put("chefFeeGst",chef.serviceFeeTax())
                 .put("chefFoodGstDeduction","0.00").put("gstTcsDeduction","0.00").put("withholding",LedgerMoney.text(withholding)).put("chefPayable",LedgerMoney.text(payable))
                 .put("foodGstLiableParty","CRAVES_ECO_SECTION_9_5").put("policyId",resolved.policyId().toString()).put("policyRevision",resolved.revision())
-                .put("chefTaxProfileId",profile.id().toString()).put("stateCode","36");
+                .put("stateCode","36");
+            if(profile.profile().financeBasis()==null)snapshot.put("chefTaxProfileId",profile.id().toString());
+            else snapshot.put("chefFinanceProfileId",profile.id().toString()).put("chefFinanceBasis",profile.profile().financeBasis())
+                .put("chefApprovalReference",profile.profile().feeTermsEvidence())
+                .put("chefWithholdingReference",profile.profile().withholdingEvidence());
             snapshot.set("items",json.valueToTree(order.items()));snapshot.set("policy",json.valueToTree(policy));
             if(deliveryQuote!=null) snapshot.set("deliveryQuote",json.valueToTree(deliveryQuote));
             snapshot.put("hash",FinancialJson.hash(snapshot,json));snapshots.add(snapshot);total=total.add(gross);

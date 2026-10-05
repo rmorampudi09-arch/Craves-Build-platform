@@ -9,6 +9,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -21,28 +23,47 @@ import org.springframework.web.server.ResponseStatusException;
 public class ChefTaxProfileService {
     public record Profile(String stateCode,String supplyRegime,String registrationStatus,String gstin,
         String declaredAggregateTurnover,String financialYear,LocalDate declarationDate,
-        String withholdingRate,String withholdingEvidence,String classificationEvidence,String feeTermsEvidence) {
+        String withholdingRate,String withholdingEvidence,String classificationEvidence,String feeTermsEvidence,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) String financeBasis) {
+        public Profile(String stateCode,String supplyRegime,String registrationStatus,String gstin,
+            String declaredAggregateTurnover,String financialYear,LocalDate declarationDate,String withholdingRate,
+            String withholdingEvidence,String classificationEvidence,String feeTermsEvidence) {
+            this(stateCode,supplyRegime,registrationStatus,gstin,declaredAggregateTurnover,financialYear,declarationDate,
+                withholdingRate,withholdingEvidence,classificationEvidence,feeTermsEvidence,null);
+        }
         public Profile {
             if(!"36".equals(stateCode) || !"RESTAURANT_ECO_9_5".equals(supplyRegime))throw new IllegalArgumentException("Automatic launch accounting supports reviewed Telangana restaurant supplies only");
+            if(financeBasis!=null) {
+                if(!"ADMIN_APPROVAL_SHARED_POLICY".equals(financeBasis) || !"NOT_RECORDED".equals(registrationStatus)
+                    || gstin!=null || declaredAggregateTurnover!=null || financialYear!=null || declarationDate!=null)
+                    throw new IllegalArgumentException("Shared finance terms cannot assert individual tax declarations");
+            } else {
             if(!java.util.Set.of("UNREGISTERED","REGISTERED").contains(registrationStatus))throw new IllegalArgumentException("Registration status is required");
             if("REGISTERED".equals(registrationStatus)) {
                 if(gstin==null || !gstin.matches("36[0-9A-Z]{13}"))throw new IllegalArgumentException("A matching Telangana GSTIN is required");
             } else if(gstin!=null && !gstin.isBlank())throw new IllegalArgumentException("Unregistered chef cannot carry a GSTIN");
             declaredAggregateTurnover=LedgerMoney.text(LedgerMoney.parse(declaredAggregateTurnover));
             if(declarationDate==null || declarationDate.isAfter(LocalDate.now(FinancePolicy.ZONE)) || !yearOf(declarationDate).equals(financialYear))throw new IllegalArgumentException("A valid dated financial-year declaration is required");
+            }
             withholdingRate=FinancePolicy.rate(withholdingRate);
-            for(String evidence:java.util.List.of(withholdingEvidence,classificationEvidence,feeTermsEvidence))if(evidence.isBlank() || evidence.length()>240)throw new IllegalArgumentException("Classification, withholding and fee terms evidence are required");
+            for(String evidence:new String[]{withholdingEvidence,classificationEvidence,feeTermsEvidence})if(evidence==null || evidence.isBlank() || evidence.length()>240)throw new IllegalArgumentException("Classification, withholding and fee terms evidence are required");
         }
     }
     public record Version(UUID id,UUID chefIdentityId,Profile profile,String registrationReview,String foodGstDeduction,String gstTcsDeduction) {}
     public record ResolvedBatch(boolean complete,List<Version> versions) {}
     private record StoredVersion(UUID chef,UUID id,String payload) {}
+    private record SharedTerms(UUID id,String rate) {}
     private final JdbcTemplate jdbc;private final ObjectMapper json;
-    public ChefTaxProfileService(JdbcTemplate jdbc,ObjectMapper json){this.jdbc=jdbc;this.json=json;}
+    private final ChefFinanceApprovalSource approvals;
+    /** Profile storage fixtures remain usable independently of the remote approval source. */
+    public ChefTaxProfileService(JdbcTemplate jdbc,ObjectMapper json){this(jdbc,json,null);}
+    @org.springframework.beans.factory.annotation.Autowired
+    public ChefTaxProfileService(JdbcTemplate jdbc,ObjectMapper json,ChefFinanceApprovalSource approvals){this.jdbc=jdbc;this.json=json;this.approvals=approvals;}
     @Transactional
     public Version save(CravesPrincipal actor,UUID chef,Profile profile,String reason) {
         FinancePolicyService.operator(actor);reason=FinancePolicyService.reason(reason);
         if(chef==null || profile==null)throw new IllegalArgumentException("Chef and tax profile are required");
+        if(profile.financeBasis()!=null)throw new IllegalArgumentException("Admin approval shared terms are resolved internally, not saved as tax declarations");
         UUID id=UUID.randomUUID();
         jdbc.update("INSERT INTO payment_schema.finance_chef_tax_version(id,chef_identity_id,payload,approved_by,reason) VALUES (?,?,CAST(? AS jsonb),?,?)",id,chef,encode(profile),actor.identityId(),reason);
         jdbc.update("INSERT INTO payment_schema.finance_chef_tax_head(chef_identity_id,version_id) VALUES (?,?) ON CONFLICT(chef_identity_id) DO UPDATE SET version_id=EXCLUDED.version_id",chef,id);
@@ -50,12 +71,25 @@ public class ChefTaxProfileService {
     }
     public Version read(CravesPrincipal actor,UUID chef){FinancePolicyService.reader(actor);return load(chef);}
     public Version resolved(UUID chef) {
+        if(approvals!=null)return resolveForQuotes(List.of(chef)).get(chef);
         return requireCurrentYear(load(chef),LocalDate.now(FinancePolicy.ZONE));
+    }
+    /** One approval read and one bounded profile query for a multi-chef checkout. */
+    public Map<UUID,Version> resolveForQuotes(List<UUID> chefs) {
+        if(chefs==null || chefs.isEmpty() || chefs.size()>50 || chefs.stream().anyMatch(java.util.Objects::isNull))throw new IllegalArgumentException("Bounded quote chefs required");
+        var result=new LinkedHashMap<UUID,Version>();
+        if(approvals==null) {for(UUID chef:chefs)result.put(chef,resolved(chef));return Map.copyOf(result);}
+        var batch=resolvedBatch(1000);
+        if(!batch.complete())throw new IllegalStateException("CHEF_APPROVAL_AUTHORITY_INCOMPLETE");
+        for(var profile:batch.versions())if(chefs.contains(profile.chefIdentityId()))result.put(profile.chefIdentityId(),profile);
+        if(!result.keySet().containsAll(chefs))throw new ResponseStatusException(HttpStatus.CONFLICT,"Admin chef approval is required for new orders");
+        return Map.copyOf(result);
     }
     /** One bounded joined query; uses exactly the same decoding, review and year rules as a quote. */
     @Transactional(readOnly=true)
     public ResolvedBatch resolvedBatch(int maximumHeads) {
         if(maximumHeads<1 || maximumHeads>1000)throw new IllegalArgumentException("Tax profile batch limit is out of range");
+        if(approvals!=null)return approvedBatch(maximumHeads);
         LocalDate today=LocalDate.now(FinancePolicy.ZONE);
         List<StoredVersion> rows=jdbc.query(
             "SELECT h.chef_identity_id,v.id,v.payload::text FROM payment_schema.finance_chef_tax_head h " +
@@ -73,6 +107,45 @@ public class ChefTaxProfileService {
             }
         }
         return new ResolvedBatch(true,List.copyOf(current));
+    }
+    private ResolvedBatch approvedBatch(int maximumHeads) {
+        var authority=approvals.current();
+        if(!authority.complete() || authority.approvals().size()>maximumHeads)return new ResolvedBatch(false,List.of());
+        var approved=authority.approvals().stream().filter(a->"36".equals(a.stateCode()))
+            .sorted(java.util.Comparator.comparing(ChefFinanceApprovalSource.Approval::chefId)).toList();
+        if(approved.isEmpty())return new ResolvedBatch(true,List.of());
+        String ids="{"+String.join(",",approved.stream().map(a->a.chefId().toString()).toList())+"}";
+        List<StoredVersion> rows=jdbc.query("SELECT h.chef_identity_id,v.id,v.payload::text FROM payment_schema.finance_chef_tax_head h " +
+            "LEFT JOIN payment_schema.finance_chef_tax_version v ON v.id=h.version_id " +
+            "WHERE h.chef_identity_id=ANY(CAST(? AS uuid[])) ORDER BY h.chef_identity_id",
+            (rs,n)->new StoredVersion(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),rs.getString(3)),ids);
+        var current=new LinkedHashMap<UUID,Version>();
+        LocalDate today=LocalDate.now(FinancePolicy.ZONE);
+        for(var row:rows) {
+            if(row.id()==null || row.payload()==null)throw new IllegalStateException("Stored tax profile reference is invalid");
+            var version=view(row.id(),row.chef(),decode(row.payload()));
+            if(yearOf(today).equals(version.profile().financialYear()))current.put(row.chef(),version);
+        }
+        SharedTerms shared=null;var result=new ArrayList<Version>(approved.size());
+        for(var approval:approved) {
+            var individual=current.get(approval.chefId());
+            if(individual!=null) {result.add(individual);continue;}
+            if(shared==null)shared=sharedTerms();
+            String approvalRef="ADMIN_CHEF_APPROVAL/"+approval.applicationId()+"/"+approval.reviewedAt();
+            var profile=new Profile("36","RESTAURANT_ECO_9_5","NOT_RECORDED",null,null,null,null,shared.rate(),
+                "SHARED_REVIEWED_WITHHOLDING/"+shared.id(),approvalRef,approvalRef,"ADMIN_APPROVAL_SHARED_POLICY");
+            UUID id=UUID.nameUUIDFromBytes((approval.chefId()+"/"+approvalRef+"/"+shared.id())
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            result.add(new Version(id,approval.chefId(),profile,"ADMIN_APPROVAL_SHARED_POLICY","0.00","0.00"));
+        }
+        return new ResolvedBatch(true,List.copyOf(result));
+    }
+    private SharedTerms sharedTerms() {
+        var rows=jdbc.query("SELECT v.id,v.withholding_rate::text FROM payment_schema.finance_shared_chef_terms_head h " +
+            "JOIN payment_schema.finance_shared_chef_terms_version v ON v.id=h.version_id WHERE h.singleton=true",
+            (rs,n)->new SharedTerms(rs.getObject(1,UUID.class),FinancePolicy.rate(rs.getString(2))));
+        if(rows.size()!=1)throw new IllegalStateException("SHARED_CHEF_FINANCE_TERMS_NOT_CONFIGURED");
+        return rows.getFirst();
     }
     private Version requireCurrentYear(Version version,LocalDate today) {
         if(!yearOf(today).equals(version.profile().financialYear()))throw new ResponseStatusException(HttpStatus.CONFLICT,"A current-financial-year tax and withholding review is required");

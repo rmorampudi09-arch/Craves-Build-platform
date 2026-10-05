@@ -108,6 +108,50 @@ def reviewed_chef_minimum_scope():
   actual[parts[1]]=parts[0]
  return actual==CHEF_MINIMUM_REQUIRED
 
+# Exact approved-chef common-finance follow-up; referral runtime and applied migrations stay protected.
+SHARED_FINANCE_BASE='eb5b6e6413a700f849de7bacf9b695cf6a14333a'
+SHARED_FINANCE_REQUIRED={'.github/workflows/chef-bank-onboarding-ci.yml': 'M',
+ '.github/workflows/chef-ledger-ci.yml': 'M',
+ 'azure-pipelines-rmorampudi09-shared-finance.yml': 'A',
+ 'docs/finance/ADMIN_APPROVAL_SHARED_FINANCE.md': 'A',
+ 'docs/finance/CATALOG_SELLING_ELIGIBILITY.md': 'M',
+ 'scripts/finance/shared_chef_finance_release.py': 'A',
+ 'scripts/finance/test_shared_chef_finance_release.py': 'A',
+ 'scripts/launch/test_shared_chef_finance_scope.py': 'A',
+ 'scripts/referrals/verify-backend-scope.py': 'M',
+ 'services/integration-service/src/main/java/in/craves/integration/finance/source/ChefFinanceApprovalProtocol.java': 'A',
+ 'services/integration-service/src/main/java/in/craves/integration/finance/source/ChefFinanceApprovalSource.java': 'A',
+ 'services/integration-service/src/main/java/in/craves/integration/finance/source/ChefTaxProfileService.java': 'M',
+ 'services/integration-service/src/main/java/in/craves/integration/finance/source/OrderFinancialQuoteService.java': 'M',
+ 'services/integration-service/src/main/resources/db/migration/V147__shared_chef_finance_terms.sql': 'A',
+ 'services/integration-service/src/test/java/in/craves/integration/finance/source/ChefFinanceApprovalSourceTest.java': 'A',
+ 'services/integration-service/src/test/java/in/craves/integration/finance/source/SharedChefFinanceDatabaseTest.java': 'A',
+ 'services/integration-service/src/test/java/in/craves/integration/finance/source/SharedChefFinanceMigrationDatabaseTest.java': 'A',
+ 'services/integration-service/src/test/java/in/craves/integration/payout/ManualSettlementMigrationDatabaseTest.java': 'M',
+ 'services/integration-service/src/test/java/in/craves/integration/refund/RefundMigrationDatabaseTest.java': 'M',
+ 'services/user-chef-service/src/main/java/in/craves/userchef/config/SecurityConfig.java': 'M',
+ 'services/user-chef-service/src/main/java/in/craves/userchef/web/ChefFinanceApprovalController.java': 'A',
+ 'services/user-chef-service/src/main/java/in/craves/userchef/web/ChefFinanceApprovalProtocol.java': 'A',
+ 'services/user-chef-service/src/test/java/in/craves/userchef/web/ChefFinanceApprovalControllerTest.java': 'A',
+ 'services/user-chef-service/src/test/java/in/craves/userchef/web/ChefFinanceApprovalDatabaseTest.java': 'A',
+ 'tests/finance/FinanceSourceRoundTrip.java': 'M'}
+
+def reviewed_shared_chef_finance_scope():
+ if subprocess.run(['git','merge-base','--is-ancestor',SHARED_FINANCE_BASE,'HEAD'],capture_output=True).returncode!=0:
+  return False
+ rows=subprocess.check_output(['git','diff','--name-status','--no-renames',SHARED_FINANCE_BASE,'HEAD'],text=True).splitlines()
+ actual={}
+ for row in rows:
+  parts=row.split('\t')
+  if len(parts)!=2 or parts[1] in actual:return False
+  actual[parts[1]]=parts[0]
+ return actual==SHARED_FINANCE_REQUIRED
+
+if reviewed_shared_chef_finance_scope():
+ subprocess.run(['python3','scripts/launch/test_shared_chef_finance_scope.py'],check=True)
+ print('PASS: exact shared chef finance follow-up; full referral compatibility tests still required')
+ raise SystemExit(0)
+
 if reviewed_chef_minimum_scope():
  subprocess.run(['python3','scripts/launch/test_chef_minimum_scope.py'],check=True)
  print('PASS: exact chef minimum boundary scope; full backend compatibility tests still required')

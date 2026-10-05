@@ -42,6 +42,14 @@ quotes, captured funds, journals, earnings and payout reservations remain frozen
 
 ## Release and verification
 
+Use `azure-pipelines-rmorampudi09-shared-finance.yml` with the existing
+`Craves-RMORAMPUDI09-Service-Connection`. Select the exact merged main SHA and its
+successful complete regression run. The default operation performs only
+read-only preflight; `deploy` builds and verifies only User/Chef and Integration.
+The old GitHub Azure identity is not a substitute for this active connection.
+Any failed health or signed-authority check restores only this release's images;
+the additive migration and historical financial records are preserved.
+
 1. Confirm the active common policy, existing unanimous withholding basis and
    existing source URL/Key Vault credential references through read-only checks.
 2. Run exact-commit User/Chef, Catalog, Order and Integration regression, V147

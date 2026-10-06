@@ -80,7 +80,7 @@ public final class EmailVerificationTestBypass {
         String phone = pairs.get(email.toLowerCase(Locale.ROOT));
         if (!enabled || !phoneTestEnabled || user == null ||
             !phone.equals(user.phoneNumber()) || !clock.instant().isBefore(expiresAt)) {
-            throw AuthException.badRequest("EMAIL_TEST_NOT_AVAILABLE",
+            throw AuthException.badRequest("EMAIL_REQUEST_INVALID",
                 "This temporary test email cannot be verified by this account right now.");
         }
         return code;

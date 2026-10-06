@@ -269,15 +269,15 @@ class EmailVerificationPersistenceTest {
         assertThrows(AuthException.class,()->service.issue(other,"qa1@example.test",UUID.randomUUID()));
         assertThrows(AuthException.class,()->service.verify(other,issued.pending().challengeId(),TEMP_CODE));
         jdbc.update("UPDATE auth_identity SET phone_number=? WHERE id=?","phone-changed-"+owner.identityId().toString().substring(0,10),owner.identityId());
-        assertEquals("EMAIL_TEST_NOT_AVAILABLE",assertThrows(AuthException.class,()->service.verify(owner,issued.pending().challengeId(),TEMP_CODE)).getCode());
+        assertEquals("EMAIL_REQUEST_INVALID",assertThrows(AuthException.class,()->service.verify(owner,issued.pending().challengeId(),TEMP_CODE)).getCode());
         assertFalse(service.state(owner).emailVerified());assertTrue(transport.codes.isEmpty());
     }
     @Test void temporaryExpiryIsCheckedEvenWhileChallengeIsStillUnexpired() throws Exception {
         service=new EmailVerificationService(jdbc,transactions,SETTINGS,transport,clock,temporaryPolicy(90));
         var issued=issue("qa1@example.test");clock.advance(90);
-        assertEquals("EMAIL_TEST_NOT_AVAILABLE",assertThrows(AuthException.class,()->service.verify(owner,issued.pending().challengeId(),TEMP_CODE)).getCode());
+        assertEquals("EMAIL_REQUEST_INVALID",assertThrows(AuthException.class,()->service.verify(owner,issued.pending().challengeId(),TEMP_CODE)).getCode());
         assertFalse(service.state(owner).emailVerified());
-        assertEquals("EMAIL_TEST_NOT_AVAILABLE",assertThrows(AuthException.class,()->issue("qa1@example.test")).getCode());
+        assertEquals("EMAIL_REQUEST_INVALID",assertThrows(AuthException.class,()->issue("qa1@example.test")).getCode());
         assertTrue(transport.codes.isEmpty());
     }
     @Test void temporaryBypassPreservesResendCooldownRetryAndNormalEmailTransport() throws Exception {

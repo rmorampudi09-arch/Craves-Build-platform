@@ -194,7 +194,7 @@ public class EmailVerificationService {
         if (!testBypass.configured(email)) return null;
         String actualPhone=jdbc.queryForObject("SELECT phone_number FROM auth_identity WHERE id=?",String.class,user.identityId());
         if (!java.util.Objects.equals(actualPhone,user.phoneNumber()))
-            throw AuthException.badRequest("EMAIL_TEST_NOT_AVAILABLE","This temporary test email cannot be verified by this account right now.");
+            throw AuthException.badRequest("EMAIL_REQUEST_INVALID","This temporary test email cannot be verified by this account right now.");
         return testBypass.codeFor(user,email);
     }
     private void requireEnabled() {

@@ -17,7 +17,7 @@ const STORY_CARDS = [
     src: '/images/story-grid/cook-pot.png',
     alt: 'Home chef cooking food in a pot on a stove',
     title: 'Finish',
-    text: 'The final touches bring a meal together',
+    text: 'The final touches bring a meal together.',
   },
   {
     src: '/images/story-grid/pack-delivery.png',
@@ -34,7 +34,7 @@ const StoryVideo = () => {
         <div className="story-video__frame">
           <div className="story-video__intro">
             <h2 id="home-chef-story-title" className="story-video__heading">
-              The Care Behind The <span className="story-video__heading-accent">Coking.</span>
+              The Care Behind The <span className="story-video__heading-accent">Cooking.</span>
             </h2>
           </div>
 

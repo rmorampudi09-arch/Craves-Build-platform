@@ -43,7 +43,7 @@ class EmailVerificationTestBypassTest {
     @ParameterizedTest @ValueSource(ints={0,4,210})
     void anotherPhoneCannotUseAConfiguredEmail(int i) throws Exception {
         var p=policy(true,true,NOW,NOW.plusSeconds(600));
-        assertEquals("EMAIL_TEST_NOT_AVAILABLE",assertThrows(AuthException.class,()->p.codeFor(user(i),email(1))).getCode());
+        assertEquals("EMAIL_REQUEST_INVALID",assertThrows(AuthException.class,()->p.codeFor(user(i),email(1))).getCode());
     }
     @Test void realEmailUsesNormalTransportEvenForAnAllowlistedPhone() throws Exception {
         assertNull(policy(true,true,NOW,NOW.plusSeconds(600)).codeFor(user(1),"real@example.test"));

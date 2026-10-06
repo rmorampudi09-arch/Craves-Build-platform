@@ -269,3 +269,21 @@ it("keeps a successfully loaded pending application editable through the guided 
   expect(fetcher.mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
 
 });
+
+it("shows an ordinary signed-out prompt only after an authoritative authentication-required response", async () => {
+  current = null;
+  fetcher.mockImplementation(input => String(input) === "/api/auth/me"
+    ? Promise.resolve(Response.json({code: "AUTHENTICATION_REQUIRED"}, {status: 401})) : normal(input));
+  boundary();
+  await screen.findByRole("heading", {name: "Sign in to start your chef application"});
+  expect(screen.queryByRole("button", {name: "Try again"})).toBeNull();
+  expect(screen.queryByLabelText("Private chef draft")).toBeNull();
+});
+it("does not mistake a server outage for an ordinary signed-out visit", async () => {
+  current = null;
+  fetcher.mockResolvedValue(Response.json({}, {status: 503}));
+  boundary();
+  await screen.findByText("We couldn’t open your application");
+  expect(screen.queryByText("Sign in to start your chef application")).toBeNull();
+  expect(screen.getByRole("button", {name: "Try again"})).toBeTruthy();
+});

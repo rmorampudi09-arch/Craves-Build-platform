@@ -57,7 +57,7 @@ test("signed-in discovery keeps the rebuilt paper reference surface", () => {
   assert.match(browse, /const current = getSession\(\);\s*if \(current\) setUser\(current\);/);
   assert.match(browse, /const cartLoad = loadCart\(\)/);
   assert.match(browse, /recoverSessionSnapshotForNavigation\(\)/);
-  assert.match(browse, /const hasInitialCatalog =/);
+  assert.match(browse, /cachedDishes.length > 0 \|\| cachedKitchens.length > 0/);
   assert.match(browse, /const shouldPreserveCatalog =/);
   assert.match(browse, /await refreshDiscovery\(defaultAddress, false, shouldPreserveCatalog\)/);
   assert.match(browse, /AuthenticationRequiredError/);

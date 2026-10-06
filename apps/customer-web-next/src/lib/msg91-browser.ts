@@ -6,6 +6,8 @@ import { getFirebaseBrowserClient } from "@/lib/firebase-client";
 export type PhoneConfirmation = {
   confirm: (code: string, currentAttempt?: () => boolean) => Promise<UserCredential>;
   resend?: () => Promise<void>;
+  /** The same server/local deadline enforced by resend; refreshed after each send. */
+  readonly resendAvailableAt?: number;
 };
 type OtpChallenge = { challengeId: string; expiresAt: number; resendAvailableAt: number };
 const RESPONSE_CODES = new Set(["OTP_INVALID", "OTP_RESTART", "OTP_EXPIRED", "OTP_BUSY", "OTP_COOLDOWN", "OTP_RATE_LIMIT", "OTP_RESEND_LIMIT"]);
@@ -80,6 +82,7 @@ export async function beginMsg91PhoneSignIn(phone: string, _captchaRenderId: str
     if (busy) throw new Error("OTP_BUSY");
   };
   return {
+    get resendAvailableAt() { return Math.max(challenge.resendAvailableAt, cooldowns.get(phone) ?? 0); },
     async resend() {
       assertChallenge();
       if (resends >= 2) throw new Error("OTP_RESEND_LIMIT");

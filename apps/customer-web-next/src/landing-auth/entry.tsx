@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import AuthModal, { type VerificationRequest, type VerifyCodeRequest } from "./AuthModal";
 import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from "@/lib/msg91-browser";
-import { phoneCodeRequestError } from "@/lib/phone-auth-errors";
+import { phoneCodeRequestError, phoneCodeVerificationError } from "@/lib/phone-auth-errors";
 import type { CravesIdentity } from "@/lib/auth-contract";
 import { parseCustomerProfile } from "@/lib/profile-contract";
 import {
@@ -65,6 +65,7 @@ function CustomerAuth({ onClose }: { onClose: () => void }) {
         requested.current = request;
       }
       if (!current()) throw new Error("Phone verification was cancelled. Please try again.");
+      return confirmation.current?.resendAvailableAt;
     } catch (error) {
       if (current()) throw new Error(phoneCodeRequestError(error));
       throw error;
@@ -81,7 +82,9 @@ function CustomerAuth({ onClose }: { onClose: () => void }) {
     const ensureCurrent = () => {
       if (!current()) throw new Error("Phone verification was cancelled. Please try again.");
     };
-    const credential = await confirmation.current.confirm(request.code, current);
+    const credential = await confirmation.current.confirm(request.code, current).catch(error => {
+      throw new Error(phoneCodeVerificationError(error));
+    });
     ensureCurrent();
     const firebaseIdToken = await credential.user.getIdToken(true);
     ensureCurrent();

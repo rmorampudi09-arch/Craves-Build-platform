@@ -140,52 +140,31 @@ function forceInstantWindowScroll(top: number): void {
 
 function BrowseFoodsPage() {
   const navigate = useNavigate();
-  const [initialCache] = useState(() => ({
-    user: getSession() ?? recoverSessionSnapshotForNavigation(),
-    address: getAddress(),
-    dishes: allDishes(),
-    kitchens: allKitchens(),
-  }));
-  const hasInitialCatalog =
-    initialCache.dishes.length > 0 || initialCache.kitchens.length > 0;
-
-  const [user, setUser] = useState<CravesUser | null>(initialCache.user);
-  const [address, setAddress] = useState<CravesAddress | null>(initialCache.address);
+  const [user, setUser] = useState<CravesUser | null>(null);
+  const [address, setAddress] = useState<CravesAddress | null>(null);
   const [homeCategory, setHomeCategory] = useState<CravingCategory | null>(null);
   const [dishSort, setDishSort] = useState<HomeDishSort>("recommended");
   const [foodPreference, setFoodPreference] = useState<HomeFoodPreference>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [cartItemCount, setCartItemCount] = useState(() => cartCount());
-  const [cartItems, setCartItems] = useState<CartItem[]>(() => getCart());
+  const [cartItemCount, setCartItemCount] = useState(0);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [unavailableCartItems, setUnavailableCartItems] = useState<CartItem[]>([]);
   const [dismissedCartAvailabilityKey, setDismissedCartAvailabilityKey] = useState<string | null>(null);
   const [cartRepairBusy, setCartRepairBusy] = useState(false);
   const [cartRepairError, setCartRepairError] = useState<string | null>(null);
-  const [kitchens, setKitchens] = useState<NearbyKitchen[]>(initialCache.kitchens);
-  const [defaultAddressResolved, setDefaultAddressResolved] = useState(() =>
-    Boolean(initialCache.address),
-  );
-  const [kitchenDiscoveryVerified, setKitchenDiscoveryVerified] = useState(hasInitialCatalog);
-  const [nearbyDishes, setNearbyDishes] = useState<Dish[]>(initialCache.dishes);
+  const [kitchens, setKitchens] = useState<NearbyKitchen[]>([]);
+  const [defaultAddressResolved, setDefaultAddressResolved] = useState(false);
+  const [kitchenDiscoveryVerified, setKitchenDiscoveryVerified] = useState(false);
+  const [nearbyDishes, setNearbyDishes] = useState<Dish[]>([]);
   const [dishLoadMoreBusy, setDishLoadMoreBusy] = useState(false);
   const [discoveryState, setDiscoveryState] = useState<DiscoveryState>(
-    hasInitialCatalog ? "ready" : "loading",
+    "loading",
   );
   const [catalogMessage, setCatalogMessage] = useState(
-    hasInitialCatalog
-      ? "Fresh homemade food available near your default delivery address."
-      : "Loading your default delivery address…",
+    "Loading your default delivery address…",
   );
-  const [radiusLabel, setRadiusLabel] = useState<string | null>(() => {
-    if (initialCache.kitchens.length > 0) {
-      return formatDiscoveryRadius(getKitchenDiscoveryRadiusMeters());
-    }
-    if (initialCache.dishes.length > 0) {
-      return formatDiscoveryRadius(getDiscoveryRadiusMeters());
-    }
-    return null;
-  });
+  const [radiusLabel, setRadiusLabel] = useState<string | null>(null);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [sessionUnavailable, setSessionUnavailable] = useState(false);
@@ -406,6 +385,27 @@ function BrowseFoodsPage() {
 
   useEffect(() => {
     let active = true;
+
+    // Browser snapshots are navigation hints. Read them after hydration so the
+    // first browser render matches the server, then keep the existing fresh checks.
+    const cachedUser = getSession() ?? recoverSessionSnapshotForNavigation();
+    const cachedAddress = getAddress();
+    const cachedDishes = allDishes();
+    const cachedKitchens = allKitchens();
+    setUser(cachedUser);
+    setAddress(cachedAddress);
+    setCartItemCount(cartCount());
+    setCartItems(getCart());
+    setDefaultAddressResolved(Boolean(cachedAddress));
+    if (cachedDishes.length > 0 || cachedKitchens.length > 0) {
+      setNearbyDishes(cachedDishes);
+      setKitchens(cachedKitchens);
+      setKitchenDiscoveryVerified(true);
+      setDiscoveryState("ready");
+      setCatalogMessage("Fresh homemade food available near your default delivery address.");
+      setRadiusLabel(formatDiscoveryRadius(cachedKitchens.length > 0
+        ? getKitchenDiscoveryRadiusMeters() : getDiscoveryRadiusMeters()));
+    }
 
     const syncCartSummary = () => {
       if (!active) return;

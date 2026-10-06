@@ -210,3 +210,22 @@ it("does not return delayed credentials after owner cancellation and never revea
   mocks.signin.mockRejectedValueOnce(new Error(`${phone} private provider token`));
   await expect(next!.confirm("123456")).rejects.toThrow("OTP_UNAVAILABLE");
 });
+
+it("exposes exactly the deadline used by resend and updates it after a replacement challenge", async () => {
+  fetcher.mockResolvedValueOnce(Response.json(challenge("a".repeat(43), 30675)));
+  const confirmation = await begin();
+  const first = confirmation!.resendAvailableAt!;
+  expect(first).toBe(Date.now() + 30675);
+  vi.setSystemTime(first - 1);
+  await expect(confirmation!.resend!()).rejects.toThrow("OTP_COOLDOWN");
+  expect(fetcher).toHaveBeenCalledOnce();
+  vi.setSystemTime(first);
+  fetcher.mockResolvedValueOnce(Response.json(challenge("b".repeat(43), 45000)));
+  await confirmation!.resend!();
+  expect(confirmation!.resendAvailableAt).toBe(Date.now() + 45000);
+});
+it("includes the local cooldown in the exposed deadline when the server permits an earlier resend", async () => {
+  fetcher.mockResolvedValueOnce(Response.json(challenge("a".repeat(43), 0)));
+  const confirmation = await begin();
+  expect(confirmation!.resendAvailableAt).toBe(Date.now() + 30000);
+});

@@ -100,9 +100,9 @@ test("customer discovery and detail recovery are fail-closed at 50 km", () => {
   assert.match(policy, /MAX_DISCOVERY_RADIUS_METERS = 50_000/);
   assert.doesNotMatch(policy, /10_000|15_000/);
   assert.match(home, /DEFAULT_DISCOVERY_RADIUS_METERS/);
-  assert.match(home, /dishes: allDishes\(\)/);
-  assert.match(home, /kitchens: allKitchens\(\)/);
-  assert.match(home, /const hasInitialCatalog =/);
+  assert.match(home, /const cachedDishes = allDishes\(\)/);
+  assert.match(home, /const cachedKitchens = allKitchens\(\)/);
+  assert.match(home, /cachedDishes.length > 0 \|\| cachedKitchens.length > 0/);
   assert.match(home, /const shouldPreserveCatalog =/);
   assert.match(home, /refreshDiscovery\(defaultAddress, false, shouldPreserveCatalog\)/);
   assert.match(dish, /outside the 50 km Craves browsing area/);

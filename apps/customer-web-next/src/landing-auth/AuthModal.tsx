@@ -21,7 +21,7 @@ export type VerifyCodeRequest = VerificationRequest & { code: string };
 type AuthModalProps = {
   onClose: () => void;
   /** Used for both initial sends and resends; the server enforces its rate limits. */
-  onRequestCode: (request: VerificationRequest, signal: AbortSignal) => Promise<void>;
+  onRequestCode: (request: VerificationRequest, signal: AbortSignal) => Promise<number | void>;
   /** Resolve only after server verification. The host owns authenticated routing. */
   onVerifyCode: (request: VerifyCodeRequest, signal: AbortSignal) => Promise<void>;
 };
@@ -220,9 +220,11 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode }: AuthModalProps) => 
     };
   }, [otpVisible, resendAvailableAt, closing]);
 
-  const startResendCountdown = () => {
-    setResendAvailableAt(Date.now() + RESEND_DELAY_SECONDS * 1000);
-    setResendSeconds(RESEND_DELAY_SECONDS);
+  const startResendCountdown = (serverDeadline: number | void) => {
+    const deadline = typeof serverDeadline === 'number' && Number.isSafeInteger(serverDeadline)
+      ? serverDeadline : Date.now() + RESEND_DELAY_SECONDS * 1000;
+    setResendAvailableAt(deadline);
+    setResendSeconds(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
   };
 
   const resetOtp = () => {
@@ -287,11 +289,11 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode }: AuthModalProps) => 
     pendingRequest.current = controller;
     setRequestKind(kind);
     try {
-      await onRequestCode(buildRequest(), controller.signal);
+      const deadline = await onRequestCode(buildRequest(), controller.signal);
       if (!controller.signal.aborted && !isClosing.current) {
         setOtp('');
         setOtpVisible(true);
-        startResendCountdown();
+        startResendCountdown(deadline);
       }
     } catch (error) {
       if (!controller.signal.aborted && !isClosing.current) {

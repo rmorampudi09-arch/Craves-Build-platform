@@ -4,7 +4,7 @@ const FOOTER_COLUMNS = [
   {
     title: 'Craves',
     className: 'footer__col--craves',
-    links: [{ label: 'About us', href: '#why-craves' }, { label: 'Contact us', href: '/contact' }],
+    links: [{ label: 'About us', href: '#why-craves' }, { label: 'Contact us', href: '/contact' }, { label: 'Customer support · 8367366787', href: 'tel:8367366787' }],
   },
   {
     title: 'Legal',

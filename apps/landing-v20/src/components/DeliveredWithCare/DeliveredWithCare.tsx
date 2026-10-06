@@ -506,7 +506,7 @@ const DeliveredWithCare = () => {
                   <div className="specials__mini-card specials__mini-card--compact">
 
                     <strong>
-                      Chef near you
+                      Chefs near you
                     </strong>
 
                     <span>

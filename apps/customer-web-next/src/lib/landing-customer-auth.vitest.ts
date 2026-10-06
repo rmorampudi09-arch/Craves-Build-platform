@@ -184,3 +184,33 @@ it("closes stale popup work when another session takes ownership", async () => {
   expect(mocks.fetch).not.toHaveBeenCalled();
   expect(mocks.navigate).not.toHaveBeenCalled();
 });
+
+it("keeps resend disabled until the adapter deadline and refreshes the displayed countdown after resend", async () => {
+  vi.useFakeTimers();
+  let deadline = Date.now() + 30675;
+  mocks.begin.mockResolvedValue({confirm: mocks.confirm, resend: mocks.resend,
+    get resendAvailableAt() { return deadline; }});
+  mocks.resend.mockImplementation(async () => { deadline = Date.now() + 45000; });
+  await act(async () => openLandingAuth());
+  await requestCode();
+  expect(screen.getByRole("button", {name: "Resend code in 31s"})).toHaveProperty("disabled", true);
+  await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
+  expect(screen.getByRole("button", {name: "Resend code in 1s"})).toHaveProperty("disabled", true);
+  expect(mocks.resend).not.toHaveBeenCalled();
+  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+  await act(async () => fireEvent.click(screen.getByRole("button", {name: "Resend OTP"})));
+  expect(mocks.resend).toHaveBeenCalledOnce();
+  expect(screen.getByRole("button", {name: "Resend code in 45s"})).toHaveProperty("disabled", true);
+  vi.useRealTimers();
+});
+it("shows friendly wrong-code instructions and allows correction without changing the challenge", async () => {
+  mocks.confirm.mockRejectedValueOnce(new Error("OTP_INVALID"));
+  await act(async () => openLandingAuth());
+  await requestCode();
+  await submitCode();
+  expect(screen.getByRole("alert").textContent).toBe("That code is incorrect. Check the code and try again.");
+  expect(mocks.fetch).not.toHaveBeenCalled();
+  await submitCode();
+  expect(mocks.begin).toHaveBeenCalledOnce();
+  expect(mocks.navigate).toHaveBeenCalledWith("/home");
+});

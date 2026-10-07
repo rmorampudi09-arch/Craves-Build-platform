@@ -85,6 +85,8 @@ const ForHomeChefs = () => {
                   <img
                     className="chefs__letter-friend chefs__letter-friend--tomato"
                     src="/images/chef-letters/tomato.png"
+                    loading="lazy"
+                    decoding="async"
                     alt=""
                     aria-hidden="true"
                   />
@@ -96,6 +98,8 @@ const ForHomeChefs = () => {
                   <img
                     className="chefs__letter-friend chefs__letter-friend--carrot"
                     src="/images/chef-letters/carrot.png"
+                    loading="lazy"
+                    decoding="async"
                     alt=""
                     aria-hidden="true"
                   />
@@ -109,6 +113,8 @@ const ForHomeChefs = () => {
                   <img
                     className="chefs__letter-friend chefs__letter-friend--potato"
                     src="/images/chef-letters/potato.png"
+                    loading="lazy"
+                    decoding="async"
                     alt=""
                     aria-hidden="true"
                   />
@@ -119,6 +125,8 @@ const ForHomeChefs = () => {
                   <img
                     className="chefs__letter-friend chefs__letter-friend--onion"
                     src="/images/chef-letters/onion.png"
+                    loading="lazy"
+                    decoding="async"
                     alt=""
                     aria-hidden="true"
                   />

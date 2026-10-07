@@ -20,6 +20,11 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      {
+        // Only content-addressed video files may be reused without revalidation.
+        source: "/landing-v20/videos/:filename(hero-web-[0-9a-f]{64}\\.mp4)",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
       { source: "/landing-auth/manifest.json", headers: [{ key: "Cache-Control", value: "no-store, max-age=0" }] },
       {
         source: "/api/:path*",

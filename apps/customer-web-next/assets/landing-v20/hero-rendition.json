@@ -1,0 +1,15 @@
+{
+  "file": "hero-web-5ecc2e7719878461f7e7b33e79536788269e436a121b675923af942cf22cbc43.mp4",
+  "sha256": "5ecc2e7719878461f7e7b33e79536788269e436a121b675923af942cf22cbc43",
+  "size": 4648416,
+  "codec": "h264",
+  "audio": false,
+  "fastStart": true,
+  "sourceSha256": "04946a4e817b329c347aa67941d8d2e08c34d116f705c2f56ece832e372866e2",
+  "durationSeconds": 22,
+  "width": 1280,
+  "height": 720,
+  "frames": 528,
+  "framesPerSecond": 24,
+  "encodeCommand": "ffmpeg -i hero-bg-3.mp4 -map 0:v:0 -an -vf scale=1280:720:flags=lanczos -c:v libx264 -preset slow -crf 24 -maxrate 1800k -bufsize 3600k -pix_fmt yuv420p -profile:v high -level:v 3.1 -g 48 -keyint_min 24 -movflags +faststart -map_metadata -1 hero-web.mp4"
+}

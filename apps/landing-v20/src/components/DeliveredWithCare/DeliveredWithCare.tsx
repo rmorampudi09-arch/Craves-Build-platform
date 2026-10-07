@@ -22,6 +22,8 @@ const ChefIcon = () => (
   <img
     className="specials__icon-image specials__icon-image--chef"
     src="/images/icons/home-chef-user.png"
+    loading="lazy"
+    decoding="async"
     alt=""
   />
 );
@@ -184,6 +186,8 @@ const DeliveryIcon = () => (
   <img
     className="specials__icon-image specials__icon-image--delivery"
     src="/images/icons/delivery-scooter-user.png"
+    loading="lazy"
+    decoding="async"
     alt=""
   />
 );
@@ -418,6 +422,8 @@ const DeliveredWithCare = () => {
                   <img
                     className="specials__brand-logo"
                     src="/images/craves-logo.png"
+                    loading="lazy"
+                    decoding="async"
                     alt="Craves"
                   />
 
@@ -463,6 +469,8 @@ const DeliveredWithCare = () => {
 
                     <img
                       src="/images/hero-poster.jpg"
+                      loading="lazy"
+                      decoding="async"
                       alt="Featured homemade meal in the Craves app"
                     />
 

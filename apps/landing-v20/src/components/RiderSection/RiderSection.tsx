@@ -23,6 +23,8 @@ const RiderSection = () => {
               <img
                 className="rider__image"
                 src="/images/rider-delivery.png"
+                loading="lazy"
+                decoding="async"
                 alt="Craves delivery rider on a motorcycle carrying an insulated delivery box"
               />
             </div>

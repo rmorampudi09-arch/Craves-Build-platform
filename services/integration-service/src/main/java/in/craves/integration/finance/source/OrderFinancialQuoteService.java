@@ -59,7 +59,7 @@ public class OrderFinancialQuoteService {
         var chefProfiles=taxProfiles.resolveForQuotes(request.orders().stream().map(OrderInput::chefIdentityId).distinct().toList());
         for(OrderInput order:request.orders()) {
             var profile=chefProfiles.get(order.chefIdentityId());
-            if("REGISTRATION_REVIEW_REQUIRED".equals(profile.registrationReview()))throw conflict("Chef registration requires review; turnover does not authorize a GST deduction");
+            // Registration declarations are informational; admin chef approval already grants access.
             if(!profile.profile().stateCode().equals(order.pickupStateCode()))throw conflict("Tax profile does not match kitchen jurisdiction");
             BigDecimal base=sum(order.items(),true),food=sum(order.items(),false),delivery=LedgerMoney.parse(order.deliveryBeforeTax());
             in.craves.integration.finance.DeliveryTariff.Quote deliveryQuote=null;

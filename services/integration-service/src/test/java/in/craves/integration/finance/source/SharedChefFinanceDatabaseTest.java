@@ -28,7 +28,7 @@ class SharedChefFinanceDatabaseTest {
         f=new OrderFinancialFinalizationDatabaseTest();f.setup();
         source=mock(ChefFinanceApprovalSource.class);
         when(source.current()).thenAnswer(i->new ChefFinanceApprovalSource.Snapshot(UUID.randomUUID(),Instant.now(),true,List.copyOf(approved)));
-        profiles=new ChefTaxProfileService(f.jdbc,f.json,source);catalog=new CatalogEligibilityService(f.policies,profiles);
+        profiles=new ChefTaxProfileService(f.jdbc,f.json,source);catalog=new CatalogEligibilityService(f.policies,source);
         f.quotes=new OrderFinancialQuoteService(f.jdbc,f.json,f.policies,profiles);
         approve(f.chef,"36");sharedId=UUID.randomUUID();
         UUID original=f.jdbc.queryForObject("SELECT version_id FROM payment_schema.finance_chef_tax_head WHERE chef_identity_id=?",UUID.class,f.chef);
@@ -52,29 +52,31 @@ class SharedChefFinanceDatabaseTest {
         assertEquals(0,f.jdbc.queryForObject("SELECT count(*) FROM payment_schema.finance_chef_tax_head WHERE chef_identity_id=?",Integer.class,chef));
         assertEquals(0,f.count("finance_payable"));
     }
-    @Test void pendingRejectedRemovedAndUnsupportedChefsCannotObtainFinanceEligibility() {
+    @Test void pendingRejectedAndRemovedChefsCannotObtainPublishingEligibility() {
         UUID chef=UUID.randomUUID();assertFalse(catalog.evaluate(UUID.randomUUID()).eligibleChefIds().contains(chef));
         assertThrows(ResponseStatusException.class,()->quote(chef));
         approve(chef,"36");String hash=catalog.evaluate(UUID.randomUUID()).hash();assertDoesNotThrow(()->quote(chef));
         approved.removeIf(a->a.chefId().equals(chef));
         assertFalse(catalog.evaluate(UUID.randomUUID()).eligibleChefIds().contains(chef));
         assertNotEquals(hash,catalog.evaluate(UUID.randomUUID()).hash());assertThrows(ResponseStatusException.class,()->quote(chef));
-        approve(chef,"UNSUPPORTED");assertThrows(ResponseStatusException.class,()->quote(chef));
+        approve(chef,"UNSUPPORTED");assertTrue(catalog.evaluate(UUID.randomUUID()).eligibleChefIds().contains(chef));
+        assertThrows(ResponseStatusException.class,()->quote(chef)); // Existing checkout jurisdiction remains accurate.
     }
-    @Test void recordedIndividualWithholdingAndRegistrationExceptionsArePreserved() {
+    @Test void recordedWithholdingIsPreservedAndRegistrationFlagsDoNotBlockApprovedChefs() {
         var original=f.profiles.resolved(f.chef).profile();
         f.profiles.save(f.admin,f.chef,new ChefTaxProfileService.Profile(original.stateCode(),original.supplyRegime(),
             original.registrationStatus(),original.gstin(),original.declaredAggregateTurnover(),original.financialYear(),
             original.declarationDate(),"1","TEST_SPECIFIC_WITHHOLDING",original.classificationEvidence(),original.feeTermsEvidence()),"Test actual individual assessment");
         var snapshot=quote(f.chef).snapshots().getFirst();assertEquals("3.69",snapshot.path("withholding").asText());
         assertEquals("334.83",snapshot.path("chefPayable").asText());assertTrue(snapshot.has("chefTaxProfileId"));
-        f.taxProfile(f.chef,"UNREGISTERED","2100000.00");assertThrows(ResponseStatusException.class,()->quote(f.chef));
-        assertFalse(catalog.evaluate(UUID.randomUUID()).eligibleChefIds().contains(f.chef));
+        f.taxProfile(f.chef,"UNREGISTERED","2100000.00");assertDoesNotThrow(()->quote(f.chef));
+        assertTrue(catalog.evaluate(UUID.randomUUID()).eligibleChefIds().contains(f.chef));
     }
     @Test void missingGlobalTermsAndApprovalOutageCannotInventFinancialTerms() {
         UUID chef=UUID.randomUUID();approve(chef,"36");
         f.jdbc.update("UPDATE payment_schema.finance_shared_chef_terms_head SET version_id=NULL WHERE singleton=true");
         assertThrows(IllegalStateException.class,()->quote(chef));assertEquals(1,f.count("finance_checkout_quote"));
+        assertTrue(catalog.evaluate(UUID.randomUUID()).eligibleChefIds().contains(chef)); // Publishing does not require separate tax terms.
         when(source.current()).thenThrow(new IllegalStateException("Synthetic source outage"));
         assertThrows(IllegalStateException.class,()->catalog.evaluate(UUID.randomUUID()));
         assertThrows(IllegalStateException.class,()->quote(f.chef));assertEquals(0,f.count("finance_payable"));

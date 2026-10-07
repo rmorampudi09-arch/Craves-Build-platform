@@ -1,5 +1,7 @@
 # Finance access after admin chef approval
 
+Publishing in every state now follows [Chef approval in all states](CHEF_APPROVAL_ALL_STATES.md). Separate tax registration review cannot block publishing or supported checkout quotes. The older release description below records the preceding rollout.
+
 Admin approval of the existing documented chef application is the common finance
 access decision. Newly approved and already approved chefs use the activated
 platform finance policy without creating or approving a second finance profile.

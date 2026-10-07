@@ -57,15 +57,15 @@ it("does not reinterpret another menu rejection as a missing kitchen", async () 
   expect(await response.json()).toEqual({ code: "MENU_REQUEST_FAILED" });
 });
 
-it.each(["POST", "PUT", "PATCH"] as const)("preserves a confirmed finance hold for menu %s without exposing upstream diagnostics", async method => {
+it.each(["POST", "PUT", "PATCH"] as const)("preserves a confirmed chef approval hold for menu %s without exposing upstream diagnostics", async method => {
   upstream.mockResolvedValue(Response.json({ code: "CHEF_SELLING_NOT_READY", message: "private finance diagnostics" }, { status: 409 }));
   const context = { params: Promise.resolve({ menuItemId: "11111111-1111-4111-8111-111111111111" }) };
   const response = await (method === "POST" ? createDish(menuRequest(method)) : method === "PUT" ? editDish(menuRequest(method), context) : updateAvailability(menuRequest(method), context));
   expect(response.status).toBe(409);
   const body = await response.json();
   expect(body.code).toBe("CHEF_SELLING_NOT_READY");
-  expect(body.message.toLowerCase()).toContain("finance review");
-  expect(body.message).toContain("tax and fee-terms review");
+  expect(body.message.toLowerCase()).toContain("chef account must be approved");
+  expect(body.message).toContain("before publishing dishes");
   expect(JSON.stringify(body)).not.toContain("private finance");
   expect(response.headers.get("Cache-Control")).toBe("no-store");
   expect(upstream).toHaveBeenCalledTimes(1);

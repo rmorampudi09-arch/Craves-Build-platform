@@ -42,9 +42,10 @@ class FinancialSourceCompletionDatabaseTest {
         assertEquals(new BigDecimal("677.04"),f.jdbc.queryForObject("SELECT sum(amount) FROM payment_schema.finance_payable",BigDecimal.class));
         assertEquals(0,f.jdbc.queryForObject("SELECT sum(credit_amount-debit_amount) FROM payment_schema.ledger_line WHERE account_code='CUSTOMER_FUNDS'",BigDecimal.class).signum());
     }
-    @Test void registrationReviewBlocksQuoteWithoutInventingAFoodGstDeduction(){
+    @Test void registrationRecordDoesNotBlockQuoteOrInventAFoodGstDeduction(){
         f.taxProfile(f.chef,"UNREGISTERED","2100000.00");
-        assertThrows(RuntimeException.class,()->f.tx.execute(s->f.quotes.quote(new OrderFinancialQuoteService.Request(UUID.randomUUID(),f.customer,f.pricedAt,List.of(f.input(UUID.randomUUID(),f.chef))))));
+        var quoted=f.tx.execute(s->f.quotes.quote(new OrderFinancialQuoteService.Request(UUID.randomUUID(),f.customer,f.pricedAt,List.of(f.input(UUID.randomUUID(),f.chef)))));
+        assertEquals("338.52",quoted.snapshots().getFirst().path("chefPayable").asText());
         assertEquals("REGISTRATION_REVIEW_REQUIRED",f.profiles.resolved(f.chef).registrationReview());assertEquals("0.00",f.profiles.resolved(f.chef).foodGstDeduction());
     }
     @Test void postedRefundHoldCannotBeBypassedByReleasingOnlyTheUiHold(){

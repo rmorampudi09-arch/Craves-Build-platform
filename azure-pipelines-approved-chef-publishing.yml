@@ -1,0 +1,56 @@
+# Existing rmorampudi09 service connection; only Integration and customer web.
+trigger: none
+pr: none
+pool:
+  vmImage: ubuntu-22.04
+parameters:
+  - name: operation
+    type: string
+    default: preflight
+    values: [preflight, deploy]
+  - name: releaseSha
+    type: string
+    default: SELECT_MERGED_MAIN_COMMIT
+  - name: regressionRunId
+    type: string
+    default: SELECT_SUCCESSFUL_MAIN_REGRESSION_RUN
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+steps:
+  - checkout: none
+  - task: AzureCLI@2
+    displayName: Release admin-approved chef publishing in all states
+    timeoutInMinutes: 90
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -Eeuo pipefail
+        set +x
+        [[ "$EXPECTED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ && "$REGRESSION_RUN_ID" =~ ^[0-9]+$ ]] || exit 2
+        [[ "$OPERATION" == preflight || "$OPERATION" == deploy ]] || exit 2
+        SOURCE=$(mktemp -d)
+        git -C "$SOURCE" init --quiet
+        git -C "$SOURCE" remote add origin https://github.com/rmorampudi09-arch/Craves-Build-platform.git
+        git -C "$SOURCE" fetch --quiet --depth 1 origin "$EXPECTED_RELEASE_SHA"
+        git -C "$SOURCE" checkout --quiet --detach FETCH_HEAD
+        cd "$SOURCE"
+        test "$(git rev-parse HEAD)" = "$EXPECTED_RELEASE_SHA"
+        mkdir -p "$RELEASE_EVIDENCE"
+        python3 -m unittest discover -s scripts/finance -p 'test_*release.py' -v
+        python3 scripts/finance/approved_chef_publish_release.py preflight --output "$RELEASE_EVIDENCE/baseline.json"
+        if [[ "$OPERATION" == deploy ]]; then
+          python3 scripts/finance/approved_chef_publish_release.py deploy --baseline "$RELEASE_EVIDENCE/baseline.json" --output "$RELEASE_EVIDENCE/receipt.json"
+        fi
+    env:
+      OPERATION: ${{ parameters.operation }}
+      EXPECTED_RELEASE_SHA: ${{ parameters.releaseSha }}
+      REGRESSION_RUN_ID: ${{ parameters.regressionRunId }}
+      RELEASE_EVIDENCE: $(Build.ArtifactStagingDirectory)/approved-chef-publishing
+  - task: PublishPipelineArtifact@1
+    displayName: Publish sanitized publishing release evidence
+    condition: always()
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)/approved-chef-publishing
+      artifact: approved-chef-publishing

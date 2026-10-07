@@ -24,7 +24,7 @@ parameters:
 variables:
   AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
   resourceGroup: rg-craves-prodlow-centralindia
-  acrName: cravesprodlowacr82121
+  acrName: cravesrm09prodlow6bf632
   containerApp: ca-craves-web-prodlow
   imageRepository: craves/customer-web-next
   appPath: apps/customer-web-next
@@ -132,7 +132,7 @@ steps:
         previous=$(jq -r '.image' "$runtime_dir/baseline.json")
         python3 scripts/release/verify-web-release-evidence.py --origin https://craves.in --baseline
         login=$(az acr show -g '$(resourceGroup)' -n '$(acrName)' --query loginServer -o tsv)
-        [[ "$login" == cravesprodlowacr82121.azurecr.io ]] || { echo 'Wrong production registry.' >&2; exit 2; }
+        [[ "$login" == cravesrm09prodlow6bf632.azurecr.io ]] || { echo 'Wrong production registry.' >&2; exit 2; }
         [[ "$previous" == "$login/$(imageRepository):"* || "$previous" == "$login/$(imageRepository)@sha256:"* ]] || { echo 'Unexpected prior image owner.' >&2; exit 2; }
         # Resolve the previous immutable image BEFORE the rollout, not during recovery.
         previous_ref=${previous#"$login/"}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
 import { readDocumentBytes } from "@/lib/document-transport";
+import { safeManualSettlementErrorCodes } from "@/lib/finance-operation-feedback";
 import { isSameOrigin } from "@/lib/request-security";
 import { manualActionSchema, manualBalanceSchema, manualInstructionSchema, manualReservationSchema, manualSettlementRoute } from "@/lib/manual-settlement-contract";
 
@@ -23,7 +24,16 @@ export async function manualSettlementProxy(request: NextRequest, segments: stri
   try {
     const response = await authenticatedApiFetch(request, path, {method: request.method,
       ...(payload === undefined ? {} : {headers: {"Content-Type": "application/json"}, body: payload})}, 20000);
-    if (!response.ok) return fail(response.status, response.status === 401 ? "SESSION_EXPIRED" : "MANUAL_SETTLEMENT_REJECTED");
+    if (!response.ok) {
+      if (response.status === 401) return fail(401, "SESSION_EXPIRED");
+      let code = "MANUAL_SETTLEMENT_REJECTED";
+      try {
+        const raw: unknown = JSON.parse(new TextDecoder("utf-8", {fatal: true}).decode(await readDocumentBytes(response.body, 4096, 5000)));
+        const error = z.object({code: z.string().max(100).optional()}).safeParse(raw);
+        if (error.success && error.data.code && safeManualSettlementErrorCodes.has(error.data.code)) code = error.data.code;
+      } catch { /* Private or malformed upstream errors remain a generic rejection. */ }
+      return fail(response.status, code);
+    }
     const raw: unknown = JSON.parse(new TextDecoder("utf-8", {fatal: true}).decode(await readDocumentBytes(response.body, 131072, 5000)));
     if (request.method === "GET" && segments.length === 1) {
       const result = z.array(manualInstructionSchema).max(100).safeParse(raw);

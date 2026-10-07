@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createAdminAuthorization, INITIAL_ADMIN_AUTHORIZATION, type AdminAuthorization } from "./admin-authorization.ts";
 import type { AdminIdentity } from "./admin-contract.ts";
+import { AdminSessionError } from "./admin-session.ts";
 
 const admin: AdminIdentity = { displayName: "Test administrator", email: null, status: "ACTIVE", adminEnabled: true };
 function deferred<T>() {
@@ -67,6 +68,25 @@ test("failed background identity check clears stale access and closes dialogs", 
   assert.equal(f.closes(), 1);
   await f.ready();
   assert.equal(f.state().identity, admin);
+});
+
+for (const status of [429, 502, 503, 504]) test(`temporary identity failure ${status} locks work without discarding mounted forms`, async () => {
+  const f = fixture(); await f.ready();
+  const pending = f.authorization.accept("ready");
+  f.requests.at(-1)!.reject(new AdminSessionError("Unavailable", status)); await pending;
+  assert.equal(f.state().identity, admin);
+  assert.equal(f.state().sessionState, "reconnecting");
+  assert.notEqual(f.state().message, "");
+  assert.equal(f.closes(), 1);
+  await f.ready();
+  assert.equal(f.state().message, "");
+});
+
+for (const status of [401, 403]) test(`identity denial ${status} clears mounted access`, async () => {
+  const f = fixture(); await f.ready();
+  const pending = f.authorization.accept("ready");
+  f.requests.at(-1)!.reject(new AdminSessionError("Access denied", status)); await pending;
+  assert.equal(f.state().identity, null);
 });
 
 for (const identity of [{ ...admin, adminEnabled: false }, { ...admin, status: "SUSPENDED" }]) {

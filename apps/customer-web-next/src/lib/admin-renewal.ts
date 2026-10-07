@@ -137,6 +137,7 @@ function instance() {
 }
 
 export const adminFetch: typeof fetch = (input, init) => instance().request(input, init);
+export const retryAdminSession = () => instance().ensure(true);
 export async function logoutAdminSession() {
   channel?.postMessage("signed-out");
   return instance().logout();

@@ -139,7 +139,7 @@ export async function openLandingAuth() {
   try {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const current = await Promise.race([
-      loadSession(),
+      loadSession({ hydrateCustomerProfile: "background" }),
       new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Sign-in took too long to open.")), 15000); }),
     ]).catch(() => null).finally(() => clearTimeout(timer));
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination

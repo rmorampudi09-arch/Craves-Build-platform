@@ -20,7 +20,7 @@ export function ChefApplicationSessionBoundary({ children }: { children: ReactNo
     const timeout = window.setTimeout(() => {
       if (active) { active = false; setCheck({ scope, state: "unavailable" }); }
     }, 15_000);
-    void loadSession().then(user => {
+    void loadSession({ hydrateCustomerProfile: "background" }).then(user => {
       if (active) setCheck({ scope: sessionScope(), state: user && isSessionReady() && getSession()?.id === user.id ? "ready" : "unavailable" });
     }).catch(() => {
       if (active) setCheck({ scope, state: "unavailable" });

@@ -210,13 +210,14 @@ jobs:
         run: |
           node scripts/prepare-standalone.mjs
           node ../../scripts/release/tests/test-web-pilot-standalone.mjs
-      - name: Verify released landing video on cold visits and playback failures
+      - name: Verify released landing video and navigation in browsers
         run: |
           set -euo pipefail
           npm --prefix /tmp/craves-browser install --ignore-scripts --no-audit --no-fund --save-exact playwright@1.63.0
           node /tmp/craves-browser/node_modules/playwright/cli.js install --with-deps chromium
           mkdir -p target/launch-web
           node scripts/release/tests/test-landing-video-browser.mjs | tee target/launch-web/landing-video-browser.json
+          node scripts/release/tests/test-landing-navigation-browser.mjs | tee target/launch-web/landing-navigation-browser.json
       - name: Require build to preserve reviewed tracked source
         run: git diff --exit-code HEAD --
       - uses: actions/upload-artifact@v4

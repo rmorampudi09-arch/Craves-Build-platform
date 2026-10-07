@@ -143,7 +143,7 @@
       content="Craves — good food, good mood. Real, home-cooked meals from home chefs in your community, delivered fresh to your door."
     />
     <title>Craves — Good food. Good mood.</title>
-    <script type="module" crossorigin src="/landing-v20/assets/index-b1Y87v9O.js"></script>
+    <script type="module" crossorigin src="/landing-v20/assets/index-DoHWAeAo.js"></script>
     <link rel="stylesheet" crossorigin href="/landing-v20/assets/index-gWcGUl4u.css" media="print" data-craves-css="all">
   </head>
   <body>
@@ -155,6 +155,7 @@
   <script id="craves-landing-auth-bridge">
       (function () {
         var loading = null;
+        var attemptedScript = '', failedImports = 0;
         function loadAuth() {
           if (!loading) {
             loading = fetch('/landing-auth/manifest.json', { cache: 'no-store' })
@@ -167,13 +168,32 @@
                     !/^\/landing-auth\/auth-[\w-]+\.css$/.test(manifest.style || '')) {
                   throw new Error('Sign-in could not be loaded.');
                 }
-                if (!document.querySelector('link[href="' + manifest.style + '"]')) {
-                  var style = document.createElement('link');
+                var style = document.querySelector('link[href="' + manifest.style + '"]');
+                var appendStyle = !style;
+                if (!style) {
+                  style = document.createElement('link');
                   style.rel = 'stylesheet';
                   style.href = manifest.style;
-                  document.head.appendChild(style);
                 }
-                return import(manifest.script);
+                var cssReady = style.sheet ? Promise.resolve() : new Promise(function (resolve) {
+                  var timer = setTimeout(resolve, 1200);
+                  style.onload = function () { clearTimeout(timer); resolve(); };
+                  style.onerror = function () { clearTimeout(timer); style.remove(); resolve(); };
+                });
+                if (appendStyle) document.head.appendChild(style);
+                if (attemptedScript !== manifest.script) {
+                  attemptedScript = manifest.script;
+                  failedImports = 0;
+                }
+                var scriptUrl = manifest.script + (failedImports ? '?craves_retry=' + failedImports : '');
+                // Browsers remember failed module URLs; only failures need a fresh retry URL.
+                var entry = import(scriptUrl).catch(function (error) {
+                  failedImports += 1;
+                  throw error;
+                });
+                return Promise.all([entry, cssReady]).then(function (results) {
+                  return results[0];
+                });
               })
               .catch(function (error) {
                 loading = null;
@@ -182,6 +202,15 @@
           }
           return loading;
         }
+        function prewarm(event) {
+          if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
+              (event.type === 'pointerdown' && event.button !== 0)) return;
+          var target = event.target && event.target.closest ? event.target.closest('a[href="#sign-in"]') : null;
+          if (target) loadAuth().catch(function () {});
+        }
+        document.addEventListener('pointerover', prewarm, { passive: true });
+        document.addEventListener('focusin', prewarm);
+        document.addEventListener('pointerdown', prewarm, { passive: true });
         document.addEventListener('click', function (event) {
           if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           var target = event.target && event.target.closest ? event.target.closest('a[href="#sign-in"]') : null;

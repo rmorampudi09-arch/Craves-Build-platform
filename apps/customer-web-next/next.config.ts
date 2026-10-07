@@ -27,6 +27,14 @@ const nextConfig: NextConfig = {
       },
       { source: "/landing-auth/manifest.json", headers: [{ key: "Cache-Control", value: "no-store, max-age=0" }] },
       {
+        source: "/landing-auth/:filename(auth-[A-Za-z0-9_-]{8,64}\\.js)",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+      {
+        source: "/landing-auth/:filename(auth-[0-9a-f]{16}\\.css)",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+      {
         source: "/api/:path*",
         headers: [
           { key: "Cache-Control", value: "private, no-store, max-age=0" },

@@ -27,6 +27,7 @@ const SplashScreen = ({ onRevealStart, onComplete }: SplashScreenProps) => {
     let finished = false;
     let targetFrame = 0;
     let handoffFrame = 0;
+    let handoffTimer: number | undefined;
     document.body.classList.add('splash-active');
     document.documentElement.setAttribute('data-craves-splash-active', 'true');
 
@@ -36,6 +37,35 @@ const SplashScreen = ({ onRevealStart, onComplete }: SplashScreenProps) => {
         if (!disposed && !finished) callback();
       }, delay);
       timers.add(timer);
+    };
+
+    const cancelHandoff = () => {
+      window.cancelAnimationFrame(handoffFrame);
+      handoffFrame = 0;
+      window.clearTimeout(handoffTimer);
+      handoffTimer = undefined;
+    };
+
+    const afterPaint = (callback: () => void) => {
+      cancelHandoff();
+      let delivered = false;
+      const deliver = () => {
+        if (disposed || delivered) return;
+        delivered = true;
+        cancelHandoff();
+        callback();
+      };
+      // Hidden tabs may suspend animation frames. Keep every handoff bounded.
+      handoffTimer = window.setTimeout(deliver, 240);
+      handoffFrame = window.requestAnimationFrame(() => {
+        handoffFrame = window.requestAnimationFrame(deliver);
+      });
+    };
+
+    const intersectsViewport = (element: Element) => {
+      const bounds = element.getBoundingClientRect();
+      return bounds.bottom > 0 && bounds.top < window.innerHeight &&
+        bounds.right > 0 && bounds.left < window.innerWidth;
     };
 
     const releaseBoot = () => {
@@ -60,18 +90,25 @@ const SplashScreen = ({ onRevealStart, onComplete }: SplashScreenProps) => {
       timers.clear();
       document.body.classList.remove('splash-active');
       document.documentElement.removeAttribute('data-craves-splash-active');
-      // On a failed asset load, give React its commit before uncovering the page.
-      if (document.getElementById('craves-boot')) {
-        handoffFrame = window.requestAnimationFrame(() => {
-          handoffFrame = window.requestAnimationFrame(() => {
-            if (disposed) return;
-            releaseBoot();
-            callbacksRef.current.onComplete();
-          });
-        });
-      } else {
+      const requestedAt = performance.now();
+      const handoff = () => {
+        if (disposed) return;
+        const app = splash.closest('.app');
+        const underlay = app?.querySelectorAll<HTMLElement>('.navbar, .hero') ?? [];
+        const painted = app?.classList.contains('app--ready') &&
+          Array.from(underlay).every((element) =>
+            (!element.classList.contains('navbar') && !intersectsViewport(element)) ||
+            Number(getComputedStyle(element).opacity) >= 0.99);
+        if (!document.hidden && !painted && performance.now() - requestedAt < 2000) {
+          afterPaint(handoff);
+          return;
+        }
+        releaseBoot();
         callbacksRef.current.onComplete();
-      }
+      };
+      // Keep the final decoded logo over its target until the landing commit
+      // has painted. Also cover early exits for failed assets/reduced motion.
+      afterPaint(handoff);
     };
 
     const updateTarget = () => {
@@ -111,12 +148,30 @@ const SplashScreen = ({ onRevealStart, onComplete }: SplashScreenProps) => {
       }
 
       started = true;
-      splash.classList.add('splash--ready');
-      // Both surfaces have the exact same red background and original wordmark.
-      releaseBoot();
-      // Your existing background/title morph and final logo timings stay intact.
-      later(reveal, motion.matches ? 80 : 1220);
-      later(finish, motion.matches ? 180 : 2700);
+      // Prepare the landing under the opaque boot cover before the CSS morph
+      // clock starts. A busy main thread must not delay a timer-based reveal
+      // until after the compositor has already shrunk away the splash.
+      reveal();
+      const beginAnimation = () => {
+        if (disposed || finished) return;
+        const app = splash.closest('.app');
+        const hero = app?.querySelector('.hero');
+        if (!app?.classList.contains('app--ready') ||
+          (hero && intersectsViewport(hero) && !hero.classList.contains('is-visible'))) {
+          afterPaint(beginAnimation);
+          return;
+        }
+        if (!updateTarget()) {
+          finish();
+          return;
+        }
+        splash.classList.add('splash--ready');
+        // Both painted surfaces use the same original wordmark and background.
+        releaseBoot();
+        // Keep the approved CSS delays, morph and final-logo timings intact.
+        later(finish, motion.matches ? 180 : 2700);
+      };
+      afterPaint(beginAnimation);
     };
 
     const onAnimationStart = (event: AnimationEvent) => {
@@ -173,7 +228,11 @@ const SplashScreen = ({ onRevealStart, onComplete }: SplashScreenProps) => {
     if (typeof motion.addEventListener === 'function') motion.addEventListener('change', onMotionChange);
     else motion.addListener(onMotionChange);
 
-    const images = Array.from(splash.querySelectorAll<HTMLImageElement>('img'));
+    const navLogo = document.querySelector<HTMLImageElement>('.navbar__logo img');
+    const images = [
+      ...Array.from(splash.querySelectorAll<HTMLImageElement>('img')),
+      ...(navLogo ? [navLogo] : []),
+    ];
     type BootWindow = Window & {
       __cravesBoot?: { stylesReady: Promise<void>; release: () => void };
     };
@@ -185,12 +244,14 @@ const SplashScreen = ({ onRevealStart, onComplete }: SplashScreenProps) => {
       if (results.every(Boolean)) start();
       else finish();
     });
-    later(() => { if (!started) finish(); }, 8000);
+    later(() => { if (!splash.classList.contains('splash--ready')) finish(); }, 8000);
+    // An initially hidden page may never emit a visibilitychange event.
+    if (document.hidden) finish();
 
     return () => {
       disposed = true;
       window.cancelAnimationFrame(targetFrame);
-      window.cancelAnimationFrame(handoffFrame);
+      cancelHandoff();
       timers.forEach((timer) => window.clearTimeout(timer));
       imageListeners.forEach((remove) => remove());
       window.removeEventListener('resize', scheduleTarget);

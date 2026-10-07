@@ -1,5 +1,7 @@
 # Catalog finance selling eligibility
 
+The current rule is [Chef approval in all states](CHEF_APPROVAL_ALL_STATES.md): publishing eligibility is the complete signed admin-approved chef list, independent of state and individual tax profiles. The profile and registration gates described below are historical.
+
 Current common eligibility rule: [Finance access after admin chef approval](ADMIN_APPROVAL_SHARED_FINANCE.md).
 The signed User/Chef approval source now supplies approved chefs to the common
 finance resolver. An individual tax/fee-terms profile is no longer a prerequisite

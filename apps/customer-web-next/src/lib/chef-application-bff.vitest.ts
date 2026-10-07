@@ -64,8 +64,8 @@ it.each(["POST", "PUT", "PATCH"] as const)("preserves a confirmed chef approval 
   expect(response.status).toBe(409);
   const body = await response.json();
   expect(body.code).toBe("CHEF_SELLING_NOT_READY");
-  expect(body.message.toLowerCase()).toContain("finance review");
-  expect(body.message).toContain("chef account must be approved");
+  expect(body.message.toLowerCase()).toContain("chef account must be approved");
+  expect(body.message).toContain("before publishing dishes");
   expect(JSON.stringify(body)).not.toContain("private finance");
   expect(response.headers.get("Cache-Control")).toBe("no-store");
   expect(upstream).toHaveBeenCalledTimes(1);

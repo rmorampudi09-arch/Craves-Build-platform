@@ -29,7 +29,7 @@ export function ChefTaxProfilePanel() {
     <div className="border-t pt-5"><h3 className="font-semibold">Order-to-ledger runtime evidence</h3>
       <button type="button" className={`${button} mt-3`} disabled={busy} onClick={() => void refresh()}>Refresh source counters</button>
       {message && <p role="status" className="mt-3 rounded-xl bg-amber-50 p-4 text-sm">{message}</p>}
-      {status && <div className="mt-4 space-y-2 text-sm"><p>Finalization worker: {status.finalizationEnabled ? "enabled" : "disabled"}. Captured checkouts: {status.capturedCheckouts}. Posted chef earnings: {status.postedEarnings}.</p><p>{status.activationNotice}</p>{status.states.map(row => <p key={`${row.state}/${row.lastResult}`}>{row.state} · {row.lastResult} · {row.count}</p>)}{status.exceptions.map((row, index) => <p key={`${row.chefOrderId}/${index}`} className="break-all text-red-800">{row.chefOrderId}: {row.reason}</p>)}</div>}
+      {status && <div className="mt-4 space-y-2 text-sm"><p>Finalization worker: {status.finalizationEnabled ? "enabled" : "disabled"}. Captured checkouts: {status.capturedCheckouts}. Posted chef earnings: {status.postedEarnings}.</p><p>{status.activationNotice}</p>{status.states.map(row => <p key={`${row.state}/${row.lastResult}`}>{row.state} / {row.lastResult} / {row.count}</p>)}{status.exceptions.map((row, index) => <p key={`${row.chefOrderId}/${index}`} className="break-all text-red-800">{row.chefOrderId}: {row.reason}</p>)}</div>}
     </div>
   </section>;
 }

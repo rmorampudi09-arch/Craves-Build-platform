@@ -114,6 +114,115 @@ async function assertAdvancing(page, startupTimeout = 20000) {
   }, first, { timeout: 10000 });
 }
 
+async function watchSplashHandoff(page, stallMainThread = false) {
+  await page.addInitScript(({ stallMainThread }) => {
+    const probe = window.__landingHandoff = {
+      coverSeen: false, splashSeen: false, readySeen: false,
+      exposedSamples: 0, failures: [], handoff: null, finished: false, stallMs: 0,
+    };
+    let afterHandoff = 0;
+    let frame;
+    const opacity = element => {
+      let value = 1;
+      for (let current = element; current; current = current.parentElement) {
+        const style = getComputedStyle(current);
+        if (style.display === 'none' || style.visibility === 'hidden') return 0;
+        value *= Number(style.opacity);
+      }
+      return value;
+    };
+    const readLanding = () => {
+      const navbar = document.querySelector('.navbar');
+      const hero = document.querySelector('.hero');
+      const logo = document.querySelector('.navbar__logo img');
+      const heroBounds = hero?.getBoundingClientRect();
+      return {
+        atMs: Math.round(performance.now()),
+        headerOpacity: navbar ? opacity(navbar) : 0,
+        heroOpacity: hero ? opacity(hero) : 0,
+        heroInViewport: Boolean(heroBounds && heroBounds.bottom > 0 && heroBounds.top < innerHeight),
+        logoDecoded: Boolean(logo?.complete && logo.naturalWidth > 0),
+      };
+    };
+    const inspect = () => {
+      const boot = document.getElementById('craves-boot');
+      const splash = document.querySelector('.splash');
+      probe.coverSeen ||= Boolean(boot || splash);
+      probe.splashSeen ||= Boolean(splash);
+      if (splash?.classList.contains('splash--ready') && !probe.readySeen) {
+        probe.readySeen = true;
+        if (stallMainThread) {
+          // CSS/compositor animation continues while application timers and
+          // React commits cannot run. This reproduced the empty-page flicker.
+          setTimeout(() => {
+            const start = performance.now();
+            while (performance.now() - start < 1450) { /* Deliberate busy main thread. */ }
+            probe.stallMs = Math.round(performance.now() - start);
+          }, 1100);
+        }
+      }
+      if (!probe.coverSeen || !probe.splashSeen || boot) return;
+      const surface = splash?.querySelector('.splash__surface');
+      const exposed = !splash || Boolean(surface && surface.getBoundingClientRect().width < innerWidth * 0.25);
+      if (exposed) {
+        const state = readLanding();
+        probe.exposedSamples += 1;
+        if (state.headerOpacity < 0.98 || (state.heroInViewport && state.heroOpacity < 0.98) || !state.logoDecoded) {
+          if (probe.failures.length < 12) probe.failures.push(state);
+        }
+        // MutationObserver records actual cover removal before another frame
+        // can hide an uncovered, transparent landing page.
+        if (!splash && !probe.handoff) probe.handoff = state;
+      }
+    };
+    const observer = new MutationObserver(inspect);
+    observer.observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    const sampleFrame = () => {
+      inspect();
+      if (probe.handoff && ++afterHandoff >= 2) {
+        probe.finished = true;
+        observer.disconnect();
+        cancelAnimationFrame(frame);
+        return;
+      }
+      frame = requestAnimationFrame(sampleFrame);
+    };
+    frame = requestAnimationFrame(sampleFrame);
+  }, { stallMainThread });
+}
+
+async function assertSplashHandoff(page, stalled = false) {
+  await page.waitForFunction(() => window.__landingHandoff?.finished, null, { timeout: 15000 });
+  const probe = await page.evaluate(() => window.__landingHandoff);
+  assert(probe.coverSeen && probe.splashSeen && probe.readySeen, 'The real startup cover and logo transition must be exercised');
+  assert(probe.exposedSamples > 0, 'The uncovered landing page must be sampled');
+  assert.deepEqual(probe.failures, [], 'The logo transition must never uncover a hidden header, hidden hero, or undecoded navbar logo');
+  assert(probe.handoff.headerOpacity >= 0.98 && (!probe.handoff.heroInViewport || probe.handoff.heroOpacity >= 0.98) && probe.handoff.logoDecoded,
+    'The visible landing page and navbar logo must already be painted when the splash is removed');
+  if (stalled) assert(probe.stallMs >= 1400, 'The regression must block JavaScript across the compositor transition');
+  return { splashHandoffSamples: probe.exposedSamples, splashHandoffAtMs: probe.handoff.atMs, mainThreadStallMs: probe.stallMs };
+}
+
+async function assertNavbarGlassAndFooter(page) {
+  const readBlur = () => page.locator('.navbar__inner').evaluate(element => {
+    const filter = getComputedStyle(element).getPropertyValue('backdrop-filter');
+    const match = /blur\(([\d.]+)px\)/.exec(filter);
+    return { filter, blurPx: match ? Number(match[1]) : 0 };
+  });
+  const resting = await readBlur();
+  assert(resting.blurPx >= 25, `The released header must render its stronger glass blur at rest: ${resting.filter}`);
+  await page.evaluate(() => window.scrollTo({ top: 320, behavior: 'instant' }));
+  await page.waitForFunction(() => window.scrollY > 40 && document.querySelector('.navbar--scrolled'), null, { timeout: 5000 });
+  const scrolled = await readBlur();
+  assert(scrolled.blurPx >= 27, `The released header must retain its stronger glass blur after scrolling: ${scrolled.filter}`);
+  const footer = page.locator('footer');
+  assert.doesNotMatch(await footer.innerText(), /8367366787/, 'The removed contact number must not be displayed in the footer');
+  assert.equal(await footer.locator('a[href^="tel:"]').count(), 0, 'The footer must not retain a phone link');
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  await page.waitForFunction(() => window.scrollY < 5 && !document.querySelector('.navbar--scrolled'), null, { timeout: 5000 });
+  return { restingBlurPx: resting.blurPx, scrolledBlurPx: scrolled.blurPx, footerPhoneAbsent: true };
+}
+
 async function complete(name, fixture, details = {}) {
   assert.deepEqual(fixture.errors, [], `${name}: browser application error`);
   assert(fixture.mediaRequests.length > 0, `${name}: real media was not requested`);
@@ -129,14 +238,19 @@ try {
   for (const [name, options] of [
     ['cold-desktop', {}],
     ['cold-mobile', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }],
+    ['cold-reduced-motion', { reducedMotion: 'reduce' }],
   ]) {
     const fixture = await fixturePage(options);
+    await watchSplashHandoff(fixture.page);
     await fixture.page.goto(origin, { waitUntil: 'domcontentloaded' });
     await assertHero(fixture.page);
+    const handoff = await assertSplashHandoff(fixture.page);
     await assertAdvancing(fixture.page);
+    const glass = name === 'cold-desktop' ? await assertNavbarGlassAndFooter(fixture.page) : {};
     if (name === 'cold-desktop') {
       await fixture.page.reload({ waitUntil: 'domcontentloaded' });
       await assertHero(fixture.page);
+      await assertSplashHandoff(fixture.page);
       await assertAdvancing(fixture.page);
       await fixture.page.evaluate(() => {
         document.querySelector('.hero__video').pause();
@@ -144,8 +258,43 @@ try {
       });
       await assertAdvancing(fixture.page);
     }
-    await complete(name, fixture, { reloadAndPageRestore: name === 'cold-desktop' });
+    await complete(name, fixture, { reloadAndPageRestore: name === 'cold-desktop', ...handoff, ...glass });
   }
+
+  const stalledSplash = await fixturePage();
+  await watchSplashHandoff(stalledSplash.page, true);
+  await stalledSplash.page.goto(origin, { waitUntil: 'domcontentloaded' });
+  await assertHero(stalledSplash.page);
+  const stalledHandoff = await assertSplashHandoff(stalledSplash.page, true);
+  await assertAdvancing(stalledSplash.page);
+  await complete('splash-main-thread-stall', stalledSplash, stalledHandoff);
+
+  const deepAnchor = await fixturePage();
+  await watchSplashHandoff(deepAnchor.page);
+  await deepAnchor.page.goto(`${origin}/#contact`, { waitUntil: 'domcontentloaded' });
+  await assertHero(deepAnchor.page);
+  await deepAnchor.page.waitForFunction(() => window.scrollY > window.innerHeight, null, { timeout: 5000 });
+  const deepHandoff = await assertSplashHandoff(deepAnchor.page);
+  assert(deepHandoff.splashHandoffAtMs < 6000, 'A deep anchor must not wait for an offscreen hero or the startup safety timeout');
+  await complete('deep-contact-anchor-startup', deepAnchor, deepHandoff);
+
+  const initiallyHidden = await fixturePage();
+  await initiallyHidden.page.addInitScript(() => {
+    window.__fixtureHidden = true;
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => window.__fixtureHidden });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => window.__fixtureHidden ? 'hidden' : 'visible' });
+  });
+  await initiallyHidden.page.goto(origin, { waitUntil: 'domcontentloaded' });
+  await assertHero(initiallyHidden.page);
+  await initiallyHidden.page.waitForFunction(() => !document.getElementById('craves-boot') && !document.querySelector('.splash') && !document.body.classList.contains('splash-active'), null, { timeout: 2500 });
+  await initiallyHidden.page.evaluate(() => {
+    window.__fixtureHidden = false;
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+  });
+  await initiallyHidden.page.waitForFunction(() => Number(getComputedStyle(document.querySelector('.navbar')).opacity) >= 0.98 && Number(getComputedStyle(document.querySelector('.hero')).opacity) >= 0.98, null, { timeout: 5000 });
+  await assertAdvancing(initiallyHidden.page);
+  await complete('initial-hidden-document-restores-page', initiallyHidden, { simulatedInitialVisibility: 'hidden' });
 
   const offscreen = await fixturePage();
   // Install before navigation so the application's watchdog interval is owned

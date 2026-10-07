@@ -8,11 +8,7 @@ export const metadata = {
   description: "Contact Craves for customer support, order help, and business enquiries.",
 };
 
-function publicSupportPhone(): string | null {
-  const value = process.env.CRAVES_PUBLIC_SUPPORT_PHONE?.trim() ?? "";
-  const digits = value.replace(/\D/g, "");
-  return digits.length >= 10 && digits.length <= 13 ? value : null;
-}
+const SUPPORT_PHONE = "8367366787";
 
 function registeredBusinessName(): string | null {
   const value = process.env.CRAVES_REGISTERED_BUSINESS_NAME?.trim() ?? "";
@@ -20,7 +16,7 @@ function registeredBusinessName(): string | null {
 }
 
 export default function ContactPage() {
-  const supportPhone = publicSupportPhone();
+  const supportPhone = SUPPORT_PHONE;
   const businessName = registeredBusinessName();
 
   return (

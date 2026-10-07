@@ -1,7 +1,12 @@
 // Disposable standalone-server verification only. Never loaded by production.
 import { readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { tmpdir } from 'node:os';
 const file = process.env.CRAVES_DISPOSABLE_WEB_LAUNCH_FIXTURE;
-if (!file || !file.startsWith('/tmp/craves-web-pilot-fixture-')) throw Error('Disposable fixture path required');
+if (!file || !path.isAbsolute(file) || path.dirname(path.resolve(file)) !== path.resolve(tmpdir()) ||
+    !/^craves-web-pilot-fixture-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$/.test(path.basename(file))) {
+  throw Error('Disposable fixture path required');
+}
 const nativeFetch = globalThis.fetch;
 globalThis.fetch = async (input, init = {}) => {
   const url = String(input);

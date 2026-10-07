@@ -2,25 +2,25 @@ import './StoryVideo.css';
 
 const STORY_CARDS = [
   {
-    src: '/images/story-grid/prep-1.png',
+    src: '/images/story-grid/prep-1.lossless-5e78de105cf19b84.webp',
     alt: 'Home chef preparing fresh vegetables in a home kitchen',
     title: 'Prepare',
     text: 'It starts with the ingredients.',
   },
   {
-    src: '/images/story-grid/cook-fresh-pot.png',
+    src: '/images/story-grid/cook-fresh-pot.lossless-eba448c1538f21b4.webp',
     alt: 'Home chef adding fresh vegetables into a pot on the stove',
     title: 'Cook',
     text: 'Familiar recipes take shape.',
   },
   {
-    src: '/images/story-grid/cook-pot.png',
+    src: '/images/story-grid/cook-pot.lossless-89a99aed4375d8eb.webp',
     alt: 'Home chef cooking food in a pot on a stove',
     title: 'Finish',
     text: 'The final touches bring a meal together.',
   },
   {
-    src: '/images/story-grid/pack-delivery.png',
+    src: '/images/story-grid/pack-delivery.lossless-c99bb219f7e001d2.webp',
     alt: 'Home chef packing meals into containers for delivery',
     title: 'Pack',
     text: 'The last step before delivery.',

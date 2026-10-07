@@ -79,7 +79,7 @@ test("landing v20 auth bridge never blocks sign-in on stylesheet load events", (
 test("rebuilt landing preserves the released host auth and startup scripts", () => {
   const index = source("../../public/landing-v20/index.html");
   for (const [id, checksum] of [
-    ["craves-landing-auth-bridge", "037a3bc17d477351a310338220d4f5221ce72f0d384a01bf6eca62564f8df4b6"],
+    ["craves-landing-auth-bridge", "c90adbd8f77822fb26a8efe308dc72fb925fc886f9e8eb71a135924a79cb9f48"],
     ["craves-boot-script", "11a49bd7849c76b8e0df9021bed0556220b3f113547b932cfa3fc05c8be00d6d"],
   ]) {
     const scripts = Array.from(

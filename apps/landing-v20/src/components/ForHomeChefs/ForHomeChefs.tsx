@@ -84,7 +84,7 @@ const ForHomeChefs = () => {
                   S
                   <img
                     className="chefs__letter-friend chefs__letter-friend--tomato"
-                    src="/images/chef-letters/tomato.png"
+                    src="/images/chef-letters/tomato.lossless-ba4f6f0b072eff7d.webp"
                     loading="lazy"
                     decoding="async"
                     alt=""
@@ -97,7 +97,7 @@ const ForHomeChefs = () => {
                   {/* Optional sprig artwork was not supplied; do not request a missing file. */}
                   <img
                     className="chefs__letter-friend chefs__letter-friend--carrot"
-                    src="/images/chef-letters/carrot.png"
+                    src="/images/chef-letters/carrot.lossless-702ac148667bfe91.webp"
                     loading="lazy"
                     decoding="async"
                     alt=""
@@ -112,7 +112,7 @@ const ForHomeChefs = () => {
                   o
                   <img
                     className="chefs__letter-friend chefs__letter-friend--potato"
-                    src="/images/chef-letters/potato.png"
+                    src="/images/chef-letters/potato.lossless-ef357b9118819f15.webp"
                     loading="lazy"
                     decoding="async"
                     alt=""
@@ -124,7 +124,7 @@ const ForHomeChefs = () => {
                   k
                   <img
                     className="chefs__letter-friend chefs__letter-friend--onion"
-                    src="/images/chef-letters/onion.png"
+                    src="/images/chef-letters/onion.lossless-4d5b07b8cf0037e7.webp"
                     loading="lazy"
                     decoding="async"
                     alt=""

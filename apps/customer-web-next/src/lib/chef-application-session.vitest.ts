@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ChefApplicationSessionBoundary } from "../components/chef-application-session-boundary";
 import { ChefApplicationWorkspace } from "../components/chef-application-workspace";
-import { captureSessionContext, invalidateSession, setSessionIdentity, setSessionEmailVerification } from "../services/auth/cravesAuth";
+import { captureSessionContext, getSession, invalidateSession, isSessionReady, setSessionIdentity, setSessionEmailVerification } from "../services/auth/cravesAuth";
 import type { CravesIdentity } from "./auth-contract";
 
 let verifiedEmail = false;
@@ -19,8 +19,9 @@ const fetcher = vi.fn<typeof fetch>();
 function deferred<T>() { let resolve!: (value: T) => void; return { promise: new Promise<T>(done => { resolve = done; }), resolve: (value: T) => resolve(value) }; }
 function PrivateChild() {
   const [draft, setDraft] = useState("");
+  const [identityId] = useState(() => getSession()?.id);
   useEffect(() => { void fetch("/api/chef/application"); }, []);
-  return createElement("input", { "aria-label": "Private chef draft", value: draft, onChange: (event: { target: { value: string } }) => setDraft(event.target.value) });
+  return createElement("input", { "aria-label": "Private chef draft", "data-owner-id": identityId, value: draft, onChange: (event: { target: { value: string } }) => setDraft(event.target.value) });
 }
 function boundary() { return render(createElement(ChefApplicationSessionBoundary, null, createElement(PrivateChild))); }
 function normal(input: RequestInfo | URL) {
@@ -44,6 +45,68 @@ it("waits for expired-session recovery before mounting private sections", async 
   await act(async () => { renewed = true; refresh.resolve(Response.json({ identity: owner })); });
   await screen.findByLabelText("Private chef draft");
   expect(fetcher.mock.calls.filter(([url]) => url === "/api/auth/refresh")).toHaveLength(1);
+});
+
+it("mounts the current active verified owner while optional customer profile hydration is pending", async () => {
+  const profile = deferred<Response>(); let profileSettled = false;
+  void profile.promise.then(() => { profileSettled = true; });
+  fetcher.mockImplementation(input => String(input) === "/api/customer/profile" ? profile.promise : normal(input));
+  boundary();
+  const draft = await screen.findByLabelText("Private chef draft");
+  expect(fetcher.mock.calls.some(([url]) => url === "/api/customer/profile")).toBe(true);
+  expect(profileSettled).toBe(false);
+  expect(isSessionReady()).toBe(true);
+  expect(getSession()).toMatchObject({ id: owner.id, status: "ACTIVE", emailVerified: true });
+  expect(draft.getAttribute("data-owner-id")).toBe(owner.id);
+  await act(async () => { profile.resolve(Response.json({}, { status: 503 })); });
+  expect(screen.getByLabelText("Private chef draft").getAttribute("data-owner-id")).toBe(owner.id);
+  expect(screen.queryByText("We couldn’t open your application")).toBeNull();
+});
+
+it("requires refresh and confirmed identity before mounting despite a pending optional profile", async () => {
+  const refresh = deferred<Response>(); const confirmedIdentity = deferred<Response>(); const profile = deferred<Response>();
+  let renewed = false; let profileSettled = false;
+  void profile.promise.then(() => { profileSettled = true; });
+  fetcher.mockImplementation(input => {
+    if (String(input) === "/api/auth/me") return renewed ? confirmedIdentity.promise : Promise.resolve(Response.json({}, { status: 401 }));
+    if (String(input) === "/api/auth/refresh") return refresh.promise;
+    if (String(input) === "/api/customer/profile") return profile.promise;
+    return normal(input);
+  });
+  boundary();
+  await waitFor(() => expect(fetcher.mock.calls.some(([url]) => url === "/api/auth/refresh")).toBe(true));
+  expect(screen.queryByLabelText("Private chef draft")).toBeNull();
+  expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/application" || url === "/api/customer/profile")).toBe(false);
+  await act(async () => { renewed = true; refresh.resolve(Response.json({ identity: owner })); });
+  await waitFor(() => expect(fetcher.mock.calls.filter(([url]) => url === "/api/auth/me").length).toBeGreaterThan(1));
+  expect(screen.queryByLabelText("Private chef draft")).toBeNull();
+  await act(async () => { confirmedIdentity.resolve(Response.json(owner)); });
+  expect((await screen.findByLabelText("Private chef draft")).getAttribute("data-owner-id")).toBe(owner.id);
+  expect(fetcher.mock.calls.filter(([url]) => url === "/api/auth/refresh")).toHaveLength(1);
+  expect(profileSettled).toBe(false);
+  await act(async () => { profile.resolve(Response.json({}, { status: 503 })); });
+});
+
+it("discards the prior owner's private form when its pending profile fails during an account switch", async () => {
+  const priorProfile = deferred<Response>(); const nextIdentity = deferred<Response>();
+  fetcher.mockImplementation(input => {
+    if (String(input) === "/api/auth/me" && current?.id !== owner.id) return nextIdentity.promise;
+    if (String(input) === "/api/customer/profile") return getSession()?.id === owner.id ? priorProfile.promise : Promise.resolve(Response.json({}, { status: 503 }));
+    return normal(input);
+  });
+  boundary();
+  fireEvent.change(await screen.findByLabelText("Private chef draft"), { target: { value: "private draft A" } });
+  current = { ...owner, id: "22222222-2222-4222-8222-222222222222", displayName: "Fixture B" };
+  act(() => { setSessionIdentity(current!); });
+  expect(screen.queryByLabelText("Private chef draft")).toBeNull();
+  await act(async () => { priorProfile.resolve(Response.json({}, { status: 503 })); });
+  expect(screen.queryByLabelText("Private chef draft")).toBeNull();
+  expect(getSession()?.id).toBe(current.id);
+  await act(async () => { nextIdentity.resolve(Response.json(current)); });
+  const nextDraft = await screen.findByLabelText("Private chef draft") as HTMLInputElement;
+  expect(nextDraft.getAttribute("data-owner-id")).toBe(current.id);
+  expect(nextDraft.value).toBe("");
+  expect(getSession()?.id).toBe(current.id);
 });
 
 it("opens a new application when optional address/profile prefills fail", async () => {

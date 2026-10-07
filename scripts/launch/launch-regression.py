@@ -180,12 +180,13 @@ def run_web(output, expected):
     result = {**source(expected), "kind": "web", "status": "RED", "commands": {},
               "scope": "CI validation bundle only; never reuse as a production-configured deployment artifact"}
     save(output / "web-summary.json", result)
-    # Execute both complete package test groups with machine-readable reporting, without filters.
+    # Execute the landing guard and both complete package test groups, without filters.
     test_script = json.loads((app / "package.json").read_text())["scripts"]["test"]
-    if test_script != "vitest run && node --test --experimental-strip-types src/lib/*.test.ts":
+    if test_script != "node scripts/verify-landing-hero.mjs && vitest run && node --test --experimental-strip-types src/lib/*.test.ts":
         raise ValueError("Package test script changed; update the full-suite reporting adapter before release")
     commands = [("install", ["npm", "ci"]), ("lint", ["npm", "run", "lint"]),
         ("typecheck", ["npm", "run", "typecheck"]),
+        ("landingHero", ["node", "scripts/verify-landing-hero.mjs"]),
         ("vitest", [str(app / "node_modules/.bin/vitest"), "run", "--reporter=json", "--outputFile=" + str(output / "vitest.json")]),
         ("node", ["node", "--test", "--experimental-strip-types", "--test-reporter=tap", *[str(p.relative_to(app)) for p in sorted((app / "src/lib").glob("*.test.ts"))]]),
         ("build", ["npm", "run", "build"])]
@@ -219,7 +220,7 @@ def combine(folder, expected):
                 if component.get("roundtrip", {}).get("status") != "GREEN": result["issues"].append("Connected source round trip did not pass")
             if kind == "web":
                 commands = component.get("commands", {})
-                if set(commands) != {"install", "lint", "typecheck", "vitest", "node", "build"} or any(c.get("exitCode") != 0 for c in commands.values()):
+                if set(commands) != {"install", "lint", "typecheck", "landingHero", "vitest", "node", "build"} or any(c.get("exitCode") != 0 for c in commands.values()):
                     result["issues"].append("Full web command set did not complete")
                 if component.get("tests", {}).get("status") != "GREEN" or not component.get("buildId"):
                     result["issues"].append("Web tests or production build evidence is incomplete")

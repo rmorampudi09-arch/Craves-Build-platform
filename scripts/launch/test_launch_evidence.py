@@ -91,7 +91,7 @@ class LaunchEvidenceTest(unittest.TestCase):
     def components(self, sha="a" * 40):
         provenance = {"sourceSha": sha, "requiredManifestSha256": hashlib.sha256(launch.MANIFEST.read_bytes()).hexdigest(), "runId": "1", "runAttempt": "1", "status": "GREEN"}
         backend = {**provenance, "services": {s: {"status": "GREEN", "command": {"exitCode": 0}} for s in launch.SERVICES}, "roundtrip": {"status": "GREEN"}}
-        web = {**provenance, "commands": {s: {"exitCode": 0} for s in ("install", "lint", "typecheck", "vitest", "node", "build")}, "tests": {"status": "GREEN"}, "buildId": "CI_BUILD"}
+        web = {**provenance, "commands": {s: {"exitCode": 0} for s in ("install", "lint", "typecheck", "landingHero", "vitest", "node", "build")}, "tests": {"status": "GREEN"}, "buildId": "CI_BUILD"}
         launch.save(self.folder / "backend-summary.json", backend); launch.save(self.folder / "web-summary.json", web)
         return backend, web
 
@@ -114,6 +114,20 @@ class LaunchEvidenceTest(unittest.TestCase):
         launch.save(self.folder / "backend-summary.json", backend); self.assertEqual("RED", launch.combine(self.folder, "a"*40)["status"])
         backend, web = self.components(); backend["requiredManifestSha256"] = "old"
         launch.save(self.folder / "backend-summary.json", backend); self.assertEqual("RED", launch.combine(self.folder, "a"*40)["status"])
+
+    @patch.dict(os.environ, {"GITHUB_RUN_ID": "1", "GITHUB_RUN_ATTEMPT": "1"})
+    def test_claimed_green_requires_successful_landing_hero_guard(self):
+        for outcome in ("missing", "failed"):
+            with self.subTest(outcome=outcome):
+                _, web = self.components()
+                if outcome == "missing":
+                    del web["commands"]["landingHero"]
+                else:
+                    web["commands"]["landingHero"]["exitCode"] = 1
+                launch.save(self.folder / "web-summary.json", web)
+                result = launch.combine(self.folder, "a"*40)
+                self.assertEqual("RED", result["status"])
+                self.assertIn("Full web command set did not complete", result["issues"])
 
     def test_command_failure_retains_actual_log_and_exit(self):
         log = self.folder / "failure.log"

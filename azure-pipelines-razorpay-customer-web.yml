@@ -22,7 +22,7 @@ parameters:
     default: NOT_SELECTED
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
   resourceGroup: rg-craves-prodlow-centralindia
   acrName: cravesprodlowacr82121
   containerApp: ca-craves-web-prodlow

@@ -5,7 +5,7 @@ export function chefMenuFailure(status: number, raw: unknown): { code: string; m
     return { code: raw.code, message: "Set up your kitchen before adding or managing dishes." };
   }
   if (status === 409 && raw.code === "CHEF_SELLING_NOT_READY") {
-    return { code: raw.code, message: "Finance review is required before publishing. Ask Craves admin to complete your tax and fee-terms review." };
+    return { code: raw.code, message: "Your chef account must be approved before publishing dishes." };
   }
   if (status === 503 && raw.code === "CATALOG_ELIGIBILITY_UNAVAILABLE") {
     return { code: raw.code, message: "Publishing could not be checked right now. Please try again shortly." };

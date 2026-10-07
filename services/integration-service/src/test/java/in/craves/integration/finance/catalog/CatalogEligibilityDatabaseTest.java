@@ -3,6 +3,7 @@ package in.craves.integration.finance.catalog;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.finance.*;
 import in.craves.integration.finance.source.ChefTaxProfileService;
+import in.craves.integration.finance.source.ChefFinanceApprovalSource;
 import in.craves.integration.security.CravesPrincipal;
 import java.time.*;
 import java.util.*;
@@ -19,6 +20,7 @@ import static org.mockito.Mockito.*;
 @EnabledIfEnvironmentVariable(named="CRAVES_CATALOG_DISPOSABLE_DATABASE",matches="true")
 class CatalogEligibilityDatabaseTest {
     JdbcTemplate jdbc; ChefTaxProfileService profiles; CatalogEligibilityService service; TransactionTemplate read;
+    final List<ChefFinanceApprovalSource.Approval> approved=new ArrayList<>();
     final CravesPrincipal actor=new CravesPrincipal(UUID.randomUUID(),"",Set.of("PAYMENTS_ADMIN"));
     @BeforeEach void setup() {
         assertEquals("true",System.getenv("GITHUB_ACTIONS"),"Disposable CI only; never a local production tunnel");
@@ -31,7 +33,9 @@ class CatalogEligibilityDatabaseTest {
         var policies=mock(FinancePolicyService.class);
         var enabled=new FinancePolicy(LocalDate.now(FinancePolicy.ZONE),true,false,false,48,0,60,"7","5","18","18","18",FinancePolicy.FeeTaxTreatment.EXCLUSIVE,"0",false,"DISPOSABLE-CI-ONLY");
         when(policies.current()).thenReturn(new FinancePolicyService.View(1,UUID.randomUUID(),enabled,List.of(),"TEST",1));
-        service=new CatalogEligibilityService(policies,profiles);
+        var approvals=mock(ChefFinanceApprovalSource.class);
+        when(approvals.current()).thenAnswer(i->new ChefFinanceApprovalSource.Snapshot(UUID.randomUUID(),Instant.now(),true,List.copyOf(approved)));
+        service=new CatalogEligibilityService(policies,approvals);
         read=new TransactionTemplate(new DataSourceTransactionManager(ds)); read.setReadOnly(true); read.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);read.setTimeout(5);
     }
     ChefTaxProfileService.Profile profile(LocalDate date,String turnover) {
@@ -39,7 +43,7 @@ class CatalogEligibilityDatabaseTest {
         return new ChefTaxProfileService.Profile("36","RESTAURANT_ECO_9_5","UNREGISTERED",null,turnover,year+"-"+String.format("%02d",(year+1)%100),date,"0","DISPOSABLE-CI-ONLY","DISPOSABLE-CI-ONLY","DISPOSABLE-CI-ONLY");
     }
     CatalogEligibilityService.Snapshot evaluate() {return read.execute(s->service.evaluate(UUID.randomUUID()));}
-    @Test void actualCurrentYearProfilesAndImmutableVersionsControlCompleteReadOnlyAuthority() {
+    @Test void existingStaleAndFlaggedTaxRecordsCannotBlockAdminApprovedChefsInAnyState() {
         assertTrue(evaluate().eligibleChefIds().isEmpty());
         UUID eligible=UUID.randomUUID(),review=UUID.randomUUID(),old=UUID.randomUUID(); LocalDate today=LocalDate.now(FinancePolicy.ZONE);
         profiles.save(actor,eligible,profile(today,"100.00"),"Disposable valid fixture");
@@ -51,11 +55,13 @@ class CatalogEligibilityDatabaseTest {
         assertTrue(resolvedBatch.versions().contains(profiles.resolved(review)));
         assertThrows(org.springframework.web.server.ResponseStatusException.class,()->profiles.resolved(old));
         long versions=jdbc.queryForObject("SELECT count(*) FROM payment_schema.finance_chef_tax_version",Long.class);
-        var first=evaluate(); assertTrue(first.complete()); assertEquals(List.of(eligible),first.eligibleChefIds());
+        for(UUID chef:List.of(eligible,review,old))approved.add(new ChefFinanceApprovalSource.Approval(chef,UUID.randomUUID(),chef.equals(old)?"UNSUPPORTED":"36",Instant.now().minusSeconds(30)));
+        var first=evaluate(); assertTrue(first.complete()); assertEquals(Set.of(eligible,review,old),Set.copyOf(first.eligibleChefIds()));
         assertEquals(first.hash(),evaluate().hash());
         assertEquals(versions,jdbc.queryForObject("SELECT count(*) FROM payment_schema.finance_chef_tax_version",Long.class));
         profiles.save(actor,eligible,profile(today,"2000000.01"),"Disposable revocation fixture");
-        var revoked=evaluate(); assertTrue(revoked.complete());assertTrue(revoked.eligibleChefIds().isEmpty());assertNotEquals(first.hash(),revoked.hash());
+        assertEquals(first.hash(),evaluate().hash()); // A tax record change cannot revoke publishing.
+        approved.clear();var revoked=evaluate(); assertTrue(revoked.complete());assertTrue(revoked.eligibleChefIds().isEmpty());assertNotEquals(first.hash(),revoked.hash());
         assertEquals(4L,jdbc.queryForObject("SELECT count(*) FROM payment_schema.finance_chef_tax_version",Long.class));
         assertEquals(0L,jdbc.queryForObject("SELECT count(*) FROM payment_schema.finance_payout_instruction",Long.class));
     }

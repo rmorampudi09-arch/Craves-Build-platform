@@ -264,9 +264,8 @@ def deploy_checked(before, changed):
             policy_and_terms(current[name], deployed=True)
             eligible = signed(current[name], secret(current[name], "CRAVES_CATALOG_FINANCE_READ_KEY"), CATALOG_PATH,
                 "X-Craves-Catalog-Timestamp", "X-Craves-Catalog-Signature")
-            approved = {a["chefId"] for a in approvals["approvals"] if a["stateCode"] == "36"}
-            holds = database(current[name], "SELECT coalesce(json_agg(h.chef_identity_id),'[]'::json) FROM payment_schema.finance_chef_tax_head h JOIN payment_schema.finance_chef_tax_version v ON v.id=h.version_id WHERE v.payload->>'registrationStatus'='UNREGISTERED' AND (v.payload->>'declaredAggregateTurnover')::numeric>2000000 AND v.payload->>'financialYear'=extract(year FROM (now() AT TIME ZONE 'Asia/Kolkata')-interval '3 months')::int::text || '-' || to_char((now() AT TIME ZONE 'Asia/Kolkata')-interval '3 months'+interval '1 year','YY');")
-            require(set(eligible["eligibleChefIds"]) == approved - set(holds), "Live Catalog authority differs from approved chefs and recorded exceptions")
+            approved = {a["chefId"] for a in approvals["approvals"]}
+            require(set(eligible["eligibleChefIds"]) == approved, "Live Catalog authority differs from all admin-approved chefs")
     return {"sourceSha": source, "status": "VERIFIED", "approvedChefCount": approval_count,
         "eligibleChefCount": len(eligible["eligibleChefIds"]), "runtimePreserved": True, "moneyTransferred": False,
         "apps": [{"name": name, "image": image, "readyRevision": current[name]["properties"]["latestReadyRevisionName"]} for name, image in changed.items()]}

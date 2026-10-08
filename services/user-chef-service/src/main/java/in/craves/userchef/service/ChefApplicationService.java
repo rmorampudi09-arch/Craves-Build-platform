@@ -36,19 +36,29 @@ public class ChefApplicationService {
     private final AuthInternalClient authInternalClient;
     private final NotificationInternalClient notificationInternalClient;
     private final in.craves.userchef.email.AuthEmailProjectionService emailProjection;
+    private final boolean onboardingV2Enabled;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ChefApplicationService(
         JdbcTemplate jdbcTemplate,
         BlobDocumentStorageService storageService,
         AuthInternalClient authInternalClient,
         NotificationInternalClient notificationInternalClient,
-        in.craves.userchef.email.AuthEmailProjectionService emailProjection
+        in.craves.userchef.email.AuthEmailProjectionService emailProjection,
+        @org.springframework.beans.factory.annotation.Value("${CRAVES_CHEF_ONBOARDING_V2_ENABLED:false}") boolean onboardingV2Enabled
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.storageService = storageService;
         this.authInternalClient = authInternalClient;
         this.notificationInternalClient = notificationInternalClient;
         this.emailProjection = emailProjection;
+        this.onboardingV2Enabled = onboardingV2Enabled;
+    }
+
+    public ChefApplicationService(JdbcTemplate jdbcTemplate, BlobDocumentStorageService storageService,
+        AuthInternalClient authInternalClient, NotificationInternalClient notificationInternalClient,
+        in.craves.userchef.email.AuthEmailProjectionService emailProjection) {
+        this(jdbcTemplate,storageService,authInternalClient,notificationInternalClient,emailProjection,false);
     }
 
     public ChefApplicationResponse getMyApplication(CurrentUser user) {
@@ -68,6 +78,9 @@ public class ChefApplicationService {
             (rs, rowNum) -> rs.getString("status"),
             user.identityId()
         );
+        if (onboardingV2Enabled || Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE identity_id=?)", Boolean.class, user.identityId()))) {
+            throw ApiException.conflict("USE_NEW_ONBOARDING_FLOW", "Continue your saved Chef onboarding application.");
+        }
         if (!statuses.isEmpty() && "APPROVED".equals(statuses.getFirst())) {
             throw ApiException.conflict("CHEF_ALREADY_APPROVED", "Approved chef applications cannot be resubmitted");
         }
@@ -96,10 +109,10 @@ public class ChefApplicationService {
     public KycDocumentResponse uploadDocument(CurrentUser user, KycDocumentType documentType, MultipartFile file) {
         jdbcTemplate.query("SELECT id FROM chef_application WHERE identity_id=? FOR UPDATE",(rs,row)->rs.getObject(1,UUID.class),user.identityId());
         ChefApplicationResponse application = getExistingApplication(user.identityId());
-        if (application.status() == ChefApplicationStatus.APPROVED) {
-            throw ApiException.conflict("CHEF_ALREADY_APPROVED", "Documents cannot be changed after approval");
+        if (application.status() == ChefApplicationStatus.APPROVED && !hasOnboardingDraft(application.id())) {
+            throw ApiException.conflict("CHEF_ALREADY_APPROVED", "Start the updated onboarding before adding its required evidence");
         }
-        if (!REQUIRED_APPLICATION_DOCUMENTS.contains(documentType)) {
+        if (!requiredApplicationDocuments(application.id(), false).contains(documentType)) {
             throw ApiException.badRequest("CHEF_DOCUMENT_TYPE_NOT_ALLOWED", "Use one of the current Chef application evidence types");
         }
 
@@ -150,9 +163,9 @@ public class ChefApplicationService {
     public List<ChefApplicationResponse> listApplications(CurrentUser admin, ChefApplicationStatus status) {
         requireReviewAccess(admin);
         if (status == null || status == ChefApplicationStatus.NOT_SUBMITTED) {
-            return findApplications("", new Object[]{});
+            return findApplications("WHERE (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))", new Object[]{});
         }
-        return findApplications("WHERE status = ?", status.name());
+        return findApplications("WHERE (status = ? OR (? = 'PENDING' AND status = 'APPROVED' AND EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=true AND EXISTS(SELECT 1 FROM chef_kyc_document k WHERE k.application_id=chef_application.id AND k.document_type IN ('SELECTED_PROOF_FRONT','SELECTED_PROOF_BACK','KITCHEN_PHOTO_1','KITCHEN_PHOTO_2','FSSAI_LICENSE') AND k.status <> 'APPROVED')))) AND (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))", status.name(), status.name());
     }
 
     public ChefApplicationResponse getApplicationForAdmin(CurrentUser admin, UUID applicationId) {
@@ -205,11 +218,12 @@ public class ChefApplicationService {
     }
 
     private void requireCompleteApplicationDocuments(UUID applicationId) {
+        Set<KycDocumentType> required = requiredApplicationDocuments(applicationId, true);
         List<KycDocumentResponse> evidence = listApplicationEvidence(applicationId);
         Set<KycDocumentType> uploaded = evidence.stream()
             .map(KycDocumentResponse::documentType)
             .collect(java.util.stream.Collectors.toSet());
-        List<KycDocumentType> missing = REQUIRED_APPLICATION_DOCUMENTS.stream()
+        List<KycDocumentType> missing = required.stream()
             .filter(type -> !uploaded.contains(type))
             .sorted()
             .toList();
@@ -226,7 +240,7 @@ public class ChefApplicationService {
             .filter(document -> "APPROVED".equals(document.status()))
             .map(KycDocumentResponse::documentType)
             .collect(java.util.stream.Collectors.toSet());
-        List<KycDocumentType> awaitingApproval = REQUIRED_APPLICATION_DOCUMENTS.stream()
+        List<KycDocumentType> awaitingApproval = required.stream()
             .filter(type -> !approved.contains(type))
             .sorted()
             .toList();
@@ -239,6 +253,46 @@ public class ChefApplicationService {
         }
     }
 
+    public Set<KycDocumentType> requiredApplicationDocuments(UUID applicationId, boolean approving) {
+        var rows = jdbcTemplate.query(
+            "SELECT details->>'proofKind' AS proof, details->>'fssaiNumber' AS fssai, submitted FROM chef_onboarding_draft WHERE application_id=?",
+            (rs,row) -> new OnboardingRequirements(rs.getString("proof"), rs.getString("fssai"), rs.getBoolean("submitted")),
+            applicationId
+        );
+        if (rows.isEmpty()) {
+            if(onboardingV2Enabled) {
+                if(approving) throw ApiException.conflict("ONBOARDING_INCOMPLETE","The Chef must complete the updated onboarding first.");
+                return Set.of(KycDocumentType.KITCHEN_PHOTO_1,KycDocumentType.KITCHEN_PHOTO_2,KycDocumentType.FSSAI_LICENSE);
+            }
+            return REQUIRED_APPLICATION_DOCUMENTS;
+        }
+        var metadata = rows.getFirst();
+        if (approving && (!metadata.submitted() || metadata.proof() == null ||
+            metadata.fssai() == null || !metadata.fssai().matches("[0-9]{14}")))
+            throw ApiException.conflict("ONBOARDING_INCOMPLETE", "The Chef must complete and submit the saved onboarding application.");
+        if (metadata.proof() == null)
+            return Set.of(KycDocumentType.KITCHEN_PHOTO_1, KycDocumentType.KITCHEN_PHOTO_2, KycDocumentType.FSSAI_LICENSE);
+        try {
+            return in.craves.userchef.onboarding.ChefOnboardingPolicy.required(
+                in.craves.userchef.onboarding.ChefOnboardingDtos.ProofKind.valueOf(metadata.proof())
+            );
+        } catch (IllegalArgumentException ex) {
+            throw ApiException.conflict("ONBOARDING_STATE_INVALID", "The saved Chef document choice is invalid.");
+        }
+    }
+
+    public boolean onboardingSubmissionBlocked(UUID applicationId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE application_id=? AND submitted=false)",
+            Boolean.class, applicationId)) || onboardingV2Enabled && !hasOnboardingDraft(applicationId);
+    }
+
+    private boolean hasOnboardingDraft(UUID applicationId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE application_id=?)",Boolean.class,applicationId));
+    }
+
+    private record OnboardingRequirements(String proof, String fssai, boolean submitted) {}
+
     private static String documentLabel(KycDocumentType type) {
         return switch (type) {
             case APPLICANT_PHOTO -> "Applicant photo";
@@ -247,6 +301,11 @@ public class ChefApplicationService {
             case TAX_ID_CARD -> "Tax ID card";
             case AADHAAR_CARD -> "Legacy government ID";
             case PAN_CARD -> "Legacy tax ID";
+            case KITCHEN_PHOTO_1 -> "Kitchen photo 1";
+            case KITCHEN_PHOTO_2 -> "Kitchen photo 2";
+            case FSSAI_LICENSE -> "FSSAI registration or licence";
+            case SELECTED_PROOF_FRONT -> "Selected proof front or single file";
+            case SELECTED_PROOF_BACK -> "Selected proof back";
         };
     }
 
@@ -297,14 +356,14 @@ public class ChefApplicationService {
 
     private List<KycDocumentResponse> listLegacyDocuments(UUID applicationId) {
         return jdbcTemplate.query(
-            "SELECT * FROM chef_kyc_document WHERE application_id = ? AND document_type IN ('AADHAAR_CARD', 'PAN_CARD') ORDER BY document_type",
+            "SELECT * FROM chef_kyc_document WHERE application_id = ? AND (document_type IN ('AADHAAR_CARD', 'PAN_CARD') OR EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_kyc_document.application_id)) ORDER BY document_type",
             this::mapDocument, applicationId
         );
     }
 
     private List<KycDocumentResponse> listApplicationEvidence(UUID applicationId) {
         return jdbcTemplate.query(
-            "SELECT * FROM chef_kyc_document WHERE application_id = ? AND document_type IN ('APPLICANT_PHOTO', 'GOVERNMENT_ID_FRONT', 'GOVERNMENT_ID_BACK', 'TAX_ID_CARD') ORDER BY document_type",
+            "SELECT * FROM chef_kyc_document WHERE application_id = ? AND document_type IN ('APPLICANT_PHOTO', 'GOVERNMENT_ID_FRONT', 'GOVERNMENT_ID_BACK', 'TAX_ID_CARD', 'KITCHEN_PHOTO_1', 'KITCHEN_PHOTO_2', 'FSSAI_LICENSE', 'SELECTED_PROOF_FRONT', 'SELECTED_PROOF_BACK') ORDER BY document_type",
             this::mapDocument, applicationId
         );
     }

@@ -17,7 +17,12 @@ export type ChefBusinessDocumentType =
   | 'GOVERNMENT_ID_BACK'
   | 'TAX_ID_CARD'
   | 'AADHAAR_CARD'
-  | 'PAN_CARD';
+  | 'PAN_CARD'
+  | 'KITCHEN_PHOTO_1'
+  | 'KITCHEN_PHOTO_2'
+  | 'FSSAI_LICENSE'
+  | 'SELECTED_PROOF_FRONT'
+  | 'SELECTED_PROOF_BACK';
 export type ChefBusinessDocumentStatus =
   | 'UPLOADED'
   | 'APPROVED'
@@ -79,6 +84,11 @@ const DOCUMENT_TYPES = new Set<ChefBusinessDocumentType>([
   'TAX_ID_CARD',
   'AADHAAR_CARD',
   'PAN_CARD',
+  'KITCHEN_PHOTO_1',
+  'KITCHEN_PHOTO_2',
+  'FSSAI_LICENSE',
+  'SELECTED_PROOF_FRONT',
+  'SELECTED_PROOF_BACK',
 ]);
 const DOCUMENT_STATUSES = new Set<ChefBusinessDocumentStatus>([
   'UPLOADED',

@@ -13,7 +13,7 @@ export default async function AdminChefReviewDetailsPage({ params }: { params: P
       <Link href="/admin/chef-reviews" className="inline-flex items-center gap-2 rounded-xl border border-[#d9cfdf] px-4 py-2.5 text-sm font-bold text-[#5d4e69]"><ArrowLeft size={16} />Applications</Link>
     </AdminPageIntro>
     {isUuid(applicationId)
-      ? <AdminChefReviewDetails applicationId={applicationId} />
+      ? <AdminChefReviewDetails applicationId={applicationId} onboardingV2Enabled={process.env.CRAVES_CHEF_ONBOARDING_V2_ENABLED === "true"} />
       : <section className="rounded-[28px] bg-white p-6 text-slate-950">Invalid application ID.</section>}
   </div>;
 }

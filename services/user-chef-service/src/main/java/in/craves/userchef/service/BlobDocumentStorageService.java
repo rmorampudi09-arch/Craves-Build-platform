@@ -107,6 +107,14 @@ public class BlobDocumentStorageService {
         }
     }
 
+    /** Share the established private container, never its credentials, with onboarding content storage. */
+    public BlobContainerClient privateDocumentsContainer() {
+        BlobContainerClient container = documentsContainer();
+        try { requirePrivate(container); return container; }
+        catch (ApiException ex) { throw ex; }
+        catch (Exception ex) { throw ApiException.conflict("DOCUMENT_STORAGE_UNAVAILABLE", "Secure storage is temporarily unavailable."); }
+    }
+
     private BlobContainerClient documentsContainer() {
         if (!StringUtils.hasText(properties.getEndpointValue())) {
             throw ApiException.badRequest("DOCUMENT_STORE_NOT_CONFIGURED", "Document storage is not configured");
@@ -166,10 +174,10 @@ public class BlobDocumentStorageService {
         if (file.getContentType()==null || !ALLOWED_CONTENT_TYPES.contains(file.getContentType())) {
             throw ApiException.badRequest("DOCUMENT_FILE_TYPE_NOT_ALLOWED", "Only PDF, JPG, and PNG files are allowed");
         }
-        if (documentType == KycDocumentType.APPLICANT_PHOTO && !APPLICANT_PHOTO_CONTENT_TYPES.contains(file.getContentType())) {
+        if ((documentType == KycDocumentType.APPLICANT_PHOTO || documentType == KycDocumentType.KITCHEN_PHOTO_1 || documentType == KycDocumentType.KITCHEN_PHOTO_2) && !APPLICANT_PHOTO_CONTENT_TYPES.contains(file.getContentType())) {
             throw ApiException.badRequest(
                 "APPLICANT_PHOTO_FILE_TYPE_NOT_ALLOWED",
-                "Applicant photo must be a JPG or PNG image"
+                "Photographs must be JPG or PNG images"
             );
         }
     }

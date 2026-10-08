@@ -55,7 +55,7 @@ def history_module():
 
 
 def compare_history(rows, expected):
-    """Only V13 may be pending; every applied SQL must match the release source."""
+    """Only the approved V13/V14/V15 additions may be pending; applied SQL must match."""
     require(isinstance(rows, list) and 0 < len(rows) <= 250, "Flyway history is missing or excessive")
     versions = set()
     evidence = []
@@ -71,10 +71,26 @@ def compare_history(rows, expected):
                 "Applied migration differs from release source at V" + str(version))
         evidence.append({"version": version, **source, "success": True})
     pending = set(expected) - versions
-    require(pending in (set(), {"13"}) and "12" in versions, "Only approved V13 may be pending after V12")
+    approved = {"13"}
     require(expected.get("13", {}).get("script") == "V13__customer_address_label.sql", "Incorrect V13 source")
-    return {"compatible": True, "v13": "PENDING" if pending else "APPLIED_MATCHING",
-            "history": evidence, "pendingVersions": sorted(pending)}
+    if "14" in expected:
+        require(expected["14"]["script"] == "V14__chef_onboarding_v2.sql", "Incorrect V14 source")
+        approved.add("14")
+    if "15" in expected:
+        require(expected["15"]["script"] == "V15__chef_onboarding_all_chefs_selected_proof.sql", "Incorrect V15 source")
+        require("14" in expected, "V15 requires V14 source")
+        approved.add("15")
+    require(pending <= approved and "12" in versions,
+            "Only approved V13/V14 may be pending after V12")
+    require(not ("14" in versions and "13" not in versions), "V14 cannot precede V13")
+    require(not ("15" in versions and "14" not in versions), "V15 cannot precede V14")
+    result = {"compatible": True, "v13": "PENDING" if "13" in pending else "APPLIED_MATCHING",
+              "history": evidence, "pendingVersions": sorted(pending)}
+    if "14" in expected:
+        result["v14"] = "PENDING" if "14" in pending else "APPLIED_MATCHING"
+    if "15" in expected:
+        result["v15"] = "PENDING" if "15" in pending else "APPLIED_MATCHING"
+    return result
 
 
 def inspect_database(app, servers, vaults):

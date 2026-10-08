@@ -141,8 +141,11 @@ public class ChefDocumentReviewService {
         );
     }
 
-    private static void requirePendingReview(DocumentReviewTarget target) {
-        if (!"PENDING".equals(target.applicationStatus())) {
+    private void requirePendingReview(DocumentReviewTarget target) {
+        boolean supplement="APPROVED".equals(target.applicationStatus()) &&
+            java.util.Set.of("SELECTED_PROOF_FRONT","SELECTED_PROOF_BACK","KITCHEN_PHOTO_1","KITCHEN_PHOTO_2","FSSAI_LICENSE").contains(target.documentType()) &&
+            Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE identity_id=? AND submitted=true)",Boolean.class,target.chefIdentityId()));
+        if (!"PENDING".equals(target.applicationStatus()) && !supplement) {
             throw ApiException.conflict(
                 "CHEF_APPLICATION_NOT_PENDING",
                 "Document decisions are only allowed while the Chef application is pending"

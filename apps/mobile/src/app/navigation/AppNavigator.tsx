@@ -1,3 +1,4 @@
+import {ChefOnboardingGate} from '../../features/chefOnboarding/screens/ChefOnboardingGate';
 import React from 'react';
 import {Linking} from 'react-native';
 import {
@@ -123,7 +124,7 @@ function ChefAccountNavigator({
   const screenOptions = useAuthStackScreenOptions();
 
   if (resolution.flow === 'CHEF') {
-    return <ChefRootNavigator />;
+    return <ChefOnboardingGate fallback={<ChefRootNavigator />} />;
   }
 
   const status: ChefApplicationStatus = resolution.onboardingStatus;

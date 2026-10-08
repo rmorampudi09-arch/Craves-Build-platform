@@ -47,7 +47,12 @@ public class ChefApplicationReadinessService {
         List<EvidenceRequirement> requirements = new ArrayList<>();
         int uploaded = 0;
         int approved = 0;
-        for (var type : ChefApplicationService.REQUIRED_APPLICATION_DOCUMENTS.stream().sorted().toList()) {
+        var required = application.id() == null ? ChefApplicationService.REQUIRED_APPLICATION_DOCUMENTS
+            : applications.requiredApplicationDocuments(application.id(), false);
+        if (required == null || required.isEmpty()) required = ChefApplicationService.REQUIRED_APPLICATION_DOCUMENTS;
+        boolean submissionBlocked = application.id() != null && applications.onboardingSubmissionBlocked(application.id());
+        if (submissionBlocked) issues.add(new BlockingIssue("ONBOARDING_NOT_SUBMITTED", null));
+        for (var type : required.stream().sorted().toList()) {
             var document = evidence.stream().filter(item -> item.documentType() == type).findFirst().orElse(null);
             String status = document == null ? "MISSING" : document.status();
             if (status == null || !Set.of("MISSING", "UPLOADED", "APPROVED", "REJECTED").contains(status)) {
@@ -67,7 +72,7 @@ public class ChefApplicationReadinessService {
             Stream.of(application.submittedAt(), application.reviewedAt()), evidence.stream().map(KycDocumentResponse::updatedAt)
         ).filter(java.util.Objects::nonNull).max(Instant::compareTo).orElse(null);
         return new ChefApplicationReadiness(1, application.status(), emailStatus,
-            application.status() == ChefApplicationStatus.PENDING && "VERIFIED".equals(emailStatus) && approved == requirements.size(),
+            application.status() == ChefApplicationStatus.PENDING && !submissionBlocked && "VERIFIED".equals(emailStatus) && approved == requirements.size(),
             requirements.size(), uploaded, approved, List.copyOf(requirements), List.copyOf(issues), Instant.now(), lastSavedAt);
     }
 }

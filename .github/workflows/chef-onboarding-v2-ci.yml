@@ -1,0 +1,136 @@
+name: Chef onboarding v2 CI
+on:
+  pull_request:
+    paths:
+      - 'services/user-chef-service/**'
+      - 'apps/customer-web-next/**'
+      - 'apps/mobile/**'
+      - 'scripts/apim/configure-chef-onboarding-v2-apim.sh'
+      - 'scripts/release/**'
+      - 'azure-pipelines-chef-onboarding-v2-*.yml'
+      - '.github/workflows/chef-onboarding-v2-ci.yml'
+  push:
+    branches: ['feat/chef-onboarding-v2-20261008']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: chef-onboarding-v2-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: chef_onboarding_test
+          POSTGRES_USER: onboarding_ci
+          POSTGRES_PASSWORD: disposable-onboarding-ci-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U onboarding_ci -d chef_onboarding_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      ONBOARDING_TEST_DB_URL: jdbc:postgresql://localhost:5432/chef_onboarding_test
+      ONBOARDING_TEST_DB_USER: onboarding_ci
+      ONBOARDING_TEST_DB_PASSWORD: disposable-onboarding-ci-only
+      CRAVES_DISPOSABLE_TEST_DATABASE: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/user-chef-service/pom.xml
+      - run: bash -n scripts/apim/configure-chef-onboarding-v2-apim.sh
+      - run: python3 -m unittest discover -s scripts/release/tests -p test_rmorampudi09_preflight.py -v
+      - run: python3 -m unittest discover -s scripts/release/tests -p test_active_address_release.py -v
+      - run: mvn -B -ntp -f services/user-chef-service/pom.xml clean verify
+      - name: Require the new database suite to run without skips
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          path = Path('services/user-chef-service/target/surefire-reports/TEST-in.craves.userchef.onboarding.ChefOnboardingDatabaseTest.xml')
+          root = ET.parse(path).getroot()
+          assert int(root.attrib['tests']) >= 7
+          assert all(int(root.attrib.get(key, '0')) == 0 for key in ['failures', 'errors', 'skipped'])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chef-onboarding-backend-evidence
+          path: services/user-chef-service/target/surefire-reports
+          retention-days: 14
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run: {working-directory: apps/customer-web-next}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/customer-web-next/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+        env:
+          CRAVES_CHEF_ONBOARDING_V2_ENABLED: 'true'
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run: {working-directory: apps/mobile}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check mobile onboarding and preserved contracts
+        run: |
+          npx tsc --noEmit
+          npm test -- --runInBand
+      - name: Lint the full mobile app with zero warnings
+        run: npm run lint -- --max-warnings=0
+  package:
+    runs-on: ubuntu-latest
+    needs: [backend,web,mobile]
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0,persist-credentials: false}
+      - name: Package complete changed files and handover
+        run: python3 scripts/chef-onboarding/package-handover.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Render and verify every handover page
+        env:
+          PLAYWRIGHT_MODULE_ROOT: ${{ runner.temp }}/onboarding-handover/package.json
+        run: |
+          npm install --prefix "$RUNNER_TEMP/onboarding-handover" --no-audit --no-fund --ignore-scripts playwright@1.55.0
+          "$RUNNER_TEMP/onboarding-handover/node_modules/.bin/playwright" install --with-deps chromium
+          node scripts/chef-onboarding/verify-handover.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Craves-Chef-Onboarding-V2
+          path: |
+            chef-onboarding-deliverables/Craves-Chef-Onboarding-V2.zip
+            chef-onboarding-deliverables/Craves-Chef-Onboarding-V2-Handover.html
+            chef-onboarding-deliverables/chef-onboarding-manifest.json
+            chef-onboarding-deliverables/handover-render-report.json
+            chef-onboarding-deliverables/rendered-pages
+          retention-days: 30

@@ -1,0 +1,167 @@
+[
+  {
+    "title": "Delivery status and scope",
+    "paragraphs": [
+      "Craves Chef onboarding now uses personal details, kitchen details and two kitchen photographs, then an FSSAI screen with three choices: provide a licence, read or watch published guidance, or request Craves assistance. A selected proof follows: PAN and bank statement require one file, while Aadhaar and another government ID require front and back.",
+      "The user's latest instruction applies this flow to every Chef. Existing pending and rejected applications complete the new requirements before approval. Already approved chefs retain APPROVED status and current operating access while adding the new details and evidence. Administrators review those added documents without granting the Chef role again.",
+      "This handover describes implemented source and its verification boundary. A passing source check does not establish an Azure deployment, a real OTP delivery, a live Blob upload, or published language content. Those observations must be recorded during rollout."
+    ]
+  },
+  {
+    "title": "User request and decision record",
+    "paragraphs": [
+      "Original request: replace the four-document Chef checklist with a dropdown for Aadhaar, PAN, bank statement or another government ID; one image for PAN and bank statement, front/back for the others; two kitchen photographs; personal details with name, DOB, phone and email; kitchen details after verification; and an FSSAI page with learning in Indian languages, a Craves helpline/email and a help form visible to administrators.",
+      "Recorded clarification: bank statement is a dropdown alternative rather than an additional mandatory bank upload. Recorded clarification: if FSSAI is unavailable, save progress and resume that FSSAI screen on every Chef entry; guidance and help do not grant selling approval.",
+      "Latest user message: “for every chef and continue and complete it”. This supersedes the earlier scope limited to new applications. Existing approval and access are preserved because the requested change should not break other behavior.",
+      "This is the task's visible request and decision record, not a claim to reproduce unavailable earlier conversations. Source comments, checks and manual acceptance steps below identify what was achieved and what still needs observation."
+    ]
+  },
+  {
+    "title": "Architecture in plain terms",
+    "paragraphs": [
+      "The Next.js website displays the forms. Its server routes, often called a backend-for-frontend, forward authenticated requests to User/Chef Service. Spring Boot validates the saved details, stores them in PostgreSQL, and decides which step is incomplete. PostgreSQL is therefore the source of saved progress; closing a browser does not erase an application.",
+      "Azure API Management routes the public API paths to the existing User/Chef container. It is the gateway, not the approval authority. JWT identity and role checks in the service remain authoritative. Azure Blob Storage holds private files; the database stores their metadata rather than video bytes.",
+      "The implementation stays within the existing Spring Boot User/Chef module and reuses current account, verified-email and Chef review code. The supplied architecture attachment could not be retrieved because the attachment service reported an ownership mismatch; comparison against that inaccessible document remains pending. No cross-service database access, replacement phone-auth system, new commission logic or payment implementation is introduced."
+    ]
+  },
+  {
+    "title": "Personal details and verification",
+    "paragraphs": [
+      "The personal screen captures first name, last name and DOB. The phone number comes from the authenticated session and is displayed read-only. Email uses the current EmailVerificationPanel and verified-email authority. Saving requires a verified email; a browser-provided address cannot bypass that authority.",
+      "The current repository uses its MSG91 phone OTP flow with the Firebase session bridge. This module reuses that flow and does not enable Firebase SMS or add a second OTP implementation. A successful frontend test of this component is not evidence that a production SMS or email was delivered.",
+      "Names and email have bounded lengths. DOB must be a real date between 1900 and today. No minimum-age or eligibility rule has been invented. Existing applications prefill available contact/address details and request the missing new details. Keep secrets in the current environment/Key Vault bindings, never in chat."
+    ]
+  },
+  {
+    "title": "Kitchen details and photographs",
+    "paragraphs": [
+      "The kitchen form saves its name, description, pickup address, pincode and coordinates. The current location/map integration is reused. Coordinates are bounded to valid latitude/longitude values, and pincode has six digits. Choosing an operational delivery radius remains a product decision and is not changed here.",
+      "Two distinct evidence slots are required: KITCHEN_PHOTO_1 and KITCHEN_PHOTO_2. Each accepts JPG or PNG with the existing ten-megabyte limit and content-signature validation. A PDF cannot satisfy a kitchen photograph. Replacing a rejected file preserves the other already approved file.",
+      "The onboarding draft contains the saved kitchen details. Existing approved Chef application rows are not rewritten or demoted by the supplemental form. Changes to an already reviewed kitchen or FSSAI number require controlled support rather than silently reusing a prior decision for different details."
+    ]
+  },
+  {
+    "title": "Selected proof and historical evidence",
+    "paragraphs": [
+      "The dropdown values are AADHAAR, PAN, BANK_STATEMENT and OTHER_GOVERNMENT_ID. Aadhaar and another government ID require SELECTED_PROOF_FRONT and SELECTED_PROOF_BACK. PAN and bank statement require SELECTED_PROOF_FRONT only. A bank statement is described as selected proof, not represented as a government-issued identity card.",
+      "New proof slots are separate from GOVERNMENT_ID_FRONT/BACK, APPLICANT_PHOTO, TAX_ID_CARD, AADHAAR_CARD and PAN_CARD. Earlier evidence remains readable in history. It is not silently relabelled as a newly chosen proof or counted as a kitchen photo.",
+      "Once the selected proof has been uploaded, changing its kind is locked so an uploaded PAN cannot be treated as Aadhaar by changing a dropdown. A support-controlled reset is required for that change. Each required file must be individually approved before a new Chef application can receive final approval."
+    ]
+  },
+  {
+    "title": "FSSAI resume behavior",
+    "paragraphs": [
+      "The FSSAI page offers licence upload, learning, and Craves help. It remains incomplete without the licence evidence and required saved number. The backend computes the resume step from saved details and evidence; the UI does not manufacture completion or grant a Chef role.",
+      "Save progress for later accepts the incomplete FSSAI step. The next Chef entry returns to that step. Continue explains a missing number or file instead of silently reloading the same screen. A rejected FSSAI file also returns to this step for replacement.",
+      "An existing approved Chef can open the current Chef workspace while adding these requirements, because the existing operating approval remains valid. That access does not mark the added evidence approved. New/pending/rejected applicants retain the established final-admin-approval gate.",
+      "Live acceptance: save without a licence, sign out, sign back in, and verify the same account resumes at FSSAI with its saved kitchen details. Confirm that learning or help alone does not make the application approval-ready."
+    ]
+  },
+  {
+    "title": "Learning content and language coverage",
+    "paragraphs": [
+      "The supported selector contains English plus the 22 scheduled Indian language codes. The administrator creates language-specific article or video entries. This is selection/filtering of actual content, not automatic translation. An empty language explicitly states that no guidance has been published and offers Craves support.",
+      "Articles are plain text with bounded title and body lengths. They can be entered or loaded from text in the admin screen. React renders them as text. Videos use MP4 or WebM and a maximum declared size of 100 MiB. Draft entries remain invisible to Chef learners until ready and published.",
+      "Publishing is explicit and version-checked. Readers with applicant roles can see published content only. PLATFORM_ADMIN and CHEF_ADMIN can create and publish; COMPLIANCE_ADMIN can read the workspace. Editors must provide accurate guidance and translations; no FSSAI eligibility or product rules have been invented by this code."
+    ]
+  },
+  {
+    "title": "Private video upload and playback",
+    "paragraphs": [
+      "The admin browser uploads a video directly to the existing private Blob container using a short-lived create-only SAS. A SAS is temporary permission for one blob, not the storage account's master credential. The upload permission lasts fifteen minutes and cannot overwrite a successfully created video.",
+      "Finalization compares actual file size, content type and video header signature under the blob's ETag. A video cannot be published before this verification succeeds. Playback obtains a separate read-only URL that expires after ten minutes. URLs with permission tokens are not stored in content database records.",
+      "Manual setup: preserve existing storage CORS rules and append the actual admin origin with PUT/OPTIONS and Content-Type, If-None-Match and x-ms-blob-type headers. Use HTTPS. Test a real MP4/WebM, finalize it, preview it, publish it and check private anonymous access fails.",
+      "This code does not provision a new storage account. Video storage and delivery consume space and bandwidth in the existing paid account. Shared-key-disabled accounts need a user-delegation SAS adaptation before enabling video upload."
+    ]
+  },
+  {
+    "title": "Help requests and administrative follow-up",
+    "paragraphs": [
+      "The help panel shows the configured helpline and email. Defaults match the existing Contact page: 8367366787 and support@craves.in. Overrides are CRAVES_ONBOARDING_SUPPORT_PHONE and CRAVES_ONBOARDING_SUPPORT_EMAIL. These are contact settings rather than credentials.",
+      "A help submission saves a snapshot of the applicant's details, current authenticated phone, kitchen/location, preferred language and message. It also creates a case through the existing SupportCaseService. A repeated request key or an unresolved request returns the existing request, avoiding duplicate open cases.",
+      "Administrators can mark a request OPEN, CONTACTED or RESOLVED. Status transitions record the actor and time in an audit table. Resolved requests remain in history. The admin request list uses a cursor rather than retrieving an unbounded list.",
+      "Sending a request does not complete FSSAI, submit the Chef application, or grant selling access. The workflow records who requested help; actual calls/emails are staff actions and are not automatically sent by this module."
+    ]
+  },
+  {
+    "title": "All-Chef enrollment and approved access",
+    "paragraphs": [
+      "Every account entering Chef onboarding receives the new flow when the coordinated feature setting is enabled. Existing pending/rejected rows are reused by identity; a second Chef application is not created. Old submission and final-approval shortcuts are blocked until the updated requirements are completed.",
+      "Already approved applications retain their APPROVED row and role. The supplement is a draft linked to that application. New evidence can be uploaded without replacing historical approved files. Once submitted, that supplement appears in the pending review queue for individual document decisions.",
+      "Supplemental review is limited to the new proof, kitchen and FSSAI document types and requires a submitted draft. Earlier legacy evidence cannot receive a new approval/rejection merely because a supplement exists. After all new required documents are approved, Chef entry returns to the existing workspace.",
+      "The UI offers approved chefs access to their existing workspace while they complete the supplement. No deadline, automatic suspension or role revocation policy is introduced. Any future enforcement deadline requires a separate explicit product decision."
+    ]
+  },
+  {
+    "title": "Database migrations and concurrency",
+    "paragraphs": [
+      "V14 creates chef_onboarding_draft, chef_onboarding_help, help audit, learning content and content audit. V15 adds the separate selected-proof types. For earlier v2 drafts that already linked front/back to an explicit proof kind, V15 moves those document types while retaining IDs, stored file paths and audit references. Historical non-v2 evidence is unchanged.",
+      "Flyway applies versioned SQL once and validates its checksums. Applied migration SQL must not be edited or repaired casually. The release preflight accepts only the explicitly reviewed V13/V14/V15 additions and refuses missing baseline, changed applied checksums and out-of-order history.",
+      "Saved drafts and publications use expected versions so an older browser tab cannot overwrite newer progress. Sensitive mutations use parent-first locks with the existing email identity lock. Evidence upload and review serialize against the application row.",
+      "No destructive down migration is supplied. Rollback must retain the database tables, evidence and an accessible onboarding path for enrolled drafts. Disabling every path after accepting new-format applications would strand those users."
+    ]
+  },
+  {
+    "title": "API routes, authorization and privacy",
+    "paragraphs": [
+      "Chef routes are under /api/v1/chef/onboarding: get/save state, submit, help, language-filtered content and playback. Admin routes are under /api/v1/backoffice/chef-onboarding: application metadata, help status and learning content operations. Existing protected evidence-upload/download/review endpoints are reused.",
+      "Next.js routes allow only the expected method/path combinations and UUID segments. Traversal and arbitrary forwarding are rejected. Mutation bodies are bounded, current session cookies provide authentication, and private responses use no-store. Safe errors avoid leaking storage diagnostics or permission tokens.",
+      "Applicant endpoints require an authenticated CUSTOMER/CHEF identity. Admin read roles and editing roles are checked by the service. Identity in a query/header cannot choose another applicant. API Management forwards the bearer token, while Spring validates the actual token and roles.",
+      "Manual checks include unauthorized requests, another identity's evidence, a read-only admin attempting content publication, malformed paths, stale versions and rejected-file replacement. No FSSAI content or personal details should be exposed through anonymous caching."
+    ]
+  },
+  {
+    "title": "Source checks and evidence limits",
+    "paragraphs": [
+      "The module workflow compiles/tests User/Chef against Java 21 and a disposable PostGIS database, then runs Next.js lint, TypeScript checking, Vitest, Node contract tests and the production build. It requires the new database suite to run without skips before packaging.",
+      "The seven database tests cover FSSAI persistence/help deduplication, PAN approval gating, Aadhaar versus bank statement, stale versions/proof locking, approved Chef supplements with historical evidence, legacy pending/rejected enrollment, and private language-filtered content publication.",
+      "The six workspace tests cover FSSAI remount/resume, actual support contacts, language-empty states, a completed approved Chef fallback, helpful Continue validation and access for approved chefs completing a supplement. Readiness and upload tests cover the expanded evidence contract.",
+      "Other feature workflows also run. An unrelated Explorer release-manifest guard can fail when its recorded backend source differs from the build context; that guard must be reconciled with verified deployed source, not weakened merely to make CI green. Tests do not prove capacity for one million concurrent users."
+    ]
+  },
+  {
+    "title": "Local setup and testing checklist",
+    "paragraphs": [
+      "Check out the feature branch in the existing repository. Use Java 21 and Maven for services/user-chef-service and the repository's Node 24/npm setup for apps/customer-web-next. Install dependencies from the committed lockfile. The ZIP is a complete changed-file overlay on the recorded base, not a standalone copy of the whole platform.",
+      "From the repository root run: mvn -B -ntp -f services/user-chef-service/pom.xml verify. In apps/customer-web-next run npm ci, npm run lint, npm run typecheck, npm test and npm run build. Run the two scripts/release/tests preflight and active-release test modules as described in README.",
+      "Database integration fixtures run only with their explicit disposable CI database guard. They refuse production database names/hosts. Do not point an integration test at Azure production to obtain more test coverage.",
+      "For local manual UI use the existing service/website README environment settings and synthetic accounts. Enable CRAVES_CHEF_ONBOARDING_V2_ENABLED on backend and web together. Use real dev verification providers only under their existing account setup; never paste secret values into chat."
+    ]
+  },
+  {
+    "title": "Azure and release manual steps",
+    "paragraphs": [
+      "Deploy the matching User/Chef source through the existing guarded release pipeline; verify healthy revision, V14/V15 application and checksum matching. Configure the fourteen new APIM operations using the scoped onboarding script/pipeline. It targets the reviewed existing subscription, tenant and APIM and stops on a target mismatch.",
+      "The Next.js release YAML is azure-pipelines-chef-onboarding-v2-web.yml. Register it in the existing Azure DevOps project if absent, reuse Craves-RMORAMPUDI09-Service-Connection, run preflight first, and supply the exact merged-main release SHA and its successful complete regression run. The older Vite pipeline is not the release path for this Next.js change.",
+      "Coordinate CRAVES_CHEF_ONBOARDING_V2_ENABLED=true across User/Chef, customer web and the actual admin app. Set Blob CORS for video upload, then publish administrator-supplied language content. Verify the current contact settings and private container.",
+      "No new paid Azure resource, DNS purchase, Firebase provider, Cashfree configuration, mobile signing key or app-store action is required. Existing video storage/bandwidth usage is billable. Deployment is not claimed until live image, routes and acceptance flows have been observed."
+    ]
+  },
+  {
+    "title": "React Native compatibility and device checks",
+    "paragraphs": [
+      "The mobile Chef registration, account status and approved Chef entry use ChefOnboardingGate. It reads the same protected backend state, preserves the older screens while the feature is disabled, resumes unfinished FSSAI on each entry, and lets approved chefs keep their existing workspace access during supplemental onboarding.",
+      "The native form reuses the current authenticated phone and verifies email through the existing email OTP API. It uses the installed image picker for JPG/PNG proof, licence and kitchen photographs, and the existing Craves native location module for kitchen coordinates. Language filtering, guidance and the help form use the same backend records as the website. No new native library or alternate SMS flow is added.",
+      "Business Information and readiness parsers retain historical types and accept selected-proof, kitchen and FSSAI types. Device checks must cover location/photo permissions, email OTP, selected-proof file count, logout/login resume and a video opened with its temporary HTTPS playback URL. Native PDF selection is not added; PDF licence/proof upload remains available on the website.",
+      "CI runs the React Native TypeScript check and full Jest suite, including new API/entry tests. These checks do not replace Android/iOS device installation, signing, permissions and store validation. Existing signing credentials remain in their established local/CI bindings; no new secrets or app-store upload is claimed."
+    ]
+  },
+  {
+    "title": "Acceptance sequence for release",
+    "paragraphs": [
+      "1. Sign in as a new applicant, verify email, save personal details, save kitchen/location and upload exactly two kitchen photos. Reject PDF/photo mismatch. 2. Save without FSSAI, sign out and return: resume at FSSAI. 3. Select a language, inspect published guidance, switch to an empty language and request help.",
+      "4. Verify the administrator receives one case with the correct saved snapshot, including on double submission. 5. Upload FSSAI and PAN; observe one selected-proof slot. Repeat with bank statement. With Aadhaar/other ID, prove submission fails until the back is uploaded.",
+      "6. Approve only some required files and prove final application approval still fails. Reject one file and replace only that file. Approve all and then the application. 7. Repeat enrollment for existing pending/rejected applicants.",
+      "8. Sign in as an already approved Chef; retain workspace access, complete the added evidence, and review it without modifying the original approval or historical file. 9. Upload/verify/publish a real video. 10. Recheck customer checkout, menu/kitchen publishing and current mobile API behavior. Record live results, failures and release SHA."
+    ]
+  },
+  {
+    "title": "Rollback, pending work and next steps",
+    "paragraphs": [
+      "Keep historical and new evidence, audit records and Flyway history. Do not drop onboarding tables or delete old uploaded files. If rollout fails after enrollment, retain service/APIM/web support for the new draft format while recovering. Pin image digests and record the previous source before a controlled image rollback.",
+      "Pending live work: confirm the current Azure inventory and service connection, register/queue the guarded pipelines if necessary, deploy V14/V15, configure APIM and Blob CORS, coordinate feature activation, publish real articles/videos, and perform synthetic live OTP/upload/approval tests. No successful live step is inferred from generated scripts.",
+      "The local execution/browser host was unavailable during this task, so source and remote CI were handled through the connected repository. That infrastructure limitation must be distinguished from a failed application test. The full runnable files below and the ZIP allow another developer to continue from the exact source.",
+      "Scaling measurement, additional language content, a controlled proof-choice reset, content editing/pagination beyond current list limits and any enforcement deadline for existing approved chefs are future work. Pricing, commissions, radius, payments and FSSAI product decisions remain outside this module."
+    ]
+  }
+]

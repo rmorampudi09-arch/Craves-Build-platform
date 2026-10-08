@@ -278,7 +278,12 @@
       "InternalRequestAuthorizerTest": 3,
       "RequesterSupportViewTest": 1,
       "SupportCaseCursorCodecTest": 2,
-      "SupportCaseServiceValidationTest": 6
+      "SupportCaseServiceValidationTest": 6,
+      "ChefOnboardingDatabaseTest": 7,
+      "ChefOnboardingPolicyTest": 6,
+      "ChefOnboardingPhotoValidationTest": 1,
+      "ChefApplicationReadinessTest": 10,
+      "ChefApplicationReadinessHttpTest": 4
     }
   },
   "web": {
@@ -293,7 +298,8 @@
       "email-verification-client.vitest.ts": 9,
       "email-verification-contract.vitest.ts": 16,
       "email-verification-ui.vitest.ts": 16,
-      "manual-settlement.vitest.ts": 15
+      "manual-settlement.vitest.ts": 15,
+      "chef-onboarding-workspace.vitest.ts": 6
     }
   }
 }

@@ -1,13 +1,14 @@
 "use client";
 
 import { adminFetch } from "@/lib/admin-renewal";
+import { parseOnboardingState, PROOF_OPTIONS, type OnboardingState } from "@/lib/chef-onboarding-v2-contract";
 
 import { CheckCircle2, CircleAlert, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AdminChefApplication } from "@/lib/admin-chef-review-contract";
 import { parseAdminChefDocuments, type AdminChefDocument } from "@/lib/admin-chef-document-contract";
 
-const REQUIREMENTS = [
+const LEGACY_REQUIREMENTS = [
   ["APPLICANT_PHOTO", "Applicant photograph"],
   ["GOVERNMENT_ID_FRONT", "Government photo ID — front"],
   ["GOVERNMENT_ID_BACK", "Government photo ID — back"],
@@ -26,7 +27,8 @@ function statusStyle(status: AdminChefDocument["status"]): string {
   return "border-amber-200 bg-amber-50/70 text-amber-900";
 }
 
-export function AdminChefReviewDetails({ applicationId }: { applicationId: string }) {
+export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = false }: { applicationId: string; onboardingV2Enabled?: boolean }) {
+  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
   const [item, setItem] = useState<AdminChefApplication | null>(null);
   const [documents, setDocuments] = useState<AdminChefDocument[]>([]);
   const [documentsAvailable, setDocumentsAvailable] = useState(false);
@@ -37,9 +39,10 @@ export function AdminChefReviewDetails({ applicationId }: { applicationId: strin
   const [busyDocumentId, setBusyDocumentId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [response, documentResponse] = await Promise.all([
+    const [response, documentResponse, onboardingResponse] = await Promise.all([
       adminFetch(`/api/admin/chef-reviews/${applicationId}`, { cache: "no-store" }),
       adminFetch(`/api/admin/chef-reviews/${applicationId}/evidence-status`, { cache: "no-store" }),
+      onboardingV2Enabled ? adminFetch(`/api/admin/chef-onboarding/applications/${applicationId}`, { cache: "no-store" }) : Promise.resolve(null),
     ]);
     const body = await response.json().catch(() => null);
     if (response.status === 401) throw new Error("Administrator session expired.");
@@ -47,6 +50,10 @@ export function AdminChefReviewDetails({ applicationId }: { applicationId: strin
     if (response.status === 404) throw new Error("Chef application was not found.");
     if (!response.ok) throw new Error("Chef application is temporarily unavailable.");
     setItem(body as AdminChefApplication);
+    if (onboardingResponse) {
+      const metadata = parseOnboardingState(await onboardingResponse.json().catch(() => null));
+      setOnboarding(onboardingResponse.ok ? metadata : null);
+    }
 
     const parsedDocuments = parseAdminChefDocuments(await documentResponse.json().catch(() => null));
     if (documentResponse.ok && parsedDocuments) {
@@ -58,16 +65,25 @@ export function AdminChefReviewDetails({ applicationId }: { applicationId: strin
     setDocuments([]);
     setDocumentsAvailable(false);
     setMessage("Application details loaded, but document decision state is temporarily unavailable. Approval is disabled until it can be verified.");
-  }, [applicationId]);
+  }, [applicationId, onboardingV2Enabled]);
 
   useEffect(() => {
     void load().catch(error => setMessage(error instanceof Error ? error.message : "Chef application is unavailable."));
   }, [load]);
 
+  const REQUIREMENTS: readonly (readonly [string, string])[] = onboarding && !onboarding.legacy
+    ? onboarding.requiredDocuments.map(type => {
+        const proof = PROOF_OPTIONS.find(([key]) => key === onboarding.details?.proofKind)?.[1] ?? "Selected document";
+        const labels: Record<string, string> = { SELECTED_PROOF_FRONT: proof + (onboarding.details?.proofKind === "PAN" || onboarding.details?.proofKind === "BANK_STATEMENT" ? "" : " — front"),
+          SELECTED_PROOF_BACK: proof + " — back", KITCHEN_PHOTO_1: "Kitchen photo 1", KITCHEN_PHOTO_2: "Kitchen photo 2", FSSAI_LICENSE: "FSSAI registration / licence" };
+        return [type, labels[type] ?? type] as const;
+      }) : LEGACY_REQUIREMENTS;
   const documentByType = useMemo(() => new Map(documents.map(document => [document.documentType, document])), [documents]);
   const uploadedCount = REQUIREMENTS.filter(([type]) => documentByType.has(type)).length;
   const approvedCount = REQUIREMENTS.filter(([type]) => documentByType.get(type)?.status === "APPROVED").length;
-  const allApproved = documentsAvailable && approvedCount === REQUIREMENTS.length;
+  const canReviewDocuments = item?.status === "PENDING" || item?.status === "APPROVED" && Boolean(onboarding && !onboarding.legacy && onboarding.submitted);
+  const allApproved = documentsAvailable && (!onboardingV2Enabled || Boolean(onboarding)) &&
+    (!onboarding || onboarding.legacy || onboarding.submitted) && REQUIREMENTS.length > 0 && approvedCount === REQUIREMENTS.length;
 
   async function decideApplication(action: "approve" | "reject") {
     if (action === "reject" && !applicationReason.trim()) {
@@ -75,10 +91,10 @@ export function AdminChefReviewDetails({ applicationId }: { applicationId: strin
       return;
     }
     if (action === "approve" && !allApproved) {
-      setMessage("Application approval is blocked until all 4 required documents are individually approved.");
+      setMessage("Application approval is blocked until all required documents are individually approved.");
       return;
     }
-    if (action === "approve" && !window.confirm("Confirm final Chef approval. All four required documents have individual APPROVED decisions.")) return;
+    if (action === "approve" && !window.confirm("Confirm final Chef approval. All required documents have individual APPROVED decisions.")) return;
     if (action === "reject" && !window.confirm("Reject the entire Chef application? Use the document-level reject button instead when only one file needs replacement.")) return;
 
     setBusy(true);
@@ -90,7 +106,7 @@ export function AdminChefReviewDetails({ applicationId }: { applicationId: strin
         body: action === "reject" ? JSON.stringify({ reason: applicationReason }) : undefined,
       });
       const body = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(action === "approve" ? "Chef approval failed. Verify all four document decisions." : "Whole-application rejection failed.");
+      if (!response.ok) throw new Error(action === "approve" ? "Chef approval failed. Verify all required document decisions." : "Whole-application rejection failed.");
       setItem(body as AdminChefApplication);
       setApplicationReason("");
       await load();
@@ -147,10 +163,17 @@ export function AdminChefReviewDetails({ applicationId }: { applicationId: strin
       {item.rejectionReason && <div className="mt-5 rounded-2xl bg-red-50 p-4 text-sm text-red-900"><strong>Whole-application rejection reason</strong><p className="mt-2">{item.rejectionReason}</p></div>}
     </section>
 
+    {onboarding && !onboarding.legacy && onboarding.details ? <section className="rounded-[30px] bg-white p-6 text-slate-950 sm:p-8">
+      <h2 className="text-xl font-bold">Saved kitchen and onboarding details</h2>
+      <p className="mt-3 text-sm">{onboarding.details.kitchenName} · Date of birth: {onboarding.details.dateOfBirth}</p>
+      <p className="mt-2 text-sm">FSSAI number: {onboarding.details.fssaiNumber} · Preferred language: {onboarding.details.language}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm">{onboarding.details.kitchenDescription}</p>
+    </section> : null}
+
     <section className="rounded-[30px] bg-white p-6 text-slate-950 sm:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930CA]">Document review</p><h2 className="mt-1 text-2xl font-bold">Review each document independently</h2><p className="mt-2 max-w-2xl text-sm text-slate-600">Open each file, then approve or reject that specific document. Rejecting one file keeps the application pending and preserves every document already approved.</p></div>
-        <div className="min-w-[220px] rounded-2xl bg-[#FFF8EC] p-4"><div className="flex justify-between gap-3 text-sm"><strong>{approvedCount}/4 approved</strong><span>{uploadedCount}/4 uploaded</span></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-[#6930CA] transition-[width] duration-500" style={{ width: `${approvedCount * 25}%` }} /></div></div>
+        <div className="min-w-[220px] rounded-2xl bg-[#FFF8EC] p-4"><div className="flex justify-between gap-3 text-sm"><strong>{approvedCount}/{REQUIREMENTS.length} approved</strong><span>{uploadedCount}/{REQUIREMENTS.length} uploaded</span></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-[#6930CA] transition-[width] duration-500" style={{ width: `${Math.round(approvedCount / REQUIREMENTS.length * 100)}%` }} /></div></div>
       </div>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -170,7 +193,7 @@ export function AdminChefReviewDetails({ applicationId }: { applicationId: strin
 
             <div className="mt-4 flex flex-wrap gap-2">
               <a target="_blank" rel="noopener noreferrer" href={`/api/admin/chef-reviews/${item.id}/documents/${document.id}/content`} className="inline-flex rounded-xl bg-[#6930CA] px-4 py-2 text-sm font-bold text-white">Open document</a>
-              {item.status === "PENDING" && document.status === "UPLOADED" && <button disabled={decisionBusy} onClick={() => void decideDocument(document, "approve")} className="rounded-xl bg-green-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">Approve document</button>}
+              {canReviewDocuments && document.status === "UPLOADED" && <button disabled={decisionBusy} onClick={() => void decideDocument(document, "approve")} className="rounded-xl bg-green-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">Approve document</button>}
             </div>
 
             {item.status === "PENDING" && document.status === "UPLOADED" && <div className="mt-4 border-t border-black/10 pt-4"><label className="text-sm font-bold">Reject only this document<textarea value={documentReasons[document.id] ?? ""} maxLength={1000} onChange={event => setDocumentReasons(current => ({ ...current, [document.id]: event.target.value }))} placeholder="Explain what is wrong with this file and what the Chef should replace" className="mt-2 min-h-20 w-full rounded-xl border border-black/10 bg-white p-3 text-slate-950" /></label><button disabled={decisionBusy || (documentReasons[document.id]?.trim().length ?? 0) < 3} onClick={() => void decideDocument(document, "reject")} className="mt-2 rounded-xl bg-red-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">Reject this document only</button></div>}
@@ -179,7 +202,7 @@ export function AdminChefReviewDetails({ applicationId }: { applicationId: strin
       </div>
 
       {!documentsAvailable && <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Document decision state could not be verified. Final approval is fail-closed until this check succeeds.</p>}
-      {allApproved && <p className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">4/4 required documents are individually approved. The Chef application is eligible for final application-level approval.</p>}
+      {allApproved && <p className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">All required documents are individually approved. {item.status === "APPROVED" ? "The added onboarding evidence is complete; the existing Chef approval stays valid." : "The Chef application is eligible for final application-level approval."}</p>}
     </section>
 
     {item.status === "PENDING" && <section className="rounded-[30px] border border-red-100 bg-white p-6 text-slate-950 sm:p-8">

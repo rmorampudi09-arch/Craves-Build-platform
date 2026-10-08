@@ -1,3 +1,4 @@
+import {ChefOnboardingGate} from '../../chefOnboarding/screens/ChefOnboardingGate';
 import React, {useCallback, useEffect, useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
@@ -18,7 +19,7 @@ import {ChefReadinessPanel} from '../../chefBusinessInformation/screens/ChefRead
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ChefAccountStatus'>;
 
-export function ChefAccountStatusScreen({navigation, route}: Props) {
+function LegacyChefAccountStatusScreen({navigation, route}: Props) {
   const dispatch = useAppDispatch();
   const accountResolution = useAppSelector(state => state.auth.accountResolution);
   const [application, setApplication] = useState<ChefApplication | null>(null);
@@ -181,3 +182,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
 });
+
+export function ChefAccountStatusScreen(props:Props) {
+  return <ChefOnboardingGate fallback={<LegacyChefAccountStatusScreen {...props} />} />;
+}

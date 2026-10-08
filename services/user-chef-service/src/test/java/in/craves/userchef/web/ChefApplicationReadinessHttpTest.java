@@ -48,12 +48,13 @@ class ChefApplicationReadinessHttpTest {
     @Autowired ChefApplicationService applications;
     @Autowired AuthInternalClient auth;
     MockMvc mvc;
+    final UUID applicationId = UUID.randomUUID();
     final CurrentUser user = new CurrentUser(UUID.randomUUID(), "synthetic-user", "+910000000001", List.of("CUSTOMER"));
 
     @BeforeEach void setup() {
         reset(applications, auth);
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
-        when(applications.getMyApplication(user)).thenReturn(new ChefApplicationResponse(UUID.randomUUID(), user.identityId(),
+        when(applications.getMyApplication(user)).thenReturn(new ChefApplicationResponse(applicationId, user.identityId(),
             user.phoneNumber(), "chef@example.test", "Test", "Chef", "Road", null, null, "Hyderabad", "Telangana", "500081",
             null, null, ChefApplicationStatus.PENDING, null, Instant.now(), null, null, List.of()));
         when(applications.listMyApplicationEvidence(user)).thenReturn(List.of(KycDocumentType.APPLICANT_PHOTO,
@@ -61,6 +62,9 @@ class ChefApplicationReadinessHttpTest {
             .map(type -> new KycDocumentResponse(UUID.randomUUID(), type, "private.png", "private", "private/blob", "image/png",
                 20, "APPROVED", null, Instant.now(), Instant.now(), Instant.now())).toList());
         when(auth.requireVerifiedEmail(user.identityId(), "chef@example.test")).thenReturn("chef@example.test");
+        when(applications.requiredApplicationDocuments(applicationId, false)).thenReturn(java.util.EnumSet.of(KycDocumentType.APPLICANT_PHOTO, KycDocumentType.GOVERNMENT_ID_FRONT,
+            KycDocumentType.GOVERNMENT_ID_BACK, KycDocumentType.TAX_ID_CARD));
+        when(applications.onboardingSubmissionBlocked(applicationId)).thenReturn(false);
     }
 
     @Test void unsignedRequestIs401BeforeReadingAnyPrivateData() throws Exception {
@@ -82,6 +86,8 @@ class ChefApplicationReadinessHttpTest {
         verify(applications).getMyApplication(user);
         verify(applications).listMyApplicationEvidence(user);
         verify(auth).requireVerifiedEmail(user.identityId(), "chef@example.test");
+        verify(applications).requiredApplicationDocuments(applicationId, false);
+        verify(applications).onboardingSubmissionBlocked(applicationId);
         verifyNoMoreInteractions(applications, auth);
     }
 

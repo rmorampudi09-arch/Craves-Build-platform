@@ -11,13 +11,11 @@ export const metadata = {
 };
 
 export default function ChefApplicationPage() {
+  const legacyWorkspace = <><ChefApplicationWorkspace /><div className="mt-6"><ChefReadinessPanel /></div></>;
   return (
     <ChefApplicationSessionBoundary>
       <main className="mx-auto min-h-screen max-w-3xl px-4 py-6 md:px-6 md:py-8">
-        {process.env.CRAVES_CHEF_ONBOARDING_V2_ENABLED === "true" ? <ChefOnboardingWorkspace fallback={<ChefApplicationWorkspace />} /> : <ChefApplicationWorkspace />}
-        <div className="mt-6">
-          <ChefReadinessPanel />
-        </div>
+        {process.env.CRAVES_CHEF_ONBOARDING_V2_ENABLED === "true" ? <ChefOnboardingWorkspace fallback={legacyWorkspace} /> : legacyWorkspace}
       </main>
     </ChefApplicationSessionBoundary>
   );

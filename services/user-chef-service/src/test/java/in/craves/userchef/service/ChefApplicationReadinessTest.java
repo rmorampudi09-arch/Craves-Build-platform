@@ -17,6 +17,7 @@ class ChefApplicationReadinessTest {
     private final AuthInternalClient auth = mock(AuthInternalClient.class);
     private final ChefApplicationReadinessService service = new ChefApplicationReadinessService(applications, auth);
     private final CurrentUser user = new CurrentUser(UUID.randomUUID(), "test-firebase", "+919876543210", List.of("CUSTOMER"));
+    private final UUID applicationId = UUID.randomUUID();
     private final Instant saved = Instant.parse("2026-10-01T00:00:00Z");
 
     @Test void unsignedRequestsNeverReadPrivateState() {
@@ -51,6 +52,8 @@ class ChefApplicationReadinessTest {
         verify(auth).requireVerifiedEmail(user.identityId(), "chef@example.test");
         verify(applications).getMyApplication(user);
         verify(applications).listMyApplicationEvidence(user);
+        verify(applications).requiredApplicationDocuments(applicationId, false);
+        verify(applications).onboardingSubmissionBlocked(applicationId);
         verifyNoMoreInteractions(auth, applications);
     }
 
@@ -97,8 +100,37 @@ class ChefApplicationReadinessTest {
         assertEquals(503, assertThrows(ApiException.class, () -> service.getReadiness(user)).getStatus());
     }
 
+    @Test void newSingleFileProofUsesFourRequirementsAndCannotApproveAnUnsubmittedDraft() {
+        var required = java.util.EnumSet.of(KycDocumentType.GOVERNMENT_ID_FRONT, KycDocumentType.KITCHEN_PHOTO_1,
+            KycDocumentType.KITCHEN_PHOTO_2, KycDocumentType.FSSAI_LICENSE);
+        setup(ChefApplicationStatus.PENDING, required.stream().map(type -> document(type, "APPROVED")).toList());
+        when(applications.requiredApplicationDocuments(applicationId, false)).thenReturn(required);
+        when(applications.onboardingSubmissionBlocked(applicationId)).thenReturn(true);
+        var result = service.getReadiness(user);
+        assertEquals(4, result.requiredDocumentCount());
+        assertEquals(4, result.approvedDocumentCount());
+        assertFalse(result.approvalReady());
+        assertTrue(result.blockingIssues().stream().anyMatch(item -> item.code().equals("ONBOARDING_NOT_SUBMITTED")));
+        when(applications.onboardingSubmissionBlocked(applicationId)).thenReturn(false);
+        assertTrue(service.getReadiness(user).approvalReady());
+    }
+
+    @Test void newTwoSidedProofRequiresFiveDocumentsIncludingTheBack() {
+        var required = java.util.EnumSet.of(KycDocumentType.GOVERNMENT_ID_FRONT, KycDocumentType.GOVERNMENT_ID_BACK,
+            KycDocumentType.KITCHEN_PHOTO_1, KycDocumentType.KITCHEN_PHOTO_2, KycDocumentType.FSSAI_LICENSE);
+        setup(ChefApplicationStatus.PENDING, required.stream().filter(type -> type != KycDocumentType.GOVERNMENT_ID_BACK)
+            .map(type -> document(type, "APPROVED")).toList());
+        when(applications.requiredApplicationDocuments(applicationId, false)).thenReturn(required);
+        var result = service.getReadiness(user);
+        assertEquals(5, result.requiredDocumentCount());
+        assertFalse(result.approvalReady());
+        assertTrue(result.blockingIssues().stream().anyMatch(item -> item.documentType() == KycDocumentType.GOVERNMENT_ID_BACK));
+    }
+
     private void setup(ChefApplicationStatus status, List<KycDocumentResponse> documents) {
         when(applications.getMyApplication(user)).thenReturn(application(status));
+        when(applications.requiredApplicationDocuments(applicationId, false)).thenReturn(ChefApplicationService.REQUIRED_APPLICATION_DOCUMENTS);
+        when(applications.onboardingSubmissionBlocked(applicationId)).thenReturn(false);
         when(applications.listMyApplicationEvidence(user)).thenReturn(documents);
         when(auth.requireVerifiedEmail(user.identityId(), "chef@example.test")).thenReturn("chef@example.test");
     }
@@ -115,7 +147,7 @@ class ChefApplicationReadinessTest {
     }
 
     private ChefApplicationResponse application(ChefApplicationStatus status) {
-        return new ChefApplicationResponse(status == ChefApplicationStatus.NOT_SUBMITTED ? null : UUID.randomUUID(),
+        return new ChefApplicationResponse(status == ChefApplicationStatus.NOT_SUBMITTED ? null : applicationId,
             user.identityId(), user.phoneNumber(), "chef@example.test", "Test", "Chef", "Test road", null, null,
             "Hyderabad", "Telangana", "500081", null, null, status, null,
             status == ChefApplicationStatus.NOT_SUBMITTED ? null : saved, null, null, List.of());

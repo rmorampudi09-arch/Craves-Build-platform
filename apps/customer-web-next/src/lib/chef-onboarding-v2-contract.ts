@@ -48,7 +48,7 @@ export function parseOnboardingState(value: unknown): OnboardingState | null {
     typeof raw.submitted !== "boolean" || typeof raw.version !== "number" || !Number.isSafeInteger(raw.version) || raw.version < 0 ||
     !steps.has(raw.resumeStep as OnboardingStep) || typeof raw.phoneNumber !== "string" ||
     typeof raw.supportPhone !== "string" || !/^[+0-9]{10,15}$/.test(raw.supportPhone) ||
-    typeof raw.supportEmail !== "string" || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(raw.supportEmail) ||
+    typeof raw.supportEmail !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.supportEmail) ||
     !Array.isArray(raw.requiredDocuments) || raw.requiredDocuments.some(x => typeof x !== "string")) return null;
   let details: OnboardingDetails | null = null;
   if (raw.details != null) {

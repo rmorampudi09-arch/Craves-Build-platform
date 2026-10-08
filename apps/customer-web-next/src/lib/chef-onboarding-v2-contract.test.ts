@@ -22,6 +22,8 @@ test("saved FSSAI resume state survives parsing and malformed state cannot appea
     details:{...EMPTY_ONBOARDING,email:"chef@example.test",firstName:"Test",lastName:"Chef",dateOfBirth:"1990-01-01"},
     application,documents:[],requiredDocuments:[],supportPhone:"8367366787",supportEmail:"support@craves.in"};
   assert.equal(parseOnboardingState(state)?.resumeStep,"fssai");
+  assert.equal(parseOnboardingState({...state,supportEmail:"invalid"}),null);
+  assert.equal(parseOnboardingState({...state,supportEmail:"support @craves.in"}),null);
   assert.equal(parseOnboardingState({...state,resumeStep:"approved-without-fssai"}),null);
   assert.equal(parseOnboardingState({...state,version:-1}),null);
   assert.equal(parseOnboardingState({...state,details:{...state.details,proofKind:"UNREVIEWED"}}),null);

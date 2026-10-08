@@ -243,7 +243,7 @@ public class ChefApplicationService {
         }
     }
 
-    Set<KycDocumentType> requiredApplicationDocuments(UUID applicationId, boolean approving) {
+    public Set<KycDocumentType> requiredApplicationDocuments(UUID applicationId, boolean approving) {
         var rows = jdbcTemplate.query(
             "SELECT details->>'proofKind' AS proof, details->>'fssaiNumber' AS fssai, submitted FROM chef_onboarding_draft WHERE application_id=?",
             (rs,row) -> new OnboardingRequirements(rs.getString("proof"), rs.getString("fssai"), rs.getBoolean("submitted")),
@@ -265,7 +265,7 @@ public class ChefApplicationService {
         }
     }
 
-    boolean onboardingSubmissionBlocked(UUID applicationId) {
+    public boolean onboardingSubmissionBlocked(UUID applicationId) {
         return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE application_id=? AND submitted=false)",
             Boolean.class, applicationId));

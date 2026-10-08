@@ -71,6 +71,7 @@ export type OnboardingState = {
   version: number;
   resumeStep: OnboardingStep;
   submitted: boolean;
+  bankEnrollmentRequired?: boolean;
   phoneNumber: string;
   details: OnboardingDetails | null;
   application: ChefApplication;
@@ -137,6 +138,7 @@ export function parseOnboardingState(value: unknown): OnboardingState | null {
     typeof raw.enabled !== "boolean" ||
     typeof raw.legacy !== "boolean" ||
     typeof raw.submitted !== "boolean" ||
+    (raw.bankEnrollmentRequired !== undefined && typeof raw.bankEnrollmentRequired !== "boolean") ||
     typeof raw.version !== "number" ||
     !Number.isSafeInteger(raw.version) ||
     raw.version < 0 ||
@@ -187,6 +189,7 @@ export function parseOnboardingState(value: unknown): OnboardingState | null {
     version: raw.version,
     resumeStep: raw.resumeStep as OnboardingStep,
     submitted: raw.submitted,
+    bankEnrollmentRequired: raw.bankEnrollmentRequired !== false,
     phoneNumber: raw.phoneNumber,
     details,
     application,
@@ -203,3 +206,4 @@ export function parseOnboardingState(value: unknown): OnboardingState | null {
       ? {progress: raw.progress as NonNullable<OnboardingState["progress"]>} : {}),
   };
 }
+

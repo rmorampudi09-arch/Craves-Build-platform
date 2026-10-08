@@ -6,6 +6,7 @@ import in.craves.userchef.exception.ApiException;
 import in.craves.userchef.security.CurrentUser;
 import in.craves.userchef.service.*;
 import in.craves.userchef.web.ApiDtos.KycDocumentType;
+import in.craves.userchef.web.ApiDtos.ChefApplicationStatus;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -33,6 +34,9 @@ class ChefOnboardingDatabaseTest {
     CurrentUser user;
     CurrentUser admin;
     ChefBankEnrollmentClient bank;
+    AuthInternalClient auth;
+    AuthEmailProjectionService projection;
+    BlobDocumentStorageService storage;
     static boolean databaseConfigured() { return System.getenv("ONBOARDING_TEST_DB_URL")!=null; }
     @BeforeEach void setup() {
         String url=System.getenv("ONBOARDING_TEST_DB_URL");
@@ -48,22 +52,25 @@ class ChefOnboardingDatabaseTest {
         var scoped=new DriverManagerDataSource(url+"?currentSchema=onboarding_v2_test,public",
             System.getenv("ONBOARDING_TEST_DB_USER"),System.getenv("ONBOARDING_TEST_DB_PASSWORD"));
         jdbc=new JdbcTemplate(scoped);tx=new TransactionTemplate(new DataSourceTransactionManager(scoped));
-        var auth=mock(AuthInternalClient.class);when(auth.requireVerifiedEmail(any(),anyString())).thenAnswer(call->call.getArgument(1));
-        var projection=mock(AuthEmailProjectionService.class);
+        auth=mock(AuthInternalClient.class);when(auth.requireVerifiedEmail(any(),anyString())).thenAnswer(call->call.getArgument(1));
+        projection=mock(AuthEmailProjectionService.class);
         var notifications=mock(NotificationInternalClient.class);
-        var storage=mock(BlobDocumentStorageService.class);
+        storage=mock(BlobDocumentStorageService.class);
         when(storage.uploadKycDocument(any(),any(),any())).thenReturn(
             new BlobDocumentStorageService.StoredDocument("documents","kyc/synthetic","photo.jpg","image/jpeg",20));
         applications=new ChefApplicationService(jdbc,storage,auth,notifications,projection,true);
         review=new ChefDocumentReviewService(jdbc,storage,notifications);
         bank=mock(ChefBankEnrollmentClient.class);when(bank.requireEnrollment(anyString(),anyString())).thenReturn(UUID.randomUUID());
-        service=new ChefOnboardingService(jdbc,new ObjectMapper().findAndRegisterModules(),applications,auth,projection,
-            new SupportCaseService(jdbc),bank,storage,true,"8367366787","support@craves.in");
+        service=onboardingService(true);
         content=new ChefOnboardingContentService(jdbc,storage);
         user=new CurrentUser(UUID.randomUUID(),"synthetic","+919000000000",List.of("CUSTOMER"));
         admin=new CurrentUser(UUID.randomUUID(),"admin","+919000000001",List.of("PLATFORM_ADMIN"));
     }
     <T> T run(Supplier<T> action) { return tx.execute(status->action.get()); }
+    ChefOnboardingService onboardingService(boolean bankRequired) {
+        return new ChefOnboardingService(jdbc,new ObjectMapper().findAndRegisterModules(),applications,auth,projection,
+            new SupportCaseService(jdbc),bank,storage,true,bankRequired,"8367366787","support@craves.in");
+    }
     State save(ProofKind proof,String licence) {
         var version=service.mine(user).version();
         return run(()->service.save(user,new SaveRequest(version,ChefOnboardingPolicyTest.details(proof,licence))));
@@ -172,6 +179,60 @@ class ChefOnboardingDatabaseTest {
         }
     }
 
+    @Test void deferredBankAllowsSubmissionRetryReviewAndApprovalWithoutBankProvider() {
+        service=onboardingService(false);
+        when(bank.requireEnrollment(anyString(),anyString())).thenThrow(new ApiException(503,"BANK_ENROLLMENT_UNAVAILABLE","Provider disabled"));
+        save(ProofKind.PAN,"12345678901234");photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
+        var before=service.mine(user);
+        assertFalse(before.bankEnrollmentRequired());
+        var request=new ChefOnboardingController.SubmitRequest(before.version(),true,ChefOnboardingService.TERMS_VERSION);
+        State submitted=run(()->service.submit(user,request,"Bearer test"));
+        State retried=run(()->service.submit(user,request,"Bearer test"));
+        assertTrue(submitted.submitted());assertEquals(submitted.version(),retried.version());
+        assertNull(jdbc.queryForObject("SELECT bank_enrollment_id FROM chef_onboarding_draft WHERE identity_id=?",UUID.class,user.identityId()));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM chef_onboarding_action_audit WHERE identity_id=? AND action='BANK_ENROLLMENT_DEFERRED'",Integer.class,user.identityId()));
+        assertTrue(applications.listApplications(admin,ChefApplicationStatus.PENDING).stream().anyMatch(a->submitted.application().id().equals(a.id())));
+        assertFalse(service.review(admin,submitted.application().id()).bankEnrollmentRequired());
+        assertThrows(ApiException.class,()->run(()->applications.approve(admin,submitted.application().id())));
+        for(var document:submitted.documents()) run(()->review.approve(admin,submitted.application().id(),document.id()));
+        assertThrows(ApiException.class,()->run(()->applications.approve(admin,submitted.application().id())));
+        run(()->service.reviewAction(admin,submitted.application().id(),new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901234")));
+        assertEquals("APPROVED",run(()->applications.approve(admin,submitted.application().id())).status().name());
+        verifyNoInteractions(bank);
+    }
+    @Test void deferredBankStillRequiresTermsVerifiedEmailCompleteProofAndCurrentVersion() {
+        service=onboardingService(false);
+        save(ProofKind.AADHAAR,"12345678901234");photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
+        var version=service.mine(user).version();
+        assertThrows(ApiException.class,()->run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(version,true,ChefOnboardingService.TERMS_VERSION),"Bearer test")));
+        upload(KycDocumentType.SELECTED_PROOF_BACK);
+        var current=service.mine(user).version();
+        assertThrows(ApiException.class,()->run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(current,false,ChefOnboardingService.TERMS_VERSION),"Bearer test")));
+        assertThrows(ApiException.class,()->run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(current,true,"outdated"),"Bearer test")));
+        assertThrows(ApiException.class,()->run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(current-1,true,ChefOnboardingService.TERMS_VERSION),"Bearer test")));
+        when(auth.requireVerifiedEmail(any(),anyString())).thenThrow(ApiException.conflict("EMAIL_VERIFICATION_REQUIRED","Verify email"));
+        assertThrows(ApiException.class,()->run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(current,true,ChefOnboardingService.TERMS_VERSION),"Bearer test")));
+        assertFalse(service.mine(user).submitted());verifyNoInteractions(bank);
+    }
+    @Test void deferredBankCorrectionResubmitsAndPreservesExistingEnrollmentReference() {
+        save(ProofKind.PAN,"12345678901234");photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
+        var submitted=run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
+        UUID savedBank=jdbc.queryForObject("SELECT bank_enrollment_id FROM chef_onboarding_draft WHERE identity_id=?",UUID.class,user.identityId());
+        service=onboardingService(false);clearInvocations(bank);
+        run(()->service.reviewAction(admin,submitted.application().id(),new ReviewAction(submitted.version(),"REQUEST_INFORMATION","Clarify kitchen details",null)));
+        save(ProofKind.PAN,"12345678901234");
+        var resubmitted=run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
+        assertTrue(resubmitted.submitted());assertEquals("PENDING",resubmitted.progress().status());
+        assertEquals(savedBank,jdbc.queryForObject("SELECT bank_enrollment_id FROM chef_onboarding_draft WHERE identity_id=?",UUID.class,user.identityId()));
+        verifyNoInteractions(bank);
+    }
+    @Test void requiredBankModeStillRejectsProviderOutageAndAdvertisesRequirement() {
+        save(ProofKind.PAN,"12345678901234");photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
+        assertTrue(service.mine(user).bankEnrollmentRequired());
+        when(bank.requireEnrollment(anyString(),anyString())).thenThrow(new ApiException(503,"BANK_ENROLLMENT_UNAVAILABLE","Provider unavailable"));
+        assertThrows(ApiException.class,()->run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test")));
+        assertFalse(service.mine(user).submitted());
+    }
     @Test void partialBasicDraftSavesWithoutVerifyingEmailOrCreatingApplication() {
         Details partial=new Details("", "Only", "",null,null,null,null,null,null,null,null,null,null,null,null,null,null,"en");
         State first=run(()->service.saveDraft(user,new SaveRequest(0L,partial)));
@@ -235,3 +296,4 @@ class ChefOnboardingDatabaseTest {
         assertThrows(ApiException.class,()->run(()->content.publish(admin,article.id(),new PublishRequest(1L,false))));
     }
 }
+

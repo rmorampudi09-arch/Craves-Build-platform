@@ -15,7 +15,7 @@ import {
 import {
   afterSectionSave,
   bankCanContinue,
-  CHEF_SECTIONS,
+  activeChefSections,
   firstIncompleteSection,
   validateChefSection,
   type ChefFieldError,
@@ -136,8 +136,12 @@ export function useChefOnboarding() {
       }
       if (!response.ok) throw new Error("We could not load your saved application. Please retry.");
       const next = verifiedState(await response.json());
-      const nextBank = await refreshBank();
+      const nextBank = next.bankEnrollmentRequired === false ? null : await refreshBank();
       if (!current()) return;
+      if (next.bankEnrollmentRequired === false) {
+        setBank(null);
+        setBankUnavailable(false);
+      }
       currentState.current = next;
       setState(next);
       setSignedOut(false);
@@ -274,8 +278,8 @@ export function useChefOnboarding() {
       return;
     }
     await work(async () => {
-      await persist();
-      setScreen(afterSectionSave(section, fromReview));
+      const saved = await persist();
+      setScreen(afterSectionSave(section, fromReview, saved));
       setFromReview(false);
     });
   }
@@ -293,9 +297,10 @@ export function useChefOnboarding() {
       setFromReview(false);
       return;
     }
-    const index = CHEF_SECTIONS.indexOf(screen as ChefFormSection);
-    if (index > 0) setScreen(CHEF_SECTIONS[index - 1]!);
-    else if (screen === "review") setScreen("bank");
+    const sections = activeChefSections(currentState.current);
+    const index = sections.indexOf(screen as ChefFormSection);
+    if (index > 0) setScreen(sections[index - 1]!);
+    else if (screen === "review") setScreen(sections[sections.length - 1]!);
     else router.push("/home");
   }
   function exit() {
@@ -486,3 +491,4 @@ export function useChefOnboarding() {
   };
 }
 export type ChefOnboardingFlow = ReturnType<typeof useChefOnboarding>;
+

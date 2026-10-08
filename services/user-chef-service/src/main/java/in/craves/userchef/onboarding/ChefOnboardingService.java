@@ -30,6 +30,7 @@ public class ChefOnboardingService {
     private final AuthEmailProjectionService emailProjection;
     private final SupportCaseService support;
     private final boolean enabled;
+    private final boolean bankEnrollmentRequired;
     private final ChefBankEnrollmentClient bank;
     private final in.craves.userchef.service.BlobDocumentStorageService storage;
     public static final String TERMS_VERSION="craves-chef-terms-20261008-v1";
@@ -39,10 +40,12 @@ public class ChefOnboardingService {
     public ChefOnboardingService(JdbcTemplate jdbc, ObjectMapper json, ChefApplicationService applications,
         AuthInternalClient auth, AuthEmailProjectionService emailProjection, SupportCaseService support, ChefBankEnrollmentClient bank, in.craves.userchef.service.BlobDocumentStorageService storage,
         @Value("${CRAVES_CHEF_ONBOARDING_V2_ENABLED:false}") boolean enabled,
+        @Value("${CRAVES_CHEF_ONBOARDING_BANK_REQUIRED:false}") boolean bankEnrollmentRequired,
         @Value("${CRAVES_ONBOARDING_SUPPORT_PHONE:8367366787}") String supportPhone,
         @Value("${CRAVES_ONBOARDING_SUPPORT_EMAIL:support@craves.in}") String supportEmail) {
         this.jdbc=jdbc; this.json=json; this.applications=applications; this.auth=auth;
         this.emailProjection=emailProjection; this.support=support; this.enabled=enabled;
+        this.bankEnrollmentRequired=bankEnrollmentRequired;
         this.bank=bank;this.storage=storage; this.supportPhone=supportPhone; this.supportEmail=supportEmail;
     }
 
@@ -63,7 +66,7 @@ public class ChefOnboardingService {
         return new State(enabled,legacy,draft==null ? 0 : draft.version(),resume,submitted,
             user.phoneNumber(),details,application,documents,
             details==null ? List.of() : ChefOnboardingPolicy.required(details.proofKind()).stream().map(Enum::name).sorted().toList(),
-            supportPhone,supportEmail,progress(draft,application));
+            supportPhone,supportEmail,progress(draft,application),bankEnrollmentRequired);
     }
 
     @Transactional
@@ -180,9 +183,11 @@ public class ChefOnboardingService {
         if(!"review".equals(ChefOnboardingPolicy.resume(draft.details(),state.documents(),false)))
             throw ApiException.conflict("ONBOARDING_INCOMPLETE","Complete the kitchen photos, FSSAI number and selected proof before submitting.");
         if(!state.submitted()) {
-            UUID enrollment=bank.requireEnrollment(authorization,draft.details().firstName()+" "+draft.details().lastName());
-            jdbc.update("UPDATE chef_onboarding_draft SET submitted=true,review_status='PENDING',correction_reason=NULL,terms_version=?,terms_accepted_at=now(),bank_enrollment_id=?,version=version+1,updated_at=now() WHERE identity_id=?",TERMS_VERSION,enrollment,user.identityId());
+            UUID enrollment=bankEnrollmentRequired
+                ? bank.requireEnrollment(authorization,draft.details().firstName()+" "+draft.details().lastName()) : null;
+            jdbc.update("UPDATE chef_onboarding_draft SET submitted=true,review_status='PENDING',correction_reason=NULL,terms_version=?,terms_accepted_at=now(),bank_enrollment_id=COALESCE(?,bank_enrollment_id),version=version+1,updated_at=now() WHERE identity_id=?",TERMS_VERSION,enrollment,user.identityId());
             jdbc.update("UPDATE chef_application SET status='PENDING',rejection_reason=NULL,reviewed_at=NULL,reviewed_by_identity_id=NULL,submitted_at=now(),updated_at=now() WHERE identity_id=? AND status<>'APPROVED'",user.identityId());
+            if(!bankEnrollmentRequired) audit(user.identityId(),user.identityId(),"BANK_ENROLLMENT_DEFERRED","Bank setup is not required for application review; no bank verification or payout activation.");
         }
         audit(user.identityId(),user.identityId(),"SUBMITTED",TERMS_VERSION);
         return mine(user);
@@ -199,7 +204,7 @@ public class ChefOnboardingService {
             (draft==null ? (enabled ? java.util.Set.of(KycDocumentType.KITCHEN_PHOTO_1,KycDocumentType.KITCHEN_PHOTO_2,KycDocumentType.FSSAI_LICENSE)
                 : java.util.Set.of(KycDocumentType.APPLICANT_PHOTO,KycDocumentType.GOVERNMENT_ID_FRONT,KycDocumentType.GOVERNMENT_ID_BACK,KycDocumentType.TAX_ID_CARD))
                 : ChefOnboardingPolicy.required(details.proofKind())).stream().map(Enum::name).sorted().toList(),
-            supportPhone,supportEmail,progress(draft,application));
+            supportPhone,supportEmail,progress(draft,application),bankEnrollmentRequired);
     }
 
     @Transactional
@@ -391,3 +396,4 @@ public class ChefOnboardingService {
             UUID.randomUUID(),actor,action,reason,identity);
     }
 }
+

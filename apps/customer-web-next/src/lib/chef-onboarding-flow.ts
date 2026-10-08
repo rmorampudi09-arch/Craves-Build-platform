@@ -85,7 +85,7 @@ export function completedSections(
       evidenceComplete(state, "SELECTED_PROOF_FRONT") &&
       (!proofNeedsBack(d.proofKind) || evidenceComplete(state, "SELECTED_PROOF_BACK")),
     ),
-    bank: bankCanContinue(bank) && sameChefBankName(bank?.accountHolderName, chefFullName(d ?? {firstName:"",lastName:""})),
+    bank: state.bankEnrollmentRequired === false || (bankCanContinue(bank) && sameChefBankName(bank?.accountHolderName, chefFullName(d ?? {firstName:"",lastName:""}))),
   };
 }
 export function firstIncompleteSection(
@@ -95,9 +95,13 @@ export function firstIncompleteSection(
   const completion = completedSections(state, bank);
   return CHEF_SECTIONS.find((section) => !completion[section]) ?? "review";
 }
-export function afterSectionSave(section: ChefFormSection, fromReview: boolean): ChefFormScreen {
+export function activeChefSections(state: OnboardingState | null): readonly ChefFormSection[] {
+  return state?.bankEnrollmentRequired === false ? CHEF_SECTIONS.filter((section) => section !== "bank") : CHEF_SECTIONS;
+}
+export function afterSectionSave(section: ChefFormSection, fromReview: boolean, state: OnboardingState | null = null): ChefFormScreen {
   if (fromReview) return "review";
-  return CHEF_SECTIONS[CHEF_SECTIONS.indexOf(section) + 1] ?? "review";
+  const sections = activeChefSections(state);
+  return sections[sections.indexOf(section) + 1] ?? "review";
 }
 export function applicationIsApproved(application: ChefApplication): boolean {
   return application.status === "APPROVED";
@@ -188,3 +192,4 @@ export function validateChefSection(
   }
   return null;
 }
+

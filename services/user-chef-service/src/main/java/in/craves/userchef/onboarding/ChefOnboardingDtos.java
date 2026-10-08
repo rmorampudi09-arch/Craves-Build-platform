@@ -23,7 +23,7 @@ public final class ChefOnboardingDtos {
         boolean enabled, boolean legacy, long version, String resumeStep, boolean submitted,
         String phoneNumber, Details details, ChefApplicationResponse application,
         List<KycDocumentResponse> documents, List<String> requiredDocuments,
-        String supportPhone, String supportEmail, ReviewProgress progress
+        String supportPhone, String supportEmail, ReviewProgress progress, boolean bankEnrollmentRequired
     ) {}
     public record ReviewProgress(String status,String reason,String nextAction,boolean fssaiVerified,String termsVersion) {}
     public record ReviewAction(Long expectedVersion,String action,String reason,String fssaiNumber) {}
@@ -45,3 +45,4 @@ public final class ChefOnboardingDtos {
     public record UploadTicket(Content content, String uploadUrl, Instant expiresAt) {}
     public record Playback(String url, Instant expiresAt) {}
 }
+

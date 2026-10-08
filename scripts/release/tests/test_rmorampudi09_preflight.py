@@ -38,6 +38,33 @@ class PreflightTests(unittest.TestCase):
     def test_v12_allows_only_pending_approved_v13(self):
         self.assertEqual(preflight.compare_history(self.rows, self.sources)["v13"], "PENDING")
 
+    def test_bank_schema_marker_is_metadata_not_an_applied_sql_version(self):
+        sources={"148":{"script":"V148__existing.sql","checksum":148},"149":{"script":"V149__chef_bank_branch_directory.sql","checksum":149}}
+        marker={"type":"SCHEMA","version":None,"script":'"payment_schema"',"checksum":None,"success":True}
+        sql={"version":"148",**sources["148"],"type":"SQL","success":True}
+        report=preflight.compare_bank_history([marker,sql],sources)
+        self.assertEqual(report["v149"],"PENDING")
+        self.assertEqual(report["pendingVersions"],["149"])
+        self.assertEqual(report["history"][0]["kind"],"SCHEMA")
+        with self.assertRaises(ValueError):preflight.compare_bank_history([marker],sources)
+
+    def test_bank_schema_marker_cannot_hide_invalid_or_duplicate_history(self):
+        sources={"148":{"script":"V148__existing.sql","checksum":148},"149":{"script":"V149__chef_bank_branch_directory.sql","checksum":149}}
+        marker={"type":"SCHEMA","version":None,"script":'"payment_schema"',"checksum":None,"success":True}
+        sql={"version":"148",**sources["148"],"type":"SQL","success":True}
+        for field,value in (("success",False),("checksum",0),("version","0"),("script",'"other_schema"'),("type","BASELINE")):
+            with self.subTest(field=field),self.assertRaises(ValueError):
+                preflight.compare_bank_history([{**marker,field:value},sql],sources)
+        for rows in ([marker,marker,sql],[sql,marker],[marker,sql,sql],[marker,{**sql,"checksum":999}],[marker,{**sql,"success":False}]):
+            with self.subTest(rows=rows),self.assertRaises(ValueError):
+                preflight.compare_bank_history(rows,sources)
+
+    def test_bank_history_bounds_and_unexpected_fields_remain_blocked(self):
+        sources={"149":{"script":"V149__chef_bank_branch_directory.sql","checksum":149}}
+        for rows in (None,[],[{}]*251,[{"type":"SCHEMA","private":"unexpected"}]):
+            with self.subTest(rows=rows),self.assertRaises(ValueError):
+                preflight.compare_bank_history(rows,sources)
+
     def test_matching_v13_is_idempotent(self):
         self.rows.append({"version": "13", **self.sources["13"], "type": "SQL", "success": True})
         self.assertEqual(preflight.compare_history(self.rows, self.sources)["v13"], "APPLIED_MATCHING")
@@ -131,3 +158,4 @@ class PreflightTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

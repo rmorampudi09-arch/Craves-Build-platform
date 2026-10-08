@@ -80,6 +80,11 @@ def compare_history(rows, expected):
         require(expected["15"]["script"] == "V15__chef_onboarding_all_chefs_selected_proof.sql", "Incorrect V15 source")
         require("14" in expected, "V15 requires V14 source")
         approved.add("15")
+    if "16" in expected:
+        require(expected["16"]["script"] == "V16__chef_onboarding_submission_contract.sql", "Incorrect V16 source")
+        require("15" in expected, "V16 requires V15 source")
+        approved.add("16")
+    require(not ("16" in versions and "15" not in versions), "V16 cannot precede V15")
     require(pending <= approved and "12" in versions,
             "Only approved V13/V14 may be pending after V12")
     require(not ("14" in versions and "13" not in versions), "V14 cannot precede V13")
@@ -90,10 +95,26 @@ def compare_history(rows, expected):
         result["v14"] = "PENDING" if "14" in pending else "APPLIED_MATCHING"
     if "15" in expected:
         result["v15"] = "PENDING" if "15" in pending else "APPLIED_MATCHING"
+    if "16" in expected:
+        result["v16"] = "PENDING" if "16" in pending else "APPLIED_MATCHING"
     return result
 
 
-def inspect_database(app, servers, vaults):
+def compare_bank_history(rows, expected):
+    require(expected.get("149", {}).get("script") == "V149__chef_bank_branch_directory.sql", "Incorrect V149 source")
+    versions=set(); evidence=[]
+    for row in rows:
+        require(row.get("type")=="SQL" and row.get("version") not in versions,"Unknown or duplicate bank migration")
+        version=row["version"]; versions.add(version); source=expected.get(version)
+        require(source is not None and row.get("success") is True and row.get("script")==source["script"] and row.get("checksum")==source["checksum"],"Bank migration history differs at V"+str(version))
+        evidence.append({"version":version,**source,"success":True})
+    pending=set(expected)-versions
+    require("148" in versions and pending <= {"149"},"Earlier bank migrations must already match before this Chef release")
+    return {"compatible":True,"v149":"PENDING" if "149" in pending else "APPLIED_MATCHING","history":evidence,"pendingVersions":sorted(pending)}
+
+
+def inspect_database(app, servers, vaults, service="user-chef-service"):
+    require(service in {"user-chef-service","integration-service"},"Database service outside Chef release scope")
     reader = history_module()
     props = app["properties"]
     require(props["latestRevisionName"] == props["latestReadyRevisionName"], "User/Chef rollout is unsettled")
@@ -125,13 +146,28 @@ def inspect_database(app, servers, vaults):
                   PGCONNECT_TIMEOUT="10", PGOPTIONS="-c default_transaction_read_only=on",
                   PGAPPNAME="craves-release-readonly-preflight")
     try:
-        rows = reader.sql("public", db_env)
+        if service=="integration-service":
+            spec=importlib.util.spec_from_file_location("bank_history",ROOT/"scripts/release/inspect-finance-migrations.py")
+            bank_history=importlib.util.module_from_spec(spec);spec.loader.exec_module(bank_history)
+            rows=bank_history.sql("payment_schema",db_env)
+            query="BEGIN READ ONLY; SET LOCAL statement_timeout='10s'; SELECT row_to_json(c) FROM (SELECT revision,submissions_enabled,validation_enabled FROM payment_schema.finance_bank_automation_control WHERE singleton=true) c; ROLLBACK;"
+            controls=subprocess.run(['psql','-X','-qAt','--set=ON_ERROR_STOP=1'],input=query,env=db_env,capture_output=True,text=True,timeout=25)
+            require(controls.returncode==0 and len(controls.stdout)<1000,"Bank controls inspection unavailable")
+            bank_controls=json.loads(controls.stdout)
+            require(set(bank_controls)=={"revision","submissions_enabled","validation_enabled"},"Bank controls response differs")
+        else:
+            rows = reader.sql("public", db_env)
     finally:
         db_env.pop("PGPASSWORD", None)
         password = None
     require(az("containerapp", "show", "-g", RG, "-n", app["name"]) == app,
             "Runtime changed during migration inspection")
-    result = compare_history(rows, reader.expected("user-chef-service"))
+    if service=="integration-service":
+        reader.REQUIRED[service]={"148"}
+        result=compare_bank_history(rows,reader.expected(service))
+        result["controls"]=bank_controls
+    else:
+        result = compare_history(rows, reader.expected(service))
     server = next(item for item in servers if item["fullyQualifiedDomainName"] == host)
     backup = server.get("backup", server.get("properties", {}).get("backup", {}))
     result.update(server=server["name"], database=database, backupPolicy=backup,

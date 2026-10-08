@@ -19,11 +19,21 @@ public class ChefOnboardingController {
     @PutMapping("/chef/onboarding") State save(@AuthenticationPrincipal CurrentUser user,@RequestBody SaveRequest request) {
         return service.save(user,request);
     }
-    @PostMapping("/chef/onboarding/submit") State submit(@AuthenticationPrincipal CurrentUser user,@RequestBody SubmitRequest request) {
-        return service.submit(user,request.expectedVersion());
+    @PatchMapping("/chef/onboarding") State saveDraft(@AuthenticationPrincipal CurrentUser user,@RequestBody SaveRequest request) {
+        return service.saveDraft(user,request);
+    }
+    @PostMapping("/chef/onboarding/submit") State submit(@AuthenticationPrincipal CurrentUser user,@RequestBody SubmitRequest request,
+        @RequestHeader(value="Authorization",required=false) String authorization) {
+        return service.submit(user,request,authorization);
     }
     @PostMapping("/chef/onboarding/help") Help help(@AuthenticationPrincipal CurrentUser user,@RequestBody HelpRequest request) {
         return service.requestHelp(user,request);
+    }
+    @GetMapping("/chef/onboarding/documents/{id}/preview") Playback documentPreview(@AuthenticationPrincipal CurrentUser user,@PathVariable UUID id) {
+        return service.documentPreview(user,id);
+    }
+    @DeleteMapping("/chef/onboarding/documents/{id}") State removeDocument(@AuthenticationPrincipal CurrentUser user,@PathVariable UUID id,@RequestBody VersionRequest request) {
+        return service.removeDocument(user,id,request.expectedVersion());
     }
     @GetMapping("/chef/onboarding/content") List<Content> learning(@AuthenticationPrincipal CurrentUser user,@RequestParam String language) {
         return content.published(user,language);
@@ -33,6 +43,9 @@ public class ChefOnboardingController {
     }
     @GetMapping("/backoffice/chef-onboarding/applications/{id}") State review(@AuthenticationPrincipal CurrentUser user,@PathVariable UUID id) {
         return service.review(user,id);
+    }
+    @PostMapping("/backoffice/chef-onboarding/applications/{id}/review") State reviewAction(@AuthenticationPrincipal CurrentUser user,@PathVariable UUID id,@RequestBody ReviewAction request) {
+        return service.reviewAction(user,id,request);
     }
     @GetMapping("/backoffice/chef-onboarding/help") HelpPage helpList(@AuthenticationPrincipal CurrentUser user,@RequestParam(required=false) String cursor) {
         return service.helpRequests(user,cursor);
@@ -55,5 +68,6 @@ public class ChefOnboardingController {
     @GetMapping("/backoffice/chef-onboarding/content/{id}/playback") Playback preview(@AuthenticationPrincipal CurrentUser user,@PathVariable UUID id) {
         return content.playback(user,id,true);
     }
-    public record SubmitRequest(Long expectedVersion) {}
+    public record SubmitRequest(Long expectedVersion,boolean termsAccepted,String termsVersion) {}
+    public record VersionRequest(Long expectedVersion) {}
 }

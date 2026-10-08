@@ -37,7 +37,7 @@ public class ChefDocumentReviewService {
                 SELECT id, document_type, original_file_name, content_type, file_size_bytes,
                        status, review_reason, reviewed_at
                 FROM chef_kyc_document
-                WHERE application_id = ?
+                WHERE application_id = ? AND removed_at IS NULL
                 ORDER BY document_type
                 """,
             (resultSet, rowNumber) -> mapMetadata(resultSet),
@@ -125,7 +125,7 @@ public class ChefDocumentReviewService {
                        a.status AS application_status
                 FROM chef_kyc_document d
                 JOIN chef_application a ON a.id = d.application_id
-                WHERE d.id = ? AND d.application_id = ?
+                WHERE d.id = ? AND d.removed_at IS NULL AND d.application_id = ?
                 FOR UPDATE OF d
                 """,
             (resultSet, rowNumber) -> new DocumentReviewTarget(

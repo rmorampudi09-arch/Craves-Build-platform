@@ -1,0 +1,67 @@
+# Scoped release through the existing Craves service connection. No automatic trigger.
+trigger: none
+pr: none
+parameters:
+  - name: operation
+    type: string
+    default: preflight
+    values: [preflight, backend, apim, web, activate]
+  - name: releaseSha
+    type: string
+    default: SELECT_REVIEWED_MERGED_MAIN_SHA
+  - name: regressionRunId
+    type: string
+    default: SELECT_MATCHING_SUCCESSFUL_REGRESSION_RUN
+  - name: confirmDeploy
+    type: boolean
+    default: false
+  - name: allowBankUnavailable
+    type: boolean
+    default: false
+pool:
+  vmImage: ubuntu-22.04
+jobs:
+  - job: ChefOnboardingRelease
+    timeoutInMinutes: 120
+    steps:
+      - checkout: none
+      - task: AzureCLI@2
+        displayName: Release reviewed Chef onboarding only
+        timeoutInMinutes: 110
+        inputs:
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -Eeuo pipefail
+            set +x
+            [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ && "$REGRESSION_RUN_ID" =~ ^[0-9]+$ ]] || { echo 'Select the exact reviewed main SHA and matching successful regression run.' >&2; exit 2; }
+            case "$OPERATION" in preflight|backend|apim|web|activate) ;; *) exit 2 ;; esac
+            if [[ "$OPERATION" != preflight && "${CONFIRM_DEPLOY,,}" != true ]]; then echo 'Explicit Chef deployment confirmation required.' >&2; exit 2; fi
+            SOURCE=$(mktemp -d)
+            trap 'rm -rf "$SOURCE"' EXIT
+            git -C "$SOURCE" init --quiet
+            git -C "$SOURCE" remote add origin https://github.com/rmorampudi09-arch/Craves-Build-platform.git
+            git -C "$SOURCE" fetch --quiet --depth 1 origin "$RELEASE_SHA"
+            git -C "$SOURCE" checkout --quiet --detach FETCH_HEAD
+            test "$(git -C "$SOURCE" rev-parse HEAD)" = "$RELEASE_SHA"
+            cd "$SOURCE"
+            python3 -m unittest discover -s scripts/release/tests -p test_rmorampudi09_preflight.py
+            python3 -m unittest discover -s scripts/release/tests -p test_chef_onboarding_release.py
+            python3 -m unittest discover -s scripts/finance -p test_configure_chef_ifsc_apim.py
+            confirmation=()
+            if [[ "${CONFIRM_DEPLOY,,}" == true ]]; then confirmation+=(--confirm); fi
+            if [[ "${ALLOW_BANK_UNAVAILABLE,,}" == true ]]; then confirmation+=(--allow-bank-unavailable); fi
+            python3 scripts/release/chef_onboarding_release.py --operation "$OPERATION" "${confirmation[@]}" --sha "$RELEASE_SHA" --regression-run "$REGRESSION_RUN_ID" --output "$BUILD_ARTIFACTSTAGINGDIRECTORY"
+        env:
+          OPERATION: ${{ parameters.operation }}
+          RELEASE_SHA: ${{ parameters.releaseSha }}
+          REGRESSION_RUN_ID: ${{ parameters.regressionRunId }}
+          CONFIRM_DEPLOY: ${{ parameters.confirmDeploy }}
+          ALLOW_BANK_UNAVAILABLE: ${{ parameters.allowBankUnavailable }}
+      - task: PublishPipelineArtifact@1
+        displayName: Save sanitized Chef release evidence
+        condition: always()
+        inputs:
+          targetPath: $(Build.ArtifactStagingDirectory)
+          artifact: chef-onboarding-release

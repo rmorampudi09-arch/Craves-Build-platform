@@ -209,7 +209,7 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
       {screen === "status" ? (
         <div className="chef-onboarding-group">
           <p className="inline-flex w-fit rounded-full bg-[#FEEDEA] px-4 py-2 text-sm font-bold text-[#C4200F]">
-            {state.application.status === "PENDING"
+            {state.progress?.status === "MORE_INFORMATION_REQUIRED" ? "More information required" : state.progress?.status === "UNDER_REVIEW" ? "Under review" : state.application.status === "PENDING"
               ? state.submitted || state.legacy
                 ? "Pending review"
                 : "Draft"
@@ -231,6 +231,8 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
               Application ID: <span className="break-all">{state.application.id}</span>
             </p>
           ) : null}
+          {state.progress?.reason ? <p role="alert" className="chef-onboarding-notice chef-onboarding-error">{state.progress.reason}</p> : null}
+          {state.progress?.nextAction === "EDIT_APPLICATION" ? <button type="button" className="chef-onboarding-button" onClick={()=>flow.edit("personal")}>Correct application</button> : null}
           {state.application.rejectionReason ? (
             <p role="alert" className="chef-onboarding-notice chef-onboarding-error">
               {state.application.rejectionReason}

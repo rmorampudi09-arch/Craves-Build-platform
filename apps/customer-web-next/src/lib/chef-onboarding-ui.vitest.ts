@@ -66,6 +66,8 @@ const identity = {
   roles: ["CUSTOMER"],
 };
 const bankFixture: BankStatus = {
+  accountHolderName: "Fixture Chef",
+  bankName: "Test Bank", branchName: "Test branch",
   id,
   state: "WAITING_APPROVAL",
   lastFour: "5678",
@@ -146,10 +148,11 @@ function normal(input: RequestInfo | URL, init?: RequestInit): Promise<Response>
   if (url === "/api/auth/me") return Promise.resolve(Response.json(identity));
   if (url === "/api/auth/refresh") return Promise.resolve(Response.json({ identity }));
   if (url === "/api/customer/profile") return Promise.resolve(Response.json({}, { status: 404 }));
+  if(url.startsWith("/api/chef-onboarding/bank/ifsc/")) return Promise.resolve(Response.json({ifsc:"TEST0000001",bankName:"Test Bank",branchName:"Test branch"}));
   if (url === "/api/chef-onboarding/bank") return Promise.resolve(Response.json(bank));
   if (url === "/api/chef/application") return Promise.resolve(Response.json(saved.application));
-  if (url === "/api/chef/onboarding" && init?.method === "PUT") {
-    const request = JSON.parse(String(init.body));
+  if (url === "/api/chef/onboarding" && ["PUT","PATCH"].includes(init?.method ?? "")) {
+    const request = JSON.parse(String(init?.body));
     if (request.expectedVersion !== saved.version)
       return Promise.resolve(Response.json({ message: "Version changed" }, { status: 409 }));
     saved = { ...saved, version: saved.version + 1, details: request.details };
@@ -315,7 +318,7 @@ describe("Chef onboarding navigation and persistence", () => {
     );
     expect(requests).toHaveLength(2);
   });
-  it("shows the backend FSSAI certificate rejection without fabricating submission", async () => {
+  it("shows a backend eligibility rejection without fabricating submission", async () => {
     open();
     await review();
     fireEvent.click(screen.getByLabelText("Accept terms and privacy policy"));
@@ -323,14 +326,14 @@ describe("Chef onboarding navigation and persistence", () => {
       String(url).endsWith("/submit")
         ? Promise.resolve(
             Response.json(
-              { message: "FSSAI certificate required by current policy" },
+              { message: "Current bank enrollment requires correction" },
               { status: 400 },
             ),
           )
         : normal(url, init),
     );
     fireEvent.click(primary("Submit application"));
-    await screen.findByText("FSSAI certificate required by current policy");
+    await screen.findByText("Current bank enrollment requires correction");
     expect(screen.queryByRole("heading", { name: "Application submitted" })).toBeNull();
   });
   it("prevents duplicate submissions and routes confirmed submissions to application status", async () => {
@@ -348,7 +351,7 @@ describe("Chef onboarding navigation and persistence", () => {
     const submit = primary("Submit application");
     fireEvent.click(submit);
     fireEvent.click(submit);
-    expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith("/submit"))).toHaveLength(1);
+    await waitFor(() => expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith("/submit"))).toHaveLength(1));
     await act(async () => {
       saved = {
         ...saved,
@@ -432,6 +435,7 @@ describe("Authoritative status and bank verification", () => {
     });
     fireEvent.change(screen.getByLabelText("IFSC code"), { target: { value: "test0000001" } });
     fireEvent.click(screen.getByLabelText("Consent to bank verification"));
+    await screen.findByText("Test Bank · Test branch");
     fireEvent.submit(document.getElementById("chef-bank-form")!);
     await screen.findByText("•••• 5678");
     fireEvent.click(primary("Re-enter bank details"));
@@ -448,7 +452,9 @@ describe("Authoritative status and bank verification", () => {
     await screen.findByText("offline");
     fireEvent.submit(document.getElementById("chef-bank-form")!);
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(bank));
-    expect(fetcher.mock.calls[0][1]?.body).toBe(fetcher.mock.calls[1][1]?.body);
+    const posts=fetcher.mock.calls.filter(([,init])=>init?.method==="POST");
+    expect(posts).toHaveLength(2);
+    expect(posts[0]![1]?.body).toBe(posts[1]![1]?.body);
   });
   it("accepts no failed or unknown bank state as a completed section", () => {
     for (const state of [

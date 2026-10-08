@@ -16,7 +16,7 @@ public class BankOnboardingSecurityConfiguration {
     @Bean
     @Order(1)
     SecurityFilterChain bankApplicantSecurity(HttpSecurity http, CravesJwtAuthenticationFilter filter) throws Exception {
-        return http.securityMatcher("/api/v1/chef-onboarding/bank")
+        return http.securityMatcher("/api/v1/chef-onboarding/bank", "/api/v1/chef-onboarding/bank/ifsc/**")
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a.anyRequest().authenticated())

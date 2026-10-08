@@ -73,6 +73,7 @@ function Upload({
       disabled={flow.busy}
       evidence={flow.state?.documents.find((document) => document.documentType === type)}
       onUpload={flow.uploadFile}
+          onRemove={flow.removeFile}
     />
   );
 }
@@ -88,7 +89,7 @@ export function ChefBasicDetails({ flow }: Props) {
           autoComplete="name"
           className="chef-onboarding-input"
           value={name}
-          maxLength={201}
+          maxLength={120}
           disabled={flow.busy}
           aria-invalid={Boolean(error)}
           onChange={(event) => {
@@ -346,8 +347,8 @@ export function ChefKitchenDetails({ flow }: Props) {
         <Field flow={flow} name="addressLine2" label="Street / area" />
         <Field flow={flow} name="landmark" label="Landmark" helper="Optional" />
         <div className="chef-onboarding-pair">
-          <Field flow={flow} name="city" label="City" maxLength={120} />
-          <Field flow={flow} name="state" label="State" maxLength={120} />
+          <Field flow={flow} name="city" label="City" maxLength={80} />
+          <Field flow={flow} name="state" label="State" maxLength={80} />
         </div>
         <Field flow={flow} name="postalCode" label="PIN code" maxLength={6} />
       </div>

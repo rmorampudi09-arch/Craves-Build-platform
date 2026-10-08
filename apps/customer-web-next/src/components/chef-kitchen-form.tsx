@@ -10,6 +10,7 @@ import {
   MapPin,
   Store,
 } from "lucide-react";
+import { parseOnboardingState } from "@/lib/chef-onboarding-v2-contract";
 import type { ChefApplication } from "@/lib/chef-application-contract";
 import { CHEF_KITCHEN_FIELD_LIMITS, missingKitchenPickupField } from "@/lib/chef-kitchen-contract";
 import type {
@@ -178,8 +179,9 @@ export function ChefKitchenForm() {
     void Promise.all([
       fetch("/api/chef/kitchen", { cache: "no-store" }),
       fetch("/api/chef/application", { cache: "no-store" }),
+      fetch("/api/chef/onboarding", { cache: "no-store" }).catch(() => null),
     ])
-      .then(async ([kitchenResponse, applicationResponse]) => {
+      .then(async ([kitchenResponse, applicationResponse, onboardingResponse]) => {
         const kitchenBody = await kitchenResponse.json().catch(() => null);
         const applicationBody = applicationResponse.ok
           ? ((await applicationResponse.json().catch(() => null)) as ChefApplication | null)
@@ -192,10 +194,25 @@ export function ChefKitchenForm() {
               : "We couldn’t load your kitchen right now.",
           );
         }
+        const onboardingBody = onboardingResponse?.ok ? parseOnboardingState(await onboardingResponse.json().catch(() => null)) : null;
+        if (!active || !isSessionContextCurrent(sessionContext)) return;
         const nextKitchen = kitchenBody as ChefKitchen | null;
         setKitchen(nextKitchen);
         const registeredPhone = getSession()?.phoneNumber ?? "";
-        setForm(nextKitchen ? fromKitchen(nextKitchen, registeredPhone) : fromApplication(applicationBody, registeredPhone));
+        const initial = nextKitchen ? fromKitchen(nextKitchen, registeredPhone) : fromApplication(applicationBody, registeredPhone);
+        if (!nextKitchen && applicationBody?.status === "APPROVED" && onboardingBody && applicationBody.id && onboardingBody.application.id === applicationBody.id && onboardingBody.legacy && onboardingBody.details) {
+          initial.kitchenName = onboardingBody.details.kitchenName;
+          initial.description = onboardingBody.details.kitchenDescription;
+          initial.addressLine1 = onboardingBody.details.addressLine1;
+          initial.addressLine2 = onboardingBody.details.addressLine2;
+          initial.landmark = onboardingBody.details.landmark;
+          initial.city = onboardingBody.details.city;
+          initial.state = onboardingBody.details.state;
+          initial.postalCode = onboardingBody.details.postalCode;
+          initial.latitude = String(onboardingBody.details.latitude ?? "");
+          initial.longitude = String(onboardingBody.details.longitude ?? "");
+        }
+        setForm(initial);
         setStep(nextKitchen ? "summary" : "name");
         setMessage("");
         setLoaded(true);

@@ -109,10 +109,12 @@ public class ChefApplicationService {
     public KycDocumentResponse uploadDocument(CurrentUser user, KycDocumentType documentType, MultipartFile file) {
         jdbcTemplate.query("SELECT id FROM chef_application WHERE identity_id=? FOR UPDATE",(rs,row)->rs.getObject(1,UUID.class),user.identityId());
         ChefApplicationResponse application = getExistingApplication(user.identityId());
+        if(Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE application_id=? AND submitted AND review_status<>'MORE_INFORMATION_REQUIRED')",Boolean.class,application.id())))
+            throw ApiException.conflict("ONBOARDING_ALREADY_SUBMITTED","Uploads are locked while this application is being reviewed.");
         if (application.status() == ChefApplicationStatus.APPROVED && !hasOnboardingDraft(application.id())) {
             throw ApiException.conflict("CHEF_ALREADY_APPROVED", "Start the updated onboarding before adding its required evidence");
         }
-        if (!requiredApplicationDocuments(application.id(), false).contains(documentType)) {
+        if (!requiredApplicationDocuments(application.id(), false).contains(documentType) && !(documentType==KycDocumentType.FSSAI_LICENSE && hasOnboardingDraft(application.id()))) {
             throw ApiException.badRequest("CHEF_DOCUMENT_TYPE_NOT_ALLOWED", "Use one of the current Chef application evidence types");
         }
 
@@ -129,6 +131,7 @@ public class ChefApplicationService {
             );
         }
 
+        if(!existing.isEmpty()) jdbcTemplate.update("INSERT INTO chef_onboarding_document_history(id,document_id,identity_id,action,snapshot) SELECT ?,id,identity_id,'REPLACED',to_jsonb(d) FROM chef_kyc_document d WHERE id=?",UUID.randomUUID(),existing.getFirst().id());
         StoredDocument stored = storageService.uploadKycDocument(user.identityId(), documentType, file);
         UUID documentId = existing.isEmpty() ? UUID.randomUUID() : existing.getFirst().id();
         if (existing.isEmpty()) {
@@ -140,7 +143,7 @@ public class ChefApplicationService {
         } else {
             jdbcTemplate.update(
                 "UPDATE chef_kyc_document SET original_file_name = ?, blob_container = ?, blob_name = ?, content_type = ?, " +
-                    "file_size_bytes = ?, status = 'UPLOADED', review_reason = NULL, reviewed_by_identity_id = NULL, " +
+                    "file_size_bytes = ?, removed_at=NULL, status = 'UPLOADED', review_reason = NULL, reviewed_by_identity_id = NULL, " +
                     "reviewed_at = NULL, updated_at = now() WHERE id = ?",
                 stored.originalFileName(), stored.container(), stored.blobName(), stored.contentType(),
                 stored.fileSizeBytes(), documentId
@@ -165,7 +168,7 @@ public class ChefApplicationService {
         if (status == null || status == ChefApplicationStatus.NOT_SUBMITTED) {
             return findApplications("WHERE (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))", new Object[]{});
         }
-        return findApplications("WHERE (status = ? OR (? = 'PENDING' AND status = 'APPROVED' AND EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=true AND EXISTS(SELECT 1 FROM chef_kyc_document k WHERE k.application_id=chef_application.id AND k.document_type IN ('SELECTED_PROOF_FRONT','SELECTED_PROOF_BACK','KITCHEN_PHOTO_1','KITCHEN_PHOTO_2','FSSAI_LICENSE') AND k.status <> 'APPROVED')))) AND (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))", status.name(), status.name());
+        return findApplications("WHERE (status = ? OR (? = 'PENDING' AND status = 'APPROVED' AND EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=true AND (d.fssai_reviewed_at IS NULL OR d.fssai_reviewed_number IS DISTINCT FROM d.details->>'fssaiNumber' OR EXISTS(SELECT 1 FROM chef_kyc_document k WHERE k.application_id=chef_application.id AND k.removed_at IS NULL AND k.document_type IN ('SELECTED_PROOF_FRONT','SELECTED_PROOF_BACK','KITCHEN_PHOTO_1','KITCHEN_PHOTO_2','FSSAI_LICENSE') AND k.status <> 'APPROVED'))))) AND (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))", status.name(), status.name());
     }
 
     public ChefApplicationResponse getApplicationForAdmin(CurrentUser admin, UUID applicationId) {
@@ -211,6 +214,8 @@ public class ChefApplicationService {
         if (application.status() != ChefApplicationStatus.PENDING) {
             throw ApiException.conflict("CHEF_APPLICATION_NOT_PENDING", "Only pending chef applications can be rejected");
         }
+        if(onboardingSubmissionBlocked(applicationId))
+            throw ApiException.conflict("ONBOARDING_NOT_SUBMITTED","Wait for the Chef to submit the completed onboarding application.");
         updateDecision(applicationId, admin.identityId(), "REJECTED", request.reason());
         ChefApplicationResponse rejected = getApplicationForAdmin(admin, applicationId);
         notificationInternalClient.chefRejected(rejected);
@@ -219,6 +224,8 @@ public class ChefApplicationService {
 
     private void requireCompleteApplicationDocuments(UUID applicationId) {
         Set<KycDocumentType> required = requiredApplicationDocuments(applicationId, true);
+        if(hasOnboardingDraft(applicationId) && !onboardingFssaiVerified(applicationId))
+            throw ApiException.conflict("FSSAI_VERIFICATION_REQUIRED","Review and record the current FSSAI registration number before approving this application.");
         List<KycDocumentResponse> evidence = listApplicationEvidence(applicationId);
         Set<KycDocumentType> uploaded = evidence.stream()
             .map(KycDocumentResponse::documentType)
@@ -279,6 +286,10 @@ public class ChefApplicationService {
         } catch (IllegalArgumentException ex) {
             throw ApiException.conflict("ONBOARDING_STATE_INVALID", "The saved Chef document choice is invalid.");
         }
+    }
+
+    public boolean onboardingFssaiVerified(UUID applicationId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE application_id=? AND fssai_reviewed_number=details->>'fssaiNumber' AND fssai_reviewed_at IS NOT NULL)",Boolean.class,applicationId));
     }
 
     public boolean onboardingSubmissionBlocked(UUID applicationId) {
@@ -356,14 +367,14 @@ public class ChefApplicationService {
 
     private List<KycDocumentResponse> listLegacyDocuments(UUID applicationId) {
         return jdbcTemplate.query(
-            "SELECT * FROM chef_kyc_document WHERE application_id = ? AND (document_type IN ('AADHAAR_CARD', 'PAN_CARD') OR EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_kyc_document.application_id)) ORDER BY document_type",
+            "SELECT * FROM chef_kyc_document WHERE application_id = ? AND removed_at IS NULL AND (document_type IN ('AADHAAR_CARD', 'PAN_CARD') OR EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_kyc_document.application_id)) ORDER BY document_type",
             this::mapDocument, applicationId
         );
     }
 
     private List<KycDocumentResponse> listApplicationEvidence(UUID applicationId) {
         return jdbcTemplate.query(
-            "SELECT * FROM chef_kyc_document WHERE application_id = ? AND document_type IN ('APPLICANT_PHOTO', 'GOVERNMENT_ID_FRONT', 'GOVERNMENT_ID_BACK', 'TAX_ID_CARD', 'KITCHEN_PHOTO_1', 'KITCHEN_PHOTO_2', 'FSSAI_LICENSE', 'SELECTED_PROOF_FRONT', 'SELECTED_PROOF_BACK') ORDER BY document_type",
+            "SELECT * FROM chef_kyc_document WHERE application_id = ? AND removed_at IS NULL AND document_type IN ('APPLICANT_PHOTO', 'GOVERNMENT_ID_FRONT', 'GOVERNMENT_ID_BACK', 'TAX_ID_CARD', 'KITCHEN_PHOTO_1', 'KITCHEN_PHOTO_2', 'FSSAI_LICENSE', 'SELECTED_PROOF_FRONT', 'SELECTED_PROOF_BACK') ORDER BY document_type",
             this::mapDocument, applicationId
         );
     }

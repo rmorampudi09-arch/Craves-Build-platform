@@ -28,7 +28,11 @@ public final class BankOnboardingModels {
                          String state, String evidenceHash) {}
     public record Status(UUID id, String state, String lastFour, String ifsc, boolean bankValidated,
                          boolean applicationApproved, boolean automaticActivation, String message,
-                         Instant updatedAt) {}
+                         Instant updatedAt,String accountHolderName,String bankName,String branchName) {
+        public Status(UUID id,String state,String lastFour,String ifsc,boolean bankValidated,boolean applicationApproved,boolean automaticActivation,String message,Instant updatedAt) {
+            this(id,state,lastFour,ifsc,bankValidated,applicationApproved,automaticActivation,message,updatedAt,null,null,null);
+        }
+    }
     public record AdminRow(UUID chefId, Status bank) {}
     public record Work(UUID id, UUID chefId, UUID leaseId, String state, String validationId,
                        String encryptedDetails, Instant createdAt) {

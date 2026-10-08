@@ -105,6 +105,7 @@ class ChefApplicationReadinessTest {
             KycDocumentType.KITCHEN_PHOTO_2, KycDocumentType.FSSAI_LICENSE);
         setup(ChefApplicationStatus.PENDING, required.stream().map(type -> document(type, "APPROVED")).toList());
         when(applications.requiredApplicationDocuments(applicationId, false)).thenReturn(required);
+        when(applications.onboardingFssaiVerified(applicationId)).thenReturn(true);
         when(applications.onboardingSubmissionBlocked(applicationId)).thenReturn(true);
         var result = service.getReadiness(user);
         assertEquals(4, result.requiredDocumentCount());
@@ -121,6 +122,7 @@ class ChefApplicationReadinessTest {
         setup(ChefApplicationStatus.PENDING, required.stream().filter(type -> type != KycDocumentType.SELECTED_PROOF_BACK)
             .map(type -> document(type, "APPROVED")).toList());
         when(applications.requiredApplicationDocuments(applicationId, false)).thenReturn(required);
+        when(applications.onboardingFssaiVerified(applicationId)).thenReturn(true);
         var result = service.getReadiness(user);
         assertEquals(5, result.requiredDocumentCount());
         assertFalse(result.approvalReady());

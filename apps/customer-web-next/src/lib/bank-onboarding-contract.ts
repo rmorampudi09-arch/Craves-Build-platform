@@ -14,6 +14,7 @@ export const bankStatusSchema = z.object({
   state: z.enum(["NOT_SUBMITTED", "QUEUED", "SUBMITTING", "VALIDATING", "UNKNOWN", "WAITING_APPROVAL", "VERIFIED", "VALIDATION_FAILED", "NAME_MISMATCH", "APPLICANT_ACTION_REQUIRED", "SUPERSEDED"]),
   lastFour: z.string().regex(/^[0-9]{4}$/).nullable(), ifsc: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/).nullable(),
   bankValidated: z.boolean(), applicationApproved: z.boolean(), automaticActivation: z.boolean(),
+  accountHolderName: z.string().max(200).nullable().optional(), bankName: z.string().max(255).nullable().optional(), branchName: z.string().max(255).nullable().optional(),
   message: z.string().max(1000), updatedAt: z.string().datetime().nullable(),
 });
 export type BankStatus = z.infer<typeof bankStatusSchema>;

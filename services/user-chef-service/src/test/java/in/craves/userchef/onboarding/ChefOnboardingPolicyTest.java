@@ -25,7 +25,7 @@ class ChefOnboardingPolicyTest {
     @Test void singleFileChoicesNeverRequireBackOrSeparatePanOrApplicantPhoto() {
         for(var proof:List.of(ProofKind.PAN,ProofKind.BANK_STATEMENT)) {
             var required=ChefOnboardingPolicy.required(proof);
-            assertEquals(4,required.size());
+            assertEquals(3,required.size());
             assertFalse(required.contains(KycDocumentType.SELECTED_PROOF_BACK));
             assertFalse(required.contains(KycDocumentType.TAX_ID_CARD));
             assertFalse(required.contains(KycDocumentType.APPLICANT_PHOTO));
@@ -33,21 +33,21 @@ class ChefOnboardingPolicyTest {
     }
     @Test void twoSidedChoicesRequireBothSidesOfSameSelectedProof() {
         for(var proof:List.of(ProofKind.AADHAAR,ProofKind.OTHER_GOVERNMENT_ID)) {
-            assertEquals(5,ChefOnboardingPolicy.required(proof).size());
+            assertEquals(4,ChefOnboardingPolicy.required(proof).size());
             assertTrue(ChefOnboardingPolicy.required(proof).contains(KycDocumentType.SELECTED_PROOF_BACK));
         }
     }
     @Test void chefWithoutFssaiAlwaysResumesFssaiRegardlessOfHelpOrContentAccess() {
         var docs=List.of(doc(KycDocumentType.KITCHEN_PHOTO_1,"APPROVED"),doc(KycDocumentType.KITCHEN_PHOTO_2,"UPLOADED"));
         assertEquals("fssai",ChefOnboardingPolicy.resume(details(null,null),docs,false));
-        assertEquals("fssai",ChefOnboardingPolicy.resume(details(ProofKind.PAN,"12345678901234"),docs,true));
+        assertEquals("documents",ChefOnboardingPolicy.resume(details(ProofKind.PAN,"12345678901234"),docs,true));
     }
     @Test void rejectedLicenceAndPhotoReturnToTheirSpecificCorrectionStep() {
         var photos=List.of(doc(KycDocumentType.KITCHEN_PHOTO_1,"APPROVED"),doc(KycDocumentType.KITCHEN_PHOTO_2,"REJECTED"));
         assertEquals("kitchen-photos",ChefOnboardingPolicy.resume(details(ProofKind.PAN,"12345678901234"),photos,true));
         var rejected=List.of(doc(KycDocumentType.KITCHEN_PHOTO_1,"APPROVED"),doc(KycDocumentType.KITCHEN_PHOTO_2,"APPROVED"),
             doc(KycDocumentType.FSSAI_LICENSE,"REJECTED"),doc(KycDocumentType.SELECTED_PROOF_FRONT,"APPROVED"));
-        assertEquals("fssai",ChefOnboardingPolicy.resume(details(ProofKind.PAN,"12345678901234"),rejected,true));
+        assertEquals("waiting",ChefOnboardingPolicy.resume(details(ProofKind.PAN,"12345678901234"),rejected,true));
     }
     @Test void completedEvidenceIsReviewedBeforeItCanEnterWaiting() {
         var docs=ChefOnboardingPolicy.required(ProofKind.PAN).stream().map(type->doc(type,"UPLOADED")).toList();

@@ -14,6 +14,27 @@ class PreflightTests(unittest.TestCase):
         self.sources["13"]["script"] = "V13__customer_address_label.sql"
         self.rows = [{"version": str(v), **self.sources[str(v)], "type": "SQL", "success": True} for v in range(1, 13)]
 
+    def test_v16_requires_exact_source_and_applied_history_checksum(self):
+        for version,script in (("14","V14__chef_onboarding_v2.sql"),("15","V15__chef_onboarding_all_chefs_selected_proof.sql"),("16","V16__chef_onboarding_submission_contract.sql")):
+            self.sources[version]={"script":script,"checksum":int(version)}
+        self.assertEqual(preflight.compare_history(self.rows,self.sources)["v16"],"PENDING")
+        for version in ("13","14","15","16"):
+            self.rows.append({"version":version,**self.sources[version],"type":"SQL","success":True})
+        self.assertEqual(preflight.compare_history(self.rows,self.sources)["v16"],"APPLIED_MATCHING")
+        self.rows[-1]["checksum"]=999
+        with self.assertRaisesRegex(ValueError,"differs.*V16"):
+            preflight.compare_history(self.rows,self.sources)
+
+    def test_bank_release_accepts_only_exact_later_v149(self):
+        sources={"148":{"script":"V148__existing.sql","checksum":148},"149":{"script":"V149__chef_bank_branch_directory.sql","checksum":149}}
+        rows=[{"version":"148",**sources["148"],"type":"SQL","success":True}]
+        self.assertEqual(preflight.compare_bank_history(rows,sources)["v149"],"PENDING")
+        rows.append({"version":"149",**sources["149"],"type":"SQL","success":True})
+        self.assertEqual(preflight.compare_bank_history(rows,sources)["v149"],"APPLIED_MATCHING")
+        rows[-1]["checksum"]=150
+        with self.assertRaises(ValueError):preflight.compare_bank_history(rows,sources)
+        with self.assertRaises(ValueError):preflight.compare_bank_history(rows[:1],{**sources,"147":{"script":"V147__earlier.sql","checksum":147}})
+
     def test_v12_allows_only_pending_approved_v13(self):
         self.assertEqual(preflight.compare_history(self.rows, self.sources)["v13"], "PENDING")
 

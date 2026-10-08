@@ -51,6 +51,7 @@ type Props = {
   photo?: boolean;
   evidence?: ChefEvidenceMetadata;
   disabled: boolean;
+  onRemove?: (id:string) => Promise<void>;
   onUpload: (type: string, file: File, progress: (value: number) => void) => Promise<void>;
 };
 export function ChefOnboardingUpload({
@@ -61,9 +62,12 @@ export function ChefOnboardingUpload({
   evidence,
   disabled,
   onUpload,
+  onRemove,
 }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [savedPreviewUrl, setSavedPreviewUrl] = useState<string | null>(null);
+  useEffect(() => { setSavedPreviewUrl(null); }, [evidence?.id, evidence?.originalFileName, evidence?.status, evidence?.reviewedAt]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
@@ -109,13 +113,31 @@ export function ChefOnboardingUpload({
       await onUpload(type, file, (value) => {
         if (mounted.current) setProgress(value);
       });
-      if (mounted.current) setFile(null);
+      if (mounted.current) { setFile(null); setSavedPreviewUrl(null); }
     } catch (failure) {
       if (mounted.current)
         setError(failure instanceof Error ? failure.message : "Upload failed. Please try again.");
     } finally {
       if (mounted.current) setBusy(false);
     }
+  }
+  async function savedPreview() {
+    if(!evidence || busy) return;
+    setBusy(true);setError("");
+    try {
+      const response=await fetch(`/api/chef/onboarding/documents/${evidence.id}/preview`,{cache:"no-store",credentials:"same-origin"});
+      const data:unknown=await response.json();
+      if(!response.ok || !data || typeof data!=="object" || !("url" in data) || typeof data.url!=="string" || !data.url.startsWith("https://")) throw new Error("Preview is unavailable. Please retry.");
+      if(mounted.current) setSavedPreviewUrl(data.url);
+    } catch(failure) {if(mounted.current) setError(failure instanceof Error?failure.message:"Preview failed.");}
+    finally {if(mounted.current) setBusy(false);}
+  }
+  async function removeSaved() {
+    if(!evidence || !onRemove || locked || busy) return;
+    setBusy(true);setError("");
+    try {await onRemove(evidence.id);}
+    catch(failure) {if(mounted.current) setError(failure instanceof Error?failure.message:"Removal failed.");}
+    finally {if(mounted.current) setBusy(false);}
   }
   return (
     <section
@@ -145,6 +167,7 @@ export function ChefOnboardingUpload({
           <span className="text-sm">{photo ? "Add a kitchen photo" : "Add your document"}</span>
         </div>
       )}
+      {savedPreviewUrl ? <a href={savedPreviewUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block underline">Open saved {label.toLowerCase()}</a> : null}
       {file && !preview ? (
         <p className="chef-onboarding-file-name flex items-center gap-2">
           <FileText size={16} aria-hidden="true" />
@@ -184,6 +207,8 @@ export function ChefOnboardingUpload({
           }}
         />
       ) : null}
+      {evidence ? <button type="button" className="chef-onboarding-text-action mt-3" disabled={disabled || busy} onClick={()=>void savedPreview()}>Preview saved upload</button> : null}
+      {evidence && !file && !locked && onRemove ? <button type="button" className="chef-onboarding-text-action mt-3" disabled={disabled || busy} onClick={()=>void removeSaved()}>Remove saved upload</button> : null}
       {locked ? (
         <p className="chef-onboarding-verified mt-3">
           <CheckCircle2 size={15} aria-hidden="true" />

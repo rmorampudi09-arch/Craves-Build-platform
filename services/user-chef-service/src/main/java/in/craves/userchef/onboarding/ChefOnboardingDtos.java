@@ -23,8 +23,10 @@ public final class ChefOnboardingDtos {
         boolean enabled, boolean legacy, long version, String resumeStep, boolean submitted,
         String phoneNumber, Details details, ChefApplicationResponse application,
         List<KycDocumentResponse> documents, List<String> requiredDocuments,
-        String supportPhone, String supportEmail
+        String supportPhone, String supportEmail, ReviewProgress progress
     ) {}
+    public record ReviewProgress(String status,String reason,String nextAction,boolean fssaiVerified,String termsVersion) {}
+    public record ReviewAction(Long expectedVersion,String action,String reason,String fssaiNumber) {}
     public record HelpRequest(UUID requestKey, String message) {}
     public record Help(
         UUID id, String caseNumber, UUID supportCaseId, UUID identityId, Details details,

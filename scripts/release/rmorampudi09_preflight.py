@@ -101,9 +101,20 @@ def compare_history(rows, expected):
 
 
 def compare_bank_history(rows, expected):
+    require(isinstance(rows,list) and 0 < len(rows) <= 250,"Bank Flyway history is missing or excessive")
     require(expected.get("149", {}).get("script") == "V149__chef_bank_branch_directory.sql", "Incorrect V149 source")
-    versions=set(); evidence=[]
+    versions=set(); evidence=[]; schema_seen=False
     for row in rows:
+        require(set(row)=={"version","script","checksum","success","type"},"Unexpected bank history fields")
+        # Flyway's reviewed schema-creation marker is not a versioned SQL migration.
+        # Accept only the exact existing payment_schema marker before all SQL rows.
+        if row.get("type")=="SCHEMA":
+            require(not schema_seen and not versions and row.get("version") is None
+                    and row.get("checksum") is None and row.get("script")=='"payment_schema"'
+                    and row.get("success") is True,"Unrecognized bank schema marker")
+            schema_seen=True
+            evidence.append({"kind":"SCHEMA","version":None,"script":row["script"],"success":True})
+            continue
         require(row.get("type")=="SQL" and row.get("version") not in versions,"Unknown or duplicate bank migration")
         version=row["version"]; versions.add(version); source=expected.get(version)
         require(source is not None and row.get("success") is True and row.get("script")==source["script"] and row.get("checksum")==source["checksum"],"Bank migration history differs at V"+str(version))
@@ -259,3 +270,4 @@ if __name__ == "__main__":
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2))
     raise SystemExit(1 if result["blockers"] else 0)
+

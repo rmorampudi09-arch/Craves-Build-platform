@@ -84,8 +84,13 @@ def wait_flags(name,before,values):
     raise ValueError('Chef activation revision did not become healthy')
 
 
-def activate(sha,output):
-    report=preflight();applied(report);bank=app(BANK);bank_available(bank,report)
+def activate(sha,output,allow_bank_unavailable=False):
+    report=preflight();applied(report);bank=app(BANK)
+    bank_ready=True
+    try:bank_available(bank,report)
+    except ValueError:
+        if not allow_bank_unavailable:raise
+        bank_ready=False
     for name in (BANK,CHEF,WEB):verify_image(image(app(name)),sha)
     origin='https://'+bank['properties']['configuration']['ingress']['fqdn']
     require(origin.endswith('.azurecontainerapps.io') and '/' not in origin[8:],'Unexpected bank service origin')
@@ -110,15 +115,15 @@ def activate(sha,output):
             if missing:args+=['--remove-env-vars',*missing]
             azure(*args)
             raise RuntimeError('Chef activation failed; previous flag values restored, verify Azure revision')
-    output.write_text(json.dumps({'sourceSha':sha,'activation':receipts},indent=2)+'\n')
-    print('Chef onboarding activated; both healthy revisions and unrelated runtime verified.',flush=True)
+    output.write_text(json.dumps({'sourceSha':sha,'activation':receipts,'bankEnrollmentAvailable':bank_ready,'financeControlsChanged':False},indent=2)+'\n')
+    print('Chef onboarding pages activated; healthy revisions and unrelated runtime verified. Bank enrollment available: '+str(bank_ready),flush=True)
 
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--operation',choices=('preflight','backend','apim','web','activate'),default='preflight')
     parser.add_argument('--sha',required=True);parser.add_argument('--regression-run',required=True)
-    parser.add_argument('--confirm',action='store_true');parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--confirm',action='store_true');parser.add_argument('--allow-bank-unavailable',action='store_true');parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args();source=Path.cwd()
     require(args.operation=='preflight' or args.confirm,'Explicit Chef release confirmation required')
     source_guard(source,args.sha,args.regression_run);args.output.mkdir(parents=True,exist_ok=True)
@@ -133,7 +138,7 @@ def main():
         run('python3',str(source/'scripts/finance/configure_chef_ifsc_apim.py'),'--apply','--expected-source-sha',args.sha,'--output',str(args.output/'chef-ifsc-apim.json'))
         print('Chef onboarding and authenticated IFSC operations published.',flush=True)
     elif args.operation=='web':applied(preflight());deploy_web(source,args.sha,args.regression_run,args.output/'chef-web.json')
-    else:activate(args.sha,args.output/'chef-activation.json')
+    else:activate(args.sha,args.output/'chef-activation.json',args.allow_bank_unavailable)
 
 if __name__=='__main__':
     try:main()

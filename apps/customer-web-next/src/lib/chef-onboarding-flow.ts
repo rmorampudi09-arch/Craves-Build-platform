@@ -33,8 +33,18 @@ export const CHEF_SECTION_DESCRIPTIONS: Record<ChefFormScreen, string> = {
   resume: "Continue setting up your kitchen.",
   submitted:
     "Thank you for joining Craves. Your application has been received, and our team will review your details.",
-  status: "Check your application and the next action available to you.",
+  status: "Your application status and what happens next.",
 };
+/** Short section names used in the Welcome back list and on Review. */
+export const CHEF_SECTION_LABELS: Record<ChefFormSection, string> = {
+  personal: "Basic details",
+  kitchen: "Kitchen details",
+  fssai: "FSSAI",
+  documents: "Identity proof",
+  bank: "Bank details",
+};
+export const FSSAI_GUIDE_TITLE = "How to apply for FSSAI";
+export const FSSAI_GUIDE_DESCRIPTION = "Follow these simple steps to apply for your registration.";
 export function chefFullName(details: Pick<OnboardingDetails, "firstName" | "lastName">): string {
   return [details.firstName, details.lastName].filter(Boolean).join(" ");
 }
@@ -88,6 +98,112 @@ export function completedSections(
     bank: state.bankEnrollmentRequired === false || (bankCanContinue(bank) && sameChefBankName(bank?.accountHolderName, chefFullName(d ?? {firstName:"",lastName:""}))),
   };
 }
+export type ChefSectionProgress = "complete" | "in-progress" | "not-started" | "attention";
+const SECTION_DOCUMENTS: Record<ChefFormSection, readonly string[]> = {
+  personal: [],
+  kitchen: ["KITCHEN_PHOTO_1", "KITCHEN_PHOTO_2"],
+  fssai: ["FSSAI_LICENSE"],
+  documents: ["SELECTED_PROOF_FRONT", "SELECTED_PROOF_BACK"],
+  bank: [],
+};
+/** The onboarding section that owns a document type, used to explain review requests. */
+export function sectionForDocument(type: string): ChefFormSection | null {
+  return (
+    (Object.keys(SECTION_DOCUMENTS) as ChefFormSection[]).find((section) =>
+      SECTION_DOCUMENTS[section].includes(type),
+    ) ?? null
+  );
+}
+/** Display-only progress for the Welcome back list; completion itself stays authoritative. */
+export function sectionProgress(
+  state: OnboardingState,
+  bank: BankStatus | null,
+): Record<ChefFormSection, ChefSectionProgress> {
+  const completion = completedSections(state, bank);
+  const d = state.details;
+  const rejected = (section: ChefFormSection) =>
+    state.documents.some(
+      (document) =>
+        document.status === "REJECTED" && SECTION_DOCUMENTS[section].includes(document.documentType),
+    );
+  const uploaded = (section: ChefFormSection) =>
+    state.documents.some(
+      (document) =>
+        document.status !== "REJECTED" && SECTION_DOCUMENTS[section].includes(document.documentType),
+    );
+  const started: Record<ChefFormSection, boolean> = {
+    personal: Boolean(d && (d.firstName || d.lastName || d.dateOfBirth)),
+    kitchen: Boolean(d && (d.kitchenName || d.addressLine1 || d.latitude != null)) || uploaded("kitchen"),
+    fssai: Boolean(d?.fssaiNumber),
+    documents: Boolean(d?.proofKind) || uploaded("documents"),
+    bank: Boolean(bank?.id),
+  };
+  const result = {} as Record<ChefFormSection, ChefSectionProgress>;
+  for (const section of CHEF_SECTIONS) {
+    result[section] = rejected(section)
+      ? "attention"
+      : completion[section]
+        ? "complete"
+        : started[section]
+          ? "in-progress"
+          : "not-started";
+  }
+  if (bank && ["VALIDATION_FAILED", "NAME_MISMATCH", "APPLICANT_ACTION_REQUIRED"].includes(bank.state))
+    result.bank = "attention";
+  return result;
+}
+
+export type ChefApplicationPhase =
+  | "DRAFT"
+  | "SUBMITTED"
+  | "UNDER_REVIEW"
+  | "MORE_INFORMATION_REQUIRED"
+  | "APPROVED"
+  | "REJECTED";
+/** Maps the authoritative application and review progress to the phase shown to the applicant. */
+export function applicationPhase(input: {
+  application: Pick<ChefApplication, "status">;
+  progress?: { status: string } | null;
+  submitted: boolean;
+}): ChefApplicationPhase {
+  const review = input.progress?.status;
+  if (input.application.status === "APPROVED") return "APPROVED";
+  if (review === "MORE_INFORMATION_REQUIRED") return "MORE_INFORMATION_REQUIRED";
+  if (input.application.status === "REJECTED") return "REJECTED";
+  if (input.application.status === "NOT_SUBMITTED" || !input.submitted) return "DRAFT";
+  if (review === "UNDER_REVIEW") return "UNDER_REVIEW";
+  return "SUBMITTED";
+}
+export const APPLICATION_PHASE_COPY: Record<
+  ChefApplicationPhase,
+  { label: string; message: string }
+> = {
+  DRAFT: {
+    label: "Draft",
+    message: "Your application is not complete.",
+  },
+  SUBMITTED: {
+    label: "Submitted",
+    message: "Your application has been submitted for review.",
+  },
+  UNDER_REVIEW: {
+    label: "Under review",
+    message: "Our team is reviewing your application.",
+  },
+  MORE_INFORMATION_REQUIRED: {
+    label: "More information required",
+    message: "Some details need to be updated.",
+  },
+  APPROVED: {
+    label: "Approved",
+    message: "Your application has been approved.",
+  },
+  REJECTED: {
+    label: "Not approved",
+    message: "Your application was not approved.",
+  },
+};
+
 export function firstIncompleteSection(
   state: OnboardingState,
   bank: BankStatus | null,

@@ -77,7 +77,7 @@ function mount() {
   );
 }
 async function resume() {
-  fireEvent.click(await screen.findByRole("button", { name: "Continue onboarding" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Continue application" }));
   return screen.findByRole("heading", { name: "FSSAI details" });
 }
 it("restores the first incomplete FSSAI section on the next mount", async () => {
@@ -113,12 +113,12 @@ it("keeps an approved Chef's dashboard available without forcing new application
     ),
   );
   mount();
-  expect((await screen.findByRole("link", { name: "Go to dashboard" })).getAttribute("href")).toBe(
+  expect((await screen.findByRole("link", { name: "Open Chef Dashboard" })).getAttribute("href")).toBe(
     "/chef",
   );
   expect(screen.queryByRole("button", { name: "Submit application" })).toBeNull();
 });
-it("explains an absent FSSAI number and confirms save-for-later only after the backend save", async () => {
+it("explains an absent FSSAI number and continues without one only after the backend save", async () => {
   mount();
   await resume();
   fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
@@ -129,8 +129,9 @@ it("explains an absent FSSAI number and confirms save-for-later only after the b
     vi.mocked(fetch).mock.calls.every(([, options]) => !options || options.method !== "PUT"),
   ).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "Don’t have FSSAI?" }));
-  fireEvent.click(screen.getByRole("button", { name: "Save progress for later" }));
-  await screen.findByText("Your progress is saved. Add your FSSAI number when you are ready.");
+  await screen.findByRole("heading", { name: "How to apply for FSSAI" });
+  fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
+  await screen.findByRole("heading", { name: "Identity verification" });
   expect(vi.mocked(fetch).mock.calls.some(([, options]) => options?.method === "PUT")).toBe(true);
 });
 it("uses the number-only FSSAI form without offering a certificate or selfie upload", async () => {
@@ -158,13 +159,13 @@ it("preserves an unsaved language choice after a failed save and confirms only a
   await resume();
   fireEvent.click(screen.getByRole("button", { name: "Don’t have FSSAI?" }));
   fireEvent.change(screen.getByLabelText("Preferred language"), { target: { value: "te" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save progress for later" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
   expect((await screen.findByRole("alert")).textContent).toContain("Save is temporarily unavailable.");
-  expect(screen.queryByText("Your progress is saved. Add your FSSAI number when you are ready.")).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Identity verification" })).toBeNull();
   expect((screen.getByLabelText("Preferred language") as HTMLSelectElement).value).toBe("te");
   failSave = false;
-  fireEvent.click(screen.getByRole("button", { name: "Save progress for later" }));
-  await screen.findByText("Your progress is saved. Add your FSSAI number when you are ready.");
+  fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
+  await screen.findByRole("heading", { name: "Identity verification" });
   expect(saveBodies).toHaveLength(2);
   expect(saveBodies).toEqual([
     expect.objectContaining({ expectedVersion: 1, details: expect.objectContaining({ language: "te" }) }),

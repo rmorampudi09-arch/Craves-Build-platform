@@ -53,9 +53,9 @@ function normaliseMobile(value: string) {
   return digits.slice(0, 10);
 }
 
-function validate(fields: Fields, mode: AuthMode): FieldErrors {
+function validate(fields: Fields, mode: AuthMode, role: AuthRole): FieldErrors {
   const errors: FieldErrors = {};
-  if (mode === 'sign-up') {
+  if (mode === 'sign-up' && role === 'customer') {
     if (!fields.firstName.trim()) errors.firstName = 'Enter your first name.';
     if (!fields.lastName.trim()) errors.lastName = 'Enter your last name.';
   }
@@ -261,14 +261,14 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode }: AuthModalProps) => 
     mode,
     role,
     phone: `+91${fields.mobile}`,
-    ...(isSignUp ? {
+    ...(isSignUp && role === 'customer' ? {
       firstName: fields.firstName.trim(),
       lastName: fields.lastName.trim(),
     } : {}),
   });
 
   const validateFields = () => {
-    const nextErrors = validate(fields, mode);
+    const nextErrors = validate(fields, mode, role);
     setErrors(nextErrors);
     const firstError = Object.keys(nextErrors)[0] as keyof Fields | undefined;
     if (firstError) {
@@ -431,7 +431,7 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode }: AuthModalProps) => 
                 </fieldset>
 
                 <div className="auth-modal__fields">
-                  {isSignUp && <>
+                  {isSignUp && role === 'customer' && <>
                     <div className="auth-modal__name-grid">
                       <div className="auth-modal__field">
                         <label htmlFor="craves-auth-firstName">First name <span className="auth-modal__required" aria-hidden="true">*</span></label>

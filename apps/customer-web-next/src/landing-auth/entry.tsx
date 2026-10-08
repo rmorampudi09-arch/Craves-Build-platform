@@ -102,7 +102,7 @@ function CustomerAuth({ onClose }: { onClose: () => void }) {
     context = captureSessionContext();
     watched.current = context;
 
-    if (request.mode === "sign-up") {
+    if (request.mode === "sign-up" && request.role === "customer") {
       const profileResponse = await fetch("/api/customer/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },

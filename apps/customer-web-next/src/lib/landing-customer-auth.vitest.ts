@@ -84,7 +84,11 @@ it("opens the exact ZIP popup and switches registration roles without requesting
   expect(screen.queryByLabelText(/Email/)).toBeNull();
   fireEvent.click(screen.getByRole("radio", { name: /Home Chef/ }));
   expect(screen.getByRole("radio", { name: /Home Chef/ })).toHaveProperty("checked", true);
+  expect(screen.queryByLabelText("First name", { exact: false })).toBeNull();
+  expect(screen.queryByLabelText("Last name", { exact: false })).toBeNull();
+  fireEvent.click(screen.getByRole("radio", { name: /Customer/ }));
   expect(screen.getByLabelText("First name", { exact: false })).toBeTruthy();
+  fireEvent.click(screen.getByRole("radio", { name: /Home Chef/ }));
   fireEvent.click(screen.getByRole("button", { name: /^Sign in$/ }));
   expect(screen.getByRole("dialog", { name: "Home Chef sign in" })).toBeTruthy();
   expect(mocks.begin).not.toHaveBeenCalled();
@@ -157,6 +161,21 @@ it("registers the original name fields before routing to customer home", async (
   expect(mocks.fetch).toHaveBeenCalledWith("/api/customer/profile", expect.objectContaining({ method: "PUT", body: JSON.stringify({ firstName: "Asha", lastName: "Rao" }) }));
   expect(mocks.profile).toHaveBeenCalledWith(profile, expect.any(Object));
   expect(mocks.navigate).toHaveBeenCalledWith("/home");
+});
+
+it("starts Chef signup with phone OTP and reaches Basic details without a customer profile write", async () => {
+  await act(async () => openLandingAuth());
+  fireEvent.click(screen.getByRole("button", { name: "Create a customer account" }));
+  fireEvent.click(screen.getByRole("radio", { name: /Home Chef/ }));
+  expect(screen.queryByLabelText(/First name|Last name|Email/)).toBeNull();
+  await requestCode();
+  expect(mocks.begin).toHaveBeenCalledOnce();
+  await submitCode();
+  expect(mocks.install).toHaveBeenCalledWith(identity);
+  expect(mocks.fetch.mock.calls.some(([url, options]) => url === "/api/customer/profile" && options?.method === "PUT")).toBe(false);
+  expect(mocks.profile).not.toHaveBeenCalled();
+  expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/chef/application");
+  expect(mocks.user?.roles).toEqual(["CUSTOMER"]);
 });
 
 it("does not create a session when a pending OTP verification completes after close", async () => {

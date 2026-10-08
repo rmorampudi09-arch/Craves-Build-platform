@@ -1,0 +1,358 @@
+.chef-onboarding-backdrop {
+  background: rgb(26 26 26 / 0.55);
+  backdrop-filter: blur(8px);
+}
+.chef-onboarding-modal {
+  position: fixed;
+  z-index: 50;
+  inset: auto 0 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 94dvh;
+  color: #1a1a1a;
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 24px 80px rgb(26 26 26 / 0.16);
+  font-family: var(--font-craves-display), sans-serif;
+  outline: none;
+}
+.chef-onboarding-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 14px 20px;
+  border-bottom: 1px solid #edf0f2;
+}
+.chef-onboarding-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.chef-onboarding-save-state {
+  font-size: 11px;
+  color: #6b6b6b;
+}
+.chef-onboarding-text-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #c4200f;
+  border-radius: 8px;
+}
+.chef-onboarding-text-action:disabled {
+  opacity: 0.5;
+}
+.chef-onboarding-text-action:focus-visible,
+.chef-onboarding-button:focus-visible {
+  outline: 2px solid #c4200f;
+  outline-offset: 3px;
+}
+.chef-onboarding-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  padding: 24px;
+  scroll-padding: 20px;
+}
+.chef-onboarding-heading {
+  margin-bottom: 28px;
+}
+.chef-onboarding-heading h1 {
+  font-size: 26px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: -0.7px;
+}
+.chef-onboarding-heading p {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #6b6b6b;
+}
+.chef-onboarding-footer {
+  flex-shrink: 0;
+  padding: 16px 24px max(16px, env(safe-area-inset-bottom));
+  border-top: 1px solid #edf0f2;
+  background: #fff;
+  border-radius: inherit;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+.chef-onboarding-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 18px;
+  background: #f62e18;
+  color: #fff;
+  border-radius: 12px;
+  font-size: 19px;
+  line-height: 24px;
+  font-weight: 800;
+  transition:
+    background-color 0.18s,
+    transform 0.18s;
+}
+.chef-onboarding-button:hover {
+  background: #dc2814;
+}
+.chef-onboarding-button:active {
+  transform: scale(0.99);
+}
+.chef-onboarding-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.chef-onboarding-field {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.chef-onboarding-input {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  padding: 13px 15px;
+  border: 1px solid #d5d9df;
+  border-radius: 12px;
+  background: #fff;
+  color: #1a1a1a;
+  font-size: 16px;
+  font-weight: 500;
+  outline: none;
+}
+.chef-onboarding-input::placeholder {
+  color: #6b6b6b;
+}
+.chef-onboarding-input:focus {
+  border-color: #c4200f;
+  box-shadow: 0 0 0 3px #feedea;
+}
+.chef-onboarding-input[aria-invalid="true"] {
+  border-color: #c4200f;
+}
+.chef-onboarding-input:read-only {
+  background: #f1f3f5;
+}
+.chef-onboarding-helper {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: #6b6b6b;
+}
+.chef-onboarding-group {
+  display: grid;
+  gap: 20px;
+}
+.chef-onboarding-section {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #edf0f2;
+}
+.chef-onboarding-section h2 {
+  margin-bottom: 16px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.chef-onboarding-notice {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f1f3f5;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.chef-onboarding-error {
+  background: #feedea;
+  color: #c4200f;
+}
+.chef-onboarding-verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #c4200f;
+  font-size: 12px;
+  font-weight: 700;
+}
+.chef-onboarding-pair {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.chef-onboarding-review {
+  display: grid;
+  gap: 14px;
+}
+.chef-onboarding-review-block {
+  padding: 20px 0;
+  border-bottom: 1px solid #edf0f2;
+}
+.chef-onboarding-review-block:first-child {
+  padding-top: 0;
+}
+.chef-onboarding-review-block header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.chef-onboarding-review-block h2 {
+  font-size: 16px;
+  font-weight: 800;
+}
+.chef-onboarding-review-block dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.chef-onboarding-review-block dt {
+  color: #6b6b6b;
+}
+.chef-onboarding-review-block dd {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.chef-onboarding-upload {
+  padding: 16px;
+  border: 1px solid #d5d9df;
+  border-radius: 16px;
+}
+.chef-onboarding-upload h3 {
+  font-size: 14px;
+  font-weight: 700;
+}
+.chef-onboarding-upload img {
+  margin-top: 14px;
+  width: 100%;
+  max-height: 200px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+.chef-onboarding-upload-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+}
+.chef-onboarding-upload progress {
+  width: 100%;
+  height: 5px;
+  margin-top: 12px;
+  accent-color: #f62e18;
+}
+.chef-onboarding-file-name {
+  margin-top: 10px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  color: #6b6b6b;
+}
+.chef-onboarding-email [class*="text-\[\#2E7D32\]"] {
+  color: #c4200f;
+}
+.chef-onboarding-email .bg-\[\#EDF7EE\] {
+  background: #feedea;
+}
+.chef-onboarding-email input {
+  min-height: 56px;
+  font-size: 16px;
+}
+.chef-onboarding-email button {
+  min-height: 44px;
+}
+.chef-onboarding-email button.bg-\[\#F62E18\] {
+  font-size: 15px;
+  background: #c4200f;
+}
+.chef-onboarding-resume-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 0;
+  border-bottom: 1px solid #edf0f2;
+  font-size: 14px;
+}
+.chef-onboarding-resume-row span:last-child {
+  font-size: 12px;
+  color: #6b6b6b;
+}
+.chef-onboarding-guide {
+  display: grid;
+  gap: 22px;
+  padding-left: 22px;
+  list-style: decimal;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.chef-onboarding-guide strong {
+  display: block;
+  font-size: 14px;
+}
+.chef-onboarding-guide p {
+  margin-top: 4px;
+  color: #6b6b6b;
+}
+@media (min-width: 768px) {
+  .chef-onboarding-modal {
+    inset: 50% auto auto 50%;
+    transform: translate(-50%, -50%);
+    width: min(560px, calc(100% - 48px));
+    max-height: min(880px, 90dvh);
+    border-radius: 20px;
+  }
+  .chef-onboarding-header {
+    padding-inline: 28px;
+  }
+  .chef-onboarding-scroll {
+    padding: 28px 32px;
+  }
+  .chef-onboarding-footer {
+    padding-inline: 32px;
+  }
+}
+@media (max-width: 359px) {
+  .chef-onboarding-header {
+    padding-inline: 12px;
+  }
+  .chef-onboarding-scroll,
+  .chef-onboarding-footer {
+    padding-inline: 18px;
+  }
+  .chef-onboarding-save-state {
+    display: none;
+  }
+  .chef-onboarding-pair {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chef-onboarding-modal *,
+  .chef-onboarding-backdrop {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .chef-onboarding-backdrop {
+    backdrop-filter: none;
+    background: #6b6b6b;
+  }
+}

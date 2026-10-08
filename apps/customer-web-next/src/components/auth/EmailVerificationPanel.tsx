@@ -207,7 +207,7 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
             htmlFor={`${id}-email`}
             className="text-sm font-semibold text-[#1A1A1A]"
           >
-            Email <span className="font-medium text-[#6B6B6B]">(optional)</span>
+            Email <span className="font-medium text-[#6B6B6B]">{required ? "(required)" : "(optional)"}</span>
           </label>
           {sameVerifiedEmail ? (
             <span className="rounded-full bg-[#EDF7EE] px-2.5 py-1 text-[0.68rem] font-bold text-[#2E7D32]">

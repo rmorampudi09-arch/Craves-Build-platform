@@ -83,7 +83,6 @@ test("profile edit stays focused on name, phone and optional OTP email verificat
   assert.match(edit, /replace\(\/\^\\\+91/);
   assert.match(edit, /EmailVerificationPanel initialEmail=\{initialEmail\} compact/);
   assert.doesNotMatch(edit, /Verified phone:/);
-  assert.match(email, /Email <span[^>]*>\(optional\)<\/span>/);
   assert.match(email, /aria-label="Send email code"/);
   assert.match(email, /Six-digit email code/);
   assert.match(email, /Verify email/);

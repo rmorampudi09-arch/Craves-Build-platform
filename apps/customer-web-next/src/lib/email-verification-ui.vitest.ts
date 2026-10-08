@@ -42,6 +42,7 @@ beforeEach(() => {
   fetcher = vi.fn<typeof fetch>(async (input, init) => {
     const url = String(input);
     if (url === "/api/auth/session") return Response.json({ identity });
+    if (url === "/api/auth/me") return Response.json(identity);
     if (url === "/api/customer/profile") return Response.json(profile);
     if (url === "/api/auth/email-verification") return Response.json(current);
     if (url.endsWith("/challenges")) { current = { ...pending, email: current.email, emailVerified: current.emailVerified, emailRevision: current.emailRevision }; return Response.json(current, { status: 202 }); }
@@ -57,16 +58,20 @@ function button(name: string | RegExp): HTMLButtonElement { return screen.getByR
 async function register(role: "customer" | "chef", email = "") {
   const authenticated = vi.fn();
   render(createElement(AuthModal, { open: true, mode: "register", initialAccountMode: role, lockAccountMode: true, onClose: vi.fn(), onSwitchMode: vi.fn(), onAuthenticated: authenticated }));
-  fireEvent.change(screen.getByLabelText(/First name/), { target: { value: "Test" } });
-  fireEvent.change(screen.getByLabelText(/Last name/), { target: { value: "Fixture" } });
-  fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: email } });
+  if (role === "customer") {
+    fireEvent.change(screen.getByLabelText(/First name/), { target: { value: "Test" } });
+    fireEvent.change(screen.getByLabelText(/Last name/), { target: { value: "Fixture" } });
+    fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: email } });
+  }
   fireEvent.change(screen.getByLabelText(/Mobile number/), { target: { value: "0000000000" } });
   fireEvent.click(button("Send verification code"));
   await screen.findByLabelText("Six-digit verification code");
   fireEvent.change(screen.getByLabelText("Six-digit verification code"), { target: { value: "000000" } });
   fireEvent.click(button(`Verify and join as ${role === "chef" ? "Home Chef" : "Customer"}`));
-  await screen.findByText("Your phone is verified");
-  await waitFor(() => expect(button("Refresh verification status").disabled).toBe(false));
+  if (role === "customer") {
+    await screen.findByText("Your phone is verified");
+    await waitFor(() => expect(button("Refresh verification status").disabled).toBe(false));
+  } else await waitFor(() => expect(authenticated).toHaveBeenCalled());
   return authenticated;
 }
 async function sendAndVerify() {
@@ -79,6 +84,11 @@ async function sendAndVerify() {
 }
 
 describe("registration and verify-later email UI", () => {
+  it.each([false, true])("labels compact email enrollment according to its required policy (%s)", async required => {
+    render(createElement(EmailVerificationPanel, { compact: true, required }));
+    await screen.findByText(required ? "(required)" : "(optional)");
+    expect(screen.getByLabelText("Email address")).toBeTruthy();
+  });
   it("allows customer registration without email and sends no email until explicitly requested", async () => {
     const authenticated = await register("customer");
     expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith("/challenges"))).toHaveLength(0);
@@ -94,14 +104,11 @@ describe("registration and verify-later email UI", () => {
     fireEvent.click(button("Continue to Craves"));
     expect(authenticated).toHaveBeenCalledWith(expect.objectContaining({ email: verified.email, emailVerified: true }), "customer");
   });
-  it("keeps chef completion blocked until Auth confirms the email", async () => {
+  it("opens chef Basic details after phone OTP and defers email verification to onboarding", async () => {
     const authenticated = await register("chef", "Fixture@example.invalid");
-    expect(button("Continue to chef application").disabled).toBe(true);
-    expect(authenticated).not.toHaveBeenCalled();
-    await sendAndVerify();
-    expect(button("Continue to chef application").disabled).toBe(false);
-    fireEvent.click(button("Continue to chef application"));
-    expect(authenticated).toHaveBeenCalledWith(expect.objectContaining({ emailVerified: true }), "chef");
+    expect(authenticated).toHaveBeenCalledWith(expect.objectContaining({ emailVerified: false }), "chef");
+    expect(fetcher.mock.calls.some(([url, init]) => url === "/api/customer/profile" && init?.method === "PUT")).toBe(false);
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes("/email-verification"))).toBe(false);
   });
   it("does not complete customer registration with a cached phone identity after logout", async () => {
     const authenticated = await register("customer");
@@ -110,23 +117,29 @@ describe("registration and verify-later email UI", () => {
     expect(screen.queryByRole("button", { name: "Verify later and continue" })).toBeNull();
     expect(authenticated).not.toHaveBeenCalled();
   });
-  it("does not complete the prior owner's chef registration after an account switch", async () => {
-    const authenticated = await register("chef", "Fixture@example.invalid");
-    await sendAndVerify();
+  it("does not finish a prior owner's chef phone verification after an account switch", async () => {
+    let resolve!: (value: { user: { getIdToken: () => Promise<string> } }) => void;
+    phoneSignIn.mockResolvedValue({ confirm: () => new Promise(done => { resolve = done; }) });
+    const authenticated = vi.fn();
+    render(createElement(AuthModal, { open: true, mode: "register", initialAccountMode: "chef", lockAccountMode: true, onClose: vi.fn(), onSwitchMode: vi.fn(), onAuthenticated: authenticated }));
+    fireEvent.change(screen.getByLabelText(/Mobile number/), { target: { value: "0000000000" } });
+    fireEvent.click(button("Send verification code"));
+    fireEvent.change(await screen.findByLabelText("Six-digit verification code"), { target: { value: "000000" } });
+    fireEvent.click(button("Verify and join as Home Chef"));
     act(() => setSessionIdentity({ ...identity, id: second }));
-    expect(screen.queryByRole("button", { name: "Continue to chef application" })).toBeNull();
+    await act(async () => { resolve({ user: { getIdToken: async () => "fixture-firebase-token" } }); });
     expect(authenticated).not.toHaveBeenCalled();
+    expect(fetcher.mock.calls.some(([url]) => url === "/api/auth/session")).toBe(false);
   });
-  it("requires an email when registering as a chef", async () => {
+  it("shows only the phone field when registering as a chef", async () => {
     render(createElement(AuthModal, { open: true, mode: "register", initialAccountMode: "chef", lockAccountMode: true, onClose: vi.fn(), onSwitchMode: vi.fn() }));
-    const email = screen.getByLabelText(/^Email/) as HTMLInputElement;
-    expect(email.required).toBe(true);
-    fireEvent.change(screen.getByLabelText(/First name/), { target: { value: "Test" } });
-    fireEvent.change(screen.getByLabelText(/Last name/), { target: { value: "Fixture" } });
+    expect(screen.queryByLabelText(/^Email/)).toBeNull();
+    expect(screen.queryByLabelText(/First name/)).toBeNull();
+    expect(screen.queryByLabelText(/Last name/)).toBeNull();
     fireEvent.change(screen.getByLabelText(/Mobile number/), { target: { value: "0000000000" } });
     fireEvent.submit(document.querySelector("form")!);
-    await screen.findByText("Enter an email address for your chef account.");
-    expect(phoneSignIn).not.toHaveBeenCalled();
+    await screen.findByLabelText("Six-digit verification code");
+    expect(phoneSignIn).toHaveBeenCalledTimes(1);
   });
   it("supports verification later inside profile editing without sending the email as a profile field", async () => {
     render(createElement(EditProfileModal, { open: true, profile, onClose: vi.fn(), onSaved: vi.fn() }));

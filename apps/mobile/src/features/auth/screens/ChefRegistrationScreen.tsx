@@ -1,3 +1,4 @@
+import {ChefOnboardingGate} from '../../chefOnboarding/screens/ChefOnboardingGate';
 import React, {useCallback, useEffect, useState} from 'react';
 import {StyleSheet, Text} from 'react-native';
 import {Controller, useForm} from 'react-hook-form';
@@ -37,7 +38,7 @@ const emptyDraft: Form = {
   postalCode: '',
 };
 
-export function ChefRegistrationScreen({navigation}: Props) {
+function LegacyChefRegistrationScreen({navigation}: Props) {
   const dispatch = useAppDispatch();
   const accountResolution = useAppSelector(state => state.auth.accountResolution);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -334,3 +335,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
 });
+
+export function ChefRegistrationScreen(props:Props) {
+  return <ChefOnboardingGate fallback={<LegacyChefRegistrationScreen {...props} />} />;
+}

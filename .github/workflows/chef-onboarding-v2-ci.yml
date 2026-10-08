@@ -4,6 +4,7 @@ on:
     paths:
       - 'services/user-chef-service/**'
       - 'apps/customer-web-next/**'
+      - 'apps/mobile/**'
       - 'scripts/apim/configure-chef-onboarding-v2-apim.sh'
       - 'scripts/release/**'
       - 'azure-pipelines-chef-onboarding-v2-*.yml'
@@ -85,9 +86,43 @@ jobs:
       - run: npm run build
         env:
           CRAVES_CHEF_ONBOARDING_V2_ENABLED: 'true'
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run: {working-directory: apps/mobile}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check mobile onboarding and preserved contracts
+        run: |
+          npx tsc --noEmit
+          npm test -- --runInBand
+      - name: Lint changed mobile source
+        run: |
+          npx eslint src/features/chefOnboarding src/features/auth/screens/ChefRegistrationScreen.tsx src/features/auth/screens/ChefAccountStatusScreen.tsx src/features/chefBusinessInformation/domain/chefReadinessContract.ts src/features/chefBusinessInformation/api/chefBusinessInformationApi.ts src/features/chefBusinessInformation/domain/chefBusinessInformationPresentation.ts src/app/navigation/AppNavigator.tsx
+      - name: Public-source formatting evidence
+        if: always()
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          import {execFileSync} from 'node:child_process';
+          const roots=['src/features/chefOnboarding'];
+          function files(path){return fs.statSync(path).isDirectory()?fs.readdirSync(path).flatMap(name=>files(path+'/'+name)):[path];}
+          for(const path of roots.flatMap(files)){
+            const content=execFileSync('./node_modules/.bin/prettier',[path],{encoding:'utf8'});
+            console.log('FORMATTED_FILE_JSON:'+JSON.stringify({path:'apps/mobile/'+path,content}));
+          }
+          JS
   package:
     runs-on: ubuntu-latest
-    needs: [backend,web]
+    needs: [backend,web,mobile]
     steps:
       - uses: actions/checkout@v4
         with: {fetch-depth: 0,persist-credentials: false}

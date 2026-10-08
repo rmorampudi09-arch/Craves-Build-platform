@@ -138,6 +138,15 @@
     ]
   },
   {
+    "title": "React Native compatibility and device checks",
+    "paragraphs": [
+      "The mobile Chef registration, account status and approved Chef entry use ChefOnboardingGate. It reads the same protected backend state, preserves the older screens while the feature is disabled, resumes unfinished FSSAI on each entry, and lets approved chefs keep their existing workspace access during supplemental onboarding.",
+      "The native form reuses the current authenticated phone and verifies email through the existing email OTP API. It uses the installed image picker for JPG/PNG proof, licence and kitchen photographs, and the existing Craves native location module for kitchen coordinates. Language filtering, guidance and the help form use the same backend records as the website. No new native library or alternate SMS flow is added.",
+      "Business Information and readiness parsers retain historical types and accept selected-proof, kitchen and FSSAI types. Device checks must cover location/photo permissions, email OTP, selected-proof file count, logout/login resume and a video opened with its temporary HTTPS playback URL. Native PDF selection is not added; PDF licence/proof upload remains available on the website.",
+      "CI runs the React Native TypeScript check and full Jest suite, including new API/entry tests. These checks do not replace Android/iOS device installation, signing, permissions and store validation. Existing signing credentials remain in their established local/CI bindings; no new secrets or app-store upload is claimed."
+    ]
+  },
+  {
     "title": "Acceptance sequence for release",
     "paragraphs": [
       "1. Sign in as a new applicant, verify email, save personal details, save kitchen/location and upload exactly two kitchen photos. Reject PDF/photo mismatch. 2. Save without FSSAI, sign out and return: resume at FSSAI. 3. Select a language, inspect published guidance, switch to an empty language and request help.",

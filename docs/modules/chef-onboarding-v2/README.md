@@ -1,6 +1,6 @@
 # Craves chef onboarding v2
 
-This module changes onboarding for every Chef: new, pending, rejected, and already approved. Existing approvals and operating access remain valid while approved chefs complete the added evidence; historical uploads and decisions are retained. The admin workspace reviews added evidence without re-granting the Chef role. There is no tax approval, rate, commission, payment, order, delivery or mobile-app change.
+This module changes onboarding for every Chef: new, pending, rejected, and already approved. Existing approvals and operating access remain valid while approved chefs complete the added evidence; historical uploads and decisions are retained. The admin workspace reviews added evidence without re-granting the Chef role. There is no tax approval, rate, commission, payment, order, delivery change to mobile orders, payments or current operations.
 
 ## Product decisions recorded
 
@@ -100,3 +100,11 @@ The session can commit to GitHub and launch its CI, but cannot currently open Az
 The passing module workflow creates Craves-Chef-Onboarding-V2.zip and Craves-Chef-Onboarding-V2-Handover.html. The handover contains at least 50 A4 pages with the task decision record, plain-language architecture, manual steps, pending live checks and complete changed source files. Open it locally in a browser; use A4 printing at 100% with browser headers/footers off. Every page is rendered and checked for overflow in CI. This is a paginated HTML document, not a PDF claimed without verification.
 
 V15 is required before activation of selected-proof slots. Existing approved Chef rows and their old evidence stay valid; new evidence receives separate document decisions. No automatic role revocation or enforcement deadline is introduced.
+
+## React Native onboarding compatibility
+
+The existing Chef registration/status routes and approved Chef entry now use ChefOnboardingGate. When the backend flow is disabled, they keep the original screens. With the flow enabled they resume the saved server step, reuse current phone authentication, verify email through the existing protected OTP API, upload JPG/PNG via the installed image picker, offer language-specific learning and help, and submit the same evidence requirements. Existing approved chefs can enter their operational workspace during supplemental onboarding. Kitchen location uses the installed Craves native location module; no new library is introduced.
+
+The native Business Information/readiness parsers and labels retain legacy types while accepting the new evidence. Native licence/proof uploads support photos; PDF upload is available on the web. Videos open through a temporary HTTPS playback URL in the device player/browser. Android/iOS installation and store publishing still use the existing signing process; no signed build or store release is claimed here.
+
+Local mobile checks: in apps/mobile run npm ci, npx tsc --noEmit, npm test -- --runInBand and npm run lint. Verify image/location permissions and an actual OTP on both device platforms before release.

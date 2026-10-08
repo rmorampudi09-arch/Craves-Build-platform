@@ -12,6 +12,17 @@ BANK='ca-craves-integration-service-pr'
 FLAG='CRAVES_CHEF_ONBOARDING_V2_ENABLED'
 BASE='CRAVES_BANK_INTEGRATION_BASE_URL'
 
+# Azure's latest-ready pointer can precede single-revision traffic/replica settlement.
+# Retry only lifecycle readiness failures; configuration, image and runtime guards
+# remain immediate failures and are never relaxed.
+WEB_SETTLING_ERRORS=frozenset((
+    'Exactly the current web revision must be active',
+    'Active web revision is not healthy',
+    'Actual web replica count must be one',
+    'Actual web container must be ready and started',
+    'Active web revision must report actual traffic weight 100',
+))
+
 
 def preflight():
     account=azure('account','show')
@@ -79,7 +90,13 @@ def wait_flags(name,before,values):
         current=app(name);flag_guard(before,current,values);props=current['properties']
         if props.get('runningStatus')=='Running' and props.get('provisioningState')=='Succeeded' and props.get('latestRevisionName')==props.get('latestReadyRevisionName'):
             code,body=inspect.probe('https://'+props['configuration']['ingress']['fqdn']+('/api/version' if name==WEB else '/actuator/health'))
-            if code==200:return current
+            if code==200:
+                if name==WEB:
+                    try:ready_web(current)
+                    except ValueError as error:
+                        if str(error) not in WEB_SETTLING_ERRORS:raise
+                    else:return current
+                else:return current
         time.sleep(10)
     raise ValueError('Chef activation revision did not become healthy')
 
@@ -103,7 +120,6 @@ def activate(sha,output,allow_bank_unavailable=False):
         azure('containerapp','update','-g',RG,'-n',name,'--set-env-vars',*[k+'='+v for k,v in values.items()])
         try:
             current=wait_flags(name,before,values)
-            if name==WEB:ready_web(current)
             receipts.append({'app':name,'enabled':True,'revision':current['properties']['latestReadyRevisionName'],'sourceSha':sha})
         except Exception:
             # Recover only the changed names if runtime and image still match this operation.

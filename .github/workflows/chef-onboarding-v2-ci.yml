@@ -47,6 +47,7 @@ jobs:
           cache: maven
           cache-dependency-path: services/user-chef-service/pom.xml
       - run: bash -n scripts/apim/configure-chef-onboarding-v2-apim.sh
+      - run: python3 -m unittest discover -s scripts/release/tests -p test_chef_onboarding_apim.py -v
       - run: python3 -m unittest discover -s scripts/release/tests -p test_rmorampudi09_preflight.py -v
       - run: python3 -m unittest discover -s scripts/release/tests -p test_active_address_release.py -v
       - run: mvn -B -ntp -f services/user-chef-service/pom.xml clean verify

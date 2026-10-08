@@ -107,7 +107,7 @@ class ChefOnboardingDatabaseTest {
         assertThrows(ApiException.class,()->run(()->applications.approve(admin,applicationId)));
         for(var document:service.mine(user).documents())
             run(()->review.approve(admin,applicationId,document.id()));
-        run(()->service.reviewAction(admin,applicationId,new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901234")));
+        run(()->service.reviewAction(admin,applicationId,new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901234",null)));
         assertEquals("APPROVED",run(()->applications.approve(admin,applicationId)).status().name());
         assertTrue(service.mine(user).legacy());
         assertEquals(4,jdbc.queryForObject("SELECT count(*) FROM chef_kyc_document WHERE application_id=?",Integer.class,applicationId));
@@ -154,7 +154,7 @@ class ChefOnboardingDatabaseTest {
         }
         assertFalse(service.mine(user).legacy());
         assertTrue(applications.listApplications(admin,in.craves.userchef.web.ApiDtos.ChefApplicationStatus.PENDING).stream().anyMatch(application -> id.equals(application.id())),"FSSAI review remains visible after all upload decisions are approved");
-        run(()->service.reviewAction(admin,id,new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901234")));
+        run(()->service.reviewAction(admin,id,new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901234",null)));
         assertTrue(service.mine(user).legacy());
         assertEquals("APPROVED",jdbc.queryForObject("SELECT status FROM chef_application WHERE id=?",String.class,id));
         assertEquals("historical",jdbc.queryForObject("SELECT blob_name FROM chef_kyc_document WHERE id=?",String.class,old));
@@ -174,7 +174,7 @@ class ChefOnboardingDatabaseTest {
             upload(KycDocumentType.SELECTED_PROOF_FRONT);
             run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
             for(var document:service.mine(user).documents()) run(()->review.approve(admin,id,document.id()));
-            run(()->service.reviewAction(admin,id,new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901234")));
+            run(()->service.reviewAction(admin,id,new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901234",null)));
             assertEquals("APPROVED",run(()->applications.approve(admin,id)).status().name());
         }
     }
@@ -196,7 +196,7 @@ class ChefOnboardingDatabaseTest {
         assertThrows(ApiException.class,()->run(()->applications.approve(admin,submitted.application().id())));
         for(var document:submitted.documents()) run(()->review.approve(admin,submitted.application().id(),document.id()));
         assertThrows(ApiException.class,()->run(()->applications.approve(admin,submitted.application().id())));
-        run(()->service.reviewAction(admin,submitted.application().id(),new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901234")));
+        run(()->service.reviewAction(admin,submitted.application().id(),new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901234",null)));
         assertEquals("APPROVED",run(()->applications.approve(admin,submitted.application().id())).status().name());
         verifyNoInteractions(bank);
     }
@@ -219,7 +219,7 @@ class ChefOnboardingDatabaseTest {
         var submitted=run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
         UUID savedBank=jdbc.queryForObject("SELECT bank_enrollment_id FROM chef_onboarding_draft WHERE identity_id=?",UUID.class,user.identityId());
         service=onboardingService(false);clearInvocations(bank);
-        run(()->service.reviewAction(admin,submitted.application().id(),new ReviewAction(submitted.version(),"REQUEST_INFORMATION","Clarify kitchen details",null)));
+        run(()->service.reviewAction(admin,submitted.application().id(),new ReviewAction(submitted.version(),"REQUEST_INFORMATION","Clarify kitchen details",null,List.of("kitchen"))));
         save(ProofKind.PAN,"12345678901234");
         var resubmitted=run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
         assertTrue(resubmitted.submitted());assertEquals("PENDING",resubmitted.progress().status());
@@ -234,7 +234,7 @@ class ChefOnboardingDatabaseTest {
         assertFalse(service.mine(user).submitted());
     }
     @Test void partialBasicDraftSavesWithoutVerifyingEmailOrCreatingApplication() {
-        Details partial=new Details("", "Only", "",null,null,null,null,null,null,null,null,null,null,null,null,null,null,"en");
+        Details partial=new Details("", "Only", "",null,null,null,null,null,null,null,null,null,null,null,null,null,null,"en",null);
         State first=run(()->service.saveDraft(user,new SaveRequest(0L,partial)));
         assertEquals("personal",first.resumeStep());assertNull(first.application().id());
         assertEquals("Only",service.mine(user).details().firstName());
@@ -254,7 +254,7 @@ class ChefOnboardingDatabaseTest {
         assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM chef_onboarding_action_audit WHERE identity_id=? AND action='SUBMITTED'",Integer.class,user.identityId()));
         assertEquals(ChefOnboardingService.TERMS_VERSION,jdbc.queryForObject("SELECT terms_version FROM chef_onboarding_draft WHERE identity_id=?",String.class,user.identityId()));
         assertThrows(ApiException.class,()->save(ProofKind.PAN,"12345678901234"));
-        State correction=run(()->service.reviewAction(admin,submitted.application().id(),new ReviewAction(submitted.version(),"REQUEST_INFORMATION","Clarify your kitchen description",null)));
+        State correction=run(()->service.reviewAction(admin,submitted.application().id(),new ReviewAction(submitted.version(),"REQUEST_INFORMATION","Clarify your kitchen description",null,List.of("kitchen","documents"))));
         assertEquals("MORE_INFORMATION_REQUIRED",correction.progress().status());
         assertFalse(correction.submitted());
         assertThrows(ApiException.class,()->run(()->applications.reject(admin,submitted.application().id(),new in.craves.userchef.web.ApiDtos.AdminDecisionRequest("Corrections have not been resubmitted"))));
@@ -269,7 +269,7 @@ class ChefOnboardingDatabaseTest {
         var submitted=run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(before.version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
         run(()->applications.reject(admin,submitted.application().id(),new in.craves.userchef.web.ApiDtos.AdminDecisionRequest("Original rejection evidence")));
         var rejected=service.mine(user);assertEquals("REJECTED",rejected.application().status().name());
-        var reopened=run(()->service.reviewAction(admin,rejected.application().id(),new ReviewAction(rejected.version(),"REQUEST_INFORMATION","Correct the kitchen description",null)));
+        var reopened=run(()->service.reviewAction(admin,rejected.application().id(),new ReviewAction(rejected.version(),"REQUEST_INFORMATION","Correct the kitchen description",null,List.of("kitchen"))));
         assertEquals("PENDING",reopened.application().status().name());assertEquals("MORE_INFORMATION_REQUIRED",reopened.progress().status());
         String prior=jdbc.queryForObject("SELECT snapshot->'application'->>'rejection_reason' FROM chef_onboarding_action_audit WHERE identity_id=? AND action='APPLICATION_REOPENED'",String.class,user.identityId());
         assertEquals("Original rejection evidence",prior);
@@ -285,10 +285,53 @@ class ChefOnboardingDatabaseTest {
         assertThrows(ApiException.class,()->service.documentPreview(new CurrentUser(UUID.randomUUID(),"other","+919000000099",List.of("CUSTOMER")),document.id()));
     }
 
+    @Test void reviewerRequestsNameSectionsAndApplicantSeesReferenceAndCallbackAfterReload() {
+        save(ProofKind.PAN,"12345678901234");photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
+        assertTrue(service.mine(user).application().referenceCode().matches("CRV-[0-9]{5,}"));
+        Help help=run(()->service.requestHelp(user,new HelpRequest(UUID.randomUUID(),"Please call me about FSSAI")));
+        var reloaded=service.mine(user).callbackRequest();
+        assertEquals(help.caseNumber(),reloaded.caseNumber());assertEquals("OPEN",reloaded.status());
+        var submitted=run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
+        UUID id=submitted.application().id();
+        assertThrows(ApiException.class,()->run(()->service.reviewAction(admin,id,new ReviewAction(submitted.version(),"REQUEST_INFORMATION","Retake photos",null,List.of()))));
+        assertThrows(ApiException.class,()->run(()->service.reviewAction(admin,id,new ReviewAction(submitted.version(),"REQUEST_INFORMATION","Retake photos",null,List.of("menu")))));
+        var correction=run(()->service.reviewAction(admin,id,new ReviewAction(submitted.version(),"REQUEST_INFORMATION","Retake photos",null,List.of("documents","kitchen"))));
+        assertEquals(List.of("kitchen","documents"),correction.progress().sections());
+        assertEquals(List.of("kitchen","documents"),service.mine(user).progress().sections());
+        var resubmitted=run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
+        assertEquals(List.of(),resubmitted.progress().sections());
+        assertNull(jdbc.queryForObject("SELECT correction_sections FROM chef_onboarding_draft WHERE identity_id=?",String.class,user.identityId()));
+    }
+    @Test void otherGovernmentIdWithoutBackSideSubmitsWithFrontOnlyAndMinorsCannotSave() {
+        var base=ChefOnboardingPolicyTest.details(ProofKind.OTHER_GOVERNMENT_ID,"12345678901234");
+        java.util.function.Function<Boolean,Details> withBack=back->new Details(base.email(),base.firstName(),base.lastName(),base.dateOfBirth(),
+            base.kitchenName(),base.kitchenDescription(),base.addressLine1(),null,null,base.city(),base.state(),base.postalCode(),
+            base.latitude(),base.longitude(),base.proofKind(),base.otherGovernmentId(),base.fssaiNumber(),base.language(),back);
+        run(()->service.save(user,new SaveRequest(0L,withBack.apply(false))));
+        photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
+        assertEquals(Boolean.FALSE,service.mine(user).details().proofHasBack());
+        assertEquals("review",service.mine(user).resumeStep());
+        assertFalse(service.mine(user).requiredDocuments().contains("SELECTED_PROOF_BACK"));
+        var minor=new Details(base.email(),base.firstName(),base.lastName(),java.time.LocalDate.now().minusYears(16),base.kitchenName(),
+            null,base.addressLine1(),null,null,base.city(),base.state(),base.postalCode(),base.latitude(),base.longitude(),
+            base.proofKind(),base.otherGovernmentId(),base.fssaiNumber(),base.language(),false);
+        var error=assertThrows(ApiException.class,()->run(()->service.saveDraft(user,new SaveRequest(service.mine(user).version(),minor))));
+        assertEquals("APPLICANT_UNDER_18",error.getCode());
+    }
+    @Test void videosFallBackToEnglishOnlyWhenTheChosenLanguageHasNone() {
+        var english=run(()->content.create(admin,new ContentRequest("en","How to apply in English","ARTICLE","Synthetic English article for testing",null,null))).content();
+        run(()->content.publish(admin,english.id(),new PublishRequest(english.version(),true)));
+        assertTrue(content.published(user,"kok").stream().allMatch(item->"en".equals(item.language())));
+        assertTrue(content.published(user,"kok").stream().anyMatch(item->item.id().equals(english.id())));
+        var konkani=run(()->content.create(admin,new ContentRequest("kok","Konkani guide","ARTICLE","Synthetic Konkani article for testing",null,null))).content();
+        run(()->content.publish(admin,konkani.id(),new PublishRequest(konkani.version(),true)));
+        assertTrue(content.published(user,"kok").stream().allMatch(item->"kok".equals(item.language())));
+    }
     @Test void contentIsPrivateUntilPublishedAndLanguageFilteringNeverPretendsTranslation() {
         var article=run(()->content.create(admin,new ContentRequest("te","How to apply","ARTICLE","Synthetic Telugu article for testing",null,null))).content();
         assertFalse(article.published());assertTrue(article.ready());
-        assertTrue(content.published(user,"te").isEmpty());
+        assertFalse(content.published(user,"te").stream().anyMatch(item->item.id().equals(article.id())));
+        assertTrue(content.published(user,"te").stream().allMatch(item->"en".equals(item.language())),"Only the English fallback may appear");
         run(()->content.publish(admin,article.id(),new PublishRequest(article.version(),true)));
         assertTrue(content.published(user,"te").stream().anyMatch(item->item.id().equals(article.id())));
         assertFalse(content.published(user,"hi").stream().anyMatch(item->item.id().equals(article.id())));

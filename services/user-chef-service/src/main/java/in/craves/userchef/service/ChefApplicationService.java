@@ -36,19 +36,29 @@ public class ChefApplicationService {
     private final AuthInternalClient authInternalClient;
     private final NotificationInternalClient notificationInternalClient;
     private final in.craves.userchef.email.AuthEmailProjectionService emailProjection;
+    private final boolean onboardingV2Enabled;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ChefApplicationService(
         JdbcTemplate jdbcTemplate,
         BlobDocumentStorageService storageService,
         AuthInternalClient authInternalClient,
         NotificationInternalClient notificationInternalClient,
-        in.craves.userchef.email.AuthEmailProjectionService emailProjection
+        in.craves.userchef.email.AuthEmailProjectionService emailProjection,
+        @org.springframework.beans.factory.annotation.Value("${CRAVES_CHEF_ONBOARDING_V2_ENABLED:false}") boolean onboardingV2Enabled
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.storageService = storageService;
         this.authInternalClient = authInternalClient;
         this.notificationInternalClient = notificationInternalClient;
         this.emailProjection = emailProjection;
+        this.onboardingV2Enabled = onboardingV2Enabled;
+    }
+
+    public ChefApplicationService(JdbcTemplate jdbcTemplate, BlobDocumentStorageService storageService,
+        AuthInternalClient authInternalClient, NotificationInternalClient notificationInternalClient,
+        in.craves.userchef.email.AuthEmailProjectionService emailProjection) {
+        this(jdbcTemplate,storageService,authInternalClient,notificationInternalClient,emailProjection,false);
     }
 
     public ChefApplicationResponse getMyApplication(CurrentUser user) {
@@ -68,7 +78,7 @@ public class ChefApplicationService {
             (rs, rowNum) -> rs.getString("status"),
             user.identityId()
         );
-        if (Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE identity_id=?)", Boolean.class, user.identityId()))) {
+        if (onboardingV2Enabled || Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE identity_id=?)", Boolean.class, user.identityId()))) {
             throw ApiException.conflict("USE_NEW_ONBOARDING_FLOW", "Continue your saved Chef onboarding application.");
         }
         if (!statuses.isEmpty() && "APPROVED".equals(statuses.getFirst())) {
@@ -99,8 +109,8 @@ public class ChefApplicationService {
     public KycDocumentResponse uploadDocument(CurrentUser user, KycDocumentType documentType, MultipartFile file) {
         jdbcTemplate.query("SELECT id FROM chef_application WHERE identity_id=? FOR UPDATE",(rs,row)->rs.getObject(1,UUID.class),user.identityId());
         ChefApplicationResponse application = getExistingApplication(user.identityId());
-        if (application.status() == ChefApplicationStatus.APPROVED) {
-            throw ApiException.conflict("CHEF_ALREADY_APPROVED", "Documents cannot be changed after approval");
+        if (application.status() == ChefApplicationStatus.APPROVED && !hasOnboardingDraft(application.id())) {
+            throw ApiException.conflict("CHEF_ALREADY_APPROVED", "Start the updated onboarding before adding its required evidence");
         }
         if (!requiredApplicationDocuments(application.id(), false).contains(documentType)) {
             throw ApiException.badRequest("CHEF_DOCUMENT_TYPE_NOT_ALLOWED", "Use one of the current Chef application evidence types");
@@ -153,9 +163,9 @@ public class ChefApplicationService {
     public List<ChefApplicationResponse> listApplications(CurrentUser admin, ChefApplicationStatus status) {
         requireReviewAccess(admin);
         if (status == null || status == ChefApplicationStatus.NOT_SUBMITTED) {
-            return findApplications("WHERE NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false)", new Object[]{});
+            return findApplications("WHERE (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))", new Object[]{});
         }
-        return findApplications("WHERE status = ? AND NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false)", status.name());
+        return findApplications("WHERE (status = ? OR (? = 'PENDING' AND status = 'APPROVED' AND EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=true AND EXISTS(SELECT 1 FROM chef_kyc_document k WHERE k.application_id=chef_application.id AND k.document_type IN ('SELECTED_PROOF_FRONT','SELECTED_PROOF_BACK','KITCHEN_PHOTO_1','KITCHEN_PHOTO_2','FSSAI_LICENSE') AND k.status <> 'APPROVED')))) AND (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))", status.name(), status.name());
     }
 
     public ChefApplicationResponse getApplicationForAdmin(CurrentUser admin, UUID applicationId) {
@@ -249,7 +259,13 @@ public class ChefApplicationService {
             (rs,row) -> new OnboardingRequirements(rs.getString("proof"), rs.getString("fssai"), rs.getBoolean("submitted")),
             applicationId
         );
-        if (rows.isEmpty()) return REQUIRED_APPLICATION_DOCUMENTS;
+        if (rows.isEmpty()) {
+            if(onboardingV2Enabled) {
+                if(approving) throw ApiException.conflict("ONBOARDING_INCOMPLETE","The Chef must complete the updated onboarding first.");
+                return Set.of(KycDocumentType.KITCHEN_PHOTO_1,KycDocumentType.KITCHEN_PHOTO_2,KycDocumentType.FSSAI_LICENSE);
+            }
+            return REQUIRED_APPLICATION_DOCUMENTS;
+        }
         var metadata = rows.getFirst();
         if (approving && (!metadata.submitted() || metadata.proof() == null ||
             metadata.fssai() == null || !metadata.fssai().matches("[0-9]{14}")))
@@ -268,7 +284,11 @@ public class ChefApplicationService {
     public boolean onboardingSubmissionBlocked(UUID applicationId) {
         return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE application_id=? AND submitted=false)",
-            Boolean.class, applicationId));
+            Boolean.class, applicationId)) || onboardingV2Enabled && !hasOnboardingDraft(applicationId);
+    }
+
+    private boolean hasOnboardingDraft(UUID applicationId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE application_id=?)",Boolean.class,applicationId));
     }
 
     private record OnboardingRequirements(String proof, String fssai, boolean submitted) {}
@@ -284,6 +304,8 @@ public class ChefApplicationService {
             case KITCHEN_PHOTO_1 -> "Kitchen photo 1";
             case KITCHEN_PHOTO_2 -> "Kitchen photo 2";
             case FSSAI_LICENSE -> "FSSAI registration or licence";
+            case SELECTED_PROOF_FRONT -> "Selected proof front or single file";
+            case SELECTED_PROOF_BACK -> "Selected proof back";
         };
     }
 
@@ -341,7 +363,7 @@ public class ChefApplicationService {
 
     private List<KycDocumentResponse> listApplicationEvidence(UUID applicationId) {
         return jdbcTemplate.query(
-            "SELECT * FROM chef_kyc_document WHERE application_id = ? AND document_type IN ('APPLICANT_PHOTO', 'GOVERNMENT_ID_FRONT', 'GOVERNMENT_ID_BACK', 'TAX_ID_CARD', 'KITCHEN_PHOTO_1', 'KITCHEN_PHOTO_2', 'FSSAI_LICENSE') ORDER BY document_type",
+            "SELECT * FROM chef_kyc_document WHERE application_id = ? AND document_type IN ('APPLICANT_PHOTO', 'GOVERNMENT_ID_FRONT', 'GOVERNMENT_ID_BACK', 'TAX_ID_CARD', 'KITCHEN_PHOTO_1', 'KITCHEN_PHOTO_2', 'FSSAI_LICENSE', 'SELECTED_PROOF_FRONT', 'SELECTED_PROOF_BACK') ORDER BY document_type",
             this::mapDocument, applicationId
         );
     }

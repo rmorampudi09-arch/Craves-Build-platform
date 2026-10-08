@@ -74,13 +74,14 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
   const REQUIREMENTS: readonly (readonly [string, string])[] = onboarding && !onboarding.legacy
     ? onboarding.requiredDocuments.map(type => {
         const proof = PROOF_OPTIONS.find(([key]) => key === onboarding.details?.proofKind)?.[1] ?? "Selected document";
-        const labels: Record<string, string> = { GOVERNMENT_ID_FRONT: proof + (onboarding.details?.proofKind === "PAN" || onboarding.details?.proofKind === "BANK_STATEMENT" ? "" : " — front"),
-          GOVERNMENT_ID_BACK: proof + " — back", KITCHEN_PHOTO_1: "Kitchen photo 1", KITCHEN_PHOTO_2: "Kitchen photo 2", FSSAI_LICENSE: "FSSAI registration / licence" };
+        const labels: Record<string, string> = { SELECTED_PROOF_FRONT: proof + (onboarding.details?.proofKind === "PAN" || onboarding.details?.proofKind === "BANK_STATEMENT" ? "" : " — front"),
+          SELECTED_PROOF_BACK: proof + " — back", KITCHEN_PHOTO_1: "Kitchen photo 1", KITCHEN_PHOTO_2: "Kitchen photo 2", FSSAI_LICENSE: "FSSAI registration / licence" };
         return [type, labels[type] ?? type] as const;
       }) : LEGACY_REQUIREMENTS;
   const documentByType = useMemo(() => new Map(documents.map(document => [document.documentType, document])), [documents]);
   const uploadedCount = REQUIREMENTS.filter(([type]) => documentByType.has(type)).length;
   const approvedCount = REQUIREMENTS.filter(([type]) => documentByType.get(type)?.status === "APPROVED").length;
+  const canReviewDocuments = item?.status === "PENDING" || item?.status === "APPROVED" && Boolean(onboarding && !onboarding.legacy && onboarding.submitted);
   const allApproved = documentsAvailable && (!onboardingV2Enabled || Boolean(onboarding)) &&
     (!onboarding || onboarding.legacy || onboarding.submitted) && REQUIREMENTS.length > 0 && approvedCount === REQUIREMENTS.length;
 
@@ -192,7 +193,7 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
 
             <div className="mt-4 flex flex-wrap gap-2">
               <a target="_blank" rel="noopener noreferrer" href={`/api/admin/chef-reviews/${item.id}/documents/${document.id}/content`} className="inline-flex rounded-xl bg-[#6930CA] px-4 py-2 text-sm font-bold text-white">Open document</a>
-              {item.status === "PENDING" && document.status === "UPLOADED" && <button disabled={decisionBusy} onClick={() => void decideDocument(document, "approve")} className="rounded-xl bg-green-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">Approve document</button>}
+              {canReviewDocuments && document.status === "UPLOADED" && <button disabled={decisionBusy} onClick={() => void decideDocument(document, "approve")} className="rounded-xl bg-green-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">Approve document</button>}
             </div>
 
             {item.status === "PENDING" && document.status === "UPLOADED" && <div className="mt-4 border-t border-black/10 pt-4"><label className="text-sm font-bold">Reject only this document<textarea value={documentReasons[document.id] ?? ""} maxLength={1000} onChange={event => setDocumentReasons(current => ({ ...current, [document.id]: event.target.value }))} placeholder="Explain what is wrong with this file and what the Chef should replace" className="mt-2 min-h-20 w-full rounded-xl border border-black/10 bg-white p-3 text-slate-950" /></label><button disabled={decisionBusy || (documentReasons[document.id]?.trim().length ?? 0) < 3} onClick={() => void decideDocument(document, "reject")} className="mt-2 rounded-xl bg-red-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">Reject this document only</button></div>}
@@ -201,7 +202,7 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
       </div>
 
       {!documentsAvailable && <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Document decision state could not be verified. Final approval is fail-closed until this check succeeds.</p>}
-      {allApproved && <p className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">All required documents are individually approved. The Chef application is eligible for final application-level approval.</p>}
+      {allApproved && <p className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">All required documents are individually approved. {item.status === "APPROVED" ? "The added onboarding evidence is complete; the existing Chef approval stays valid." : "The Chef application is eligible for final application-level approval."}</p>}
     </section>
 
     {item.status === "PENDING" && <section className="rounded-[30px] border border-red-100 bg-white p-6 text-slate-950 sm:p-8">

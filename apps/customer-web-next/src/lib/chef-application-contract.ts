@@ -7,7 +7,9 @@ export type ChefDocumentType =
   | "PAN_CARD"
   | "KITCHEN_PHOTO_1"
   | "KITCHEN_PHOTO_2"
-  | "FSSAI_LICENSE";
+  | "FSSAI_LICENSE"
+  | "SELECTED_PROOF_FRONT"
+  | "SELECTED_PROOF_BACK";
 export type ChefApplicationStatus = "NOT_SUBMITTED" | "PENDING" | "APPROVED" | "REJECTED";
 
 export type ChefProofDocument = {
@@ -67,6 +69,8 @@ const DOCUMENT_TYPES = new Set<ChefDocumentType>([
   "KITCHEN_PHOTO_1",
   "KITCHEN_PHOTO_2",
   "FSSAI_LICENSE",
+  "SELECTED_PROOF_FRONT",
+  "SELECTED_PROOF_BACK",
 ]);
 
 function text(value: unknown, max: number): string | null {

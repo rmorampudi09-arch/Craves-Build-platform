@@ -33,6 +33,7 @@ export function ChefOnboardingWorkspace({fallback}:{fallback:ReactNode}) {
   const [message,setMessage]=useState("");
   const [loading,setLoading]=useState(true);
   const [signedOut,setSignedOut]=useState(false);
+  const [showExisting,setShowExisting]=useState(false);
   const [content,setContent]=useState<LearningContent[]>([]);
   const [contentError,setContentError]=useState("");
   const [contentLoading,setContentLoading]=useState(false);
@@ -115,6 +116,9 @@ export function ChefOnboardingWorkspace({fallback}:{fallback:ReactNode}) {
         onChange={event=>field(key,event.target.value as never)} />
     </label>;
   }
+  if(showExisting && state?.application.status==="APPROVED") return <>
+    <div className="mb-5 rounded-xl bg-[#FFF8EC] p-4"><Button variant="outline" onClick={()=>setShowExisting(false)}>Continue updated onboarding</Button></div>{fallback}
+  </>;
   if(signedOut || state?.legacy || state && !state.enabled) return <>{fallback}</>;
   if(loading) return <section aria-busy="true" className="rounded-3xl border border-[#E5E7EB] bg-white p-7">Loading your saved application…</section>;
   if(!state) return <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7"><p role="alert">{message}</p><Button className="mt-4" onClick={()=>void load()}>Try again</Button></section>;
@@ -123,6 +127,10 @@ export function ChefOnboardingWorkspace({fallback}:{fallback:ReactNode}) {
     <p className="text-sm font-semibold text-[#F62E18]">Become a Craves Chef</p>
     <h1 className="mt-2 text-3xl font-bold">{stepNames[step]}</h1>
     <p className="mt-3 text-sm text-[#6B6B6B]">Your saved progress stays with your Craves account.</p>
+    {state.application.status==="APPROVED"?<div className="mt-4 rounded-xl bg-[#FFF8EC] p-4">
+      <p className="text-sm">Your existing Chef approval remains valid while you complete the added onboarding details.</p>
+      <Button variant="outline" className="mt-3" onClick={()=>setShowExisting(true)}>View existing Chef workspace</Button>
+    </div>:null}
     {state.application.rejectionReason?<p role="alert" className="mt-4 rounded-xl bg-red-50 p-4 text-sm">{state.application.rejectionReason}</p>:null}
     {step==="personal"?<form className="mt-6 space-y-5" onSubmit={event=>{event.preventDefault();void work(()=>save());}}>
       <div className="grid gap-4 sm:grid-cols-2">{textField("firstName","First name","text",true,100)}{textField("lastName","Last name","text",true,100)}
@@ -196,15 +204,15 @@ export function ChefOnboardingWorkspace({fallback}:{fallback:ReactNode}) {
       <Button variant="outline" className="w-full" disabled={busy} onClick={()=>void work(async()=>{await save("fssai");setMessage("Progress saved. You can continue from this FSSAI step on your next Chef login.");})}>Save progress for later</Button>
     </div>:null}
     {step==="documents"?<div className="mt-6 space-y-4">
-      <label className="block text-sm font-semibold">Choose your document<select aria-label="Choose your document" value={details.proofKind ?? ""} disabled={busy || state.documents.some(d=>d.documentType==="GOVERNMENT_ID_FRONT"||d.documentType==="GOVERNMENT_ID_BACK")} className={inputClass} onChange={event=>field("proofKind",event.target.value as ProofKind)}>
+      <label className="block text-sm font-semibold">Choose your document<select aria-label="Choose your document" value={details.proofKind ?? ""} disabled={busy || state.documents.some(d=>d.documentType==="SELECTED_PROOF_FRONT"||d.documentType==="SELECTED_PROOF_BACK")} className={inputClass} onChange={event=>field("proofKind",event.target.value as ProofKind)}>
         <option value="" disabled>Select a document</option>{PROOF_OPTIONS.map(([key,label])=><option key={key} value={key}>{label}</option>)}
       </select></label>
       {details.proofKind==="OTHER_GOVERNMENT_ID"?textField("otherGovernmentId","Government ID name","text",true,80):null}
       <p className="text-sm text-[#6B6B6B]">PAN card and bank statement need one file. Aadhaar and other government IDs need front and back.</p>
       <Button variant="outline" disabled={busy || !details.proofKind} onClick={()=>void work(()=>save("documents"))}>Save document choice</Button>
       {details.proofKind && state.details?.proofKind===details.proofKind?<>
-        {fileSlot("GOVERNMENT_ID_FRONT",proofLabel+(proofNeedsBack(details.proofKind)?" - front":""))}
-        {proofNeedsBack(details.proofKind)?fileSlot("GOVERNMENT_ID_BACK",proofLabel+" - back"):null}
+        {fileSlot("SELECTED_PROOF_FRONT",proofLabel+(proofNeedsBack(details.proofKind)?" - front":""))}
+        {proofNeedsBack(details.proofKind)?fileSlot("SELECTED_PROOF_BACK",proofLabel+" - back"):null}
       </>:null}
     </div>:null}
     {step==="review"?<div className="mt-6 space-y-4">

@@ -101,7 +101,7 @@ class ChefApplicationReadinessTest {
     }
 
     @Test void newSingleFileProofUsesFourRequirementsAndCannotApproveAnUnsubmittedDraft() {
-        var required = java.util.EnumSet.of(KycDocumentType.GOVERNMENT_ID_FRONT, KycDocumentType.KITCHEN_PHOTO_1,
+        var required = java.util.EnumSet.of(KycDocumentType.SELECTED_PROOF_FRONT, KycDocumentType.KITCHEN_PHOTO_1,
             KycDocumentType.KITCHEN_PHOTO_2, KycDocumentType.FSSAI_LICENSE);
         setup(ChefApplicationStatus.PENDING, required.stream().map(type -> document(type, "APPROVED")).toList());
         when(applications.requiredApplicationDocuments(applicationId, false)).thenReturn(required);
@@ -116,15 +116,15 @@ class ChefApplicationReadinessTest {
     }
 
     @Test void newTwoSidedProofRequiresFiveDocumentsIncludingTheBack() {
-        var required = java.util.EnumSet.of(KycDocumentType.GOVERNMENT_ID_FRONT, KycDocumentType.GOVERNMENT_ID_BACK,
+        var required = java.util.EnumSet.of(KycDocumentType.SELECTED_PROOF_FRONT, KycDocumentType.SELECTED_PROOF_BACK,
             KycDocumentType.KITCHEN_PHOTO_1, KycDocumentType.KITCHEN_PHOTO_2, KycDocumentType.FSSAI_LICENSE);
-        setup(ChefApplicationStatus.PENDING, required.stream().filter(type -> type != KycDocumentType.GOVERNMENT_ID_BACK)
+        setup(ChefApplicationStatus.PENDING, required.stream().filter(type -> type != KycDocumentType.SELECTED_PROOF_BACK)
             .map(type -> document(type, "APPROVED")).toList());
         when(applications.requiredApplicationDocuments(applicationId, false)).thenReturn(required);
         var result = service.getReadiness(user);
         assertEquals(5, result.requiredDocumentCount());
         assertFalse(result.approvalReady());
-        assertTrue(result.blockingIssues().stream().anyMatch(item -> item.documentType() == KycDocumentType.GOVERNMENT_ID_BACK));
+        assertTrue(result.blockingIssues().stream().anyMatch(item -> item.documentType() == KycDocumentType.SELECTED_PROOF_BACK));
     }
 
     private void setup(ChefApplicationStatus status, List<KycDocumentResponse> documents) {

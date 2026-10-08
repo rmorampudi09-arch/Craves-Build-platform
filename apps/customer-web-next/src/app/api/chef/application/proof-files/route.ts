@@ -13,7 +13,7 @@ const ALLOWED_TYPES = new Set([
   "TAX_ID_CARD",
   "KITCHEN_PHOTO_1",
   "KITCHEN_PHOTO_2",
-  "FSSAI_LICENSE",
+  "FSSAI_LICENSE", "SELECTED_PROOF_FRONT", "SELECTED_PROOF_BACK",
 ]);
 const ALLOWED_CONTENT_TYPES = new Set([
   "application/pdf",

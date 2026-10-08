@@ -49,9 +49,11 @@ public class ChefOnboardingService {
         var draft=find(user.identityId(),false);
         var documents=application.id()==null ? List.<in.craves.userchef.web.ApiDtos.KycDocumentResponse>of()
             : applications.listMyApplicationEvidence(user);
-        boolean legacy=application.status()==ChefApplicationStatus.APPROVED ||
-            application.id()!=null && draft==null;
-        Details details=draft==null ? null : draft.details();
+        boolean legacy=application.status()==ChefApplicationStatus.APPROVED && draft!=null && draft.submitted() &&
+            "waiting".equals(ChefOnboardingPolicy.resume(draft.details(),documents,true)) &&
+            ChefOnboardingPolicy.required(draft.details().proofKind()).stream().allMatch(type -> documents.stream()
+                .anyMatch(document -> document.documentType()==type && "APPROVED".equals(document.status())));
+        Details details=draft==null ? existingDetails(application) : draft.details();
         boolean submitted=draft!=null && draft.submitted() && application.status()!=ChefApplicationStatus.REJECTED;
         String resume=legacy ? "legacy" : ChefOnboardingPolicy.resume(details,documents,submitted);
         return new State(enabled,legacy,draft==null ? 0 : draft.version(),resume,submitted,
@@ -69,8 +71,6 @@ public class ChefOnboardingService {
         lock(user);
         var application=applications.getMyApplication(user);
         var existing=find(user.identityId(),true);
-        if(application.status()==ChefApplicationStatus.APPROVED || application.id()!=null && existing==null)
-            throw ApiException.conflict("CHEF_EXISTING_APPLICATION","Continue using your existing Chef application.");
         long version=existing==null ? 0 : existing.version();
         if(request.expectedVersion()!=version)
             throw ApiException.conflict("ONBOARDING_VERSION_CHANGED","Your application changed in another tab. Reload it.");
@@ -83,9 +83,9 @@ public class ChefOnboardingService {
             trim(input.fssaiNumber()),input.language());
         var docs=application.id()==null ? List.<in.craves.userchef.web.ApiDtos.KycDocumentResponse>of()
             : applications.listMyApplicationEvidence(user);
-        if(existing!=null && !Objects.equals(existing.details().proofKind(),details.proofKind()) &&
-            docs.stream().anyMatch(d -> d.documentType()==KycDocumentType.GOVERNMENT_ID_FRONT ||
-                d.documentType()==KycDocumentType.GOVERNMENT_ID_BACK))
+        if(existing!=null && existing.details().proofKind()!=null && !Objects.equals(existing.details().proofKind(),details.proofKind()) &&
+            docs.stream().anyMatch(d -> d.documentType()==KycDocumentType.SELECTED_PROOF_FRONT ||
+                d.documentType()==KycDocumentType.SELECTED_PROOF_BACK))
             throw ApiException.conflict("PROOF_CHOICE_LOCKED","The document choice is saved with your uploaded proof. Contact support to change it.");
         if(existing!=null && docs.stream().anyMatch(d -> "APPROVED".equals(d.status()) &&
             (d.documentType()==KycDocumentType.KITCHEN_PHOTO_1 || d.documentType()==KycDocumentType.KITCHEN_PHOTO_2)) &&
@@ -157,10 +157,10 @@ public class ChefOnboardingService {
         var draft=find(application.identityId(),false);
         var docs=applications.listApplicationEvidenceForAdmin(admin,applicationId);
         Details details=draft==null ? null : draft.details();
-        return new State(enabled,draft==null,draft==null?0:draft.version(),"review",draft!=null&&draft.submitted(),
+        return new State(enabled,!enabled && draft==null,draft==null?0:draft.version(),"review",draft!=null&&draft.submitted(),
             application.phoneNumber(),details,application,docs,
-            (draft==null ? java.util.Set.of(KycDocumentType.APPLICANT_PHOTO,KycDocumentType.GOVERNMENT_ID_FRONT,
-                KycDocumentType.GOVERNMENT_ID_BACK,KycDocumentType.TAX_ID_CARD)
+            (draft==null ? (enabled ? java.util.Set.of(KycDocumentType.KITCHEN_PHOTO_1,KycDocumentType.KITCHEN_PHOTO_2,KycDocumentType.FSSAI_LICENSE)
+                : java.util.Set.of(KycDocumentType.APPLICANT_PHOTO,KycDocumentType.GOVERNMENT_ID_FRONT,KycDocumentType.GOVERNMENT_ID_BACK,KycDocumentType.TAX_ID_CARD))
                 : ChefOnboardingPolicy.required(details.proofKind())).stream().map(Enum::name).sorted().toList(),
             supportPhone,supportEmail);
     }
@@ -170,8 +170,6 @@ public class ChefOnboardingService {
         requireEnabled(); requireApplicant(user); lock(user);
         var draft=find(user.identityId(),true);
         if(draft==null) throw ApiException.conflict("ONBOARDING_DETAILS_REQUIRED","Save your personal details first.");
-        if(applications.getMyApplication(user).status()==ChefApplicationStatus.APPROVED)
-            throw ApiException.conflict("CHEF_ALREADY_APPROVED","Use your usual Chef support options.");
         if(request==null || request.requestKey()==null || request.message()==null ||
             request.message().trim().length()<3 || request.message().length()>2000)
             throw ApiException.badRequest("HELP_REQUEST_INVALID","Explain the help you need using 3 to 2000 characters.");
@@ -231,6 +229,13 @@ public class ChefOnboardingService {
                 UUID.randomUUID(),id,admin.identityId(),previous.status(),request.status());
         }
         return jdbc.query("SELECT * FROM chef_onboarding_help WHERE id=?",this::mapHelp,id).getFirst();
+    }
+
+    private static Details existingDetails(in.craves.userchef.web.ApiDtos.ChefApplicationResponse application) {
+        if(application.id()==null) return null;
+        return new Details(application.email(),application.firstName(),application.lastName(),null,null,null,
+            application.addressLine1(),application.addressLine2(),application.landmark(),application.city(),
+            application.state(),application.postalCode(),application.latitude(),application.longitude(),null,null,null,"en");
     }
 
     private void lock(CurrentUser user) {

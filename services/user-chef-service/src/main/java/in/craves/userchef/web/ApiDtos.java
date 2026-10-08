@@ -37,7 +37,9 @@ public final class ApiDtos {
         PAN_CARD,
         KITCHEN_PHOTO_1,
         KITCHEN_PHOTO_2,
-        FSSAI_LICENSE
+        FSSAI_LICENSE,
+        SELECTED_PROOF_FRONT,
+        SELECTED_PROOF_BACK
     }
 
     public record CustomerProfileRequest(

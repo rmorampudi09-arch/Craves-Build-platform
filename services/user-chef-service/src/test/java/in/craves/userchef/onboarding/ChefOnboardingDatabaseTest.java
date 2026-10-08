@@ -53,7 +53,7 @@ class ChefOnboardingDatabaseTest {
         var storage=mock(BlobDocumentStorageService.class);
         when(storage.uploadKycDocument(any(),any(),any())).thenReturn(
             new BlobDocumentStorageService.StoredDocument("documents","kyc/synthetic","photo.jpg","image/jpeg",20));
-        applications=new ChefApplicationService(jdbc,storage,auth,notifications,projection);
+        applications=new ChefApplicationService(jdbc,storage,auth,notifications,projection,true);
         review=new ChefDocumentReviewService(jdbc,storage,notifications);
         service=new ChefOnboardingService(jdbc,new ObjectMapper().findAndRegisterModules(),applications,auth,projection,
             new SupportCaseService(jdbc),true,"8367366787","support@craves.in");
@@ -91,7 +91,7 @@ class ChefOnboardingDatabaseTest {
         save(ProofKind.PAN,"12345678901234");photos();
         UUID applicationId=service.mine(user).application().id();
         assertThrows(ApiException.class,()->run(()->applications.approve(admin,applicationId)));
-        upload(KycDocumentType.FSSAI_LICENSE);upload(KycDocumentType.GOVERNMENT_ID_FRONT);
+        upload(KycDocumentType.FSSAI_LICENSE);upload(KycDocumentType.SELECTED_PROOF_FRONT);
         assertEquals("review",service.mine(user).resumeStep());
         var version=service.mine(user).version();
         run(()->service.submit(user,version));
@@ -101,39 +101,70 @@ class ChefOnboardingDatabaseTest {
         assertEquals("APPROVED",run(()->applications.approve(admin,applicationId)).status().name());
         assertTrue(service.mine(user).legacy());
         assertEquals(4,jdbc.queryForObject("SELECT count(*) FROM chef_kyc_document WHERE application_id=?",Integer.class,applicationId));
-        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM chef_kyc_document WHERE application_id=? AND document_type IN ('APPLICANT_PHOTO','TAX_ID_CARD','GOVERNMENT_ID_BACK')",Integer.class,applicationId));
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM chef_kyc_document WHERE application_id=? AND document_type IN ('APPLICANT_PHOTO','TAX_ID_CARD','SELECTED_PROOF_BACK')",Integer.class,applicationId));
     }
     @Test void aadhaarCannotSubmitWithoutItsBackButBankStatementIsSingleFile() {
-        save(ProofKind.AADHAAR,"12345678901234");photos();upload(KycDocumentType.FSSAI_LICENSE);upload(KycDocumentType.GOVERNMENT_ID_FRONT);
+        save(ProofKind.AADHAAR,"12345678901234");photos();upload(KycDocumentType.FSSAI_LICENSE);upload(KycDocumentType.SELECTED_PROOF_FRONT);
         assertEquals("documents",service.mine(user).resumeStep());
         assertThrows(ApiException.class,()->run(()->service.submit(user,service.mine(user).version())));
-        upload(KycDocumentType.GOVERNMENT_ID_BACK);
+        upload(KycDocumentType.SELECTED_PROOF_BACK);
         assertEquals("review",service.mine(user).resumeStep());
         user=new CurrentUser(UUID.randomUUID(),"bank","+919000000002",List.of("CUSTOMER"));
-        save(ProofKind.BANK_STATEMENT,"12345678901234");photos();upload(KycDocumentType.FSSAI_LICENSE);upload(KycDocumentType.GOVERNMENT_ID_FRONT);
+        save(ProofKind.BANK_STATEMENT,"12345678901234");photos();upload(KycDocumentType.FSSAI_LICENSE);upload(KycDocumentType.SELECTED_PROOF_FRONT);
         assertEquals("review",service.mine(user).resumeStep());
-        assertThrows(ApiException.class,()->upload(KycDocumentType.GOVERNMENT_ID_BACK));
+        assertThrows(ApiException.class,()->upload(KycDocumentType.SELECTED_PROOF_BACK));
     }
     @Test void versionAndProofLocksPreventStaleTabsOrMismatchedDocuments() {
         save(ProofKind.PAN,null);
         long staleVersion=service.mine(user).version();
         save(ProofKind.PAN,null);
         assertThrows(ApiException.class,()->run(()->service.save(user,new SaveRequest(staleVersion,ChefOnboardingPolicyTest.details(ProofKind.PAN,null)))));
-        upload(KycDocumentType.GOVERNMENT_ID_FRONT);
+        upload(KycDocumentType.SELECTED_PROOF_FRONT);
         assertThrows(ApiException.class,()->save(ProofKind.AADHAAR,null));
         assertEquals(ProofKind.PAN,service.mine(user).details().proofKind());
     }
-    @Test void existingApprovedChefRowsAreUntouchedAndRemainOnExistingFlow() {
+    @Test void existingApprovedChefCompletesAddedEvidenceWithoutLosingApprovalOrOldDocuments() {
         UUID id=UUID.randomUUID();
         jdbc.update("""
             INSERT INTO chef_application(id,identity_id,phone_number,email,first_name,last_name,address_line1,city,state,status)
             VALUES (?,?,'9000000000','approved@example.test','Approved','Chef','Kitchen','Hyderabad','Telangana','APPROVED')
             """,id,user.identityId());
+        UUID old=UUID.randomUUID();
+        jdbc.update("INSERT INTO chef_kyc_document(id,application_id,identity_id,document_type,original_file_name,blob_container,blob_name,content_type,file_size_bytes,status) VALUES (?,?,?,'GOVERNMENT_ID_FRONT','old.jpg','documents','historical','image/jpeg',20,'APPROVED')",old,id,user.identityId());
+        assertFalse(service.mine(user).legacy());
+        assertEquals("personal",service.mine(user).resumeStep());
+        save(ProofKind.PAN,"12345678901234");photos();upload(KycDocumentType.FSSAI_LICENSE);upload(KycDocumentType.SELECTED_PROOF_FRONT);
+        assertThrows(ApiException.class,()->run(()->review.approve(admin,id,service.mine(user).documents().stream()
+            .filter(document -> document.documentType()==KycDocumentType.KITCHEN_PHOTO_1).findFirst().orElseThrow().id())));
+        run(()->service.submit(user,service.mine(user).version()));
+        assertTrue(applications.listApplications(admin,in.craves.userchef.web.ApiDtos.ChefApplicationStatus.PENDING).stream().anyMatch(application -> id.equals(application.id())));
+        for(var document:service.mine(user).documents()) {
+            if(document.documentType()==KycDocumentType.GOVERNMENT_ID_FRONT) continue;
+            run(()->review.approve(admin,id,document.id()));
+        }
         assertTrue(service.mine(user).legacy());
-        assertThrows(ApiException.class,()->save(ProofKind.PAN,null));
         assertEquals("APPROVED",jdbc.queryForObject("SELECT status FROM chef_application WHERE id=?",String.class,id));
-        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM chef_onboarding_draft WHERE identity_id=?",Integer.class,user.identityId()));
+        assertEquals("historical",jdbc.queryForObject("SELECT blob_name FROM chef_kyc_document WHERE id=?",String.class,old));
+        assertEquals("GOVERNMENT_ID_FRONT",jdbc.queryForObject("SELECT document_type FROM chef_kyc_document WHERE id=?",String.class,old));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM chef_onboarding_draft WHERE identity_id=?",Integer.class,user.identityId()));
     }
+    @Test void pendingAndRejectedLegacyApplicationsMustCompleteNewFlowBeforeApproval() {
+        for(String status:List.of("PENDING","REJECTED")) {
+            user=new CurrentUser(UUID.randomUUID(),"legacy-"+status,"+919000000003",List.of("CUSTOMER"));
+            UUID id=UUID.randomUUID();
+            jdbc.update("INSERT INTO chef_application(id,identity_id,phone_number,email,first_name,last_name,address_line1,city,state,status) VALUES (?,?,'9000000000','legacy@example.test','Existing','Chef','Kitchen','Hyderabad','Telangana',?)",id,user.identityId(),status);
+            assertFalse(service.mine(user).legacy());
+            assertEquals("personal",service.mine(user).resumeStep());
+            assertThrows(ApiException.class,()->run(()->applications.approve(admin,id)));
+            save(ProofKind.BANK_STATEMENT,"12345678901234");photos();upload(KycDocumentType.FSSAI_LICENSE);
+            assertEquals("documents",service.mine(user).resumeStep());
+            upload(KycDocumentType.SELECTED_PROOF_FRONT);
+            run(()->service.submit(user,service.mine(user).version()));
+            for(var document:service.mine(user).documents()) run(()->review.approve(admin,id,document.id()));
+            assertEquals("APPROVED",run(()->applications.approve(admin,id)).status().name());
+        }
+    }
+
     @Test void contentIsPrivateUntilPublishedAndLanguageFilteringNeverPretendsTranslation() {
         var article=run(()->content.create(admin,new ContentRequest("te","How to apply","ARTICLE","Synthetic Telugu article for testing",null,null))).content();
         assertFalse(article.published());assertTrue(article.ready());

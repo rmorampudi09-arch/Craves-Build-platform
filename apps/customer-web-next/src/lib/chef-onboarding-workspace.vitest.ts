@@ -32,7 +32,7 @@ it("shows the selected-language empty state without claiming translated or compl
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes("language=te"))).toBe(true));
   expect(screen.queryByRole("button",{name:"Submit for admin review"})).toBeNull();
 });
-it("leaves an existing approved Chef on the established workspace",async()=>{
+it("returns a Chef with fully reviewed onboarding to the established workspace",async()=>{
   vi.stubGlobal("fetch",vi.fn(async()=>Response.json({...state,legacy:true,resumeStep:"legacy",application:{...state.application,status:"APPROVED"}})));
   mount();expect(await screen.findByText("Existing Chef workspace")).toBeTruthy();
   expect(screen.queryByRole("heading",{name:"FSSAI registration"})).toBeNull();
@@ -59,4 +59,13 @@ it("explains the missing FSSAI document even when a valid number is entered",asy
   expect(await screen.findByRole("status")).toHaveProperty("textContent",
     "Upload your FSSAI registration or licence document to continue. You can save your progress for later.");
   expect(request.mock.calls.every(([,options])=>!options || options.method!=="PUT")).toBe(true);
+});
+
+it("lets an approved Chef complete added onboarding and access the existing workspace",async()=>{
+  vi.stubGlobal("fetch",vi.fn(async(url:string)=>Response.json(url.includes("/content")?[]:{...state,application:{...state.application,status:"APPROVED"}})));
+  mount();await screen.findByRole("heading",{name:"FSSAI registration"});
+  fireEvent.click(screen.getByRole("button",{name:"View existing Chef workspace"}));
+  expect(await screen.findByText("Existing Chef workspace")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button",{name:"Continue updated onboarding"}));
+  expect(screen.getByRole("heading",{name:"FSSAI registration"})).toBeTruthy();
 });

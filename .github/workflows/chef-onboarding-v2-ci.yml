@@ -56,7 +56,7 @@ jobs:
           from pathlib import Path
           path = Path('services/user-chef-service/target/surefire-reports/TEST-in.craves.userchef.onboarding.ChefOnboardingDatabaseTest.xml')
           root = ET.parse(path).getroot()
-          assert int(root.attrib['tests']) >= 6
+          assert int(root.attrib['tests']) >= 7
           assert all(int(root.attrib.get(key, '0')) == 0 for key in ['failures', 'errors', 'skipped'])
           PY
       - uses: actions/upload-artifact@v4

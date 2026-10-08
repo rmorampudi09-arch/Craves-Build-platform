@@ -19,9 +19,9 @@ public final class ChefOnboardingPolicy {
     );
     public static Set<KycDocumentType> required(ProofKind proof) {
         var types = new LinkedHashSet<KycDocumentType>();
-        types.add(KycDocumentType.GOVERNMENT_ID_FRONT);
+        types.add(KycDocumentType.SELECTED_PROOF_FRONT);
         if (proof == ProofKind.AADHAAR || proof == ProofKind.OTHER_GOVERNMENT_ID)
-            types.add(KycDocumentType.GOVERNMENT_ID_BACK);
+            types.add(KycDocumentType.SELECTED_PROOF_BACK);
         types.add(KycDocumentType.KITCHEN_PHOTO_1);
         types.add(KycDocumentType.KITCHEN_PHOTO_2);
         types.add(KycDocumentType.FSSAI_LICENSE);
@@ -38,7 +38,7 @@ public final class ChefOnboardingPolicy {
             d.latitude() != null && d.longitude() != null;
     }
     public static String resume(Details d, List<KycDocumentResponse> docs, boolean submitted) {
-        if (d == null) return "personal";
+        if (d == null || d.dateOfBirth() == null) return "personal";
         if (!kitchenComplete(d)) return "kitchen";
         if (!accepted(docs, KycDocumentType.KITCHEN_PHOTO_1) ||
             !accepted(docs, KycDocumentType.KITCHEN_PHOTO_2)) return "kitchen-photos";

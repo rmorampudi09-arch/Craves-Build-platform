@@ -26,7 +26,7 @@ class ChefOnboardingPolicyTest {
         for(var proof:List.of(ProofKind.PAN,ProofKind.BANK_STATEMENT)) {
             var required=ChefOnboardingPolicy.required(proof);
             assertEquals(4,required.size());
-            assertFalse(required.contains(KycDocumentType.GOVERNMENT_ID_BACK));
+            assertFalse(required.contains(KycDocumentType.SELECTED_PROOF_BACK));
             assertFalse(required.contains(KycDocumentType.TAX_ID_CARD));
             assertFalse(required.contains(KycDocumentType.APPLICANT_PHOTO));
         }
@@ -34,7 +34,7 @@ class ChefOnboardingPolicyTest {
     @Test void twoSidedChoicesRequireBothSidesOfSameSelectedProof() {
         for(var proof:List.of(ProofKind.AADHAAR,ProofKind.OTHER_GOVERNMENT_ID)) {
             assertEquals(5,ChefOnboardingPolicy.required(proof).size());
-            assertTrue(ChefOnboardingPolicy.required(proof).contains(KycDocumentType.GOVERNMENT_ID_BACK));
+            assertTrue(ChefOnboardingPolicy.required(proof).contains(KycDocumentType.SELECTED_PROOF_BACK));
         }
     }
     @Test void chefWithoutFssaiAlwaysResumesFssaiRegardlessOfHelpOrContentAccess() {
@@ -46,7 +46,7 @@ class ChefOnboardingPolicyTest {
         var photos=List.of(doc(KycDocumentType.KITCHEN_PHOTO_1,"APPROVED"),doc(KycDocumentType.KITCHEN_PHOTO_2,"REJECTED"));
         assertEquals("kitchen-photos",ChefOnboardingPolicy.resume(details(ProofKind.PAN,"12345678901234"),photos,true));
         var rejected=List.of(doc(KycDocumentType.KITCHEN_PHOTO_1,"APPROVED"),doc(KycDocumentType.KITCHEN_PHOTO_2,"APPROVED"),
-            doc(KycDocumentType.FSSAI_LICENSE,"REJECTED"),doc(KycDocumentType.GOVERNMENT_ID_FRONT,"APPROVED"));
+            doc(KycDocumentType.FSSAI_LICENSE,"REJECTED"),doc(KycDocumentType.SELECTED_PROOF_FRONT,"APPROVED"));
         assertEquals("fssai",ChefOnboardingPolicy.resume(details(ProofKind.PAN,"12345678901234"),rejected,true));
     }
     @Test void completedEvidenceIsReviewedBeforeItCanEnterWaiting() {

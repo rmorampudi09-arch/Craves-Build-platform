@@ -279,7 +279,7 @@
       "RequesterSupportViewTest": 1,
       "SupportCaseCursorCodecTest": 2,
       "SupportCaseServiceValidationTest": 6,
-      "ChefOnboardingDatabaseTest": 6,
+      "ChefOnboardingDatabaseTest": 7,
       "ChefOnboardingPolicyTest": 6,
       "ChefOnboardingPhotoValidationTest": 1,
       "ChefApplicationReadinessTest": 10,
@@ -299,7 +299,7 @@
       "email-verification-contract.vitest.ts": 16,
       "email-verification-ui.vitest.ts": 16,
       "manual-settlement.vitest.ts": 15,
-      "chef-onboarding-workspace.vitest.ts": 5
+      "chef-onboarding-workspace.vitest.ts": 6
     }
   }
 }

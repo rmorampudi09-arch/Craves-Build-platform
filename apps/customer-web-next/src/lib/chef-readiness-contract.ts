@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const documentType = z.enum(["APPLICANT_PHOTO", "GOVERNMENT_ID_FRONT", "GOVERNMENT_ID_BACK", "TAX_ID_CARD", "KITCHEN_PHOTO_1", "KITCHEN_PHOTO_2", "FSSAI_LICENSE"]);
+const documentType = z.enum(["APPLICANT_PHOTO", "GOVERNMENT_ID_FRONT", "GOVERNMENT_ID_BACK", "TAX_ID_CARD", "KITCHEN_PHOTO_1", "KITCHEN_PHOTO_2", "FSSAI_LICENSE", "SELECTED_PROOF_FRONT", "SELECTED_PROOF_BACK"]);
 const schema = z.object({
   contractVersion: z.literal(1),
   applicationStatus: z.enum(["NOT_SUBMITTED", "PENDING", "APPROVED", "REJECTED"]),

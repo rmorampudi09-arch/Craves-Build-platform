@@ -21,7 +21,7 @@
     "paragraphs": [
       "The Next.js website displays the forms. Its server routes, often called a backend-for-frontend, forward authenticated requests to User/Chef Service. Spring Boot validates the saved details, stores them in PostgreSQL, and decides which step is incomplete. PostgreSQL is therefore the source of saved progress; closing a browser does not erase an application.",
       "Azure API Management routes the public API paths to the existing User/Chef container. It is the gateway, not the approval authority. JWT identity and role checks in the service remain authoritative. Azure Blob Storage holds private files; the database stores their metadata rather than video bytes.",
-      "The implementation stays in User/Chef ownership established by CRV-ARCH-HLD-002 v2.0. The account, verified email and Chef review requirements follow the relevant CRV-FUNC-001 v1.0 sections read for this module. No cross-service database access, replacement phone-auth system, new commission logic or payment implementation is introduced."
+      "The implementation stays within the existing Spring Boot User/Chef module and reuses current account, verified-email and Chef review code. The supplied architecture attachment could not be retrieved because the attachment service reported an ownership mismatch; comparison against that inaccessible document remains pending. No cross-service database access, replacement phone-auth system, new commission logic or payment implementation is introduced."
     ]
   },
   {

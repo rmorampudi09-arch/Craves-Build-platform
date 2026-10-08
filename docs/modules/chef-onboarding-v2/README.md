@@ -72,7 +72,7 @@ This package contains complete changed files for overlay on base commit a79d0d83
 
 ## Execution status
 
-Backend and web regression checks have passed. React Native integration is included and its exact-commit checks are running. Production activation, a live OTP flow and an actual Azure video upload must be confirmed separately; they are not assumed from code or unit tests.
+Backend and web regression checks have passed. React Native integration has passed TypeScript and the full Jest suite. Final exact-commit checks include zero-warning lint and the production Android JavaScript bundle; signed-device testing remains a separate release check. Production activation, a live OTP flow and an actual Azure video upload must be confirmed separately; they are not assumed from code or unit tests.
 The local terminal in this session could not start because the host sandbox reported helper_unknown_error: setup refresh had errors. Repository inspection and edits therefore use the connected GitHub repository.
 
 ## Reviewed release corrections (8 October 2026)

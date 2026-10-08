@@ -131,3 +131,16 @@ test('disabled rollout preserves the original mobile flow', async () => {
       .some(node => node.props.children === 'Existing workspace'),
   ).toBe(true);
 });
+
+test.each([
+  ['', 'Enter the 14-digit FSSAI number to continue.'],
+  ['12345678901234', 'Upload the FSSAI document or save progress for later.'],
+])('incomplete FSSAI %s explains what is missing', async (fssaiNumber, message) => {
+  await mount({...state, details: {...state.details!, fssaiNumber}});
+  await act(async () => {
+    await button('Save and continue').props.onPress();
+  });
+  expect(tree.root.findAllByType(Text).some(node => node.props.children === message)).toBe(true);
+  expect(chefOnboardingApi.save).not.toHaveBeenCalled();
+  expect(chefOnboardingApi.submit).not.toHaveBeenCalled();
+});

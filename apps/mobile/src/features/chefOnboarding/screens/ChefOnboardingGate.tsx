@@ -17,7 +17,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as KitchenLocation from '../../customerAddresses/location/currentLocation';
 import { useAppDispatch } from '../../../app/store/hooks';
-import { toAppApiError } from '../../../core/http/apiError';
+import { AppApiError, toAppApiError } from '../../../core/http/apiError';
 import { colors, spacing } from '../../../design/tokens';
 import { AuthShell } from '../../auth/components/AuthShell';
 import { AuthCard } from '../../auth/components/AuthCard';
@@ -283,6 +283,9 @@ const titles: Record<OnboardingState['resumeStep'], string> = {
   waiting: 'Application under review',
   legacy: 'Chef workspace',
 };
+function inputError(message: string) {
+  return new AppApiError('ONBOARDING_INPUT_INVALID', message);
+}
 export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
   const dispatch = useAppDispatch();
   const [state, setState] = useState<OnboardingState | null>(null);
@@ -384,7 +387,7 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
   }
   async function save() {
     if (!state) {
-      throw new Error('Reload your Chef application.');
+      throw inputError('Reload your Chef application.');
     }
     return accept(await chefOnboardingApi.save(state.version, details));
   }
@@ -410,7 +413,7 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
     const permission =
       await KitchenLocation.requestForegroundPermissionsAsync();
     if (permission.status !== 'granted') {
-      throw new Error('Allow location access while you are at your kitchen.');
+      throw inputError('Allow location access while you are at your kitchen.');
     }
     const position = await KitchenLocation.getCurrentPositionAsync({
       accuracy: KitchenLocation.Accuracy.High,
@@ -428,7 +431,7 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
     }
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      throw new Error('Allow photo access to choose the document.');
+      throw inputError('Allow photo access to choose the document.');
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -446,7 +449,7 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
       !['image/jpeg', 'image/png'].includes(mime) ||
       (asset.fileSize && asset.fileSize > 10 * 1024 * 1024)
     ) {
-      throw new Error('Choose a JPG or PNG image no larger than 10 MB.');
+      throw inputError('Choose a JPG or PNG image no larger than 10 MB.');
     }
     accept(
       await chefOnboardingApi.upload(type, {
@@ -603,7 +606,7 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
               onPress={() => {
                 work(async () => {
                   if (details.latitude === null || details.longitude === null) {
-                    throw new Error(
+                    throw inputError(
                       'Choose your kitchen location before continuing.',
                     );
                   }
@@ -679,7 +682,7 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
                   onPress={() => {
                     work(async () => {
                       if (!/^\d{14}$/.test(details.fssaiNumber)) {
-                        throw new Error(
+                        throw inputError(
                           'Enter the 14-digit FSSAI number to continue.',
                         );
                       }
@@ -690,7 +693,7 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
                             document.status !== 'REJECTED',
                         )
                       ) {
-                        throw new Error(
+                        throw inputError(
                           'Upload the FSSAI document or save progress for later.',
                         );
                       }

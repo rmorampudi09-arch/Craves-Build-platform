@@ -87,11 +87,13 @@ export function ApplicationFacts({
   application,
   phase,
 }: {
-  application: Pick<ChefApplication, "id" | "submittedAt" | "reviewedAt">;
+  application: Pick<ChefApplication, "id" | "submittedAt" | "reviewedAt" | "referenceCode">;
   phase: ChefApplicationPhase;
 }) {
   const rows: [string, ReactNode][] = [
-    ["Application ID", application.id],
+    application.referenceCode
+      ? ["Application reference", application.referenceCode]
+      : ["Application ID", application.id],
     ["Submitted on", phase === "DRAFT" ? null : formatDate(application.submittedAt)],
     ["Last reviewed", formatDate(application.reviewedAt)],
   ];
@@ -102,7 +104,7 @@ export function ApplicationFacts({
       {visible.map(([label, value]) => (
         <div key={label} className="cob-row">
           <dt>{label}</dt>
-          <dd style={{ fontSize: label === "Application ID" ? 13 : undefined }}>{value}</dd>
+          <dd className={label === "Application reference" ? "cob-mono" : undefined} style={{ fontSize: label === "Application ID" ? 13 : undefined }}>{value}</dd>
         </div>
       ))}
     </dl>
@@ -114,6 +116,8 @@ type StatusInput = {
   application: ChefApplication;
   reason?: string | null;
   documents?: ChefEvidenceMetadata[];
+  /** Sections the reviewer named; document rejections add their own sections. */
+  sections?: string[];
   supportPhone?: string;
   supportEmail?: string;
 };
@@ -124,16 +128,19 @@ export function ChefStatusView({
   application,
   reason,
   documents = [],
+  sections: requested = [],
   supportPhone,
   supportEmail,
 }: StatusInput) {
   const copy = APPLICATION_PHASE_COPY[phase];
   const needsUpdate = documents.filter((document) => document.status === "REJECTED");
-  const sections = Array.from(
-    new Set(
-      needsUpdate.map((document) => sectionForDocument(document.documentType)).filter(Boolean),
-    ),
-  ) as (keyof typeof CHEF_SECTION_LABELS)[];
+  const flagged = new Set([
+    ...requested,
+    ...needsUpdate.map((document) => sectionForDocument(document.documentType)),
+  ]);
+  const sections = (Object.keys(CHEF_SECTION_LABELS) as (keyof typeof CHEF_SECTION_LABELS)[]).filter((section) =>
+    flagged.has(section),
+  );
   const explanation = reason ?? application.rejectionReason;
   return (
     <div className="cob-stack">
@@ -379,6 +386,7 @@ export function ChefApplicationStatus({ draftsEnabled }: { draftsEnabled: boolea
           application={application}
           reason={onboarding?.progress?.reason}
           documents={onboarding?.documents}
+          sections={onboarding?.progress?.sections}
           supportPhone={onboarding?.supportPhone}
           supportEmail={onboarding?.supportEmail}
         />

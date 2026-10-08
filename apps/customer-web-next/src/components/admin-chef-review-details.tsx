@@ -1,7 +1,8 @@
 "use client";
 
 import { adminFetch } from "@/lib/admin-renewal";
-import { parseOnboardingState, PROOF_OPTIONS, type OnboardingState } from "@/lib/chef-onboarding-v2-contract";
+import { CORRECTION_SECTIONS, parseOnboardingState, PROOF_OPTIONS, type OnboardingState } from "@/lib/chef-onboarding-v2-contract";
+import { CHEF_SECTION_LABELS } from "@/lib/chef-onboarding-flow";
 
 import { CheckCircle2, CircleAlert, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -33,6 +34,7 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
   const [documents, setDocuments] = useState<AdminChefDocument[]>([]);
   const [documentsAvailable, setDocumentsAvailable] = useState(false);
   const [applicationReason, setApplicationReason] = useState("");
+  const [correctionSections, setCorrectionSections] = useState<string[]>([]);
   const [documentReasons, setDocumentReasons] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("Loading chef application…");
   const [busy, setBusy] = useState(false);
@@ -89,10 +91,10 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
     if(!onboarding || busy) return;
     setBusy(true);setMessage("");
     try {
-      const response=await adminFetch(`/api/admin/chef-onboarding/applications/${applicationId}/review`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expectedVersion:onboarding.version,action,reason:applicationReason,fssaiNumber:onboarding.details?.fssaiNumber})});
+      const response=await adminFetch(`/api/admin/chef-onboarding/applications/${applicationId}/review`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expectedVersion:onboarding.version,action,reason:applicationReason,fssaiNumber:onboarding.details?.fssaiNumber,sections:action==="REQUEST_INFORMATION"?correctionSections:null})});
       const data=await response.json().catch(()=>null) as {message?:string}|null;
       if(!response.ok) throw new Error(data?.message??"Review action failed. Reload this application.");
-      await load();setApplicationReason("");setMessage("Review action saved.");
+      await load();setApplicationReason("");setCorrectionSections([]);setMessage("Review action saved.");
     } catch(error) {setMessage(error instanceof Error?error.message:"Review action failed.");}
     finally {setBusy(false);}
   }
@@ -167,7 +169,7 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
   return <div className="space-y-6">
     <section className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950 sm:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930CA]">{item.status}</p><h2 className="mt-2 text-3xl font-bold">{item.firstName} {item.lastName}</h2><p className="mt-2 text-sm text-slate-600">{item.email} · {item.phoneNumber}</p></div>
+        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930CA]">{item.referenceCode ? `${item.referenceCode} · ` : ""}{item.status}</p><h2 className="mt-2 text-3xl font-bold">{item.firstName} {item.lastName}</h2><p className="mt-2 text-sm text-slate-600">{item.email} · {item.phoneNumber}</p></div>
         <span className="text-sm text-slate-500">Submitted {new Date(item.submittedAt).toLocaleString("en-IN")}</span>
       </div>
       <p className="mt-5 text-sm leading-6">{item.addressLine1}{item.addressLine2 ? `, ${item.addressLine2}` : ""}{item.landmark ? `, ${item.landmark}` : ""}<br />{item.city}, {item.state} {item.postalCode ?? ""}</p>
@@ -180,9 +182,12 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
       <p className="mt-2 text-sm">FSSAI number: {onboarding.details.fssaiNumber} · Preferred language: {onboarding.details.language}</p>
       <p className="mt-2 whitespace-pre-wrap text-sm">{onboarding.details.kitchenDescription}</p>
       <p className="mt-3 text-sm">Review status: {onboarding.progress?.status} · FSSAI: {onboarding.progress?.fssaiVerified ? "Verified by reviewer" : "Verification required"}</p>
+      {onboarding.progress?.sections?.length ? <p className="mt-2 text-sm">Sections the Chef must update: {onboarding.progress.sections.map(section => CHEF_SECTION_LABELS[section as keyof typeof CHEF_SECTION_LABELS] ?? section).join(", ")}</p> : null}
+      {onboarding.callbackRequest ? <p className="mt-2 text-sm">FSSAI callback: {onboarding.callbackRequest.caseNumber} · {onboarding.callbackRequest.status}</p> : null}
       {onboarding.submitted && !onboarding.legacy ? <div className="mt-4 space-y-3">
         <label className="block text-sm">Correction reason or FSSAI verification evidence<textarea aria-label="Onboarding review evidence" className="mt-2 w-full rounded-xl border p-3" value={applicationReason} maxLength={2000} onChange={event=>setApplicationReason(event.target.value)} /></label>
-        <div className="flex flex-wrap gap-3">{item.status!=="APPROVED" ? <><button disabled={busy} onClick={()=>void onboardingAction("START_REVIEW")}>Start review</button><button disabled={busy || applicationReason.trim().length<3} onClick={()=>void onboardingAction("REQUEST_INFORMATION")}>Request information</button></> : null}<button disabled={busy || applicationReason.trim().length<3 || onboarding.progress?.fssaiVerified} onClick={()=>void onboardingAction("VERIFY_FSSAI")}>Record verified FSSAI number</button></div>
+        {item.status!=="APPROVED" ? <fieldset className="text-sm"><legend className="font-bold">Sections the Chef must update (needed to request information)</legend><div className="mt-2 flex flex-wrap gap-4">{CORRECTION_SECTIONS.filter(section => section !== "bank" || onboarding.bankEnrollmentRequired).map(section => <label key={section} className="inline-flex items-center gap-2"><input type="checkbox" checked={correctionSections.includes(section)} onChange={event => setCorrectionSections(current => event.target.checked ? [...current, section] : current.filter(value => value !== section))} />{CHEF_SECTION_LABELS[section]}</label>)}</div></fieldset> : null}
+        <div className="flex flex-wrap gap-3">{item.status!=="APPROVED" ? <><button disabled={busy} onClick={()=>void onboardingAction("START_REVIEW")}>Start review</button><button disabled={busy || applicationReason.trim().length<3 || correctionSections.length===0} onClick={()=>void onboardingAction("REQUEST_INFORMATION")}>Request information</button></> : null}<button disabled={busy || applicationReason.trim().length<3 || onboarding.progress?.fssaiVerified} onClick={()=>void onboardingAction("VERIFY_FSSAI")}>Record verified FSSAI number</button></div>
       </div> : null}
     </section> : null}
 

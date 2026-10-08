@@ -93,7 +93,7 @@ export function completedSections(
     documents: Boolean(
       d?.proofKind &&
       evidenceComplete(state, "SELECTED_PROOF_FRONT") &&
-      (!proofNeedsBack(d.proofKind) || evidenceComplete(state, "SELECTED_PROOF_BACK")),
+      (!proofNeedsBack(d.proofKind, d.proofHasBack) || evidenceComplete(state, "SELECTED_PROOF_BACK")),
     ),
     bank: state.bankEnrollmentRequired === false || (bankCanContinue(bank) && sameChefBankName(bank?.accountHolderName, chefFullName(d ?? {firstName:"",lastName:""}))),
   };
@@ -113,6 +113,18 @@ export function sectionForDocument(type: string): ChefFormSection | null {
       SECTION_DOCUMENTS[section].includes(type),
     ) ?? null
   );
+}
+/** Sections a reviewer asked the applicant to change; empty unless more information is required. */
+export function correctionSections(state: OnboardingState): ChefFormSection[] {
+  return state.progress?.status === "MORE_INFORMATION_REQUIRED"
+    ? CHEF_SECTIONS.filter((section) => state.progress?.sections?.includes(section))
+    : [];
+}
+export const MINIMUM_CHEF_AGE = 18;
+/** Latest date of birth that is 18 today (yyyy-mm-dd, local calendar). Plain string comparison is correct for leap days. */
+export function adultCutoff(today = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${today.getFullYear() - MINIMUM_CHEF_AGE}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
 }
 /** Display-only progress for the Welcome back list; completion itself stays authoritative. */
 export function sectionProgress(
@@ -139,8 +151,9 @@ export function sectionProgress(
     bank: Boolean(bank?.id),
   };
   const result = {} as Record<ChefFormSection, ChefSectionProgress>;
+  const requested = correctionSections(state);
   for (const section of CHEF_SECTIONS) {
-    result[section] = rejected(section)
+    result[section] = rejected(section) || requested.includes(section)
       ? "attention"
       : completion[section]
         ? "complete"
@@ -261,6 +274,11 @@ export function validateChefSection(
       details.dateOfBirth > new Date().toISOString().slice(0, 10)
     )
       return { field: "dateOfBirth", message: "Enter a valid date of birth." };
+    if (details.dateOfBirth > adultCutoff())
+      return {
+        field: "dateOfBirth",
+        message: "You must be at least 18 years old to apply as a Craves home chef.",
+      };
     if (!state.phoneNumber)
       return { field: "phoneNumber", message: "Sign in again to verify your mobile number." };
     if (!emailVerified)
@@ -303,7 +321,7 @@ export function validateChefSection(
         field: "SELECTED_PROOF_FRONT",
         message: "Upload the front of your chosen document.",
       };
-    if (proofNeedsBack(details.proofKind) && !evidenceComplete(state, "SELECTED_PROOF_BACK"))
+    if (proofNeedsBack(details.proofKind, details.proofHasBack) && !evidenceComplete(state, "SELECTED_PROOF_BACK"))
       return { field: "SELECTED_PROOF_BACK", message: "Upload the back of your chosen document." };
   }
   return null;

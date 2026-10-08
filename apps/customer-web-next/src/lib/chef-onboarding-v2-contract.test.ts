@@ -73,7 +73,7 @@ test("saved FSSAI resume state survives parsing and malformed state cannot appea
 });
 for (const [dateOfBirth, valid] of [
   ["2000-02-29", true],
-  ["2024-02-29", true],
+  ["1996-02-29", true],
   ["1900-02-29", false],
   ["2023-02-29", false],
   ["1990-04-31", false],
@@ -149,4 +149,48 @@ test("Welcome back progress distinguishes not started, in progress, complete and
   assert.equal(progress.fssai, "not-started");
   assert.equal(progress.documents, "attention");
   assert.equal(progress.bank, "complete");
+});
+
+test("applicants must be 18, using the local calendar and leap-day birthdays from 1 March", async () => {
+  const { adultCutoff } = await import("./chef-onboarding-flow.ts");
+  assert.equal(adultCutoff(new Date(2026, 9, 9)), "2008-10-09");
+  assert.ok("2008-02-29" > adultCutoff(new Date(2026, 1, 28)));
+  assert.ok("2008-02-29" <= adultCutoff(new Date(2026, 2, 1)));
+  const details = {
+    ...EMPTY_ONBOARDING, email: "chef@example.invalid", firstName: "Young", lastName: "Chef",
+    dateOfBirth: `${new Date().getFullYear() - 10}-01-01`,
+  };
+  const state = parseOnboardingState({
+    enabled: true, legacy: false, version: 1, resumeStep: "personal", submitted: false,
+    phoneNumber: "+910000000000", details, application: { id: null, status: "NOT_SUBMITTED", documents: [] },
+    documents: [], requiredDocuments: [], supportPhone: "+910000000000", supportEmail: "support@example.invalid",
+  });
+  assert.ok(state);
+  assert.match(validateChefSection("personal", details, state, true)?.message ?? "", /at least 18/);
+});
+
+test("an Other government ID can be single-sided; Aadhaar always needs its back", () => {
+  assert.equal(proofNeedsBack("OTHER_GOVERNMENT_ID", false), false);
+  assert.equal(proofNeedsBack("OTHER_GOVERNMENT_ID", null), true);
+  assert.equal(proofNeedsBack("AADHAAR", false), true);
+});
+
+test("callback status, reviewer sections and the short reference survive parsing", () => {
+  const base = {
+    enabled: true, legacy: false, version: 3, resumeStep: "review", submitted: false,
+    phoneNumber: "+910000000000", details: { ...EMPTY_ONBOARDING, proofKind: "OTHER_GOVERNMENT_ID", proofHasBack: false },
+    application: { id: "12345678-1234-4123-8123-123456789012", status: "PENDING", documents: [], referenceCode: "CRV-10042" },
+    documents: [], requiredDocuments: [], supportPhone: "+910000000000", supportEmail: "support@example.invalid",
+    progress: { status: "MORE_INFORMATION_REQUIRED", reason: "Retake", nextAction: "EDIT_APPLICATION", fssaiVerified: false,
+      termsVersion: "v1", sections: ["documents", "menu", "kitchen"] },
+    callbackRequest: { caseNumber: "SUP-1", status: "CONTACTED", requestedAt: "2026-10-09T00:00:00Z" },
+  };
+  const state = parseOnboardingState(base);
+  assert.ok(state);
+  assert.deepEqual(state.progress?.sections, ["kitchen", "documents"]);
+  assert.equal(state.callbackRequest?.status, "CONTACTED");
+  assert.equal(state.application.referenceCode, "CRV-10042");
+  assert.equal(state.details?.proofHasBack, false);
+  assert.equal(parseOnboardingState({ ...base, callbackRequest: { caseNumber: "SUP-1", status: "LOST", requestedAt: "x" } }), null);
+  assert.equal(parseOnboardingState({ ...base, callbackRequest: undefined })?.callbackRequest, null);
 });

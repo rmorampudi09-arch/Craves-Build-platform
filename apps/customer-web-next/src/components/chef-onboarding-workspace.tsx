@@ -229,7 +229,7 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
         </Link>
       ) : phase === "MORE_INFORMATION_REQUIRED" ? (
         primary("Update application", {
-          onClick: () => flow.open(firstIncompleteSection(state, flow.bank)),
+          onClick: () => flow.open(flow.nextCorrection()),
         })
       ) : phase === "REJECTED" ? (
         <Link href="/home" className="cob-secondary">
@@ -358,6 +358,7 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
           application={state.application}
           reason={state.progress?.reason}
           documents={state.documents}
+          sections={state.progress?.sections}
           supportPhone={state.supportPhone}
           supportEmail={state.supportEmail}
         />

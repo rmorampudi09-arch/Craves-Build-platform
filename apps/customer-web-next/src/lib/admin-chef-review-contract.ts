@@ -30,6 +30,8 @@ export type AdminChefApplication = {
   submittedAt: string;
   reviewedAt: string | null;
   documents: AdminChefDocument[];
+  /** Short applicant-facing reference such as CRV-10001. */
+  referenceCode?: string | null;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -67,7 +69,7 @@ export function parseAdminChefApplication(value: unknown): AdminChefApplication 
   const city = text(raw.city, 120); const state = text(raw.state, 120); const status = text(raw.status, 40); const submittedAt = instant(raw.submittedAt);
   const documents = (Array.isArray(raw.documents) ? raw.documents.slice(0, 20) : []).map(parseDocument);
   if (!id || !UUID.test(id) || !phoneNumber || !email || !firstName || !lastName || !addressLine1 || !city || !state || !status || !STATUSES.has(status) || !submittedAt || documents.some(item => item === null)) return null;
-  return { id, phoneNumber, email, firstName, lastName, addressLine1, addressLine2: optionalText(raw.addressLine2, 250), landmark: optionalText(raw.landmark, 160), city, state, postalCode: optionalText(raw.postalCode, 20), latitude: coordinate(raw.latitude, -90, 90), longitude: coordinate(raw.longitude, -180, 180), status: status as AdminChefApplicationStatus, rejectionReason: optionalText(raw.rejectionReason, 1000), submittedAt, reviewedAt: raw.reviewedAt == null ? null : instant(raw.reviewedAt), documents: documents as AdminChefDocument[] };
+  return { id, phoneNumber, email, firstName, lastName, addressLine1, addressLine2: optionalText(raw.addressLine2, 250), landmark: optionalText(raw.landmark, 160), city, state, postalCode: optionalText(raw.postalCode, 20), latitude: coordinate(raw.latitude, -90, 90), longitude: coordinate(raw.longitude, -180, 180), status: status as AdminChefApplicationStatus, rejectionReason: optionalText(raw.rejectionReason, 1000), submittedAt, reviewedAt: raw.reviewedAt == null ? null : instant(raw.reviewedAt), documents: documents as AdminChefDocument[], referenceCode: /^CRV-[0-9]{5,12}$/.test(String(raw.referenceCode)) ? String(raw.referenceCode) : null };
 }
 
 export function parseAdminChefApplications(value: unknown): AdminChefApplication[] | null {

@@ -42,17 +42,36 @@ Modified
 
 ## Backend handover — gaps found while redesigning
 
-None of these block the UI release. Each needs an owner decision before it can be enforced or shown.
+Items 1–4, 6 and 7 were fixed in backend and web on 9 October 2026 (follow-up release, see “Gap fixes” below). Items 5, 8 and 9 stay as they are.
 
-1. **Age eligibility** — the backend only checks that DOB is a real date between 1900 and today. There is no 18+ rule, so the UI shows none. If Craves requires 18+, add it to `ChefOnboardingPolicy.validate` and return a field error.
-2. **Callback status on return visits** — `POST /chef/onboarding/help` de-duplicates open requests, but there is no applicant `GET` for the latest request, so “Request received” only shows in the session that raised it. Suggest `GET /chef/onboarding/help/latest`. Category, stage and FSSAI status are sent inside the message text; structured fields would make the admin queue filterable.
-3. **More information required** — only a free-text reason and per-document review reasons exist. A structured `affectedSections` list would let the status page name sections that have no document (for example Basic details).
-4. **Human-friendly application reference** — only the UUID exists. The design called for a short reference (for example `CRV-48213`); that needs a backend field.
-5. **FSSAI verification** — no automated FoSCoS lookup; “Verified by Craves” appears only after an admin `VERIFY_FSSAI` action.
-6. **FSSAI video fallback** — content is strictly per language. If a language has no video, the UI shows an empty state; a server-side fallback to English would help.
-7. **Identity types** — Voter ID, Driving Licence and Passport are only available through “Other government ID”, and the backend always requires a back side for it. A “no back side” option needs a policy change. Confirm that removing uploaded proof clears the `PROOF_CHOICE_LOCKED` check (the UI tells applicants to remove files to change type).
+1. **Age eligibility** — fixed. Applicants must be 18 or older.
+2. **Callback status on return visits** — fixed. The onboarding state returns the latest callback request.
+3. **More information required** — fixed. Reviewers pick the sections to update.
+4. **Human-friendly application reference** — fixed. Every application has a `CRV-#####` reference.
+5. **FSSAI verification** — unchanged: no automated FoSCoS lookup; “Verified by Craves” appears only after an admin `VERIFY_FSSAI` action.
+6. **FSSAI video fallback** — fixed. English content is shown when the chosen language has none.
+7. **Identity types / back side** — fixed. “Other government ID” can be marked as having no back side. (Removing uploaded proof still clears `PROOF_CHOICE_LOCKED` because removed files are excluded from the check.)
 8. **Bank** — unchanged and deferred: `CRAVES_CHEF_ONBOARDING_BANK_REQUIRED=false`, RazorpayX bindings absent. The bank screen is ready when that is switched on.
-9. **Official FSSAI guidance** — the step text is generic and links to `https://foscos.fssai.gov.in/`; web verification of current FoSCoS wording wasn’t possible from the build sandbox, so no fees or turnover thresholds are stated.
+9. **Official FSSAI guidance** — the step text is generic and links to `https://foscos.fssai.gov.in/`; no fees or turnover thresholds are stated.
+
+## Gap fixes (backend + web)
+
+| Gap | Backend (`services/user-chef-service`) | Web (`apps/customer-web-next`) |
+| --- | --- | --- |
+| 18+ rule | `ChefOnboardingPolicy.validateDraft` rejects a date of birth less than 18 years before today (India time) with `APPLICANT_UNDER_18`, on draft save, full save and submit. 29 February birthdays count from 1 March. | Basic details: helper “You must be at least 18 years old to apply”, the date picker stops at 18 years ago, and the same message shows before any save. |
+| Callback status after reload | `GET /chef/onboarding` (and the admin application view) now include `callbackRequest {caseNumber, status, requestedAt}` — the applicant’s latest FSSAI help request. No new route. | “Don’t have FSSAI?” shows “Request received” (or “Our team contacted you”) with the reference after any reload. A resolved request lets the chef ask again. Admin review shows the callback status. |
+| Structured “more information” | `REQUEST_INFORMATION` now requires `sections` (any of `personal, kitchen, fssai, documents`, plus `bank` only when bank is required). Stored in `chef_onboarding_draft.correction_sections`, returned as `progress.sections`, cleared on resubmission, and recorded in the action audit. | Admin review has a section checklist; “Request information” stays disabled until one is picked. Chef status lists those sections under “What needs updating” (with any rejected-document reasons), Welcome back marks them “Needs attention”, and “Update application” opens the first one. |
+| Short application reference | New `chef_application.reference_code` (`CRV-10001`, `CRV-10002`, …) from a sequence; existing applications get one when the migration runs. Returned as `referenceCode` on every application response. | Submitted and status screens show “Application reference CRV-…”; admin review list and detail show it next to the status. |
+| English video fallback | `GET /chef/onboarding/content?language=xx` returns English published content when nothing is published in `xx`. Items keep their own language. | The FSSAI guide shows “Not available in <language> yet, so we’re showing the English guide.” |
+| No back side | `Details.proofHasBack` (only kept for `OTHER_GOVERNMENT_ID`; `false` means front only). Required documents, resume step, submission and final approval all use it. | Identity step shows “This document has no back side” for Other government ID; the back upload disappears and Review lists only the document. |
+
+**Admin portal uploads (question asked):** yes — `/admin/chef-onboarding` (“Chef onboarding help” in the admin menu) already lets Platform/Chef admins create articles or upload MP4/WebM videos (≤100 MB) per language, preview, and publish/unpublish. Published, verified items appear in the chef app’s “Watch how to apply” card; with this release English items also cover languages that have none. The page now says so.
+
+**Database:** `V17__chef_onboarding_reference_and_correction_sections.sql` — additive only (new sequence, `reference_code` with unique constraint, nullable `correction_sections` with a format check). `scripts/release/rmorampudi09_preflight.py` approves V17 so the guarded Chef release can apply it.
+
+**Mobile app:** not changed. It ignores the new fields; it still asks for a back side for Other government ID, and the 18+ rule now applies there through the backend.
+
+**Release order:** merged `main` → `launch-regression-ci.yml` → pipeline #14 `operation=backend` (deploys user-chef-service, Flyway applies V17) → pipeline #14 `operation=web`. No APIM change (no new routes).
 
 ## Verification (local, Node 22.22)
 
@@ -63,6 +82,8 @@ None of these block the UI release. Each needs an owner decision before it can b
 - Visual check — every screen rendered with mocked APIs at 390×844 and 1280×860 (Playwright)
 
 Live OTP, uploads to private storage, email delivery and callbacks need an authorised test identity on the deployed environment.
+
+Gap fixes (9 Oct 2026, follow-up): `npm run lint`, `npm run typecheck`, `npm run test` (53 Vitest files / 672 tests and 378 Node tests) and `npm run build` pass locally; release preflight tests pass with the new V17 test. All migrations V1–V17 were applied in order to a local PostgreSQL 16 + PostGIS database, including V17 over existing applications (references `CRV-10001…` assigned, section check accepts `kitchen,documents` and rejects `kitchen,menu`). Java compilation and `ChefOnboardingDatabaseTest` (three new database tests) run in GitHub Actions because Maven Central is not reachable from the build sandbox.
 
 ## Release
 

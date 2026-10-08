@@ -58,15 +58,15 @@ public class ChefOnboardingService {
         boolean legacy=application.status()==ChefApplicationStatus.APPROVED && draft!=null && draft.submitted() &&
             draft.reviewedFssai()!=null && Objects.equals(draft.reviewedFssai(),draft.details().fssaiNumber()) &&
             "waiting".equals(ChefOnboardingPolicy.resume(draft.details(),documents,true)) &&
-            ChefOnboardingPolicy.required(draft.details().proofKind()).stream().allMatch(type -> documents.stream()
+            ChefOnboardingPolicy.required(draft.details()).stream().allMatch(type -> documents.stream()
                 .anyMatch(document -> document.documentType()==type && "APPROVED".equals(document.status())));
         Details details=draft==null ? existingDetails(application) : draft.details();
         boolean submitted=draft!=null && draft.submitted() && !"MORE_INFORMATION_REQUIRED".equals(draft.reviewStatus());
         String resume=legacy ? "legacy" : ChefOnboardingPolicy.resume(details,documents,submitted);
         return new State(enabled,legacy,draft==null ? 0 : draft.version(),resume,submitted,
             user.phoneNumber(),details,application,documents,
-            details==null ? List.of() : ChefOnboardingPolicy.required(details.proofKind()).stream().map(Enum::name).sorted().toList(),
-            supportPhone,supportEmail,progress(draft,application),bankEnrollmentRequired);
+            details==null ? List.of() : ChefOnboardingPolicy.required(details).stream().map(Enum::name).sorted().toList(),
+            supportPhone,supportEmail,progress(draft,application),bankEnrollmentRequired,latestCallback(user.identityId()));
     }
 
     @Transactional
@@ -99,7 +99,8 @@ public class ChefOnboardingService {
             trim(input.kitchenName()),trim(input.kitchenDescription()),trim(input.addressLine1()),
             trim(input.addressLine2()),trim(input.landmark()),trim(input.city()),trim(input.state()),
             trim(input.postalCode()),input.latitude(),input.longitude(),input.proofKind(),trim(input.otherGovernmentId()),
-            trim(input.fssaiNumber()),input.language());
+            trim(input.fssaiNumber()),input.language(),
+            input.proofKind()==ProofKind.OTHER_GOVERNMENT_ID && Boolean.FALSE.equals(input.proofHasBack()) ? Boolean.FALSE : null);
         var docs=application.id()==null ? List.<in.craves.userchef.web.ApiDtos.KycDocumentResponse>of()
             : applications.listMyApplicationEvidence(user);
         if(existing!=null && existing.details().proofKind()!=null && !Objects.equals(existing.details().proofKind(),details.proofKind()) &&
@@ -185,7 +186,7 @@ public class ChefOnboardingService {
         if(!state.submitted()) {
             UUID enrollment=bankEnrollmentRequired
                 ? bank.requireEnrollment(authorization,draft.details().firstName()+" "+draft.details().lastName()) : null;
-            jdbc.update("UPDATE chef_onboarding_draft SET submitted=true,review_status='PENDING',correction_reason=NULL,terms_version=?,terms_accepted_at=now(),bank_enrollment_id=COALESCE(?,bank_enrollment_id),version=version+1,updated_at=now() WHERE identity_id=?",TERMS_VERSION,enrollment,user.identityId());
+            jdbc.update("UPDATE chef_onboarding_draft SET submitted=true,review_status='PENDING',correction_reason=NULL,correction_sections=NULL,terms_version=?,terms_accepted_at=now(),bank_enrollment_id=COALESCE(?,bank_enrollment_id),version=version+1,updated_at=now() WHERE identity_id=?",TERMS_VERSION,enrollment,user.identityId());
             jdbc.update("UPDATE chef_application SET status='PENDING',rejection_reason=NULL,reviewed_at=NULL,reviewed_by_identity_id=NULL,submitted_at=now(),updated_at=now() WHERE identity_id=? AND status<>'APPROVED'",user.identityId());
             if(!bankEnrollmentRequired) audit(user.identityId(),user.identityId(),"BANK_ENROLLMENT_DEFERRED","Bank setup is not required for application review; no bank verification or payout activation.");
         }
@@ -203,8 +204,8 @@ public class ChefOnboardingService {
             application.phoneNumber(),details,application,docs,
             (draft==null ? (enabled ? java.util.Set.of(KycDocumentType.KITCHEN_PHOTO_1,KycDocumentType.KITCHEN_PHOTO_2,KycDocumentType.FSSAI_LICENSE)
                 : java.util.Set.of(KycDocumentType.APPLICANT_PHOTO,KycDocumentType.GOVERNMENT_ID_FRONT,KycDocumentType.GOVERNMENT_ID_BACK,KycDocumentType.TAX_ID_CARD))
-                : ChefOnboardingPolicy.required(details.proofKind())).stream().map(Enum::name).sorted().toList(),
-            supportPhone,supportEmail,progress(draft,application),bankEnrollmentRequired);
+                : ChefOnboardingPolicy.required(details)).stream().map(Enum::name).sorted().toList(),
+            supportPhone,supportEmail,progress(draft,application),bankEnrollmentRequired,latestCallback(application.identityId()));
     }
 
     @Transactional
@@ -277,7 +278,7 @@ public class ChefOnboardingService {
         if(application.id()==null) return null;
         return new Details(application.email(),application.firstName(),application.lastName(),null,null,null,
             application.addressLine1(),application.addressLine2(),application.landmark(),application.city(),
-            application.state(),application.postalCode(),application.latitude(),application.longitude(),null,null,null,"en");
+            application.state(),application.postalCode(),application.latitude(),application.longitude(),null,null,null,"en",null);
     }
 
     private void lock(CurrentUser user) {
@@ -286,7 +287,8 @@ public class ChefOnboardingService {
     }
     private Draft find(UUID identityId,boolean lock) {
         var rows=jdbc.query("SELECT * FROM chef_onboarding_draft WHERE identity_id=?"+(lock?" FOR UPDATE":""),
-            (rs,row)->new Draft(decode(rs.getString("details")),rs.getLong("version"),rs.getBoolean("submitted"),rs.getString("review_status"),rs.getString("correction_reason"),rs.getString("fssai_reviewed_number"),rs.getString("terms_version")),identityId);
+            (rs,row)->new Draft(decode(rs.getString("details")),rs.getLong("version"),rs.getBoolean("submitted"),rs.getString("review_status"),rs.getString("correction_reason"),rs.getString("fssai_reviewed_number"),rs.getString("terms_version"),
+                rs.getString("correction_sections")==null ? List.of() : List.of(rs.getString("correction_sections").split(","))),identityId);
         return rows.isEmpty()?null:rows.getFirst();
     }
     private Help mapHelp(ResultSet rs,int row)throws SQLException {
@@ -321,13 +323,19 @@ public class ChefOnboardingService {
         if(user==null || !user.hasAnyRole("PLATFORM_ADMIN","CHEF_ADMIN"))
             throw ApiException.forbidden("ONBOARDING_EDITOR_REQUIRED","Chef onboarding editor access is required.");
     }
-    private record Draft(Details details,long version,boolean submitted,String reviewStatus,String reason,String reviewedFssai,String termsVersion) {}
+    private record Draft(Details details,long version,boolean submitted,String reviewStatus,String reason,String reviewedFssai,String termsVersion,List<String> sections) {}
+    private CallbackRequest latestCallback(UUID identityId) {
+        var rows=jdbc.query("SELECT case_number,status,created_at FROM chef_onboarding_help WHERE identity_id=? ORDER BY created_at DESC,id DESC LIMIT 1",
+            (rs,row)->new CallbackRequest(rs.getString("case_number"),rs.getString("status"),rs.getTimestamp("created_at").toInstant()),identityId);
+        return rows.isEmpty()?null:rows.getFirst();
+    }
     private ReviewProgress progress(Draft draft,in.craves.userchef.web.ApiDtos.ChefApplicationResponse application) {
         String status=application.status()==ChefApplicationStatus.APPROVED?"APPROVED":application.status()==ChefApplicationStatus.REJECTED?"REJECTED":draft==null?"DRAFT":draft.reviewStatus();
         if(draft!=null && "MORE_INFORMATION_REQUIRED".equals(draft.reviewStatus())) status=draft.reviewStatus();
         boolean correctable="DRAFT".equals(status) || "MORE_INFORMATION_REQUIRED".equals(status);
         return new ReviewProgress(status,draft==null?application.rejectionReason():draft.reason(),correctable?"EDIT_APPLICATION":"VIEW_STATUS",
-            draft!=null && draft.reviewedFssai()!=null && Objects.equals(draft.reviewedFssai(),draft.details().fssaiNumber()),TERMS_VERSION);
+            draft!=null && draft.reviewedFssai()!=null && Objects.equals(draft.reviewedFssai(),draft.details().fssaiNumber()),TERMS_VERSION,
+            draft!=null && "MORE_INFORMATION_REQUIRED".equals(status) ? draft.sections() : List.of());
     }
     @Transactional
     public State reviewAction(CurrentUser admin,UUID applicationId,ReviewAction request) {
@@ -345,6 +353,14 @@ public class ChefOnboardingService {
         String reason=trim(request.reason());
         if(!"START_REVIEW".equals(action) && (reason==null || reason.length()<3 || reason.length()>2000))
             throw ApiException.badRequest("REVIEW_REASON_REQUIRED","Record the correction reason or FSSAI verification evidence using 3 to 2000 characters.");
+        String sections=null;
+        if("REQUEST_INFORMATION".equals(action)) {
+            var chosen=request.sections()==null ? List.<String>of() : request.sections();
+            var allowed=ChefOnboardingPolicy.SECTIONS.stream().filter(section -> bankEnrollmentRequired || !"bank".equals(section)).toList();
+            if(chosen.isEmpty() || chosen.stream().anyMatch(section -> section==null || !allowed.contains(section)))
+                throw ApiException.badRequest("REVIEW_SECTIONS_REQUIRED","Choose the sections the Chef must update.");
+            sections=String.join(",",allowed.stream().filter(chosen::contains).toList());
+        }
         if(application.status()==ChefApplicationStatus.REJECTED && !"REQUEST_INFORMATION".equals(action))
             throw ApiException.conflict("APPLICATION_REOPEN_REQUIRED","Request corrections before reviewing a rejected application.");
         if(application.status()==ChefApplicationStatus.REJECTED) {
@@ -356,10 +372,11 @@ public class ChefOnboardingService {
                 throw ApiException.conflict("FSSAI_NUMBER_CHANGED","Review the current saved FSSAI number.");
             jdbc.update("UPDATE chef_onboarding_draft SET fssai_reviewed_number=?,fssai_reviewed_by=?,fssai_reviewed_at=now(),fssai_review_evidence=?,version=version+1,updated_at=now() WHERE identity_id=?",request.fssaiNumber(),admin.identityId(),reason,application.identityId());
         } else {
-            jdbc.update("UPDATE chef_onboarding_draft SET review_status=?,correction_reason=?,submitted=CASE WHEN ?='REQUEST_INFORMATION' THEN false ELSE submitted END,version=version+1,updated_at=now() WHERE identity_id=?",
-                "START_REVIEW".equals(action)?"UNDER_REVIEW":"MORE_INFORMATION_REQUIRED",reason,action,application.identityId());
+            jdbc.update("UPDATE chef_onboarding_draft SET review_status=?,correction_reason=?,correction_sections=?,submitted=CASE WHEN ?='REQUEST_INFORMATION' THEN false ELSE submitted END,version=version+1,updated_at=now() WHERE identity_id=?",
+                "START_REVIEW".equals(action)?"UNDER_REVIEW":"MORE_INFORMATION_REQUIRED",reason,sections,action,application.identityId());
         }
-        audit(application.identityId(),admin.identityId(),action,reason);
+        String note=sections==null ? reason : "["+sections+"] "+reason;
+        audit(application.identityId(),admin.identityId(),action,note==null || note.length()<=2000 ? note : note.substring(0,2000));
         return review(admin,applicationId);
     }
     public Playback documentPreview(CurrentUser user,UUID id) {

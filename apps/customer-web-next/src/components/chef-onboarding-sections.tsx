@@ -38,6 +38,7 @@ import {
 } from "@/lib/chef-onboarding-v2-contract";
 import {
   CHEF_SECTION_LABELS,
+  adultCutoff,
   chefFullName,
   completedSections,
   evidenceComplete,
@@ -55,6 +56,7 @@ import {
   StatusChip,
   VerifiedBadge,
   describedBy,
+  formatDate,
   formatDateOfBirth,
   formatFssai,
   formatPhone,
@@ -104,7 +106,7 @@ function TextField({
         autoComplete={autoComplete ?? "off"}
         placeholder={placeholder}
         value={String(flow.details[name] ?? "")}
-        max={type === "date" ? new Date().toISOString().slice(0, 10) : undefined}
+        max={type === "date" ? adultCutoff() : undefined}
         min={type === "date" ? "1900-01-01" : undefined}
         maxLength={maxLength}
         disabled={flow.busy}
@@ -184,6 +186,7 @@ export function ChefBasicDetails({ flow }: Props) {
             flow={flow}
             name="dateOfBirth"
             label="Date of birth"
+            helper="You must be at least 18 years old to apply."
             type="date"
             autoComplete="bday"
           />
@@ -712,13 +715,11 @@ function FssaiGuide({ flow }: Props) {
         const raw: unknown = await response.json();
         if (!Array.isArray(raw) || raw.length > 100 || !raw.every(isLearningContent))
           throw new Error("The video guide could not be loaded.");
-        if (!controller.signal.aborted)
-          setContent(
-            raw.filter(
-              (item) =>
-                item.published === true && item.ready === true && item.language === language,
-            ),
-          );
+        if (controller.signal.aborted) return;
+        const ready = raw.filter((item) => item.published === true && item.ready === true);
+        const own = ready.filter((item) => item.language === language);
+        // The service sends English only when nothing is published in the chosen language.
+        setContent(own.length || language === "en" ? own : ready.filter((item) => item.language === "en"));
       })
       .catch((failure) => {
         if (!controller.signal.aborted)
@@ -756,6 +757,8 @@ function FssaiGuide({ flow }: Props) {
   }
 
   const videos = content.filter((item) => item.kind === "VIDEO");
+  const showingEnglish = language !== "en" && content.length > 0 && content.every((item) => item.language === "en");
+  const languageName = ONBOARDING_LANGUAGES.find(([key]) => key === language)?.[1] ?? language;
   const articles = content.filter((item) => item.kind === "ARTICLE");
   return (
     <div className="cob-stack">
@@ -848,6 +851,11 @@ function FssaiGuide({ flow }: Props) {
           </div>
         ) : (
           <div className="cob-fields">
+            {showingEnglish ? (
+              <p className="cob-helper" role="status">
+                Not available in {languageName} yet, so we’re showing the English guide.
+              </p>
+            ) : null}
             {videos.map((item) => (
               <div key={item.id} className="cob-field" lang={item.language}>
                 <div className="cob-video">
@@ -927,15 +935,25 @@ function FssaiGuide({ flow }: Props) {
               style={{ color: "#C4200F", flexShrink: 0 }}
             />
             <div>
-              <strong>Request received</strong>
+              <strong>{flow.callback?.status === "CONTACTED" ? "Our team contacted you" : "Request received"}</strong>
               <p>
-                Our Craves team will call you on your registered mobile number to help with your
-                FSSAI application.
+                {flow.callback?.status === "CONTACTED"
+                  ? "Our Craves team has spoken to you about your FSSAI application. We’ll follow up if anything else is needed."
+                  : "Our Craves team will call you on your registered mobile number to help with your FSSAI application."}
               </p>
-              <small>Reference {flow.callbackCase}</small>
+              <small>
+                Reference {flow.callbackCase}
+                {flow.callback?.requestedAt ? ` · Requested ${formatDate(flow.callback.requestedAt)}` : ""}
+              </small>
             </div>
           </div>
         ) : (
+          <>
+          {flow.callback?.status === "RESOLVED" ? (
+            <p className="cob-helper" style={{ marginBottom: 10 }}>
+              Your last request ({flow.callback.caseNumber}) is resolved. Ask again if you still need help.
+            </p>
+          ) : null}
           <button
             type="button"
             className="cob-secondary"
@@ -945,6 +963,7 @@ function FssaiGuide({ flow }: Props) {
             <Phone size={18} aria-hidden="true" />
             Request a call from Craves
           </button>
+          </>
         )}
       </Card>
 
@@ -981,7 +1000,7 @@ export function ChefIdentityDetails({ flow }: Props) {
   const locked = Boolean(
     flow.state?.documents.some((document) => document.documentType.startsWith("SELECTED_PROOF_")),
   );
-  const twoSided = proofNeedsBack(proof);
+  const twoSided = proofNeedsBack(proof, flow.details.proofHasBack);
   const proofError = fieldError(flow, "proofKind");
   const done = Boolean(
     proof &&
@@ -1008,7 +1027,10 @@ export function ChefIdentityDetails({ flow }: Props) {
                   aria-checked={selected}
                   className="cob-choice"
                   disabled={flow.busy || (locked && !selected)}
-                  onClick={() => flow.field("proofKind", key as ProofKind)}
+                  onClick={() => {
+                    flow.field("proofKind", key as ProofKind);
+                    if (key !== "OTHER_GOVERNMENT_ID") flow.field("proofHasBack", null);
+                  }}
                 >
                   {selected ? <Check size={16} strokeWidth={3} aria-hidden="true" /> : null}
                   {PROOF_SHORT[key]}
@@ -1033,6 +1055,17 @@ export function ChefIdentityDetails({ flow }: Props) {
               maxLength={80}
               placeholder="For example, Voter ID, Driving Licence or Passport"
             />
+          ) : null}
+          {proof === "OTHER_GOVERNMENT_ID" ? (
+            <label className="cob-check">
+              <input
+                type="checkbox"
+                checked={flow.details.proofHasBack === false}
+                disabled={flow.busy}
+                onChange={(event) => flow.field("proofHasBack", event.target.checked ? false : null)}
+              />
+              <span>This document has no back side</span>
+            </label>
           ) : null}
         </div>
       </Card>
@@ -1264,7 +1297,7 @@ export function ChefReviewDetails({ flow }: Props) {
                   : PROOF_SHORT[d.proofKind]
                 : "",
             ],
-            ...(proofNeedsBack(d.proofKind)
+            ...(proofNeedsBack(d.proofKind, d.proofHasBack)
               ? ([
                   ["Front side", uploaded("SELECTED_PROOF_FRONT") ? "Uploaded" : ""],
                   ["Back side", uploaded("SELECTED_PROOF_BACK") ? "Uploaded" : ""],

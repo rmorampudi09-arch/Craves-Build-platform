@@ -152,6 +152,7 @@ class ChefApplicationReadinessTest {
         return new ChefApplicationResponse(status == ChefApplicationStatus.NOT_SUBMITTED ? null : applicationId,
             user.identityId(), user.phoneNumber(), "chef@example.test", "Test", "Chef", "Test road", null, null,
             "Hyderabad", "Telangana", "500081", null, null, status, null,
-            status == ChefApplicationStatus.NOT_SUBMITTED ? null : saved, null, null, List.of());
+            status == ChefApplicationStatus.NOT_SUBMITTED ? null : saved, null, null, List.of(),
+            status == ChefApplicationStatus.NOT_SUBMITTED ? null : "CRV-10001");
     }
 }

@@ -166,7 +166,9 @@ public final class ApiDtos {
         Instant submittedAt,
         Instant reviewedAt,
         UUID reviewedByIdentityId,
-        List<KycDocumentResponse> documents
+        List<KycDocumentResponse> documents,
+        /** Short human-friendly reference such as CRV-10001; null before an application row exists. */
+        String referenceCode
     ) {
     }
 

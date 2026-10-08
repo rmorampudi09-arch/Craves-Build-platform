@@ -6,6 +6,7 @@ import in.craves.userchef.onboarding.ChefOnboardingDtos.ProofKind;
 import in.craves.userchef.web.ApiDtos.KycDocumentResponse;
 import in.craves.userchef.web.ApiDtos.KycDocumentType;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -17,10 +18,16 @@ public final class ChefOnboardingPolicy {
         "en","as","bn","brx","doi","gu","hi","kn","ks","kok","mai","ml","mni",
         "mr","ne","or","pa","sa","sat","sd","ta","te","ur"
     );
-    public static Set<KycDocumentType> required(ProofKind proof) {
+    public static final int MINIMUM_AGE = 18;
+    /** Sections a reviewer can ask the applicant to correct, in onboarding order. */
+    public static final List<String> SECTIONS = List.of("personal","kitchen","fssai","documents","bank");
+    public static Set<KycDocumentType> required(Details details) {
+        return details == null ? required(null, null) : required(details.proofKind(), details.proofHasBack());
+    }
+    public static Set<KycDocumentType> required(ProofKind proof, Boolean hasBack) {
         var types = new LinkedHashSet<KycDocumentType>();
         types.add(KycDocumentType.SELECTED_PROOF_FRONT);
-        if (proof == ProofKind.AADHAAR || proof == ProofKind.OTHER_GOVERNMENT_ID)
+        if (proof == ProofKind.AADHAAR || proof == ProofKind.OTHER_GOVERNMENT_ID && !Boolean.FALSE.equals(hasBack))
             types.add(KycDocumentType.SELECTED_PROOF_BACK);
         types.add(KycDocumentType.KITCHEN_PHOTO_1);
         types.add(KycDocumentType.KITCHEN_PHOTO_2);
@@ -43,7 +50,7 @@ public final class ChefOnboardingPolicy {
             !accepted(docs, KycDocumentType.KITCHEN_PHOTO_2)) return "kitchen-photos";
         if (!StringUtils.hasText(d.fssaiNumber()) || !d.fssaiNumber().matches("[0-9]{14}"))
             return "fssai";
-        if (d.proofKind() == null || !required(d.proofKind()).stream().allMatch(t -> accepted(docs,t)))
+        if (d.proofKind() == null || !required(d).stream().allMatch(t -> accepted(docs,t)))
             return "documents";
         return submitted ? "waiting" : "review";
     }
@@ -65,6 +72,8 @@ public final class ChefOnboardingPolicy {
         if (d.dateOfBirth() != null && (d.dateOfBirth().isAfter(LocalDate.now()) ||
             d.dateOfBirth().isBefore(LocalDate.of(1900,1,1))))
             throw ApiException.badRequest("DATE_OF_BIRTH_INVALID","Enter a valid date of birth.");
+        if (d.dateOfBirth() != null && !adult(d.dateOfBirth(), LocalDate.now(ZoneId.of("Asia/Kolkata"))))
+            throw ApiException.badRequest("APPLICANT_UNDER_18","You must be at least 18 years old to apply as a Craves home chef.");
         optionalText(d.kitchenName(),160); optionalText(d.kitchenDescription(),1000);
         optionalText(d.addressLine1(),255); optionalText(d.addressLine2(),255); optionalText(d.landmark(),255);
         optionalText(d.city(),80); optionalText(d.state(),80); optionalText(d.otherGovernmentId(),80);
@@ -78,6 +87,10 @@ public final class ChefOnboardingPolicy {
             throw ApiException.badRequest("FSSAI_NUMBER_INVALID","Enter the 14-digit FSSAI registration or licence number.");
         if (d.language() == null || !LANGUAGES.contains(d.language()))
             throw ApiException.badRequest("LANGUAGE_INVALID","Choose a supported language.");
+    }
+    /** True once the applicant has had their 18th birthday on {@code today} (29 February birthdays count from 1 March). */
+    public static boolean adult(LocalDate dateOfBirth, LocalDate today) {
+        return !dateOfBirth.isAfter(today.minusYears(MINIMUM_AGE));
     }
     private static void requiredText(String value,int limit) {
         if (!StringUtils.hasText(value) || value.length() > limit)

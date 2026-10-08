@@ -40,6 +40,8 @@ export type ChefApplication = {
   submittedAt: string | null;
   reviewedAt: string | null;
   documents: ChefProofDocument[];
+  /** Short applicant-facing reference, for example CRV-10001. */
+  referenceCode?: string | null;
 };
 
 export type ChefApplicationInput = {
@@ -141,7 +143,8 @@ export function parseChefApplication(value: unknown): ChefApplication | null {
     rejectionReason: optionalText(application.rejectionReason, 1000),
     submittedAt: instant(application.submittedAt),
     reviewedAt: instant(application.reviewedAt),
-    documents: documents as ChefProofDocument[]
+    documents: documents as ChefProofDocument[],
+    referenceCode: /^CRV-[0-9]{5,12}$/.test(String(application.referenceCode)) ? String(application.referenceCode) : null
   };
 }
 

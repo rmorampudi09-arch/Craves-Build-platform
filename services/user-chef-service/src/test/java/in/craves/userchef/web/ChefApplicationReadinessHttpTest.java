@@ -56,7 +56,7 @@ class ChefApplicationReadinessHttpTest {
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         when(applications.getMyApplication(user)).thenReturn(new ChefApplicationResponse(applicationId, user.identityId(),
             user.phoneNumber(), "chef@example.test", "Test", "Chef", "Road", null, null, "Hyderabad", "Telangana", "500081",
-            null, null, ChefApplicationStatus.PENDING, null, Instant.now(), null, null, List.of()));
+            null, null, ChefApplicationStatus.PENDING, null, Instant.now(), null, null, List.of(), "CRV-10001"));
         when(applications.listMyApplicationEvidence(user)).thenReturn(List.of(KycDocumentType.APPLICANT_PHOTO,
             KycDocumentType.GOVERNMENT_ID_FRONT, KycDocumentType.GOVERNMENT_ID_BACK, KycDocumentType.TAX_ID_CARD).stream()
             .map(type -> new KycDocumentResponse(UUID.randomUUID(), type, "private.png", "private", "private/blob", "image/png",

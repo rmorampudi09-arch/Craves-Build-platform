@@ -64,7 +64,7 @@ public class ChefApplicationService {
     public ChefApplicationResponse getMyApplication(CurrentUser user) {
         List<ChefApplicationResponse> rows = findApplications("WHERE identity_id = ?", user.identityId());
         if (rows.isEmpty()) {
-            return new ChefApplicationResponse(null, user.identityId(), user.phoneNumber(), null, null, null, null, null, null, null, null, null, null, null, ChefApplicationStatus.NOT_SUBMITTED, null, null, null, null, List.of());
+            return new ChefApplicationResponse(null, user.identityId(), user.phoneNumber(), null, null, null, null, null, null, null, null, null, null, null, ChefApplicationStatus.NOT_SUBMITTED, null, null, null, null, List.of(), null);
         }
         return rows.getFirst();
     }
@@ -262,8 +262,8 @@ public class ChefApplicationService {
 
     public Set<KycDocumentType> requiredApplicationDocuments(UUID applicationId, boolean approving) {
         var rows = jdbcTemplate.query(
-            "SELECT details->>'proofKind' AS proof, details->>'fssaiNumber' AS fssai, submitted FROM chef_onboarding_draft WHERE application_id=?",
-            (rs,row) -> new OnboardingRequirements(rs.getString("proof"), rs.getString("fssai"), rs.getBoolean("submitted")),
+            "SELECT details->>'proofKind' AS proof, details->>'fssaiNumber' AS fssai, details->>'proofHasBack' AS has_back, submitted FROM chef_onboarding_draft WHERE application_id=?",
+            (rs,row) -> new OnboardingRequirements(rs.getString("proof"), rs.getString("fssai"), rs.getBoolean("submitted"), rs.getString("has_back")),
             applicationId
         );
         if (rows.isEmpty()) {
@@ -281,7 +281,8 @@ public class ChefApplicationService {
             return Set.of(KycDocumentType.KITCHEN_PHOTO_1, KycDocumentType.KITCHEN_PHOTO_2, KycDocumentType.FSSAI_LICENSE);
         try {
             return in.craves.userchef.onboarding.ChefOnboardingPolicy.required(
-                in.craves.userchef.onboarding.ChefOnboardingDtos.ProofKind.valueOf(metadata.proof())
+                in.craves.userchef.onboarding.ChefOnboardingDtos.ProofKind.valueOf(metadata.proof()),
+                "false".equals(metadata.hasBack()) ? Boolean.FALSE : null
             );
         } catch (IllegalArgumentException ex) {
             throw ApiException.conflict("ONBOARDING_STATE_INVALID", "The saved Chef document choice is invalid.");
@@ -302,7 +303,7 @@ public class ChefApplicationService {
         return Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE application_id=?)",Boolean.class,applicationId));
     }
 
-    private record OnboardingRequirements(String proof, String fssai, boolean submitted) {}
+    private record OnboardingRequirements(String proof, String fssai, boolean submitted, String hasBack) {}
 
     private static String documentLabel(KycDocumentType type) {
         return switch (type) {
@@ -361,7 +362,8 @@ public class ChefApplicationService {
             rs.getBigDecimal("latitude"), rs.getBigDecimal("longitude"),
             ChefApplicationStatus.valueOf(rs.getString("status")), rs.getString("rejection_reason"),
             instant(rs, "submitted_at"), instant(rs, "reviewed_at"),
-            rs.getObject("reviewed_by_identity_id", UUID.class), listLegacyDocuments(applicationId)
+            rs.getObject("reviewed_by_identity_id", UUID.class), listLegacyDocuments(applicationId),
+            rs.getString("reference_code")
         );
     }
 

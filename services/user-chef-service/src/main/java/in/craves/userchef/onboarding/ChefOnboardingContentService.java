@@ -31,8 +31,10 @@ public class ChefOnboardingContentService {
     }
     public List<Content> published(CurrentUser user,String language) {
         ChefOnboardingService.requireApplicant(user); language(language);
-        return jdbc.query("SELECT * FROM chef_onboarding_content WHERE published=true AND ready=true AND language=? ORDER BY created_at DESC LIMIT 50",
+        var items=jdbc.query("SELECT * FROM chef_onboarding_content WHERE published=true AND ready=true AND language=? ORDER BY created_at DESC LIMIT 50",
             this::map,language);
+        // English is the fallback; each item keeps its own language so the app can say so.
+        return items.isEmpty() && !"en".equals(language) ? published(user,"en") : items;
     }
     public List<Content> list(CurrentUser admin) {
         ChefOnboardingService.requireAdmin(admin);

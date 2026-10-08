@@ -13,6 +13,10 @@ interface AddressMapPickerProps extends Coordinate {
   onUseCurrentLocation: () => void;
   locating?: boolean;
   disabled?: boolean;
+  /** Accessible name for the map; defaults to the delivery-address wording. */
+  ariaLabel?: string;
+  /** Hide the built-in recenter control when the host renders its own location action. */
+  showLocateButton?: boolean;
 }
 
 const STATIC_MAP_WIDTH = 900;
@@ -29,10 +33,7 @@ function latitudeToWorldY(latitude: number, zoom: number): number {
   const worldSize = 256 * 2 ** zoom;
   const clipped = Math.min(85.05112878, Math.max(-85.05112878, latitude));
   const sin = Math.sin((clipped * Math.PI) / 180);
-  return (
-    (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) *
-    worldSize
-  );
+  return (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * worldSize;
 }
 
 function worldXToLongitude(x: number, zoom: number): number {
@@ -55,6 +56,8 @@ export function AddressMapPicker({
   onUseCurrentLocation,
   locating = false,
   disabled = false,
+  ariaLabel = "Delivery map. Drag the map or use arrow keys to move the delivery pin.",
+  showLocateButton = true,
 }: AddressMapPickerProps) {
   const [zoom, setZoom] = useState(17);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -97,10 +100,7 @@ export function AddressMapPicker({
     });
   };
 
-  const finishDrag = (
-    event: React.PointerEvent<HTMLDivElement>,
-    cancelled = false,
-  ) => {
+  const finishDrag = (event: React.PointerEvent<HTMLDivElement>, cancelled = false) => {
     const active = pointerRef.current;
     if (!active || active.id !== event.pointerId) return;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -120,7 +120,7 @@ export function AddressMapPicker({
         ref={viewportRef}
         role="application"
         tabIndex={disabled ? -1 : 0}
-        aria-label="Delivery map. Drag the map or use arrow keys to move the delivery pin."
+        aria-label={ariaLabel}
         onKeyDown={(event) => {
           if (disabled) return;
           const step = event.shiftKey ? 72 : 28;
@@ -186,9 +186,7 @@ export function AddressMapPicker({
         ) : (
           <div className="absolute inset-0 grid place-items-center bg-[#F1F3F5] px-8 text-center">
             <div>
-              <p className="text-sm font-semibold text-[#6B6B6B]">
-                Map preview could not load.
-              </p>
+              <p className="text-sm font-semibold text-[#6B6B6B]">Map preview could not load.</p>
               <button
                 type="button"
                 onClick={() => {
@@ -251,25 +249,26 @@ export function AddressMapPicker({
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={onUseCurrentLocation}
-          disabled={disabled || locating}
-          className="absolute bottom-3 right-3 z-30 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/80 bg-white/95 px-3 text-xs font-black text-[#1A1A1A] shadow-[0_5px_16px_rgba(26,26,26,0.12)] backdrop-blur transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:bg-[#F1F3F5] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none disabled:opacity-50"
-        >
-          {locating ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Crosshair className="h-4 w-4 text-[#F62E18]" />
-          )}
-          Recenter
-        </button>
+        {showLocateButton ? (
+          <button
+            type="button"
+            onClick={onUseCurrentLocation}
+            disabled={disabled || locating}
+            className="absolute bottom-3 right-3 z-30 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/80 bg-white/95 px-3 text-xs font-black text-[#1A1A1A] shadow-[0_5px_16px_rgba(26,26,26,0.12)] backdrop-blur transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:bg-[#F1F3F5] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none disabled:opacity-50"
+          >
+            {locating ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Crosshair className="h-4 w-4 text-[#F62E18]" />
+            )}
+            Recenter
+          </button>
+        ) : null}
 
         <span className="pointer-events-none absolute bottom-2 left-3 z-20 rounded bg-white/80 px-1.5 py-0.5 text-[9px] font-semibold text-[#6B6B6B] backdrop-blur">
           Microsoft Azure Maps
         </span>
       </div>
-
     </div>
   );
 }

@@ -291,6 +291,82 @@ describe("Redesigned Chef onboarding popup", () => {
   });
 });
 
+describe("Backend gap fixes", () => {
+  it("blocks applicants under 18 before saving Basic details", async () => {
+    saved.details = null;
+    saved.application = { ...saved.application, status: "NOT_SUBMITTED" };
+    open();
+    await screen.findByRole("heading", { name: "Basic details" });
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Young Chef" } });
+    fireEvent.change(screen.getByLabelText("Date of birth"), {
+      target: { value: `${new Date().getFullYear() - 16}-05-01` },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("at least 18 years old");
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+  });
+
+  it("lets an Other government ID be marked as having no back side", async () => {
+    saved.details = { ...saved.details!, proofKind: "OTHER_GOVERNMENT_ID", otherGovernmentId: "Voter ID" };
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: /Identity proof/ }));
+    await screen.findByRole("heading", { name: "Identity verification" });
+    expect(screen.getByText("Back side")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("This document has no back side"));
+    expect(screen.queryByText("Back side")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
+    await screen.findByRole("heading", { name: "Review your application" });
+    expect(saved.details?.proofHasBack).toBe(false);
+  });
+
+  it("shows an earlier callback request after a reload and an English fallback guide", async () => {
+    saved.details = { ...saved.details!, fssaiNumber: "", language: "te" };
+    saved.callbackRequest = { caseNumber: "SUP-2041", status: "OPEN", requestedAt: "2026-10-09T05:00:00Z" };
+    fetcher.mockImplementation((input, init) =>
+      String(input).startsWith("/api/chef/onboarding/content")
+        ? Promise.resolve(
+            Response.json([
+              {
+                id: "22222222-2222-4222-8222-222222222222", language: "en", title: "Apply for FSSAI",
+                kind: "ARTICLE", body: "Synthetic English guide", published: true, ready: true, version: 1,
+                contentType: null, fileSizeBytes: null, createdAt: "2026-10-09T00:00:00Z",
+              },
+            ]),
+          )
+        : normal(input, init),
+    );
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: "Continue application" }));
+    await screen.findByRole("heading", { name: "FSSAI details" });
+    fireEvent.click(screen.getByRole("button", { name: "Don’t have FSSAI?" }));
+    expect(await screen.findByText(/showing the English guide/)).toBeTruthy();
+    expect(screen.getByText("Apply for FSSAI")).toBeTruthy();
+    expect(screen.getByText("Request received")).toBeTruthy();
+    expect(screen.getByText(/SUP-2041/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Request a call from Craves" })).toBeNull();
+  });
+
+  it("names reviewer-requested sections and shows the short application reference", async () => {
+    saved.application = { ...saved.application, submittedAt: "2026-10-08T00:00:00Z", referenceCode: "CRV-10042" };
+    saved.progress = {
+      status: "MORE_INFORMATION_REQUIRED",
+      reason: "Please confirm your date of birth.",
+      nextAction: "EDIT_APPLICATION",
+      fssaiVerified: false,
+      termsVersion: "v1",
+      sections: ["personal"],
+    };
+    open();
+    await screen.findByText("More information required");
+    expect(screen.getByText("CRV-10042")).toBeTruthy();
+    expect(screen.queryByText("Application ID")).toBeNull();
+    const card = screen.getByRole("heading", { name: "What needs updating" }).closest("section")!;
+    expect(card.textContent).toContain("Basic details");
+    fireEvent.click(screen.getByRole("button", { name: "Update application" }));
+    await screen.findByRole("heading", { name: "Basic details" });
+  });
+});
+
 describe("Become a chef entry", () => {
   it("opens the phone-first Home Chef popup for a signed-out visitor without mounting the application", async () => {
     invalidateSession(captureSessionContext());

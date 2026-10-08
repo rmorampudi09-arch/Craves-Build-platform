@@ -64,7 +64,11 @@ export type OnboardingDetails = {
   otherGovernmentId: string;
   fssaiNumber: string;
   language: string;
+  /** Other government ID only: false when the document has no back side. */
+  proofHasBack: boolean | null;
 };
+export const CORRECTION_SECTIONS = ["personal", "kitchen", "fssai", "documents", "bank"] as const;
+export type CallbackRequest = { caseNumber: string; status: "OPEN" | "CONTACTED" | "RESOLVED"; requestedAt: string };
 export type OnboardingState = {
   enabled: boolean;
   legacy: boolean;
@@ -79,7 +83,8 @@ export type OnboardingState = {
   requiredDocuments: string[];
   supportPhone: string;
   supportEmail: string;
-  progress?: {status: string; reason: string | null; nextAction: string; fssaiVerified: boolean; termsVersion: string};
+  progress?: {status: string; reason: string | null; nextAction: string; fssaiVerified: boolean; termsVersion: string; sections?: string[]};
+  callbackRequest?: CallbackRequest | null;
 };
 export type LearningContent = {
   id: string;
@@ -113,9 +118,20 @@ export const EMPTY_ONBOARDING: OnboardingDetails = {
   otherGovernmentId: "",
   fssaiNumber: "",
   language: "en",
+  proofHasBack: null,
 };
-export function proofNeedsBack(proof: ProofKind | null): boolean {
-  return proof === "AADHAAR" || proof === "OTHER_GOVERNMENT_ID";
+export function proofNeedsBack(proof: ProofKind | null, hasBack: boolean | null = null): boolean {
+  return proof === "AADHAAR" || (proof === "OTHER_GOVERNMENT_ID" && hasBack !== false);
+}
+function parseCallback(value: unknown): CallbackRequest | null | undefined {
+  if (value == null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  return typeof raw.caseNumber === "string" && raw.caseNumber.length <= 40 &&
+    (raw.status === "OPEN" || raw.status === "CONTACTED" || raw.status === "RESOLVED") &&
+    typeof raw.requestedAt === "string" && !Number.isNaN(Date.parse(raw.requestedAt))
+    ? { caseNumber: raw.caseNumber, status: raw.status, requestedAt: raw.requestedAt }
+    : undefined;
 }
 const steps = new Set<OnboardingStep>([
   "personal",
@@ -158,7 +174,7 @@ export function parseOnboardingState(value: unknown): OnboardingState | null {
     const d = raw.details as Record<string, unknown>;
     const next = { ...EMPTY_ONBOARDING };
     for (const key of Object.keys(EMPTY_ONBOARDING) as (keyof OnboardingDetails)[]) {
-      if (key === "latitude" || key === "longitude" || key === "proofKind") continue;
+      if (key === "latitude" || key === "longitude" || key === "proofKind" || key === "proofHasBack") continue;
       if (d[key] != null && typeof d[key] !== "string") return null;
       Object.assign(next, { [key]: d[key] ?? "" });
     }
@@ -175,14 +191,20 @@ export function parseOnboardingState(value: unknown): OnboardingState | null {
     )
       return null;
     if (d.proofKind != null && !PROOF_OPTIONS.some(([key]) => key === d.proofKind)) return null;
+    if (d.proofHasBack != null && typeof d.proofHasBack !== "boolean") return null;
     if (!ONBOARDING_LANGUAGES.some(([key]) => key === next.language)) return null;
     details = {
       ...next,
       latitude: (d.latitude ?? null) as number | null,
       longitude: (d.longitude ?? null) as number | null,
       proofKind: (d.proofKind ?? null) as ProofKind | null,
+      proofHasBack: (d.proofHasBack ?? null) as boolean | null,
     };
   }
+  const callbackRequest = parseCallback(raw.callbackRequest);
+  if (callbackRequest === undefined) return null;
+  const progress = raw.progress && typeof raw.progress === "object" && !Array.isArray(raw.progress)
+    ? (raw.progress as Record<string, unknown>) : null;
   return {
     enabled: raw.enabled,
     legacy: raw.legacy,
@@ -197,13 +219,23 @@ export function parseOnboardingState(value: unknown): OnboardingState | null {
     requiredDocuments: raw.requiredDocuments as string[],
     supportPhone: raw.supportPhone,
     supportEmail: raw.supportEmail,
-    ...(raw.progress && typeof raw.progress === "object" && !Array.isArray(raw.progress) &&
-      typeof (raw.progress as Record<string,unknown>).status === "string" &&
-      typeof (raw.progress as Record<string,unknown>).nextAction === "string" &&
-      typeof (raw.progress as Record<string,unknown>).fssaiVerified === "boolean" &&
-      typeof (raw.progress as Record<string,unknown>).termsVersion === "string" &&
-      ((raw.progress as Record<string,unknown>).reason === null || typeof (raw.progress as Record<string,unknown>).reason === "string")
-      ? {progress: raw.progress as NonNullable<OnboardingState["progress"]>} : {}),
+    callbackRequest,
+    ...(progress &&
+      typeof progress.status === "string" &&
+      typeof progress.nextAction === "string" &&
+      typeof progress.fssaiVerified === "boolean" &&
+      typeof progress.termsVersion === "string" &&
+      (progress.reason === null || typeof progress.reason === "string")
+      ? {
+          progress: {
+            ...(progress as Omit<NonNullable<OnboardingState["progress"]>, "sections">),
+            // Older services omit sections; unknown names are dropped rather than trusted.
+            sections: Array.isArray(progress.sections)
+              ? CORRECTION_SECTIONS.filter((section) => (progress.sections as unknown[]).includes(section))
+              : [],
+          },
+        }
+      : {}),
   };
 }
 

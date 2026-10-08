@@ -195,6 +195,8 @@ class ChefOnboardingDatabaseTest {
         assertThrows(ApiException.class,()->save(ProofKind.PAN,"12345678901234"));
         State correction=run(()->service.reviewAction(admin,submitted.application().id(),new ReviewAction(submitted.version(),"REQUEST_INFORMATION","Clarify your kitchen description",null)));
         assertEquals("MORE_INFORMATION_REQUIRED",correction.progress().status());
+        assertFalse(correction.submitted());
+        assertThrows(ApiException.class,()->run(()->applications.reject(admin,submitted.application().id(),new in.craves.userchef.web.ApiDtos.AdminDecisionRequest("Corrections have not been resubmitted"))));
         save(ProofKind.PAN,"12345678901234");
         assertEquals("MORE_INFORMATION_REQUIRED",service.mine(user).progress().status());
         assertTrue(jdbc.queryForObject("SELECT count(*) FROM chef_onboarding_action_audit WHERE identity_id=?",Integer.class,user.identityId())>=3);

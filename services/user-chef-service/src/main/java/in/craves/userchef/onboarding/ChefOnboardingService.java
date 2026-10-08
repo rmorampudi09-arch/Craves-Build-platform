@@ -351,8 +351,8 @@ public class ChefOnboardingService {
                 throw ApiException.conflict("FSSAI_NUMBER_CHANGED","Review the current saved FSSAI number.");
             jdbc.update("UPDATE chef_onboarding_draft SET fssai_reviewed_number=?,fssai_reviewed_by=?,fssai_reviewed_at=now(),fssai_review_evidence=?,version=version+1,updated_at=now() WHERE identity_id=?",request.fssaiNumber(),admin.identityId(),reason,application.identityId());
         } else {
-            jdbc.update("UPDATE chef_onboarding_draft SET review_status=?,correction_reason=?,version=version+1,updated_at=now() WHERE identity_id=?",
-                "START_REVIEW".equals(action)?"UNDER_REVIEW":"MORE_INFORMATION_REQUIRED",reason,application.identityId());
+            jdbc.update("UPDATE chef_onboarding_draft SET review_status=?,correction_reason=?,submitted=CASE WHEN ?='REQUEST_INFORMATION' THEN false ELSE submitted END,version=version+1,updated_at=now() WHERE identity_id=?",
+                "START_REVIEW".equals(action)?"UNDER_REVIEW":"MORE_INFORMATION_REQUIRED",reason,action,application.identityId());
         }
         audit(application.identityId(),admin.identityId(),action,reason);
         return review(admin,applicationId);

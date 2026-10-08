@@ -340,6 +340,12 @@ public class ChefOnboardingService {
         String reason=trim(request.reason());
         if(!"START_REVIEW".equals(action) && (reason==null || reason.length()<3 || reason.length()>2000))
             throw ApiException.badRequest("REVIEW_REASON_REQUIRED","Record the correction reason or FSSAI verification evidence using 3 to 2000 characters.");
+        if(application.status()==ChefApplicationStatus.REJECTED && !"REQUEST_INFORMATION".equals(action))
+            throw ApiException.conflict("APPLICATION_REOPEN_REQUIRED","Request corrections before reviewing a rejected application.");
+        if(application.status()==ChefApplicationStatus.REJECTED) {
+            jdbc.update("INSERT INTO chef_onboarding_action_audit(id,identity_id,actor_id,action,version,reason,snapshot) SELECT ?,d.identity_id,?,'APPLICATION_REOPENED',d.version,?,jsonb_build_object('application',to_jsonb(a),'details',d.details) FROM chef_onboarding_draft d JOIN chef_application a ON a.id=d.application_id WHERE a.id=?",UUID.randomUUID(),admin.identityId(),reason,applicationId);
+            jdbc.update("UPDATE chef_application SET status='PENDING',updated_at=now() WHERE id=? AND status='REJECTED'",applicationId);
+        }
         if("VERIFY_FSSAI".equals(action)) {
             if(!Objects.equals(request.fssaiNumber(),draft.details().fssaiNumber()) || request.fssaiNumber()==null || !request.fssaiNumber().matches("[0-9]{14}"))
                 throw ApiException.conflict("FSSAI_NUMBER_CHANGED","Review the current saved FSSAI number.");

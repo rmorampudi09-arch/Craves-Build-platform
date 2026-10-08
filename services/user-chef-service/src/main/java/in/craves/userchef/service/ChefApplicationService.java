@@ -168,7 +168,7 @@ public class ChefApplicationService {
         if (status == null || status == ChefApplicationStatus.NOT_SUBMITTED) {
             return findApplications("WHERE (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))", new Object[]{});
         }
-        return findApplications("WHERE (status = ? OR (? = 'PENDING' AND status = 'APPROVED' AND EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=true AND EXISTS(SELECT 1 FROM chef_kyc_document k WHERE k.application_id=chef_application.id AND k.document_type IN ('SELECTED_PROOF_FRONT','SELECTED_PROOF_BACK','KITCHEN_PHOTO_1','KITCHEN_PHOTO_2','FSSAI_LICENSE') AND k.status <> 'APPROVED')))) AND (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))", status.name(), status.name());
+        return findApplications("WHERE (status = ? OR (? = 'PENDING' AND status = 'APPROVED' AND EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=true AND (d.fssai_reviewed_at IS NULL OR d.fssai_reviewed_number IS DISTINCT FROM d.details->>'fssaiNumber' OR EXISTS(SELECT 1 FROM chef_kyc_document k WHERE k.application_id=chef_application.id AND k.removed_at IS NULL AND k.document_type IN ('SELECTED_PROOF_FRONT','SELECTED_PROOF_BACK','KITCHEN_PHOTO_1','KITCHEN_PHOTO_2','FSSAI_LICENSE') AND k.status <> 'APPROVED'))))) AND (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))", status.name(), status.name());
     }
 
     public ChefApplicationResponse getApplicationForAdmin(CurrentUser admin, UUID applicationId) {
@@ -214,6 +214,8 @@ public class ChefApplicationService {
         if (application.status() != ChefApplicationStatus.PENDING) {
             throw ApiException.conflict("CHEF_APPLICATION_NOT_PENDING", "Only pending chef applications can be rejected");
         }
+        if(onboardingSubmissionBlocked(applicationId))
+            throw ApiException.conflict("ONBOARDING_NOT_SUBMITTED","Wait for the Chef to submit the completed onboarding application.");
         updateDecision(applicationId, admin.identityId(), "REJECTED", request.reason());
         ChefApplicationResponse rejected = getApplicationForAdmin(admin, applicationId);
         notificationInternalClient.chefRejected(rejected);

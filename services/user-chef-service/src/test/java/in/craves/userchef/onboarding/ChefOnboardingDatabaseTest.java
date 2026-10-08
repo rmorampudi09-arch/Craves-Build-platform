@@ -146,6 +146,7 @@ class ChefOnboardingDatabaseTest {
             run(()->review.approve(admin,id,document.id()));
         }
         assertFalse(service.mine(user).legacy());
+        assertTrue(applications.listApplications(admin,in.craves.userchef.web.ApiDtos.ChefApplicationStatus.PENDING).stream().anyMatch(application -> id.equals(application.id())),"FSSAI review remains visible after all upload decisions are approved");
         run(()->service.reviewAction(admin,id,new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901234")));
         assertTrue(service.mine(user).legacy());
         assertEquals("APPROVED",jdbc.queryForObject("SELECT status FROM chef_application WHERE id=?",String.class,id));
@@ -197,6 +198,19 @@ class ChefOnboardingDatabaseTest {
         save(ProofKind.PAN,"12345678901234");
         assertEquals("MORE_INFORMATION_REQUIRED",service.mine(user).progress().status());
         assertTrue(jdbc.queryForObject("SELECT count(*) FROM chef_onboarding_action_audit WHERE identity_id=?",Integer.class,user.identityId())>=3);
+    }
+    @Test void explicitCorrectionReopensRejectedApplicationAndRetainsRejectionEvidence() {
+        save(ProofKind.PAN,"12345678901234");photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
+        var before=service.mine(user);
+        assertThrows(ApiException.class,()->run(()->applications.reject(admin,before.application().id(),new in.craves.userchef.web.ApiDtos.AdminDecisionRequest("Draft must not be rejected"))));
+        var submitted=run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(before.version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
+        run(()->applications.reject(admin,submitted.application().id(),new in.craves.userchef.web.ApiDtos.AdminDecisionRequest("Original rejection evidence")));
+        var rejected=service.mine(user);assertEquals("REJECTED",rejected.application().status().name());
+        var reopened=run(()->service.reviewAction(admin,rejected.application().id(),new ReviewAction(rejected.version(),"REQUEST_INFORMATION","Correct the kitchen description",null)));
+        assertEquals("PENDING",reopened.application().status().name());assertEquals("MORE_INFORMATION_REQUIRED",reopened.progress().status());
+        String prior=jdbc.queryForObject("SELECT snapshot->'application'->>'rejection_reason' FROM chef_onboarding_action_audit WHERE identity_id=? AND action='APPLICATION_REOPENED'",String.class,user.identityId());
+        assertEquals("Original rejection evidence",prior);
+        assertFalse(reopened.submitted());
     }
     @Test void uploadRemovalIsOwnedVersionedAndPreservesHistory() {
         save(ProofKind.PAN,null);photos();

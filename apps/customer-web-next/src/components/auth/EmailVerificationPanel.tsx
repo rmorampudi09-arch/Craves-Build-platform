@@ -9,6 +9,8 @@ type Props = {
   initialEmail?: string;
   required?: boolean;
   compact?: boolean;
+  /** "onboarding" renders the Chef onboarding field style (label, 56px input, inline Verified badge). */
+  variant?: "default" | "onboarding";
   onStateChange?: (state: EmailVerificationState | null) => void;
   onVerified?: (state: EmailVerificationState) => void;
 };
@@ -16,7 +18,7 @@ type Props = {
 const inputClass = "mt-2 min-h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10 disabled:opacity-50";
 const buttonClass = "min-h-10 rounded-xl border border-[#E5E7EB] bg-[#F1F3F5] px-4 text-xs font-black text-[#1A1A1A] hover:bg-white disabled:opacity-50";
 
-export function EmailVerificationPanel({ initialEmail = "", required = false, compact = false, onStateChange, onVerified }: Props) {
+export function EmailVerificationPanel({ initialEmail = "", required = false, compact = false, variant = "default", onStateChange, onVerified }: Props) {
   const id = useId();
   const [state, setState] = useState<EmailVerificationState | null>(null);
   const [email, setEmail] = useState(initialEmail);
@@ -184,6 +186,156 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
   const verified = chefEmailEligible(state);
   const pending = state?.pending;
   const disabled = busy || sessionExpired || !state;
+
+  if (variant === "onboarding") {
+    const sameVerifiedEmail =
+      verified &&
+      Boolean(state?.email) &&
+      email.trim().toLocaleLowerCase("en-IN") === state?.email?.trim().toLocaleLowerCase("en-IN");
+    const validEmail = Boolean(email.trim()) && verificationEmail.safeParse(email).success;
+    const resendLabel = timing.resendIn > 0 ? `Resend code in ${timing.resendIn}s` : "Resend code";
+    return (
+      <div className="cob-field" aria-busy={busy}>
+        <label htmlFor={`${id}-email`} className="cob-label">
+          Email address
+        </label>
+        <div className="cob-control">
+          <input
+            id={`${id}-email`}
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            maxLength={EMAIL_VERIFICATION_MAX_LENGTH}
+            value={email}
+            disabled={sessionExpired}
+            readOnly={busy}
+            placeholder="you@example.com"
+            aria-invalid={Boolean(error) || undefined}
+            aria-describedby={`${id}-email-help`}
+            className="cob-input cob-input--with-adornment"
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setError("");
+              setNotice("");
+            }}
+          />
+          <span className="cob-adornment">
+            {busy && !pending ? (
+              <span className="cob-spinner cob-spinner--red" aria-hidden="true" />
+            ) : sameVerifiedEmail ? (
+              <span className="cob-verified">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" /></svg>
+                Verified
+              </span>
+            ) : !pending ? (
+              <button
+                type="button"
+                className="cob-inline-action"
+                aria-label="Send email code"
+                disabled={disabled || !!retrySend}
+                onClick={() => {
+                  if (!validEmail) {
+                    setError("Enter a valid email address, for example name@example.com.");
+                    return;
+                  }
+                  void send(createEmailSendAttempt("challenges", email));
+                }}
+              >
+                Verify
+              </button>
+            ) : null}
+          </span>
+        </div>
+        {pending ? (
+          <div className="cob-field" style={{ marginTop: 6 }}>
+            <label htmlFor={`${id}-code`} className="cob-label">
+              Enter the 6-digit code
+            </label>
+            <span className="cob-helper" style={{ marginTop: -4 }}>
+              {pending.deliveryStatus === "UNAVAILABLE"
+                ? "We couldn’t send the email. Try again when resend is available."
+                : `We sent a code to ${pending.maskedEmail}. Check your inbox and spam folder.`}
+            </span>
+            <div className="cob-control">
+              <input
+                id={`${id}-code`}
+                aria-label="Six-digit email code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                value={code}
+                disabled={disabled || timing.expiresIn === 0}
+                placeholder="000000"
+                className="cob-input cob-input--with-adornment cob-mono"
+                style={{ letterSpacing: code ? "0.3em" : undefined, fontWeight: 700 }}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              />
+              <span className="cob-adornment">
+                <button
+                  type="button"
+                  className="cob-inline-action"
+                  disabled={disabled || timing.expiresIn === 0 || !/^\d{6}$/.test(code)}
+                  onClick={() => void verify()}
+                >
+                  Verify email
+                </button>
+              </span>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 16px" }}>
+              <button
+                type="button"
+                className="cob-link"
+                disabled={disabled || timing.resendIn > 0 || !!retrySend}
+                onClick={() => void send(createEmailSendAttempt("resend", pending.challengeId))}
+              >
+                {resendLabel}
+              </button>
+              <span className="cob-helper">
+                {timing.expiresIn > 0
+                  ? `Code expires in ${Math.floor(timing.expiresIn / 60)}:${String(timing.expiresIn % 60).padStart(2, "0")}`
+                  : "This code has expired. Request a new code."}
+              </span>
+            </div>
+          </div>
+        ) : null}
+        {error ? (
+          <span id={`${id}-email-help`} role="alert" className="cob-error">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            <span>
+              {error}
+              {retrySend ? (
+                <>
+                  {" "}
+                  <button type="button" className="cob-link" style={{ minHeight: 0, display: "inline" }} disabled={busy || sessionExpired} onClick={() => void send(retrySend)}>
+                    Try again
+                  </button>
+                </>
+              ) : null}
+            </span>
+          </span>
+        ) : notice && sameVerifiedEmail ? (
+          <span id={`${id}-email-help`} role="status" className="cob-success-line">
+            {notice}
+          </span>
+        ) : (
+          <span id={`${id}-email-help`} className="cob-helper">
+            {sameVerifiedEmail
+              ? "Confirmed for your Craves account."
+              : pending
+                ? "Enter the code from the email to verify this address."
+                : required
+                  ? "We’ll send a 6-digit code to verify your email."
+                  : "Optional. Verify it to receive account updates."}
+          </span>
+        )}
+        <button type="button" aria-label="Refresh verification status" className="sr-only" disabled={busy} onClick={() => void refresh(true)}>
+          Refresh verification status
+        </button>
+      </div>
+    );
+  }
 
   if (compact) {
     const sameVerifiedEmail =

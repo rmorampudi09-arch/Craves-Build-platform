@@ -180,9 +180,9 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
       <p className="mt-2 text-sm">FSSAI number: {onboarding.details.fssaiNumber} · Preferred language: {onboarding.details.language}</p>
       <p className="mt-2 whitespace-pre-wrap text-sm">{onboarding.details.kitchenDescription}</p>
       <p className="mt-3 text-sm">Review status: {onboarding.progress?.status} · FSSAI: {onboarding.progress?.fssaiVerified ? "Verified by reviewer" : "Verification required"}</p>
-      {onboarding.submitted && item.status!=="APPROVED" ? <div className="mt-4 space-y-3">
+      {onboarding.submitted && !onboarding.legacy ? <div className="mt-4 space-y-3">
         <label className="block text-sm">Correction reason or FSSAI verification evidence<textarea aria-label="Onboarding review evidence" className="mt-2 w-full rounded-xl border p-3" value={applicationReason} maxLength={2000} onChange={event=>setApplicationReason(event.target.value)} /></label>
-        <div className="flex flex-wrap gap-3"><button disabled={busy} onClick={()=>void onboardingAction("START_REVIEW")}>Start review</button><button disabled={busy || applicationReason.trim().length<3} onClick={()=>void onboardingAction("REQUEST_INFORMATION")}>Request information</button><button disabled={busy || applicationReason.trim().length<3 || onboarding.progress?.fssaiVerified} onClick={()=>void onboardingAction("VERIFY_FSSAI")}>Record verified FSSAI number</button></div>
+        <div className="flex flex-wrap gap-3">{item.status!=="APPROVED" ? <><button disabled={busy} onClick={()=>void onboardingAction("START_REVIEW")}>Start review</button><button disabled={busy || applicationReason.trim().length<3} onClick={()=>void onboardingAction("REQUEST_INFORMATION")}>Request information</button></> : null}<button disabled={busy || applicationReason.trim().length<3 || onboarding.progress?.fssaiVerified} onClick={()=>void onboardingAction("VERIFY_FSSAI")}>Record verified FSSAI number</button></div>
       </div> : null}
     </section> : null}
 

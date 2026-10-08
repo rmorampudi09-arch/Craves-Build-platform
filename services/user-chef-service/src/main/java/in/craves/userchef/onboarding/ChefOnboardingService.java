@@ -53,6 +53,7 @@ public class ChefOnboardingService {
         var documents=application.id()==null ? List.<in.craves.userchef.web.ApiDtos.KycDocumentResponse>of()
             : applications.listMyApplicationEvidence(user);
         boolean legacy=application.status()==ChefApplicationStatus.APPROVED && draft!=null && draft.submitted() &&
+            draft.reviewedFssai()!=null && Objects.equals(draft.reviewedFssai(),draft.details().fssaiNumber()) &&
             "waiting".equals(ChefOnboardingPolicy.resume(draft.details(),documents,true)) &&
             ChefOnboardingPolicy.required(draft.details().proofKind()).stream().allMatch(type -> documents.stream()
                 .anyMatch(document -> document.documentType()==type && "APPROVED".equals(document.status())));
@@ -171,10 +172,10 @@ public class ChefOnboardingService {
         var application=state.application();
         if(application.id()==null || !Objects.equals(details.firstName(),application.firstName()) ||
             !Objects.equals(details.lastName(),application.lastName()) || !Objects.equals(details.email(),application.email()) ||
-            !Objects.equals(details.addressLine1(),application.addressLine1()) || !Objects.equals(details.addressLine2(),application.addressLine2()) ||
+            application.status()!=ChefApplicationStatus.APPROVED && (!Objects.equals(details.addressLine1(),application.addressLine1()) || !Objects.equals(details.addressLine2(),application.addressLine2()) ||
             !Objects.equals(details.landmark(),application.landmark()) || !Objects.equals(details.city(),application.city()) ||
             !Objects.equals(details.state(),application.state()) || !Objects.equals(details.postalCode(),application.postalCode()) ||
-            !sameCoordinate(details.latitude(),application.latitude()) || !sameCoordinate(details.longitude(),application.longitude()))
+            !sameCoordinate(details.latitude(),application.latitude()) || !sameCoordinate(details.longitude(),application.longitude())))
             throw ApiException.conflict("ONBOARDING_DETAILS_NOT_CONFIRMED","Save your completed application before submitting.");
         if(!"review".equals(ChefOnboardingPolicy.resume(draft.details(),state.documents(),false)))
             throw ApiException.conflict("ONBOARDING_INCOMPLETE","Complete the kitchen photos, FSSAI number and selected proof before submitting.");

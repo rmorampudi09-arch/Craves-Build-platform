@@ -25,6 +25,16 @@ class PreflightTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"differs.*V16"):
             preflight.compare_history(self.rows,self.sources)
 
+    def test_bank_release_accepts_only_exact_later_v149(self):
+        sources={"148":{"script":"V148__existing.sql","checksum":148},"149":{"script":"V149__chef_bank_branch_directory.sql","checksum":149}}
+        rows=[{"version":"148",**sources["148"],"type":"SQL","success":True}]
+        self.assertEqual(preflight.compare_bank_history(rows,sources)["v149"],"PENDING")
+        rows.append({"version":"149",**sources["149"],"type":"SQL","success":True})
+        self.assertEqual(preflight.compare_bank_history(rows,sources)["v149"],"APPLIED_MATCHING")
+        rows[-1]["checksum"]=150
+        with self.assertRaises(ValueError):preflight.compare_bank_history(rows,sources)
+        with self.assertRaises(ValueError):preflight.compare_bank_history(rows[:1],{**sources,"147":{"script":"V147__earlier.sql","checksum":147}})
+
     def test_v12_allows_only_pending_approved_v13(self):
         self.assertEqual(preflight.compare_history(self.rows, self.sources)["v13"], "PENDING")
 

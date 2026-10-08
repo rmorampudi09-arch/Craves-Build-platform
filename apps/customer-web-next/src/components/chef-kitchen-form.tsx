@@ -200,9 +200,17 @@ export function ChefKitchenForm() {
         setKitchen(nextKitchen);
         const registeredPhone = getSession()?.phoneNumber ?? "";
         const initial = nextKitchen ? fromKitchen(nextKitchen, registeredPhone) : fromApplication(applicationBody, registeredPhone);
-        if (!nextKitchen && applicationBody?.status === "APPROVED" && onboardingBody?.application.id === applicationBody.id && onboardingBody.details) {
+        if (!nextKitchen && applicationBody?.status === "APPROVED" && onboardingBody && applicationBody.id && onboardingBody.application.id === applicationBody.id && onboardingBody.legacy && onboardingBody.details) {
           initial.kitchenName = onboardingBody.details.kitchenName;
           initial.description = onboardingBody.details.kitchenDescription;
+          initial.addressLine1 = onboardingBody.details.addressLine1;
+          initial.addressLine2 = onboardingBody.details.addressLine2;
+          initial.landmark = onboardingBody.details.landmark;
+          initial.city = onboardingBody.details.city;
+          initial.state = onboardingBody.details.state;
+          initial.postalCode = onboardingBody.details.postalCode;
+          initial.latitude = String(onboardingBody.details.latitude ?? "");
+          initial.longitude = String(onboardingBody.details.longitude ?? "");
         }
         setForm(initial);
         setStep(nextKitchen ? "summary" : "name");

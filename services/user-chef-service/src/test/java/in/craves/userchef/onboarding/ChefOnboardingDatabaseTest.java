@@ -130,7 +130,7 @@ class ChefOnboardingDatabaseTest {
         UUID id=UUID.randomUUID();
         jdbc.update("""
             INSERT INTO chef_application(id,identity_id,phone_number,email,first_name,last_name,address_line1,city,state,status)
-            VALUES (?,?,'9000000000','approved@example.test','Approved','Chef','Kitchen','Hyderabad','Telangana','APPROVED')
+            VALUES (?,?,'9000000000','chef@example.test','Test','Chef','Kitchen','Hyderabad','Telangana','APPROVED')
             """,id,user.identityId());
         UUID old=UUID.randomUUID();
         jdbc.update("INSERT INTO chef_kyc_document(id,application_id,identity_id,document_type,original_file_name,blob_container,blob_name,content_type,file_size_bytes,status) VALUES (?,?,?,'GOVERNMENT_ID_FRONT','old.jpg','documents','historical','image/jpeg',20,'APPROVED')",old,id,user.identityId());
@@ -145,6 +145,8 @@ class ChefOnboardingDatabaseTest {
             if(document.documentType()==KycDocumentType.GOVERNMENT_ID_FRONT) continue;
             run(()->review.approve(admin,id,document.id()));
         }
+        assertFalse(service.mine(user).legacy());
+        run(()->service.reviewAction(admin,id,new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901234")));
         assertTrue(service.mine(user).legacy());
         assertEquals("APPROVED",jdbc.queryForObject("SELECT status FROM chef_application WHERE id=?",String.class,id));
         assertEquals("historical",jdbc.queryForObject("SELECT blob_name FROM chef_kyc_document WHERE id=?",String.class,old));

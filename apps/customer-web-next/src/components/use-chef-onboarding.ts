@@ -163,7 +163,7 @@ export function useChefOnboarding() {
       setDirty(false);
       setFromReview(false);
       setScreen(
-        next.application.status === "APPROVED" ||
+        next.application.status === "APPROVED" && next.legacy ||
           next.application.status === "REJECTED" && next.progress?.nextAction !== "EDIT_APPLICATION" ||
           next.submitted ||
           (next.legacy && next.application.status === "PENDING")
@@ -435,7 +435,7 @@ export function useChefOnboarding() {
           termsVersion: saved.progress?.termsVersion ?? "craves-chef-terms-20261008-v1",
         }),
       );
-      if (!next.submitted || next.application.status !== "PENDING" || !next.application.id)
+      if (!next.submitted || !["PENDING", ...(saved.application.status === "APPROVED" ? ["APPROVED"] : [])].includes(next.application.status) || !next.application.id)
         throw new Error(
           "Submission could not be confirmed. Check your application status before trying again.",
         );

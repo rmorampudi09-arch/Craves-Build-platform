@@ -73,6 +73,20 @@ class PreflightTests(unittest.TestCase):
                 {"version": "14", **self.sources["14"], "type": "SQL", "success": True}
             ], self.sources)
 
+    def test_v15_is_explicitly_reviewed_and_preserves_applied_history(self):
+        self.sources["14"] = {"script": "V14__chef_onboarding_v2.sql", "checksum": 14}
+        self.sources["15"] = {"script": "V15__chef_onboarding_all_chefs_selected_proof.sql", "checksum": 15}
+        self.assertEqual(preflight.compare_history(self.rows, self.sources)["pendingVersions"], ["13", "14", "15"])
+        for version in ("13", "14", "15"):
+            self.rows.append({"version": version, **self.sources[version], "type": "SQL", "success": True})
+        self.assertEqual(preflight.compare_history(self.rows, self.sources)["v15"], "APPLIED_MATCHING")
+        rows = [dict(row) for row in self.rows]
+        rows[-1]["checksum"] = 999
+        with self.assertRaisesRegex(ValueError, "differs.*V15"):
+            preflight.compare_history(rows, self.sources)
+        with self.assertRaisesRegex(ValueError, "precede V14"):
+            preflight.compare_history(self.rows[:-2] + [self.rows[-1]], self.sources)
+
     def test_ambiguous_resources_are_rejected(self):
         with self.assertRaises(ValueError):
             preflight.one([{"name": "web-a"}, {"name": "web-b"}], "web-")

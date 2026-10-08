@@ -94,3 +94,9 @@ python -m unittest discover -s scripts/release/tests -p test_rmorampudi09_prefli
 python -m unittest discover -s scripts/release/tests -p test_active_address_release.py -v
 
 The session can commit to GitHub and launch its CI, but cannot currently open Azure DevOps or execute Azure CLI: the browser/terminal host runtime failed to initialize and the connected workstation is offline. Azure pipeline registration, queueing, live image verification and coordinated feature activation remain pending. No production deployment is claimed.
+
+## Full source and paginated handover
+
+The passing module workflow creates Craves-Chef-Onboarding-V2.zip and Craves-Chef-Onboarding-V2-Handover.html. The handover contains at least 50 A4 pages with the task decision record, plain-language architecture, manual steps, pending live checks and complete changed source files. Open it locally in a browser; use A4 printing at 100% with browser headers/footers off. Every page is rendered and checked for overflow in CI. This is a paginated HTML document, not a PDF claimed without verification.
+
+V15 is required before activation of selected-proof slots. Existing approved Chef rows and their old evidence stay valid; new evidence receives separate document decisions. No automatic role revocation or enforcement deadline is introduced.

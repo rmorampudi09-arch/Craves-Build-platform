@@ -92,21 +92,24 @@ jobs:
       - uses: actions/checkout@v4
         with: {fetch-depth: 0,persist-credentials: false}
       - name: Package complete changed files and handover
+        run: python3 scripts/chef-onboarding/package-handover.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Render and verify every handover page
+        env:
+          PLAYWRIGHT_MODULE_ROOT: ${{ runner.temp }}/onboarding-handover/package.json
         run: |
-          python3 - <<'PY'
-          import pathlib, subprocess, zipfile, json
-          base='a79d0d83de730715597956d82da9970b78323152'
-          files=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
-          files=[path for path in files if pathlib.Path(path).is_file()]
-          pathlib.Path('chef-onboarding-manifest.json').write_text(json.dumps({'base':base,'head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'files':files},indent=2))
-          with zipfile.ZipFile('Craves-Chef-Onboarding-V2.zip','w',zipfile.ZIP_DEFLATED) as archive:
-              for path in files: archive.write(path,path)
-              archive.write('chef-onboarding-manifest.json')
-          PY
+          npm install --prefix "$RUNNER_TEMP/onboarding-handover" --no-audit --no-fund --ignore-scripts playwright@1.55.0
+          "$RUNNER_TEMP/onboarding-handover/node_modules/.bin/playwright" install --with-deps chromium
+          node scripts/chef-onboarding/verify-handover.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: Craves-Chef-Onboarding-V2
           path: |
-            Craves-Chef-Onboarding-V2.zip
-            chef-onboarding-manifest.json
+            chef-onboarding-deliverables/Craves-Chef-Onboarding-V2.zip
+            chef-onboarding-deliverables/Craves-Chef-Onboarding-V2-Handover.html
+            chef-onboarding-deliverables/chef-onboarding-manifest.json
+            chef-onboarding-deliverables/handover-render-report.json
+            chef-onboarding-deliverables/rendered-pages
           retention-days: 30

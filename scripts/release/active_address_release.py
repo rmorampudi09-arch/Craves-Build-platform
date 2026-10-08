@@ -125,6 +125,8 @@ def require_database(report, applied=False):
         require(report["database"]["v13"] == "APPLIED_MATCHING", "Deploy and verify User/Chef V13 first")
         if "v14" in report["database"]:
             require(report["database"]["v14"] == "APPLIED_MATCHING", "Deploy and verify User/Chef V14 first")
+        if "v15" in report["database"]:
+            require(report["database"]["v15"] == "APPLIED_MATCHING", "Deploy and verify User/Chef V15 first")
 
 
 def resolve_image(image):

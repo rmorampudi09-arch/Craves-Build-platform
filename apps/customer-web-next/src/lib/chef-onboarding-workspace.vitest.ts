@@ -37,3 +37,26 @@ it("leaves an existing approved Chef on the established workspace",async()=>{
   mount();expect(await screen.findByText("Existing Chef workspace")).toBeTruthy();
   expect(screen.queryByRole("heading",{name:"FSSAI registration"})).toBeNull();
 });
+
+it("explains the missing FSSAI number without submitting or silently repeating the step",async()=>{
+  const request=vi.fn(async(url:string,_options?:RequestInit)=>Response.json(url.includes("/content")?[]:state));
+  vi.stubGlobal("fetch",request);mount();
+  await screen.findByRole("heading",{name:"FSSAI registration"});
+  fireEvent.click(screen.getByRole("button",{name:"Save and continue"}));
+  expect(await screen.findByRole("status")).toHaveProperty("textContent",
+    "Enter the 14-digit FSSAI registration or licence number to continue.");
+  expect(request.mock.calls.every(([,options])=>!options || options.method!=="PUT")).toBe(true);
+  fireEvent.click(screen.getByRole("button",{name:"Save progress for later"}));
+  expect(await screen.findByText(/Progress saved. You can continue/)).toBeTruthy();
+  expect(screen.queryByRole("button",{name:"Submit for admin review"})).toBeNull();
+});
+it("explains the missing FSSAI document even when a valid number is entered",async()=>{
+  const request=vi.fn(async(url:string,_options?:RequestInit)=>Response.json(url.includes("/content")?[]:state));
+  vi.stubGlobal("fetch",request);mount();
+  await screen.findByRole("heading",{name:"FSSAI registration"});
+  fireEvent.change(screen.getByLabelText("FSSAI registration / licence number"),{target:{value:"12345678901234"}});
+  fireEvent.click(screen.getByRole("button",{name:"Save and continue"}));
+  expect(await screen.findByRole("status")).toHaveProperty("textContent",
+    "Upload your FSSAI registration or licence document to continue. You can save your progress for later.");
+  expect(request.mock.calls.every(([,options])=>!options || options.method!=="PUT")).toBe(true);
+});

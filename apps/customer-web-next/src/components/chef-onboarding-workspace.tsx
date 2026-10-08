@@ -160,7 +160,13 @@ export function ChefOnboardingWorkspace({fallback}:{fallback:ReactNode}) {
         {ONBOARDING_LANGUAGES.map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
       {fssaiOption==="licence"?<div className="space-y-4">{textField("fssaiNumber","FSSAI registration / licence number","text",false,14)}
         {fileSlot("FSSAI_LICENSE","FSSAI registration / licence document")}
-        <Button className="w-full" disabled={busy} onClick={()=>void work(()=>save())}>Save and continue</Button>
+        <Button className="w-full" disabled={busy} onClick={()=>void work(async()=>{
+          if(!/^[0-9]{14}$/.test(details.fssaiNumber)) throw new Error("Enter the 14-digit FSSAI registration or licence number to continue.");
+          if(!state.documents.some(document=>document.documentType==="FSSAI_LICENSE" && (document.status==="UPLOADED" || document.status==="APPROVED"))) {
+            throw new Error("Upload your FSSAI registration or licence document to continue. You can save your progress for later.");
+          }
+          await save();
+        })}>Save and continue</Button>
       </div>:null}
       {fssaiOption==="learn"?<div className="space-y-4">
         {contentLoading?<p role="status">Loading learning content…</p>:null}
@@ -197,8 +203,8 @@ export function ChefOnboardingWorkspace({fallback}:{fallback:ReactNode}) {
       <p className="text-sm text-[#6B6B6B]">PAN card and bank statement need one file. Aadhaar and other government IDs need front and back.</p>
       <Button variant="outline" disabled={busy || !details.proofKind} onClick={()=>void work(()=>save("documents"))}>Save document choice</Button>
       {details.proofKind && state.details?.proofKind===details.proofKind?<>
-        {fileSlot("GOVERNMENT_ID_FRONT",proofLabel+(proofNeedsBack(details.proofKind)?" — front":""))}
-        {proofNeedsBack(details.proofKind)?fileSlot("GOVERNMENT_ID_BACK",proofLabel+" — back"):null}
+        {fileSlot("GOVERNMENT_ID_FRONT",proofLabel+(proofNeedsBack(details.proofKind)?" - front":""))}
+        {proofNeedsBack(details.proofKind)?fileSlot("GOVERNMENT_ID_BACK",proofLabel+" - back"):null}
       </>:null}
     </div>:null}
     {step==="review"?<div className="mt-6 space-y-4">

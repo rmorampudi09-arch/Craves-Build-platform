@@ -55,10 +55,13 @@ class AuthEmailProjectionDbTest {
         flyway(null).validate();assertEquals(0,flyway(null).migrate().migrationsExecuted);
         resetPublicExplorerFixture(jdbc);
         jdbc.execute("DROP SCHEMA email_userchef_test CASCADE");jdbc.execute("CREATE SCHEMA email_userchef_test");assertEquals(10,flyway("10").migrate().migrationsExecuted);
-        UUID id=UUID.randomUUID();insertProfile(id,"legacy-unverified@example.test");assertEquals(4,flyway(null).migrate().migrationsExecuted);flyway(null).validate();
+        UUID id=UUID.randomUUID();insertProfile(id,"legacy-unverified@example.test");assertEquals(5,flyway(null).migrate().migrationsExecuted);flyway(null).validate();
         assertEquals(0,flyway(null).migrate().migrationsExecuted);assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM auth_email_projection",Integer.class));
         assertEquals("legacy-unverified@example.test",profiles.getProfile(user(id)).email());
-        assertEquals(14,jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
+        // V11, V11.1, V12, V13 and the additive V14 must all upgrade and replay safely.
+        assertEquals(15,jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
+        assertNotNull(jdbc.queryForObject("SELECT to_regclass('email_userchef_test.chef_onboarding_draft')::text",String.class));
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM chef_onboarding_draft",Integer.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_audit')::text",String.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_admission')::text",String.class));
     }
@@ -113,6 +116,8 @@ class AuthEmailProjectionDbTest {
         var home = tx.execute(ignored -> profiles.addAddress(owner, address("HOME", true)));
         var work = tx.execute(ignored -> profiles.addAddress(owner, address("WORK", false)));
         var old = tx.execute(ignored -> profiles.addAddress(owner, address("OTHER", false)));
+        // Isolate the address-label migration, then verify the new onboarding migration preserves the same rows.
+        assertEquals(1, flyway("13").migrate().migrationsExecuted);
         assertEquals(1, flyway(null).migrate().migrationsExecuted);
         flyway(null).validate();
         assertEquals(0, flyway(null).migrate().migrationsExecuted);

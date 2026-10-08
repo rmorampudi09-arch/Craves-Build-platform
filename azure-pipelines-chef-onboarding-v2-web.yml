@@ -1,0 +1,69 @@
+# Register in Azure DevOps rmorampudi09 / Craves. Uses existing Ramkumar-owned Azure resources.
+# Next.js only; this does not enable onboarding flags or provision infrastructure.
+trigger: none
+pr: none
+pool:
+  vmImage: ubuntu-22.04
+parameters:
+  - name: operation
+    type: string
+    default: preflight
+    values: [preflight, web, status]
+  - name: confirmDeploy
+    type: boolean
+    default: false
+  - name: releaseSha
+    type: string
+    default: SELECT_GREEN_MERGED_MAIN_COMMIT
+  - name: regressionRunId
+    type: string
+    default: SELECT_EXACT_MAIN_REGRESSION_RUN
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+steps:
+  - checkout: self
+    persistCredentials: false
+  - task: AzureCLI@2
+    displayName: Verify and release the reviewed Next.js web
+    timeoutInMinutes: 90
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -Eeuo pipefail
+        set +x
+        [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ && "$REGRESSION_RUN_ID" =~ ^[0-9]+$ ]] || {
+          echo 'Choose the exact green merged-main source and regression run.' >&2; exit 2;
+        }
+        case "$OPERATION" in preflight|web|status) ;; *) exit 2 ;; esac
+        [[ "$OPERATION" != web || "${CONFIRM_DEPLOY,,}" == true ]] || {
+          echo 'Select confirmDeploy for the explicit web release.' >&2; exit 2;
+        }
+        SOURCE=$(mktemp -d)
+        git -C "$SOURCE" init --quiet
+        git -C "$SOURCE" remote add origin https://github.com/rmorampudi09-arch/Craves-Build-platform.git
+        git -C "$SOURCE" fetch --quiet --depth 1 origin "$RELEASE_SHA"
+        git -C "$SOURCE" checkout --quiet --detach FETCH_HEAD
+        test "$(git -C "$SOURCE" rev-parse HEAD)" = "$RELEASE_SHA"
+        cd "$SOURCE"
+        python3 -m unittest discover -s scripts/release/tests -p test_rmorampudi09_preflight.py -v
+        python3 -m unittest discover -s scripts/release/tests -p test_active_address_release.py -v
+        python3 -m unittest discover -s scripts/release/tests -p test_preserve_bank_binding.py -v
+        confirmation=()
+        if [[ "${CONFIRM_DEPLOY,,}" == true ]]; then confirmation+=(--confirm); fi
+        python3 scripts/release/active_address_release.py \
+          --operation "$OPERATION" "${confirmation[@]}" \
+          --source "$SOURCE" --sha "$RELEASE_SHA" --regression-run "$REGRESSION_RUN_ID" \
+          --output "$BUILD_ARTIFACTSTAGINGDIRECTORY"
+    env:
+      OPERATION: ${{ parameters.operation }}
+      CONFIRM_DEPLOY: ${{ parameters.confirmDeploy }}
+      RELEASE_SHA: ${{ parameters.releaseSha }}
+      REGRESSION_RUN_ID: ${{ parameters.regressionRunId }}
+  - task: PublishPipelineArtifact@1
+    displayName: Publish sanitized Next.js release evidence
+    condition: always()
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)
+      artifact: chef-onboarding-next-web-release

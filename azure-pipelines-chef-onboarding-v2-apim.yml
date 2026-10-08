@@ -4,6 +4,8 @@ parameters:
   - name: confirmConfigureChefOnboarding
     type: boolean
     default: false
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
 pool:
   vmImage: ubuntu-latest
 steps:
@@ -14,7 +16,7 @@ steps:
     condition: and(succeeded(), eq('${{ parameters.confirmConfigureChefOnboarding }}', 'True'))
     displayName: Configure chef onboarding routes
     inputs:
-      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      azureSubscription: $(azureServiceConnection)
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |

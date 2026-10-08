@@ -39,7 +39,7 @@ it("leaves an existing approved Chef on the established workspace",async()=>{
 });
 
 it("explains the missing FSSAI number without submitting or silently repeating the step",async()=>{
-  const request=vi.fn(async(url:string,_options?:RequestInit)=>Response.json(url.includes("/content")?[]:state));
+  const request=vi.fn<(url:string,options?:RequestInit)=>Promise<Response>>(async(url)=>Response.json(url.includes("/content")?[]:state));
   vi.stubGlobal("fetch",request);mount();
   await screen.findByRole("heading",{name:"FSSAI registration"});
   fireEvent.click(screen.getByRole("button",{name:"Save and continue"}));
@@ -51,7 +51,7 @@ it("explains the missing FSSAI number without submitting or silently repeating t
   expect(screen.queryByRole("button",{name:"Submit for admin review"})).toBeNull();
 });
 it("explains the missing FSSAI document even when a valid number is entered",async()=>{
-  const request=vi.fn(async(url:string,_options?:RequestInit)=>Response.json(url.includes("/content")?[]:state));
+  const request=vi.fn<(url:string,options?:RequestInit)=>Promise<Response>>(async(url)=>Response.json(url.includes("/content")?[]:state));
   vi.stubGlobal("fetch",request);mount();
   await screen.findByRole("heading",{name:"FSSAI registration"});
   fireEvent.change(screen.getByLabelText("FSSAI registration / licence number"),{target:{value:"12345678901234"}});

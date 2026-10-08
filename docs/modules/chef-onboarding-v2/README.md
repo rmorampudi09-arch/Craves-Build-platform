@@ -37,7 +37,7 @@ The existing service README and .env examples remain the source for database, st
 ## Configuration and manual steps required
 
 - Deploy the User/Chef image containing V14 before enabling the new screens. Confirm migration success and normal aggregate health.
-- Configure the new APIM routes using the scoped script or azure-pipelines-chef-onboarding-v2-apim.yml. The Azure service connection variable is AZURE_SERVICE_CONNECTION; reuse the existing authorized connection.
+- Configure the new APIM routes using the scoped script or azure-pipelines-chef-onboarding-v2-apim.yml. The pipeline references Craves-RMORAMPUDI09-Service-Connection. Confirm that this Azure DevOps connection reaches the existing Azure subscription owned through Ramkumar's account; do not create or rotate credentials merely to run this release.
 - Set CRAVES_CHEF_ONBOARDING_V2_ENABLED=true on User/Chef, customer web and the routed admin web for coordinated activation. It defaults to false.
 - Optional contact overrides are CRAVES_ONBOARDING_SUPPORT_PHONE and CRAVES_ONBOARDING_SUPPORT_EMAIL. Defaults match the current repository Contact page: 8367366787 and support@craves.in.
 - Reuse CRAVES_STORAGE_ENDPOINT_VALUE and CRAVES_STORAGE_DOCUMENTS_CONTAINER from the service's existing secret binding. No new credential is required.
@@ -74,3 +74,23 @@ This package contains complete changed files for overlay on base commit a79d0d83
 
 Implementation is prepared for verification. Production activation, a live OTP flow and an actual Azure video upload must be confirmed separately; they are not assumed from code or unit tests.
 The local terminal in this session could not start because the host sandbox reported helper_sandbox_lock_failed. Repository inspection and edits therefore use the connected GitHub repository.
+
+## Reviewed release corrections (8 October 2026)
+
+The migration regression now counts V14 and verifies that applying V14 after V13 preserves saved address labels. The full launch regression and address workflow use separate disposable onboarding databases. Required suite evidence includes all six onboarding database tests and five Chef workspace tests; skips cannot qualify as a release.
+
+The FSSAI Continue action explains a missing 14-digit number or missing licence document. Save progress for later still accepts an incomplete FSSAI step. Neither learning nor help can substitute for evidence.
+
+The APIM script is limited to subscription 721906c9-4a72-4606-830b-d3e7ace093ff, tenant 1e7e43ac-c7f5-4d47-a74f-289a7cc21508 and the current reviewed APIM name apim-craves-prodlow-kmqgfy. Azure live inventory has not been verified in this session; target/account mismatches stop before writes.
+
+Register azure-pipelines-chef-onboarding-v2-web.yml in Azure DevOps rmorampudi09 / Craves if a pipeline using this YAML does not already exist. It builds apps/customer-web-next using the existing guarded release helper, targets ca-craves-web-prodlow in rg-craves-prodlow-centralindia, and reuses cravesrm09prodlow6bf632. Do not use azure-pipelines-customer-web.yml for this release: that file builds the older Vite app.
+
+Choose operation=preflight first. Supply releaseSha as the exact merged-main commit and regressionRunId as its successful Craves complete launch regression CI run. Choose operation=web and confirmDeploy=true for the authorized release only after backend V14 and onboarding APIM routes are ready; then use status. The helper refuses unknown/checksum-conflicting migrations, unapplied V14, missing protected routes, another backend source or unrelated live configuration changes. Feature flags still require coordinated activation on backend, customer web and the admin application that actually serves /admin.
+
+Use the existing focused address-readiness pipeline's backend operation to roll out the matching User/Chef image with the reviewed V14-aware release tools. The scoped onboarding APIM pipeline configures only the new routes. Do not run generic infrastructure/rebuild pipelines for this module.
+
+Local release-guard checks:
+python -m unittest discover -s scripts/release/tests -p test_rmorampudi09_preflight.py -v
+python -m unittest discover -s scripts/release/tests -p test_active_address_release.py -v
+
+The session can commit to GitHub and launch its CI, but cannot currently open Azure DevOps or execute Azure CLI: the browser/terminal host runtime failed to initialize and the connected workstation is offline. Azure pipeline registration, queueing, live image verification and coordinated feature activation remain pending. No production deployment is claimed.

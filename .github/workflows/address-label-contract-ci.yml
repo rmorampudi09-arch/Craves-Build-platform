@@ -44,6 +44,10 @@ jobs:
       EMAIL_TEST_DB_USER: address_ci
       EMAIL_TEST_DB_PASSWORD: disposable-address-ci-only
       EMAIL_TEST_DISPOSABLE: 'true'
+      ONBOARDING_TEST_DB_URL: jdbc:postgresql://localhost:5432/chef_onboarding_test
+      ONBOARDING_TEST_DB_USER: address_ci
+      ONBOARDING_TEST_DB_PASSWORD: disposable-address-ci-only
+      CRAVES_DISPOSABLE_TEST_DATABASE: 'true'
       EXPLORER_TEST_DB_URL: jdbc:postgresql://127.0.0.1:5433/craves_explorer_test
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +59,10 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: services/user-chef-service/pom.xml
+      - name: Create isolated onboarding database
+        run: psql -h localhost -U address_ci -d craves_email_test -c 'CREATE DATABASE chef_onboarding_test'
+        env:
+          PGPASSWORD: disposable-address-ci-only
       - name: Verify backend and real PostGIS address migration and persistence
         run: mvn -B -ntp -f services/user-chef-service/pom.xml verify
       - name: Check Chef application gateway script syntax

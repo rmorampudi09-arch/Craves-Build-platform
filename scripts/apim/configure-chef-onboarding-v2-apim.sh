@@ -4,11 +4,22 @@ set +x
 : "${CONFIRM_APIM_WRITE:=false}"
 [[ "$CONFIRM_APIM_WRITE" == "true" ]] || { echo 'Set CONFIRM_APIM_WRITE=true for the scoped APIM update.' >&2; exit 1; }
 RG="${RG:-rg-craves-prodlow-centralindia}"
-APIM="${APIM:-apim-craves-prodlow-l3ing6}"
+APIM="${APIM:-apim-craves-prodlow-kmqgfy}"
 APP="${USER_CHEF_APP:-ca-craves-user-chef-service-prod}"
 API_VERSION=2022-08-01
 for tool in az jq curl; do command -v "$tool" >/dev/null; done
-SUB=$(az account show --query id -o tsv)
+EXPECTED_SUBSCRIPTION=721906c9-4a72-4606-830b-d3e7ace093ff
+EXPECTED_TENANT=1e7e43ac-c7f5-4d47-a74f-289a7cc21508
+[[ "$RG" == rg-craves-prodlow-centralindia && "$APIM" == apim-craves-prodlow-kmqgfy && "$APP" == ca-craves-user-chef-service-prod ]] || {
+  echo 'Unexpected onboarding resource target; no update applied.' >&2; exit 1;
+}
+ACCOUNT=$(az account show -o json --only-show-errors)
+SUB=$(jq -r '.id' <<<"$ACCOUNT")
+TENANT=$(jq -r '.tenantId' <<<"$ACCOUNT")
+[[ "$SUB" == "$EXPECTED_SUBSCRIPTION" && "$TENANT" == "$EXPECTED_TENANT" ]] || {
+  echo 'Wrong Azure subscription or tenant; no update applied.' >&2; exit 1;
+}
+az apim show -g "$RG" -n "$APIM" -o none --only-show-errors
 APP_JSON=$(az containerapp show -g "$RG" -n "$APP" -o json --only-show-errors)
 FQDN=$(jq -r '.properties.configuration.ingress.fqdn' <<<"$APP_JSON")
 [[ $(jq -r '.properties.runningStatus' <<<"$APP_JSON") == Running ]]

@@ -123,6 +123,8 @@ def require_database(report, applied=False):
     require(report["account"]["subscriptionId"] == SUBSCRIPTION, "Unexpected Azure subscription")
     if applied:
         require(report["database"]["v13"] == "APPLIED_MATCHING", "Deploy and verify User/Chef V13 first")
+        if "v14" in report["database"]:
+            require(report["database"]["v14"] == "APPLIED_MATCHING", "Deploy and verify User/Chef V14 first")
 
 
 def resolve_image(image):
@@ -299,6 +301,10 @@ def execute(args):
     elif args.operation == "web":
         require(not report["blockers"], "Backend/APIM release prerequisites are incomplete")
         chef_image_guard(args.sha)
+        if "v14" in report["database"]:
+            for path in ("/api/v1/chef/onboarding", "/api/v1/backoffice/chef-onboarding/content"):
+                require(inspect.probe("https://api.craves.in" + path)[0] == 401,
+                        "Onboarding APIM route is missing or its unsigned response is unsafe: " + path)
         deploy_web(args.source, args.sha, args.regression_run, args.output / "web-release.json")
 
 

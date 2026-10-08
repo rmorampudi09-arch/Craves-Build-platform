@@ -35,6 +35,44 @@ class PreflightTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             preflight.compare_history(self.rows[1:], self.sources)
 
+    def test_v13_with_pending_onboarding_preserves_v13_applied_state(self):
+        self.sources["14"] = {"script": "V14__chef_onboarding_v2.sql", "checksum": 14}
+        self.rows.append({"version": "13", **self.sources["13"], "type": "SQL", "success": True})
+        report = preflight.compare_history(self.rows, self.sources)
+        self.assertEqual(report["v13"], "APPLIED_MATCHING")
+        self.assertEqual(report["v14"], "PENDING")
+        self.assertEqual(report["pendingVersions"], ["14"])
+
+    def test_v12_allows_both_reviewed_additions_and_matching_v14_replay(self):
+        self.sources["14"] = {"script": "V14__chef_onboarding_v2.sql", "checksum": 14}
+        self.assertEqual(preflight.compare_history(self.rows, self.sources)["pendingVersions"], ["13", "14"])
+        for version in ("13", "14"):
+            self.rows.append({"version": version, **self.sources[version], "type": "SQL", "success": True})
+        report = preflight.compare_history(self.rows, self.sources)
+        self.assertEqual(report["v14"], "APPLIED_MATCHING")
+        self.assertEqual(report["pendingVersions"], [])
+
+    def test_unknown_or_conflicting_onboarding_migrations_are_rejected(self):
+        for version, script in (("14", "V14__other.sql"), ("15", "V15__unknown.sql")):
+            with self.subTest(version=version):
+                sources = dict(self.sources)
+                sources[version] = {"script": script, "checksum": int(version)}
+                with self.assertRaises(ValueError):
+                    preflight.compare_history(self.rows, sources)
+        self.sources["14"] = {"script": "V14__chef_onboarding_v2.sql", "checksum": 14}
+        with self.assertRaisesRegex(ValueError, "differs.*V14"):
+            preflight.compare_history(self.rows + [
+                {"version": "13", **self.sources["13"], "type": "SQL", "success": True},
+                {"version": "14", "script": "V14__chef_onboarding_v2.sql", "checksum": 999, "type": "SQL", "success": True}
+            ], self.sources)
+
+    def test_onboarding_cannot_be_applied_before_address_baseline(self):
+        self.sources["14"] = {"script": "V14__chef_onboarding_v2.sql", "checksum": 14}
+        with self.assertRaisesRegex(ValueError, "precede V13"):
+            preflight.compare_history(self.rows + [
+                {"version": "14", **self.sources["14"], "type": "SQL", "success": True}
+            ], self.sources)
+
     def test_ambiguous_resources_are_rejected(self):
         with self.assertRaises(ValueError):
             preflight.one([{"name": "web-a"}, {"name": "web-b"}], "web-")

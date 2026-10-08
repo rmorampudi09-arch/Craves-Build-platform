@@ -1,6 +1,6 @@
 # Craves chef onboarding v2
 
-This module changes onboarding for every Chef: new, pending, rejected, and already approved. Existing approvals and operating access remain valid while approved chefs complete the added evidence; historical uploads and decisions are retained. The admin workspace reviews added evidence without re-granting the Chef role. There is no tax approval, rate, commission, payment, order, delivery change to mobile orders, payments or current operations.
+This module changes onboarding for every Chef: new, pending, rejected, and already approved. Existing approvals and operating access remain valid while approved chefs complete the added evidence; historical uploads and decisions are retained. The admin workspace reviews added evidence without re-granting the Chef role. Pricing, commissions, payments, orders and delivery rules are unchanged.
 
 ## Product decisions recorded
 
@@ -72,12 +72,12 @@ This package contains complete changed files for overlay on base commit a79d0d83
 
 ## Execution status
 
-Implementation is prepared for verification. Production activation, a live OTP flow and an actual Azure video upload must be confirmed separately; they are not assumed from code or unit tests.
-The local terminal in this session could not start because the host sandbox reported helper_sandbox_lock_failed. Repository inspection and edits therefore use the connected GitHub repository.
+Backend and web regression checks have passed. React Native integration is included and its exact-commit checks are running. Production activation, a live OTP flow and an actual Azure video upload must be confirmed separately; they are not assumed from code or unit tests.
+The local terminal in this session could not start because the host sandbox reported helper_unknown_error: setup refresh had errors. Repository inspection and edits therefore use the connected GitHub repository.
 
 ## Reviewed release corrections (8 October 2026)
 
-The migration regression now counts V14 and verifies that applying V14 after V13 preserves saved address labels. The full launch regression and address workflow use separate disposable onboarding databases. Required suite evidence includes all seven onboarding database tests and six Chef workspace tests; skips cannot qualify as a release.
+The migration regression now counts all 16 entries through V15 and verifies that applying V14 after V13 preserves saved address labels. The full launch regression and address workflow use separate disposable onboarding databases. Required suite evidence includes all seven onboarding database tests and six Chef workspace tests; skips cannot qualify as a release.
 
 The FSSAI Continue action explains a missing 14-digit number or missing licence document. Save progress for later still accepts an incomplete FSSAI step. Neither learning nor help can substitute for evidence.
 
@@ -85,9 +85,9 @@ The APIM script is limited to subscription 721906c9-4a72-4606-830b-d3e7ace093ff,
 
 Register azure-pipelines-chef-onboarding-v2-web.yml in Azure DevOps rmorampudi09 / Craves if a pipeline using this YAML does not already exist. It builds apps/customer-web-next using the existing guarded release helper, targets ca-craves-web-prodlow in rg-craves-prodlow-centralindia, and reuses cravesrm09prodlow6bf632. Do not use azure-pipelines-customer-web.yml for this release: that file builds the older Vite app.
 
-Choose operation=preflight first. Supply releaseSha as the exact merged-main commit and regressionRunId as its successful Craves complete launch regression CI run. Choose operation=web and confirmDeploy=true for the authorized release only after backend V14 and V15 and onboarding APIM routes are ready; then use status. The helper refuses unknown/checksum-conflicting migrations, unapplied V14, missing protected routes, another backend source or unrelated live configuration changes. Feature flags still require coordinated activation on backend, customer web and the admin application that actually serves /admin.
+Choose operation=preflight first. Supply releaseSha as the exact merged-main commit and regressionRunId as its successful Craves complete launch regression CI run. Choose operation=web and confirmDeploy=true for the authorized release only after backend V14 and V15 and onboarding APIM routes are ready; then use status. The helper refuses unknown/checksum-conflicting migrations, unapplied V14/V15, missing protected routes, another backend source or unrelated live configuration changes. Feature flags still require coordinated activation on backend, customer web and the admin application that actually serves /admin.
 
-Use the existing focused address-readiness pipeline's backend operation to roll out the matching User/Chef image with the reviewed V14-aware release tools. The scoped onboarding APIM pipeline configures only the new routes. Do not run generic infrastructure/rebuild pipelines for this module.
+Use the existing focused address-readiness pipeline's backend operation to roll out the matching User/Chef image with the reviewed V15-aware release tools. The scoped onboarding APIM pipeline configures only the new routes. Do not run generic infrastructure/rebuild pipelines for this module.
 
 Local release-guard checks:
 python -m unittest discover -s scripts/release/tests -p test_rmorampudi09_preflight.py -v

@@ -115,6 +115,20 @@ public class BlobDocumentStorageService {
         catch (Exception ex) { throw ApiException.conflict("DOCUMENT_STORAGE_UNAVAILABLE", "Secure storage is temporarily unavailable."); }
     }
 
+    public in.craves.userchef.onboarding.ChefOnboardingDtos.Playback previewKycDocument(String blobName,String contentType) {
+        try {
+            var client=privateDocumentsContainer().getBlobClient(blobName);
+            var expires=java.time.OffsetDateTime.now().plusMinutes(5);
+            var values=new com.azure.storage.blob.sas.BlobServiceSasSignatureValues(expires,
+                new com.azure.storage.blob.sas.BlobSasPermission().setReadPermission(true))
+                .setStartTime(java.time.OffsetDateTime.now().minusMinutes(1))
+                .setProtocol(com.azure.storage.common.sas.SasProtocol.HTTPS_ONLY)
+                .setContentType(contentType).setCacheControl("private, no-store");
+            return new in.craves.userchef.onboarding.ChefOnboardingDtos.Playback(client.getBlobUrl()+"?"+client.generateSas(values),expires.toInstant());
+        } catch(ApiException ex) {throw ex;}
+        catch(Exception ex) {throw ApiException.conflict("DOCUMENT_PREVIEW_UNAVAILABLE","Secure preview is temporarily unavailable.");}
+    }
+
     private BlobContainerClient documentsContainer() {
         if (!StringUtils.hasText(properties.getEndpointValue())) {
             throw ApiException.badRequest("DOCUMENT_STORE_NOT_CONFIGURED", "Document storage is not configured");

@@ -78,6 +78,7 @@ export type OnboardingState = {
   requiredDocuments: string[];
   supportPhone: string;
   supportEmail: string;
+  progress?: {status: string; reason: string | null; nextAction: string; fssaiVerified: boolean; termsVersion: string};
 };
 export type LearningContent = {
   id: string;
@@ -193,5 +194,12 @@ export function parseOnboardingState(value: unknown): OnboardingState | null {
     requiredDocuments: raw.requiredDocuments as string[],
     supportPhone: raw.supportPhone,
     supportEmail: raw.supportEmail,
+    ...(raw.progress && typeof raw.progress === "object" && !Array.isArray(raw.progress) &&
+      typeof (raw.progress as Record<string,unknown>).status === "string" &&
+      typeof (raw.progress as Record<string,unknown>).nextAction === "string" &&
+      typeof (raw.progress as Record<string,unknown>).fssaiVerified === "boolean" &&
+      typeof (raw.progress as Record<string,unknown>).termsVersion === "string" &&
+      ((raw.progress as Record<string,unknown>).reason === null || typeof (raw.progress as Record<string,unknown>).reason === "string")
+      ? {progress: raw.progress as NonNullable<OnboardingState["progress"]>} : {}),
   };
 }

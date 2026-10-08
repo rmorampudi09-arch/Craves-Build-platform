@@ -24,7 +24,6 @@ public final class ChefOnboardingPolicy {
             types.add(KycDocumentType.SELECTED_PROOF_BACK);
         types.add(KycDocumentType.KITCHEN_PHOTO_1);
         types.add(KycDocumentType.KITCHEN_PHOTO_2);
-        types.add(KycDocumentType.FSSAI_LICENSE);
         return Set.copyOf(types);
     }
     public static boolean accepted(List<KycDocumentResponse> documents, KycDocumentType type) {
@@ -38,21 +37,30 @@ public final class ChefOnboardingPolicy {
             d.latitude() != null && d.longitude() != null;
     }
     public static String resume(Details d, List<KycDocumentResponse> docs, boolean submitted) {
-        if (d == null || d.dateOfBirth() == null) return "personal";
+        if (!personalComplete(d)) return "personal";
         if (!kitchenComplete(d)) return "kitchen";
         if (!accepted(docs, KycDocumentType.KITCHEN_PHOTO_1) ||
             !accepted(docs, KycDocumentType.KITCHEN_PHOTO_2)) return "kitchen-photos";
-        if (!StringUtils.hasText(d.fssaiNumber()) || !accepted(docs, KycDocumentType.FSSAI_LICENSE))
+        if (!StringUtils.hasText(d.fssaiNumber()) || !d.fssaiNumber().matches("[0-9]{14}"))
             return "fssai";
         if (d.proofKind() == null || !required(d.proofKind()).stream().allMatch(t -> accepted(docs,t)))
             return "documents";
         return submitted ? "waiting" : "review";
     }
     public static void validate(Details d) {
-        if (d == null) throw ApiException.badRequest("ONBOARDING_DETAILS_REQUIRED","Complete your personal details.");
+        validateDraft(d);
         requiredText(d.firstName(),100); requiredText(d.lastName(),100); requiredText(d.email(),255);
-        if (d.dateOfBirth() == null || d.dateOfBirth().isAfter(LocalDate.now()) ||
-            d.dateOfBirth().isBefore(LocalDate.of(1900,1,1)))
+        if (!personalComplete(d)) throw ApiException.badRequest("ONBOARDING_PERSONAL_INCOMPLETE","Complete your name, date of birth and email.");
+    }
+    public static boolean personalComplete(Details d) {
+        return d!=null && StringUtils.hasText(d.firstName()) && StringUtils.hasText(d.lastName()) &&
+            d.dateOfBirth()!=null && d.email()!=null && d.email().matches("[^\\s@]+@[^\\s@]+\\.[^\\s@]+");
+    }
+    public static void validateDraft(Details d) {
+        if (d == null) throw ApiException.badRequest("ONBOARDING_DETAILS_REQUIRED","Complete your personal details.");
+        optionalText(d.firstName(),100); optionalText(d.lastName(),100); optionalText(d.email(),255);
+        if (d.dateOfBirth() != null && (d.dateOfBirth().isAfter(LocalDate.now()) ||
+            d.dateOfBirth().isBefore(LocalDate.of(1900,1,1))))
             throw ApiException.badRequest("DATE_OF_BIRTH_INVALID","Enter a valid date of birth.");
         optionalText(d.kitchenName(),160); optionalText(d.kitchenDescription(),1000);
         optionalText(d.addressLine1(),255); optionalText(d.addressLine2(),255); optionalText(d.landmark(),255);
@@ -63,7 +71,6 @@ public final class ChefOnboardingPolicy {
             d.latitude() != null && (d.latitude().abs().compareTo(java.math.BigDecimal.valueOf(90)) > 0 ||
             d.longitude().abs().compareTo(java.math.BigDecimal.valueOf(180)) > 0))
             throw ApiException.badRequest("KITCHEN_COORDINATES_INVALID","Choose a valid kitchen location.");
-        if (d.proofKind() == ProofKind.OTHER_GOVERNMENT_ID) requiredText(d.otherGovernmentId(),80);
         if (StringUtils.hasText(d.fssaiNumber()) && !d.fssaiNumber().matches("[0-9]{14}"))
             throw ApiException.badRequest("FSSAI_NUMBER_INVALID","Enter the 14-digit FSSAI registration or licence number.");
         if (d.language() == null || !LANGUAGES.contains(d.language()))

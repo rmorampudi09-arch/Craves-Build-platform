@@ -5,4 +5,4 @@ export const runtime = "nodejs";
 async function handle(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {
   return onboardingBff(request, (await context.params).path ?? [], false);
 }
-export { handle as GET, handle as PUT, handle as POST };
+export { handle as GET, handle as PUT, handle as POST, handle as PATCH, handle as DELETE };

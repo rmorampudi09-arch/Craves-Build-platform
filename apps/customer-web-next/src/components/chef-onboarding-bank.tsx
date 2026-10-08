@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   bankConsentVersion,
   bankStatusSchema,
@@ -35,6 +35,20 @@ export function ChefOnboardingBank({
     [error, setError] = useState("");
   const request = useRef<ReturnType<typeof bankSubmissionSchema.parse> | null>(null);
   const inFlight = useRef(false);
+  const [branch,setBranch]=useState<{ifsc:string;bankName:string;branchName:string}|null>(null);
+  const [lookupError,setLookupError]=useState("");
+  const [lookupRetry,setLookupRetry]=useState(0);
+  useEffect(()=>{
+    setBranch(null);setLookupError("");
+    if(!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) return;
+    const controller=new AbortController();
+    void fetch(`/api/chef-onboarding/bank/ifsc/${ifsc}`,{cache:"no-store",credentials:"same-origin",signal:controller.signal}).then(async response=>{
+      const data=await response.json() as {ifsc?:string;bankName?:string;branchName?:string;message?:string};
+      if(!response.ok || data.ifsc!==ifsc || !data.bankName || !data.branchName) throw new Error(data.message??"Bank branch lookup is unavailable. Retry.");
+      if(!controller.signal.aborted) setBranch({ifsc,bankName:data.bankName,branchName:data.branchName});
+    }).catch(failure=>{if(!controller.signal.aborted) setLookupError(failure instanceof Error?failure.message:"Bank branch lookup failed.");});
+    return ()=>controller.abort();
+  },[ifsc,lookupRetry]);
   function changed() {
     request.current = null;
     setError("");
@@ -62,6 +76,7 @@ export function ChefOnboardingBank({
       );
       return;
     }
+    if(!branch || branch.ifsc!==ifsc) {setError("Confirm the bank name and branch after the IFSC lookup completes.");return;}
     request.current = result.data;
     setConfirming(true);
     setError("");
@@ -117,7 +132,7 @@ export function ChefOnboardingBank({
       onSubmit={(event) => {
         event.preventDefault();
         if (busy || inFlight.current) return;
-        if (bankCanContinue(bank) && !account && !confirmation && !ifsc) {
+        if (bankCanContinue(bank) && bank?.accountHolderName === name && !account && !confirmation && !ifsc) {
           onSaved(bank!);
           return;
         }
@@ -140,6 +155,7 @@ export function ChefOnboardingBank({
           <div>
             <p className="font-semibold">Account ending {bank.lastFour}</p>
             <p className="mt-1">{bank.message}</p>
+            {bank.bankName ? <p className="mt-1">{bank.bankName} · {bank.branchName}</p> : null}
           </div>
         </div>
       ) : null}
@@ -212,6 +228,8 @@ export function ChefOnboardingBank({
               }}
             />
           </label>
+          {branch ? <div role="status" className="chef-onboarding-notice"><p>{branch.bankName} · {branch.branchName}</p></div> : null}
+          {lookupError ? <div role="alert"><p>{lookupError}</p><button type="button" className="chef-onboarding-text-action" onClick={()=>setLookupRetry(value=>value+1)}>Retry branch lookup</button></div> : null}
           <label className="flex items-start gap-3 text-sm leading-6">
             <input
               aria-label="Consent to bank verification"
@@ -239,6 +257,7 @@ export function ChefOnboardingBank({
             <dd>{name}</dd>
             <dt>Account</dt>
             <dd>•••• {account.slice(-4)}</dd>
+            <dt>Bank / branch</dt><dd>{branch?.bankName} · {branch?.branchName}</dd>
             <dt>IFSC</dt>
             <dd>{ifsc}</dd>
           </dl>

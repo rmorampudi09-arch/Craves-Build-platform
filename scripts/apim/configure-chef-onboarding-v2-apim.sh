@@ -65,11 +65,15 @@ configure_api "$CHEF" "api/v1/chef/onboarding"
 configure_api "$ADMIN" "api/v1/backoffice/chef-onboarding"
 operation "$CHEF" state GET / /api/v1/chef/onboarding
 operation "$CHEF" save PUT / /api/v1/chef/onboarding
+operation "$CHEF" draft PATCH / /api/v1/chef/onboarding
+operation "$CHEF" document-preview GET '/documents/{id}/preview' '/api/v1/chef/onboarding/documents/{id}/preview'
+operation "$CHEF" document-remove DELETE '/documents/{id}' '/api/v1/chef/onboarding/documents/{id}'
 operation "$CHEF" submit POST /submit /api/v1/chef/onboarding/submit
 operation "$CHEF" help POST /help /api/v1/chef/onboarding/help
 operation "$CHEF" content GET /content /api/v1/chef/onboarding/content
 operation "$CHEF" playback GET '/content/{id}/playback' '/api/v1/chef/onboarding/content/{id}/playback'
 operation "$ADMIN" application GET '/applications/{id}' '/api/v1/backoffice/chef-onboarding/applications/{id}'
+operation "$ADMIN" review-action POST '/applications/{id}/review' '/api/v1/backoffice/chef-onboarding/applications/{id}/review'
 operation "$ADMIN" help GET /help /api/v1/backoffice/chef-onboarding/help
 operation "$ADMIN" help-status PUT '/help/{id}' '/api/v1/backoffice/chef-onboarding/help/{id}'
 operation "$ADMIN" content-list GET /content /api/v1/backoffice/chef-onboarding/content

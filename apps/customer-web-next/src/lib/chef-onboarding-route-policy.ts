@@ -4,9 +4,11 @@ export function onboardingRoute(method: string, path: string[], admin: boolean):
     return null;
   const joined = path.join("/");
   if (!admin) {
-    if (!joined && ["GET", "PUT"].includes(method)) return "/chef/onboarding";
+    if (!joined && ["GET", "PUT", "PATCH"].includes(method)) return "/chef/onboarding";
     if (["submit", "help"].includes(joined) && method === "POST")
       return "/chef/onboarding/" + joined;
+    if(path.length===2 && path[0]==="documents" && UUID.test(path[1]!) && method==="DELETE") return "/chef/onboarding/"+joined;
+    if(path.length===3 && path[0]==="documents" && UUID.test(path[1]!) && path[2]==="preview" && method==="GET") return "/chef/onboarding/"+joined;
     if (joined === "content" && method === "GET") return "/chef/onboarding/content";
     if (
       path.length === 3 &&
@@ -17,6 +19,7 @@ export function onboardingRoute(method: string, path: string[], admin: boolean):
     )
       return "/chef/onboarding/" + joined;
   } else {
+    if(path.length===3 && path[0]==="applications" && UUID.test(path[1]!) && path[2]==="review" && method==="POST") return "/backoffice/chef-onboarding/"+joined;
     if (
       (joined === "help" && method === "GET") ||
       (joined === "content" && ["GET", "POST"].includes(method))

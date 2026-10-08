@@ -66,6 +66,8 @@ const identity = {
   roles: ["CUSTOMER"],
 };
 const bankFixture: BankStatus = {
+  accountHolderName: "Fixture Chef",
+  bankName: "Test Bank", branchName: "Test branch",
   id,
   state: "WAITING_APPROVAL",
   lastFour: "5678",
@@ -146,9 +148,10 @@ function normal(input: RequestInfo | URL, init?: RequestInit): Promise<Response>
   if (url === "/api/auth/me") return Promise.resolve(Response.json(identity));
   if (url === "/api/auth/refresh") return Promise.resolve(Response.json({ identity }));
   if (url === "/api/customer/profile") return Promise.resolve(Response.json({}, { status: 404 }));
+  if(url.startsWith("/api/chef-onboarding/bank/ifsc/")) return Promise.resolve(Response.json({ifsc:"TEST0000001",bankName:"Test Bank",branchName:"Test branch"}));
   if (url === "/api/chef-onboarding/bank") return Promise.resolve(Response.json(bank));
   if (url === "/api/chef/application") return Promise.resolve(Response.json(saved.application));
-  if (url === "/api/chef/onboarding" && init?.method === "PUT") {
+  if (url === "/api/chef/onboarding" && ["PUT","PATCH"].includes(init?.method ?? "")) {
     const request = JSON.parse(String(init.body));
     if (request.expectedVersion !== saved.version)
       return Promise.resolve(Response.json({ message: "Version changed" }, { status: 409 }));
@@ -315,7 +318,7 @@ describe("Chef onboarding navigation and persistence", () => {
     );
     expect(requests).toHaveLength(2);
   });
-  it("shows the backend FSSAI certificate rejection without fabricating submission", async () => {
+  it("shows a backend eligibility rejection without fabricating submission", async () => {
     open();
     await review();
     fireEvent.click(screen.getByLabelText("Accept terms and privacy policy"));
@@ -323,14 +326,14 @@ describe("Chef onboarding navigation and persistence", () => {
       String(url).endsWith("/submit")
         ? Promise.resolve(
             Response.json(
-              { message: "FSSAI certificate required by current policy" },
+              { message: "Current bank enrollment requires correction" },
               { status: 400 },
             ),
           )
         : normal(url, init),
     );
     fireEvent.click(primary("Submit application"));
-    await screen.findByText("FSSAI certificate required by current policy");
+    await screen.findByText("Current bank enrollment requires correction");
     expect(screen.queryByRole("heading", { name: "Application submitted" })).toBeNull();
   });
   it("prevents duplicate submissions and routes confirmed submissions to application status", async () => {
@@ -432,6 +435,7 @@ describe("Authoritative status and bank verification", () => {
     });
     fireEvent.change(screen.getByLabelText("IFSC code"), { target: { value: "test0000001" } });
     fireEvent.click(screen.getByLabelText("Consent to bank verification"));
+    await screen.findByText("Test Bank · Test branch");
     fireEvent.submit(document.getElementById("chef-bank-form")!);
     await screen.findByText("•••• 5678");
     fireEvent.click(primary("Re-enter bank details"));

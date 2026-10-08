@@ -14,7 +14,13 @@ import org.springframework.web.server.ResponseStatusException;
 public class BankOnboardingController {
     private final BankOnboardingService service;
     private final ObjectMapper json;
-    public BankOnboardingController(BankOnboardingService service,ObjectMapper json) {this.service=service;this.json=json;}
+    private final in.craves.integration.payout.bank.IfscLookupClient branches;
+    public BankOnboardingController(BankOnboardingService service,ObjectMapper json,in.craves.integration.payout.bank.IfscLookupClient branches) {this.service=service;this.json=json;this.branches=branches;}
+    @GetMapping("/api/v1/chef-onboarding/bank/ifsc/{ifsc}")
+    public ResponseEntity<in.craves.integration.payout.bank.IfscLookupClient.Branch> lookup(@AuthenticationPrincipal CravesPrincipal actor,@PathVariable String ifsc) {
+        if(actor==null || actor.identityId()==null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"Sign in before bank lookup");
+        return ResponseEntity.ok().header("Cache-Control","private, no-store").body(branches.lookup(ifsc));
+    }
     @GetMapping("/api/v1/chef-onboarding/bank")
     public ResponseEntity<BankOnboardingModels.Status> status(@AuthenticationPrincipal CravesPrincipal actor) {
         return ResponseEntity.ok().header("Cache-Control","no-store").body(service.status(actor));

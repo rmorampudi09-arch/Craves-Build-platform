@@ -164,7 +164,7 @@ export function useChefOnboarding() {
       setFromReview(false);
       setScreen(
         next.application.status === "APPROVED" ||
-          next.application.status === "REJECTED" ||
+          next.application.status === "REJECTED" && next.progress?.nextAction !== "EDIT_APPLICATION" ||
           next.submitted ||
           (next.legacy && next.application.status === "PENDING")
           ? "status"
@@ -214,17 +214,17 @@ export function useChefOnboarding() {
       setDirty(true);
     }
   }, []);
-  async function persist(): Promise<OnboardingState> {
+  async function persist(partial = false): Promise<OnboardingState> {
     const existing = currentState.current;
     if (!existing || !current()) throw new Error("Sign in again to continue.");
-    if (existing.submitted || existing.application.status === "APPROVED")
+    if (existing.submitted || existing.legacy)
       throw new Error(
         "This application is already submitted. Check its status before making changes.",
       );
     const next = verifiedState(
-      await chefOnboardingApi("/api/chef/onboarding", "PUT", {
+      await chefOnboardingApi("/api/chef/onboarding", partial ? "PATCH" : "PUT", {
         expectedVersion: existing.version,
-        details: currentDetails.current,
+        details: {...currentDetails.current,dateOfBirth:currentDetails.current.dateOfBirth || null},
       }),
     );
     if (!current())
@@ -305,8 +305,15 @@ export function useChefOnboarding() {
       return;
     }
     void work(async () => {
-      await persist();
+      await persist(true);
       router.push("/home");
+    });
+  }
+  async function removeFile(id:string) {
+    await work(async () => {
+      const saved=currentState.current;
+      if(!saved) throw new Error("Reload your saved application.");
+      accept(verifiedState(await chefOnboardingApi(`/api/chef/onboarding/documents/${id}`,"DELETE",{expectedVersion:saved.version})),true);
     });
   }
   async function uploadFile(type: string, file: File, progress: (value: number) => void) {
@@ -424,6 +431,8 @@ export function useChefOnboarding() {
       const next = verifiedState(
         await chefOnboardingApi("/api/chef/onboarding/submit", "POST", {
           expectedVersion: saved.version,
+          termsAccepted: true,
+          termsVersion: saved.progress?.termsVersion ?? "craves-chef-terms-20261008-v1",
         }),
       );
       if (!next.submitted || next.application.status !== "PENDING" || !next.application.id)
@@ -469,6 +478,7 @@ export function useChefOnboarding() {
     back,
     exit,
     uploadFile,
+    removeFile,
     requestCallback,
     savedBank,
     bankBusy,

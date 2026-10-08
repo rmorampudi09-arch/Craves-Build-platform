@@ -81,7 +81,7 @@ export function completedSections(
       evidenceComplete(state, "SELECTED_PROOF_FRONT") &&
       (!proofNeedsBack(d.proofKind) || evidenceComplete(state, "SELECTED_PROOF_BACK")),
     ),
-    bank: bankCanContinue(bank),
+    bank: bankCanContinue(bank) && Boolean(bank?.accountHolderName && bank.accountHolderName.trim().toLowerCase() === chefFullName(d ?? {firstName:"",lastName:""}).trim().toLowerCase()),
   };
 }
 export function firstIncompleteSection(

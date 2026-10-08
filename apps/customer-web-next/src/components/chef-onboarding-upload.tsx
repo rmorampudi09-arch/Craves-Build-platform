@@ -51,6 +51,7 @@ type Props = {
   photo?: boolean;
   evidence?: ChefEvidenceMetadata;
   disabled: boolean;
+  onRemove?: (id:string) => Promise<void>;
   onUpload: (type: string, file: File, progress: (value: number) => void) => Promise<void>;
 };
 export function ChefOnboardingUpload({
@@ -61,6 +62,7 @@ export function ChefOnboardingUpload({
   evidence,
   disabled,
   onUpload,
+  onRemove,
 }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -116,6 +118,24 @@ export function ChefOnboardingUpload({
     } finally {
       if (mounted.current) setBusy(false);
     }
+  }
+  async function savedPreview() {
+    if(!evidence || busy) return;
+    setBusy(true);setError("");
+    try {
+      const response=await fetch(`/api/chef/onboarding/documents/${evidence.id}/preview`,{cache:"no-store",credentials:"same-origin"});
+      const data:unknown=await response.json();
+      if(!response.ok || !data || typeof data!=="object" || !("url" in data) || typeof data.url!=="string" || !data.url.startsWith("https://")) throw new Error("Preview is unavailable. Please retry.");
+      window.open(data.url,"_blank","noopener,noreferrer");
+    } catch(failure) {if(mounted.current) setError(failure instanceof Error?failure.message:"Preview failed.");}
+    finally {if(mounted.current) setBusy(false);}
+  }
+  async function removeSaved() {
+    if(!evidence || !onRemove || locked || busy) return;
+    setBusy(true);setError("");
+    try {await onRemove(evidence.id);}
+    catch(failure) {if(mounted.current) setError(failure instanceof Error?failure.message:"Removal failed.");}
+    finally {if(mounted.current) setBusy(false);}
   }
   return (
     <section
@@ -184,6 +204,8 @@ export function ChefOnboardingUpload({
           }}
         />
       ) : null}
+      {evidence ? <button type="button" className="chef-onboarding-text-action mt-3" disabled={disabled || busy} onClick={()=>void savedPreview()}>Preview saved upload</button> : null}
+      {evidence && !file && !locked && onRemove ? <button type="button" className="chef-onboarding-text-action mt-3" disabled={disabled || busy} onClick={()=>void removeSaved()}>Remove saved upload</button> : null}
       {locked ? (
         <p className="chef-onboarding-verified mt-3">
           <CheckCircle2 size={15} aria-hidden="true" />

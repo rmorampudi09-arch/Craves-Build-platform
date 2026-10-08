@@ -34,27 +34,38 @@ public class BankOnboardingService {
     private final RazorpayBankValidationClient provider;
     private final TransactionTemplate tx;
     private final boolean workerDeployed;
+    private final IfscLookupClient branches;
     public BankOnboardingService(JdbcTemplate jdbc, BankDataCipher cipher, BankApplicantClient applicants,
-            RazorpayBankValidationClient provider, PlatformTransactionManager manager,
+            RazorpayBankValidationClient provider, PlatformTransactionManager manager, IfscLookupClient branches,
             @Value("${CRAVES_BANK_WORKER_ENABLED:false}") boolean workerDeployed) {
         this.jdbc=jdbc; this.cipher=cipher; this.applicants=applicants; this.provider=provider;
-        this.tx=new TransactionTemplate(manager); this.workerDeployed=workerDeployed;
+        this.branches=branches;this.tx=new TransactionTemplate(manager); this.workerDeployed=workerDeployed;
     }
     public Status status(CravesPrincipal actor) {
         requireIdentity(actor);
         var rows=jdbc.query("SELECT r.* FROM payment_schema.finance_bank_head h JOIN payment_schema.finance_bank_request r ON r.id=h.request_id WHERE h.chef_identity_id=?",
                 this::mapStatus,actor.identityId());
-        return availability(rows.isEmpty()?new Status(null,"NOT_SUBMITTED",null,null,false,false,true,
-                "Add your bank details once. Razorpay performs bank validation automatically.",null):rows.getFirst());
+        if(rows.isEmpty()) return availability(new Status(null,"NOT_SUBMITTED",null,null,false,false,true,
+                "Add your bank details once. Razorpay performs bank validation automatically.",null));
+        Status saved=rows.getFirst();
+        var encrypted=jdbc.queryForObject("SELECT encrypted_details FROM payment_schema.finance_bank_request WHERE id=?",String.class,saved.id());
+        var details=cipher.decrypt(saved.id(),actor.identityId(),encrypted);
+        var applicant=applicants.fetch(actor.identityId());
+        boolean matches=applicant.applicationId().equals(details.applicationId()) && normalizeName(applicant.name()).equals(normalizeName(details.name())) && Set.of("PENDING","APPROVED").contains(applicant.status());
+        Status result=availability(saved);
+        return new Status(result.id(),matches?result.state():"APPLICANT_ACTION_REQUIRED",result.lastFour(),result.ifsc(),matches && result.bankValidated(),applicant.approved(),result.automaticActivation(),
+            matches?result.message():"Your applicant details changed. Confirm bank enrollment using your current name.",result.updatedAt(),details.name(),result.bankName(),result.branchName());
     }
     public Status submit(CravesPrincipal actor, Submission request) {
         requireIdentity(actor);
         if(!available()) throw unavailable("Bank enrollment is not currently available. Check your finance balance for eligible payout options.");
         var identity=applicants.fetch(actor.identityId());
         var details=BankOnboardingModels.details(request,identity);
-        return availability(tx.execute(s->save(actor.identityId(),request,details)));
+        var branch=branches.lookup(details.ifsc());
+        tx.execute(s->save(actor.identityId(),request,details,branch));
+        return status(actor);
     }
-    private Status save(UUID chef,Submission request,Details details) {
+    private Status save(UUID chef,Submission request,Details details,IfscLookupClient.Branch branch) {
         lockChef(chef);
         var receipt=jdbc.queryForList("SELECT request_id,expected_current_id FROM payment_schema.finance_bank_submission_receipt WHERE chef_identity_id=? AND request_key=?",chef,request.requestKey());
         if(!receipt.isEmpty()) {
@@ -82,9 +93,9 @@ public class BankOnboardingService {
         if(count>=((Number)controls.get("maximum_requests_per_day")).intValue())
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,"Bank enrollment limit reached for the last 24 hours");
         UUID id=UUID.randomUUID();
-        jdbc.update("INSERT INTO payment_schema.finance_bank_request(id,chef_identity_id,encrypted_details,fingerprint,last_four,ifsc,consent_version,state) VALUES (?,?,?,?,?,?,?,'QUEUED')",
+        jdbc.update("INSERT INTO payment_schema.finance_bank_request(id,chef_identity_id,encrypted_details,fingerprint,last_four,ifsc,consent_version,state,bank_name,branch_name) VALUES (?,?,?,?,?,?,?,'QUEUED',?,?)",
                 id,chef,cipher.encrypt(id,chef,details),cipher.fingerprint(details),
-                details.accountNumber().substring(details.accountNumber().length()-4),details.ifsc(),CONSENT_VERSION);
+                details.accountNumber().substring(details.accountNumber().length()-4),details.ifsc(),CONSENT_VERSION,branch.bankName(),branch.branchName());
         if(current!=null) jdbc.update("UPDATE payment_schema.finance_bank_request SET state='SUPERSEDED',lease_id=NULL,lease_until=NULL,updated_at=now() WHERE id=?",current);
         jdbc.update("INSERT INTO payment_schema.finance_bank_head(chef_identity_id,request_id) VALUES (?,?) ON CONFLICT(chef_identity_id) DO UPDATE SET request_id=EXCLUDED.request_id",chef,id);
         jdbc.update("INSERT INTO payment_schema.finance_chef_payout_control(chef_identity_id,on_hold,hold_reason) VALUES (?,false,NULL) ON CONFLICT DO NOTHING",chef);
@@ -211,7 +222,7 @@ public class BankOnboardingService {
     private Status availability(Status status) {
         boolean ready=available();
         return new Status(status.id(),status.state(),status.lastFour(),status.ifsc(),status.bankValidated(),status.applicationApproved(),ready,
-            ready?status.message():"Automatic bank enrollment is currently unavailable. Check your finance balance for eligible payout options.",status.updatedAt());
+            ready?status.message():"Automatic bank enrollment is currently unavailable. Check your finance balance for eligible payout options.",status.updatedAt(),status.accountHolderName(),status.bankName(),status.branchName());
     }
     private Status get(UUID id) {return jdbc.query("SELECT * FROM payment_schema.finance_bank_request WHERE id=?",this::mapStatus,id).getFirst();}
     private Status mapStatus(ResultSet rs,int n)throws SQLException {
@@ -230,7 +241,7 @@ public class BankOnboardingService {
         };
         return new Status(rs.getObject("id",UUID.class),stale && available()?"VALIDATING":state,rs.getString("last_four"),rs.getString("ifsc"),
                 rs.getBoolean("bank_validated"),rs.getBoolean("application_approved"),true,message,
-                rs.getTimestamp("updated_at").toInstant());
+                rs.getTimestamp("updated_at").toInstant(),null,rs.getString("bank_name"),rs.getString("branch_name"));
     }
     private void audit(UUID id,UUID chef,String action,String actor) {
         jdbc.update("INSERT INTO payment_schema.finance_bank_audit(id,request_id,chef_identity_id,action,actor_type) VALUES (?,?,?,?,?)",UUID.randomUUID(),id,chef,action,actor);

@@ -51,6 +51,8 @@ public class ChefApplicationReadinessService {
             : applications.requiredApplicationDocuments(application.id(), false);
         if (required == null || required.isEmpty()) required = ChefApplicationService.REQUIRED_APPLICATION_DOCUMENTS;
         boolean submissionBlocked = application.id() != null && applications.onboardingSubmissionBlocked(application.id());
+        boolean fssaiVerified=application.id()==null || !required.contains(in.craves.userchef.web.ApiDtos.KycDocumentType.SELECTED_PROOF_FRONT) || applications.onboardingFssaiVerified(application.id());
+        if(!fssaiVerified) issues.add(new BlockingIssue("FSSAI_VERIFICATION_REQUIRED",null));
         if (submissionBlocked) issues.add(new BlockingIssue("ONBOARDING_NOT_SUBMITTED", null));
         for (var type : required.stream().sorted().toList()) {
             var document = evidence.stream().filter(item -> item.documentType() == type).findFirst().orElse(null);
@@ -72,7 +74,7 @@ public class ChefApplicationReadinessService {
             Stream.of(application.submittedAt(), application.reviewedAt()), evidence.stream().map(KycDocumentResponse::updatedAt)
         ).filter(java.util.Objects::nonNull).max(Instant::compareTo).orElse(null);
         return new ChefApplicationReadiness(1, application.status(), emailStatus,
-            application.status() == ChefApplicationStatus.PENDING && !submissionBlocked && "VERIFIED".equals(emailStatus) && approved == requirements.size(),
+            application.status() == ChefApplicationStatus.PENDING && !submissionBlocked && fssaiVerified && "VERIFIED".equals(emailStatus) && approved == requirements.size(),
             requirements.size(), uploaded, approved, List.copyOf(requirements), List.copyOf(issues), Instant.now(), lastSavedAt);
     }
 }

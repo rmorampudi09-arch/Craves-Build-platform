@@ -73,6 +73,7 @@ function Upload({
       disabled={flow.busy}
       evidence={flow.state?.documents.find((document) => document.documentType === type)}
       onUpload={flow.uploadFile}
+          onRemove={flow.removeFile}
     />
   );
 }

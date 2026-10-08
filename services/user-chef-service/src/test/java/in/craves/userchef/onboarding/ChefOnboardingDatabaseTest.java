@@ -32,6 +32,7 @@ class ChefOnboardingDatabaseTest {
     ChefOnboardingContentService content;
     CurrentUser user;
     CurrentUser admin;
+    ChefBankEnrollmentClient bank;
     static boolean databaseConfigured() { return System.getenv("ONBOARDING_TEST_DB_URL")!=null; }
     @BeforeEach void setup() {
         String url=System.getenv("ONBOARDING_TEST_DB_URL");
@@ -55,8 +56,9 @@ class ChefOnboardingDatabaseTest {
             new BlobDocumentStorageService.StoredDocument("documents","kyc/synthetic","photo.jpg","image/jpeg",20));
         applications=new ChefApplicationService(jdbc,storage,auth,notifications,projection,true);
         review=new ChefDocumentReviewService(jdbc,storage,notifications);
+        bank=mock(ChefBankEnrollmentClient.class);when(bank.requireEnrollment(anyString(),anyString())).thenReturn(UUID.randomUUID());
         service=new ChefOnboardingService(jdbc,new ObjectMapper().findAndRegisterModules(),applications,auth,projection,
-            new SupportCaseService(jdbc),true,"8367366787","support@craves.in");
+            new SupportCaseService(jdbc),bank,storage,true,"8367366787","support@craves.in");
         content=new ChefOnboardingContentService(jdbc,storage);
         user=new CurrentUser(UUID.randomUUID(),"synthetic","+919000000000",List.of("CUSTOMER"));
         admin=new CurrentUser(UUID.randomUUID(),"admin","+919000000001",List.of("PLATFORM_ADMIN"));
@@ -94,10 +96,11 @@ class ChefOnboardingDatabaseTest {
         upload(KycDocumentType.FSSAI_LICENSE);upload(KycDocumentType.SELECTED_PROOF_FRONT);
         assertEquals("review",service.mine(user).resumeStep());
         var version=service.mine(user).version();
-        run(()->service.submit(user,version));
+        run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(version,true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
         assertThrows(ApiException.class,()->run(()->applications.approve(admin,applicationId)));
         for(var document:service.mine(user).documents())
             run(()->review.approve(admin,applicationId,document.id()));
+        run(()->service.reviewAction(admin,applicationId,new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901234")));
         assertEquals("APPROVED",run(()->applications.approve(admin,applicationId)).status().name());
         assertTrue(service.mine(user).legacy());
         assertEquals(4,jdbc.queryForObject("SELECT count(*) FROM chef_kyc_document WHERE application_id=?",Integer.class,applicationId));
@@ -106,7 +109,7 @@ class ChefOnboardingDatabaseTest {
     @Test void aadhaarCannotSubmitWithoutItsBackButBankStatementIsSingleFile() {
         save(ProofKind.AADHAAR,"12345678901234");photos();upload(KycDocumentType.FSSAI_LICENSE);upload(KycDocumentType.SELECTED_PROOF_FRONT);
         assertEquals("documents",service.mine(user).resumeStep());
-        assertThrows(ApiException.class,()->run(()->service.submit(user,service.mine(user).version())));
+        assertThrows(ApiException.class,()->run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test")));
         upload(KycDocumentType.SELECTED_PROOF_BACK);
         assertEquals("review",service.mine(user).resumeStep());
         user=new CurrentUser(UUID.randomUUID(),"bank","+919000000002",List.of("CUSTOMER"));
@@ -136,7 +139,7 @@ class ChefOnboardingDatabaseTest {
         save(ProofKind.PAN,"12345678901234");photos();upload(KycDocumentType.FSSAI_LICENSE);upload(KycDocumentType.SELECTED_PROOF_FRONT);
         assertThrows(ApiException.class,()->run(()->review.approve(admin,id,service.mine(user).documents().stream()
             .filter(document -> document.documentType()==KycDocumentType.KITCHEN_PHOTO_1).findFirst().orElseThrow().id())));
-        run(()->service.submit(user,service.mine(user).version()));
+        run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
         assertTrue(applications.listApplications(admin,in.craves.userchef.web.ApiDtos.ChefApplicationStatus.PENDING).stream().anyMatch(application -> id.equals(application.id())));
         for(var document:service.mine(user).documents()) {
             if(document.documentType()==KycDocumentType.GOVERNMENT_ID_FRONT) continue;
@@ -159,10 +162,45 @@ class ChefOnboardingDatabaseTest {
             save(ProofKind.BANK_STATEMENT,"12345678901234");photos();upload(KycDocumentType.FSSAI_LICENSE);
             assertEquals("documents",service.mine(user).resumeStep());
             upload(KycDocumentType.SELECTED_PROOF_FRONT);
-            run(()->service.submit(user,service.mine(user).version()));
+            run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
             for(var document:service.mine(user).documents()) run(()->review.approve(admin,id,document.id()));
+            run(()->service.reviewAction(admin,id,new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901234")));
             assertEquals("APPROVED",run(()->applications.approve(admin,id)).status().name());
         }
+    }
+
+    @Test void partialBasicDraftSavesWithoutVerifyingEmailOrCreatingApplication() {
+        Details partial=new Details("", "Only", "",null,null,null,null,null,null,null,null,null,null,null,null,null,null,"en");
+        State first=run(()->service.saveDraft(user,new SaveRequest(0L,partial)));
+        assertEquals("personal",first.resumeStep());assertNull(first.application().id());
+        assertEquals("Only",service.mine(user).details().firstName());
+        assertThrows(ApiException.class,()->run(()->service.save(user,new SaveRequest(first.version(),partial))));
+    }
+    @Test void termsAndBankEnrollmentAreRequiredByServerAndCorrectionKeepsDecisionHistory() {
+        save(ProofKind.PAN,"12345678901234");photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
+        long version=service.mine(user).version();
+        assertThrows(ApiException.class,()->run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(version,false,ChefOnboardingService.TERMS_VERSION),"Bearer test")));
+        when(bank.requireEnrollment(anyString(),anyString())).thenThrow(ApiException.conflict("BANK_ENROLLMENT_REQUIRED","Missing bank"));
+        assertThrows(ApiException.class,()->run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(version,true,ChefOnboardingService.TERMS_VERSION),"Bearer test")));
+        assertFalse(service.mine(user).submitted());
+        doReturn(UUID.randomUUID()).when(bank).requireEnrollment(anyString(),anyString());
+        State submitted=run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(version,true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
+        assertEquals(ChefOnboardingService.TERMS_VERSION,jdbc.queryForObject("SELECT terms_version FROM chef_onboarding_draft WHERE identity_id=?",String.class,user.identityId()));
+        assertThrows(ApiException.class,()->save(ProofKind.PAN,"12345678901234"));
+        State correction=run(()->service.reviewAction(admin,submitted.application().id(),new ReviewAction(submitted.version(),"REQUEST_INFORMATION","Clarify your kitchen description",null)));
+        assertEquals("MORE_INFORMATION_REQUIRED",correction.progress().status());
+        save(ProofKind.PAN,"12345678901234");
+        assertEquals("MORE_INFORMATION_REQUIRED",service.mine(user).progress().status());
+        assertTrue(jdbc.queryForObject("SELECT count(*) FROM chef_onboarding_action_audit WHERE identity_id=?",Integer.class,user.identityId())>=3);
+    }
+    @Test void uploadRemovalIsOwnedVersionedAndPreservesHistory() {
+        save(ProofKind.PAN,null);photos();
+        var before=service.mine(user);var document=before.documents().getFirst();
+        assertThrows(ApiException.class,()->run(()->service.removeDocument(user,document.id(),before.version()-1)));
+        State removed=run(()->service.removeDocument(user,document.id(),before.version()));
+        assertFalse(removed.documents().stream().anyMatch(d->document.id().equals(d.id())));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM chef_onboarding_document_history WHERE document_id=? AND action='REMOVED'",Integer.class,document.id()));
+        assertThrows(ApiException.class,()->service.documentPreview(new CurrentUser(UUID.randomUUID(),"other","+919000000099",List.of("CUSTOMER")),document.id()));
     }
 
     @Test void contentIsPrivateUntilPublishedAndLanguageFilteringNeverPretendsTranslation() {

@@ -83,8 +83,19 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
   const approvedCount = REQUIREMENTS.filter(([type]) => documentByType.get(type)?.status === "APPROVED").length;
   const canReviewDocuments = item?.status === "PENDING" || item?.status === "APPROVED" && Boolean(onboarding && !onboarding.legacy && onboarding.submitted);
   const allApproved = documentsAvailable && (!onboardingV2Enabled || Boolean(onboarding)) &&
-    (!onboarding || onboarding.legacy || onboarding.submitted) && REQUIREMENTS.length > 0 && approvedCount === REQUIREMENTS.length;
+    (!onboarding || onboarding.legacy || onboarding.submitted && onboarding.progress?.fssaiVerified) && REQUIREMENTS.length > 0 && approvedCount === REQUIREMENTS.length;
 
+  async function onboardingAction(action:"START_REVIEW"|"REQUEST_INFORMATION"|"VERIFY_FSSAI") {
+    if(!onboarding || busy) return;
+    setBusy(true);setMessage("");
+    try {
+      const response=await adminFetch(`/api/admin/chef-onboarding/applications/${applicationId}/review`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expectedVersion:onboarding.version,action,reason:applicationReason,fssaiNumber:onboarding.details?.fssaiNumber})});
+      const data=await response.json().catch(()=>null) as {message?:string}|null;
+      if(!response.ok) throw new Error(data?.message??"Review action failed. Reload this application.");
+      await load();setApplicationReason("");setMessage("Review action saved.");
+    } catch(error) {setMessage(error instanceof Error?error.message:"Review action failed.");}
+    finally {setBusy(false);}
+  }
   async function decideApplication(action: "approve" | "reject") {
     if (action === "reject" && !applicationReason.trim()) {
       setMessage("A whole-application rejection reason is required.");
@@ -168,6 +179,11 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
       <p className="mt-3 text-sm">{onboarding.details.kitchenName} · Date of birth: {onboarding.details.dateOfBirth}</p>
       <p className="mt-2 text-sm">FSSAI number: {onboarding.details.fssaiNumber} · Preferred language: {onboarding.details.language}</p>
       <p className="mt-2 whitespace-pre-wrap text-sm">{onboarding.details.kitchenDescription}</p>
+      <p className="mt-3 text-sm">Review status: {onboarding.progress?.status} · FSSAI: {onboarding.progress?.fssaiVerified ? "Verified by reviewer" : "Verification required"}</p>
+      {onboarding.submitted && item.status!=="APPROVED" ? <div className="mt-4 space-y-3">
+        <label className="block text-sm">Correction reason or FSSAI verification evidence<textarea aria-label="Onboarding review evidence" className="mt-2 w-full rounded-xl border p-3" value={applicationReason} maxLength={2000} onChange={event=>setApplicationReason(event.target.value)} /></label>
+        <div className="flex flex-wrap gap-3"><button disabled={busy} onClick={()=>void onboardingAction("START_REVIEW")}>Start review</button><button disabled={busy || applicationReason.trim().length<3} onClick={()=>void onboardingAction("REQUEST_INFORMATION")}>Request information</button><button disabled={busy || applicationReason.trim().length<3 || onboarding.progress?.fssaiVerified} onClick={()=>void onboardingAction("VERIFY_FSSAI")}>Record verified FSSAI number</button></div>
+      </div> : null}
     </section> : null}
 
     <section className="rounded-[30px] bg-white p-6 text-slate-950 sm:p-8">

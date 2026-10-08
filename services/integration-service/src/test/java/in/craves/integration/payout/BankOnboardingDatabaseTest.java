@@ -25,16 +25,19 @@ class BankOnboardingDatabaseTest {
     BankApplicantClient identities;
     RazorpayBankValidationClient provider;
     BankDataCipher cipher;
+    in.craves.integration.payout.bank.IfscLookupClient branches;
     UUID application=UUID.randomUUID();
     @BeforeEach void setup() throws Exception {
         f=new ChefPayoutDatabaseTest();f.setup();
         identities=mock(BankApplicantClient.class);provider=mock(RazorpayBankValidationClient.class);
         when(provider.ready()).thenReturn(true);
+        branches=mock(in.craves.integration.payout.bank.IfscLookupClient.class);
+        when(branches.lookup(anyString())).thenReturn(new in.craves.integration.payout.bank.IfscLookupClient.Branch("HDFC0000053","HDFC Bank","Test branch"));
         when(identities.fetch(f.chef.identityId())).thenReturn(identity("APPROVED"));
         String key=Base64.getEncoder().encodeToString(new byte[32]);
         cipher=new BankDataCipher(f.json,"test","{\"test\":\""+key+"\"}");
         banks=new BankOnboardingService(f.jdbc,cipher,identities,provider,
-                new DataSourceTransactionManager(f.jdbc.getDataSource()),true);
+                new DataSourceTransactionManager(f.jdbc.getDataSource()),branches,true);
         banks.configure(f.admin,new BankOnboardingService.ControlChange(0,true,true,10,"Isolated test configuration only"));
     }
     Identity identity(String status) {return new Identity(f.chef.identityId(),application,"Test Chef","chef@example.invalid","+919000000001",status,Instant.now());}
@@ -150,7 +153,7 @@ class BankOnboardingDatabaseTest {
         assertEquals(1,f.count("finance_bank_request"));
     }
     @Test void missingWorkerDisablesSubmissionEvenWhenProviderConfigured() {
-        var stopped=new BankOnboardingService(f.jdbc,cipher,identities,provider,new DataSourceTransactionManager(f.jdbc.getDataSource()),false);
+        var stopped=new BankOnboardingService(f.jdbc,cipher,identities,provider,new DataSourceTransactionManager(f.jdbc.getDataSource()),branches,false);
         assertFalse(stopped.status(f.chef).automaticActivation());assertThrows(RuntimeException.class,()->stopped.submit(f.chef,request(UUID.randomUUID(),null,"001234567890")));
         assertEquals(0,f.count("finance_bank_request"));verifyNoInteractions(identities);
     }

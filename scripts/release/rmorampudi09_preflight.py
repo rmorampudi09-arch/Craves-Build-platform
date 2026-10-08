@@ -80,6 +80,11 @@ def compare_history(rows, expected):
         require(expected["15"]["script"] == "V15__chef_onboarding_all_chefs_selected_proof.sql", "Incorrect V15 source")
         require("14" in expected, "V15 requires V14 source")
         approved.add("15")
+    if "16" in expected:
+        require(expected["16"]["script"] == "V16__chef_onboarding_submission_contract.sql", "Incorrect V16 source")
+        require("15" in expected, "V16 requires V15 source")
+        approved.add("16")
+    require(not ("16" in versions and "15" not in versions), "V16 cannot precede V15")
     require(pending <= approved and "12" in versions,
             "Only approved V13/V14 may be pending after V12")
     require(not ("14" in versions and "13" not in versions), "V14 cannot precede V13")
@@ -90,6 +95,8 @@ def compare_history(rows, expected):
         result["v14"] = "PENDING" if "14" in pending else "APPLIED_MATCHING"
     if "15" in expected:
         result["v15"] = "PENDING" if "15" in pending else "APPLIED_MATCHING"
+    if "16" in expected:
+        result["v16"] = "PENDING" if "16" in pending else "APPLIED_MATCHING"
     return result
 
 

@@ -61,8 +61,8 @@ XML
 }
 CHEF=craves-chef-onboarding-v2
 ADMIN=craves-chef-onboarding-backoffice-v2
-configure_api "$CHEF" "api/v1/chef/onboarding" "Craves Chef Onboarding"
-configure_api "$ADMIN" "api/v1/backoffice/chef-onboarding" "Craves Chef Onboarding Backoffice"
+configure_api "$CHEF" "api/v1/chef/onboarding" "Craves Chef Onboarding v2"
+configure_api "$ADMIN" "api/v1/backoffice/chef-onboarding" "Craves Chef Onboarding Backoffice v2"
 operation "$CHEF" state GET / /api/v1/chef/onboarding
 operation "$CHEF" save PUT / /api/v1/chef/onboarding
 operation "$CHEF" submit POST /submit /api/v1/chef/onboarding/submit

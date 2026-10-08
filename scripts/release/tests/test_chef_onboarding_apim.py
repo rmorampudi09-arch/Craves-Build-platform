@@ -45,9 +45,11 @@ class ChefOnboardingApimTests(unittest.TestCase):
     def test_unique_names_bootstrap_and_partial_retry_preserve_scoped_routes(self):
         self.assertIsNotNone(shutil.which("jq"), "jq is required by the deployment script")
         chef = {"id": "craves-chef-onboarding-v2", "path": "api/v1/chef/onboarding",
-                "displayName": "Craves Chef Onboarding"}
-        for existing in ([], [chef]):
-            with self.subTest(existing_chef=bool(existing)), tempfile.TemporaryDirectory() as directory:
+                "displayName": "Craves Chef Onboarding v2"}
+        legacy = {"id": "craves-chef-onboarding", "path": "api/v1/chef-onboarding",
+                  "displayName": "Craves Chef Onboarding"}
+        for existing in ([], [chef], [legacy], [legacy, chef]):
+            with self.subTest(existing=existing), tempfile.TemporaryDirectory() as directory:
                 folder = Path(directory)
                 state = folder / "state.json"
                 state.write_text(json.dumps({"apis": existing, "writes": []}))
@@ -60,10 +62,13 @@ class ChefOnboardingApimTests(unittest.TestCase):
                          "CONFIRM_APIM_WRITE": "true", "MOCK_APIM_STATE": str(state)}, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 actual = json.loads(state.read_text())
-                self.assertEqual(len(actual["apis"]), 2)
-                self.assertEqual(len({api["displayName"] for api in actual["apis"]}), 2)
-                self.assertEqual({api["path"] for api in actual["apis"]},
+                scoped = [api for api in actual["apis"] if api["id"].endswith("-v2")]
+                self.assertEqual(len(scoped), 2)
+                self.assertEqual(len({api["displayName"] for api in actual["apis"]}), len(actual["apis"]))
+                self.assertEqual({api["path"] for api in scoped},
                     {"api/v1/chef/onboarding", "api/v1/backoffice/chef-onboarding"})
+                if legacy in existing:
+                    self.assertIn(legacy, actual["apis"])
                 operations = [write for write in actual["writes"] if "/policies/" not in write["url"]]
                 policies = [write for write in actual["writes"] if "/policies/" in write["url"]]
                 self.assertEqual(len(operations), 14)

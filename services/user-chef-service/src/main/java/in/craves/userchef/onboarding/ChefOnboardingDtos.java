@@ -16,17 +16,22 @@ public final class ChefOnboardingDtos {
         String kitchenName, String kitchenDescription,
         String addressLine1, String addressLine2, String landmark, String city, String state,
         String postalCode, BigDecimal latitude, BigDecimal longitude,
-        ProofKind proofKind, String otherGovernmentId, String fssaiNumber, String language
+        ProofKind proofKind, String otherGovernmentId, String fssaiNumber, String language,
+        /** Other government ID only: false means the document has no back side. Null keeps the back side required. */
+        Boolean proofHasBack
     ) {}
     public record SaveRequest(Long expectedVersion, Details details) {}
     public record State(
         boolean enabled, boolean legacy, long version, String resumeStep, boolean submitted,
         String phoneNumber, Details details, ChefApplicationResponse application,
         List<KycDocumentResponse> documents, List<String> requiredDocuments,
-        String supportPhone, String supportEmail, ReviewProgress progress, boolean bankEnrollmentRequired
+        String supportPhone, String supportEmail, ReviewProgress progress, boolean bankEnrollmentRequired,
+        CallbackRequest callbackRequest
     ) {}
-    public record ReviewProgress(String status,String reason,String nextAction,boolean fssaiVerified,String termsVersion) {}
-    public record ReviewAction(Long expectedVersion,String action,String reason,String fssaiNumber) {}
+    /** The applicant's latest FSSAI callback request, so its status survives a reload. */
+    public record CallbackRequest(String caseNumber, String status, Instant requestedAt) {}
+    public record ReviewProgress(String status,String reason,String nextAction,boolean fssaiVerified,String termsVersion,List<String> sections) {}
+    public record ReviewAction(Long expectedVersion,String action,String reason,String fssaiNumber,List<String> sections) {}
     public record HelpRequest(UUID requestKey, String message) {}
     public record Help(
         UUID id, String caseNumber, UUID supportCaseId, UUID identityId, Details details,

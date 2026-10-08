@@ -53,7 +53,7 @@ export function AdminChefOnboardingContent() {
   return <div className="space-y-6">
     <section className="rounded-[30px] bg-white p-6 text-slate-950">
       <h2 className="text-2xl font-bold">FSSAI learning articles and videos</h2>
-      <p className="mt-3 text-sm text-slate-600">Create content in the selected language. Only published content appears in Chef onboarding.</p>
+      <p className="mt-3 text-sm text-slate-600">Create content in the selected language. Only published content appears in Chef onboarding. When a chef’s language has nothing published, the app shows the published English content and says so.</p>
       <form className="mt-5 space-y-4" onSubmit={event=>{event.preventDefault();void work(create);}}>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-bold">Language<select aria-label="Content language" value={language} disabled={busy} className={input} onChange={event=>setLanguage(event.target.value)}>

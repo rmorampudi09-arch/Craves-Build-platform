@@ -9,6 +9,7 @@ import { parseCustomerProfile } from "@/lib/profile-contract";
 import {
   EMPTY_ONBOARDING,
   parseOnboardingState,
+  type CallbackRequest,
   type OnboardingDetails,
   type OnboardingState,
 } from "@/lib/chef-onboarding-v2-contract";
@@ -16,6 +17,7 @@ import {
   afterSectionSave,
   bankCanContinue,
   activeChefSections,
+  correctionSections,
   firstIncompleteSection,
   validateChefSection,
   type ChefFieldError,
@@ -84,7 +86,9 @@ export function useChefOnboarding() {
     [notice, setNotice] = useState("");
   const [fromReview, setFromReview] = useState(false),
     [terms, setTerms] = useState(false),
-    [callbackCase, setCallbackCase] = useState("");
+    [callback, setCallback] = useState<CallbackRequest | null>(null);
+  // An open or contacted request blocks a duplicate; a resolved one lets the applicant ask again.
+  const callbackCase = callback && callback.status !== "RESOLVED" ? callback.caseNumber : "";
   const [fssaiGuide, setFssaiGuideState] = useState(false);
   const currentState = useRef(state),
     currentDetails = useRef(details),
@@ -153,6 +157,7 @@ export function useChefOnboarding() {
       }
       currentState.current = next;
       setState(next);
+      setCallback(next.callbackRequest ?? null);
       setSignedOut(false);
       setUnavailable(false);
       let nextDetails = next.details ?? { ...EMPTY_ONBOARDING };
@@ -325,6 +330,12 @@ export function useChefOnboarding() {
     setError("");
     setNotice("");
   }
+  /** The first section a reviewer flagged, otherwise the first incomplete one. */
+  function nextCorrection(): ChefFormSection | "review" {
+    const saved = currentState.current;
+    if (!saved) return "personal";
+    return correctionSections(saved)[0] ?? firstIncompleteSection(saved, bank);
+  }
   function edit(section: ChefFormSection) {
     setFromReview(true);
     go(section);
@@ -468,7 +479,8 @@ export function useChefOnboarding() {
         throw new Error(
           "Your callback request could not be confirmed. Retry to check the same request.",
         );
-      if (current()) setCallbackCase(result.caseNumber);
+      if (current())
+        setCallback({ caseNumber: result.caseNumber, status: "OPEN", requestedAt: new Date().toISOString() });
     });
   }
   function savedBank(next: BankStatus) {
@@ -533,6 +545,8 @@ export function useChefOnboarding() {
     terms,
     setTerms,
     callbackCase,
+    callback,
+    nextCorrection,
     fssaiGuide,
     setFssaiGuide,
     continueWithoutFssai,

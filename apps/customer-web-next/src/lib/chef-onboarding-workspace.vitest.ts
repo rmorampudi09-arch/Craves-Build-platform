@@ -139,3 +139,35 @@ it("uses the number-only FSSAI form without offering a certificate or selfie upl
   expect(screen.getByLabelText("FSSAI registration number")).toBeTruthy();
   expect(screen.queryByLabelText(/certificate|licence document|selfie/i)).toBeNull();
 });
+it("preserves an unsaved language choice after a failed save and confirms only a successful retry", async () => {
+  let failSave = true;
+  const saveBodies: unknown[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, options?: RequestInit) => {
+      if (options?.method === "PUT") {
+        const body = JSON.parse(String(options.body));
+        saveBodies.push(body);
+        if (failSave) return Response.json({ message: "Save is temporarily unavailable." }, { status: 503 });
+        return Response.json({ ...state, version: 2, details: body.details });
+      }
+      return Response.json(url.includes("/content") ? [] : state);
+    }),
+  );
+  mount();
+  await resume();
+  fireEvent.click(screen.getByRole("button", { name: "Don’t have FSSAI?" }));
+  fireEvent.change(screen.getByLabelText("Preferred language"), { target: { value: "te" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save progress for later" }));
+  expect((await screen.findByRole("alert")).textContent).toContain("Save is temporarily unavailable.");
+  expect(screen.queryByText("Your progress is saved. Add your FSSAI number when you are ready.")).toBeNull();
+  expect((screen.getByLabelText("Preferred language") as HTMLSelectElement).value).toBe("te");
+  failSave = false;
+  fireEvent.click(screen.getByRole("button", { name: "Save progress for later" }));
+  await screen.findByText("Your progress is saved. Add your FSSAI number when you are ready.");
+  expect(saveBodies).toHaveLength(2);
+  expect(saveBodies).toEqual([
+    expect.objectContaining({ expectedVersion: 1, details: expect.objectContaining({ language: "te" }) }),
+    expect.objectContaining({ expectedVersion: 1, details: expect.objectContaining({ language: "te" }) }),
+  ]);
+});

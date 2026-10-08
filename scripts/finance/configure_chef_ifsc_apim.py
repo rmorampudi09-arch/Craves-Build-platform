@@ -48,6 +48,28 @@ def check_operations(base, operations, complete=False):
         if len(params)!=1 or any(params[0].get(k)!=v for k,v in PARAM.items()): raise GuardError('IFSC parameter differs')
         if pages(url(base,'/operations/ifsc-get/policies')): raise GuardError('Unexpected IFSC operation policy')
 
+def check_policies(existing, policies, expected, backend):
+    """Allow only the exact known rawxml encoding defect on a still-gated owned API."""
+    if len(policies)>1: raise GuardError('Unexpected IFSC policies')
+    expected_structure=policy_structure(expected)
+    legacy=ET.fromstring(expected)
+    for node, attribute in ((legacy.find('./inbound/choose/when'),'condition'),
+                            (legacy.find('./inbound/rewrite-uri'),'template')):
+        node.set(attribute,node.get(attribute).replace('"','&quot;'))
+    legacy_structure=policy_structure(ET.tostring(legacy,encoding='unicode'))
+    for item in policies:
+        actual=policy_structure(item['properties'].get('value'))
+        if actual==expected_structure: continue
+        props=(existing or {}).get('properties',{})
+        if (props.get('subscriptionRequired') is not True or props.get('serviceUrl')!=backend
+                or props.get('protocols')!=['https'] or actual!=legacy_structure):
+            raise GuardError('Existing IFSC policy differs')
+
+def publish_policy(api_base, expected):
+    # ElementTree encodes quotes in expressions. APIM xml decodes those entities;
+    # rawxml instead retains them inside the expression and breaks its semantics.
+    put(url(api_base,'/policies/policy'),{'properties':{'format':'xml','value':expected}})
+
 def check_api(base,backend,subscription):
     item=az('rest','--method','get','--url',url(base,''),'--headers','Accept=application/json')
     check_owner([item]);props=item['properties']
@@ -72,7 +94,7 @@ def main(argv=None):
     policies=pages(url(api_base,'/policies')) if existing else []
     privacy_guard(policies,pages(url(api_base,'/diagnostics')) if existing else [])
     expected=policy(backend)
-    if any(policy_structure(p['properties'].get('value'))!=policy_structure(expected) for p in policies): raise GuardError('Existing IFSC policy differs')
+    check_policies(existing,policies,expected,backend)
     check_operations(api_base,pages(url(api_base,'/operations')) if existing else [])
     Path(args.output).write_text(json.dumps({'sourceSha':sha,'mode':'APPLY' if args.apply else 'PLAN_ONLY','api':API,'path':PATH,'backend':backend,'existingBankApisChanged':False},indent=2)+'\n')
     if not args.apply: return
@@ -80,7 +102,7 @@ def main(argv=None):
     properties={'path':PATH,'displayName':API,'description':OWNER,'serviceUrl':backend,'protocols':['https'],'subscriptionRequired':True}
     if not existing: put(url(api_base,''),{'properties':properties},create=True)
     put(url(api_base,'/operations/ifsc-get'),{'properties':{'displayName':'Authenticated IFSC lookup','method':'GET','urlTemplate':'/{ifsc}','templateParameters':[PARAM],'responses':[]}})
-    put(url(api_base,'/policies/policy'),{'properties':{'format':'rawxml','value':expected}})
+    publish_policy(api_base,expected)
     check_api(api_base,backend,True if not existing else existing['properties']['subscriptionRequired'])
     check_operations(api_base,pages(url(api_base,'/operations')),complete=True)
     actual=pages(url(api_base,'/policies'))

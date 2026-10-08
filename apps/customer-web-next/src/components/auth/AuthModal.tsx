@@ -202,7 +202,6 @@ export function AuthModal({
     if (firstName.trim().length < 2)
       return "Enter your first name using at least two characters.";
     if (lastName.trim().length < 1) return "Enter your last name.";
-    if (isChef && !email.trim()) return "Enter an email address for your chef account.";
     if (email.trim() && !verificationEmail.safeParse(email).success)
       return "Enter a valid email address or leave it blank.";
     return null;
@@ -216,7 +215,7 @@ export function AuthModal({
       setError("Enter a valid 10-digit mobile number.");
       return;
     }
-    if (mode === "register") {
+    if (mode === "register" && !isChef) {
       const validationError = validateRegistration();
       if (validationError) {
         setError(validationError);
@@ -309,7 +308,7 @@ export function AuthModal({
       finally { ownIdentityInstall.current = false; }
       context = captureSessionContext();
 
-      if (mode === "register") {
+      if (mode === "register" && !isChef) {
         const profileResponse = await fetch("/api/customer/profile", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -340,7 +339,7 @@ export function AuthModal({
       }
       if (!currentAttempt() || !isSessionReady()) return;
 
-      if (mode === "register" || (isChef && !user.emailVerified)) {
+      if (mode === "register" && !isChef) {
         clearVerifier();
         confirmation.current = null;
         setOtp("");
@@ -526,7 +525,7 @@ export function AuthModal({
             onSubmit={otpSent ? handleVerify : handleGenerateOtp}
             className="mt-6 space-y-4"
           >
-            {mode === "register" && !otpSent && (
+            {mode === "register" && !isChef && !otpSent && (
               <div className="grid gap-4 sm:grid-cols-2">
                 <label
                   htmlFor={`${fieldPrefix}-first-name`}
@@ -565,7 +564,7 @@ export function AuthModal({
               </div>
             )}
 
-            {mode === "register" && !otpSent && (
+            {mode === "register" && !isChef && !otpSent && (
               <label
                 htmlFor={`${fieldPrefix}-email`}
                 className="block text-sm font-semibold text-ink"

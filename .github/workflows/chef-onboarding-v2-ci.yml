@@ -1,0 +1,108 @@
+name: Chef onboarding v2 CI
+on:
+  pull_request:
+    paths:
+      - 'services/user-chef-service/**'
+      - 'apps/customer-web-next/**'
+      - 'scripts/apim/configure-chef-onboarding-v2-apim.sh'
+      - '.github/workflows/chef-onboarding-v2-ci.yml'
+  push:
+    branches: ['feat/chef-onboarding-v2-20261008']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: chef-onboarding-v2-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: chef_onboarding_test
+          POSTGRES_USER: onboarding_ci
+          POSTGRES_PASSWORD: disposable-onboarding-ci-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U onboarding_ci -d chef_onboarding_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      ONBOARDING_TEST_DB_URL: jdbc:postgresql://localhost:5432/chef_onboarding_test
+      ONBOARDING_TEST_DB_USER: onboarding_ci
+      ONBOARDING_TEST_DB_PASSWORD: disposable-onboarding-ci-only
+      CRAVES_DISPOSABLE_TEST_DATABASE: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/user-chef-service/pom.xml
+      - run: bash -n scripts/apim/configure-chef-onboarding-v2-apim.sh
+      - run: mvn -B -ntp -f services/user-chef-service/pom.xml clean verify
+      - name: Require the new database suite to run without skips
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          path = Path('services/user-chef-service/target/surefire-reports/TEST-in.craves.userchef.onboarding.ChefOnboardingDatabaseTest.xml')
+          root = ET.parse(path).getroot()
+          assert int(root.attrib['tests']) >= 6
+          assert all(int(root.attrib.get(key, '0')) == 0 for key in ['failures', 'errors', 'skipped'])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chef-onboarding-backend-evidence
+          path: services/user-chef-service/target/surefire-reports
+          retention-days: 14
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run: {working-directory: apps/customer-web-next}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/customer-web-next/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+        env:
+          CRAVES_CHEF_ONBOARDING_V2_ENABLED: 'true'
+  package:
+    runs-on: ubuntu-latest
+    needs: [backend,web]
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0,persist-credentials: false}
+      - name: Package complete changed files and handover
+        run: |
+          python3 - <<'PY'
+          import pathlib, subprocess, zipfile, json
+          base='a79d0d83de730715597956d82da9970b78323152'
+          files=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          files=[path for path in files if pathlib.Path(path).is_file()]
+          pathlib.Path('chef-onboarding-manifest.json').write_text(json.dumps({'base':base,'head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'files':files},indent=2))
+          with zipfile.ZipFile('Craves-Chef-Onboarding-V2.zip','w',zipfile.ZIP_DEFLATED) as archive:
+              for path in files: archive.write(path,path)
+              archive.write('chef-onboarding-manifest.json')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Craves-Chef-Onboarding-V2
+          path: |
+            Craves-Chef-Onboarding-V2.zip
+            chef-onboarding-manifest.json
+          retention-days: 30

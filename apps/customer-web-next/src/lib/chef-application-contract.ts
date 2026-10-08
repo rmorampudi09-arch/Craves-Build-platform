@@ -4,7 +4,10 @@ export type ChefDocumentType =
   | "GOVERNMENT_ID_BACK"
   | "TAX_ID_CARD"
   | "AADHAAR_CARD"
-  | "PAN_CARD";
+  | "PAN_CARD"
+  | "KITCHEN_PHOTO_1"
+  | "KITCHEN_PHOTO_2"
+  | "FSSAI_LICENSE";
 export type ChefApplicationStatus = "NOT_SUBMITTED" | "PENDING" | "APPROVED" | "REJECTED";
 
 export type ChefProofDocument = {
@@ -61,6 +64,9 @@ const DOCUMENT_TYPES = new Set<ChefDocumentType>([
   "TAX_ID_CARD",
   "AADHAAR_CARD",
   "PAN_CARD",
+  "KITCHEN_PHOTO_1",
+  "KITCHEN_PHOTO_2",
+  "FSSAI_LICENSE",
 ]);
 
 function text(value: unknown, max: number): string | null {

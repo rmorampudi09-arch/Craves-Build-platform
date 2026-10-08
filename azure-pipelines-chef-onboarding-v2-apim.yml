@@ -1,0 +1,21 @@
+trigger: none
+pr: none
+parameters:
+  - name: confirmConfigureChefOnboarding
+    type: boolean
+    default: false
+pool:
+  vmImage: ubuntu-latest
+steps:
+  - checkout: self
+  - script: bash -n scripts/apim/configure-chef-onboarding-v2-apim.sh
+    displayName: Validate scoped APIM script
+  - task: AzureCLI@2
+    condition: and(succeeded(), eq('${{ parameters.confirmConfigureChefOnboarding }}', 'True'))
+    displayName: Configure chef onboarding routes
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        CONFIRM_APIM_WRITE=true bash scripts/apim/configure-chef-onboarding-v2-apim.sh

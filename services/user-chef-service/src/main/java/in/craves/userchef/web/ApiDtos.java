@@ -34,7 +34,10 @@ public final class ApiDtos {
         GOVERNMENT_ID_BACK,
         TAX_ID_CARD,
         AADHAAR_CARD,
-        PAN_CARD
+        PAN_CARD,
+        KITCHEN_PHOTO_1,
+        KITCHEN_PHOTO_2,
+        FSSAI_LICENSE
     }
 
     public record CustomerProfileRequest(

@@ -11,6 +11,9 @@ const ALLOWED_TYPES = new Set([
   "GOVERNMENT_ID_FRONT",
   "GOVERNMENT_ID_BACK",
   "TAX_ID_CARD",
+  "KITCHEN_PHOTO_1",
+  "KITCHEN_PHOTO_2",
+  "FSSAI_LICENSE",
 ]);
 const ALLOWED_CONTENT_TYPES = new Set([
   "application/pdf",
@@ -36,7 +39,7 @@ const UPLOAD_ERRORS: Record<string, string> = {
   DOCUMENT_UPLOAD_FAILED: "Craves could not store your document. Please try again later or contact support.",
   DOCUMENT_UPLOAD_UNAVAILABLE: "Craves document storage is temporarily unavailable. Please try again later.",
   CHEF_APPLICATION_REQUIRED: "Save your Chef application details before uploading identity documents.",
-  CHEF_DOCUMENT_TYPE_NOT_ALLOWED: "Choose one of the four supported Chef identity documents.",
+  CHEF_DOCUMENT_TYPE_NOT_ALLOWED: "Choose one of the documents required for your saved Chef application.",
   CHEF_DOCUMENT_ALREADY_APPROVED: "This document is already approved and cannot be replaced.",
   CHEF_ALREADY_APPROVED: "Your Chef application is approved, so its documents cannot be replaced.",
 };
@@ -68,7 +71,7 @@ export async function POST(request: NextRequest) {
   if (!ALLOWED_CONTENT_TYPES.has(file.type) || file.size < 1 || file.size > MAX_FILE_BYTES) {
     return NextResponse.json({ code: "INVALID_PROOF_FILE" }, { status: 400 });
   }
-  if (documentType === "APPLICANT_PHOTO" && !PHOTO_CONTENT_TYPES.has(file.type)) {
+  if (["APPLICANT_PHOTO", "KITCHEN_PHOTO_1", "KITCHEN_PHOTO_2"].includes(documentType) && !PHOTO_CONTENT_TYPES.has(file.type)) {
     return NextResponse.json({ code: "INVALID_APPLICANT_PHOTO" }, { status: 400 });
   }
 

@@ -8,7 +8,7 @@ The implementation is confined to `apps/customer-web-next` and this module's doc
 
 | Area | Result |
 | --- | --- |
-| Entry | Chef registration asks for phone OTP first. It reuses the authenticated identity and skips a customer-profile registration write. Customer registration keeps its existing fields and optional email flow. |
+| Entry | Chef registration asks for phone OTP first in both the shared application modal and the standalone landing popup. Both reuse the authenticated identity and skip a customer-profile registration write for chefs. Customer registration keeps its existing fields and optional email flow. |
 | Popup | Existing Radix dialog primitives; centered desktop modal, mobile bottom sheet, locked background scrolling, keyboard focus trap, red/white/neutral palette, Plus Jakarta Sans, 56px controls, sticky footer, reduced motion and visible focus. No stepper. |
 | Basic details | One full-name field, backend-compatible DOB, verified phone, existing authoritative email verification. No selfie. |
 | Kitchen | Name and optional description, map before address fields, search/current location/map movement with reverse geocoding, editable address and exactly two named photo slots. No type, cuisine or radius input. |
@@ -36,6 +36,8 @@ The implementation is confined to `apps/customer-web-next` and this module's doc
 | `components/chef-access-boundary.tsx` | Fresh application approval and current session/role gate |
 | `components/auth/AuthModal.tsx` | Phone-first chef entry; customer flow retained |
 | `components/auth/EmailVerificationPanel.tsx` | Required versus optional email label |
+| `landing-auth/AuthModal.tsx`, `landing-auth/entry.tsx` | Phone-only Chef registration in the standalone landing popup; customer name capture remains in customer mode |
+| `lib/landing-customer-auth.vitest.ts` | Customer compatibility and landing Chef OTP-to-application integration without a customer profile write |
 | `lib/chef-onboarding-flow.ts` | Completion, navigation and field validation rules |
 | `lib/chef-onboarding-v2-contract.ts` | Existing state parser with safe null normalization |
 | `lib/chef-onboarding-bff.ts`, `lib/chef-onboarding-route-policy.ts` | Allowlisted same-origin authenticated proxy, bounded JSON and private responses |
@@ -69,7 +71,7 @@ The code checks valid calendar DOB in the supported backend range, a complete fi
 
 Rendered regressions cover all five Review edit/save paths, restoration/first-incomplete resume, failed-save receipts, unverified email, reverse-geocode failure, callback failure/retry keys, number-only FSSAI rejection from the backend, duplicate submission, masked bank re-entry/retry and stale-role pending access. BFF checks cover cross-origin requests, bounded JSON/route rejection, safe upstream failures and no-store private responses. Existing customer/auth/session tests are retained and updated for the requested chef entry behavior.
 
-Local verification on 8 October 2026: `npm run verify` completed successfully with zero-warning ESLint, TypeScript, 52 Vitest files / 657 tests, 373 Node tests, approved landing-media integrity checks and the production Next.js build. These 1,030 cases include a sixth onboarding workspace case covering a failed save, preserved language selection and confirmed retry; five leap-year/impossible-calendar DOB cases; and service-error and network-error access retries. The release reporting adapter also validates each required file's minimum executed case count. Final CI links belong in the PR and release handover. Mocked component tests verify frontend behavior and contract handling; they do not establish that production backend activation or provider processing succeeds.
+Local verification on 8 October 2026: `npm run verify` completed successfully with zero-warning ESLint, TypeScript, 52 Vitest files / 658 tests, 373 Node tests, approved landing-media integrity checks and the production Next.js build. These 1,031 cases include a sixth onboarding workspace case covering a failed save, preserved language selection and confirmed retry; five leap-year/impossible-calendar DOB cases; landing Chef signup through OTP without customer-profile creation; and service-error and network-error access retries. The release reporting adapter also validates each required file's minimum executed case count. Final CI links belong in the PR and release handover. Mocked component tests verify frontend behavior and contract handling; they do not establish that production backend activation or provider processing succeeds.
 
 ## Local setup and checks
 

@@ -156,12 +156,26 @@ public class ChefOnboardingService {
             throw ApiException.badRequest("CHEF_TERMS_REQUIRED","Accept the current Chef Terms before submitting.");
         Long expectedVersion=request.expectedVersion();
         var draft=find(user.identityId(),true);
+        if(draft!=null && draft.submitted() && !"MORE_INFORMATION_REQUIRED".equals(draft.reviewStatus()) &&
+            expectedVersion!=null && TERMS_VERSION.equals(draft.termsVersion())) {
+            Long submittedVersion=jdbc.queryForObject("SELECT max(version) FROM chef_onboarding_action_audit WHERE identity_id=? AND action='SUBMITTED'",Long.class,user.identityId());
+            if(submittedVersion!=null && expectedVersion==submittedVersion-1) return mine(user);
+        }
         if(draft==null || expectedVersion==null || expectedVersion!=draft.version())
             throw ApiException.conflict("ONBOARDING_VERSION_CHANGED","Reload your application before submitting.");
         var state=mine(user);
         if(state.legacy()) throw ApiException.conflict("CHEF_EXISTING_APPLICATION","Use your existing Chef application.");
         ChefOnboardingPolicy.validate(draft.details());
         auth.requireVerifiedEmail(user.identityId(),draft.details().email());
+        var details=draft.details();
+        var application=state.application();
+        if(application.id()==null || !Objects.equals(details.firstName(),application.firstName()) ||
+            !Objects.equals(details.lastName(),application.lastName()) || !Objects.equals(details.email(),application.email()) ||
+            !Objects.equals(details.addressLine1(),application.addressLine1()) || !Objects.equals(details.addressLine2(),application.addressLine2()) ||
+            !Objects.equals(details.landmark(),application.landmark()) || !Objects.equals(details.city(),application.city()) ||
+            !Objects.equals(details.state(),application.state()) || !Objects.equals(details.postalCode(),application.postalCode()) ||
+            !sameCoordinate(details.latitude(),application.latitude()) || !sameCoordinate(details.longitude(),application.longitude()))
+            throw ApiException.conflict("ONBOARDING_DETAILS_NOT_CONFIRMED","Save your completed application before submitting.");
         if(!"review".equals(ChefOnboardingPolicy.resume(draft.details(),state.documents(),false)))
             throw ApiException.conflict("ONBOARDING_INCOMPLETE","Complete the kitchen photos, FSSAI number and selected proof before submitting.");
         if(!state.submitted()) {
@@ -282,6 +296,9 @@ public class ChefOnboardingService {
         try { return json.writeValueAsString(value); }
         catch(Exception e) { throw new IllegalStateException("Cannot encode onboarding details"); }
     }
+    private static boolean sameCoordinate(java.math.BigDecimal left,java.math.BigDecimal right) {
+        return left==null ? right==null : right!=null && left.compareTo(right)==0;
+    }
     private static String trim(String value) { return value==null || value.isBlank()?null:value.trim(); }
     private void requireEnabled() {
         if(!enabled) throw ApiException.notFound("ONBOARDING_NOT_ENABLED","The new Chef onboarding flow is not enabled.");
@@ -344,6 +361,11 @@ public class ChefOnboardingService {
     public State removeDocument(CurrentUser user,UUID id,Long expectedVersion) {
         requireEnabled();requireApplicant(user);lock(user);
         var draft=find(user.identityId(),true);
+        if(draft!=null && draft.submitted() && !"MORE_INFORMATION_REQUIRED".equals(draft.reviewStatus()) &&
+            expectedVersion!=null && TERMS_VERSION.equals(draft.termsVersion())) {
+            Long submittedVersion=jdbc.queryForObject("SELECT max(version) FROM chef_onboarding_action_audit WHERE identity_id=? AND action='SUBMITTED'",Long.class,user.identityId());
+            if(submittedVersion!=null && expectedVersion==submittedVersion-1) return mine(user);
+        }
         if(draft==null || expectedVersion==null || expectedVersion!=draft.version())
             throw ApiException.conflict("ONBOARDING_VERSION_CHANGED","Reload your saved application before removing an upload.");
         if(draft.submitted() && !"MORE_INFORMATION_REQUIRED".equals(draft.reviewStatus()))

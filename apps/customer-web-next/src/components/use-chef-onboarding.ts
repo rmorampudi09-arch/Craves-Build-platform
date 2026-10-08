@@ -421,7 +421,7 @@ export function useChefOnboarding() {
   async function submit() {
     await work(async () => {
       if (!terms) throw new Error("Accept the terms before submitting your application.");
-      const saved = dirty ? await persist() : currentState.current;
+      const saved = await persist();
       if (!saved) throw new Error("Reload your saved application.");
       const incomplete = firstIncompleteSection(saved, bank);
       if (incomplete !== "review") {

@@ -40,7 +40,7 @@ class SharedChefFinanceMigrationDatabaseTest {
         long revision=jdbc.queryForObject("SELECT revision FROM payment_schema.finance_policy_head",Long.class);
         int deliveryChecksum=jdbc.queryForObject("SELECT checksum FROM payment_schema.flyway_schema_history WHERE version='147'",Integer.class);
         assertEquals(-837191910,deliveryChecksum);
-        var migration=migration(null);assertEquals(1,migration.migrate().migrationsExecuted);migration.validate();assertEquals(0,migration.migrate().migrationsExecuted);
+        var migration=migration(null);assertEquals(2,migration.migrate().migrationsExecuted);migration.validate();assertEquals(0,migration.migrate().migrationsExecuted);
         assertEquals(deliveryChecksum,jdbc.queryForObject("SELECT checksum FROM payment_schema.flyway_schema_history WHERE version='147'",Integer.class));
         assertEquals("0.000000",jdbc.queryForObject("SELECT withholding_rate::text FROM payment_schema.finance_shared_chef_terms_version",String.class));
         var sources=jdbc.queryForObject("SELECT source_profile_ids::text FROM payment_schema.finance_shared_chef_terms_version",String.class);

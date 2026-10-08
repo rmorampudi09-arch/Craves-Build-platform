@@ -51,6 +51,10 @@ export function evidenceComplete(state: OnboardingState, type: string): boolean 
       document.documentType === type && ["UPLOADED", "APPROVED"].includes(document.status),
   );
 }
+export function sameChefBankName(left: string | null | undefined, right: string): boolean {
+  const normalize = (value: string) => value.normalize("NFKC").toUpperCase().replace(/[.\-'’]/g, " ").replace(/\s+/g, " ").trim();
+  return Boolean(left && normalize(left) === normalize(right));
+}
 export function bankCanContinue(bank: BankStatus | null): boolean {
   return Boolean(
     bank?.id &&
@@ -81,7 +85,7 @@ export function completedSections(
       evidenceComplete(state, "SELECTED_PROOF_FRONT") &&
       (!proofNeedsBack(d.proofKind) || evidenceComplete(state, "SELECTED_PROOF_BACK")),
     ),
-    bank: bankCanContinue(bank) && Boolean(bank?.accountHolderName && bank.accountHolderName.trim().toLowerCase() === chefFullName(d ?? {firstName:"",lastName:""}).trim().toLowerCase()),
+    bank: bankCanContinue(bank) && sameChefBankName(bank?.accountHolderName, chefFullName(d ?? {firstName:"",lastName:""})),
   };
 }
 export function firstIncompleteSection(
@@ -126,8 +130,8 @@ export function validateChefSection(
         field: "fullName",
         message: "Enter your full name, including your first and last name.",
       };
-    if (details.firstName.length > 100 || details.lastName.length > 100)
-      return { field: "fullName", message: "Keep each part of your name within 100 characters." };
+    if (chefFullName(details).length > 120 || details.firstName.length > 100 || details.lastName.length > 100)
+      return { field: "fullName", message: "Keep your full name within 120 characters." };
     const birthTimestamp = Date.parse(details.dateOfBirth);
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(details.dateOfBirth) ||

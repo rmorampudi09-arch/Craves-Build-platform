@@ -7,7 +7,7 @@ import {
   bankSubmissionSchema,
   type BankStatus,
 } from "@/lib/bank-onboarding-contract";
-import { bankCanContinue } from "@/lib/chef-onboarding-flow";
+import { bankCanContinue, sameChefBankName } from "@/lib/chef-onboarding-flow";
 
 type Props = {
   name: string;
@@ -132,7 +132,7 @@ export function ChefOnboardingBank({
       onSubmit={(event) => {
         event.preventDefault();
         if (busy || inFlight.current) return;
-        if (bankCanContinue(bank) && bank?.accountHolderName === name && !account && !confirmation && !ifsc) {
+        if (bankCanContinue(bank) && sameChefBankName(bank?.accountHolderName, name) && !account && !confirmation && !ifsc) {
           onSaved(bank!);
           return;
         }

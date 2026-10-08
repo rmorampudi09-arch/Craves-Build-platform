@@ -20,11 +20,13 @@ public class IfscLookupClient {
     private record Cached(Branch branch,Instant expires) {}
     private final RestClient client;
     private final ConcurrentHashMap<String,Cached> cache=new ConcurrentHashMap<>();
+    @org.springframework.beans.factory.annotation.Autowired
     public IfscLookupClient(RestClient.Builder builder) {
         var http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).followRedirects(HttpClient.Redirect.NEVER).build();
         var factory=new JdkClientHttpRequestFactory(http);factory.setReadTimeout(Duration.ofSeconds(5));
         client=builder.clone().requestFactory(factory).build();
     }
+    IfscLookupClient(RestClient client) { this.client=client; }
     public Branch lookup(String input) {
         String ifsc=input==null?"":input.trim().toUpperCase(Locale.ROOT);
         if(!ifsc.matches("[A-Z]{4}0[A-Z0-9]{6}")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Enter a valid IFSC code");

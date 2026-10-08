@@ -16,9 +16,20 @@ public class BankOnboardingController {
     private final ObjectMapper json;
     private final in.craves.integration.payout.bank.IfscLookupClient branches;
     public BankOnboardingController(BankOnboardingService service,ObjectMapper json,in.craves.integration.payout.bank.IfscLookupClient branches) {this.service=service;this.json=json;this.branches=branches;}
+    private record LookupWindow(long start,int count) {}
+    private final java.util.Map<java.util.UUID,LookupWindow> lookups=new java.util.HashMap<>();
+    private synchronized void allowLookup(java.util.UUID actor) {
+        long now=System.currentTimeMillis();
+        lookups.entrySet().removeIf(entry -> now-entry.getValue().start()>=60000);
+        var window=lookups.get(actor);
+        if(window==null && lookups.size()>=10000 || window!=null && window.count()>=20)
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,"Too many bank lookups. Retry in one minute.");
+        lookups.put(actor,window==null?new LookupWindow(now,1):new LookupWindow(window.start(),window.count()+1));
+    }
     @GetMapping("/api/v1/chef-onboarding/bank/ifsc/{ifsc}")
     public ResponseEntity<in.craves.integration.payout.bank.IfscLookupClient.Branch> lookup(@AuthenticationPrincipal CravesPrincipal actor,@PathVariable String ifsc) {
         if(actor==null || actor.identityId()==null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"Sign in before bank lookup");
+        allowLookup(actor.identityId());
         return ResponseEntity.ok().header("Cache-Control","private, no-store").body(branches.lookup(ifsc));
     }
     @GetMapping("/api/v1/chef-onboarding/bank")

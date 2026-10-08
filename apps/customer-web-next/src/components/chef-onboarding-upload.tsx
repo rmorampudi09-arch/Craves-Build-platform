@@ -66,6 +66,8 @@ export function ChefOnboardingUpload({
 }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [savedPreviewUrl, setSavedPreviewUrl] = useState<string | null>(null);
+  useEffect(() => { setSavedPreviewUrl(null); }, [evidence?.id, evidence?.originalFileName, evidence?.status, evidence?.reviewedAt]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
@@ -111,7 +113,7 @@ export function ChefOnboardingUpload({
       await onUpload(type, file, (value) => {
         if (mounted.current) setProgress(value);
       });
-      if (mounted.current) setFile(null);
+      if (mounted.current) { setFile(null); setSavedPreviewUrl(null); }
     } catch (failure) {
       if (mounted.current)
         setError(failure instanceof Error ? failure.message : "Upload failed. Please try again.");
@@ -126,7 +128,7 @@ export function ChefOnboardingUpload({
       const response=await fetch(`/api/chef/onboarding/documents/${evidence.id}/preview`,{cache:"no-store",credentials:"same-origin"});
       const data:unknown=await response.json();
       if(!response.ok || !data || typeof data!=="object" || !("url" in data) || typeof data.url!=="string" || !data.url.startsWith("https://")) throw new Error("Preview is unavailable. Please retry.");
-      window.open(data.url,"_blank","noopener,noreferrer");
+      if(mounted.current) setSavedPreviewUrl(data.url);
     } catch(failure) {if(mounted.current) setError(failure instanceof Error?failure.message:"Preview failed.");}
     finally {if(mounted.current) setBusy(false);}
   }
@@ -165,6 +167,7 @@ export function ChefOnboardingUpload({
           <span className="text-sm">{photo ? "Add a kitchen photo" : "Add your document"}</span>
         </div>
       )}
+      {savedPreviewUrl ? <a href={savedPreviewUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block underline">Open saved {label.toLowerCase()}</a> : null}
       {file && !preview ? (
         <p className="chef-onboarding-file-name flex items-center gap-2">
           <FileText size={16} aria-hidden="true" />

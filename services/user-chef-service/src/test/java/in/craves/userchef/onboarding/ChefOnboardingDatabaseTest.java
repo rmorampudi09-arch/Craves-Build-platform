@@ -185,6 +185,9 @@ class ChefOnboardingDatabaseTest {
         assertFalse(service.mine(user).submitted());
         doReturn(UUID.randomUUID()).when(bank).requireEnrollment(anyString(),anyString());
         State submitted=run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(version,true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
+        State retried=run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(version,true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
+        assertEquals(submitted.version(),retried.version());
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM chef_onboarding_action_audit WHERE identity_id=? AND action='SUBMITTED'",Integer.class,user.identityId()));
         assertEquals(ChefOnboardingService.TERMS_VERSION,jdbc.queryForObject("SELECT terms_version FROM chef_onboarding_draft WHERE identity_id=?",String.class,user.identityId()));
         assertThrows(ApiException.class,()->save(ProofKind.PAN,"12345678901234"));
         State correction=run(()->service.reviewAction(admin,submitted.application().id(),new ReviewAction(submitted.version(),"REQUEST_INFORMATION","Clarify your kitchen description",null)));

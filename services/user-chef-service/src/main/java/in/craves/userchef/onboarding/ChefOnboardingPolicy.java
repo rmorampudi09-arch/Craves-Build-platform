@@ -50,6 +50,7 @@ public final class ChefOnboardingPolicy {
     public static void validate(Details d) {
         validateDraft(d);
         requiredText(d.firstName(),100); requiredText(d.lastName(),100); requiredText(d.email(),255);
+        if (d.proofKind()==ProofKind.OTHER_GOVERNMENT_ID) requiredText(d.otherGovernmentId(),80);
         if (!personalComplete(d)) throw ApiException.badRequest("ONBOARDING_PERSONAL_INCOMPLETE","Complete your name, date of birth and email.");
     }
     public static boolean personalComplete(Details d) {
@@ -59,12 +60,14 @@ public final class ChefOnboardingPolicy {
     public static void validateDraft(Details d) {
         if (d == null) throw ApiException.badRequest("ONBOARDING_DETAILS_REQUIRED","Complete your personal details.");
         optionalText(d.firstName(),100); optionalText(d.lastName(),100); optionalText(d.email(),255);
+        if ((String.valueOf(d.firstName()==null?"":d.firstName()).trim()+" "+String.valueOf(d.lastName()==null?"":d.lastName()).trim()).trim().length()>120)
+            throw ApiException.badRequest("ONBOARDING_NAME_TOO_LONG","Your full name must be 120 characters or fewer.");
         if (d.dateOfBirth() != null && (d.dateOfBirth().isAfter(LocalDate.now()) ||
             d.dateOfBirth().isBefore(LocalDate.of(1900,1,1))))
             throw ApiException.badRequest("DATE_OF_BIRTH_INVALID","Enter a valid date of birth.");
         optionalText(d.kitchenName(),160); optionalText(d.kitchenDescription(),1000);
         optionalText(d.addressLine1(),255); optionalText(d.addressLine2(),255); optionalText(d.landmark(),255);
-        optionalText(d.city(),120); optionalText(d.state(),120); optionalText(d.otherGovernmentId(),80);
+        optionalText(d.city(),80); optionalText(d.state(),80); optionalText(d.otherGovernmentId(),80);
         if (StringUtils.hasText(d.postalCode()) && !d.postalCode().matches("[0-9]{6}"))
             throw ApiException.badRequest("PINCODE_INVALID","Enter a six-digit pincode.");
         if ((d.latitude() == null) != (d.longitude() == null) ||

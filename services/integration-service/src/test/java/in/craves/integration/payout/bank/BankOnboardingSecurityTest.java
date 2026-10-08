@@ -27,6 +27,16 @@ class BankOnboardingSecurityTest {
     @Autowired MockMvc mvc;
     @MockBean BankOnboardingService service;
     @MockBean JwtVerifier verifier;
+    @MockBean IfscLookupClient branches;
+    @Test void anonymousLookupCannotReachDirectory()throws Exception {
+        mvc.perform(get("/api/v1/chef-onboarding/bank/ifsc/HDFC0001234")).andExpect(status().is4xxClientError());verifyNoInteractions(branches);
+    }
+    @Test void signedInApplicantCanLookupBranch()throws Exception {
+        when(verifier.verify("applicant-token")).thenReturn(new CravesPrincipal(UUID.randomUUID(),"",Set.of("CUSTOMER")));
+        when(branches.lookup("HDFC0001234")).thenReturn(new IfscLookupClient.Branch("HDFC0001234","Test Bank","Test Branch"));
+        mvc.perform(get("/api/v1/chef-onboarding/bank/ifsc/HDFC0001234").header("Authorization","Bearer applicant-token"))
+            .andExpect(status().isOk()).andExpect(header().string("Cache-Control","private, no-store")).andExpect(jsonPath("$.branchName").value("Test Branch"));
+    }
     @Test void anonymousReadCannotReachBankService()throws Exception {
         mvc.perform(get("/api/v1/chef-onboarding/bank")).andExpect(status().is4xxClientError());verifyNoInteractions(service);
     }

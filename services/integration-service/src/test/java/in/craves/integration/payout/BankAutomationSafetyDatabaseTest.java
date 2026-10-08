@@ -18,7 +18,10 @@ class BankAutomationSafetyDatabaseTest {
     @Test void identityOutageBeforeProviderPostIsSafelyRetryable() {
         var request=b.submit();
         when(b.identities.fetch(b.f.chef.identityId())).thenThrow(new IllegalStateException("source timeout"));
-        b.banks.processOne();assertEquals("QUEUED",b.banks.status(b.f.chef).state());verify(b.provider,never()).create(any(),any());
+        b.banks.processOne();
+        assertEquals("QUEUED",b.f.jdbc.queryForObject("SELECT state FROM payment_schema.finance_bank_request WHERE id=?",String.class,request.id()));
+        assertThrows(IllegalStateException.class,()->b.banks.status(b.f.chef),"A source outage must not present stale account eligibility");
+        verify(b.provider,never()).create(any(),any());
         doReturn(b.identity("APPROVED")).when(b.identities).fetch(b.f.chef.identityId());
         when(b.provider.create(any(),any())).thenReturn(b.success("resumed"));b.due();b.banks.processOne();
         assertEquals("VERIFIED",b.banks.status(b.f.chef).state());verify(b.provider,times(1)).create(eq(request.id()),any());

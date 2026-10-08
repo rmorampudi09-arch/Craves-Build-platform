@@ -152,7 +152,7 @@ function normal(input: RequestInfo | URL, init?: RequestInit): Promise<Response>
   if (url === "/api/chef-onboarding/bank") return Promise.resolve(Response.json(bank));
   if (url === "/api/chef/application") return Promise.resolve(Response.json(saved.application));
   if (url === "/api/chef/onboarding" && ["PUT","PATCH"].includes(init?.method ?? "")) {
-    const request = JSON.parse(String(init.body));
+    const request = JSON.parse(String(init?.body));
     if (request.expectedVersion !== saved.version)
       return Promise.resolve(Response.json({ message: "Version changed" }, { status: 409 }));
     saved = { ...saved, version: saved.version + 1, details: request.details };
@@ -351,7 +351,7 @@ describe("Chef onboarding navigation and persistence", () => {
     const submit = primary("Submit application");
     fireEvent.click(submit);
     fireEvent.click(submit);
-    expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith("/submit"))).toHaveLength(1);
+    await waitFor(() => expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith("/submit"))).toHaveLength(1));
     await act(async () => {
       saved = {
         ...saved,
@@ -452,7 +452,9 @@ describe("Authoritative status and bank verification", () => {
     await screen.findByText("offline");
     fireEvent.submit(document.getElementById("chef-bank-form")!);
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(bank));
-    expect(fetcher.mock.calls[0][1]?.body).toBe(fetcher.mock.calls[1][1]?.body);
+    const posts=fetcher.mock.calls.filter(([,init])=>init?.method==="POST");
+    expect(posts).toHaveLength(2);
+    expect(posts[0]![1]?.body).toBe(posts[1]![1]?.body);
   });
   it("accepts no failed or unknown bank state as a completed section", () => {
     for (const state of [

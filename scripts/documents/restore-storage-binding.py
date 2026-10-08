@@ -94,7 +94,7 @@ def strict_runtime(apps):
                          "identity": app.get("identity"), "tags": app.get("tags")}) for name, app in sorted(apps.items())}
 
 
-def patch_binding(app, baseline_hash):
+def patch_binding(app, baseline_hash, rollback=False):
     # JSON Merge Patch keeps every other template field untouched. The container
     # array is copied in full, preserving image, resources, probes, mounts and env.
     # A fresh revision suffix is revision metadata, not another runtime setting.
@@ -102,10 +102,12 @@ def patch_binding(app, baseline_hash):
     containers = copy.deepcopy(app["properties"]["template"]["containers"])
     require(len(containers) == 1, "Unexpected target container count")
     matches = [row for row in containers[0].get("env", []) if row.get("name") == KEY]
-    require(len(matches) == 1 and matches[0].get("value") == FROM and not matches[0].get("secretRef"), "Patch setting differs")
-    matches[0]["value"] = TO
+    source, target = (TO, FROM) if rollback else (FROM, TO)
+    require(len(matches) == 1 and matches[0].get("value") == source and not matches[0].get("secretRef"), "Patch setting differs")
+    matches[0]["value"] = target
+    suffix = ("pdf-restore-" if rollback else "pdf-storage-") + baseline_hash[:10]
     body = {"location": app["location"], "properties": {"template": {
-        "containers": containers, "revisionSuffix": "pdf-storage-" + baseline_hash[:10]}}}
+        "containers": containers, "revisionSuffix": suffix}}}
     with tempfile.TemporaryDirectory(prefix="craves-pdf-binding-") as temp:
         payload = Path(temp) / "patch.json"
         with payload.open("x") as stream:
@@ -113,6 +115,72 @@ def patch_binding(app, baseline_hash):
             json.dump(body, stream, separators=(",", ":"))
         cli(["rest", "--method", "patch", "--url", APP_URL, "--body", "@" + str(payload),
              "--headers", "Content-Type=application/json"], approved_patch=True)
+
+
+def unrelated_preserved(before, now):
+    if set(before) != set(now):
+        return False
+    first, current = strict_runtime(before), strict_runtime(now)
+    return (all(first[name] == current[name] for name in before if name != APP)
+            and before[APP]["properties"]["configuration"]["ingress"].get("traffic")
+            == now[APP]["properties"]["configuration"]["ingress"].get("traffic"))
+
+
+def wait_binding(helper, before_apps, desired_apps, suffix):
+    prior, wanted = baseline(helper, before_apps), baseline(helper, desired_apps)
+    prior_revision = before_apps[APP]["properties"].get("latestRevisionName")
+    own_revision, seen_own = APP + "--" + suffix, False
+    for attempt in range(48):
+        now = helper.inventory()
+        require(unrelated_preserved(before_apps, now), "Unrelated runtime or traffic changed")
+        state, props = baseline(helper, now), now[APP]["properties"]
+        actual_suffix = props["template"].get("revisionSuffix")
+        if actual_suffix == suffix or props.get("latestRevisionName") == own_revision:
+            seen_own = True
+            require(actual_suffix == suffix and state == wanted, "Own revision has unexpected runtime settings")
+            require(props.get("latestRevisionName") in (prior_revision, own_revision), "Another revision superseded this change")
+            if props.get("latestRevisionName") == props.get("latestReadyRevisionName") == own_revision:
+                try:
+                    health, _, _ = helper.request_json(helper.origin(now[APP]) + "/actuator/health/readiness")
+                    if health.get("status") == "UP":
+                        return now
+                except Exception:
+                    pass
+        else:
+            require(not seen_own and state == prior and props.get("latestRevisionName") == prior_revision
+                    and strict_runtime(now) == strict_runtime(before_apps), "Unexpected state while waiting for ARM publication")
+        if attempt < 47:
+            time.sleep(5)
+    raise ValueError("Own Notification revision did not become healthy within the bound")
+
+
+def rollback_owned_change(helper, original, desired, baseline_hash):
+    result = {"status": "HELD_FOR_REVIEW", "mutationAttempted": False}
+    own_suffix = "pdf-storage-" + baseline_hash[:10]
+    try:
+        current = helper.inventory()
+        props = current[APP]["properties"]
+        if (baseline(helper, current) != baseline(helper, desired)
+                or props["template"].get("revisionSuffix") != own_suffix
+                or props.get("latestRevisionName") not in (original[APP]["properties"].get("latestRevisionName"), APP + "--" + own_suffix)
+                or not unrelated_preserved(original, current)):
+            result["reason"] = "Exact owned change is not visible or unrelated state changed; no rollback write"
+            return result
+        fresh = helper.inventory()
+        require(strict_runtime(fresh) == strict_runtime(current)
+                and fresh[APP]["properties"].get("latestRevisionName") == props.get("latestRevisionName"),
+                "Concurrent change before rollback; no rollback write")
+        restored = copy.deepcopy(fresh)
+        next(row for row in restored[APP]["properties"]["template"]["containers"][0]["env"] if row["name"] == KEY)["value"] = FROM
+        require(baseline(helper, restored) == baseline(helper, original), "Rollback would not restore exact original settings")
+        result.update(status="ROLLBACK_REQUESTED_NOT_VERIFIED", mutationAttempted=True)
+        patch_binding(fresh[APP], baseline_hash, rollback=True)
+        final = wait_binding(helper, fresh, restored, "pdf-restore-" + baseline_hash[:10])
+        require(baseline(helper, final) == baseline(helper, original), "Rollback runtime differs from original")
+        result.update(status="ROLLED_BACK_AND_HEALTHY", readyRevision=final[APP]["properties"]["latestReadyRevisionName"])
+    except Exception:
+        result["reason"] = "Rollback could not be safely completed or verified; inspect runtime before another write"
+    return result
 
 
 def inspect(helper):
@@ -220,33 +288,25 @@ def main():
     expected_after = baseline(helper, desired)
     report["mutationAttempted"] = True
     print(json.dumps({"event": "APPLY_ONE_PDF_BINDING", "change": report["proposedChange"]}), flush=True)
-    patch_binding(apps[APP], digest(before))
-    healthy = False
-    for attempt in range(48):
-        now = helper.inventory()
-        require(baseline(helper, now) == expected_after, "Unexpected runtime change after update; inspect before proceeding")
-        props = now[APP]["properties"]
-        if props.get("latestRevisionName") == props.get("latestReadyRevisionName"):
-            try:
-                health, _, _ = helper.request_json(helper.origin(now[APP]) + "/actuator/health/readiness")
-                healthy = health.get("status") == "UP"
-            except Exception:
-                healthy = False
-            if healthy:
-                break
-        if attempt < 47:
-            time.sleep(5)
-    require(healthy, "Notification revision did not become ready; inspect traffic before further changes")
-    after, value, after_resources = inspect(helper)
-    require(baseline(helper, after) == expected_after and value == TO and resources == after_resources,
-            "Final runtime/storage preservation check failed")
-    before_strict, after_strict = strict_runtime(apps), strict_runtime(after)
-    require(all(after_strict[name] == before_strict[name] for name in apps if name != APP), "An unrelated app changed concurrently")
-    require(after[APP]["properties"]["configuration"]["ingress"].get("traffic") == apps[APP]["properties"]["configuration"]["ingress"].get("traffic"),
-            "Notification traffic configuration changed unexpectedly")
+    try:
+        patch_binding(apps[APP], digest(before))
+        wait_binding(helper, apps, desired, "pdf-storage-" + digest(before)[:10])
+        after, value, after_resources = inspect(helper)
+        require(baseline(helper, after) == expected_after and value == TO and resources == after_resources
+                and unrelated_preserved(apps, after), "Final runtime/storage preservation check failed")
+        require(after[APP]["properties"]["latestReadyRevisionName"] == APP + "--pdf-storage-" + digest(before)[:10],
+                "Final ready revision is not this script's revision")
+    except Exception as exc:
+        report["result"] = "BINDING_APPLY_FAILED"
+        report["error"] = str(exc) if isinstance(exc, ValueError) and not isinstance(exc, json.JSONDecodeError) else "Runtime operation or verification unavailable"
+        report["rollback"] = rollback_owned_change(helper, apps, desired, digest(before))
+        report["appsAndStoragePreserved"] = False
+        report["originalApplicationSettingsRestored"] = report["rollback"]["status"] == "ROLLED_BACK_AND_HEALTHY"
+        emit_report(report, args.output)
+        raise SystemExit(1) from None
     report.update(appsAndStoragePreserved=True, notificationOnlyExpectedBindingChanged=True,
                   readyRevision=after[APP]["properties"]["latestReadyRevisionName"], result="BINDING_CORRECTED_AND_HEALTHY",
-                  finalApps=baseline(helper, after))
+                  finalApps=baseline(helper, after), rollback={"status": "NOT_REQUIRED", "mutationAttempted": False})
     emit_report(report, args.output)
 
 

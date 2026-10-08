@@ -49,6 +49,30 @@ def lower(value):
     return str(value or "").rstrip("/").lower()
 
 
+def error_code(stderr):
+    """Return safe machine classifications, never raw ARM messages or values."""
+    if "You do not have the required permissions needed to perform this operation" in stderr:
+        return "AuthorizationPermissionMismatch"
+    for pattern in (r'"code"\s*:\s*"([A-Za-z][A-Za-z0-9_.-]{1,79})"',
+                    r'ERROR:\s*\(([A-Za-z][A-Za-z0-9_.-]{1,79})\)',
+                    r'(?m)^Code:\s*([A-Za-z][A-Za-z0-9_.-]{1,79})\s*$'):
+        match = re.search(pattern, stderr)
+        if match:
+            return match.group(1)
+    if "unrecognized arguments:" in stderr:
+        return "CliUnrecognizedArguments"
+    if "invalid choice:" in stderr:
+        return "CliInvalidChoice"
+    return "UnclassifiedAzureFailure"
+
+
+def revision_suffix(baseline_hash, rollback=False):
+    suffix = ("pdfr-" if rollback else "pdfs-") + baseline_hash[:10]
+    require(len(APP + "--" + suffix) <= 54 and re.fullmatch(r"[a-z][a-z0-9-]*[a-z0-9]", suffix)
+            and "--" not in suffix, "Invalid repair revision name")
+    return suffix
+
+
 def cli(args, data_read=False, approved_patch=False):
     allowed = args[:3] in (["storage", "account", "show"], ["role", "assignment", "list"],
                            ["storage", "blob", "download"], ["rest", "--method", "get"])
@@ -64,11 +88,12 @@ def cli(args, data_read=False, approved_patch=False):
             return {"error": "OperationUnavailable"}
         raise ValueError("Azure operation unavailable; raw output suppressed") from None
     if result.returncode:
+        classified = error_code(result.stderr)
         if data_read:
             codes = ("AuthorizationPermissionMismatch", "AuthorizationFailure", "AuthenticationFailed",
                      "InvalidAuthenticationInfo", "BlobNotFound", "ContainerNotFound", "ResourceNotFound")
-            return {"error": next((code for code in codes if code in result.stderr), "UnclassifiedAzureReadFailure")}
-        raise ValueError("Azure operation failed; raw output suppressed")
+            return {"error": next((code for code in codes if code in result.stderr), classified)}
+        raise ValueError("Azure operation failed: " + classified + "; raw output suppressed")
     require(len(result.stdout) <= 4_000_000, "Azure response exceeds bound")
     return json.loads(result.stdout) if result.stdout.strip() else {}
 
@@ -105,7 +130,7 @@ def patch_binding(app, baseline_hash, rollback=False):
     source, target = (TO, FROM) if rollback else (FROM, TO)
     require(len(matches) == 1 and matches[0].get("value") == source and not matches[0].get("secretRef"), "Patch setting differs")
     matches[0]["value"] = target
-    suffix = ("pdf-restore-" if rollback else "pdf-storage-") + baseline_hash[:10]
+    suffix = revision_suffix(baseline_hash, rollback)
     body = {"location": app["location"], "properties": {"template": {
         "containers": containers, "revisionSuffix": suffix}}}
     with tempfile.TemporaryDirectory(prefix="craves-pdf-binding-") as temp:
@@ -156,7 +181,7 @@ def wait_binding(helper, before_apps, desired_apps, suffix):
 
 def rollback_owned_change(helper, original, desired, baseline_hash):
     result = {"status": "HELD_FOR_REVIEW", "mutationAttempted": False}
-    own_suffix = "pdf-storage-" + baseline_hash[:10]
+    own_suffix = revision_suffix(baseline_hash)
     try:
         current = helper.inventory()
         props = current[APP]["properties"]
@@ -175,7 +200,7 @@ def rollback_owned_change(helper, original, desired, baseline_hash):
         require(baseline(helper, restored) == baseline(helper, original), "Rollback would not restore exact original settings")
         result.update(status="ROLLBACK_REQUESTED_NOT_VERIFIED", mutationAttempted=True)
         patch_binding(fresh[APP], baseline_hash, rollback=True)
-        final = wait_binding(helper, fresh, restored, "pdf-restore-" + baseline_hash[:10])
+        final = wait_binding(helper, fresh, restored, revision_suffix(baseline_hash, rollback=True))
         require(baseline(helper, final) == baseline(helper, original), "Rollback runtime differs from original")
         result.update(status="ROLLED_BACK_AND_HEALTHY", readyRevision=final[APP]["properties"]["latestReadyRevisionName"])
     except Exception:
@@ -290,11 +315,11 @@ def main():
     print(json.dumps({"event": "APPLY_ONE_PDF_BINDING", "change": report["proposedChange"]}), flush=True)
     try:
         patch_binding(apps[APP], digest(before))
-        wait_binding(helper, apps, desired, "pdf-storage-" + digest(before)[:10])
+        wait_binding(helper, apps, desired, revision_suffix(digest(before)))
         after, value, after_resources = inspect(helper)
         require(baseline(helper, after) == expected_after and value == TO and resources == after_resources
                 and unrelated_preserved(apps, after), "Final runtime/storage preservation check failed")
-        require(after[APP]["properties"]["latestReadyRevisionName"] == APP + "--pdf-storage-" + digest(before)[:10],
+        require(after[APP]["properties"]["latestReadyRevisionName"] == APP + "--" + revision_suffix(digest(before)),
                 "Final ready revision is not this script's revision")
     except Exception as exc:
         report["result"] = "BINDING_APPLY_FAILED"

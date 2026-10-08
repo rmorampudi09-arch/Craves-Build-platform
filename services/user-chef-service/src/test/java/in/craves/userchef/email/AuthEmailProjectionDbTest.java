@@ -59,7 +59,7 @@ class AuthEmailProjectionDbTest {
         assertEquals(0,flyway(null).migrate().migrationsExecuted);assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM auth_email_projection",Integer.class));
         assertEquals("legacy-unverified@example.test",profiles.getProfile(user(id)).email());
         // V11, V11.1, V12, V13 and the additive V14 and V15 must all upgrade and replay safely.
-        assertEquals(15,jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
+        assertEquals(16,jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('email_userchef_test.chef_onboarding_draft')::text",String.class));
         assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM chef_onboarding_draft",Integer.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_audit')::text",String.class));

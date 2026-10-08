@@ -190,7 +190,7 @@ function open() {
   );
 }
 async function review() {
-  fireEvent.click(await screen.findByRole("button", { name: "Continue onboarding" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Review application" }));
   await screen.findByRole("heading", { name: "Review your application" });
 }
 function primary(name: string) {
@@ -240,8 +240,8 @@ describe("Chef onboarding navigation and persistence", () => {
       const labels = {
         personal: "Basic details",
         kitchen: "Kitchen details",
-        fssai: "FSSAI details",
-        documents: "Identity documents",
+        fssai: "FSSAI",
+        documents: "Identity proof",
         bank: "Bank details",
       };
       fireEvent.click(primary(`Edit ${labels[section]}`));
@@ -257,9 +257,10 @@ describe("Chef onboarding navigation and persistence", () => {
         });
       fireEvent.click(primary("Save and return to review"));
       await screen.findByRole("heading", { name: "Review your application" });
-      if (section === "personal") expect(screen.getAllByText("Updated Chef")).toHaveLength(2);
+      // The saved bank enrollment keeps its own holder name, so only Basic details shows the edit.
+      if (section === "personal") expect(screen.getAllByText("Updated Chef")).toHaveLength(1);
       if (section === "kitchen") expect(screen.getByText("Updated Kitchen")).toBeTruthy();
-      if (section === "fssai") expect(screen.getByText("23456789012345")).toBeTruthy();
+      if (section === "fssai") expect(screen.getByText("2345 6789 0123 45")).toBeTruthy();
       if (section !== "bank")
         expect(fetcher.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
     },
@@ -287,11 +288,11 @@ describe("Chef onboarding navigation and persistence", () => {
   it("restores a saved kitchen and resumes the first incomplete section", async () => {
     saved.details!.fssaiNumber = "";
     const view = open();
-    fireEvent.click(await screen.findByRole("button", { name: "Continue onboarding" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue application" }));
     await screen.findByRole("heading", { name: "FSSAI details" });
     view.unmount();
     open();
-    fireEvent.click(await screen.findByRole("button", { name: "Continue onboarding" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue application" }));
     await screen.findByRole("heading", { name: "FSSAI details" });
     fireEvent.click(primary("Back"));
     expect((screen.getByLabelText("Kitchen name") as HTMLInputElement).value).toBe(
@@ -319,7 +320,7 @@ describe("Chef onboarding navigation and persistence", () => {
     fireEvent.click(primary("Edit Kitchen details"));
     fireEvent.click(primary("Move kitchen pin"));
     await screen.findByText(/Your pin is selected/);
-    expect((screen.getByLabelText("House / building") as HTMLInputElement).value).toBe(
+    expect((screen.getByLabelText("Flat / house number / building") as HTMLInputElement).value).toBe(
       "1 Fixture Road",
     );
     fireEvent.click(primary("Save and return to review"));
@@ -329,7 +330,7 @@ describe("Chef onboarding navigation and persistence", () => {
   it("confirms callbacks only after a real case response and reuses uncertain request keys", async () => {
     open();
     await review();
-    fireEvent.click(primary("Edit FSSAI details"));
+    fireEvent.click(primary("Edit FSSAI"));
     fireEvent.click(primary("Don’t have FSSAI?"));
     let attempts = 0;
     fetcher.mockImplementation((url, init) => {
@@ -341,11 +342,12 @@ describe("Chef onboarding navigation and persistence", () => {
       }
       return normal(url, init);
     });
-    fireEvent.click(primary("Request a callback"));
+    fireEvent.click(primary("Request a call from Craves"));
     await screen.findByText(/We could not complete this request/);
-    expect(screen.queryByText(/callback request is confirmed/)).toBeNull();
-    fireEvent.click(primary("Request a callback"));
-    await screen.findByText(/Your callback request is confirmed/);
+    expect(screen.queryByText("Request received")).toBeNull();
+    fireEvent.click(primary("Request a call from Craves"));
+    await screen.findByText("Request received");
+    expect(screen.getByText(/call you on your registered mobile number/)).toBeTruthy();
     const requests = fetcher.mock.calls.filter(([url]) => String(url).endsWith("/help"));
     expect(JSON.parse(String(requests[0][1]?.body)).requestKey).toBe(
       JSON.parse(String(requests[1][1]?.body)).requestKey,
@@ -444,8 +446,9 @@ describe("Authoritative status and bank verification", () => {
   });
   it("does not offer a dashboard on pending status", async () => {
     render(createElement(ChefApplicationStatus, { draftsEnabled: false }));
-    await screen.findByText("Pending review");
-    expect(screen.queryByRole("link", { name: "Go to dashboard" })).toBeNull();
+    await screen.findByText("Submitted");
+    expect(screen.queryByRole("link", { name: "Open Chef Dashboard" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /dashboard/i })).toBeNull();
   });
   it("keeps bank re-entry in the same step, confirms masked details and retries with the same key", async () => {
     const onSaved = vi.fn(),

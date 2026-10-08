@@ -99,3 +99,54 @@ for (const [dateOfBirth, valid] of [
   });
 }
 
+
+test("application phases follow authoritative application and review state", async () => {
+  const { applicationPhase } = await import("./chef-onboarding-flow.ts");
+  const app = (status: "NOT_SUBMITTED" | "PENDING" | "APPROVED" | "REJECTED") => ({ status });
+  assert.equal(applicationPhase({ application: app("NOT_SUBMITTED"), submitted: false }), "DRAFT");
+  assert.equal(applicationPhase({ application: app("PENDING"), submitted: false }), "DRAFT");
+  assert.equal(applicationPhase({ application: app("PENDING"), submitted: true }), "SUBMITTED");
+  assert.equal(
+    applicationPhase({ application: app("PENDING"), submitted: true, progress: { status: "UNDER_REVIEW" } }),
+    "UNDER_REVIEW",
+  );
+  assert.equal(
+    applicationPhase({ application: app("PENDING"), submitted: false, progress: { status: "MORE_INFORMATION_REQUIRED" } }),
+    "MORE_INFORMATION_REQUIRED",
+  );
+  assert.equal(
+    applicationPhase({ application: app("REJECTED"), submitted: true, progress: { status: "MORE_INFORMATION_REQUIRED" } }),
+    "MORE_INFORMATION_REQUIRED",
+  );
+  assert.equal(applicationPhase({ application: app("REJECTED"), submitted: true }), "REJECTED");
+  // A stale review status can never make an approved application look pending, or vice versa.
+  assert.equal(
+    applicationPhase({ application: app("APPROVED"), submitted: true, progress: { status: "UNDER_REVIEW" } }),
+    "APPROVED",
+  );
+});
+
+test("Welcome back progress distinguishes not started, in progress, complete and reviewer requests", async () => {
+  const { sectionProgress } = await import("./chef-onboarding-flow.ts");
+  const base = parseOnboardingState({
+    enabled: true, legacy: false, version: 2, resumeStep: "kitchen", submitted: false,
+    bankEnrollmentRequired: false, phoneNumber: "+910000000000",
+    details: {
+      ...EMPTY_ONBOARDING, email: "chef@example.invalid", firstName: "Test", lastName: "Chef",
+      dateOfBirth: "1990-01-01", kitchenName: "Saved kitchen",
+    },
+    application: { id: null, status: "NOT_SUBMITTED", documents: [] },
+    documents: [{
+      id: "12345678-1234-4123-8123-123456789012", documentType: "SELECTED_PROOF_FRONT",
+      originalFileName: "front.png", fileSizeBytes: 10, status: "REJECTED", reviewReason: "Blurred", reviewedAt: null,
+    }],
+    requiredDocuments: [], supportPhone: "+910000000000", supportEmail: "support@example.invalid",
+  });
+  assert.ok(base);
+  const progress = sectionProgress(base, null);
+  assert.equal(progress.personal, "complete");
+  assert.equal(progress.kitchen, "in-progress");
+  assert.equal(progress.fssai, "not-started");
+  assert.equal(progress.documents, "attention");
+  assert.equal(progress.bank, "complete");
+});

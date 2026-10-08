@@ -1,10 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode } from "react";
-import { CheckCircle2, LoaderCircle } from "lucide-react";
-import { ChefOnboardingShell } from "@/components/chef-onboarding-shell";
-import { ChefOnboardingBank } from "@/components/chef-onboarding-bank";
+import { useState, type ReactNode } from "react";
+import {
+  Check,
+  ChevronRight,
+  Clock3,
+  IdCard,
+  Landmark,
+  RefreshCw,
+  ShieldCheck,
+  Store,
+  UserRound,
+} from "lucide-react";
+import { ChefOnboardingShell, type ChefSaveState } from "@/components/chef-onboarding-shell";
+import { ChefOnboardingBank, type BankFormMode } from "@/components/chef-onboarding-bank";
 import {
   ChefBasicDetails,
   ChefKitchenDetails,
@@ -12,112 +22,300 @@ import {
   ChefIdentityDetails,
   ChefReviewDetails,
 } from "@/components/chef-onboarding-sections";
-import { useChefOnboarding } from "@/components/use-chef-onboarding";
+import {
+  ApplicationFacts,
+  ChefStatusView,
+  WhatHappensNext,
+} from "@/components/chef-application-status";
+import { Card, Note, Spinner, StatusChip } from "@/components/chef-onboarding-ui";
+import { useChefOnboarding, type ChefOnboardingFlow } from "@/components/use-chef-onboarding";
 import {
   CHEF_SECTIONS,
+  CHEF_SECTION_LABELS,
   CHEF_SECTION_TITLES,
   CHEF_SECTION_DESCRIPTIONS,
-  completedSections,
-  firstIncompleteSection,
-  chefFullName,
+  FSSAI_GUIDE_DESCRIPTION,
+  FSSAI_GUIDE_TITLE,
+  activeChefSections,
+  applicationPhase,
   bankCanContinue,
+  chefFullName,
+  firstIncompleteSection,
+  sectionProgress,
   type ChefFormSection,
+  type ChefSectionProgress,
 } from "@/lib/chef-onboarding-flow";
+
+const SECTION_ICONS: Record<ChefFormSection, ReactNode> = {
+  personal: <UserRound size={20} aria-hidden="true" />,
+  kitchen: <Store size={20} aria-hidden="true" />,
+  fssai: <ShieldCheck size={20} aria-hidden="true" />,
+  documents: <IdCard size={20} aria-hidden="true" />,
+  bank: <Landmark size={20} aria-hidden="true" />,
+};
+const PROGRESS_CHIP: Record<ChefSectionProgress, ReactNode> = {
+  complete: <StatusChip tone="complete">Complete</StatusChip>,
+  "in-progress": <StatusChip tone="progress">In progress</StatusChip>,
+  "not-started": <StatusChip tone="idle">Not started</StatusChip>,
+  attention: <StatusChip tone="attention">Needs attention</StatusChip>,
+};
+
+function PageState({
+  title,
+  message,
+  children,
+  busy,
+}: {
+  title: string;
+  message: string;
+  children?: ReactNode;
+  busy?: boolean;
+}) {
+  return (
+    <section className="cob cob-page-state" aria-busy={busy}>
+      <span className="cob-icon-well cob-icon-well--round">
+        {busy ? <Spinner red /> : <Clock3 size={20} aria-hidden="true" />}
+      </span>
+      <h2>{title}</h2>
+      <p role={busy ? "status" : undefined}>{message}</p>
+      {children ? <div className="cob-page-actions">{children}</div> : null}
+    </section>
+  );
+}
+
+function ResumeScreen({ flow }: { flow: ChefOnboardingFlow }) {
+  const state = flow.state!;
+  const progress = sectionProgress(state, flow.bank);
+  const sections = activeChefSections(state);
+  return (
+    <div className="cob-stack">
+      <Card title="Your application" subtitle="Tap any section to review or edit it.">
+        <div className="cob-list">
+          {sections.map((section) => (
+            <button
+              key={section}
+              type="button"
+              className="cob-list-row"
+              disabled={flow.busy}
+              onClick={() => flow.open(section)}
+            >
+              <span className="cob-icon-well cob-icon-well--neutral cob-icon-well--round">
+                {SECTION_ICONS[section]}
+              </span>
+              <span className="cob-list-label">{CHEF_SECTION_LABELS[section]}</span>
+              {PROGRESS_CHIP[progress[section]]}
+              <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      </Card>
+      <Note icon={<Check size={18} aria-hidden="true" />}>
+        Everything you entered is saved exactly as you left it.
+      </Note>
+    </div>
+  );
+}
+
+function SubmittedScreen({ flow }: { flow: ChefOnboardingFlow }) {
+  const state = flow.state!;
+  return (
+    <div className="cob-stack">
+      <Card>
+        <div className="cob-status-line">
+          <span className="cob-icon-well cob-icon-well--neutral">
+            <Clock3 size={20} aria-hidden="true" />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <small>Application status</small>
+            <strong>Submitted</strong>
+          </div>
+        </div>
+        <div className="cob-divider" style={{ margin: "16px 0" }} />
+        <ApplicationFacts application={state.application} phase="SUBMITTED" />
+      </Card>
+      <WhatHappensNext />
+    </div>
+  );
+}
 
 export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
   const flow = useChefOnboarding();
   const { state, screen, busy } = flow;
+  const [bankMode, setBankMode] = useState<BankFormMode>("entry");
   if (flow.unavailable || (state && (!state.enabled || state.legacy) && screen !== "status"))
     return <>{fallback}</>;
   if (flow.signedOut)
     return (
-      <section className="rounded-3xl bg-white p-7">
-        <h1 className="text-xl font-bold">Sign in to continue</h1>
-        <p className="mt-3 text-sm">Your saved application stays with your Craves account.</p>
-        <Link
-          href="/sign-in?returnTo=/chef/application"
-          className="mt-5 inline-flex min-h-12 items-center rounded-xl bg-[#F62E18] px-5 font-bold text-white"
-        >
+      <PageState
+        title="Sign in to continue"
+        message="Your saved application stays with your Craves account."
+      >
+        <Link href="/sign-in?returnTo=/chef/application" className="cob-primary">
           Sign in
         </Link>
-      </section>
+      </PageState>
     );
-  if (flow.loading || !state)
-    return (
-      <section className="rounded-3xl bg-white p-7" aria-busy={flow.loading}>
-        {flow.loading ? (
-          <p role="status">Opening your saved application…</p>
-        ) : (
-          <>
-            <p role="alert">{flow.error}</p>
-            <button
-              type="button"
-              className="mt-4 min-h-12 font-bold text-[#C4200F]"
-              onClick={() => void flow.load()}
-            >
-              Try again
-            </button>
-          </>
-        )}
-      </section>
+  if (!state)
+    return flow.loading ? (
+      <PageState busy title="Opening your application" message="Loading your saved details…" />
+    ) : (
+      <PageState
+        title="We couldn’t open your application"
+        message={flow.error || "Please try again."}
+      >
+        <button type="button" className="cob-primary" onClick={() => void flow.load()}>
+          <RefreshCw size={18} aria-hidden="true" />
+          Try again
+        </button>
+      </PageState>
     );
+
   const section = CHEF_SECTIONS.includes(screen as ChefFormSection)
     ? (screen as ChefFormSection)
     : null;
-  const completion = completedSections(state, flow.bank);
-  const canSave = screen !== "submitted" && screen !== "status";
-  const buttonLabel =
-    screen === "review"
-      ? "Submit application"
-      : screen === "resume"
-        ? "Continue onboarding"
-        : screen === "submitted"
-          ? "View application status"
-          : screen === "status"
-            ? state.application.status === "APPROVED"
-              ? "Go to dashboard"
-              : "Refresh application status"
-            : flow.fromReview
-              ? "Save and return to review"
-              : "Save and continue";
-  function action() {
-    if (screen === "resume") flow.setScreen(firstIncompleteSection(state!, flow.bank));
-    else if (screen === "review") void flow.submit();
-    else if (screen === "status") void flow.load();
-  }
-  const footer =
-    screen === "submitted" ? (
-      <Link href="/chef/application/status" className="chef-onboarding-button">
-        {buttonLabel}
+  const guide = screen === "fssai" && flow.fssaiGuide;
+  const saveLabel = flow.fromReview ? "Save and return to review" : "Save and continue";
+  const phase = applicationPhase({
+    application: state.application,
+    progress: state.progress,
+    submitted: state.submitted || state.legacy,
+  });
+  const editingAllowed = screen !== "submitted" && screen !== "status";
+  // Nothing is claimed for a brand-new application until the first confirmed save.
+  const saveState: ChefSaveState = !editingAllowed
+    ? null
+    : busy
+      ? "saving"
+      : !state.details
+        ? null
+        : flow.dirty
+          ? "unsaved"
+          : "saved";
+
+  const title = guide ? FSSAI_GUIDE_TITLE : CHEF_SECTION_TITLES[screen];
+  const description = guide
+    ? FSSAI_GUIDE_DESCRIPTION
+    : screen === "resume"
+      ? flow.details.firstName
+        ? "Continue setting up your kitchen."
+        : CHEF_SECTION_DESCRIPTIONS.resume
+      : screen === "status"
+        ? CHEF_SECTION_DESCRIPTIONS.status
+        : CHEF_SECTION_DESCRIPTIONS[screen];
+  const heading =
+    screen === "resume" && flow.details.firstName
+      ? `Welcome back, ${flow.details.firstName}`
+      : title;
+
+  const busyLabel = screen === "review" ? "Submitting…" : "Saving…";
+  const primary = (label: ReactNode, props: { onClick: () => void }) => (
+    <button type="button" className="cob-primary" disabled={busy} onClick={props.onClick}>
+      {busy ? <Spinner /> : null}
+      {busy ? busyLabel : label}
+    </button>
+  );
+  let footer: ReactNode;
+  if (screen === "submitted")
+    footer = (
+      <Link href="/chef/application/status" className="cob-primary">
+        View application status
       </Link>
-    ) : screen === "status" && state.application.status === "APPROVED" ? (
-      <Link href="/chef" className="chef-onboarding-button">
-        {buttonLabel}
-      </Link>
-    ) : (
+    );
+  else if (screen === "status")
+    footer =
+      phase === "APPROVED" ? (
+        <Link href="/chef" className="cob-primary">
+          Open Chef Dashboard
+        </Link>
+      ) : phase === "MORE_INFORMATION_REQUIRED" ? (
+        primary("Update application", {
+          onClick: () => flow.open(firstIncompleteSection(state, flow.bank)),
+        })
+      ) : phase === "REJECTED" ? (
+        <Link href="/home" className="cob-secondary">
+          Continue browsing as a customer
+        </Link>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="cob-primary"
+            disabled={busy || flow.loading}
+            onClick={() => void flow.load()}
+          >
+            {flow.loading ? <Spinner /> : null}
+            {flow.loading ? "Checking status…" : "Refresh status"}
+          </button>
+          <Link href="/home" className="cob-link cob-link--ink cob-link--center">
+            Continue browsing as a customer
+          </Link>
+        </>
+      );
+  else if (screen === "resume")
+    footer = primary(
+      (() => {
+        const next = firstIncompleteSection(state, flow.bank);
+        return next === "review" ? "Review application" : "Continue application";
+      })(),
+      { onClick: () => flow.open(firstIncompleteSection(state, flow.bank)) },
+    );
+  else if (screen === "review")
+    footer = primary("Submit application", { onClick: () => void flow.submit() });
+  else if (guide) footer = primary(saveLabel, { onClick: () => void flow.continueWithoutFssai() });
+  else if (section === "bank")
+    footer = (
       <button
-        type={section ? "submit" : "button"}
-        form={section === "bank" ? "chef-bank-form" : section ? "chef-section-form" : undefined}
-        className="chef-onboarding-button"
-        disabled={
-          busy || (section === "bank" && flow.bankUnavailable && !bankCanContinue(flow.bank))
-        }
-        onClick={section ? undefined : action}
+        type="submit"
+        form="chef-bank-form"
+        className="cob-primary"
+        disabled={busy || (flow.bankUnavailable && !bankCanContinue(flow.bank))}
       >
-        {busy ? <LoaderCircle size={20} className="animate-spin" aria-hidden="true" /> : null}
-        {busy ? "Please wait…" : buttonLabel}
+        {busy ? <Spinner /> : null}
+        {busy ? "Saving…" : bankMode === "entry" ? "Continue" : saveLabel}
       </button>
     );
+  else if (section)
+    footer = (
+      <button type="submit" form="chef-section-form" className="cob-primary" disabled={busy}>
+        {busy ? <Spinner /> : null}
+        {busy ? "Saving…" : saveLabel}
+      </button>
+    );
+
+  const errorNote =
+    flow.error && editingAllowed ? (
+      <Note tone="error" role="alert">
+        {flow.error}
+      </Note>
+    ) : null;
+
   return (
     <ChefOnboardingShell
-      title={CHEF_SECTION_TITLES[screen]}
-      description={CHEF_SECTION_DESCRIPTIONS[screen]}
-      saved={!flow.dirty && state.details !== null}
+      title={heading}
+      description={description}
+      screenKey={`${screen}${guide ? "-guide" : ""}`}
+      saveState={saveState}
       busy={busy}
-      canSave={canSave}
-      onBack={flow.back}
+      onBack={screen === "submitted" || screen === "status" ? null : flow.back}
+      exitLabel={screen === "submitted" ? null : screen === "status" ? "Close" : "Save & exit"}
       onExit={flow.exit}
-      footer={footer}
+      hero={
+        screen === "submitted" ? (
+          <div className="cob-hero">
+            <span className="cob-hero-badge" aria-hidden="true">
+              <span>
+                <Check size={34} strokeWidth={3} />
+              </span>
+            </span>
+          </div>
+        ) : undefined
+      }
+      footer={
+        <>
+          {errorNote}
+          {footer}
+        </>
+      }
     >
       {section && section !== "bank" ? (
         <form
@@ -148,112 +346,36 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
           onSaved={flow.savedBank}
           onBusy={flow.bankBusy}
           onRefresh={() => void flow.refreshBank()}
+          onModeChange={setBankMode}
         />
       ) : null}
       {screen === "review" ? <ChefReviewDetails flow={flow} /> : null}
-      {screen === "resume" ? (
-        <div>
-          <p className="chef-onboarding-helper mb-4">
-            Your saved details are below. We’ll take you to the next section that needs attention.
-          </p>
-          {CHEF_SECTIONS.map((key) => (
-            <div key={key} className="chef-onboarding-resume-row">
-              <span>{CHEF_SECTION_TITLES[key]}</span>
-              <span>{key === "bank" && state.bankEnrollmentRequired === false ? "Add later" : completion[key] ? "Completed" : "Needs attention"}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {screen === "submitted" ? (
-        <div>
-          <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#FEEDEA] text-[#C4200F]">
-            <CheckCircle2 size={32} aria-hidden="true" />
-          </div>
-          <dl className="chef-onboarding-review-block">
-            <div className="flex justify-between gap-4 text-sm">
-              <dt>Application ID</dt>
-              <dd className="break-all text-right">{state.application.id}</dd>
-            </div>
-            {state.application.submittedAt ? (
-              <div className="mt-3 flex justify-between gap-4 text-sm">
-                <dt>Submission date</dt>
-                <dd>
-                  {new Date(state.application.submittedAt).toLocaleDateString("en-IN", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </dd>
-              </div>
-            ) : null}
-          </dl>
-          <section className="chef-onboarding-section">
-            <h2>What happens next?</h2>
-            <ol className="chef-onboarding-guide">
-              <li>
-                <strong>Our team reviews your application</strong>
-                <p>We check your kitchen details and documents.</p>
-              </li>
-              <li>
-                <strong>Check for updates here</strong>
-                <p>Your application status will show the next action you need to take.</p>
-              </li>
-              <li>
-                <strong>Start after approval</strong>
-                <p>Your chef dashboard becomes available once Craves approves your application.</p>
-              </li>
-            </ol>
-          </section>
-        </div>
-      ) : null}
+      {screen === "resume" ? <ResumeScreen flow={flow} /> : null}
+      {screen === "submitted" ? <SubmittedScreen flow={flow} /> : null}
       {screen === "status" ? (
-        <div className="chef-onboarding-group">
-          <p className="inline-flex w-fit rounded-full bg-[#FEEDEA] px-4 py-2 text-sm font-bold text-[#C4200F]">
-            {state.progress?.status === "MORE_INFORMATION_REQUIRED" ? "More information required" : state.progress?.status === "UNDER_REVIEW" ? "Under review" : state.application.status === "PENDING"
-              ? state.submitted || state.legacy
-                ? "Pending review"
-                : "Draft"
-              : state.application.status === "NOT_SUBMITTED"
-                ? "Draft"
-                : state.application.status === "APPROVED"
-                  ? "Approved"
-                  : "Rejected"}
-          </p>
-          <p className="text-sm leading-7 text-[#6B6B6B]">
-            {state.application.status === "APPROVED"
-              ? "Your application is approved. You can open your chef dashboard."
-              : state.application.status === "REJECTED"
-                ? "Your application needs attention. Contact Craves support about the reason below."
-                : "Your chef dashboard becomes available after approval. You can continue using Craves in Customer Mode."}
-          </p>
-          {state.application.id ? (
-            <p className="text-sm">
-              Application ID: <span className="break-all">{state.application.id}</span>
-            </p>
-          ) : null}
-          {state.progress?.reason ? <p role="alert" className="chef-onboarding-notice chef-onboarding-error">{state.progress.reason}</p> : null}
-          {state.progress?.nextAction === "EDIT_APPLICATION" ? <button type="button" className="chef-onboarding-button" onClick={()=>flow.edit("personal")}>Correct application</button> : null}
-          {state.application.rejectionReason ? (
-            <p role="alert" className="chef-onboarding-notice chef-onboarding-error">
-              {state.application.rejectionReason}
-            </p>
-          ) : null}
-          <Link href="/home" className="chef-onboarding-text-action justify-start">
-            Switch to Customer Mode
-          </Link>
-        </div>
-      ) : null}
-      {flow.error || flow.fieldError ? (
-        <p role="alert" className="chef-onboarding-notice chef-onboarding-error">
-          {flow.error || flow.fieldError?.message}
-        </p>
+        <ChefStatusView
+          phase={phase}
+          application={state.application}
+          reason={state.progress?.reason}
+          documents={state.documents}
+          supportPhone={state.supportPhone}
+          supportEmail={state.supportEmail}
+        />
       ) : null}
       {flow.notice ? (
-        <p role="status" className="chef-onboarding-notice">
-          {flow.notice}
-        </p>
+        <div style={{ marginTop: 16 }}>
+          <Note tone="neutral" role="status">
+            {flow.notice}
+          </Note>
+        </div>
+      ) : null}
+      {flow.error && !editingAllowed ? (
+        <div style={{ marginTop: 16 }}>
+          <Note tone="error" role="alert">
+            {flow.error}
+          </Note>
+        </div>
       ) : null}
     </ChefOnboardingShell>
   );
 }
-

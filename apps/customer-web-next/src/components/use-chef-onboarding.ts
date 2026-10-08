@@ -52,6 +52,14 @@ export async function chefOnboardingApi(
   }
   return raw;
 }
+const INCOMPLETE_MESSAGES: Record<ChefFormSection, string> = {
+  personal: "Complete your basic details before submitting your application.",
+  kitchen: "Complete your kitchen details and add both kitchen photos before submitting.",
+  fssai:
+    "Add your 14-digit FSSAI registration number before submitting. If you don’t have one yet, use “Don’t have FSSAI?” for help.",
+  documents: "Upload your identity document before submitting your application.",
+  bank: "Confirm your bank details before submitting your application.",
+};
 function verifiedState(raw: unknown): OnboardingState {
   const next = parseOnboardingState(raw);
   if (!next) throw new Error("We could not verify your saved application. Please retry.");
@@ -77,6 +85,7 @@ export function useChefOnboarding() {
   const [fromReview, setFromReview] = useState(false),
     [terms, setTerms] = useState(false),
     [callbackCase, setCallbackCase] = useState("");
+  const [fssaiGuide, setFssaiGuideState] = useState(false);
   const currentState = useRef(state),
     currentDetails = useRef(details),
     inFlight = useRef(false),
@@ -166,17 +175,19 @@ export function useChefOnboarding() {
       setDetails(nextDetails);
       setDirty(false);
       setFromReview(false);
-      setScreen(
+      setFssaiGuideState(false);
+      const destination: ChefFormScreen =
         next.application.status === "APPROVED" && next.legacy ||
           next.application.status === "REJECTED" && next.progress?.nextAction !== "EDIT_APPLICATION" ||
+          next.progress?.status === "MORE_INFORMATION_REQUIRED" ||
           next.submitted ||
           (next.legacy && next.application.status === "PENDING")
           ? "status"
           : next.details
             ? "resume"
-            : "personal",
-      );
-      if (next.details && firstIncompleteSection(next, nextBank) === "review")
+            : "personal";
+      setScreen(destination);
+      if (destination === "resume" && firstIncompleteSection(next, nextBank) === "review")
         setNotice("Your saved details are ready to review.");
     } catch (failure) {
       if (current())
@@ -264,6 +275,14 @@ export function useChefOnboarding() {
       element?.scrollIntoView({ block: "center", behavior: "instant" });
     });
   }
+  /** Moves between screens and clears transient messages from the previous one. */
+  function go(next: ChefFormScreen) {
+    setScreen(next);
+    setFssaiGuideState(false);
+    setFieldError(null);
+    setError("");
+    setNotice("");
+  }
   async function saveSection(section: ChefFormSection) {
     const existing = currentState.current;
     if (!existing) return;
@@ -279,29 +298,62 @@ export function useChefOnboarding() {
     }
     await work(async () => {
       const saved = await persist();
-      setScreen(afterSectionSave(section, fromReview, saved));
+      go(afterSectionSave(section, fromReview, saved));
       setFromReview(false);
     });
   }
-  function edit(section: ChefFormSection) {
-    setFromReview(true);
-    setScreen(section);
+  /** Saves the FSSAI help view as a draft and lets the applicant finish the other sections. */
+  async function continueWithoutFssai() {
+    const value = currentDetails.current.fssaiNumber.trim();
+    if (value && !/^[0-9]{14}$/.test(value)) {
+      setFssaiGuideState(false);
+      focusError({
+        field: "fssaiNumber",
+        message: "Finish your 14-digit FSSAI number, or clear it to continue without one for now.",
+      });
+      return;
+    }
+    await work(async () => {
+      const saved = await persist();
+      go(afterSectionSave("fssai", fromReview, saved));
+      setFromReview(false);
+    });
+  }
+  function setFssaiGuide(open: boolean) {
+    setFssaiGuideState(open);
     setFieldError(null);
     setError("");
     setNotice("");
   }
+  function edit(section: ChefFormSection) {
+    setFromReview(true);
+    go(section);
+  }
+  /** Opens a section from the Welcome back list in the normal onboarding order. */
+  function open(section: ChefFormSection | "review") {
+    setFromReview(false);
+    go(section);
+  }
   function back() {
     if (busy) return;
+    if (screen === "fssai" && fssaiGuide) {
+      setFssaiGuide(false);
+      return;
+    }
     if (fromReview) {
-      setScreen("review");
+      go("review");
       setFromReview(false);
       return;
     }
     const sections = activeChefSections(currentState.current);
     const index = sections.indexOf(screen as ChefFormSection);
-    if (index > 0) setScreen(sections[index - 1]!);
-    else if (screen === "review") setScreen(sections[sections.length - 1]!);
+    if (index > 0) go(sections[index - 1]!);
+    else if (screen === "review") go(sections[sections.length - 1]!);
+    else if (index === 0 && currentState.current?.details) go("resume");
     else router.push("/home");
+  }
+  function cancelUpload() {
+    upload.current?.abort();
   }
   function exit() {
     if (busy) return;
@@ -391,9 +443,18 @@ export function useChefOnboarding() {
     await work(async () => {
       const saved = await persist();
       helpKey.current ??= crypto.randomUUID();
+      const fssai = currentDetails.current.fssaiNumber;
       const result = await chefOnboardingApi("/api/chef/onboarding/help", "POST", {
         requestKey: helpKey.current,
-        message: `FSSAI callback requested during chef onboarding (${saved.application.status}); preferred language: ${currentDetails.current.language}. Please help me apply for FSSAI registration.`,
+        message: [
+          "Category: FSSAI application callback",
+          "Request: Please call me on my verified mobile number to help me apply for FSSAI registration.",
+          `Application: ${saved.application.id ?? "Not created yet"} (${saved.application.status})`,
+          "Onboarding stage: FSSAI details",
+          `FSSAI status: ${/^[0-9]{14}$/.test(fssai) ? "Number added" : "No FSSAI number yet"}`,
+          `Verified mobile: ${saved.phoneNumber || "On file"}`,
+          `Preferred language: ${currentDetails.current.language}`,
+        ].join("\n"),
       });
       if (
         !result ||
@@ -415,7 +476,7 @@ export function useChefOnboarding() {
     setBank(next);
     setBankUnavailable(false);
     if (bankCanContinue(next)) {
-      setScreen(afterSectionSave("bank", fromReview));
+      go(afterSectionSave("bank", fromReview));
       setFromReview(false);
     }
   }
@@ -431,7 +492,7 @@ export function useChefOnboarding() {
       const incomplete = firstIncompleteSection(saved, bank);
       if (incomplete !== "review") {
         edit(incomplete);
-        throw new Error("Complete this section before submitting your application.");
+        throw new Error(INCOMPLETE_MESSAGES[incomplete]);
       }
       const next = verifiedState(
         await chefOnboardingApi("/api/chef/onboarding/submit", "POST", {
@@ -446,7 +507,7 @@ export function useChefOnboarding() {
         );
       if (current()) {
         accept(next);
-        setScreen("submitted");
+        go("submitted");
       }
     });
   }
@@ -472,6 +533,12 @@ export function useChefOnboarding() {
     terms,
     setTerms,
     callbackCase,
+    fssaiGuide,
+    setFssaiGuide,
+    continueWithoutFssai,
+    open,
+    go,
+    cancelUpload,
     load,
     refreshBank,
     field,

@@ -159,7 +159,7 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
           {CHEF_SECTIONS.map((key) => (
             <div key={key} className="chef-onboarding-resume-row">
               <span>{CHEF_SECTION_TITLES[key]}</span>
-              <span>{completion[key] ? "Completed" : "Needs attention"}</span>
+              <span>{key === "bank" && state.bankEnrollmentRequired === false ? "Add later" : completion[key] ? "Completed" : "Needs attention"}</span>
             </div>
           ))}
         </div>
@@ -256,3 +256,4 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
     </ChefOnboardingShell>
   );
 }
+

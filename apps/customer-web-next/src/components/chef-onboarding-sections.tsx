@@ -767,17 +767,26 @@ export function ChefReviewDetails({ flow }: Props) {
           ],
         ]}
       />
-      <ReviewBlock
-        flow={flow}
-        section="bank"
-        title="Bank details"
-        rows={[
-          ["Account holder", chefFullName(d)],
-          ["Account", flow.bank?.lastFour ? "•••• " + flow.bank.lastFour : ""],
-          ["IFSC", flow.bank?.ifsc ?? ""],
-          ["Verification", flow.bank?.message ?? ""],
-        ]}
-      />
+      {saved?.bankEnrollmentRequired === false ? (
+        <section className="chef-onboarding-review-block">
+          <h2>Bank details</h2>
+          <p className="chef-onboarding-helper mt-3">
+            You can add bank details later. Submit your application now for review; bank verification and payouts are not active yet.
+          </p>
+        </section>
+      ) : (
+        <ReviewBlock
+          flow={flow}
+          section="bank"
+          title="Bank details"
+          rows={[
+            ["Account holder", chefFullName(d)],
+            ["Account", flow.bank?.lastFour ? "•••• " + flow.bank.lastFour : ""],
+            ["IFSC", flow.bank?.ifsc ?? ""],
+            ["Verification", flow.bank?.message ?? ""],
+          ]}
+        />
+      )}
       <label className="mt-3 flex items-start gap-3 text-sm leading-6">
         <input
           type="checkbox"
@@ -812,3 +821,4 @@ export function ChefReviewDetails({ flow }: Props) {
     </div>
   );
 }
+

@@ -58,6 +58,10 @@ test("saved FSSAI resume state survives parsing and malformed state cannot appea
     supportEmail: "support@craves.in",
   };
   assert.equal(parseOnboardingState(state)?.resumeStep, "fssai");
+  assert.equal(parseOnboardingState(state)?.bankEnrollmentRequired, true);
+  assert.equal(parseOnboardingState({ ...state, bankEnrollmentRequired: false })?.bankEnrollmentRequired, false);
+  for (const value of [null, "false", 0, {}])
+    assert.equal(parseOnboardingState({ ...state, bankEnrollmentRequired: value }), null);
   assert.equal(parseOnboardingState({ ...state, supportEmail: "invalid" }), null);
   assert.equal(parseOnboardingState({ ...state, supportEmail: "support @craves.in" }), null);
   assert.equal(parseOnboardingState({ ...state, resumeStep: "approved-without-fssai" }), null);
@@ -94,3 +98,4 @@ for (const [dateOfBirth, valid] of [
       valid ? null : "dateOfBirth");
   });
 }
+

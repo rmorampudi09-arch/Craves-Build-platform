@@ -198,6 +198,40 @@ function primary(name: string) {
 }
 
 describe("Chef onboarding navigation and persistence", () => {
+  it("submits the initial Chef application without loading or posting bank details", async () => {
+    saved.bankEnrollmentRequired = false;
+    fetcher.mockImplementation((url, init) => {
+      if (String(url).includes("/chef-onboarding/bank")) return Promise.reject(new Error("Provider disabled"));
+      if (String(url).endsWith("/submit")) {
+        saved = { ...saved, submitted: true, version: saved.version + 1, application: { ...saved.application, submittedAt: "2026-10-08T00:00:00Z" } };
+        return Promise.resolve(Response.json(saved));
+      }
+      return normal(url, init);
+    });
+    open();
+    await review();
+    expect(screen.getByText(/You can add bank details later/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Edit Bank details" })).toBeNull();
+    fireEvent.click(primary("Submit application"));
+    await screen.findByText("Accept the terms before submitting your application.");
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/submit"))).toBe(false);
+    fireEvent.click(screen.getByLabelText("Accept terms and privacy policy"));
+    fireEvent.click(primary("Submit application"));
+    await screen.findByRole("heading", { name: "Application submitted" });
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes("/chef-onboarding/bank"))).toBe(false);
+    expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith("/submit"))).toHaveLength(1);
+    expect(screen.queryByRole("link", { name: "Go to dashboard" })).toBeNull();
+  });
+  it("skips deferred bank on document save and back navigation without changing other sections", async () => {
+    saved.bankEnrollmentRequired = false;
+    open();
+    await review();
+    fireEvent.click(primary("Back"));
+    await screen.findByRole("heading", { name: "Identity verification" });
+    fireEvent.click(primary("Save and continue"));
+    await screen.findByRole("heading", { name: "Review your application" });
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes("/chef-onboarding/bank"))).toBe(false);
+  });
   it.each(["personal", "kitchen", "fssai", "documents", "bank"] as ChefFormSection[])(
     "returns %s edits directly to Review after a confirmed save",
     async (section) => {
@@ -477,6 +511,14 @@ describe("Authoritative status and bank verification", () => {
     ] as ChefFormSection[])
       expect(afterSectionSave(section, true)).toBe("review");
   });
+  it("requires bank enrollment unless the server explicitly defers it, while retaining all other requirements", () => {
+    expect(firstIncompleteSection(complete(), null)).toBe("bank");
+    const deferred = { ...complete(), bankEnrollmentRequired: false };
+    expect(firstIncompleteSection(deferred, null)).toBe("review");
+    expect(afterSectionSave("documents", false, deferred)).toBe("review");
+    deferred.details!.fssaiNumber = "";
+    expect(firstIncompleteSection(deferred, null)).toBe("fssai");
+  });
   it("normalizes omitted coordinates and rejects malformed onboarding state", () => {
     const raw = complete();
     delete (raw.details as Partial<typeof EMPTY_ONBOARDING>).latitude;
@@ -492,3 +534,4 @@ describe("Authoritative status and bank verification", () => {
     await expect(prepareChefUpload(file, false)).rejects.toThrow("up to 10 MB");
   });
 });
+

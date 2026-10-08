@@ -7,6 +7,7 @@ import {
   EMPTY_ONBOARDING,
 } from "./chef-onboarding-v2-contract.ts";
 import { onboardingRoute } from "./chef-onboarding-route-policy.ts";
+import { validateChefSection } from "./chef-onboarding-flow.ts";
 test("single-file and two-sided proof requirements match the selected option", () => {
   for (const proof of ["PAN", "BANK_STATEMENT"] as const)
     assert.equal(proofNeedsBack(proof), false);
@@ -66,3 +67,30 @@ test("saved FSSAI resume state survives parsing and malformed state cannot appea
     null,
   );
 });
+for (const [dateOfBirth, valid] of [
+  ["2000-02-29", true],
+  ["2024-02-29", true],
+  ["1900-02-29", false],
+  ["2023-02-29", false],
+  ["1990-04-31", false],
+] as const) {
+  test(`Basic details ${valid ? "accept" : "reject"} calendar DOB ${dateOfBirth}`, () => {
+    const details = {
+      ...EMPTY_ONBOARDING,
+      email: "chef@example.invalid",
+      firstName: "Test",
+      lastName: "Chef",
+      dateOfBirth,
+    };
+    const state = parseOnboardingState({
+      enabled: true, legacy: false, version: 1, resumeStep: "personal", submitted: false,
+      phoneNumber: "+910000000000", details,
+      application: { id: null, status: "NOT_SUBMITTED", documents: [] },
+      documents: [], requiredDocuments: [],
+      supportPhone: "+910000000000", supportEmail: "support@example.invalid",
+    });
+    assert.ok(state);
+    assert.equal(validateChefSection("personal", details, state, true)?.field ?? null,
+      valid ? null : "dateOfBirth");
+  });
+}

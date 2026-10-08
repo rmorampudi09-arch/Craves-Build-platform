@@ -128,9 +128,11 @@ export function validateChefSection(
       };
     if (details.firstName.length > 100 || details.lastName.length > 100)
       return { field: "fullName", message: "Keep each part of your name within 100 characters." };
+    const birthTimestamp = Date.parse(details.dateOfBirth);
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(details.dateOfBirth) ||
-      !Number.isFinite(Date.parse(details.dateOfBirth)) ||
+      !Number.isFinite(birthTimestamp) ||
+      new Date(birthTimestamp).toISOString().slice(0, 10) !== details.dateOfBirth ||
       details.dateOfBirth < "1900-01-01" ||
       details.dateOfBirth > new Date().toISOString().slice(0, 10)
     )

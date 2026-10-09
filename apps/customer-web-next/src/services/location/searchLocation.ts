@@ -1,5 +1,9 @@
 export type LocationSearchResult = {
   id: string;
+  /** Primary suggestion line, e.g. "Madhapur". */
+  title: string;
+  /** Secondary suggestion line, e.g. "Hyderabad, Telangana, India". */
+  subtitle: string | null;
   formattedAddress: string;
   latitude: number;
   longitude: number;
@@ -50,6 +54,8 @@ function parseResult(value: unknown): LocationSearchResult | null {
 
   return {
     id,
+    title: optionalText(raw.title) ?? formattedAddress.split(",")[0].trim(),
+    subtitle: optionalText(raw.subtitle),
     formattedAddress,
     latitude,
     longitude,
@@ -66,11 +72,13 @@ function parseResult(value: unknown): LocationSearchResult | null {
 export async function searchLocations(
   query: string,
   near?: { latitude: number; longitude: number } | null,
+  signal?: AbortSignal,
 ): Promise<LocationSearchResult[]> {
   const response = await fetch("/api/location/search", {
     method: "POST",
     credentials: "same-origin",
     cache: "no-store",
+    signal,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       query,

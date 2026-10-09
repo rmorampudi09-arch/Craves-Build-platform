@@ -357,48 +357,8 @@ steps:
           -o none \
           --only-show-errors
 
-        PROD_ENV_JSON=$(az containerapp show \
-          --subscription "$EXPECTED_SUBSCRIPTION" \
-          --resource-group "$RG" \
-          --name "$PROD_APP" \
-          --query properties.template.containers[0].env \
-          -o json \
-          --only-show-errors)
-
-        MAPS_CLIENT_ID=$(jq -r '[.[]? | select(.name=="AZURE_MAPS_CLIENT_ID") | .value][0] // empty' <<<"$PROD_ENV_JSON")
-        MAPS_ENDPOINT=$(jq -r '[.[]? | select(.name=="AZURE_MAPS_ENDPOINT") | .value][0] // empty' <<<"$PROD_ENV_JSON")
-
-        if [[ -n "$MAPS_CLIENT_ID" ]]; then
-          MAPS_ID=$(az maps account list \
-            --subscription "$EXPECTED_SUBSCRIPTION" \
-            --resource-group "$RG" \
-            --query "[?properties.uniqueId=='$MAPS_CLIENT_ID'].id | [0]" \
-            -o tsv \
-            --only-show-errors)
-
-          [[ -n "$MAPS_ID" ]] || {
-            echo "ERROR: Azure Maps account for configured client ID was not found in $RG." >&2
-            exit 2
-          }
-
-          MAPS_READER_COUNT=$(az role assignment list \
-            --subscription "$EXPECTED_SUBSCRIPTION" \
-            --assignee-object-id "$PRINCIPAL_ID" \
-            --scope "$MAPS_ID" \
-            --query "[?roleDefinitionName=='Azure Maps Data Reader'] | length(@)" \
-            -o tsv \
-            --only-show-errors || printf '0')
-
-          LOCATION_PROXY_BASE_URL=''
-          if [[ "$MAPS_READER_COUNT" == '0' ]]; then
-            echo 'WARNING: The isolated test Container App identity does not have Azure Maps Data Reader.'
-            echo 'WARNING: The service connection cannot create Azure RBAC assignments, so this deployment will use the production location BFF as the test-only Maps transport.'
-            LOCATION_PROXY_BASE_URL='https://craves.in'
-          fi
-        else
-          LOCATION_PROXY_BASE_URL='https://craves.in'
-          echo 'WARNING: Production Azure Maps configuration was not found; using the production location BFF for the isolated UI test app.'
-        fi
+        # The Ola Maps key is never copied into isolated test apps; location calls use the production BFF.
+        LOCATION_PROXY_BASE_URL='https://craves.in'
 
         ENV_ARGS=(
           "CRAVES_API_BASE_URL=$API_BASE_URL"
@@ -407,8 +367,6 @@ steps:
           "CRAVES_BUILD_SHA=$(Build.SourceVersion)"
           "CRAVES_LOCATION_PROXY_BASE_URL=$LOCATION_PROXY_BASE_URL"
         )
-        [[ -n "$MAPS_CLIENT_ID" ]] && ENV_ARGS+=("AZURE_MAPS_CLIENT_ID=$MAPS_CLIENT_ID")
-        [[ -n "$MAPS_ENDPOINT" ]] && ENV_ARGS+=("AZURE_MAPS_ENDPOINT=$MAPS_ENDPOINT")
 
         az containerapp ingress update \
           --subscription "$EXPECTED_SUBSCRIPTION" \

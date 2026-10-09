@@ -37,13 +37,13 @@ When the customer chooses **Use current location**:
 1. the browser obtains a high-accuracy GPS point;
 2. in the initial chooser, Craves checks the existing PostGIS saved-address recommendation where applicable;
 3. when a nearby saved address matches, that saved address is selected/prefilled;
-4. otherwise the existing same-origin reverse-geocode BFF resolves the GPS point with Azure Maps;
+4. otherwise the existing same-origin reverse-geocode BFF resolves the GPS point with Ola Maps;
 5. the customer confirms or fine-tunes the point on the map; reverse geocoding runs again after map movement;
 6. street, district, city, state, pincode and coordinates stay in the background while the customer primarily edits the door/flat, area and landmark;
 7. recipient name/phone are reused from the customer profile or saved address where possible;
 8. latitude/longitude remain internal and are never rendered as customer inputs.
 
-Location search uses a same-origin server BFF backed by Azure Maps forward geocoding. Azure credentials and managed-identity tokens remain server-side. If geolocation permission is denied, search remains available.
+Location search (Add address -> Search for area, street or landmark) uses a same-origin server BFF backed by Ola Maps Autocomplete, biased to the pin being edited, the customer's selected location or `CRAVES_LOCATION_SEARCH_CENTER`. Picking a suggestion opens the map with the pin on it; the customer drags the map to fine-tune and each settled pin is reverse geocoded. The Ola key remains server-side. If geolocation permission is denied, search remains available.
 
 The provider may not know a private apartment/unit number. Craves never invents one; Door / Flat No. remains customer-editable.
 
@@ -87,9 +87,9 @@ The new web UI requires and sends district for new/edited addresses. The backend
 - HTTP-only Craves access-token cookie for customer saved-address APIs.
 - Mutation requests require same-origin browser headers.
 - Reverse geocoding is a same-origin POST through the Next.js BFF.
-- Azure Maps is called server-side using the Container App managed identity.
-- Azure Maps shared/local authentication is disabled in production.
-- No Azure Maps key, managed-identity token or provider secret reaches browser code.
+- Ola Maps is called server-side with `OLA_MAPS_API_KEY`, bound as `secretref:ola-maps-api-key`: a Key Vault reference to the secret `ola-maps-api-key` in the vault User/Chef already uses.
+- The Ola credential is domain-restricted to `craves.in`; server calls send `Origin: https://craves.in`.
+- No Ola key or provider secret reaches browser code (no `NEXT_PUBLIC_` Ola variable exists).
 - Customer identity IDs are removed from browser responses.
 - Coordinates are validated and retained internally for PostGIS/discovery/delivery but hidden from normal customer UI.
 - No address is stored in browser storage by authenticated address management; only the current in-memory browsing location may be temporary.
@@ -99,7 +99,7 @@ The new web UI requires and sends district for new/edited addresses. The backend
 1. Run exact-head feature CI.
 2. Merge the feature after CI succeeds.
 3. Deploy User-Chef Service so Flyway V4 and the additive `districtName` response field are live.
-4. Run `azure-pipelines-customer-location-azure-maps.yml` with `confirmBillableAzureMapsProvision=true`.
+4. Store the Ola key as `ola-maps-api-key` in the User/Chef Key Vault, then run `azure-pipelines-customer-location-ola-maps.yml` with `operation=bind` and `confirmProductionChange=true`.
 5. Deploy the customer-web-next image using the existing guarded customer-web deployment pipeline.
 6. Purge only the immutable customer-web static assets if the web deployment pipeline does not already perform the Front Door purge.
 7. Run authenticated customer and chef smoke tests.
@@ -137,4 +137,4 @@ chef application -> Use current location
 
 ## Manual / Azure-sensitive steps
 
-The Azure Maps provisioning pipeline is billing-sensitive. It is guarded and must be explicitly run with the confirmation parameter set to true. It creates/reuses the Gen2/G2 Maps account, disables local/shared-key auth, grants the customer-web managed identity `Azure Maps Data Reader`, and binds only the non-secret Maps account unique ID to the Container App.
+Ola Maps is metered per request. `azure-pipelines-customer-location-ola-maps.yml` is guarded: mutating operations (`bind`, `apim`, `remove-azure-maps`) need `confirmProductionChange=true`. It never reads or prints the key; an operator stores the key once in Key Vault. The retired Azure Maps account (Craves-Dev subscription) is no longer used by the location flows; deleting it is an owner billing decision.

@@ -11,6 +11,7 @@ import {
   Loader2,
   MapPin,
   Save,
+  Search,
   Tag,
   X,
 } from "lucide-react";
@@ -28,6 +29,11 @@ import {
 } from "@/lib/address-contract";
 import type { ReverseGeocodedAddress } from "@/lib/location-contract";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
+import {
+  searchLocations,
+  type LocationSearchResult,
+} from "@/services/location/searchLocation";
+import { getAddress } from "@/services/auth/cravesAuth";
 import { sessionFetch } from "@/services/auth/sessionFetch";
 
 type Step = "locate" | "details";
@@ -262,11 +268,19 @@ export function AddressEditorFlow({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<LocationSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchMessage, setSearchMessage] = useState<string | null>(null);
   const reverseRequestRef = useRef(0);
+  const searchRequestRef = useRef(0);
+  const draftLatitude = draft.latitude;
+  const draftLongitude = draft.longitude;
 
   useEffect(() => {
     if (!open) return;
 
+    setSearchQuery("");
     const nextDraft = initialAddress
       ? draftFrom(initialAddress)
       : {
@@ -287,6 +301,55 @@ export function AddressEditorFlow({
     profileDefaults.contactPhoneNumber,
     profileDefaults.recipientName,
   ]);
+
+  // Debounced typeahead; superseded requests are aborted and stale responses dropped.
+  useEffect(() => {
+    const input = searchQuery.trim();
+    const requestId = searchRequestRef.current + 1;
+    searchRequestRef.current = requestId;
+    if (!open || step !== "locate" || input.length < 3) {
+      setSearching(false);
+      setSearchResults([]);
+      setSearchMessage(null);
+      return;
+    }
+
+    setSearching(true);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      // Bias towards the pin being edited, else the customer's selected delivery location.
+      const selected = getAddress();
+      const near =
+        currentPoint({ ...EMPTY_DRAFT, latitude: draftLatitude, longitude: draftLongitude })
+        ?? (selected?.lat != null && selected?.lng != null
+          ? currentPoint({ ...EMPTY_DRAFT, latitude: String(selected.lat), longitude: String(selected.lng) })
+          : null);
+      searchLocations(input, near, controller.signal)
+        .then((found) => {
+          if (requestId !== searchRequestRef.current) return;
+          setSearchResults(found);
+          setSearchMessage(
+            found.length ? null : "No matching places found. Try a nearby landmark or area name.",
+          );
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted || requestId !== searchRequestRef.current) return;
+          setSearchResults([]);
+          setSearchMessage(
+            error instanceof Error
+              ? error.message
+              : "Address search is unavailable right now. Use your current location instead.",
+          );
+        })
+        .finally(() => {
+          if (requestId === searchRequestRef.current) setSearching(false);
+        });
+    }, 350);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [draftLatitude, draftLongitude, open, searchQuery, step]);
 
   const update = <K extends keyof AddressDraft>(
     key: K,
@@ -335,6 +398,20 @@ export function AddressEditorFlow({
         setMapResolving(false);
       }
     }
+  };
+
+  const handleSelectSearchResult = (result: LocationSearchResult) => {
+    // A pending GPS fix would otherwise move the pin after the customer picked a place.
+    if (busy || locating) return;
+    // Open the map on the suggestion immediately; reverse geocoding fills the fields.
+    setDraft((current) => ({
+      ...current,
+      latitude: String(result.latitude),
+      longitude: String(result.longitude),
+    }));
+    setResolvedAddress(result.formattedAddress);
+    setStep("details");
+    void resolvePoint(result.latitude, result.longitude);
   };
 
   const handleUseCurrentLocation = async () => {
@@ -525,7 +602,7 @@ export function AddressEditorFlow({
                 }
               >
                 {step === "locate"
-                  ? "Use your current location to place the delivery pin."
+                  ? "Search for your area or use your current location to place the delivery pin."
                   : "Confirm the pin and complete the required address details."}
               </Dialog.Description>
             </div>
@@ -555,12 +632,86 @@ export function AddressEditorFlow({
                   exit={{ opacity: 0, x: -10 }}
                   transition={{ duration: 0.2, ease: [0.23, 0.88, 0.26, 0.92] }}
                 >
+                  <label htmlFor="address-location-search" className="sr-only">
+                    Search for your area, street or landmark
+                  </label>
+                  <div className="relative">
+                    <Search
+                      className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-[#6B6B6B]"
+                      aria-hidden="true"
+                    />
+                    <input
+                      id="address-location-search"
+                      type="search"
+                      enterKeyHint="search"
+                      autoComplete="off"
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="Search for area, street or landmark"
+                      maxLength={160}
+                      disabled={busy || locating}
+                      aria-controls={searchResults.length ? "address-location-results" : undefined}
+                      aria-describedby="address-location-search-status"
+                      className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3.5 pl-10 pr-10 text-sm text-[#1A1A1A] outline-none transition-[border-color,box-shadow] placeholder:text-[#9A9A9A] focus:border-[#1A1A1A] focus:ring-2 focus:ring-[#1A1A1A]/10 disabled:opacity-50"
+                    />
+                    {searching ? (
+                      <Loader2
+                        className="absolute right-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 animate-spin text-[#F62E18]"
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                  </div>
+
+                  <p id="address-location-search-status" role="status" className="sr-only">
+                    {searching
+                      ? "Searching places"
+                      : searchResults.length
+                        ? `${searchResults.length} places found`
+                        : ""}
+                  </p>
+
+                  {searchResults.length ? (
+                    <ul
+                      id="address-location-results"
+                      className="mt-2 overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white"
+                    >
+                      {searchResults.map((result) => (
+                        <li key={result.id} className="border-b border-[#F1F3F5] last:border-b-0">
+                          <button
+                            type="button"
+                            onClick={() => handleSelectSearchResult(result)}
+                            disabled={busy || locating}
+                            className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-[#F1F3F5] focus-visible:bg-[#F1F3F5] focus-visible:outline-none disabled:opacity-50"
+                          >
+                            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-bold text-[#1A1A1A]">
+                                {result.title}
+                              </span>
+                              {result.subtitle ? (
+                                <span className="mt-0.5 block truncate text-xs font-medium text-[#6B6B6B]">
+                                  {result.subtitle}
+                                </span>
+                              ) : null}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+
+                  {searchMessage ? (
+                    <p className="mt-2 px-1 text-xs font-semibold leading-5 text-[#6B6B6B]">
+                      {searchMessage}
+                    </p>
+                  ) : null}
+
                   <button
                     type="button"
                     onClick={() => void handleUseCurrentLocation()}
                     disabled={locating || busy}
                     className={
-                      "flex w-full items-center gap-4 rounded-2xl border border-[#E5E7EB] !bg-[#F1F3F5] p-4 text-left !text-[#1A1A1A] " +
+                      "mt-4 flex w-full items-center gap-4 rounded-2xl border border-[#E5E7EB] !bg-[#F1F3F5] p-4 text-left !text-[#1A1A1A] " +
                       actionClass +
                       " disabled:opacity-50"
                     }

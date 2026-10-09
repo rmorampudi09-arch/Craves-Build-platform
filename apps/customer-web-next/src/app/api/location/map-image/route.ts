@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { boundedFetch } from "@/lib/bounded-fetch";
 import { isRequestOriginAllowed } from "@/lib/request-security";
-import { renderAzureMapsStaticImage } from "@/lib/server/azure-maps";
+import { renderOlaMapsStaticImage } from "@/lib/server/ola-maps";
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 90;
@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const image = await renderAzureMapsStaticImage(
+    const image = await renderOlaMapsStaticImage(
       latitude,
       longitude,
       zoom,

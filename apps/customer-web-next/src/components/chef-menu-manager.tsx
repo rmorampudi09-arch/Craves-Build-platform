@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ImagePlus, Plus, UtensilsCrossed } from "lucide-react";
 import { FaPepperHot } from "react-icons/fa";
@@ -54,6 +54,7 @@ const EMPTY: FormState = {
   status: "DRAFT",
 };
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_PHOTOS = 5;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const FOOD_TYPES = [
   { value: "VEG", label: "Veg", color: "bg-[#2E7D32]" },
@@ -75,6 +76,10 @@ function toForm(item: ChefMenuItem): FormState {
     spiceLevel: item.spiceLevel ?? "",
     unitPackageWeightGrams: String(item.unitPackageWeightGrams),
   };
+}
+/** Saved photos, cover first, in the order customers see them. */
+function savedImages(item?: ChefMenuItem) {
+  return [...(item?.images ?? [])].sort((a, b) => Number(b.primary) - Number(a.primary) || a.sortOrder - b.sortOrder);
 }
 function primaryImage(item?: ChefMenuItem) {
   return (
@@ -141,8 +146,8 @@ export function ChefMenuManager() {
   const busyRef = useRef(false);
   const [uncertainSave, setUncertainSave] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState("");
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const previews = useMemo(() => imageFiles.map((file) => URL.createObjectURL(file)), [imageFiles]);
   const formRef = useRef<HTMLFormElement>(null);
 
   const load = useCallback(async (initial = false): Promise<boolean> => {
@@ -189,15 +194,7 @@ export function ChefMenuManager() {
   useEffect(() => {
     void load(true);
   }, [load]);
-  useEffect(() => {
-    if (!imageFile) {
-      setPreview("");
-      return;
-    }
-    const url = URL.createObjectURL(imageFile);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [imageFile]);
+  useEffect(() => () => previews.forEach((url) => URL.revokeObjectURL(url)), [previews]);
 
   function update<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -205,7 +202,7 @@ export function ChefMenuManager() {
   }
   function start(item?: ChefMenuItem) {
     setForm(item ? toForm(item) : EMPTY);
-    setImageFile(null);
+    setImageFiles([]);
     setErrors({});
     setMessage("");
     setNotice("");
@@ -262,8 +259,8 @@ export function ChefMenuManager() {
       )
         next[field] = `${label} must be a whole number from 1 to 100,000.`;
     }
-    if (errors.photo) next.photo = errors.photo;
-    setErrors(next);
+    // A rejected photo is never queued, so its message stays visible without blocking the save.
+    setErrors(errors.photo ? { ...next, photo: errors.photo } : next);
     const first = Object.keys(next)[0] as Field | undefined;
     if (first) {
       focusField(first);
@@ -332,10 +329,12 @@ export function ChefMenuManager() {
         );
       upsert(saved);
       setForm(toForm(saved));
-      if (imageFile) {
+      // Upload one at a time; each confirmed photo leaves the queue so a retry never duplicates it.
+      const pending = [...imageFiles];
+      for (const file of pending) {
         const data = new FormData();
-        data.set("file", imageFile);
-        data.set("primary", "true");
+        data.set("file", file);
+        data.set("primary", "false");
         const upload = await fetch(`/api/chef/menu/${saved.id}/images`, {
           method: "POST",
           body: data,
@@ -354,7 +353,7 @@ export function ChefMenuManager() {
           throw new Error(
             "The photo upload was not confirmed. Please reload your menu to check it.",
           );
-        setImageFile(null);
+        setImageFiles((current) => current.filter((entry) => entry !== file));
       }
       setEditing(false);
       setNotice(creating ? "Dish added successfully" : "Dish updated successfully");
@@ -364,7 +363,11 @@ export function ChefMenuManager() {
         error instanceof Error
           ? error.message
           : "Connection interrupted. Please reload your menu to check the result.";
-      if (saved) setMessage(`Dish details saved, but the photo was not confirmed. ${detail}`);
+      if (saved) {
+        setMessage(`Dish details saved, but a photo was not confirmed. Photos still listed as New were not uploaded. ${detail}`);
+        // Show photos that did upload before the failure.
+        await load();
+      }
       else {
         setMessage(detail);
         if (!confirmedRejection) setUncertainSave(true);
@@ -414,7 +417,8 @@ export function ChefMenuManager() {
       setBusy(false);
     }
   }
-  const displayedPhoto = preview || primaryImage(items.find((item) => item.id === form.id));
+  const existingPhotos = savedImages(items.find((item) => item.id === form.id));
+  const photoSlots = MAX_PHOTOS - existingPhotos.length - imageFiles.length;
   const feedback = (
     <>
       {notice ? (
@@ -605,73 +609,96 @@ export function ChefMenuManager() {
           <div className="mt-5 space-y-5">
             <div>
               <label htmlFor="dish-photo" className="font-medium">
-                Dish photo{" "}
+                Dish photos{" "}
                 <span className="text-sm font-normal text-muted-foreground">Optional</span>
               </label>
               <p className="mt-1 text-sm text-muted-foreground">
-                JPEG, PNG or WebP, up to 8 MB. A photo helps customers choose your dish.
+                Add up to {MAX_PHOTOS} photos. JPEG, PNG or WebP, up to 8 MB each. The first photo is the cover customers see.
               </p>
-              <div className="mt-3 flex flex-wrap items-center gap-4">
-                {displayedPhoto ? (
-                  <img
-                    src={displayedPhoto}
-                    alt="Dish preview"
-                    className="size-28 rounded-xl object-cover"
-                  />
-                ) : (
-                  <div className="flex size-28 items-center justify-center rounded-xl bg-muted">
-                    <ImagePlus className="size-8 text-muted-foreground" />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <Input
-                    {...fieldProps("photo")}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className={`${CONTROL} pt-3`}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (!file) return;
-                      if (
-                        !IMAGE_TYPES.has(file.type) ||
-                        file.size === 0 ||
-                        file.size > MAX_IMAGE_BYTES
-                      ) {
-                        setErrors((current) => ({
-                          ...current,
-                          photo: "Choose a JPEG, PNG or WebP photo up to 8 MB.",
-                        }));
-                        event.target.value = "";
-                        return;
-                      }
-                      setErrors((current) => ({ ...current, photo: undefined }));
-                      setImageFile(file);
-                    }}
-                  />
-                  {imageFile || errors.photo ? (
-                    <Button
+              <ul className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-5" aria-label="Photo gallery">
+                {existingPhotos.map((image, index) => (
+                  <li key={image.id} className="relative">
+                    <img
+                      src={image.publicUrl ?? ""}
+                      alt={`Saved photo ${index + 1}`}
+                      className="aspect-square w-full rounded-xl border border-border object-cover"
+                    />
+                    {image.primary ? (
+                      <span className="absolute left-1.5 top-1.5 rounded-full bg-[#F62E18] px-2 py-0.5 text-xs font-semibold text-white">
+                        Cover
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+                {imageFiles.map((file, index) => (
+                  <li key={`${file.name}-${file.size}-${file.lastModified}`} className="relative">
+                    <img
+                      src={previews[index]}
+                      alt={existingPhotos.length === 0 && index === 0 ? "Dish preview" : `New photo ${file.name}`}
+                      className="aspect-square w-full rounded-xl border border-dashed border-[#F62E18] object-cover"
+                    />
+                    <span className="absolute left-1.5 top-1.5 rounded-full bg-white/95 px-2 py-0.5 text-xs font-semibold text-[#1A1A1A] shadow">
+                      {existingPhotos.length === 0 && index === 0 ? "Cover · New" : "New"}
+                    </span>
+                    <button
                       type="button"
-                      variant="ghost"
-                      className="mt-1"
-                      onClick={() => {
-                        setImageFile(null);
-                        setErrors(current => ({ ...current, photo: undefined }));
-                        const input = document.getElementById(
-                          "dish-photo",
-                        ) as HTMLInputElement | null;
-                        if (input) input.value = "";
-                      }}
+                      aria-label={`Remove ${file.name}`}
+                      className="absolute right-1.5 top-1.5 flex size-9 min-h-9! min-w-9! items-center justify-center rounded-full p-0! text-base font-bold text-[#1A1A1A] shadow focus-visible:outline-2 focus-visible:outline-[#F62E18]"
+                      onClick={() => setImageFiles((current) => current.filter((entry) => entry !== file))}
                     >
-                      Remove selected photo
-                    </Button>
-                  ) : displayedPhoto ? (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Choose a new photo to replace the primary photo.
-                    </p>
-                  ) : null}
-                </div>
-              </div>
+                      ×
+                    </button>
+                  </li>
+                ))}
+                {photoSlots > 0 ? (
+                  <li>
+                    <label className="flex aspect-square w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[#C9CDD2] bg-muted text-center text-xs font-medium text-muted-foreground focus-within:ring-2 focus-within:ring-[#F62E18] hover:border-[#F62E18] hover:text-[#F62E18]">
+                      <ImagePlus className="size-6" aria-hidden="true" />
+                      Add photo
+                      <Input
+                        {...fieldProps("photo")}
+                        type="file"
+                        multiple
+                        accept="image/jpeg,image/png,image/webp"
+                        className="sr-only"
+                        onChange={(event) => {
+                          const chosen = Array.from(event.target.files ?? []);
+                          event.target.value = "";
+                          if (!chosen.length) return;
+                          const valid = chosen.filter(
+                            (file) => IMAGE_TYPES.has(file.type) && file.size > 0 && file.size <= MAX_IMAGE_BYTES,
+                          );
+                          const accepted = valid.slice(0, Math.max(0, photoSlots));
+                          setImageFiles((current) => [...current, ...accepted]);
+                          setErrors((current) => ({
+                            ...current,
+                            photo:
+                              valid.length < chosen.length
+                                ? "Choose a JPEG, PNG or WebP photo up to 8 MB."
+                                : accepted.length < valid.length
+                                  ? `You can add up to ${MAX_PHOTOS} photos per dish.`
+                                  : undefined,
+                          }));
+                        }}
+                      />
+                    </label>
+                  </li>
+                ) : null}
+              </ul>
+              <p className="mt-2 text-xs text-muted-foreground" aria-live="polite">
+                {existingPhotos.length + imageFiles.length} of {MAX_PHOTOS} photos
+              </p>
               {errorText("photo")}
+              {errors.photo ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="mt-1"
+                  onClick={() => setErrors((current) => ({ ...current, photo: undefined }))}
+                >
+                  Dismiss
+                </Button>
+              ) : null}
             </div>
             <div>
               <label htmlFor="dish-itemName" className="font-medium">

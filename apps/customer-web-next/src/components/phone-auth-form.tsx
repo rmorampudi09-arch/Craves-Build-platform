@@ -16,7 +16,8 @@ type RecaptchaMode = "visible" | "invisible";
 
 const RESEND_DELAY_SECONDS = 30;
 
-export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
+/** centralOtp=false: this host has no central MSG91 OTP (admin portal), so sign in with Firebase phone auth. */
+export function PhoneAuthForm({ returnTo, centralOtp = true }: { returnTo?: string; centralOtp?: boolean }) {
   const destination = safeReturnPath(returnTo);
   const chefJourney = destination.startsWith("/chef");
   const [phone, setPhone] = useState("+91");
@@ -93,7 +94,7 @@ export function PhoneAuthForm({ returnTo }: { returnTo?: string }) {
       if (isResend && confirmation.current?.resend) {
         await confirmation.current.resend();
       } else {
-        const msg91 = await beginMsg91PhoneSignIn(normalized, "craves-recaptcha");
+        const msg91 = centralOtp ? await beginMsg91PhoneSignIn(normalized, "craves-recaptcha") : null;
         if (msg91) confirmation.current = msg91;
         else {
           const { auth } = getFirebaseBrowserClient();

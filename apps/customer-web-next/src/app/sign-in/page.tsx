@@ -18,7 +18,9 @@ export default async function SignInPage({ searchParams }: {
   const adminJourney = process.env.CRAVES_ADMIN_PORTAL === "true" || isAdminDestination(destination);
   // Never default an administrator sign-in to the public customer home page.
   const returnTo = adminJourney ? (isAdminDestination(destination) ? destination : "/admin") : destination;
-  if (!adminJourney) return <main className="mx-auto flex min-h-screen max-w-xl items-center px-5 py-12"><PhoneAuthForm returnTo={returnTo}/></main>;
+  // The admin portal signs in with Firebase phone auth; only hosts with the central MSG91 OTP use it.
+  const centralOtp = process.env.CRAVES_CENTRAL_OTP_ENABLED === "true";
+  if (!adminJourney) return <main className="mx-auto flex min-h-screen max-w-xl items-center px-5 py-12"><PhoneAuthForm returnTo={returnTo} centralOtp={centralOtp}/></main>;
 
   return <main className="cr-admin cr-login">
     <section className="cr-login-story" aria-labelledby="cr-login-title">
@@ -29,7 +31,7 @@ export default async function SignInPage({ searchParams }: {
     </section>
     <div className="cr-login-form-area">
       <div className="cr-login-form-heading"><span className="cr-badge">Administrator access</span><p>Use your approved admin mobile number. Signing in does not grant administrator privileges.</p></div>
-      <div className="cr-login-auth"><PhoneAuthForm returnTo={returnTo}/></div>
+      <div className="cr-login-auth"><PhoneAuthForm returnTo={returnTo} centralOtp={centralOtp}/></div>
       <p className="cr-footnote">Access is verified by Craves. Existing session, OTP and security policies remain in effect.</p>
     </div>
   </main>;

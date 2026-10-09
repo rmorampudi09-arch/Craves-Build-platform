@@ -207,30 +207,42 @@ def deploy_admin(source,sha,run_id,output):
         raise RuntimeError('Admin release failed; previous admin image restore requested, verify Azure revisions')
 
 
-def deploy_notification(source,sha,run_id,output):
-    """Image-only update of Notification from the reviewed source; secrets and settings are untouched."""
-    before=app(NOTIFICATION)
-    require(before['properties']['configuration'].get('activeRevisionsMode')=='Single','Notification must run in single-revision mode for an image swap')
+def deploy_image_only(name,label,service,source,sha,run_id,output):
+    """Image-only update of one app from the reviewed source; secrets and settings are untouched."""
+    before=app(name)
+    require(before['properties']['configuration'].get('activeRevisionsMode')=='Single',label.capitalize()+' must run in single-revision mode for an image swap')
     old=resolve_image(image(before))
-    target=build_image(source,'services/notification-service','craves/notification-service',sha)
+    target=build_image(source,'services/'+service,'craves/'+service,sha)
     source_guard(source,sha,run_id)
-    current=app(NOTIFICATION)
-    require(runtime.stable(current)==runtime.stable(before) and image(current)==image(before),'Concurrent notification runtime change; deployment stopped')
-    receipt={'app':NOTIFICATION,'sourceSha':sha,'image':target,'previousImage':old}
+    current=app(name)
+    require(runtime.stable(current)==runtime.stable(before) and image(current)==image(before),'Concurrent '+label+' runtime change; deployment stopped')
+    receipt={'app':name,'sourceSha':sha,'image':target,'previousImage':old}
     output.write_text(json.dumps(receipt,indent=2)+'\n')
-    if image(current)!=target:azure('containerapp','update','-g',RG,'-n',NOTIFICATION,'--image',target,'--no-wait')
+    if image(current)!=target:azure('containerapp','update','-g',RG,'-n',name,'--image',target,'--no-wait')
     try:
         for attempt in range(90):
-            current=app(NOTIFICATION)
-            require(runtime.stable(current)==runtime.stable(before),'Unrelated notification runtime setting changed; stop')
+            current=app(name)
+            require(runtime.stable(current)==runtime.stable(before),'Unrelated '+label+' runtime setting changed; stop')
             if admin_settled(current,target):
                 verify_image(image(current),sha);print(json.dumps({**receipt,'verified':True}),flush=True);return
-            print('Waiting for the reviewed notification revision: '+str(attempt+1),flush=True);time.sleep(10)
-        raise ValueError('Notification revision did not become ready within fifteen minutes')
+            print('Waiting for the reviewed '+label+' revision: '+str(attempt+1),flush=True);time.sleep(10)
+        raise ValueError(label.capitalize()+' revision did not become ready within fifteen minutes')
     except Exception:
-        print('Restoring the previous notification image; other settings remain unchanged.',flush=True)
-        azure('containerapp','update','-g',RG,'-n',NOTIFICATION,'--image',old,'--no-wait')
-        raise RuntimeError('Notification release failed; previous notification image restore requested, verify Azure revisions')
+        print('Restoring the previous '+label+' image; other settings remain unchanged.',flush=True)
+        azure('containerapp','update','-g',RG,'-n',name,'--image',old,'--no-wait')
+        raise RuntimeError(label.capitalize()+' release failed; previous '+label+' image restore requested, verify Azure revisions')
+
+
+def deploy_notification(source,sha,run_id,output):
+    # Its ACS secret is a plain app secret, which the preserve-runtime backend helper refuses.
+    deploy_image_only(NOTIFICATION,'notification','notification-service',source,sha,run_id,output)
+
+
+def deploy_catalog(source,sha,run_id,output):
+    """Catalog image from the reviewed source, then its chef photo APIM operations (remove, set cover)."""
+    deploy_image_only(CATALOG,'catalog','catalog-service',source,sha,run_id,output)
+    run('bash',str(source/'scripts/apim/configure-chef-menu-media-apim.sh'),env=dict(os.environ,RG=RG,APIM=APIM,CATALOG_APP=CATALOG))
+    print('Chef menu photo operations published.',flush=True)
 
 
 def configure_media(output):
@@ -281,7 +293,7 @@ def configure_media(output):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--operation',choices=('preflight','backend','apim','web','activate','media'),default='preflight')
+    parser.add_argument('--operation',choices=('preflight','backend','apim','web','activate','media','catalog'),default='preflight')
     parser.add_argument('--sha',required=True);parser.add_argument('--regression-run',required=True)
     parser.add_argument('--confirm',action='store_true');parser.add_argument('--allow-bank-unavailable',action='store_true');parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args();source=Path.cwd()
@@ -303,6 +315,7 @@ def main():
         applied(preflight());deploy_web(source,args.sha,args.regression_run,args.output/'chef-web.json')
         deploy_admin(source,args.sha,args.regression_run,args.output/'chef-admin.json')
     elif args.operation=='media':configure_media(args.output/'catalog-media.json')
+    elif args.operation=='catalog':deploy_catalog(source,args.sha,args.regression_run,args.output/'catalog.json')
     else:activate(args.sha,args.output/'chef-activation.json',args.allow_bank_unavailable)
 
 if __name__=='__main__':

@@ -16,6 +16,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -116,6 +117,28 @@ public class KitchenController {
         @RequestParam(defaultValue = "false") boolean primary
     ) {
         MenuItemImageResponse response = catalogService.uploadMenuItemImage(principal, menuItemId, file, primary);
+        discoveryCacheService.invalidateAllDiscovery();
+        return response;
+    }
+
+    @DeleteMapping("/menu-items/{menuItemId}/images/{imageId}")
+    public MenuItemResponse deleteMenuItemImage(
+        @AuthenticationPrincipal CravesPrincipal principal,
+        @PathVariable UUID menuItemId,
+        @PathVariable UUID imageId
+    ) {
+        MenuItemResponse response = catalogService.deleteMenuItemImage(principal, menuItemId, imageId);
+        discoveryCacheService.invalidateAllDiscovery();
+        return response;
+    }
+
+    @PutMapping("/menu-items/{menuItemId}/images/{imageId}/primary")
+    public MenuItemResponse setPrimaryMenuItemImage(
+        @AuthenticationPrincipal CravesPrincipal principal,
+        @PathVariable UUID menuItemId,
+        @PathVariable UUID imageId
+    ) {
+        MenuItemResponse response = catalogService.setPrimaryMenuItemImage(principal, menuItemId, imageId);
         discoveryCacheService.invalidateAllDiscovery();
         return response;
     }

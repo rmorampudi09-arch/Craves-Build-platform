@@ -140,6 +140,20 @@ class ChefReleaseGuardTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'previous notification image restore requested'):release.deploy_notification(Path('.'),'a'*40,'1',Mock())
         self.assertEqual(update.call_args.args,('containerapp','update','-g',release.RG,'-n',release.NOTIFICATION,'--image','old-pinned','--no-wait'))
 
+    def test_catalog_deploy_swaps_only_the_image_then_publishes_photo_routes(self):
+        before=self.settled_app(release.CATALOG);after=copy.deepcopy(before)
+        after['properties']['template']['containers'][0]['image']='craves/catalog-service@sha256:new'
+        state={'updated':False}
+        def azure(*args):state['updated']=True
+        with patch.object(release,'app',side_effect=lambda name:after if state['updated'] else before),patch.object(release,'resolve_image',return_value='old-pinned'),\
+             patch.object(release,'build_image',return_value='craves/catalog-service@sha256:new') as build,patch.object(release,'source_guard'),\
+             patch.object(release,'verify_image'),patch.object(release,'azure',side_effect=azure) as update,patch.object(release,'run') as cli,patch.object(release.time,'sleep'):
+            release.deploy_catalog(Path('.'),'a'*40,'1',Mock())
+        self.assertEqual(build.call_args.args[1:3],('services/catalog-service','craves/catalog-service'))
+        self.assertEqual(update.call_args_list,[unittest.mock.call('containerapp','update','-g',release.RG,'-n',release.CATALOG,'--image','craves/catalog-service@sha256:new','--no-wait')])
+        self.assertTrue(cli.call_args.args[1].endswith('scripts/apim/configure-chef-menu-media-apim.sh'))
+        self.assertEqual(cli.call_args.kwargs['env']['APIM'],release.APIM)
+
     def test_media_creates_public_photo_storage_and_points_catalog_at_it(self):
         before=self.settled_app(release.CATALOG);after=copy.deepcopy(before)
         after['properties']['template']['containers'][0]['env']+=[{'name':'CRAVES_STORAGE_ENDPOINT_VALUE','secretRef':'media-storage'},{'name':'CRAVES_STORAGE_MEDIA_CONTAINER','value':'media'}]

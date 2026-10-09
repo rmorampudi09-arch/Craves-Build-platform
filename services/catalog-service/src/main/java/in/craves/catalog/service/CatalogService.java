@@ -31,11 +31,14 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class CatalogService {
+    static final int MAX_MENU_ITEM_IMAGES = 5;
     private final CatalogFinanceEligibility financeEligibility;
     private final JdbcTemplate jdbcTemplate;
     private final MediaStorageService mediaStorageService;
@@ -215,6 +218,10 @@ public class CatalogService {
         requireChef(principal);
         UUID kitchenId = requireMyKitchenId(principal.identityId());
         getMyMenuItem(principal, menuItemId);
+        lockMenuItem(menuItemId);
+        if (listImages(menuItemId).size() >= MAX_MENU_ITEM_IMAGES) {
+            throw ApiException.conflict("MENU_IMAGE_LIMIT_REACHED", "A dish can have up to " + MAX_MENU_ITEM_IMAGES + " photos");
+        }
         StoredMedia stored = mediaStorageService.uploadMenuImage(kitchenId, menuItemId, file);
         boolean shouldBePrimary = primary || listImages(menuItemId).isEmpty();
         if (shouldBePrimary) {
@@ -240,6 +247,53 @@ public class CatalogService {
             shouldBePrimary
         );
         return getImage(imageId);
+    }
+
+    /** Removes one saved photo; the next photo becomes the cover. The blob is removed only after commit. */
+    @Transactional
+    public MenuItemResponse deleteMenuItemImage(CravesPrincipal principal, UUID menuItemId, UUID imageId) {
+        requireChef(principal);
+        getMyMenuItem(principal, menuItemId);
+        lockMenuItem(menuItemId);
+        MenuItemImageResponse image = requireImage(menuItemId, imageId);
+        jdbcTemplate.update("DELETE FROM catalog_schema.menu_item_image WHERE id = ? AND menu_item_id = ?", imageId, menuItemId);
+        if (image.primary()) {
+            jdbcTemplate.update(
+                "UPDATE catalog_schema.menu_item_image SET is_primary = true WHERE id = (SELECT id FROM catalog_schema.menu_item_image WHERE menu_item_id = ? ORDER BY sort_order ASC, created_at ASC LIMIT 1)",
+                menuItemId
+            );
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { mediaStorageService.deleteQuietly(image.blobName()); }
+            });
+        } else {
+            mediaStorageService.deleteQuietly(image.blobName());
+        }
+        return getMyMenuItem(principal, menuItemId);
+    }
+
+    /** Makes one saved photo the cover customers see first. */
+    @Transactional
+    public MenuItemResponse setPrimaryMenuItemImage(CravesPrincipal principal, UUID menuItemId, UUID imageId) {
+        requireChef(principal);
+        getMyMenuItem(principal, menuItemId);
+        lockMenuItem(menuItemId);
+        requireImage(menuItemId, imageId);
+        jdbcTemplate.update("UPDATE catalog_schema.menu_item_image SET is_primary = false WHERE menu_item_id = ?", menuItemId);
+        jdbcTemplate.update("UPDATE catalog_schema.menu_item_image SET is_primary = true WHERE id = ? AND menu_item_id = ?", imageId, menuItemId);
+        return getMyMenuItem(principal, menuItemId);
+    }
+
+    // Serializes photo changes per dish so concurrent uploads cannot pass the photo limit.
+    private void lockMenuItem(UUID menuItemId) {
+        jdbcTemplate.queryForList("SELECT id FROM catalog_schema.menu_item WHERE id = ? FOR UPDATE", menuItemId);
+    }
+
+    private MenuItemImageResponse requireImage(UUID menuItemId, UUID imageId) {
+        return jdbcTemplate.query(
+            "SELECT * FROM catalog_schema.menu_item_image WHERE id = ? AND menu_item_id = ?", this::mapImage, imageId, menuItemId
+        ).stream().findFirst().orElseThrow(() -> ApiException.notFound("MENU_IMAGE_NOT_FOUND", "Menu photo was not found"));
     }
 
     public PublicKitchenDiscoveryResponse discoverKitchens(BigDecimal latitude, BigDecimal longitude, String city, String areaName, BigDecimal requestedRadiusKm) {

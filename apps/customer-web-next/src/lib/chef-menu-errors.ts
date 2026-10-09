@@ -16,6 +16,7 @@ export function chefMenuFailure(status: number, raw: unknown): { code: string; m
     MEDIA_FILE_TOO_LARGE: "This photo is larger than 8 MB. Choose a smaller photo.",
     MEDIA_CONTENT_TYPE_NOT_ALLOWED: "Use a JPEG, PNG or WebP photo.",
     MENU_IMAGE_LIMIT_REACHED: "This dish already has 5 photos.",
+    MENU_IMAGE_NOT_FOUND: "That photo was already removed. Reload the menu to see the latest photos.",
   };
   if (typeof raw.code === "string" && media[raw.code]) return { code: raw.code, message: media[raw.code] };
   return null;

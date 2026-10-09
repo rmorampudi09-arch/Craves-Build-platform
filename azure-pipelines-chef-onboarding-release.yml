@@ -5,7 +5,7 @@ parameters:
   - name: operation
     type: string
     default: preflight
-    values: [preflight, backend, apim, web, activate, media]
+    values: [preflight, backend, apim, web, activate, media, catalog]
   - name: releaseSha
     type: string
     default: SELECT_REVIEWED_MERGED_MAIN_SHA
@@ -36,7 +36,7 @@ jobs:
             set -Eeuo pipefail
             set +x
             [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ && "$REGRESSION_RUN_ID" =~ ^[0-9]+$ ]] || { echo 'Select the exact reviewed main SHA and matching successful regression run.' >&2; exit 2; }
-            case "$OPERATION" in preflight|backend|apim|web|activate|media) ;; *) exit 2 ;; esac
+            case "$OPERATION" in preflight|backend|apim|web|activate|media|catalog) ;; *) exit 2 ;; esac
             if [[ "$OPERATION" != preflight && "${CONFIRM_DEPLOY,,}" != true ]]; then echo 'Explicit Chef deployment confirmation required.' >&2; exit 2; fi
             SOURCE=$(mktemp -d)
             trap 'rm -rf "$SOURCE"' EXIT

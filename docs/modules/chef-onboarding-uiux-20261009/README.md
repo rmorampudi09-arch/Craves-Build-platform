@@ -73,6 +73,18 @@ Items 1–4, 6 and 7 were fixed in backend and web on 9 October 2026 (follow-up 
 
 **Release order:** merged `main` → `launch-regression-ci.yml` → pipeline #14 `operation=backend` (deploys user-chef-service, Flyway applies V17) → pipeline #14 `operation=web`. No APIM change (no new routes).
 
+## Upload, submit and admin-queue fixes (9 Oct 2026, second follow-up)
+
+Reported after the first live test (applicant Gopi Nagalla): uploads looked failed until a reload, Submit kept failing, and the application never reached the admin queue.
+
+| Symptom | Root cause | Fix |
+|---|---|---|
+| A document uploads but shows “Upload failed” until refresh | The server renames files (`[^a-zA-Z0-9._-]` → `-`), but the web confirmed the upload by comparing the original file name, so names with spaces or brackets (`Aadhaar front.jpg`, macOS screenshots) never matched | `use-chef-onboarding.ts` confirms by the document id the upload returns |
+| Submit always fails, even after reloads | A map pin has 7 decimals; `chef_application.latitude/longitude` are `NUMERIC(9,6)`, so the saved kitchen never equalled the draft and submit returned `ONBOARDING_DETAILS_NOT_CONFIRMED` (409). The web showed every 409 as “Your saved application changed. Reload it…”, hiding the real reason | `ChefOnboardingService` rounds draft coordinates to 6 decimals on save and compares coordinates at that precision; the web now shows the server’s 409 message |
+| Submitted application missing in Admin → Chef applications | The admin queue only lists submitted drafts, so a draft blocked by the submit bug above never appears (production data was not inspected to confirm this for the test applicant). Separately, the admin list rejected any document over 10,000,000 bytes although uploads allow 10 MiB, which would blank the whole list | Fixed by the submit fix; admin list and document viewer accept up to 10 MiB |
+
+An applicant whose submit failed only needs to open the application and press **Submit application** again; their saved details and uploads are kept.
+
 ## Verification (local, Node 22.22)
 
 - `npm run lint` — 0 warnings

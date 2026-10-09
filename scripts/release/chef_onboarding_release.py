@@ -10,7 +10,8 @@ from active_address_release import (SUBSCRIPTION, RG, CHEF, WEB, APIM, ACR, FIRE
     source_guard, build_image, verify_image, resolve_image, deploy_web, ready_web, environment, inspect, runtime, require)
 
 BANK='ca-craves-integration-service-pr'
-# Email verification codes are sent by Notification; released with the backend so it tracks reviewed main.
+# Sends email verification codes. Image-only update: its ACS secret is a plain app secret, which the
+# preserve-runtime backend helper refuses, and an image swap never touches secrets or settings.
 NOTIFICATION='ca-craves-notification-service-p'
 FLAG='CRAVES_CHEF_ONBOARDING_V2_ENABLED'
 BASE='CRAVES_BANK_INTEGRATION_BASE_URL'
@@ -46,13 +47,13 @@ def applied(report):
 
 def release_images(source,sha,run_id,output):
     preflight()
-    snapshots={name:app(name) for name in (BANK,CHEF,NOTIFICATION)}
+    snapshots={name:app(name) for name in (BANK,CHEF)}
     helper=source/'scripts/release/deploy-single-service-preserve-runtime.sh'
     guard_env=dict(os.environ,DEPLOY_PREFLIGHT_ONLY='true',READY_ATTEMPTS='150',READY_SLEEP_SECONDS='10')
-    for name in (BANK,CHEF,NOTIFICATION):run('bash',str(helper),RG,name,image(snapshots[name]),'chef-onboarding',env=guard_env)
+    for name in (BANK,CHEF):run('bash',str(helper),RG,name,image(snapshots[name]),'chef-onboarding',env=guard_env)
     run('az','acr','login','-n',ACR,'--only-show-errors')
     receipts=[]
-    for name,service in ((BANK,'integration-service'),(CHEF,'user-chef-service'),(NOTIFICATION,'notification-service')):
+    for name,service in ((BANK,'integration-service'),(CHEF,'user-chef-service')):
         target=build_image(source,'services/'+service,'craves/'+service,sha)
         source_guard(source,sha,run_id)
         current=app(name)
@@ -63,7 +64,7 @@ def release_images(source,sha,run_id,output):
         receipts.append({'app':name,'sourceSha':sha,'image':target,'previousImage':image(current)})
     report=preflight();applied(report)
     output.write_text(json.dumps({'images':receipts,'migrations':report},indent=2)+'\n')
-    print('Chef, bank and notification images deployed; exact migrations and unchanged runtime verified.',flush=True)
+    print('Chef and bank images deployed; exact migrations and unchanged runtime verified.',flush=True)
 
 
 def stable_without(value,keys):
@@ -200,6 +201,32 @@ def deploy_admin(source,sha,run_id,output):
         raise RuntimeError('Admin release failed; previous admin image restore requested, verify Azure revisions')
 
 
+def deploy_notification(source,sha,run_id,output):
+    """Image-only update of Notification from the reviewed source; secrets and settings are untouched."""
+    before=app(NOTIFICATION)
+    require(before['properties']['configuration'].get('activeRevisionsMode')=='Single','Notification must run in single-revision mode for an image swap')
+    old=resolve_image(image(before))
+    target=build_image(source,'services/notification-service','craves/notification-service',sha)
+    source_guard(source,sha,run_id)
+    current=app(NOTIFICATION)
+    require(runtime.stable(current)==runtime.stable(before) and image(current)==image(before),'Concurrent notification runtime change; deployment stopped')
+    receipt={'app':NOTIFICATION,'sourceSha':sha,'image':target,'previousImage':old}
+    output.write_text(json.dumps(receipt,indent=2)+'\n')
+    if image(current)!=target:azure('containerapp','update','-g',RG,'-n',NOTIFICATION,'--image',target,'--no-wait')
+    try:
+        for attempt in range(90):
+            current=app(NOTIFICATION)
+            require(runtime.stable(current)==runtime.stable(before),'Unrelated notification runtime setting changed; stop')
+            if admin_settled(current,target):
+                verify_image(image(current),sha);print(json.dumps({**receipt,'verified':True}),flush=True);return
+            print('Waiting for the reviewed notification revision: '+str(attempt+1),flush=True);time.sleep(10)
+        raise ValueError('Notification revision did not become ready within fifteen minutes')
+    except Exception:
+        print('Restoring the previous notification image; other settings remain unchanged.',flush=True)
+        azure('containerapp','update','-g',RG,'-n',NOTIFICATION,'--image',old,'--no-wait')
+        raise RuntimeError('Notification release failed; previous notification image restore requested, verify Azure revisions')
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--operation',choices=('preflight','backend','apim','web','activate'),default='preflight')
@@ -211,7 +238,9 @@ def main():
     inspect.ROOT=source
     if args.operation=='preflight':
         report=preflight();(args.output/'chef-preflight.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2))
-    elif args.operation=='backend':release_images(source,args.sha,args.regression_run,args.output/'chef-images.json')
+    elif args.operation=='backend':
+        release_images(source,args.sha,args.regression_run,args.output/'chef-images.json')
+        deploy_notification(source,args.sha,args.regression_run,args.output/'notification.json')
     elif args.operation=='apim':
         applied(preflight())
         for name in (BANK,CHEF):verify_image(image(app(name)),args.sha)

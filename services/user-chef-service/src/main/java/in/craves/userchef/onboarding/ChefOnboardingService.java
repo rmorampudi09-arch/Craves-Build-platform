@@ -216,7 +216,7 @@ public class ChefOnboardingService {
         if(request==null || request.requestKey()==null || request.message()==null ||
             request.message().trim().length()<3 || request.message().length()>2000)
             throw ApiException.badRequest("HELP_REQUEST_INVALID","Explain the help you need using 3 to 2000 characters.");
-        var same=jdbc.query("SELECT * FROM chef_onboarding_help WHERE identity_id=? AND (request_key=? OR status<>'RESOLVED') ORDER BY created_at DESC LIMIT 1",
+        var same=jdbc.query(HELP+"WHERE identity_id=? AND (request_key=? OR status<>'RESOLVED') ORDER BY created_at DESC LIMIT 1",
             this::mapHelp,user.identityId(),request.requestKey());
         if(!same.isEmpty()) return same.getFirst();
         Details details=draft.details();
@@ -232,21 +232,21 @@ public class ChefOnboardingService {
             VALUES (?,?,?,?,?,?,?::jsonb,?)
             """,id,user.identityId(),request.requestKey(),supportCase.id(),supportCase.caseNumber(),user.phoneNumber(),
             encode(details),request.message().trim());
-        return jdbc.query("SELECT * FROM chef_onboarding_help WHERE id=?",this::mapHelp,id).getFirst();
+        return jdbc.query(HELP+"WHERE id=?",this::mapHelp,id).getFirst();
     }
 
     public HelpPage helpRequests(CurrentUser admin,String cursor) {
         requireAdmin(admin);
         List<Help> rows;
         if(cursor==null || cursor.isBlank()) {
-            rows=jdbc.query("SELECT * FROM chef_onboarding_help ORDER BY created_at DESC,id DESC LIMIT 101",this::mapHelp);
+            rows=jdbc.query(HELP+"ORDER BY created_at DESC,id DESC LIMIT 101",this::mapHelp);
         } else {
             try {
                 if(cursor.length()>120) throw new IllegalArgumentException();
                 String[] parts=cursor.split("\\|",-1);
                 if(parts.length!=2) throw new IllegalArgumentException();
                 java.time.Instant time=java.time.Instant.parse(parts[0]); UUID id=UUID.fromString(parts[1]);
-                rows=jdbc.query("SELECT * FROM chef_onboarding_help WHERE (created_at,id)<(?,?) ORDER BY created_at DESC,id DESC LIMIT 101",
+                rows=jdbc.query(HELP+"WHERE (created_at,id)<(?,?) ORDER BY created_at DESC,id DESC LIMIT 101",
                     this::mapHelp,java.sql.Timestamp.from(time),id);
             } catch(IllegalArgumentException ex) {
                 throw ApiException.badRequest("HELP_CURSOR_INVALID","Reload the support requests.");
@@ -261,7 +261,7 @@ public class ChefOnboardingService {
         requireAdmin(admin);
         if(request==null || !java.util.Set.of("OPEN","CONTACTED","RESOLVED").contains(Objects.toString(request.status(),"")))
             throw ApiException.badRequest("HELP_STATUS_INVALID","Choose a valid request status.");
-        var rows=jdbc.query("SELECT * FROM chef_onboarding_help WHERE id=? FOR UPDATE",this::mapHelp,id);
+        var rows=jdbc.query(HELP+"WHERE id=? FOR UPDATE",this::mapHelp,id);
         if(rows.isEmpty()) throw ApiException.notFound("HELP_NOT_FOUND","Help request was not found.");
         Help previous=rows.getFirst();
         if(!previous.status().equals(request.status())) {
@@ -271,7 +271,7 @@ public class ChefOnboardingService {
             jdbc.update("INSERT INTO chef_onboarding_help_audit(id,help_id,actor_id,old_status,new_status) VALUES (?,?,?,?,?)",
                 UUID.randomUUID(),id,admin.identityId(),previous.status(),request.status());
         }
-        return jdbc.query("SELECT * FROM chef_onboarding_help WHERE id=?",this::mapHelp,id).getFirst();
+        return jdbc.query(HELP+"WHERE id=?",this::mapHelp,id).getFirst();
     }
 
     private static Details existingDetails(in.craves.userchef.web.ApiDtos.ChefApplicationResponse application) {
@@ -291,10 +291,13 @@ public class ChefOnboardingService {
                 rs.getString("correction_sections")==null ? List.of() : List.of(rs.getString("correction_sections").split(","))),identityId);
         return rows.isEmpty()?null:rows.getFirst();
     }
+    /** Help rows with the applicant's application, so reviewers can open it from the request. */
+    private static final String HELP="SELECT h.*,(SELECT a.id FROM chef_application a WHERE a.identity_id=h.identity_id) AS application_id FROM chef_onboarding_help h ";
     private Help mapHelp(ResultSet rs,int row)throws SQLException {
         return new Help(rs.getObject("id",UUID.class),rs.getString("case_number"),rs.getObject("support_case_id",UUID.class),
             rs.getObject("identity_id",UUID.class),decode(rs.getString("details")),rs.getString("phone_number"),
-            rs.getString("message"),rs.getString("status"),rs.getTimestamp("created_at").toInstant());
+            rs.getString("message"),rs.getString("status"),rs.getTimestamp("created_at").toInstant(),
+            rs.getObject("application_id",UUID.class));
     }
     private Details decode(String value) {
         try { return json.readValue(value,Details.class); }

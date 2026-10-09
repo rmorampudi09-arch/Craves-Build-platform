@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { adminFetch } from "@/lib/admin-renewal";
 import { ONBOARDING_LANGUAGES, type LearningContent, type OnboardingDetails } from "@/lib/chef-onboarding-v2-contract";
 
-type Help={id:string;caseNumber:string;phoneNumber:string;details:OnboardingDetails;message:string;status:string;createdAt:string};
+type Help={id:string;caseNumber:string;phoneNumber:string;details:OnboardingDetails;message:string;status:string;createdAt:string;applicationId?:string|null};
 type HelpPage={items:Help[];nextCursor:string|null};
 const input="mt-2 w-full rounded-xl border border-slate-200 bg-white p-3 text-slate-950";
 async function api(path:string,method="GET",body?:unknown) {
@@ -50,7 +50,29 @@ export function AdminChefOnboardingContent() {
     setTitle("");setBody("");setFile(null);await load();
     setMessage("Content saved as a draft. Preview it, then publish when ready.");
   }
+  const openHelp=help.filter(item=>item.status!=="RESOLVED");
   return <div className="space-y-6">
+    <section className="rounded-[30px] bg-white p-6 text-slate-950">
+      <h2 className="text-2xl font-bold">Chef FSSAI help requests</h2>
+      <p className="mt-2 font-bold" role="status">{openHelp.length===0?"No open requests.":`${openHelp.length}${cursor?"+":""} open ${openHelp.length===1?"request":"requests"} — call the chef, then mark it contacted or resolved.`}</p>
+      <p className="mt-3 text-sm text-slate-600">The contact and kitchen details shown here are the saved snapshot from the request. Updates are recorded in an audit history.</p>
+      <div className="mt-5 space-y-4">{[...openHelp,...help.filter(item=>item.status==="RESOLVED")].map(item=><article key={item.id} className="rounded-2xl border border-slate-200 p-4">
+        <h3 className="font-bold">{item.details.firstName} {item.details.lastName} · {item.caseNumber}</h3>
+        <p className="mt-2 text-sm">{item.phoneNumber} · {item.details.email} · {item.details.language}</p>
+        <p className="mt-2 text-sm">DOB: {item.details.dateOfBirth} · Kitchen: {item.details.kitchenName || "Not yet saved"}</p>
+        <p className="mt-2 text-sm">{[item.details.addressLine1,item.details.addressLine2,item.details.landmark,item.details.city,item.details.state,item.details.postalCode].filter(Boolean).join(", ")}</p>
+        <p className="mt-2 whitespace-pre-wrap text-sm">{item.message}</p>
+        <p className="mt-2 text-xs text-slate-600">{new Date(item.createdAt).toLocaleString("en-IN")} · {item.status}</p>
+        {item.applicationId?<a className="mt-2 inline-block text-sm font-bold text-[#6930CA] underline" href={`/admin/chef-reviews/${item.applicationId}`}>Open this chef’s application</a>:<p className="mt-2 text-xs text-slate-600">No application saved yet (basic details only).</p>}
+        <div className="mt-3 flex gap-2">{(["CONTACTED","RESOLVED"] as const).map(status=><button key={status} disabled={busy || item.status===status || item.status==="RESOLVED"} className="rounded-xl border px-4 py-2 text-sm font-bold disabled:opacity-50" onClick={()=>void work(async()=>{
+          const updated=await api("help/"+item.id,"PUT",{status}) as Help;setHelp(current=>current.map(existing=>existing.id===updated.id?updated:existing));setMessage("Request status saved.");
+        })}>{status==="CONTACTED"?"Mark contacted":"Mark resolved"}</button>)}</div>
+      </article>)}</div>
+      {cursor?<button disabled={busy} className="mt-5 rounded-xl border px-4 py-3 font-semibold" onClick={()=>void work(async()=>{
+        const result=await api("help?cursor="+encodeURIComponent(cursor)) as HelpPage;
+        setHelp(current=>[...current,...result.items]);setCursor(result.nextCursor);
+      })}>Load older requests</button>:null}
+    </section>
     <section className="rounded-[30px] bg-white p-6 text-slate-950">
       <h2 className="text-2xl font-bold">FSSAI learning articles and videos</h2>
       <p className="mt-3 text-sm text-slate-600">Create content in the selected language. Only published content appears in Chef onboarding. When a chef’s language has nothing published, the app shows the published English content and says so.</p>
@@ -85,25 +107,6 @@ export function AdminChefOnboardingContent() {
           await api("content/"+item.id+"/publication","PUT",{expectedVersion:item.version,published:!item.published});await load();setMessage(item.published?"Content unpublished.":"Content published.");
         })}>{item.published?"Unpublish":"Publish"}</button>
       </article>)}</div>
-    </section>
-    <section className="rounded-[30px] bg-white p-6 text-slate-950">
-      <h2 className="text-2xl font-bold">Chef FSSAI help requests</h2>
-      <p className="mt-3 text-sm text-slate-600">The contact and kitchen details shown here are the saved snapshot from the request. Updates are recorded in an audit history.</p>
-      <div className="mt-5 space-y-4">{help.map(item=><article key={item.id} className="rounded-2xl border border-slate-200 p-4">
-        <h3 className="font-bold">{item.details.firstName} {item.details.lastName} · {item.caseNumber}</h3>
-        <p className="mt-2 text-sm">{item.phoneNumber} · {item.details.email} · {item.details.language}</p>
-        <p className="mt-2 text-sm">DOB: {item.details.dateOfBirth} · Kitchen: {item.details.kitchenName || "Not yet saved"}</p>
-        <p className="mt-2 text-sm">{[item.details.addressLine1,item.details.addressLine2,item.details.landmark,item.details.city,item.details.state,item.details.postalCode].filter(Boolean).join(", ")}</p>
-        <p className="mt-2 whitespace-pre-wrap text-sm">{item.message}</p>
-        <p className="mt-2 text-xs text-slate-600">{new Date(item.createdAt).toLocaleString("en-IN")} · {item.status}</p>
-        <div className="mt-3 flex gap-2">{(["CONTACTED","RESOLVED"] as const).map(status=><button key={status} disabled={busy || item.status===status || item.status==="RESOLVED"} className="rounded-xl border px-4 py-2 text-sm font-bold disabled:opacity-50" onClick={()=>void work(async()=>{
-          const updated=await api("help/"+item.id,"PUT",{status}) as Help;setHelp(current=>current.map(existing=>existing.id===updated.id?updated:existing));setMessage("Request status saved.");
-        })}>{status==="CONTACTED"?"Mark contacted":"Mark resolved"}</button>)}</div>
-      </article>)}</div>
-      {cursor?<button disabled={busy} className="mt-5 rounded-xl border px-4 py-3 font-semibold" onClick={()=>void work(async()=>{
-        const result=await api("help?cursor="+encodeURIComponent(cursor)) as HelpPage;
-        setHelp(current=>[...current,...result.items]);setCursor(result.nextCursor);
-      })}>Load older requests</button>:null}
     </section>
     {message?<p role="status" className="rounded-2xl bg-[#FFF8EC] p-4 text-slate-950">{message}</p>:null}
   </div>;

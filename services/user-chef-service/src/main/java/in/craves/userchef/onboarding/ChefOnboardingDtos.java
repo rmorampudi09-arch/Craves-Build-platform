@@ -35,7 +35,7 @@ public final class ChefOnboardingDtos {
     public record HelpRequest(UUID requestKey, String message) {}
     public record Help(
         UUID id, String caseNumber, UUID supportCaseId, UUID identityId, Details details,
-        String phoneNumber, String message, String status, Instant createdAt
+        String phoneNumber, String message, String status, Instant createdAt, UUID applicationId
     ) {}
     public record HelpPage(List<Help> items, String nextCursor) {}
     public record HelpStatusRequest(String status) {}

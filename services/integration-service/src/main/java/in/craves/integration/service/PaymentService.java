@@ -221,15 +221,29 @@ public class PaymentService {
                 );
             }
             String identity = StringUtils.hasText(eventId) ? eventId : paymentId + ":" + eventType;
-            try {
+            // A unique-violation exception would abort this PostgreSQL transaction before it can acknowledge a retry.
+            int inserted = jdbcTemplate.update(
+                "INSERT INTO payment_schema.payment_event (id, payment_order_id, provider_event_id, event_type, payment_status, raw_payload, created_at) VALUES (?, ?, ?, ?, ?, ?::jsonb, now()) ON CONFLICT (provider_event_id) DO NOTHING",
+                UUID.randomUUID(), order.paymentOrderId(), identity, eventType, status, rawBody
+            );
+            if (inserted == 0) {
+                // This separate statement sees a concurrent winner after ON CONFLICT waits for its commit.
+                // JSONB comparison ignores formatting, but never accepts changed signed payment evidence.
+                boolean sameEvidence = Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM payment_schema.payment_event
+                        WHERE provider_event_id = ? AND payment_order_id = ?
+                          AND event_type IS NOT DISTINCT FROM ? AND payment_status IS NOT DISTINCT FROM ?
+                          AND raw_payload = ?::jsonb
+                    )
+                    """, Boolean.class, identity, order.paymentOrderId(), eventType, status, rawBody));
+                if (!sameEvidence) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Razorpay event identity was reused with different payment evidence");
+                }
                 jdbcTemplate.update(
-                    "INSERT INTO payment_schema.payment_event (id, payment_order_id, provider_event_id, event_type, payment_status, raw_payload, created_at) VALUES (?, ?, ?, ?, ?, ?::jsonb, now())",
-                    UUID.randomUUID(), order.paymentOrderId(), identity, eventType, status, rawBody
-                );
-            } catch (DuplicateKeyException duplicate) {
-                jdbcTemplate.update(
-                    "UPDATE payment_schema.webhook_inbox SET processing_status = 'DUPLICATE', processed_at = now() WHERE id = ?",
-                    inboxId
+                    "UPDATE payment_schema.webhook_inbox SET event_identity = ?, processing_status = 'DUPLICATE', processed_at = now() WHERE id = ?",
+                    identity, inboxId
                 );
                 return;
             }
@@ -248,7 +262,8 @@ public class PaymentService {
                 if (transitioned > 0) notifyOrderPaid(order.checkoutId(), order, paymentId);
             } else {
                 jdbcTemplate.update(
-                    "UPDATE payment_schema.payment_order SET provider_status = ?, provider_payment_id = ?, updated_at = now() WHERE id = ?",
+                    // Captured order evidence is terminal; later attempts remain in the event/attempt tables.
+                    "UPDATE payment_schema.payment_order SET provider_status = ?, provider_payment_id = ?, updated_at = now() WHERE id = ? AND status <> 'PAID'",
                     status, paymentId, order.paymentOrderId()
                 );
             }

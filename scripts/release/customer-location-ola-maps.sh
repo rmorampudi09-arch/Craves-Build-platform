@@ -41,26 +41,87 @@ app_json() { az containerapp show -g "$RG" -n "$1" -o json --only-show-errors; }
 # Secret metadata only (names, Key Vault URLs, identities); values are never requested.
 secret_meta() { az containerapp secret list -g "$RG" -n "$1" -o json --only-show-errors; }
 
+VAULT_NAMES='[.[] | .keyVaultUrl // empty | select(test("^https://[a-z0-9-]+\\.vault\\.azure\\.net/secrets/"))
+  | capture("^https://(?<v>[a-z0-9-]+)\\.").v] | unique'
+
 vault_name() {
   if [[ -n "$KEY_VAULT_NAME" ]]; then printf '%s\n' "$KEY_VAULT_NAME"; return; fi
-  # Reuse the vault that already backs the User/Chef secrets.
-  local url
-  url=$(secret_meta "$CHEF_APP" | jq -r '[.[] | .keyVaultUrl // empty | select(test("^https://[a-z0-9-]+\\.vault\\.azure\\.net/secrets/"))][0] // ""')
-  [[ -n "$url" ]] || fail "No Key Vault-backed secret found on $CHEF_APP; set KEY_VAULT_NAME"
-  url=${url#https://}
-  printf '%s\n' "${url%%.vault.azure.net/*}"
+  # A vault both apps already reference, so each keeps using an identity it already has.
+  local -a common
+  mapfile -t common < <(comm -12 <(secret_meta "$WEB_APP" | jq -r "$VAULT_NAMES | .[]" | sort) \
+    <(secret_meta "$CHEF_APP" | jq -r "$VAULT_NAMES | .[]" | sort))
+  [[ ${#common[@]} -eq 1 ]] \
+    || fail "Expected one Key Vault referenced by both $WEB_APP and $CHEF_APP (found ${#common[@]}); set KEY_VAULT_NAME"
+  printf '%s\n' "${common[0]}"
 }
 
 identity_ref() {
-  # Same identity the app already uses for Key Vault references (system or a user-assigned resource ID).
-  local app=$1 ref
-  ref=$(secret_meta "$app" | jq -r '[.[] | select((.keyVaultUrl // "") != "") | .identity // empty][0] // ""')
+  # The identity the app already uses for this vault, else for any vault, else its system identity.
+  local app=$1 vault=$2 meta ref
+  meta=$(secret_meta "$app")
+  ref=$(jq -r --arg host "https://$vault.vault.azure.net/" \
+    '[.[] | select((.keyVaultUrl // "") | startswith($host)) | .identity // empty][0] // ""' <<<"$meta")
+  [[ -n "$ref" ]] || ref=$(jq -r '[.[] | select((.keyVaultUrl // "") != "") | .identity // empty][0] // ""' <<<"$meta")
   if [[ -z "$ref" ]]; then
     [[ "$(app_json "$app" | jq -r '.identity.type // ""')" == *SystemAssigned* ]] \
       || fail "$app has no managed identity that can read Key Vault"
     ref=system
   fi
   printf '%s\n' "$ref"
+}
+
+principal_id() {
+  local app=$1 identity=$2
+  if [[ "$identity" == system ]]; then
+    app_json "$app" | jq -r '.identity.principalId // ""'
+  else
+    app_json "$app" | jq -r --arg id "${identity,,}" \
+      '[(.identity.userAssignedIdentities // {}) | to_entries[] | select((.key | ascii_downcase) == $id) | .value.principalId][0] // ""'
+  fi
+}
+
+can_read_vault() {
+  # true/false/unknown from role assignments or legacy access policies (metadata only, never secret values).
+  local principal=$1 vault=$2 kv assignments
+  [[ -n "$principal" ]] || { echo false; return; }
+  kv=$(az keyvault show -n "$vault" -o json --only-show-errors 2>/dev/null) || { echo unknown; return; }
+  if [[ "$(jq -r '.properties.enableRbacAuthorization // false' <<<"$kv")" == true ]]; then
+    assignments=$(az role assignment list --scope "$(jq -r .id <<<"$kv")" --include-inherited \
+      -o json --only-show-errors 2>/dev/null) || { echo unknown; return; }
+    # shortcut: built-in data roles only; a custom role reads as false, so grant a built-in role or bind manually.
+    jq -r --arg p "$principal" '[.[] | select(.principalId == $p) | .roleDefinitionName]
+      | any(. == "Key Vault Secrets User" or . == "Key Vault Secrets Officer" or . == "Key Vault Administrator")' <<<"$assignments"
+  else
+    jq -r --arg p "$principal" '[.properties.accessPolicies[]? | select(.objectId == $p)
+      | .permissions.secrets[]? | ascii_downcase] | any(. == "get" or . == "all")' <<<"$kv"
+  fi
+}
+
+bind_app() {
+  # Returns non-zero after restoring a first-time binding that did not become healthy.
+  local app=$1 identity=$2 had_secret had_env
+  had_secret=$(secret_meta "$app" | jq --arg s "$SECRET_NAME" 'any(.[]; .name == $s)')
+  had_env=$(app_json "$app" | jq '[.properties.template.containers[0].env[]?
+    | select(.name == "OLA_MAPS_API_KEY" or .name == "CRAVES_LOCATION_SEARCH_CENTER")] | length > 0')
+  if az containerapp secret set -g "$RG" -n "$app" -o none --only-show-errors \
+       --secrets "$SECRET_NAME=keyvaultref:https://$VAULT.vault.azure.net/secrets/$SECRET_NAME,identityref:$identity" \
+    && az containerapp update -g "$RG" -n "$app" -o none --only-show-errors \
+       --set-env-vars "OLA_MAPS_API_KEY=secretref:$SECRET_NAME" "CRAVES_LOCATION_SEARCH_CENTER=$SEARCH_CENTER" \
+    && wait_ready "$app" \
+    && binding_report "$app" | tee /dev/stderr | jq -e --arg ref "secretref:$SECRET_NAME" \
+       '.olaKeyBinding == $ref and .olaSecretReference.keyVaultBacked == true' >/dev/null; then
+    return 0
+  fi
+  echo "ERROR: $app Ola binding failed; restoring its previous settings." >&2
+  if [[ "$had_env" == false ]]; then
+    az containerapp update -g "$RG" -n "$app" -o none --only-show-errors \
+      --remove-env-vars OLA_MAPS_API_KEY CRAVES_LOCATION_SEARCH_CENTER || true
+  fi
+  if [[ "$had_secret" == false ]]; then
+    az containerapp secret remove -g "$RG" -n "$app" -o none --only-show-errors --secret-names "$SECRET_NAME" || true
+  fi
+  wait_ready "$app" || true
+  return 1
 }
 
 binding_report() {
@@ -70,6 +131,7 @@ binding_report() {
     {
       app: $app,
       identityType: ($app_json.identity.type // "None"),
+      keyVaults: ($meta | '"$VAULT_NAMES"'),
       latestRevision: $app_json.properties.latestRevisionName,
       latestReadyRevision: $app_json.properties.latestReadyRevisionName,
       olaSecretReference: ([$meta[] | select(.name == $secret) | {
@@ -99,7 +161,8 @@ wait_ready() {
     fi
     sleep 10
   done
-  fail "$app did not report a ready, healthy revision (the previous revision keeps serving; inspect revisions)"
+  echo "ERROR: $app did not report a ready, healthy revision (the previous revision keeps serving)." >&2
+  return 1
 }
 
 key_vault_report() {
@@ -113,25 +176,33 @@ key_vault_report() {
 
 case "$OPERATION" in
   inspect)
-    VAULT=$(vault_name)
-    key_vault_report "$VAULT"
     for app in "$WEB_APP" "$CHEF_APP"; do binding_report "$app"; done
+    VAULT=$(vault_name) || VAULT=''
+    if [[ -n "$VAULT" ]]; then
+      key_vault_report "$VAULT"
+      for app in "$WEB_APP" "$CHEF_APP"; do
+        identity=$(identity_ref "$app" "$VAULT") || identity=''
+        jq -n --arg app "$app" --arg vault "$VAULT" --arg identity "${identity##*/}" \
+          --arg access "$(can_read_vault "$(principal_id "$app" "$identity")" "$VAULT")" \
+          '{app: $app, vault: $vault, identity: $identity, canReadSecrets: $access}'
+      done
+    fi
     ;;
   bind)
     VAULT=$(vault_name)
     [[ "$(key_vault_report "$VAULT" | jq -r '.present')" != false ]] \
       || fail "Key Vault $VAULT has no secret $SECRET_NAME; store the Ola API key there first"
+    declare -A IDENTITY=()
     for app in "$WEB_APP" "$CHEF_APP"; do
-      identity=$(identity_ref "$app")
-      echo "Referencing Key Vault secret $SECRET_NAME from $app (identity: ${identity##*/})."
-      az containerapp secret set -g "$RG" -n "$app" -o none --only-show-errors \
-        --secrets "$SECRET_NAME=keyvaultref:https://$VAULT.vault.azure.net/secrets/$SECRET_NAME,identityref:$identity"
-      az containerapp update -g "$RG" -n "$app" -o none --only-show-errors \
-        --set-env-vars "OLA_MAPS_API_KEY=secretref:$SECRET_NAME" "CRAVES_LOCATION_SEARCH_CENTER=$SEARCH_CENTER"
-      wait_ready "$app"
-      binding_report "$app" | tee /dev/stderr | jq -e --arg ref "secretref:$SECRET_NAME" \
-        '.olaKeyBinding == $ref and .olaSecretReference.keyVaultBacked == true' >/dev/null \
-        || fail "$app Ola binding verification failed"
+      IDENTITY[$app]=$(identity_ref "$app" "$VAULT")
+      access=$(can_read_vault "$(principal_id "$app" "${IDENTITY[$app]}")" "$VAULT")
+      [[ "$access" != false ]] \
+        || fail "$app identity ${IDENTITY[$app]##*/} cannot read secrets in $VAULT; grant it Key Vault Secrets User there first"
+      [[ "$access" == true ]] || echo "WARNING: could not confirm $app read access to $VAULT; a failed bind is rolled back." >&2
+    done
+    for app in "$WEB_APP" "$CHEF_APP"; do
+      echo "Referencing Key Vault secret $SECRET_NAME from $app (identity: ${IDENTITY[$app]##*/})."
+      bind_app "$app" "${IDENTITY[$app]}" || fail "$app Ola binding failed and its previous settings were restored"
     done
     echo "Ola Maps key bound to $WEB_APP and $CHEF_APP as secretref:$SECRET_NAME (Key Vault $VAULT)."
     ;;
@@ -153,7 +224,7 @@ case "$OPERATION" in
         || fail "$app is not bound to Ola Maps yet; refusing to remove Azure Maps settings"
       # shellcheck disable=SC2086 # names are validated AZURE_MAPS_* identifiers
       az containerapp update -g "$RG" -n "$app" -o none --only-show-errors --remove-env-vars $names
-      wait_ready "$app"
+      wait_ready "$app" || fail "$app did not become healthy after removing $names"
       echo "Removed $names from $app."
     done
     echo "The Azure Maps account and its role assignments were not changed (owner decision; see the migration document)."

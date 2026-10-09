@@ -48,3 +48,9 @@ test("admin review strips identity and blob storage fields", () => {
 test("rejects unsupported document content type", () => {
   assert.equal(parseAdminChefApplication({ ...application, documents: [{ ...application.documents[0], contentType: "text/html" }] }), null);
 });
+
+test("admin review accepts documents up to the 10 MB upload limit", () => {
+  const sized = (fileSizeBytes: number) => ({ ...application, documents: [{ ...application.documents[0], fileSizeBytes }] });
+  assert.ok(parseAdminChefApplication(sized(10 * 1024 * 1024)));
+  assert.equal(parseAdminChefApplication(sized(10 * 1024 * 1024 + 1)), null);
+});

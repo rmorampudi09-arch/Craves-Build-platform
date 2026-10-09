@@ -48,7 +48,7 @@ export async function chefOnboardingApi(
       response.status === 401
         ? "Your session expired. Sign in again to continue."
         : response.status === 409
-          ? "Your saved application changed. Reload it before trying again."
+          ? (message ?? "Your saved application changed. Reload it before trying again.")
           : (message ?? "We could not complete this request. Your saved progress is preserved."),
     );
   }
@@ -394,7 +394,7 @@ export function useChefOnboarding() {
       const form = new FormData();
       form.set("documentType", type);
       form.set("file", file);
-      await new Promise<void>((resolve, reject) => {
+      const uploadedId = await new Promise<string>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         upload.current = xhr;
         xhr.open("POST", "/api/chef/application/proof-files");
@@ -409,7 +409,14 @@ export function useChefOnboarding() {
           reject(new Error("Upload cancelled. Your saved application is preserved."));
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
+            let id = "";
+            try {
+              const raw: unknown = JSON.parse(xhr.responseText);
+              if (raw && typeof raw === "object" && "id" in raw && typeof raw.id === "string") id = raw.id;
+            } catch {
+              /* An unreadable receipt fails the confirmation below. */
+            }
+            resolve(id);
             return;
           }
           let message = "Upload failed. Please retry.";
@@ -430,11 +437,12 @@ export function useChefOnboarding() {
         xhr.send(form);
       });
       const next = verifiedState(await chefOnboardingApi("/api/chef/onboarding"));
+      // Confirm by id: the server renames files (spaces and symbols become "-"), so names never match.
       if (
         !next.documents.some(
           (document) =>
+            document.id === uploadedId &&
             document.documentType === type &&
-            document.originalFileName === file.name &&
             document.status !== "REJECTED",
         )
       )

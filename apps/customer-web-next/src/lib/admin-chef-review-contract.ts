@@ -57,7 +57,7 @@ function parseDocument(value: unknown): AdminChefDocument | null {
   const id = text(raw.id, 64); const documentType = text(raw.documentType, 40); const originalFileName = text(raw.originalFileName, 255);
   const contentType = text(raw.contentType, 100); const status = text(raw.status, 40); const createdAt = instant(raw.createdAt); const updatedAt = instant(raw.updatedAt);
   const fileSizeBytes = typeof raw.fileSizeBytes === "number" && Number.isSafeInteger(raw.fileSizeBytes) ? raw.fileSizeBytes : -1;
-  if (!id || !UUID.test(id) || !documentType || !originalFileName || !contentType || !CONTENT_TYPES.has(contentType) || !status || !createdAt || !updatedAt || fileSizeBytes < 1 || fileSizeBytes > 10_000_000) return null;
+  if (!id || !UUID.test(id) || !documentType || !originalFileName || !contentType || !CONTENT_TYPES.has(contentType) || !status || !createdAt || !updatedAt || fileSizeBytes < 1 || fileSizeBytes > 10 * 1024 * 1024) return null;
   return { id, documentType, originalFileName, contentType: contentType as AdminChefDocument["contentType"], fileSizeBytes, status, createdAt, updatedAt };
 }
 

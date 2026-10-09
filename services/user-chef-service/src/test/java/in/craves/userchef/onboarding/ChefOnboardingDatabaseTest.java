@@ -94,7 +94,12 @@ class ChefOnboardingDatabaseTest {
         assertEquals("PENDING",jdbc.queryForObject("SELECT status FROM chef_application WHERE identity_id=?",String.class,user.identityId()));
         assertFalse(service.mine(user).submitted());
         assertFalse(applications.listApplications(admin,null).stream().anyMatch(a->user.identityId().equals(a.identityId())));
-        run(()->service.updateHelp(admin,first.id(),new HelpStatusRequest("CONTACTED")));
+        var applicationId=service.mine(user).application().id();
+        assertEquals(applicationId,first.applicationId());
+        var queue=service.helpRequests(admin,null).items();
+        assertTrue(queue.stream().anyMatch(h->h.id().equals(first.id()) && applicationId.equals(h.applicationId()) && "OPEN".equals(h.status())));
+        var contacted=run(()->service.updateHelp(admin,first.id(),new HelpStatusRequest("CONTACTED")));
+        assertEquals(applicationId,contacted.applicationId());
         assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM chef_onboarding_help_audit WHERE help_id=?",Integer.class,first.id()));
     }
     @Test void panNeedsFourNewEvidenceFilesAndOnlyFinalAdminApprovalEnablesChef() {

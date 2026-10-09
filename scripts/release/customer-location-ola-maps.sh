@@ -108,17 +108,21 @@ can_read_vault() {
 bind_app() {
   # identity "existing" reuses an operator-created app secret; otherwise a Key Vault reference is created.
   # Returns non-zero after restoring a first-time binding that did not become healthy.
-  local app=$1 identity=$2 had_secret had_env
+  local app=$1 identity=$2 had_secret had_env report
   had_secret=$(secret_meta "$app" | jq --arg s "$SECRET_NAME" 'any(.[]; .name == $s)')
   had_env=$(app_json "$app" | jq '[.properties.template.containers[0].env[]?
     | select(.name == "OLA_MAPS_API_KEY" or .name == "CRAVES_LOCATION_SEARCH_CENTER")] | length > 0')
+  # No /dev/stderr here: pipeline agents may have no such device, which once failed a healthy bind.
   if { [[ "$identity" == existing ]] || az containerapp secret set -g "$RG" -n "$app" -o none --only-show-errors \
          --secrets "$SECRET_NAME=keyvaultref:https://$VAULT.vault.azure.net/secrets/$SECRET_NAME,identityref:$identity"; } \
     && az containerapp update -g "$RG" -n "$app" -o none --only-show-errors \
        --set-env-vars "OLA_MAPS_API_KEY=secretref:$SECRET_NAME" "CRAVES_LOCATION_SEARCH_CENTER=$SEARCH_CENTER" \
     && wait_ready "$app" \
-    && binding_report "$app" | tee /dev/stderr | jq -e --arg ref "secretref:$SECRET_NAME" --argjson kv "$(kv_required "$app")" \
-       '.olaKeyBinding == $ref and .olaSecretReference != null and (($kv | not) or .olaSecretReference.keyVaultBacked)' >/dev/null; then
+    && report=$(binding_report "$app") \
+    && printf '%s\n' "$report" \
+    && jq -e --arg ref "secretref:$SECRET_NAME" --argjson kv "$(kv_required "$app")" \
+       '.olaKeyBinding == $ref and .olaSecretReference != null and (($kv | not) or .olaSecretReference.keyVaultBacked)' \
+       <<<"$report" >/dev/null; then
     return 0
   fi
   echo "ERROR: $app Ola binding failed; restoring its previous settings." >&2

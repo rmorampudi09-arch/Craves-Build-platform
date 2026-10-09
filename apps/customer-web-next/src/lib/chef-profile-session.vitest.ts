@@ -591,16 +591,40 @@ describe("Chef menu save and recovery", () => {
     await screen.findByRole("button", { name: "Reload menu" });
     expect(screen.queryByText("Your first dish starts here")).toBeNull();
   });
-  it("rejects a photo above 8 MB and lets the Chef remove it and save without a photo", async () => {
+  it("rejects a photo above 8 MB without queueing it, so the dish still saves without that photo", async () => {
     await openNew(); fillRequired();
     const file = new File([new Uint8Array(8 * 1024 * 1024 + 1)], "large.png", { type: "image/png" });
     fireEvent.change(screen.getByLabelText(/Dish photo/), { target: { files: [file] } });
     expect(screen.getByText("Choose a JPEG, PNG or WebP photo up to 8 MB.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
-    expect(fetcher.mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: "Remove selected photo" }));
+    expect(screen.queryByRole("button", { name: "Remove large.png" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
     await screen.findByText("Dish added successfully");
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/images"))).toBe(false);
+  });
+  it("adds up to 5 photos per dish and uploads each one once", async () => {
+    stored = [{ ...fixture, images: [
+      { id: "aaaaaaaa-1111-4111-8111-111111111111", publicUrl: "https://media.example/1.jpg", contentType: "image/jpeg", fileSizeBytes: 10, sortOrder: 0, primary: true },
+      { id: "aaaaaaaa-2222-4222-8222-222222222222", publicUrl: "https://media.example/2.jpg", contentType: "image/jpeg", fileSizeBytes: 10, sortOrder: 1, primary: false },
+    ] }];
+    const original = fetcher.getMockImplementation()!;
+    fetcher.mockImplementation((input, options) => String(input).endsWith("/images") ? Promise.resolve(Response.json({ uploaded: true })) : original(input, options));
+    vi.stubGlobal("URL", class extends URL { static createObjectURL() { return "blob:fixture"; } static revokeObjectURL() {} });
+    render(createElement(ChefMenuManager));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Fixture dish" }));
+    expect(screen.getByRole("img", { name: "Saved photo 1" })).toBeTruthy();
+    expect(screen.getByText("Cover")).toBeTruthy();
+    const files = ["a", "b", "c", "d"].map(name => new File(["x"], `${name}.png`, { type: "image/png" }));
+    fireEvent.change(screen.getByLabelText(/Dish photo/), { target: { files } });
+    expect(screen.getByText("You can add up to 5 photos per dish.")).toBeTruthy();
+    expect(screen.getByText("5 of 5 photos")).toBeTruthy();
+    expect(screen.queryByLabelText(/Add photo/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Remove b.png" }));
+    expect(screen.getByText("4 of 5 photos")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    await screen.findByText("Dish updated successfully");
+    const uploads = fetcher.mock.calls.filter(([url]) => String(url).endsWith("/images"));
+    expect(uploads.map(([, options]) => ((options?.body as FormData).get("file") as File).name)).toEqual(["a.png", "c.png"]);
+    expect(uploads.every(([, options]) => (options?.body as FormData).get("primary") === "false")).toBe(true);
   });
   it("keeps the saved dish ID after a photo failure so retry updates instead of creating a duplicate", async () => {
     await openNew(); fillRequired();
@@ -609,9 +633,9 @@ describe("Chef menu save and recovery", () => {
     fetcher.mockImplementation((input, options) => String(input).endsWith("/images") ? Promise.resolve(Response.json({ code: "MENU_IMAGE_UPLOAD_FAILED" }, { status: 500 })) : original(input, options));
     fireEvent.change(screen.getByLabelText(/Dish photo/), { target: { files: [new File(["fixture"], "photo.png", { type: "image/png" })] } });
     fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
-    expect((await screen.findByRole("alert")).textContent).toContain("Dish details saved, but the photo was not confirmed");
+    expect((await screen.findByRole("alert")).textContent).toContain("Dish details saved, but a photo was not confirmed");
     expect(screen.queryByText("Dish added successfully")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Remove selected photo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove photo.png" }));
     fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
     await screen.findByText("Dish updated successfully");
     expect(stored).toHaveLength(1);

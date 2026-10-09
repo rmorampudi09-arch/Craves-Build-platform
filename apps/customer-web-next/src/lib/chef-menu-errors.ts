@@ -10,5 +10,13 @@ export function chefMenuFailure(status: number, raw: unknown): { code: string; m
   if (status === 503 && raw.code === "CATALOG_ELIGIBILITY_UNAVAILABLE") {
     return { code: raw.code, message: "Publishing could not be checked right now. Please try again shortly." };
   }
+  const media: Record<string, string> = {
+    MEDIA_STORE_NOT_CONFIGURED: "Photo storage is not available yet. Your dish details are saved; add photos once it is fixed.",
+    MEDIA_STORE_CONFIGURATION_FAILED: "Photo storage is not available yet. Your dish details are saved; add photos once it is fixed.",
+    MEDIA_FILE_TOO_LARGE: "This photo is larger than 8 MB. Choose a smaller photo.",
+    MEDIA_CONTENT_TYPE_NOT_ALLOWED: "Use a JPEG, PNG or WebP photo.",
+    MENU_IMAGE_LIMIT_REACHED: "This dish already has 5 photos.",
+  };
+  if (typeof raw.code === "string" && media[raw.code]) return { code: raw.code, message: media[raw.code] };
   return null;
 }

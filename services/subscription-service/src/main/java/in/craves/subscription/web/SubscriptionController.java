@@ -101,6 +101,22 @@ public class SubscriptionController {
         return service.getMine(subscriptionId, user);
     }
 
+    @GetMapping("/subscriptions/{subscriptionId}/payment-eligibility")
+    public ResponseEntity<Void> paymentEligibility(
+        @PathVariable UUID subscriptionId,
+        @RequestParam(required = false) String expectedCustomerIdentityId,
+        @AuthenticationPrincipal CurrentUser user
+    ) {
+        UUID expectedCustomer;
+        try {
+            expectedCustomer = UUID.fromString(expectedCustomerIdentityId);
+        } catch (IllegalArgumentException | NullPointerException invalidCustomer) {
+            throw ApiException.badRequest("INVALID_PAYMENT_CUSTOMER", "expectedCustomerIdentityId must be a UUID");
+        }
+        service.requirePaymentEligibility(subscriptionId, expectedCustomer, user);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/subscriptions/{subscriptionId}/occurrences")
     public List<CustomerOccurrenceResponse> listOccurrences(
         @PathVariable UUID subscriptionId,

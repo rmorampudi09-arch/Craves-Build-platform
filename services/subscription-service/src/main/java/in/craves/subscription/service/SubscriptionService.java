@@ -1,6 +1,7 @@
 package in.craves.subscription.service;
 
 import in.craves.subscription.capacity.CapacityService;
+import in.craves.subscription.address.SubscriptionDeliveryAddressClient;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
@@ -31,9 +32,13 @@ public class SubscriptionService {
     private final SubscriptionRepository repository;
     private final CapacityService capacityService;
 
-    public SubscriptionService(SubscriptionRepository repository, CapacityService capacityService) {
+    private final SubscriptionDeliveryAddressClient deliveryAddresses;
+
+    public SubscriptionService(SubscriptionRepository repository, CapacityService capacityService,
+                               SubscriptionDeliveryAddressClient deliveryAddresses) {
         this.repository = repository;
         this.capacityService = capacityService;
+        this.deliveryAddresses = deliveryAddresses;
     }
 
     public List<PublicPlanResponse> listActivePlans() {
@@ -85,6 +90,7 @@ public class SubscriptionService {
         if (existing != null) {
             ensureSameEnrollment(existing, request);
             if ("PENDING_PAYMENT".equals(existing.status())) {
+                deliveryAddresses.requireEligible(user.identityId(), existing.deliveryAddressId());
                 capacityService.acquireEnrollmentHold(existing);
             }
             return toCustomerSubscription(existing);
@@ -101,6 +107,7 @@ public class SubscriptionService {
         if (request.deliveryAddressId() == null) {
             throw ApiException.badRequest("DELIVERY_ADDRESS_REQUIRED", "deliveryAddressId is required for meal subscriptions");
         }
+        deliveryAddresses.requireEligible(user.identityId(), request.deliveryAddressId());
         SubscriptionResponse stored = repository.createSubscription(
             user.identityId(),
             plan,
@@ -123,6 +130,20 @@ public class SubscriptionService {
 
     public CustomerSubscriptionResponse getMine(UUID subscriptionId, CurrentUser user) {
         return toCustomerSubscription(getOwnedSubscription(subscriptionId, user));
+    }
+
+    public void requirePaymentEligibility(UUID subscriptionId, UUID expectedCustomerIdentityId, CurrentUser user) {
+        requireRole(user, "CUSTOMER");
+        if (!user.identityId().equals(expectedCustomerIdentityId)) {
+            throw ApiException.forbidden("SUBSCRIPTION_ACCESS_DENIED", "Payment customer does not match the authenticated customer");
+        }
+        SubscriptionResponse subscription = repository.findSubscriptionById(subscriptionId)
+            .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
+        // Customer payment eligibility never inherits the ordinary detail GET's administrator exemption.
+        if (!user.identityId().equals(subscription.customerIdentityId())) {
+            throw ApiException.forbidden("SUBSCRIPTION_ACCESS_DENIED", "You cannot pay for this subscription");
+        }
+        deliveryAddresses.requireEligible(subscription.customerIdentityId(), subscription.deliveryAddressId());
     }
 
     @Transactional

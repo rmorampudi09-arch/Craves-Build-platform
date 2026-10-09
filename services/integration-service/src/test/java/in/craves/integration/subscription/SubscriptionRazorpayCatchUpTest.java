@@ -93,7 +93,7 @@ class SubscriptionRazorpayCatchUpTest {
         var failed = old("FAILED"); var paid = old("PAID");
         owner(1); capture();
         when(repository.findByInvoice(INVOICE)).thenReturn(Optional.of(failed), Optional.of(paid));
-        assertEquals("PAID", service.createProviderOrder(AUTH, INVOICE, null).status());
+        assertEquals("PAID", service.createProviderOrder(AUTH, INVOICE, null, null).status());
         noCreation(); server.verify();
     }
     @Test void latestOwnedInvoiceAlsoUsesRazorpayCatchUp() {

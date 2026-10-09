@@ -117,4 +117,27 @@ class ChefReleaseGuardTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'previous admin image restore requested'):release.deploy_admin(Path('.'),'a'*40,'1',Mock())
         self.assertEqual(update.call_args.args,('containerapp','update','-g',release.RG,'-n',release.ADMIN,'--image','old-pinned','--no-wait'))
 
+    def test_notification_deploy_swaps_only_the_image(self):
+        before=self.settled_app(release.NOTIFICATION);after=copy.deepcopy(before)
+        after['properties']['template']['containers'][0]['image']='craves/notification-service@sha256:new'
+        state={'updated':False}
+        def azure(*args):state['updated']=True
+        with patch.object(release,'app',side_effect=lambda name:after if state['updated'] else before),patch.object(release,'resolve_image',return_value='old-pinned'),\
+             patch.object(release,'build_image',return_value='craves/notification-service@sha256:new') as build,patch.object(release,'source_guard'),\
+             patch.object(release,'verify_image'),patch.object(release,'azure',side_effect=azure) as update,patch.object(release.time,'sleep'):
+            release.deploy_notification(Path('.'),'a'*40,'1',Mock())
+        self.assertEqual(build.call_args.args[1:3],('services/notification-service','craves/notification-service'))
+        self.assertEqual(update.call_args_list,[unittest.mock.call('containerapp','update','-g',release.RG,'-n',release.NOTIFICATION,'--image','craves/notification-service@sha256:new','--no-wait')])
+
+    def test_notification_deploy_restores_previous_image_when_it_never_verifies(self):
+        before=self.settled_app(release.NOTIFICATION);after=copy.deepcopy(before)
+        after['properties']['template']['containers'][0]['image']='craves/notification-service@sha256:new'
+        state={'updated':False}
+        def azure(*args):state['updated']=True
+        with patch.object(release,'app',side_effect=lambda name:after if state['updated'] else before),patch.object(release,'resolve_image',return_value='old-pinned'),\
+             patch.object(release,'build_image',return_value='craves/notification-service@sha256:new'),patch.object(release,'source_guard'),\
+             patch.object(release,'verify_image',side_effect=ValueError('label')),patch.object(release,'azure',side_effect=azure) as update,patch.object(release.time,'sleep'):
+            with self.assertRaisesRegex(RuntimeError,'previous notification image restore requested'):release.deploy_notification(Path('.'),'a'*40,'1',Mock())
+        self.assertEqual(update.call_args.args,('containerapp','update','-g',release.RG,'-n',release.NOTIFICATION,'--image','old-pinned','--no-wait'))
+
 if __name__=='__main__':unittest.main()

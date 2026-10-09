@@ -154,7 +154,7 @@ public class SubscriptionService {
         if (!StringUtils.hasText(reason)) {
             throw ApiException.badRequest("ADMIN_REASON_REQUIRED", "An operational reason is required for admin status changes");
         }
-        SubscriptionResponse subscription = repository.findSubscriptionById(subscriptionId)
+        SubscriptionResponse subscription = repository.lockSubscriptionById(subscriptionId)
             .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
         String normalized = normalize(newStatus, "status");
         if (!ADMIN_STATUS_CHANGES.contains(normalized)) {

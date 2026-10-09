@@ -6,6 +6,8 @@ import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.CustomerOccu
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.OccurrenceItemResponse;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.SkipRequestResponse;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.SubscriptionStatusHistoryResponse;
+import in.craves.subscription.lifecycle.CustomerResumeOccurrences.ResumeOccurrence;
+import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -26,9 +28,11 @@ public class SubscriptionLifecycleRepository {
     );
 
     private final JdbcTemplate jdbcTemplate;
+    private final CustomerResumeOccurrences resumeOccurrences;
 
     public SubscriptionLifecycleRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+        this.resumeOccurrences = new CustomerResumeOccurrences(jdbcTemplate);
     }
 
     public Optional<OwnedSubscription> findOwned(UUID subscriptionId, UUID customerIdentityId) {
@@ -101,7 +105,7 @@ public class SubscriptionLifecycleRepository {
     public boolean pause(UUID subscriptionId, UUID customerIdentityId, String reason) {
         int updated = jdbcTemplate.update(
             "UPDATE subscription_schema.customer_subscription SET status = 'PAUSED', updated_at = now(), " +
-                "generation_lock_token = NULL, generation_locked_at = NULL " +
+                "generation_lock_token = NULL, generation_locked_at = NULL, billing_lock_token = NULL, billing_locked_at = NULL " +
                 "WHERE id = ? AND customer_identity_id = ? AND status = 'ACTIVE'",
             subscriptionId, customerIdentityId
         );
@@ -117,7 +121,8 @@ public class SubscriptionLifecycleRepository {
         if (locked == null || !("ACTIVE".equals(locked.status()) || "PAUSED".equals(locked.status()))) return false;
         int updated = jdbcTemplate.update(
             "UPDATE subscription_schema.customer_subscription SET status = 'CANCELLED', end_date = current_date, " +
-                "next_service_date = NULL, generation_lock_token = NULL, generation_locked_at = NULL, updated_at = now() " +
+                "next_service_date = NULL, generation_lock_token = NULL, generation_locked_at = NULL, " +
+                "billing_lock_token = NULL, billing_locked_at = NULL, updated_at = now() " +
                 "WHERE id = ? AND customer_identity_id = ? AND status = ?",
             subscriptionId, customerIdentityId, locked.status()
         );
@@ -131,13 +136,26 @@ public class SubscriptionLifecycleRepository {
     public boolean resume(UUID subscriptionId, UUID customerIdentityId, LocalDate resumeDate, String reason) {
         int updated = jdbcTemplate.update(
             "UPDATE subscription_schema.customer_subscription SET status = 'ACTIVE', next_service_date = ?, " +
-                "generation_lock_token = NULL, generation_locked_at = NULL, updated_at = now() " +
+                "generation_lock_token = NULL, generation_locked_at = NULL, " +
+                "billing_lock_token = NULL, billing_locked_at = NULL, updated_at = now() " +
                 "WHERE id = ? AND customer_identity_id = ? AND status = 'PAUSED'",
             resumeDate, subscriptionId, customerIdentityId
         );
         if (updated != 1) return false;
         insertSubscriptionHistory(subscriptionId, "PAUSED", "ACTIVE", reason, customerIdentityId);
         return true;
+    }
+
+    List<ResumeOccurrence> lockResumeOccurrences(SubscriptionResponse subscription, LocalDate resumeDate) {
+        return resumeOccurrences.lockCandidates(subscription, resumeDate);
+    }
+
+    void validateResumeOccurrence(SubscriptionResponse subscription, ResumeOccurrence occurrence, boolean materialized) {
+        resumeOccurrences.validate(subscription, occurrence, materialized);
+    }
+
+    void restorePausedOccurrence(ResumeOccurrence occurrence, UUID actorIdentityId) {
+        resumeOccurrences.restore(occurrence, actorIdentityId);
     }
 
     @Transactional
@@ -241,7 +259,7 @@ public class SubscriptionLifecycleRepository {
         );
     }
 
-    private Optional<OwnedSubscription> lockOwned(UUID subscriptionId, UUID customerIdentityId) {
+    Optional<OwnedSubscription> lockOwned(UUID subscriptionId, UUID customerIdentityId) {
         return jdbcTemplate.query(
             "SELECT id, customer_identity_id, plan_id, status, next_service_date " +
                 "FROM subscription_schema.customer_subscription WHERE id = ? AND customer_identity_id = ? FOR UPDATE",
@@ -261,13 +279,21 @@ public class SubscriptionLifecycleRepository {
         );
     }
 
-    private void cancelUndispatchedOccurrences(UUID subscriptionId, UUID actorIdentityId, String source) {
-        List<OccurrenceState> candidates = jdbcTemplate.query(
-            "SELECT id, status FROM subscription_schema.subscription_occurrence WHERE subscription_id = ? " +
-                "AND status IN ('BILLING_PENDING', 'PAYMENT_PENDING', 'READY_FOR_ORDER') FOR UPDATE",
-            (rs, rowNum) -> new OccurrenceState(rs.getObject("id", UUID.class), rs.getString("status")), subscriptionId
+    // Call within the lifecycle transaction after locking the owned subscription. Never skip a
+    // locked meal: it may be exactly the occurrence whose cutoff must protect this transition.
+    List<CancellableOccurrence> lockCancellableOccurrences(UUID subscriptionId) {
+        return jdbcTemplate.query(
+            "SELECT id, status, service_at FROM subscription_schema.subscription_occurrence WHERE subscription_id = ? " +
+                "AND status IN ('BILLING_PENDING', 'PAYMENT_PENDING', 'READY_FOR_ORDER') " +
+                "ORDER BY service_at, id FOR UPDATE",
+            (rs, rowNum) -> new CancellableOccurrence(
+                rs.getObject("id", UUID.class), rs.getString("status"), rs.getTimestamp("service_at").toInstant()
+            ), subscriptionId
         );
-        for (OccurrenceState candidate : candidates) {
+    }
+
+    private void cancelUndispatchedOccurrences(UUID subscriptionId, UUID actorIdentityId, String source) {
+        for (CancellableOccurrence candidate : lockCancellableOccurrences(subscriptionId)) {
             jdbcTemplate.update(
                 "UPDATE subscription_schema.subscription_occurrence SET status = 'CANCELLED', " +
                     "order_dispatch_lock_token = NULL, order_dispatch_locked_at = NULL, updated_at = now() WHERE id = ?",
@@ -312,5 +338,6 @@ public class SubscriptionLifecycleRepository {
 
     public record OwnedSubscription(UUID id, UUID customerIdentityId, UUID planId, String status, LocalDate nextServiceDate) {}
     public record ScheduleClock(String timezone, LocalTime serviceTime) {}
+    record CancellableOccurrence(UUID id, String status, Instant serviceAt) {}
     private record OccurrenceState(UUID id, String status) {}
 }

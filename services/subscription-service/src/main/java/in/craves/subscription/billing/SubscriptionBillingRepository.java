@@ -68,6 +68,16 @@ public class SubscriptionBillingRepository {
         UUID outboxId,
         JsonNode payload
     ) {
+        // Serialize the eligibility check and all billing artifacts with customer lifecycle changes.
+        // A claim is a lease for one exact cycle, not permission to bill after that lease is revoked.
+        if (jdbcTemplate.queryForList(
+            "SELECT id FROM subscription_schema.customer_subscription WHERE id = ? AND customer_identity_id = ? " +
+                "AND status IN ('PENDING_PAYMENT', 'ACTIVE', 'PAYMENT_FAILED') " +
+                "AND billing_lock_token = ? AND next_billing_date = ? FOR UPDATE",
+            UUID.class, claim.subscriptionId(), claim.customerIdentityId(), claim.lockToken(), claim.cycleStart()
+        ).isEmpty()) {
+            throw new IllegalStateException("Subscription billing claim was lost");
+        }
         int inserted = jdbcTemplate.update(
             "INSERT INTO subscription_schema.subscription_invoice " +
                 "(id, subscription_id, plan_id, customer_identity_id, chef_identity_id, cycle_start, cycle_end, amount, currency, status, created_at, updated_at) " +
@@ -108,8 +118,9 @@ public class SubscriptionBillingRepository {
     public void releaseAndAdvance(BillingClaim claim, LocalDate nextBillingDate) {
         int updated = jdbcTemplate.update(
             "UPDATE subscription_schema.customer_subscription SET next_billing_date = ?, billing_lock_token = NULL, billing_locked_at = NULL, updated_at = now() " +
-                "WHERE id = ? AND billing_lock_token = ?",
-            nextBillingDate, claim.subscriptionId(), claim.lockToken()
+                "WHERE id = ? AND customer_identity_id = ? AND billing_lock_token = ? AND next_billing_date = ? " +
+                "AND status IN ('PENDING_PAYMENT', 'ACTIVE', 'PAYMENT_FAILED')",
+            nextBillingDate, claim.subscriptionId(), claim.customerIdentityId(), claim.lockToken(), claim.cycleStart()
         );
         if (updated != 1) {
             throw new IllegalStateException("Subscription billing claim was lost");

@@ -11,7 +11,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ app
     if (!upstream.ok) return NextResponse.json({ code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "ADMIN_ACCESS_REQUIRED" : upstream.status === 404 ? "CHEF_DOCUMENT_NOT_FOUND" : "CHEF_DOCUMENT_UNAVAILABLE" }, { status: upstream.status });
     const contentType = upstream.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
     const length = Number(upstream.headers.get("content-length") ?? "0");
-    if (!CONTENT_TYPES.has(contentType) || !Number.isSafeInteger(length) || length < 1 || length > 10_000_000) return NextResponse.json({ code: "INVALID_CHEF_DOCUMENT_RESPONSE" }, { status: 502 });
+    if (!CONTENT_TYPES.has(contentType) || !Number.isSafeInteger(length) || length < 1 || length > 10 * 1024 * 1024) return NextResponse.json({ code: "INVALID_CHEF_DOCUMENT_RESPONSE" }, { status: 502 });
     const bytes = await upstream.arrayBuffer();
     if (bytes.byteLength !== length) return NextResponse.json({ code: "INVALID_CHEF_DOCUMENT_RESPONSE" }, { status: 502 });
     const response = new NextResponse(bytes, { status: 200, headers: { "Content-Type": contentType, "Content-Length": String(length), "Cache-Control": "no-store, no-cache, must-revalidate", "Content-Security-Policy": "sandbox", "X-Content-Type-Options": "nosniff" } });

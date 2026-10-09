@@ -417,6 +417,30 @@ export function ChefMenuManager() {
       setBusy(false);
     }
   }
+  /** Saved photos change right away (not on Save Dish): remove one, or make it the cover. */
+  async function changeSavedPhoto(imageId: string, action: "remove" | "cover") {
+    if (busyRef.current || !form.id) return;
+    busyRef.current = true;
+    setBusy(true);
+    setMessage("");
+    setNotice("");
+    try {
+      const response = await fetch(`/api/chef/menu/${form.id}/images/${imageId}`, {
+        method: action === "remove" ? "DELETE" : "PUT",
+      });
+      const body: unknown = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(apiError(response, body, "The photo change was not confirmed. Reload the menu to check it."));
+      const updated = parseChefMenuItem(body);
+      if (!updated) throw new Error("The photo change returned an incomplete response. Reload the menu to check it.");
+      upsert(updated);
+      setNotice(action === "remove" ? "Photo removed" : "Cover photo updated");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The photo change could not be confirmed. Reload the menu to check it.");
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }
   const existingPhotos = savedImages(items.find((item) => item.id === form.id));
   const photoSlots = MAX_PHOTOS - existingPhotos.length - imageFiles.length;
   const feedback = (
@@ -613,7 +637,8 @@ export function ChefMenuManager() {
                 <span className="text-sm font-normal text-muted-foreground">Optional</span>
               </label>
               <p className="mt-1 text-sm text-muted-foreground">
-                Add up to {MAX_PHOTOS} photos. JPEG, PNG or WebP, up to 8 MB each. The first photo is the cover customers see.
+                Add up to {MAX_PHOTOS} photos. JPEG, PNG or WebP, up to 8 MB each. The cover is the photo customers see first.
+                {existingPhotos.length ? " Removing a saved photo or changing the cover applies right away." : ""}
               </p>
               <ul className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-5" aria-label="Photo gallery">
                 {existingPhotos.map((image, index) => (
@@ -627,7 +652,24 @@ export function ChefMenuManager() {
                       <span className="absolute left-1.5 top-1.5 rounded-full bg-[#F62E18] px-2 py-0.5 text-xs font-semibold text-white">
                         Cover
                       </span>
-                    ) : null}
+                    ) : (
+                      <button
+                        type="button"
+                        aria-label={`Make saved photo ${index + 1} the cover`}
+                        className="absolute bottom-1.5 left-1.5 min-h-8! min-w-0! rounded-full bg-white/95 px-2 py-0.5 text-xs font-semibold text-[#1A1A1A] shadow focus-visible:outline-2 focus-visible:outline-[#F62E18]"
+                        onClick={() => void changeSavedPhoto(image.id, "cover")}
+                      >
+                        Make cover
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      aria-label={`Remove saved photo ${index + 1}`}
+                      className="absolute right-1.5 top-1.5 flex size-9 min-h-9! min-w-9! items-center justify-center rounded-full p-0! text-base font-bold text-[#1A1A1A] shadow focus-visible:outline-2 focus-visible:outline-[#F62E18]"
+                      onClick={() => void changeSavedPhoto(image.id, "remove")}
+                    >
+                      ×
+                    </button>
                   </li>
                 ))}
                 {imageFiles.map((file, index) => (

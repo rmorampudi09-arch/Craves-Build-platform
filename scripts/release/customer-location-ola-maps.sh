@@ -198,27 +198,34 @@ case "$OPERATION" in
     fi
     ;;
   bind)
-    # Each app either already has the operator-created app secret, or gets a Key Vault reference to it.
+    # Prefer a Key Vault reference wherever the app identity can read the key (one place to rotate it);
+    # otherwise reuse an operator-created Container App secret, never on User/Chef (backend releases refuse it).
+    VAULT=$(vault_name) || VAULT=''
+    present=false
+    [[ -z "$VAULT" ]] || present=$(key_vault_report "$VAULT" | jq -r '.present')
     declare -A IDENTITY=()
     for app in "$WEB_APP" "$CHEF_APP"; do
-      has_app_secret "$app" || continue
-      [[ "$(kv_required "$app")" == false || "$(binding_report "$app" | jq -r '.olaSecretReference.keyVaultBacked')" == true ]] \
-        || fail "$app secret $SECRET_NAME is not Key Vault-backed and backend releases refuse it; remove it and re-run"
-      IDENTITY[$app]=existing
-    done
-    if [[ "${IDENTITY[$WEB_APP]:-}" != existing || "${IDENTITY[$CHEF_APP]:-}" != existing ]]; then
-      VAULT=$(vault_name)
-      [[ "$(key_vault_report "$VAULT" | jq -r '.present')" != false ]] \
-        || fail "Key Vault $VAULT has no secret $SECRET_NAME; store the Ola API key there first"
-    fi
-    for app in "$WEB_APP" "$CHEF_APP"; do
-      [[ "${IDENTITY[$app]:-}" != existing ]] || continue
-      IDENTITY[$app]=$(identity_ref "$app" "$VAULT")
-      access=$(can_read_vault "$(principal_id "$app" "${IDENTITY[$app]}")" "$VAULT")
+      identity='' access=false
+      if [[ "$present" != false ]]; then
+        identity=$(identity_ref "$app" "$VAULT") || identity=''
+        [[ -z "$identity" ]] || access=$(can_read_vault "$(principal_id "$app" "$identity")" "$VAULT")
+      fi
       hint="Grant it Key Vault Secrets User on $SECRET_NAME"
       [[ "$(kv_required "$app")" == true ]] || hint+=", or add the Container App secret $SECRET_NAME to $app"
-      [[ "$access" != false ]] || fail "$app identity ${IDENTITY[$app]##*/} cannot read secrets in $VAULT. $hint, then re-run"
-      [[ "$access" == true ]] || echo "WARNING: could not confirm $app read access to $VAULT; a failed bind is rolled back." >&2
+      if [[ "$access" == true ]]; then
+        IDENTITY[$app]=$identity
+      elif [[ "$(kv_required "$app")" == false ]] && has_app_secret "$app"; then
+        IDENTITY[$app]=existing
+      elif [[ "$access" == unknown ]]; then
+        echo "WARNING: could not confirm $app read access to $VAULT; a failed bind is rolled back." >&2
+        IDENTITY[$app]=$identity
+      elif [[ -z "$VAULT" ]]; then
+        fail "No Key Vault could be chosen for $app; set KEY_VAULT_NAME"
+      elif [[ "$present" == false ]]; then
+        fail "Key Vault $VAULT has no secret $SECRET_NAME; store the Ola API key there first"
+      else
+        fail "$app identity ${identity##*/} cannot read secrets in $VAULT. $hint, then re-run"
+      fi
     done
     for app in "$WEB_APP" "$CHEF_APP"; do
       if [[ "${IDENTITY[$app]}" == existing ]]; then

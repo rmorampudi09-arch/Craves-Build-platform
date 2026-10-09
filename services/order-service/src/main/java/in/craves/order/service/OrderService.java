@@ -1,6 +1,7 @@
 package in.craves.order.service;
 
 import in.craves.order.exception.OrderApiException;
+import in.craves.order.launchpolicy.LaunchPolicyCheckoutValidator;
 import in.craves.order.security.CravesPrincipal;
 import in.craves.order.service.CatalogClient.CatalogKitchen;
 import in.craves.order.service.CatalogClient.CatalogMenuItem;
@@ -33,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -53,19 +55,22 @@ public class OrderService {
     private final CustomerAddressClient customerAddressClient;
     private final CheckoutSnapshotFactory checkoutSnapshotFactory;
     private final NotificationInternalClient notificationInternalClient;
+    private final ObjectProvider<LaunchPolicyCheckoutValidator> launchPolicyCheckoutValidator;
 
     public OrderService(
         JdbcTemplate jdbcTemplate,
         CatalogClient catalogClient,
         CustomerAddressClient customerAddressClient,
         CheckoutSnapshotFactory checkoutSnapshotFactory,
-        NotificationInternalClient notificationInternalClient
+        NotificationInternalClient notificationInternalClient,
+        ObjectProvider<LaunchPolicyCheckoutValidator> launchPolicyCheckoutValidator
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.catalogClient = catalogClient;
         this.customerAddressClient = customerAddressClient;
         this.checkoutSnapshotFactory = checkoutSnapshotFactory;
         this.notificationInternalClient = notificationInternalClient;
+        this.launchPolicyCheckoutValidator = launchPolicyCheckoutValidator;
     }
 
     public CartResponse getCart(CravesPrincipal principal) {
@@ -327,6 +332,13 @@ public class OrderService {
             checkoutPlatform = checkoutPlatform.add(charges.platformFee());
             checkoutTax = checkoutTax.add(charges.taxAmount());
             checkoutDelivery = checkoutDelivery.add(charges.deliveryFee());
+        }
+
+        // Use exactly the food subtotal and location snapshots about to be written, under the cart lock.
+        LaunchPolicyCheckoutValidator launchValidator = launchPolicyCheckoutValidator.getIfAvailable();
+        if (launchValidator != null) {
+            launchValidator.enforce(checkoutFood, dropoff,
+                pendingOrders.stream().map(PendingKitchenOrder::pickup).toList());
         }
 
         UUID checkoutId = UUID.randomUUID();

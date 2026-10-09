@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.craves.in/events/refund-status-changed-v1.1.schema.json",
+  "title": "Craves REFUND_STATUS_CHANGED v1.1 composite completion",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "eventType",
+    "eventVersion",
+    "occurredAt",
+    "correlationId",
+    "causationId",
+    "source",
+    "subject",
+    "data"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "eventType": {
+      "const": "REFUND_STATUS_CHANGED"
+    },
+    "eventVersion": {
+      "const": "1.1"
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "correlationId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "causationId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "source": {
+      "const": "integration-service"
+    },
+    "subject": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "refundId",
+        "checkoutId",
+        "chefSubOrderId",
+        "customerIdentityId",
+        "refundReference",
+        "refundAmount",
+        "currency",
+        "reason",
+        "status",
+        "providerStatus",
+        "updatedAt",
+        "provider",
+        "completion"
+      ],
+      "properties": {
+        "refundId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "checkoutId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "chefSubOrderId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "customerIdentityId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "refundReference": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 40
+        },
+        "refundAmount": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "multipleOf": 0.01
+        },
+        "currency": {
+          "const": "INR"
+        },
+        "reason": {
+          "enum": [
+            "CHEF_DECLINED",
+            "CHEF_ACCEPTANCE_TIMEOUT"
+          ]
+        },
+        "status": {
+          "const": "REFUNDED"
+        },
+        "providerStatus": {
+          "enum": [
+            "SUCCESS",
+            "NO_EXTERNAL_REFUND"
+          ]
+        },
+        "cfRefundId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "provider": {
+          "enum": [
+            "RAZORPAY",
+            "CASHFREE",
+            "REFERRAL_WALLET"
+          ]
+        },
+        "providerRefundId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "completion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "gatewayPaise",
+            "walletPaise",
+            "discountPaise",
+            "operationId",
+            "version"
+          ],
+          "properties": {
+            "type": {
+              "const": "ALL_TENDERS_RESTORED"
+            },
+            "operationId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            },
+            "gatewayPaise": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9223372036854775807
+            },
+            "walletPaise": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9223372036854775807
+            },
+            "discountPaise": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9223372036854775807
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "completion": {
+                "properties": {
+                  "gatewayPaise": {
+                    "const": 0
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "provider": {
+                "enum": [
+                  "REFERRAL_WALLET",
+                  "RAZORPAY",
+                  "CASHFREE"
+                ]
+              },
+              "providerStatus": {
+                "const": "NO_EXTERNAL_REFUND"
+              },
+              "providerRefundId": {
+                "type": "null"
+              },
+              "cfRefundId": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "required": [
+              "providerRefundId"
+            ],
+            "properties": {
+              "provider": {
+                "enum": [
+                  "RAZORPAY",
+                  "CASHFREE"
+                ]
+              },
+              "providerStatus": {
+                "const": "SUCCESS"
+              },
+              "providerRefundId": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "provider": {
+                "const": "RAZORPAY"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cfRefundId": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "provider": {
+                "const": "CASHFREE"
+              },
+              "completion": {
+                "properties": {
+                  "gatewayPaise": {
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "cfRefundId"
+            ],
+            "properties": {
+              "cfRefundId": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$comment": "The consumer additionally validates exact overflow-safe tender sum = refundAmount * 100, operationId binding to chefSubOrderId, checkout/correlation/subject identity, and durable order request/refund bindings. Cashfree IDs must match. Deploy consumer and additive V34 migration before this producer; retain consumer until every v1.1 outbox, broker, retry and dead-letter event is drained."
+}

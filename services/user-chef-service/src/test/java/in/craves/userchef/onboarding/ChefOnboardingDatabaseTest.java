@@ -7,6 +7,7 @@ import in.craves.userchef.security.CurrentUser;
 import in.craves.userchef.service.*;
 import in.craves.userchef.web.ApiDtos.KycDocumentType;
 import in.craves.userchef.web.ApiDtos.ChefApplicationStatus;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -317,6 +318,19 @@ class ChefOnboardingDatabaseTest {
             base.proofKind(),base.otherGovernmentId(),base.fssaiNumber(),base.language(),false);
         var error=assertThrows(ApiException.class,()->run(()->service.saveDraft(user,new SaveRequest(service.mine(user).version(),minor))));
         assertEquals("APPLICANT_UNDER_18",error.getCode());
+    }
+    @Test void mapPinWithSevenDecimalsSubmitsAndReachesAdminPendingQueue() {
+        var base=ChefOnboardingPolicyTest.details(ProofKind.PAN,"12345678901234");
+        var pinned=new Details(base.email(),base.firstName(),base.lastName(),base.dateOfBirth(),base.kitchenName(),
+            base.kitchenDescription(),base.addressLine1(),null,null,base.city(),base.state(),base.postalCode(),
+            new BigDecimal("17.4398715"),new BigDecimal("78.4482946"),base.proofKind(),base.otherGovernmentId(),
+            base.fssaiNumber(),base.language(),null);
+        run(()->service.save(user,new SaveRequest(0L,pinned)));
+        photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
+        assertEquals(0,new BigDecimal("17.439872").compareTo(service.mine(user).details().latitude()));
+        var submitted=run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
+        assertTrue(submitted.submitted());
+        assertTrue(applications.listApplications(admin,ChefApplicationStatus.PENDING).stream().anyMatch(a->submitted.application().id().equals(a.id())));
     }
     @Test void videosFallBackToEnglishOnlyWhenTheChosenLanguageHasNone() {
         var english=run(()->content.create(admin,new ContentRequest("en","How to apply in English","ARTICLE","Synthetic English article for testing",null,null))).content();

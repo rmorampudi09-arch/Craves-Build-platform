@@ -74,4 +74,47 @@ class ChefReleaseGuardTests(unittest.TestCase):
             self.assertEqual(azure.call_args.args,('containerapp','update','-g',release.RG,'-n',release.WEB,'--set-env-vars',release.FLAG+'=false'))
             output.write_text.assert_not_called()
 
+    def admin_app(self,image='old-admin'):
+        value=self.settled_app(release.ADMIN);value['properties']['template']['containers'][0]['image']=image
+        value['properties']['configuration']['ingress']['fqdn']='admin-origin.azurecontainerapps.io'
+        return value
+
+    def web_env(self):
+        web=self.app();web['properties']['template']['containers'][0]['env']=[{'name':k,'value':'public'} for k in release.FIREBASE]
+        return web
+
+    def test_admin_deploy_refuses_an_app_that_does_not_serve_admin_craves_in(self):
+        pages={release.ADMIN_HOST+'/sign-in':(200,b'static/chunks/a.js'),'https://admin-origin.azurecontainerapps.io/sign-in':(200,b'static/chunks/b.js')}
+        with patch.object(release,'app',return_value=self.admin_app()),patch.object(release.inspect,'probe',side_effect=lambda url:pages[url]),patch.object(release,'build_image') as build,patch.object(release,'azure') as azure:
+            with self.assertRaisesRegex(ValueError,'not served by'):release.deploy_admin(Path('.'),'a'*40,'1',Mock())
+            build.assert_not_called();azure.assert_not_called()
+
+    def test_admin_deploy_swaps_only_the_image_and_verifies_the_public_host(self):
+        before=self.admin_app();after=self.admin_app('craves/admin-web@sha256:new')
+        served={'value':b'static/chunks/old.js'}
+        def probe(url):
+            if url.endswith('/api/admin/me'):return (401,b'{}')
+            return (200,served['value'])
+        def azure(*args):served['value']=b'static/chunks/new.js'
+        output=Mock()
+        with patch.object(release,'app',side_effect=lambda name:self.web_env() if name==release.WEB else (after if served['value']==b'static/chunks/new.js' else before)),\
+             patch.object(release.inspect,'probe',side_effect=probe),patch.object(release,'resolve_image',return_value='old-pinned'),\
+             patch.object(release,'build_image',return_value='craves/admin-web@sha256:new') as build,patch.object(release,'source_guard'),\
+             patch.object(release,'verify_image'),patch.object(release,'azure',side_effect=azure) as update,patch.object(release.time,'sleep'):
+            release.deploy_admin(Path('.'),'a'*40,'1',output)
+        self.assertEqual(build.call_args.kwargs['dockerfile'],'Dockerfile.admin')
+        self.assertEqual(update.call_args_list[0].args,('containerapp','update','-g',release.RG,'-n',release.ADMIN,'--image','craves/admin-web@sha256:new','--no-wait'))
+        self.assertEqual(update.call_count,1)
+
+    def test_admin_deploy_restores_previous_image_when_it_never_verifies(self):
+        before=self.admin_app();after=self.admin_app('craves/admin-web@sha256:new')
+        state={'updated':False}
+        def azure(*args):state['updated']=True
+        with patch.object(release,'app',side_effect=lambda name:self.web_env() if name==release.WEB else (after if state['updated'] else before)),\
+             patch.object(release.inspect,'probe',side_effect=lambda url:(401,b'') if url.endswith('/me') else (200,b'static/chunks/same.js')),\
+             patch.object(release,'resolve_image',return_value='old-pinned'),patch.object(release,'build_image',return_value='craves/admin-web@sha256:new'),\
+             patch.object(release,'source_guard'),patch.object(release,'verify_image',side_effect=ValueError('label')),patch.object(release,'azure',side_effect=azure) as update,patch.object(release.time,'sleep'):
+            with self.assertRaisesRegex(RuntimeError,'previous admin image restore requested'):release.deploy_admin(Path('.'),'a'*40,'1',Mock())
+        self.assertEqual(update.call_args.args,('containerapp','update','-g',release.RG,'-n',release.ADMIN,'--image','old-pinned','--no-wait'))
+
 if __name__=='__main__':unittest.main()

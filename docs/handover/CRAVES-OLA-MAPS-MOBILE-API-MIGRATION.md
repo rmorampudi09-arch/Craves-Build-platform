@@ -30,7 +30,7 @@ APK -> APIM (api.craves.in) -> User/Chef Service -> Ola Maps places/v1/reverse-g
 Web -> Next.js BFF /api/location/* -> Ola Maps places/v1/autocomplete, places/v1/reverse-geocode, tiles/v1 static map
 ```
 
-The Ola key (`OLA_MAPS_API_KEY`) is a Key Vault-backed secret on the User/Chef and customer-web Container Apps. Provider-specific parsing lives only in `services/user-chef-service/.../location/OlaMapsClient.java` and `apps/customer-web-next/src/lib/server/ola-maps.ts`; clients only see CRAVES contracts.
+The Ola key (`OLA_MAPS_API_KEY`) is a server-side secret on the User/Chef and customer-web Container Apps (`secretref:ola-maps-api-key`). Provider-specific parsing lives only in `services/user-chef-service/.../location/OlaMapsClient.java` and `apps/customer-web-next/src/lib/server/ola-maps.ts`; clients only see CRAVES contracts.
 
 ## 3. API replacement table
 
@@ -217,7 +217,7 @@ Must not:
 
 | Setting | Where | Secret | Value |
 |---|---|---|---|
-| `OLA_MAPS_API_KEY` | `ca-craves-user-chef-service-prod`, `ca-craves-web-prodlow` | Yes | `secretref:ola-maps-api-key` -> Key Vault secret `ola-maps-api-key` |
+| `OLA_MAPS_API_KEY` | `ca-craves-user-chef-service-prod`, `ca-craves-web-prodlow` | Yes | `secretref:ola-maps-api-key` (User/Chef: Key Vault reference; web: Container App secret) |
 | `CRAVES_LOCATION_SEARCH_CENTER` | same apps | No | `17.3850,78.4867` |
 | `AZURE_MAPS_CLIENT_ID`, `AZURE_MAPS_ENDPOINT` | same apps | No | Retired; removed after the live Ola flows are verified (`operation=remove-azure-maps`) |
 

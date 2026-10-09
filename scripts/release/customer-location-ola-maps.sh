@@ -3,7 +3,8 @@
 #
 # OPERATION:
 #   inspect            read-only: Key Vault secret presence (metadata only), identities, bindings, legacy Azure Maps settings
-#   bind               reference the Key Vault secret from both apps and bind OLA_MAPS_API_KEY / CRAVES_LOCATION_SEARCH_CENTER
+#   bind               give both apps the "ola-maps-api-key" secret (an operator-created app secret is reused, else a Key
+#                      Vault reference is added) and bind OLA_MAPS_API_KEY / CRAVES_LOCATION_SEARCH_CENTER
 #   apim               add/refresh the customer-address APIM operations, including POST /addresses/location-search
 #   remove-azure-maps  remove the retired AZURE_MAPS_CLIENT_ID / AZURE_MAPS_ENDPOINT settings once Ola is verified live
 #
@@ -46,14 +47,21 @@ VAULT_NAMES='[.[] | .keyVaultUrl // empty | select(test("^https://[a-z0-9-]+\\.v
 
 vault_name() {
   if [[ -n "$KEY_VAULT_NAME" ]]; then printf '%s\n' "$KEY_VAULT_NAME"; return; fi
-  # A vault both apps already reference, so each keeps using an identity it already has.
-  local -a common
-  mapfile -t common < <(comm -12 <(secret_meta "$WEB_APP" | jq -r "$VAULT_NAMES | .[]" | sort) \
-    <(secret_meta "$CHEF_APP" | jq -r "$VAULT_NAMES | .[]" | sort))
-  [[ ${#common[@]} -eq 1 ]] \
-    || fail "Expected one Key Vault referenced by both $WEB_APP and $CHEF_APP (found ${#common[@]}); set KEY_VAULT_NAME"
-  printf '%s\n' "${common[0]}"
+  # A vault both apps already reference, else the only vault either app references.
+  local -a web chef common all
+  mapfile -t web < <(secret_meta "$WEB_APP" | jq -r "$VAULT_NAMES | .[]")
+  mapfile -t chef < <(secret_meta "$CHEF_APP" | jq -r "$VAULT_NAMES | .[]")
+  mapfile -t common < <(comm -12 <(printf '%s\n' "${web[@]}" | sort -u) <(printf '%s\n' "${chef[@]}" | sort -u) | grep .)
+  mapfile -t all < <(printf '%s\n' "${web[@]}" "${chef[@]}" | sort -u | grep .)
+  if [[ ${#common[@]} -eq 1 ]]; then printf '%s\n' "${common[0]}"; return; fi
+  [[ ${#common[@]} -eq 0 && ${#all[@]} -eq 1 ]] \
+    || fail "Cannot choose one Key Vault from the apps' existing references (${all[*]:-none}); set KEY_VAULT_NAME"
+  printf '%s\n' "${all[0]}"
 }
+
+has_app_secret() { secret_meta "$1" | jq -e --arg s "$SECRET_NAME" 'any(.[]; .name == $s)' >/dev/null; }
+# Backend releases (deploy-single-service-preserve-runtime.sh) refuse any active secret that is not Key Vault-backed.
+kv_required() { [[ "$1" == "$CHEF_APP" ]] && echo true || echo false; }
 
 identity_ref() {
   # The identity the app already uses for this vault, else for any vault, else its system identity.
@@ -98,18 +106,19 @@ can_read_vault() {
 }
 
 bind_app() {
+  # identity "existing" reuses an operator-created app secret; otherwise a Key Vault reference is created.
   # Returns non-zero after restoring a first-time binding that did not become healthy.
   local app=$1 identity=$2 had_secret had_env
   had_secret=$(secret_meta "$app" | jq --arg s "$SECRET_NAME" 'any(.[]; .name == $s)')
   had_env=$(app_json "$app" | jq '[.properties.template.containers[0].env[]?
     | select(.name == "OLA_MAPS_API_KEY" or .name == "CRAVES_LOCATION_SEARCH_CENTER")] | length > 0')
-  if az containerapp secret set -g "$RG" -n "$app" -o none --only-show-errors \
-       --secrets "$SECRET_NAME=keyvaultref:https://$VAULT.vault.azure.net/secrets/$SECRET_NAME,identityref:$identity" \
+  if { [[ "$identity" == existing ]] || az containerapp secret set -g "$RG" -n "$app" -o none --only-show-errors \
+         --secrets "$SECRET_NAME=keyvaultref:https://$VAULT.vault.azure.net/secrets/$SECRET_NAME,identityref:$identity"; } \
     && az containerapp update -g "$RG" -n "$app" -o none --only-show-errors \
        --set-env-vars "OLA_MAPS_API_KEY=secretref:$SECRET_NAME" "CRAVES_LOCATION_SEARCH_CENTER=$SEARCH_CENTER" \
     && wait_ready "$app" \
-    && binding_report "$app" | tee /dev/stderr | jq -e --arg ref "secretref:$SECRET_NAME" \
-       '.olaKeyBinding == $ref and .olaSecretReference.keyVaultBacked == true' >/dev/null; then
+    && binding_report "$app" | tee /dev/stderr | jq -e --arg ref "secretref:$SECRET_NAME" --argjson kv "$(kv_required "$app")" \
+       '.olaKeyBinding == $ref and .olaSecretReference != null and (($kv | not) or .olaSecretReference.keyVaultBacked)' >/dev/null; then
     return 0
   fi
   echo "ERROR: $app Ola binding failed; restoring its previous settings." >&2
@@ -189,22 +198,37 @@ case "$OPERATION" in
     fi
     ;;
   bind)
-    VAULT=$(vault_name)
-    [[ "$(key_vault_report "$VAULT" | jq -r '.present')" != false ]] \
-      || fail "Key Vault $VAULT has no secret $SECRET_NAME; store the Ola API key there first"
+    # Each app either already has the operator-created app secret, or gets a Key Vault reference to it.
     declare -A IDENTITY=()
     for app in "$WEB_APP" "$CHEF_APP"; do
+      has_app_secret "$app" || continue
+      [[ "$(kv_required "$app")" == false || "$(binding_report "$app" | jq -r '.olaSecretReference.keyVaultBacked')" == true ]] \
+        || fail "$app secret $SECRET_NAME is not Key Vault-backed and backend releases refuse it; remove it and re-run"
+      IDENTITY[$app]=existing
+    done
+    if [[ "${IDENTITY[$WEB_APP]:-}" != existing || "${IDENTITY[$CHEF_APP]:-}" != existing ]]; then
+      VAULT=$(vault_name)
+      [[ "$(key_vault_report "$VAULT" | jq -r '.present')" != false ]] \
+        || fail "Key Vault $VAULT has no secret $SECRET_NAME; store the Ola API key there first"
+    fi
+    for app in "$WEB_APP" "$CHEF_APP"; do
+      [[ "${IDENTITY[$app]:-}" != existing ]] || continue
       IDENTITY[$app]=$(identity_ref "$app" "$VAULT")
       access=$(can_read_vault "$(principal_id "$app" "${IDENTITY[$app]}")" "$VAULT")
-      [[ "$access" != false ]] \
-        || fail "$app identity ${IDENTITY[$app]##*/} cannot read secrets in $VAULT; grant it Key Vault Secrets User there first"
+      hint="Grant it Key Vault Secrets User on $SECRET_NAME"
+      [[ "$(kv_required "$app")" == true ]] || hint+=", or add the Container App secret $SECRET_NAME to $app"
+      [[ "$access" != false ]] || fail "$app identity ${IDENTITY[$app]##*/} cannot read secrets in $VAULT. $hint, then re-run"
       [[ "$access" == true ]] || echo "WARNING: could not confirm $app read access to $VAULT; a failed bind is rolled back." >&2
     done
     for app in "$WEB_APP" "$CHEF_APP"; do
-      echo "Referencing Key Vault secret $SECRET_NAME from $app (identity: ${IDENTITY[$app]##*/})."
+      if [[ "${IDENTITY[$app]}" == existing ]]; then
+        echo "Using the existing Container App secret $SECRET_NAME on $app."
+      else
+        echo "Referencing Key Vault secret $SECRET_NAME in $VAULT from $app (identity: ${IDENTITY[$app]##*/})."
+      fi
       bind_app "$app" "${IDENTITY[$app]}" || fail "$app Ola binding failed and its previous settings were restored"
     done
-    echo "Ola Maps key bound to $WEB_APP and $CHEF_APP as secretref:$SECRET_NAME (Key Vault $VAULT)."
+    echo "Ola Maps key bound to $WEB_APP and $CHEF_APP as secretref:$SECRET_NAME."
     ;;
   apim)
     RG="$RG" APIM="$APIM" USER_APP="$CHEF_APP" bash "$ROOT/scripts/apim/configure-customer-addresses-apim.sh"

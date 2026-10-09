@@ -87,7 +87,7 @@ The new web UI requires and sends district for new/edited addresses. The backend
 - HTTP-only Craves access-token cookie for customer saved-address APIs.
 - Mutation requests require same-origin browser headers.
 - Reverse geocoding is a same-origin POST through the Next.js BFF.
-- Ola Maps is called server-side with `OLA_MAPS_API_KEY`, a Key Vault-backed Container App secret reference.
+- Ola Maps is called server-side with `OLA_MAPS_API_KEY`, bound as `secretref:ola-maps-api-key` (a Key Vault reference on User/Chef; a Container App secret on the web app, which has no Key Vault references).
 - The Ola credential is domain-restricted to `craves.in`; server calls send `Origin: https://craves.in`.
 - No Ola key or provider secret reaches browser code (no `NEXT_PUBLIC_` Ola variable exists).
 - Customer identity IDs are removed from browser responses.
@@ -99,7 +99,7 @@ The new web UI requires and sends district for new/edited addresses. The backend
 1. Run exact-head feature CI.
 2. Merge the feature after CI succeeds.
 3. Deploy User-Chef Service so Flyway V4 and the additive `districtName` response field are live.
-4. Store the Ola key in Key Vault as `ola-maps-api-key`, then run `azure-pipelines-customer-location-ola-maps.yml` with `operation=bind` and `confirmProductionChange=true`.
+4. Store the Ola key as `ola-maps-api-key` in the User/Chef Key Vault and as a Container App secret on the web app, then run `azure-pipelines-customer-location-ola-maps.yml` with `operation=bind` and `confirmProductionChange=true`.
 5. Deploy the customer-web-next image using the existing guarded customer-web deployment pipeline.
 6. Purge only the immutable customer-web static assets if the web deployment pipeline does not already perform the Front Door purge.
 7. Run authenticated customer and chef smoke tests.

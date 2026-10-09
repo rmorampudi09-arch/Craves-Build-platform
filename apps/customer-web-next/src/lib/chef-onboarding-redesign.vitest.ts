@@ -260,15 +260,16 @@ describe("Redesigned Chef onboarding popup", () => {
       }
       send(body: FormData) {
         sent.push(body);
-        saved = {
-          ...saved,
-          documents: [
-            ...saved.documents,
-            { ...document("KITCHEN_PHOTO_2"), originalFileName: "stove.png" },
-          ],
+        // The server stores a sanitised name, so the upload is confirmed by its id.
+        const stored = {
+          ...document("KITCHEN_PHOTO_2"),
+          id: "77777777-7777-4777-8777-777777777777",
+          originalFileName: "my-stove-(1).png",
         };
+        saved = { ...saved, documents: [...saved.documents, stored] };
         this.upload.onprogress?.({ lengthComputable: true, loaded: 1, total: 1 } as ProgressEvent);
         this.status = 201;
+        this.responseText = JSON.stringify(stored);
         queueMicrotask(() => this.onload?.());
       }
     }
@@ -282,12 +283,33 @@ describe("Redesigned Chef onboarding popup", () => {
         (element) => element.tagName === "INPUT" && !element.hasAttribute("capture"),
       ) as HTMLInputElement;
     fireEvent.change(input, {
-      target: { files: [new File(["x"], "stove.png", { type: "image/png" })] },
+      target: { files: [new File(["x"], "my stove (1).png", { type: "image/png" })] },
     });
-    await screen.findByText("stove.png");
     await waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0]!.get("documentType")).toBe("KITCHEN_PHOTO_2");
-    expect(screen.getByRole("button", { name: "Replace cooking setup photo" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Replace cooking setup photo" })).toBeTruthy();
+    expect(screen.queryByText("Upload failed")).toBeNull();
+  });
+
+  it("shows the server's reason when a submission is refused", async () => {
+    fetcher.mockImplementation((input, init) =>
+      String(input).endsWith("/submit")
+        ? Promise.resolve(
+            Response.json(
+              { code: "ONBOARDING_INCOMPLETE", message: "Complete the kitchen photos before submitting." },
+              { status: 409 },
+            ),
+          )
+        : normal(input, init),
+    );
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: "Review application" }));
+    await screen.findByRole("heading", { name: "Review your application" });
+    fireEvent.click(screen.getByLabelText("Accept terms and privacy policy"));
+    fireEvent.click(screen.getByRole("button", { name: "Submit application" }));
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Complete the kitchen photos before submitting.",
+    );
   });
 });
 

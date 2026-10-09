@@ -626,6 +626,31 @@ describe("Chef menu save and recovery", () => {
     expect(uploads.map(([, options]) => ((options?.body as FormData).get("file") as File).name)).toEqual(["a.png", "c.png"]);
     expect(uploads.every(([, options]) => (options?.body as FormData).get("primary") === "false")).toBe(true);
   });
+  it("removes a saved photo and changes the cover right away", async () => {
+    const one = { id: "aaaaaaaa-1111-4111-8111-111111111111", publicUrl: "https://media.example/1.jpg", contentType: "image/jpeg", fileSizeBytes: 10, sortOrder: 0, primary: true };
+    const two = { id: "aaaaaaaa-2222-4222-8222-222222222222", publicUrl: "https://media.example/2.jpg", contentType: "image/jpeg", fileSizeBytes: 10, sortOrder: 1, primary: false };
+    stored = [{ ...fixture, images: [one, two] }];
+    const original = fetcher.getMockImplementation()!;
+    fetcher.mockImplementation((input, options) => {
+      const url = String(input);
+      if (url.endsWith(`/images/${two.id}`) && options?.method === "PUT") return Promise.resolve(Response.json({ ...stored[0], images: [{ ...one, primary: false }, { ...two, primary: true }] }));
+      if (url.endsWith(`/images/${one.id}`) && options?.method === "DELETE") return Promise.resolve(Response.json({ ...stored[0], images: [{ ...two, primary: true }] }));
+      return original(input, options);
+    });
+    render(createElement(ChefMenuManager));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Fixture dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Make saved photo 2 the cover" }));
+    await screen.findByText("Cover photo updated");
+    expect((screen.getByRole("img", { name: "Saved photo 1" }) as HTMLImageElement).src).toBe("https://media.example/2.jpg");
+    fireEvent.click(screen.getByRole("button", { name: "Remove saved photo 2" }));
+    await screen.findByText("Photo removed");
+    expect(screen.queryByRole("img", { name: "Saved photo 2" })).toBeNull();
+    expect(screen.getByText("1 of 5 photos")).toBeTruthy();
+    expect(fetcher.mock.calls.filter(([url]) => String(url).includes("/images/")).map(([url, options]) => `${options?.method} ${url}`)).toEqual([
+      `PUT /api/chef/menu/${fixture.id}/images/${two.id}`,
+      `DELETE /api/chef/menu/${fixture.id}/images/${one.id}`,
+    ]);
+  });
   it("keeps the saved dish ID after a photo failure so retry updates instead of creating a duplicate", async () => {
     await openNew(); fillRequired();
     const original = fetcher.getMockImplementation()!;

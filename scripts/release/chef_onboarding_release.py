@@ -10,6 +10,8 @@ from active_address_release import (SUBSCRIPTION, RG, CHEF, WEB, APIM, ACR, FIRE
     source_guard, build_image, verify_image, resolve_image, deploy_web, ready_web, environment, inspect, runtime, require)
 
 BANK='ca-craves-integration-service-pr'
+# Email verification codes are sent by Notification; released with the backend so it tracks reviewed main.
+NOTIFICATION='ca-craves-notification-service-p'
 FLAG='CRAVES_CHEF_ONBOARDING_V2_ENABLED'
 BASE='CRAVES_BANK_INTEGRATION_BASE_URL'
 
@@ -44,13 +46,13 @@ def applied(report):
 
 def release_images(source,sha,run_id,output):
     preflight()
-    snapshots={name:app(name) for name in (BANK,CHEF)}
+    snapshots={name:app(name) for name in (BANK,CHEF,NOTIFICATION)}
     helper=source/'scripts/release/deploy-single-service-preserve-runtime.sh'
     guard_env=dict(os.environ,DEPLOY_PREFLIGHT_ONLY='true',READY_ATTEMPTS='150',READY_SLEEP_SECONDS='10')
-    for name in (BANK,CHEF):run('bash',str(helper),RG,name,image(snapshots[name]),'chef-onboarding',env=guard_env)
+    for name in (BANK,CHEF,NOTIFICATION):run('bash',str(helper),RG,name,image(snapshots[name]),'chef-onboarding',env=guard_env)
     run('az','acr','login','-n',ACR,'--only-show-errors')
     receipts=[]
-    for name,service in ((BANK,'integration-service'),(CHEF,'user-chef-service')):
+    for name,service in ((BANK,'integration-service'),(CHEF,'user-chef-service'),(NOTIFICATION,'notification-service')):
         target=build_image(source,'services/'+service,'craves/'+service,sha)
         source_guard(source,sha,run_id)
         current=app(name)
@@ -61,7 +63,7 @@ def release_images(source,sha,run_id,output):
         receipts.append({'app':name,'sourceSha':sha,'image':target,'previousImage':image(current)})
     report=preflight();applied(report)
     output.write_text(json.dumps({'images':receipts,'migrations':report},indent=2)+'\n')
-    print('Chef and bank images deployed; exact migrations and unchanged runtime verified.',flush=True)
+    print('Chef, bank and notification images deployed; exact migrations and unchanged runtime verified.',flush=True)
 
 
 def stable_without(value,keys):

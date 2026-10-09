@@ -4,7 +4,6 @@ import com.azure.communication.email.EmailClient;
 import com.azure.communication.email.EmailClientBuilder;
 import com.azure.communication.email.models.EmailAddress;
 import com.azure.communication.email.models.EmailMessage;
-import com.azure.communication.email.models.EmailSendStatus;
 import com.azure.core.http.netty.NettyAsyncHttpClientBuilder;
 import com.azure.core.http.policy.FixedDelayOptions;
 import com.azure.core.http.policy.RetryOptions;
@@ -18,6 +17,7 @@ public class VerificationEmailTransport {
     public enum Outcome { ACCEPTED, UNKNOWN, UNAVAILABLE }
     private final NotificationDeliveryProperties properties;
     private final java.util.concurrent.Semaphore capacity;
+    volatile EmailClient acs;
     @org.springframework.beans.factory.annotation.Autowired
     public VerificationEmailTransport(NotificationDeliveryProperties properties) { this(properties, new java.util.concurrent.Semaphore(8)); }
     VerificationEmailTransport(NotificationDeliveryProperties properties, java.util.concurrent.Semaphore capacity) {
@@ -48,19 +48,28 @@ public class VerificationEmailTransport {
         final EmailMessage message;
         try {
             if (!configured()) return Outcome.UNAVAILABLE;
-            var http = new NettyAsyncHttpClientBuilder().connectTimeout(Duration.ofSeconds(3))
-                .responseTimeout(Duration.ofSeconds(8)).readTimeout(Duration.ofSeconds(8)).writeTimeout(Duration.ofSeconds(8)).build();
-            client = new EmailClientBuilder().connectionString(properties.getAcsEmailConnectionString()).httpClient(http)
-                .retryOptions(new RetryOptions(new FixedDelayOptions(0, Duration.ofSeconds(1)))).buildClient();
+            client = client();
             message = prepareMessage(request);
         } catch (Exception ex) { return Outcome.UNAVAILABLE; }
         // Once submission starts, all ambiguous exceptions retain UNKNOWN and must never be blindly retried.
         try {
-            var result = client.beginSend(message).waitForCompletion(Duration.ofSeconds(15)).getValue();
-            if (result == null || result.getId() == null) return Outcome.UNKNOWN;
-            if (EmailSendStatus.SUCCEEDED.equals(result.getStatus())) return Outcome.ACCEPTED;
-            if (EmailSendStatus.FAILED.equals(result.getStatus())) return Outcome.UNAVAILABLE;
-            return Outcome.UNKNOWN;
+            // beginSend returns only after ACS accepts the message (HTTP 202); ACS then delivers it on its own.
+            // Waiting for its final status held the chef's screen for up to 15 seconds without sending any sooner.
+            client.beginSend(message);
+            return Outcome.ACCEPTED;
         } catch (Exception ex) { return Outcome.UNKNOWN; }
+    }
+    /** One client per process: reuses the ACS connection instead of a new TLS handshake for every code. */
+    private EmailClient client() {
+        EmailClient value = acs;
+        if (value == null) synchronized (this) {
+            if ((value = acs) == null) {
+                var http = new NettyAsyncHttpClientBuilder().connectTimeout(Duration.ofSeconds(3))
+                    .responseTimeout(Duration.ofSeconds(8)).readTimeout(Duration.ofSeconds(8)).writeTimeout(Duration.ofSeconds(8)).build();
+                acs = value = new EmailClientBuilder().connectionString(properties.getAcsEmailConnectionString()).httpClient(http)
+                    .retryOptions(new RetryOptions(new FixedDelayOptions(0, Duration.ofSeconds(1)))).buildClient();
+            }
+        }
+        return value;
     }
 }

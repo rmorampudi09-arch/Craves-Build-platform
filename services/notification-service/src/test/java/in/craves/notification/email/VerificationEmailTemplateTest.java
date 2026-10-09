@@ -53,6 +53,19 @@ class VerificationEmailTemplateTest {
         assertEquals(VerificationEmailTransport.Outcome.UNAVAILABLE,transport.send(VerificationEmailSecurityTest.dto()));
         assertEquals(1,capacity.availablePermits());
     }
+    @Test @SuppressWarnings("unchecked") void acceptedAsSoonAsAcsAcceptsWithoutWaitingForDelivery() {
+        var properties=new in.craves.notification.delivery.NotificationDeliveryProperties();
+        properties.setAcsEmailSenderAddress("sender@example.test");properties.setAcsEmailConnectionString("endpoint=https://example.test/;accesskey=dGVzdA==");
+        var transport=new VerificationEmailTransport(properties);
+        var client=org.mockito.Mockito.mock(com.azure.communication.email.EmailClient.class);
+        var poller=org.mockito.Mockito.mock(com.azure.core.util.polling.SyncPoller.class);
+        org.mockito.Mockito.when(client.beginSend(org.mockito.ArgumentMatchers.any(com.azure.communication.email.models.EmailMessage.class))).thenReturn(poller);
+        transport.acs=client;
+        assertEquals(VerificationEmailTransport.Outcome.ACCEPTED,transport.send(VerificationEmailSecurityTest.dto()));
+        org.mockito.Mockito.verifyNoInteractions(poller);
+        org.mockito.Mockito.when(client.beginSend(org.mockito.ArgumentMatchers.any(com.azure.communication.email.models.EmailMessage.class))).thenThrow(new IllegalStateException("simulated-timeout"));
+        assertEquals(VerificationEmailTransport.Outcome.UNKNOWN,transport.send(VerificationEmailSecurityTest.dto()));
+    }
     @Test void absentAcsConfigurationNeverCallsProvider() {
         var transport=new VerificationEmailTransport(new in.craves.notification.delivery.NotificationDeliveryProperties());
         assertFalse(transport.configured()); assertEquals(VerificationEmailTransport.Outcome.UNAVAILABLE,transport.send(VerificationEmailSecurityTest.dto()));

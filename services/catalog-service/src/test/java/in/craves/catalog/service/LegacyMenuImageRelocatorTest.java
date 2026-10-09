@@ -18,15 +18,15 @@ class LegacyMenuImageRelocatorTest {
         String oldOk="https://stcravesprodlowl3ing6.blob.core.windows.net/media/public%2Fdishes%2Fa.jpg";
         String oldBroken="https://stcravesprodlowl3ing6.blob.core.windows.net/media/public%2Fdishes%2Fb.jpg";
         when(jdbc.queryForList(anyString(),eq(base+"/"))).thenReturn(List.of(
-            Map.of("id",broken,"blob_name","public/dishes/b.jpg","public_url",oldBroken),
-            Map.of("id",foreign,"blob_name","x.jpg","public_url","http://169.254.169.254/x.jpg"),
-            Map.of("id",ok,"blob_name","public/dishes/a.jpg","public_url",oldOk)));
-        when(media.copyFromPublicUrl(oldBroken,"public/dishes/b.jpg")).thenThrow(new RuntimeException("404"));
-        when(media.copyFromPublicUrl(oldOk,"public/dishes/a.jpg")).thenReturn(base+"/public%2Fdishes%2Fa.jpg");
+            Map.of("id",broken,"blob_name","public/dishes/b.jpg","content_type","image/jpeg","public_url",oldBroken),
+            Map.of("id",foreign,"blob_name","x.jpg","content_type","image/jpeg","public_url","http://169.254.169.254/x.jpg"),
+            Map.of("id",ok,"blob_name","public/dishes/a.jpg","content_type","image/png","public_url",oldOk)));
+        when(media.copyFromPublicUrl(oldBroken,"public/dishes/b.jpg","image/jpeg")).thenThrow(new RuntimeException("404"));
+        when(media.copyFromPublicUrl(oldOk,"public/dishes/a.jpg","image/png")).thenReturn(base+"/public%2Fdishes%2Fa.jpg");
         when(jdbc.update(anyString(),any(),any(),any())).thenReturn(1);
 
         assertEquals(1,new LegacyMenuImageRelocator(jdbc,media).relocate());
-        verify(media,never()).copyFromPublicUrl(eq("http://169.254.169.254/x.jpg"),anyString());
+        verify(media,never()).copyFromPublicUrl(eq("http://169.254.169.254/x.jpg"),anyString(),anyString());
         verify(jdbc).update(contains("SET public_url = ?"),eq(base+"/public%2Fdishes%2Fa.jpg"),eq(ok),eq(oldOk));
     }
 

@@ -12,12 +12,15 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class MediaStorageService {
+    private static final Logger log = LoggerFactory.getLogger(MediaStorageService.class);
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
         "image/jpeg",
         "image/png",
@@ -48,6 +51,33 @@ public class MediaStorageService {
             file.getSize(),
             publicUrl(blobClient, blobName)
         );
+    }
+
+    /** Best effort: a missing blob or unconfigured store never blocks removing the photo record. */
+    public void deleteQuietly(String blobName) {
+        try {
+            containerClient().getBlobClient(blobName).deleteIfExists();
+        } catch (RuntimeException ex) {
+            log.warn("Menu photo blob could not be removed: {}", ex.getClass().getSimpleName());
+        }
+    }
+
+    public boolean configured() {
+        return StringUtils.hasText(properties.getEndpointValue());
+    }
+
+    /** Public URL prefix of photos stored by this service (without a trailing slash). */
+    public String publicBaseUrl() {
+        return StringUtils.hasText(properties.getPublicMediaBaseUrl())
+            ? properties.getPublicMediaBaseUrl().replaceAll("/+$", "")
+            : containerClient().getBlobContainerUrl();
+    }
+
+    /** Server-side copy of a publicly readable photo into this container; returns its new public URL. */
+    public String copyFromPublicUrl(String sourceUrl, String blobName) {
+        BlobClient blobClient = containerClient().getBlobClient(blobName);
+        blobClient.copyFromUrl(sourceUrl);
+        return publicUrl(blobClient, blobName);
     }
 
     private BlobContainerClient containerClient() {

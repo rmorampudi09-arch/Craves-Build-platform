@@ -85,6 +85,16 @@ Reported after the first live test (applicant Gopi Nagalla): uploads looked fail
 
 An applicant whose submit failed only needs to open the application and press **Submit application** again; their saved details and uploads are kept.
 
+## Admin approvals and assistance visibility (9 Oct 2026, third follow-up)
+
+End-to-end audit of sign-up → submission → admin approval → help requests.
+
+- **Live admin portal is out of date.** `admin.craves.in` is served by a separate Container App, `ca-craves-admin-r92-ffe80e7c` (same static bundle as `admin.craves.in`; `craves.in/admin` redirects there). Its build predates onboarding v2: the review page knows only the legacy documents (applicant photo, government ID, PAN), has no FSSAI verification or “request information” controls, and `/admin/chef-onboarding` returns 404. Until it is redeployed from current `main` (`Dockerfile.admin`, image-only update), admins cannot approve a v2 application or see chef help requests. Pipeline #14 used to deploy only `ca-craves-web-prodlow`; `operation=web` now also updates the admin portal (`chef_onboarding_release.deploy_admin`: image-only, refuses unless `admin.craves.in` serves the same bundle as the target app, verifies `/sign-in`, `/admin`, `/admin/chef-reviews`, `/admin/chef-onboarding` and the 401 identity guard, and restores the previous image on failure).
+- **Admins now see who is waiting.** The admin overview shows “Chefs are waiting for you”: applications waiting for review and open FSSAI help requests (with the oldest open time), each linking to its page. The help page lists open requests first with a count, and each request links to the chef’s application (`applicationId` added to help requests by the backend).
+- **Approval explains what is missing.** The review page shows a checklist (submitted, every document approved x/y, FSSAI verified) above the approve button; the FSSAI evidence note no longer pre-fills the whole-application rejection reason; review actions are styled as buttons. The admin page treats v2 as on unless `CRAVES_CHEF_ONBOARDING_V2_ENABLED=false`, because the admin container does not carry the customer-site flag.
+- **Faster for signed-in chefs.** The sign-in popup (phone/OTP code) loads only for signed-out visitors: a signed-in chef downloads 1,147 KB of JavaScript on `/chef/application` instead of 1,275 KB (−10%); signed-out is unchanged (1,279 KB vs 1,275 KB). The customer bottom navigation (framer-motion) is still loaded by the root layout on chef pages; moving it into customer routes is the next saving.
+- Not possible from this environment: signing in to production with test phone numbers (OTP entry is a credential step) — the live signed-in flow needs a person to enter the code.
+
 ## Verification (local, Node 22.22)
 
 - `npm run lint` — 0 warnings

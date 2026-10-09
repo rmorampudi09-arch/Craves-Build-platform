@@ -1,0 +1,96 @@
+name: KUSHIRAVI ARM64 Installable APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - KUSHIRAVI-app-build
+    paths:
+      - .github/workflows/kushiravi-arm64-apk.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build-arm64-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact KUSHIRAVI source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install JavaScript dependencies
+        working-directory: apps/mobile
+        run: npm ci
+
+      - name: Configure existing production API endpoint
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          grep -qx 'CRAVES_ENVIRONMENT=production' .env
+          grep -qx 'CRAVES_API_BASE_URL=https://api.craves.in' .env
+          test -s android/app/google-services.json
+          test -s android/app/debug.keystore
+
+      - name: Build signed standalone ARM64 APK
+        working-directory: apps/mobile/android
+        env:
+          NODE_ENV: production
+          CRAVES_ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/apps/mobile/android/app/debug.keystore
+          CRAVES_ANDROID_KEYSTORE_PASSWORD: android
+          CRAVES_ANDROID_KEY_ALIAS: androiddebugkey
+          CRAVES_ANDROID_KEY_PASSWORD: android
+        run: ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+
+      - name: Verify architecture, JS bundle, app identity, and signature
+        run: |
+          set -euo pipefail
+          APK=apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+          unzip -Z1 "$APK" > /tmp/kushiravi-apk-files.txt
+          grep -qx 'assets/index.android.bundle' /tmp/kushiravi-apk-files.txt
+          grep -q '^lib/arm64-v8a/' /tmp/kushiravi-apk-files.txt
+          if grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/' /tmp/kushiravi-apk-files.txt; then
+            echo 'FAIL: non-arm64 libraries in APK'
+            exit 1
+          fi
+          AAPT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/aapt"
+          "$AAPT" dump badging "$APK" | tee /tmp/kushiravi-badging.txt
+          grep -q "package: name='com.cravesapp'" /tmp/kushiravi-badging.txt
+          grep -q "versionCode='37'" /tmp/kushiravi-badging.txt
+          grep -q "versionName='1.24.2'" /tmp/kushiravi-badging.txt
+          if grep -q 'application-debuggable' /tmp/kushiravi-badging.txt; then
+            echo 'FAIL: APK must be standalone/non-debuggable'
+            exit 1
+          fi
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --verbose "$APK"
+          sha256sum "$APK" | tee /tmp/kushiravi-sha256.txt
+          mkdir -p artifacts
+          cp "$APK" artifacts/KUSHIRAVI-app-v1.24.2-arm64.apk
+          printf 'branch=%s\ncommit=%s\nabi=arm64-v8a\nandroid_package=com.cravesapp\nversion=1.24.2\nsigning=internal-test-key\n' "$GITHUB_REF_NAME" "$GITHUB_SHA" > artifacts/build-info.txt
+          cp /tmp/kushiravi-sha256.txt artifacts/apk-sha256.txt
+
+      - name: Upload installable ARM64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: KUSHIRAVI-app-v1.24.2-arm64
+          path: artifacts/
+          retention-days: 14
+          if-no-files-found: error

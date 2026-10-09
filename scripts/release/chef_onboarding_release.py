@@ -212,6 +212,7 @@ def deploy_image_only(name,label,service,source,sha,run_id,output):
     before=app(name)
     require(before['properties']['configuration'].get('activeRevisionsMode')=='Single',label.capitalize()+' must run in single-revision mode for an image swap')
     old=resolve_image(image(before))
+    run('az','acr','login','-n',ACR,'--only-show-errors')  # build/push/pull need it; the backend path logged in earlier
     target=build_image(source,'services/'+service,'craves/'+service,sha)
     source_guard(source,sha,run_id)
     current=app(name)

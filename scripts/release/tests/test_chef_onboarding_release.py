@@ -124,7 +124,7 @@ class ChefReleaseGuardTests(unittest.TestCase):
         def azure(*args):state['updated']=True
         with patch.object(release,'app',side_effect=lambda name:after if state['updated'] else before),patch.object(release,'resolve_image',return_value='old-pinned'),\
              patch.object(release,'build_image',return_value='craves/notification-service@sha256:new') as build,patch.object(release,'source_guard'),\
-             patch.object(release,'verify_image'),patch.object(release,'azure',side_effect=azure) as update,patch.object(release.time,'sleep'):
+             patch.object(release,'verify_image'),patch.object(release,'azure',side_effect=azure) as update,patch.object(release,'run'),patch.object(release.time,'sleep'):
             release.deploy_notification(Path('.'),'a'*40,'1',Mock())
         self.assertEqual(build.call_args.args[1:3],('services/notification-service','craves/notification-service'))
         self.assertEqual(update.call_args_list,[unittest.mock.call('containerapp','update','-g',release.RG,'-n',release.NOTIFICATION,'--image','craves/notification-service@sha256:new','--no-wait')])
@@ -136,7 +136,7 @@ class ChefReleaseGuardTests(unittest.TestCase):
         def azure(*args):state['updated']=True
         with patch.object(release,'app',side_effect=lambda name:after if state['updated'] else before),patch.object(release,'resolve_image',return_value='old-pinned'),\
              patch.object(release,'build_image',return_value='craves/notification-service@sha256:new'),patch.object(release,'source_guard'),\
-             patch.object(release,'verify_image',side_effect=ValueError('label')),patch.object(release,'azure',side_effect=azure) as update,patch.object(release.time,'sleep'):
+             patch.object(release,'verify_image',side_effect=ValueError('label')),patch.object(release,'azure',side_effect=azure) as update,patch.object(release,'run'),patch.object(release.time,'sleep'):
             with self.assertRaisesRegex(RuntimeError,'previous notification image restore requested'):release.deploy_notification(Path('.'),'a'*40,'1',Mock())
         self.assertEqual(update.call_args.args,('containerapp','update','-g',release.RG,'-n',release.NOTIFICATION,'--image','old-pinned','--no-wait'))
 
@@ -151,6 +151,7 @@ class ChefReleaseGuardTests(unittest.TestCase):
             release.deploy_catalog(Path('.'),'a'*40,'1',Mock())
         self.assertEqual(build.call_args.args[1:3],('services/catalog-service','craves/catalog-service'))
         self.assertEqual(update.call_args_list,[unittest.mock.call('containerapp','update','-g',release.RG,'-n',release.CATALOG,'--image','craves/catalog-service@sha256:new','--no-wait')])
+        self.assertEqual(cli.call_args_list[0].args,('az','acr','login','-n',release.ACR,'--only-show-errors'))
         self.assertTrue(cli.call_args.args[1].endswith('scripts/apim/configure-chef-menu-media-apim.sh'))
         self.assertEqual(cli.call_args.kwargs['env']['APIM'],release.APIM)
 

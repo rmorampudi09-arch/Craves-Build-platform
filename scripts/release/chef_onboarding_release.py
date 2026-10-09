@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import tempfile
 import time
 from active_address_release import (SUBSCRIPTION, RG, CHEF, WEB, APIM, ACR, FIREBASE, app, azure, run,
     source_guard, build_image, verify_image, resolve_image, deploy_web, ready_web, environment, inspect, runtime, require)
@@ -13,6 +14,11 @@ BANK='ca-craves-integration-service-pr'
 # Sends email verification codes. Image-only update: its ACS secret is a plain app secret, which the
 # preserve-runtime backend helper refuses, and an image swap never touches secrets or settings.
 NOTIFICATION='ca-craves-notification-service-p'
+CATALOG='ca-craves-catalog-service-prodlo'
+MEDIA_ACCOUNT='stcravesmediakmqgfy'
+MEDIA_CONTAINER='media'
+MEDIA_SECRET='media-storage'
+MEDIA_ENV={'CRAVES_STORAGE_ENDPOINT_VALUE':'secretref:'+MEDIA_SECRET,'CRAVES_STORAGE_MEDIA_CONTAINER':MEDIA_CONTAINER}
 FLAG='CRAVES_CHEF_ONBOARDING_V2_ENABLED'
 BASE='CRAVES_BANK_INTEGRATION_BASE_URL'
 
@@ -227,9 +233,55 @@ def deploy_notification(source,sha,run_id,output):
         raise RuntimeError('Notification release failed; previous notification image restore requested, verify Azure revisions')
 
 
+def configure_media(output):
+    """Dish photos: a separate storage account whose `media` container serves single photos publicly
+    (no listing). The KYC documents account stays private. Catalog gets the connection as a plain app
+    secret, like its other secrets; the value is passed by file, never in arguments or logs."""
+    before=app(CATALOG)
+    require(before['properties']['configuration'].get('activeRevisionsMode')=='Single','Catalog must run in single-revision mode')
+    accounts={a['name']:a for a in azure('storage','account','list','-g',RG)}
+    if MEDIA_ACCOUNT not in accounts:
+        require(azure('storage','account','check-name','-n',MEDIA_ACCOUNT)['nameAvailable'] is True,'Photo storage name is taken outside Craves')
+        azure('storage','account','create','-g',RG,'-n',MEDIA_ACCOUNT,'-l','centralindia','--sku','Standard_LRS','--kind','StorageV2',
+              '--https-only','true','--min-tls-version','TLS1_2','--allow-blob-public-access','true',
+              '--tags','project=craves','environment=prodlow','craves-purpose=dish-photos')
+    else:require(accounts[MEDIA_ACCOUNT].get('allowBlobPublicAccess') is True,'Photo storage must allow public photo reads')
+    exists=azure('storage','container-rm','exists','-g',RG,'--storage-account',MEDIA_ACCOUNT,'-n',MEDIA_CONTAINER)['exists']
+    azure('storage','container-rm','update' if exists else 'create','-g',RG,'--storage-account',MEDIA_ACCOUNT,'-n',MEDIA_CONTAINER,'--public-access','blob')
+    conn=run('az','storage','account','show-connection-string','-g',RG,'-n',MEDIA_ACCOUNT,'--query','connectionString','-o','tsv','--only-show-errors')
+    require(conn.startswith('DefaultEndpointsProtocol=https;') and ';AccountName='+MEDIA_ACCOUNT+';' in conn,'Unexpected photo storage connection')
+    # Prove anonymous single-photo reads work and listing stays closed before Catalog depends on it.
+    probe=f'https://{MEDIA_ACCOUNT}.blob.core.windows.net/{MEDIA_CONTAINER}/health/probe.txt'
+    with tempfile.TemporaryDirectory(prefix='craves-media-') as folder:
+        body=Path(folder)/'probe.txt';body.write_text('craves')
+        run('az','storage','blob','upload','-c',MEDIA_CONTAINER,'-n','health/probe.txt','-f',str(body),'--overwrite','--only-show-errors','-o','none',
+            env=dict(os.environ,AZURE_STORAGE_CONNECTION_STRING=conn))
+        secret=Path(folder)/'secret';secret.write_text(conn);secret.chmod(0o600)
+        if MEDIA_SECRET not in {s['name'] for s in before['properties']['configuration'].get('secrets',[])}:
+            run('az','containerapp','secret','set','-g',RG,'-n',CATALOG,'--secrets',MEDIA_SECRET+'=@'+str(secret),'--only-show-errors','-o','none')
+    for attempt in range(6):  # container access changes can take ~30 s to apply
+        if inspect.probe(probe)[0]==200:break
+        time.sleep(10)
+    else:raise ValueError('Photos are not publicly readable')
+    require(inspect.probe(f'https://{MEDIA_ACCOUNT}.blob.core.windows.net/{MEDIA_CONTAINER}?restype=container&comp=list')[0] in (403,404),'Photo container must not be listable')
+    def setting(entry):return 'secretref:'+entry['secretRef'] if entry.get('secretRef') else entry.get('value')
+    env=environment(app(CATALOG))
+    missing=[k+'='+v for k,v in MEDIA_ENV.items() if k not in env or setting(env[k])!=v]
+    if missing:azure('containerapp','update','-g',RG,'-n',CATALOG,'--set-env-vars',*missing,'--no-wait')
+    receipt={'app':CATALOG,'storageAccount':MEDIA_ACCOUNT,'container':MEDIA_CONTAINER,'publicRead':'blob','settingsAdded':[m.split('=')[0] for m in missing]}
+    output.write_text(json.dumps(receipt,indent=2)+'\n')
+    for attempt in range(90):
+        current=app(CATALOG)
+        require(image(current)==image(before),'Catalog image changed during photo storage setup; stop')
+        if admin_settled(current,image(before)) and all(k in environment(current) for k in MEDIA_ENV):
+            print(json.dumps({**receipt,'readyRevision':current['properties']['latestReadyRevisionName']}),flush=True);return
+        print('Waiting for the Catalog revision with photo storage: '+str(attempt+1),flush=True);time.sleep(10)
+    raise ValueError('Catalog revision with photo storage did not become ready within fifteen minutes')
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--operation',choices=('preflight','backend','apim','web','activate'),default='preflight')
+    parser.add_argument('--operation',choices=('preflight','backend','apim','web','activate','media'),default='preflight')
     parser.add_argument('--sha',required=True);parser.add_argument('--regression-run',required=True)
     parser.add_argument('--confirm',action='store_true');parser.add_argument('--allow-bank-unavailable',action='store_true');parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args();source=Path.cwd()
@@ -250,6 +302,7 @@ def main():
     elif args.operation=='web':
         applied(preflight());deploy_web(source,args.sha,args.regression_run,args.output/'chef-web.json')
         deploy_admin(source,args.sha,args.regression_run,args.output/'chef-admin.json')
+    elif args.operation=='media':configure_media(args.output/'catalog-media.json')
     else:activate(args.sha,args.output/'chef-activation.json',args.allow_bank_unavailable)
 
 if __name__=='__main__':

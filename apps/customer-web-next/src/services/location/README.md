@@ -2,23 +2,39 @@
 
 Craves uses device GPS only to obtain a precise map point. Customers and chefs do not enter or see latitude/longitude in normal UI.
 
+## Provider
+
+Craves uses **Ola Maps (Krutrim)** for place search, reverse geocoding and the static delivery map. Every call is made server-side by the Next.js BFF; the browser only talks to same-origin Craves routes and never receives the Ola key.
+
 ## Current-location flow
 
 ```text
-Browser location permission
+Browser location permission (only after the customer taps "Use current location")
   -> latitude/longitude kept in component state only
   -> POST /api/location/reverse-geocode
   -> same-origin + per-instance request-rate guard
-  -> Next.js BFF obtains a Microsoft Entra token from the Container App managed identity
-  -> Azure Maps Reverse Geocoding
+  -> Next.js BFF calls Ola Maps Reverse Geocode with the server-only OLA_MAPS_API_KEY
   -> sanitized written-address response
   -> editable Craves address fields
+```
+
+## Search and pin flow
+
+```text
+Customer types an area, street or landmark (debounced, 3+ characters)
+  -> POST /api/location/search { query, latitude?, longitude? }
+  -> Next.js BFF calls Ola Maps Autocomplete, biased to the supplied point,
+     else CRAVES_LOCATION_SEARCH_CENTER (a bias, not a restriction)
+  -> up to six suggestions with title/subtitle and coordinates
+  -> customer picks one; the map opens with the pin on it
+  -> customer drags the map under the fixed pin; GET /api/location/map-image renders the Ola static map
+  -> each settled pin position is reverse geocoded into the form
 ```
 
 The BFF returns only:
 
 - formatted address
-- house/building number when Azure Maps resolves one
+- house/building number when Ola Maps resolves one
 - street/road
 - area/neighborhood
 - city/locality
@@ -26,54 +42,37 @@ The BFF returns only:
 - state
 - pincode
 - country
-- confidence metadata
+- confidence metadata (from the Ola `location_type`)
 
-It never returns Azure credentials or managed-identity tokens.
+It never returns the Ola key, request URLs or raw provider bodies.
 
-## Production Azure configuration
+## Production configuration
 
-Required non-secret runtime environment variables on `ca-craves-web-prodlow`:
-
-```text
-AZURE_MAPS_CLIENT_ID=<Azure Maps account properties.uniqueId>
-AZURE_MAPS_ENDPOINT=https://atlas.microsoft.com
-```
-
-`IDENTITY_ENDPOINT` and `IDENTITY_HEADER` are injected by Azure Container Apps when the app has a managed identity. They must never be configured manually in source control.
-
-Production uses:
-
-- Azure Maps Gen2 / G2
-- shared/local key authentication disabled
-- customer-web system-assigned managed identity
-- `Azure Maps Data Reader` RBAC scoped only to the Maps account
-
-Provisioning is intentionally guarded because Azure Maps is a billable metered Azure resource:
+Runtime environment variables on `ca-craves-web-prodlow` (and the same key on `ca-craves-user-chef-service-prod` for the mobile APIs):
 
 ```text
-azure-pipelines-customer-location-azure-maps.yml
-confirmBillableAzureMapsProvision=true
+OLA_MAPS_API_KEY=secretref:ola-maps-api-key      # secret, Key Vault-backed Container App secret
+CRAVES_LOCATION_SEARCH_CENTER=17.3850,78.4867    # optional, not secret
 ```
+
+Bind them with `azure-pipelines-customer-location-ola-maps.yml` after the key exists in the environment Key Vault as `ola-maps-api-key`. The Ola credential's allowed domains must include `craves.in`; server calls identify themselves with `Origin: https://craves.in`.
 
 ## Accuracy rule
 
-Reverse geocoding can only fill what the map provider can resolve. When Azure Maps returns a street/house number, Craves prefills it. If a private flat/unit number cannot be resolved from GPS, Craves fills the best available postal address and asks the user to correct the flat/house/building field. Craves never invents an apartment or door number.
+Reverse geocoding can only fill what the map provider can resolve. When Ola Maps returns a street/house number, Craves prefills it. If a private flat/unit number cannot be resolved from GPS, Craves fills the best available postal address and asks the user to correct the flat/house/building field. Craves never invents an apartment or door number.
 
 ## Security and metered-usage protection
 
-- reverse geocoding is server-side only;
-- the browser never receives an Azure Maps key;
-- the public BFF route accepts same-origin POST requests only;
-- the BFF validates JSON of at most 1 KiB within two seconds and finite, in-range numeric coordinates before consuming provider admission;
-- the BFF admits at most 30 lookups in a rolling 60-second window, shared by all anonymous and signed-in callers in one process, with at most four provider lookups in flight;
-- forwarded IP headers do not identify callers or create extra budgets; the guard retains at most 30 timestamps and returns HTTP 429 with `Retry-After` when full;
-- failed provider calls release the in-flight slot but still count against the lookup budget;
-- managed-identity and Maps responses have whole-body deadlines of five and seven seconds, response limits of 32 KiB and 256 KiB respectively, and redirects are rejected;
-- errors return a generic response without logging raw provider exceptions, tokens, coordinates, or response bodies;
-- precise coordinates remain internal to Craves requests used for PostGIS discovery and delivery;
-- provider responses are normalized before they reach UI code;
-- the Azure Maps account itself uses Entra/RBAC with local/shared-key authentication disabled.
+- all Ola calls are server-side only; the browser never receives the key;
+- the public BFF routes accept same-origin requests only;
+- the BFF validates JSON of at most 1 KiB (2 KiB for search) within two seconds and finite, in-range numeric coordinates before consuming provider admission;
+- in a rolling 60-second window per process: reverse geocoding admits 30 lookups (4 in flight), search 120 typeahead lookups (8 in flight; superseded keystrokes are aborted end to end) and the static map 90 images (6 in flight);
+- forwarded IP headers do not identify callers or create extra budgets; the guard returns HTTP 429 with `Retry-After` when full;
+- failed provider calls release the in-flight slot but still count against the budget;
+- Ola responses have whole-body deadlines of seven seconds (twelve for map images), size limits, and redirects are rejected;
+- provider failures (timeouts, 4xx, 429, 5xx, unusable bodies) become a generic 503 for the browser and one `[location] Ola Maps <operation> unavailable: <reason> (request <id>)` server log line, never the URL, key, coordinates, query or body;
+- precise coordinates remain internal to Craves requests used for PostGIS discovery and delivery.
 
-These are engineering limits for the existing single-replica deployment, not a huge-load or availability guarantee. Admission is per Node.js process and resets on process restart; more processes or replicas would each have their own budget. Anonymous use remains supported, so one caller can consume the shared budget. Production monitoring should alert on reverse-geocoding volume and 429/5xx rates; higher capacity requires reviewed traffic controls and metered-usage bounds.
+These are engineering limits for the existing single-replica deployment, not a huge-load or availability guarantee. Admission is per Node.js process and resets on process restart. Production monitoring should alert on location 429/5xx rates and on the Ola usage dashboard.
 
 Kitchen discovery requires explicit decimal latitude and longitude, including legitimate zero values. Missing, blank, duplicate, unknown, non-finite, or out-of-range query values are rejected before Catalog is called. The query is limited to 256 characters, coordinates to 32 characters, radius to 1–100,000 metres, page to 0–1,000, and page size to 1–50. Omitted radius/page/size keep the existing defaults of 5,000/0/20. These request bounds limit input and pagination work; they do not establish measured service capacity.

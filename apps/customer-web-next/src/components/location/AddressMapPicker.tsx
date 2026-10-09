@@ -141,6 +141,8 @@ export function AddressMapPicker({
         onPointerDown={(event) => {
           if (disabled) return;
           if (event.pointerType === "mouse" && event.button !== 0) return;
+          // Pointer capture would retarget the click away from the zoom/recenter/retry buttons.
+          if ((event.target as HTMLElement).closest("button")) return;
           event.currentTarget.setPointerCapture(event.pointerId);
           pointerRef.current = {
             id: event.pointerId,
@@ -162,7 +164,7 @@ export function AddressMapPicker({
         className="relative aspect-[900/520] w-full touch-none overflow-hidden rounded-[1.6rem] border border-[#E5E7EB] bg-[#F1F3F5] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35"
       >
         {!imageFailed ? (
-          // Static Azure map bytes come from our authenticated same-origin BFF,
+          // Static Ola Maps bytes come from our same-origin BFF (the key stays server-side),
           // so Next/Image optimization would only add another server hop.
           <img
             key={imageUrl}
@@ -266,7 +268,7 @@ export function AddressMapPicker({
         ) : null}
 
         <span className="pointer-events-none absolute bottom-2 left-3 z-20 rounded bg-white/80 px-1.5 py-0.5 text-[9px] font-semibold text-[#6B6B6B] backdrop-blur">
-          Microsoft Azure Maps
+          © Ola Maps · Map data available under ODbL
         </span>
       </div>
     </div>

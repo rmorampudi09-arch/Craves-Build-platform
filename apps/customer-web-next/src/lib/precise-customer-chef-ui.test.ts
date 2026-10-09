@@ -167,7 +167,8 @@ test("address manager owns default selection and the shared location-first edito
 
   assert.match(addressEditor, /<Dialog\.Root/);
   assert.match(addressEditor, /<AddressMapPicker/);
-  assert.doesNotMatch(addressEditor, /Search for area, street name/);
+  assert.match(addressEditor, /id="address-location-search"/);
+  assert.match(addressEditor, /searchLocations\(input, near, controller\.signal\)/);
   assert.doesNotMatch(addressEditor, /Saved Addresses/);
   assert.match(addressEditor, /Use current location/);
   assert.match(addressEditor, /Add address details/);

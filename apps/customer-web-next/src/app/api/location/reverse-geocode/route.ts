@@ -1,7 +1,7 @@
 import { boundBffRequest } from "@/lib/bff-request-limits";
 import { boundedFetch } from "@/lib/bounded-fetch";
 import { NextRequest, NextResponse } from "next/server";
-import { reverseGeocodeWithAzureMaps } from "@/lib/server/azure-maps";
+import { reverseGeocodeWithOlaMaps } from "@/lib/server/ola-maps";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_REQUESTS = 30;
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const address = await reverseGeocodeWithAzureMaps(latitude, longitude);
+    const address = await reverseGeocodeWithOlaMaps(latitude, longitude);
     return NextResponse.json(address, {
       headers: {
         "Cache-Control": "no-store, private",

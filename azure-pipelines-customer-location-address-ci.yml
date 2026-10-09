@@ -38,8 +38,6 @@ steps:
     displayName: Verify customer web location experience
     env:
       CRAVES_API_BASE_URL: https://api.craves.in/api/v1
-      AZURE_MAPS_CLIENT_ID: 00000000-0000-0000-0000-000000000000
-      AZURE_MAPS_ENDPOINT: https://atlas.microsoft.com
       NEXT_PUBLIC_FIREBASE_API_KEY: ci-placeholder
       NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ci.example.invalid
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: craves-ci
@@ -51,7 +49,7 @@ steps:
 
   - script: |
       set -euo pipefail
-      bash -n scripts/release/customer-location-azure-maps-provision.sh
+      bash -n scripts/release/customer-location-ola-maps.sh
       bash -n scripts/release/customer-location-runtime-smoke.sh
 
       TARGETS=(
@@ -83,9 +81,14 @@ steps:
       grep -q 'parseLocationRecommendation' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
       grep -q 'reverseGeocodeCurrentLocation' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
       grep -q 'RATE_LIMIT_REQUESTS = 30' apps/customer-web-next/src/app/api/location/reverse-geocode/route.ts
-      grep -q 'disable-local-auth true' scripts/release/customer-location-azure-maps-provision.sh
-      grep -q 'Azure Maps Data Reader' scripts/release/customer-location-azure-maps-provision.sh
-      grep -q 'confirmBillableAzureMapsProvision' azure-pipelines-customer-location-azure-maps.yml
+      grep -q 'keyvaultref:' scripts/release/customer-location-ola-maps.sh
+      grep -q 'OLA_MAPS_API_KEY=secretref:' scripts/release/customer-location-ola-maps.sh
+      grep -q 'confirmProductionChange' azure-pipelines-customer-location-ola-maps.yml
+      grep -q '^import "server-only";' apps/customer-web-next/src/lib/server/ola-maps.ts
+      if grep -rn 'NEXT_PUBLIC_OLA' apps/customer-web-next/src apps/customer-web-next/.env.example; then
+        echo 'ERROR: The Ola Maps key must stay server-only.' >&2
+        exit 1
+      fi
       grep -q 'customer-location-runtime-smoke.sh' azure-pipelines-customer-location-runtime-smoke.yml
       grep -q 'POST /api/location/reverse-geocode' apps/customer-web-next/src/services/location/README.md
     displayName: Verify location security and billing guards

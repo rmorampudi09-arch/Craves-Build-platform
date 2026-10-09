@@ -34,49 +34,59 @@ function firstText(values: unknown[]): string | null {
   return null;
 }
 
-export function parseReverseGeocodedAddress(value: unknown): ReverseGeocodedAddress | null {
-  const root = object(value);
-  if (!root) return null;
-
-  const features = Array.isArray(root.features) ? root.features : [];
-  const feature = object(features[0]);
-  const properties = feature ? object(feature.properties) : null;
-  const address = properties ? object(properties.address) : null;
-  if (!properties || !address) return null;
-
-  const formattedAddress = text(address.formattedAddress);
-  if (!formattedAddress) return null;
-
-  const adminDistricts = Array.isArray(address.adminDistricts)
-    ? address.adminDistricts.map(object).filter((item): item is JsonObject => Boolean(item))
+/** Ola Maps uses Google-style address component types. */
+function componentReader(address: JsonObject) {
+  const components = Array.isArray(address.address_components)
+    ? address.address_components.map(object).filter((item): item is JsonObject => Boolean(item))
     : [];
-  const state = firstText([adminDistricts[0]?.name, adminDistricts[0]?.shortName]);
-  const district = firstText([
-    adminDistricts[1]?.name,
-    adminDistricts[2]?.name,
-    adminDistricts[3]?.name,
-  ]);
-  const countryRegion = object(address.countryRegion);
-  const houseNumber = text(address.streetNumber);
-  const street = text(address.streetName);
-  const area = firstText([address.neighborhood, address.locality, district]);
-  const city = firstText([address.locality, district]);
-  const confidence = text(properties.confidence);
+  return (...types: string[]): string | null => {
+    for (const type of types) {
+      const match = components.find((item) => Array.isArray(item.types) && item.types.includes(type));
+      const value = match ? firstText([match.long_name, match.short_name]) : null;
+      if (value) return value;
+    }
+    return null;
+  };
+}
+
+const CONFIDENCE: Record<string, ReverseGeocodedAddress["confidence"]> = {
+  rooftop: "High",
+  range_interpolated: "Medium",
+  geometric_center: "Medium",
+  approximate: "Low",
+};
+
+/** Maps an Ola Maps reverse-geocode body into the provider-neutral Craves address. */
+export function parseOlaReverseGeocode(value: unknown): ReverseGeocodedAddress | null {
+  const root = object(value);
+  const results = root && Array.isArray(root.results) ? root.results : [];
+  const result = results.map(object).find((item) => item && text(item.formatted_address)) ?? null;
+  if (!result) return null;
+
+  const formattedAddress = text(result.formatted_address)!;
+  const component = componentReader(result);
+  const houseNumber = component("street_number", "premise");
+  const district = component("administrative_area_level_2");
+  const locality = component("locality");
+  const geometry = object(result.geometry);
+  const locationType = text(geometry?.location_type)?.toLowerCase() ?? "";
 
   return {
     formattedAddress,
     houseNumber,
-    street,
-    area,
-    city,
+    street: component("route", "street_address"),
+    area: firstText([
+      component("sublocality_level_1", "sublocality", "neighborhood", "sublocality_level_2"),
+      locality,
+      district,
+    ]),
+    city: firstText([locality, component("administrative_area_level_3"), district]),
     district,
-    state,
-    postalCode: text(address.postalCode),
-    country: countryRegion ? text(countryRegion.name) : null,
-    confidence:
-      confidence === "High" || confidence === "Medium" || confidence === "Low"
-        ? confidence
-        : null,
+    state: component("administrative_area_level_1"),
+    // Indian PIN codes are six digits; the formatted line is the fallback when no component exists.
+    postalCode: component("postal_code") ?? formattedAddress.match(/\b[1-9]\d{5}\b/)?.[0] ?? null,
+    country: component("country"),
+    confidence: CONFIDENCE[locationType] ?? null,
     preciseHouseNumber: Boolean(houseNumber),
   };
 }

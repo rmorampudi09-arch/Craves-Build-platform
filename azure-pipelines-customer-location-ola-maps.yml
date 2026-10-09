@@ -1,0 +1,72 @@
+# Ola Maps (Krutrim) location wiring for production. Manual runs only.
+#
+# Order of use:
+#   1. inspect            read-only report (Key Vault secret presence, identities, current bindings)
+#   2. bind               after an operator stores the key in Key Vault as "ola-maps-api-key"
+#   3. apim               after the User/Chef release that contains POST /addresses/location-search
+#   4. smoke              after the web release that contains the Ola BFF
+#   5. remove-azure-maps  only after the live Ola flows are verified
+# Mutating operations need confirmProductionChange=true and must not overlap another Craves release.
+trigger: none
+pr: none
+
+parameters:
+  - name: operation
+    type: string
+    default: inspect
+    values: [inspect, bind, apim, smoke, remove-azure-maps]
+  - name: confirmProductionChange
+    type: boolean
+    default: false
+  - name: keyVaultName
+    displayName: Key Vault name (auto = the vault already backing User/Chef secrets)
+    type: string
+    default: auto
+  - name: searchCenter
+    displayName: Default search bias "latitude,longitude" (a bias, not a restriction)
+    type: string
+    default: '17.3850,78.4867'
+
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 1
+    persistCredentials: false
+
+  - script: |
+      set -euo pipefail
+      bash -n scripts/release/customer-location-ola-maps.sh
+      bash -n scripts/release/customer-location-runtime-smoke.sh
+      bash -n scripts/apim/configure-customer-addresses-apim.sh
+    displayName: Validate Ola Maps release scripts
+
+  - task: AzureCLI@2
+    displayName: Ola Maps wiring (${{ parameters.operation }})
+    condition: and(succeeded(), ne('${{ parameters.operation }}', 'smoke'))
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        set +x
+        [[ "$KEY_VAULT_NAME" != auto ]] || KEY_VAULT_NAME=''
+        export KEY_VAULT_NAME
+        bash scripts/release/customer-location-ola-maps.sh
+    env:
+      OPERATION: ${{ parameters.operation }}
+      CONFIRM: ${{ parameters.confirmProductionChange }}
+      KEY_VAULT_NAME: ${{ parameters.keyVaultName }}
+      SEARCH_CENTER: ${{ parameters.searchCenter }}
+
+  - script: |
+      set -euo pipefail
+      CRAVES_BASE_URL=https://craves.in bash scripts/release/customer-location-runtime-smoke.sh
+    displayName: Live location smoke (reverse geocode, search, static map)
+    condition: and(succeeded(), in('${{ parameters.operation }}', 'smoke', 'bind', 'remove-azure-maps'))

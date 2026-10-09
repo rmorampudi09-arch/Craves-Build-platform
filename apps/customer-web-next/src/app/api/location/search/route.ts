@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { boundBffRequest } from "@/lib/bff-request-limits";
-import { searchAzureMapsAddresses } from "@/lib/server/azure-maps";
+import { searchOlaMapsAddresses } from "@/lib/server/ola-maps";
 
 const WINDOW_MS = 60_000;
-const MAX_REQUESTS = 30;
+// Sized for debounced typeahead on the single web replica; abandoned keystrokes are aborted.
+const MAX_REQUESTS = 120;
 const admittedAt: number[] = [];
 let inFlight = 0;
-const MAX_IN_FLIGHT = 4;
+const MAX_IN_FLIGHT = 8;
 
 function admissionRetryAfter(): number | null {
   const now = Date.now();
@@ -86,10 +87,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const results = await searchAzureMapsAddresses(
+    const results = await searchOlaMapsAddresses(
       query,
       latitude,
       longitude,
+      request.signal,
     );
     return NextResponse.json(
       { results },

@@ -2,7 +2,7 @@
 set -euo pipefail
 set +x
 RG="${RG:-rg-craves-prodlow-centralindia}"
-APIM="${APIM:-apim-craves-prodlow-l3ing6}"
+APIM="${APIM:-apim-craves-prodlow-kmqgfy}"
 APP="${CATALOG_APP:-ca-craves-catalog-service-prodlo}"
 API_PATH="api/v1/kitchens/me"
 API_VERSION="${API_VERSION:-2022-08-01}"
@@ -29,7 +29,10 @@ put_operation(){
   local ID="$1" METHOD="$2" TEMPLATE="$3" DISPLAY="$4"
   local BODY RENDERED POLICY_BODY
   BODY=$(mktemp); RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
-  printf '%s' "{\"properties\":{\"displayName\":\"$DISPLAY\",\"method\":\"$METHOD\",\"urlTemplate\":\"$TEMPLATE\",\"templateParameters\":[{\"name\":\"menuItemId\",\"type\":\"string\",\"required\":true}],\"responses\":[{\"statusCode\":200,\"description\":\"Chef menu operation response\"},{\"statusCode\":401,\"description\":\"Authentication required\"},{\"statusCode\":403,\"description\":\"Chef role required\"}]}}" >"$BODY"
+  local PARAMS
+  # Every {name} in the URL template becomes a required string parameter.
+  PARAMS=$(grep -o '{[A-Za-z]*}' <<<"$TEMPLATE" | tr -d '{}' | jq -Rc '{name:.,type:"string",required:true}' | jq -sc .)
+  printf '%s' "{\"properties\":{\"displayName\":\"$DISPLAY\",\"method\":\"$METHOD\",\"urlTemplate\":\"$TEMPLATE\",\"templateParameters\":$PARAMS,\"responses\":[{\"statusCode\":200,\"description\":\"Chef menu operation response\"},{\"statusCode\":401,\"description\":\"Authentication required\"},{\"statusCode\":403,\"description\":\"Chef role required\"}]}}" >"$BODY"
   az rest --method put --url "${MGMT}/operations/${ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
   sed "s|__CHEF_KITCHEN_BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
   jq -Rs '{properties:{format:"rawxml",value:.}}' "$RENDERED" >"$POLICY_BODY"
@@ -38,5 +41,7 @@ put_operation(){
 }
 put_operation "update-my-menu-availability" "PATCH" "/menu-items/{menuItemId}/availability" "Update my menu availability"
 put_operation "upload-my-menu-image" "POST" "/menu-items/{menuItemId}/images" "Upload my menu image"
-for ID in update-my-menu-availability upload-my-menu-image; do az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o none; done
+put_operation "delete-my-menu-image" "DELETE" "/menu-items/{menuItemId}/images/{imageId}" "Remove my menu image"
+put_operation "set-my-menu-cover-image" "PUT" "/menu-items/{menuItemId}/images/{imageId}/primary" "Set my menu cover image"
+for ID in update-my-menu-availability upload-my-menu-image delete-my-menu-image set-my-menu-cover-image; do az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o none; done
 echo "SUCCESS: Chef menu media operations configured on API $API_ID."

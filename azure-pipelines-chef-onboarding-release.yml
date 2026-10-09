@@ -25,6 +25,15 @@ jobs:
     timeoutInMinutes: 120
     steps:
       - checkout: none
+      - bash: |
+          set -euo pipefail
+          # Docker Hub's anonymous pull limit is exhausted on shared agents; pull official images through Google's mirror first.
+          cfg=/etc/docker/daemon.json
+          [ -s "$cfg" ] || echo '{}' | sudo tee "$cfg" >/dev/null
+          sudo jq '. + {"registry-mirrors":["https://mirror.gcr.io"]}' "$cfg" | sudo tee "$cfg.new" >/dev/null
+          sudo mv "$cfg.new" "$cfg" && sudo systemctl restart docker
+          docker info --format 'Registry mirrors: {{.RegistryConfig.Mirrors}}'
+        displayName: Pull Docker Hub images through mirror.gcr.io
       - task: AzureCLI@2
         displayName: Release reviewed Chef onboarding only
         timeoutInMinutes: 110

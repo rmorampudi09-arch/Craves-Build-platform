@@ -240,10 +240,9 @@ def deploy_notification(source,sha,run_id,output):
 
 
 def deploy_catalog(source,sha,run_id,output):
-    """Catalog image from the reviewed source, then its chef photo APIM operations (remove, set cover)."""
+    """Catalog image from the reviewed source. APIM needs no change here: the craves-kitchens-v1 API
+    (api/v1/kitchens) forwards every method under it to Catalog through wildcard operations."""
     deploy_image_only(CATALOG,'catalog','catalog-service',source,sha,run_id,output)
-    run('bash',str(source/'scripts/apim/configure-chef-menu-media-apim.sh'),env=dict(os.environ,RG=RG,APIM=APIM,CATALOG_APP=CATALOG))
-    print('Chef menu photo operations published.',flush=True)
 
 
 def configure_media(output):

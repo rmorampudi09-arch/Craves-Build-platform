@@ -1,5 +1,7 @@
 package in.craves.catalog.service;
 
+import com.azure.storage.blob.models.BlobStorageException;
+import in.craves.catalog.exception.ApiException;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
@@ -45,7 +47,7 @@ public class LegacyMenuImageRelocator {
             return 0;
         }
         var rows = jdbcTemplate.queryForList(
-            "SELECT id, blob_name, public_url FROM catalog_schema.menu_item_image WHERE public_url IS NOT NULL AND NOT starts_with(public_url, ?)",
+            "SELECT id, blob_name, content_type, public_url FROM catalog_schema.menu_item_image WHERE public_url IS NOT NULL AND NOT starts_with(public_url, ?)",
             base
         );
         int moved = 0;
@@ -53,12 +55,14 @@ public class LegacyMenuImageRelocator {
             String url = (String) row.get("public_url");
             if (!AZURE_BLOB.matcher(url).matches()) continue;
             try {
-                String next = media.copyFromPublicUrl(url, (String) row.get("blob_name"));
+                String next = media.copyFromPublicUrl(url, (String) row.get("blob_name"), (String) row.get("content_type"));
                 moved += jdbcTemplate.update(
                     "UPDATE catalog_schema.menu_item_image SET public_url = ? WHERE id = ? AND public_url = ?", next, row.get("id"), url
                 );
             } catch (RuntimeException ex) {
-                log.warn("Legacy menu photo {} not relocated: {}", row.get("id"), ex.getClass().getSimpleName());
+                // Error codes and our own messages only; never response bodies.
+                String detail = ex instanceof BlobStorageException blob ? String.valueOf(blob.getErrorCode()) : ex instanceof ApiException api ? api.getMessage() : "";
+                log.warn("Legacy menu photo {} not relocated: {} {}", row.get("id"), ex.getClass().getSimpleName(), detail);
             }
         }
         log.info("Relocated {} of {} legacy menu photos", moved, rows.size());

@@ -1,5 +1,6 @@
 package in.craves.catalog.service;
 
+import com.azure.core.util.BinaryData;
 import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobContainerClientBuilder;
@@ -8,6 +9,12 @@ import in.craves.catalog.config.CatalogStorageProperties;
 import in.craves.catalog.exception.ApiException;
 import in.craves.catalog.web.ApiDtos.MenuItemImageResponse;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Set;
@@ -21,6 +28,8 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class MediaStorageService {
     private static final Logger log = LoggerFactory.getLogger(MediaStorageService.class);
+    // Redirects are not followed: only the exact Azure Blob URL stored for the photo is read.
+    private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).followRedirects(HttpClient.Redirect.NEVER).build();
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
         "image/jpeg",
         "image/png",
@@ -73,10 +82,33 @@ public class MediaStorageService {
             : containerClient().getBlobContainerUrl();
     }
 
-    /** Server-side copy of a publicly readable photo into this container; returns its new public URL. */
-    public String copyFromPublicUrl(String sourceUrl, String blobName) {
+    /**
+     * Copies a publicly readable photo into this container and returns its new public URL. Downloaded here and
+     * uploaded, because Azure's server-side copy from the previous account was refused (BlobStorageException).
+     */
+    public String copyFromPublicUrl(String sourceUrl, String blobName, String contentType) {
+        byte[] data;
+        try {
+            HttpResponse<InputStream> response = HTTP.send(
+                HttpRequest.newBuilder(URI.create(sourceUrl)).timeout(Duration.ofSeconds(30)).GET().build(),
+                HttpResponse.BodyHandlers.ofInputStream()
+            );
+            try (InputStream body = response.body()) {
+                if (response.statusCode() != 200) throw new IOException("HTTP " + response.statusCode());
+                data = body.readNBytes((int) properties.getMaxImageFileSizeBytes() + 1);
+            }
+        } catch (IOException ex) {
+            throw new ApiException(502, "LEGACY_MEDIA_UNAVAILABLE", "Previous photo could not be read: " + ex.getMessage());
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new ApiException(502, "LEGACY_MEDIA_UNAVAILABLE", "Previous photo read was interrupted");
+        }
+        if (data.length == 0 || data.length > properties.getMaxImageFileSizeBytes()) {
+            throw new ApiException(502, "LEGACY_MEDIA_UNAVAILABLE", "Previous photo is empty or too large");
+        }
         BlobClient blobClient = containerClient().getBlobClient(blobName);
-        blobClient.copyFromUrl(sourceUrl);
+        blobClient.upload(BinaryData.fromBytes(data), true);
+        blobClient.setHttpHeaders(new BlobHttpHeaders().setContentType(contentType));
         return publicUrl(blobClient, blobName);
     }
 

@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Fragment, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ChefHat, RefreshCw } from "lucide-react";
-import { AuthModal } from "@/components/auth/AuthModal";
 import { Spinner } from "@/components/chef-onboarding-ui";
 import {
   AuthenticationRequiredError,
@@ -14,6 +14,9 @@ import {
   subscribeSession,
 } from "@/services/auth/cravesAuth";
 import "@/styles/chef-onboarding.css";
+
+// Signed-in chefs never see the sign-in popup, so its phone/OTP code loads only when needed.
+const AuthModal = dynamic(() => import("@/components/auth/AuthModal").then((module) => module.AuthModal), { ssr: false });
 
 function sessionScope() {
   const context = captureSessionContext();
@@ -131,15 +134,15 @@ export function ChefApplicationSessionBoundary({
           </div>
         ) : null}
       </section>
-      <AuthModal
-        open={signedOut && authOpen}
+      {signedOut ? <AuthModal
+        open={authOpen}
         mode={mode}
         initialAccountMode="chef"
         lockAccountMode
         onSwitchMode={setMode}
         onClose={() => setAuthOpen(false)}
         onAuthenticated={() => retry()}
-      />
+      /> : null}
     </>
   );
 }

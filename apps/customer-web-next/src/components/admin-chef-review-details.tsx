@@ -35,6 +35,8 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
   const [documentsAvailable, setDocumentsAvailable] = useState(false);
   const [applicationReason, setApplicationReason] = useState("");
   const [correctionSections, setCorrectionSections] = useState<string[]>([]);
+  // Kept apart from the whole-application rejection reason so evidence never pre-fills a rejection.
+  const [reviewNote, setReviewNote] = useState("");
   const [documentReasons, setDocumentReasons] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("Loading chef application…");
   const [busy, setBusy] = useState(false);
@@ -87,14 +89,20 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
   const allApproved = documentsAvailable && (!onboardingV2Enabled || Boolean(onboarding)) &&
     (!onboarding || onboarding.legacy || onboarding.submitted && onboarding.progress?.fssaiVerified) && REQUIREMENTS.length > 0 && approvedCount === REQUIREMENTS.length;
 
+  const v2 = Boolean(onboarding && !onboarding.legacy);
+  const checklist: [boolean, string][] = [
+    ...(v2 ? [[Boolean(onboarding?.submitted), "Chef has submitted the application"] as [boolean, string]] : []),
+    [documentsAvailable && approvedCount === REQUIREMENTS.length && REQUIREMENTS.length > 0, `Every required document approved (${approvedCount}/${REQUIREMENTS.length})`],
+    ...(v2 ? [[Boolean(onboarding?.progress?.fssaiVerified), "FSSAI number checked and recorded with “Record verified FSSAI number”"] as [boolean, string]] : []),
+  ];
   async function onboardingAction(action:"START_REVIEW"|"REQUEST_INFORMATION"|"VERIFY_FSSAI") {
     if(!onboarding || busy) return;
     setBusy(true);setMessage("");
     try {
-      const response=await adminFetch(`/api/admin/chef-onboarding/applications/${applicationId}/review`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expectedVersion:onboarding.version,action,reason:applicationReason,fssaiNumber:onboarding.details?.fssaiNumber,sections:action==="REQUEST_INFORMATION"?correctionSections:null})});
+      const response=await adminFetch(`/api/admin/chef-onboarding/applications/${applicationId}/review`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expectedVersion:onboarding.version,action,reason:reviewNote,fssaiNumber:onboarding.details?.fssaiNumber,sections:action==="REQUEST_INFORMATION"?correctionSections:null})});
       const data=await response.json().catch(()=>null) as {message?:string}|null;
       if(!response.ok) throw new Error(data?.message??"Review action failed. Reload this application.");
-      await load();setApplicationReason("");setCorrectionSections([]);setMessage("Review action saved.");
+      await load();setReviewNote("");setCorrectionSections([]);setMessage("Review action saved.");
     } catch(error) {setMessage(error instanceof Error?error.message:"Review action failed.");}
     finally {setBusy(false);}
   }
@@ -185,9 +193,9 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
       {onboarding.progress?.sections?.length ? <p className="mt-2 text-sm">Sections the Chef must update: {onboarding.progress.sections.map(section => CHEF_SECTION_LABELS[section as keyof typeof CHEF_SECTION_LABELS] ?? section).join(", ")}</p> : null}
       {onboarding.callbackRequest ? <p className="mt-2 text-sm">FSSAI callback: {onboarding.callbackRequest.caseNumber} · {onboarding.callbackRequest.status}</p> : null}
       {onboarding.submitted && !onboarding.legacy ? <div className="mt-4 space-y-3">
-        <label className="block text-sm">Correction reason or FSSAI verification evidence<textarea aria-label="Onboarding review evidence" className="mt-2 w-full rounded-xl border p-3" value={applicationReason} maxLength={2000} onChange={event=>setApplicationReason(event.target.value)} /></label>
+        <label className="block text-sm">Correction reason or FSSAI verification evidence<textarea aria-label="Onboarding review evidence" className="mt-2 w-full rounded-xl border p-3" value={reviewNote} maxLength={2000} onChange={event=>setReviewNote(event.target.value)} /></label>
         {item.status!=="APPROVED" ? <fieldset className="text-sm"><legend className="font-bold">Sections the Chef must update (needed to request information)</legend><div className="mt-2 flex flex-wrap gap-4">{CORRECTION_SECTIONS.filter(section => section !== "bank" || onboarding.bankEnrollmentRequired).map(section => <label key={section} className="inline-flex items-center gap-2"><input type="checkbox" checked={correctionSections.includes(section)} onChange={event => setCorrectionSections(current => event.target.checked ? [...current, section] : current.filter(value => value !== section))} />{CHEF_SECTION_LABELS[section]}</label>)}</div></fieldset> : null}
-        <div className="flex flex-wrap gap-3">{item.status!=="APPROVED" ? <><button disabled={busy} onClick={()=>void onboardingAction("START_REVIEW")}>Start review</button><button disabled={busy || applicationReason.trim().length<3 || correctionSections.length===0} onClick={()=>void onboardingAction("REQUEST_INFORMATION")}>Request information</button></> : null}<button disabled={busy || applicationReason.trim().length<3 || onboarding.progress?.fssaiVerified} onClick={()=>void onboardingAction("VERIFY_FSSAI")}>Record verified FSSAI number</button></div>
+        <div className="flex flex-wrap gap-3">{item.status!=="APPROVED" ? <><button disabled={busy} className="rounded-xl border border-[#d9cfdf] bg-white px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40" onClick={()=>void onboardingAction("START_REVIEW")}>Start review</button><button disabled={busy || reviewNote.trim().length<3 || correctionSections.length===0} className="rounded-xl border border-[#d9cfdf] bg-white px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40" onClick={()=>void onboardingAction("REQUEST_INFORMATION")}>Request information</button></> : null}<button disabled={busy || reviewNote.trim().length<3 || onboarding.progress?.fssaiVerified} className="rounded-xl border border-[#d9cfdf] bg-white px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40" onClick={()=>void onboardingAction("VERIFY_FSSAI")}>Record verified FSSAI number</button></div>
       </div> : null}
     </section> : null}
 
@@ -229,6 +237,7 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
     {item.status === "PENDING" && <section className="rounded-[30px] border border-red-100 bg-white p-6 text-slate-950 sm:p-8">
       <h2 className="text-2xl font-bold">Final application decision</h2>
       <p className="mt-2 text-sm text-slate-600">Use document-level rejection above when only one file is incorrect. Use the red action below only when the <strong>entire Chef application</strong> must be rejected.</p>
+      <ul className="mt-4 space-y-1 text-sm" aria-label="Approval checklist">{checklist.map(([done,label]) => <li key={label} className="flex items-center gap-2">{done ? <CheckCircle2 className="h-4 w-4 text-emerald-700" aria-hidden="true" /> : <CircleAlert className="h-4 w-4 text-amber-700" aria-hidden="true" />}<span>{done ? "Done: " : "Needed: "}{label}</span></li>)}</ul>
       <div className="mt-5 flex flex-wrap gap-3"><button disabled={busy || !allApproved} onClick={() => void decideApplication("approve")} className="rounded-2xl bg-green-700 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Approve Chef application</button></div>
       <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5"><label className="block text-sm font-bold text-red-950">Whole-application rejection reason<textarea value={applicationReason} maxLength={1000} onChange={event => setApplicationReason(event.target.value)} placeholder="Use only for an application-level problem, not a single bad document" className="mt-2 min-h-28 w-full rounded-2xl bg-white p-4 text-slate-950" /></label><button disabled={busy || !applicationReason.trim()} onClick={() => void decideApplication("reject")} className="mt-3 rounded-2xl bg-red-700 px-5 py-3 font-bold text-white disabled:opacity-50">Reject entire application</button></div>
     </section>}

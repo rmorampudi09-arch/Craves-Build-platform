@@ -69,13 +69,18 @@ case "$RELEASE_MODE" in
     ;;
 esac
 
-mkdir -p "$OUTPUT_DIR/service-logs"
+mkdir -p "$OUTPUT_DIR/service-logs" "$OUTPUT_DIR/service-receipts"
 EVENTS="$OUTPUT_DIR/deployment-events.jsonl"
 ROLLBACK_MAP="$OUTPUT_DIR/rollback-map.jsonl"
 : >"$EVENTS"
 : >"$ROLLBACK_MAP"
 
 declare -a COMPLETED_KEYS=()
+# Invocation intent is separate from successfully verified completion.
+declare -a ATTEMPTED_KEYS=()
+declare -A TARGET_IMAGE_BY_KEY=()
+declare -A RECOVERY_FAILED_BY_KEY=()
+declare -A VERIFIED_SUBMISSION_BY_KEY=()
 declare -A APP_BY_KEY=()
 declare -A PREVIOUS_IMAGE_BY_KEY=()
 declare -A PREVIOUS_REVISION_BY_KEY=()
@@ -102,7 +107,35 @@ record_event() {
 materialize_evidence() {
   local release_status=$1
   local failure_reason=${2:-}
-  local events_json rollback_json
+  local events_json rollback_json receipts_json receipt key
+  receipts_json='[]'
+  for key in "${ATTEMPTED_KEYS[@]}"; do
+    receipt="$OUTPUT_DIR/service-receipts/${key}.json"
+    if [[ -s "$receipt" ]] && jq -e \
+      --arg key "$key" --arg app "${APP_BY_KEY[$key]}" --arg rg "$RESOURCE_GROUP" \
+      --arg target "${TARGET_IMAGE_BY_KEY[$key]}" --arg previous "${PREVIOUS_IMAGE_BY_KEY[$key]}" \
+      --arg revision "${PREVIOUS_REVISION_BY_KEY[$key]}" \
+      --argjson knownSubmitted "${VERIFIED_SUBMISSION_BY_KEY[$key]:-false}" '
+        (if $knownSubmitted then .submitted == true else true end) and
+        .schemaVersion == 1 and .serviceKey == $key and .containerApp == $app and
+        .resourceGroup == $rg and .targetImage == $target and (.submitted | type == "boolean") and
+        (if .submitted then
+          .previousImage == $previous and .previousRevision == $revision and
+          (.status | IN("submitted", "deployment-verified", "restored", "restore-submitted", "operator-required")) and
+          ([.stateHash,.templateHash,.secretHash] | all(type == "string" and test("^[0-9a-f]{64}$"))) and
+          (if .status == "deployment-verified" or .status == "restored" then (.observedRevision | type == "string" and length > 0) else true end) and
+          (if .status == "restored" then (.restoredRevision | type == "string" and length > 0) else true end)
+        else .status == "not-submitted" end)
+      ' "$receipt" >/dev/null 2>&1; then
+      if [[ "${RECOVERY_FAILED_BY_KEY[$key]:-false}" == true ]]; then
+        receipts_json=$(jq --slurpfile receipt "$receipt" '. + [$receipt[0] + {recordedStatus:$receipt[0].status,status:"operator-required",reason:"Recovery failed; original receipt retained"}]' <<<"$receipts_json")
+      else
+        receipts_json=$(jq --slurpfile receipt "$receipt" '. + $receipt' <<<"$receipts_json")
+      fi
+    else
+      receipts_json=$(jq --arg key "$key" '. + [{serviceKey:$key,status:"operator-required",reason:"Deployment receipt unavailable or invalid"}]' <<<"$receipts_json")
+    fi
+  done
 
   events_json=$(jq -s '.' "$EVENTS" 2>/dev/null || printf '[]')
   rollback_json=$(jq -s '.' "$ROLLBACK_MAP" 2>/dev/null || printf '[]')
@@ -119,6 +152,7 @@ materialize_evidence() {
     --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --argjson deploymentEvents "$events_json" \
     --argjson rollbackMap "$rollback_json" \
+    --argjson mutationReceipts "$receipts_json" \
     '{
       schemaVersion:1,
       resourceGroup:$resourceGroup,
@@ -133,7 +167,9 @@ materialize_evidence() {
       externalProvidersActivated:false,
       secretsReadOrChanged:false,
       deploymentEvents:$deploymentEvents,
-      rollbackMap:$rollbackMap
+      rollbackMap:$rollbackMap,
+      mutationReceipts:$mutationReceipts,
+      unrecoveredServices:[$mutationReceipts[] | select(.status != "not-submitted" and .status != "restored" and ($releaseStatus != "SUCCEEDED" or .status != "deployment-verified")) | .serviceKey]
     }' >"$OUTPUT_DIR/backend-deployment-manifest.json"
 }
 
@@ -359,49 +395,54 @@ verify_step_one_dormant_flags() {
   done < <(jq -c '.stepOneDormantFlags[]' "$PACK_FILE")
 }
 
-rollback_completed_services() {
-  local reason=$1
-  local index key app previous_image current_snapshot current_revision log_file helper_rc
-  echo "Rolling back ${#COMPLETED_KEYS[@]} completed service(s) in reverse order: $reason" >&2
-
-  for ((index=${#COMPLETED_KEYS[@]}-1; index>=0; index--)); do
-    key=${COMPLETED_KEYS[$index]}
+recover_attempted_services() {
+  local reason=$1 index key app target_image previous_image log_file helper_rc status revision receipt
+  echo "Recovering ${#ATTEMPTED_KEYS[@]} attempted service(s) in reverse order: $reason" >&2
+  for ((index=${#ATTEMPTED_KEYS[@]}-1; index>=0; index--)); do
+    key=${ATTEMPTED_KEYS[$index]}
     app=${APP_BY_KEY[$key]}
+    target_image=${TARGET_IMAGE_BY_KEY[$key]}
     previous_image=${PREVIOUS_IMAGE_BY_KEY[$key]}
+    receipt="$OUTPUT_DIR/service-receipts/${key}.json"
     log_file="$OUTPUT_DIR/service-logs/${key}-rollback.log"
-
-    if is_ready_image "$app" "$previous_image"; then
-      current_snapshot=$(ready_revision_snapshot "$app")
-      current_revision=$(jq -r '.revision' <<<"$current_snapshot")
-      record_event "$key" "$app" 'rollback' 'already-restored' "$previous_image" "$current_revision"
-      continue
-    fi
-
     set +e
-    READY_ATTEMPTS="$READY_ATTEMPTS" \
-    READY_SLEEP_SECONDS="$READY_SLEEP_SECONDS" \
-    bash "$SINGLE_SERVICE_DEPLOY" "$RESOURCE_GROUP" "$app" "$previous_image" "$key-rollback" \
+    READY_ATTEMPTS="$READY_ATTEMPTS" READY_SLEEP_SECONDS="$READY_SLEEP_SECONDS" \
+    DEPLOY_RECOVERY_ONLY=true DEPLOY_RECEIPT_FILE="$receipt" \
+    bash "$SINGLE_SERVICE_DEPLOY" "$RESOURCE_GROUP" "$app" "$target_image" "$key" \
       2>&1 | tee "$log_file"
     helper_rc=${PIPESTATUS[0]}
     set -e
-
-    if [[ "$helper_rc" -eq 0 ]] && is_ready_image "$app" "$previous_image"; then
-      current_snapshot=$(ready_revision_snapshot "$app")
-      current_revision=$(jq -r '.revision' <<<"$current_snapshot")
-      record_event "$key" "$app" 'rollback' 'ready' "$previous_image" "$current_revision"
+    status=$(jq -r '.status // "operator-required"' "$receipt" 2>/dev/null) || status=operator-required
+    revision=$(jq -r '.restoredRevision // ""' "$receipt" 2>/dev/null) || revision=''
+    if [[ "$helper_rc" -eq 0 && ( "$status" == restored || ( "$status" == not-submitted && "${VERIFIED_SUBMISSION_BY_KEY[$key]:-false}" != true ) ) ]]; then
+      record_event "$key" "$app" 'rollback' "$status" "$previous_image" "$revision"
     else
-      record_event "$key" "$app" 'rollback' 'failed' "$previous_image" ''
-      show_runtime_diagnostics "$key-rollback" "$app" "$previous_image"
+      RECOVERY_FAILED_BY_KEY[$key]=true
+      record_event "$key" "$app" 'rollback' 'operator-required' "$previous_image" ''
+      echo "ERROR: $key recovery is unresolved; original receipt retained at $receipt" >&2
     fi
   done
 }
 
 abort_release() {
   local message=$1
-  rollback_completed_services "$message"
+  trap - EXIT
+  recover_attempted_services "$message"
   materialize_evidence 'FAILED' "$message"
   fail "$message"
 }
+
+on_release_exit() {
+  local rc=$?
+  trap - EXIT
+  if [[ "$rc" -ne 0 ]]; then
+    set +e
+    recover_attempted_services 'Unexpected release failure; inspect service receipts'
+    materialize_evidence 'FAILED' 'Unexpected release failure; inspect service receipts'
+  fi
+  exit "$rc"
+}
+trap on_release_exit EXIT
 
 # Complete every read-only check before the first Container App mutation.
 while IFS= read -r service; do
@@ -437,7 +478,7 @@ while IFS= read -r service; do
   digest=$(jq -r --arg key "$key" '.images[] | select(.serviceKey == $key) | .digest' "$IMAGE_MANIFEST")
   target_image="$ACR_LOGIN/$repository@$digest"
   log_file="$OUTPUT_DIR/service-logs/${key}-preflight.log"
-  if ! DEPLOY_PREFLIGHT_ONLY=true bash "$SINGLE_SERVICE_DEPLOY" \
+  if ! DEPLOY_PREFLIGHT_ONLY=true DEPLOY_RECOVERY_ONLY=false bash "$SINGLE_SERVICE_DEPLOY" \
     "$RESOURCE_GROUP" "$app" "$target_image" "$key" >"$log_file" 2>&1; then
     cat "$log_file" >&2
     record_event "$key" "$app" 'preflight' 'failed' "$target_image" ''
@@ -468,6 +509,7 @@ while IFS= read -r service; do
   APP_BY_KEY[$key]=$app
   PREVIOUS_IMAGE_BY_KEY[$key]=$previous_image
   PREVIOUS_REVISION_BY_KEY[$key]=$previous_revision
+  TARGET_IMAGE_BY_KEY[$key]=$target_image
 
   jq -cn \
     --arg serviceKey "$key" \
@@ -494,9 +536,13 @@ while IFS= read -r service; do
 
   echo "========== DEPLOY $key -> $app =========="
   log_file="$OUTPUT_DIR/service-logs/${key}-deployment.log"
+  ATTEMPTED_KEYS+=("$key")
   set +e
   READY_ATTEMPTS="$READY_ATTEMPTS" \
   READY_SLEEP_SECONDS="$READY_SLEEP_SECONDS" \
+  DEPLOY_RECOVERY_ONLY=false \
+  EXPECTED_PREVIOUS_IMAGE="$previous_image" \
+  DEPLOY_RECEIPT_FILE="$OUTPUT_DIR/service-receipts/${key}.json" \
   bash "$SINGLE_SERVICE_DEPLOY" "$RESOURCE_GROUP" "$app" "$target_image" "$key" \
     2>&1 | tee "$log_file"
   helper_rc=${PIPESTATUS[0]}
@@ -508,6 +554,7 @@ while IFS= read -r service; do
     abort_release "New revision did not become ready for $app; see the published safe diagnostics and service log."
   fi
 
+  VERIFIED_SUBMISSION_BY_KEY[$key]=true
   if ! is_ready_image "$app" "$target_image"; then
     record_event "$key" "$app" 'deployment' 'verification-failed' "$target_image" ''
     show_runtime_diagnostics "$key" "$app" "$target_image"
@@ -527,6 +574,8 @@ materialize_evidence 'SUCCEEDED' ''
 jq -e \
   --argjson expectedDeployCount "$EXPECTED_DEPLOY_COUNT" '
   .releaseStatus == "SUCCEEDED"
+  and (.unrecoveredServices | length == 0)
+  and ([.mutationReceipts[] | select(.status != "deployment-verified")] | length == 0)
   and .runtimeConfigurationPreservationEnforced == true
   and .stepOneDormantFlagsVerified == true
   and .externalProvidersActivated == false

@@ -4,13 +4,17 @@ pr: none
 parameters:
   - name: resourceGroup
     type: string
-    default: rg-craves-prodlow-centralindia
+    default: ''
   - name: acrName
     type: string
-    default: cravesprodlowacr82121
+    default: ''
   - name: containerAppName
     type: string
-    default: ca-craves-web-prodlow
+    default: ''
+  - name: confirmIsolatedDiagnosticTargets
+    displayName: Confirm app, resource group and registry are existing isolated test resources
+    type: boolean
+    default: false
   - name: imageTag
     type: string
     default: $(Build.BuildId)
@@ -27,14 +31,35 @@ pool:
 steps:
   - checkout: self
 
+  # This source-only step runs before AzureCLI task authentication or any build/push.
+  - script: |
+      set -euo pipefail
+      echo '##vso[task.setvariable variable=diagnosticTargetsValidated]false'
+      bash scripts/release/validate-diagnostic-target.sh
+      echo '##vso[task.setvariable variable=diagnosticTargetsValidated]true'
+    displayName: Require explicit isolated diagnostic destinations
+    env:
+      DIAGNOSTIC_RESOURCE_GROUP: '${{ parameters.resourceGroup }}'
+      DIAGNOSTIC_CONTAINER_APP: '${{ parameters.containerAppName }}'
+      DIAGNOSTIC_REGISTRY: '${{ parameters.acrName }}'
+      CONFIRM_ISOLATED_DIAGNOSTIC_TARGETS: '${{ parameters.confirmIsolatedDiagnosticTargets }}'
+      DIAGNOSTIC_IMAGE_TAG: '${{ parameters.imageTag }}'
+
   - task: AzureCLI@2
     displayName: Build and push API test dashboard image
+    env:
+      DIAGNOSTIC_RESOURCE_GROUP: '${{ parameters.resourceGroup }}'
+      DIAGNOSTIC_CONTAINER_APP: '${{ parameters.containerAppName }}'
+      DIAGNOSTIC_REGISTRY: '${{ parameters.acrName }}'
+      CONFIRM_ISOLATED_DIAGNOSTIC_TARGETS: '${{ parameters.confirmIsolatedDiagnosticTargets }}'
+      DIAGNOSTIC_IMAGE_TAG: '${{ parameters.imageTag }}'
     inputs:
       azureSubscription: $(azureServiceConnection)
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
+        bash scripts/release/validate-diagnostic-target.sh
 
         ACR_LOGIN_SERVER=$(az acr show \
           --name "${{ parameters.acrName }}" \
@@ -42,7 +67,7 @@ steps:
           --query loginServer \
           -o tsv)
 
-        IMAGE="${ACR_LOGIN_SERVER}/$(imageRepository):${{ parameters.imageTag }}"
+        IMAGE="${ACR_LOGIN_SERVER}/$(imageRepository):${DIAGNOSTIC_IMAGE_TAG}"
         echo "Building ${IMAGE}"
 
         az acr login --name "${{ parameters.acrName }}"
@@ -63,12 +88,19 @@ steps:
 
   - task: AzureCLI@2
     displayName: Deploy API test dashboard to existing web Container App
+    env:
+      DIAGNOSTIC_RESOURCE_GROUP: '${{ parameters.resourceGroup }}'
+      DIAGNOSTIC_CONTAINER_APP: '${{ parameters.containerAppName }}'
+      DIAGNOSTIC_REGISTRY: '${{ parameters.acrName }}'
+      CONFIRM_ISOLATED_DIAGNOSTIC_TARGETS: '${{ parameters.confirmIsolatedDiagnosticTargets }}'
+      DIAGNOSTIC_IMAGE_TAG: '${{ parameters.imageTag }}'
     inputs:
       azureSubscription: $(azureServiceConnection)
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
+        bash scripts/release/validate-diagnostic-target.sh
 
         ACR_LOGIN_SERVER=$(az acr show \
           --name "${{ parameters.acrName }}" \
@@ -76,7 +108,7 @@ steps:
           --query loginServer \
           -o tsv)
 
-        IMAGE="${ACR_LOGIN_SERVER}/$(imageRepository):${{ parameters.imageTag }}"
+        IMAGE="${ACR_LOGIN_SERVER}/$(imageRepository):${DIAGNOSTIC_IMAGE_TAG}"
         echo "Deploying ${IMAGE} to ${{ parameters.containerAppName }}"
 
         az containerapp ingress update \
@@ -115,12 +147,20 @@ steps:
 
   - task: AzureCLI@2
     displayName: Show latest web app logs
-    condition: always()
+    condition: and(always(), eq(variables['diagnosticTargetsValidated'], 'true'))
+    env:
+      DIAGNOSTIC_RESOURCE_GROUP: '${{ parameters.resourceGroup }}'
+      DIAGNOSTIC_CONTAINER_APP: '${{ parameters.containerAppName }}'
+      DIAGNOSTIC_REGISTRY: '${{ parameters.acrName }}'
+      CONFIRM_ISOLATED_DIAGNOSTIC_TARGETS: '${{ parameters.confirmIsolatedDiagnosticTargets }}'
+      DIAGNOSTIC_IMAGE_TAG: '${{ parameters.imageTag }}'
     inputs:
       azureSubscription: $(azureServiceConnection)
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
+        set -euo pipefail
+        bash scripts/release/validate-diagnostic-target.sh
         az containerapp logs show \
           --name "${{ parameters.containerAppName }}" \
           --resource-group "${{ parameters.resourceGroup }}" \

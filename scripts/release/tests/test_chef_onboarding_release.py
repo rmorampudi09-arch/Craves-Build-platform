@@ -140,4 +140,40 @@ class ChefReleaseGuardTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'previous notification image restore requested'):release.deploy_notification(Path('.'),'a'*40,'1',Mock())
         self.assertEqual(update.call_args.args,('containerapp','update','-g',release.RG,'-n',release.NOTIFICATION,'--image','old-pinned','--no-wait'))
 
+    def test_media_creates_public_photo_storage_and_points_catalog_at_it(self):
+        before=self.settled_app(release.CATALOG);after=copy.deepcopy(before)
+        after['properties']['template']['containers'][0]['env']+=[{'name':'CRAVES_STORAGE_ENDPOINT_VALUE','secretRef':'media-storage'},{'name':'CRAVES_STORAGE_MEDIA_CONTAINER','value':'media'}]
+        state={'updated':False};calls=[]
+        def azure(*args):
+            calls.append(args)
+            if args[:3]==('storage','account','list'):return []
+            if args[:3]==('storage','account','check-name'):return {'nameAvailable':True}
+            if args[:3]==('storage','container-rm','exists'):return {'exists':False}
+            if args[:2]==('containerapp','update'):state['updated']=True
+        conn='DefaultEndpointsProtocol=https;AccountName='+release.MEDIA_ACCOUNT+';AccountKey=k;EndpointSuffix=core.windows.net'
+        secrets=[]
+        def run(*args,**kwargs):
+            if 'secret' in args:secrets.append(Path(args[args.index('--secrets')+1].split('=@')[1]).read_text())
+            return conn if 'show-connection-string' in args else ''
+        probes={'probe.txt':200,'comp=list':404}
+        with patch.object(release,'app',side_effect=lambda name:after if state['updated'] else before),patch.object(release,'azure',side_effect=azure),\
+             patch.object(release,'run',side_effect=run) as cli,patch.object(release.inspect,'probe',side_effect=lambda url:(next(v for k,v in probes.items() if k in url),b'')),\
+             patch.object(release.time,'sleep'):
+            release.configure_media(Mock())
+        self.assertIn(('storage','container-rm','create','-g',release.RG,'--storage-account',release.MEDIA_ACCOUNT,'-n','media','--public-access','blob'),calls)
+        self.assertEqual(calls[-1],('containerapp','update','-g',release.RG,'-n',release.CATALOG,'--set-env-vars','CRAVES_STORAGE_ENDPOINT_VALUE=secretref:media-storage','CRAVES_STORAGE_MEDIA_CONTAINER=media','--no-wait'))
+        self.assertEqual(secrets,[conn])
+        self.assertFalse(any(conn in arg for call in cli.call_args_list for arg in call.args))
+
+    def test_media_refuses_a_listable_photo_container(self):
+        before=self.settled_app(release.CATALOG)
+        def azure(*args):
+            if args[:3]==('storage','account','list'):return [{'name':release.MEDIA_ACCOUNT,'allowBlobPublicAccess':True}]
+            if args[:3]==('storage','container-rm','exists'):return {'exists':True}
+        with patch.object(release,'app',return_value=before),patch.object(release,'azure',side_effect=azure) as update,\
+             patch.object(release,'run',return_value='DefaultEndpointsProtocol=https;AccountName='+release.MEDIA_ACCOUNT+';AccountKey=k'),\
+             patch.object(release.inspect,'probe',return_value=(200,b'')),patch.object(release.time,'sleep'):
+            with self.assertRaisesRegex(ValueError,'must not be listable'):release.configure_media(Mock())
+        self.assertFalse(any(call.args[:2]==('containerapp','update') for call in update.call_args_list))
+
 if __name__=='__main__':unittest.main()

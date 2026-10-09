@@ -98,7 +98,7 @@ public class ChefOnboardingService {
         Details details=new Details(email,trim(input.firstName()),trim(input.lastName()),input.dateOfBirth(),
             trim(input.kitchenName()),trim(input.kitchenDescription()),trim(input.addressLine1()),
             trim(input.addressLine2()),trim(input.landmark()),trim(input.city()),trim(input.state()),
-            trim(input.postalCode()),input.latitude(),input.longitude(),input.proofKind(),trim(input.otherGovernmentId()),
+            trim(input.postalCode()),coordinate(input.latitude()),coordinate(input.longitude()),input.proofKind(),trim(input.otherGovernmentId()),
             trim(input.fssaiNumber()),input.language(),
             input.proofKind()==ProofKind.OTHER_GOVERNMENT_ID && Boolean.FALSE.equals(input.proofHasBack()) ? Boolean.FALSE : null);
         var docs=application.id()==null ? List.<in.craves.userchef.web.ApiDtos.KycDocumentResponse>of()
@@ -113,8 +113,8 @@ public class ChefOnboardingService {
              !Objects.equals(existing.details().addressLine1(),details.addressLine1()) ||
              !Objects.equals(existing.details().city(),details.city()) ||
              !Objects.equals(existing.details().state(),details.state()) ||
-             !Objects.equals(existing.details().latitude(),details.latitude()) ||
-             !Objects.equals(existing.details().longitude(),details.longitude())))
+             !sameCoordinate(existing.details().latitude(),details.latitude()) ||
+             !sameCoordinate(existing.details().longitude(),details.longitude())))
             throw ApiException.conflict("REVIEWED_KITCHEN_LOCKED","Contact support before changing an already reviewed kitchen.");
         if(existing!=null && !"MORE_INFORMATION_REQUIRED".equals(existing.reviewStatus()) && (Objects.equals(existing.reviewedFssai(),existing.details().fssaiNumber()) && existing.reviewedFssai()!=null || docs.stream().anyMatch(d -> d.documentType()==KycDocumentType.FSSAI_LICENSE &&
             "APPROVED".equals(d.status()))) && !Objects.equals(existing.details().fssaiNumber(),details.fssaiNumber()))
@@ -304,8 +304,12 @@ public class ChefOnboardingService {
         try { return json.writeValueAsString(value); }
         catch(Exception e) { throw new IllegalStateException("Cannot encode onboarding details"); }
     }
-    private static boolean sameCoordinate(java.math.BigDecimal left,java.math.BigDecimal right) {
-        return left==null ? right==null : right!=null && left.compareTo(right)==0;
+    /** chef_application stores NUMERIC(9,6); map pins carry 7+ decimals, which made submit fail to confirm the saved kitchen. */
+    static java.math.BigDecimal coordinate(java.math.BigDecimal value) {
+        return value==null || value.scale()<=6 ? value : value.setScale(6,java.math.RoundingMode.HALF_UP);
+    }
+    static boolean sameCoordinate(java.math.BigDecimal left,java.math.BigDecimal right) {
+        return left==null ? right==null : right!=null && coordinate(left).compareTo(coordinate(right))==0;
     }
     private static String trim(String value) { return value==null || value.isBlank()?null:value.trim(); }
     private void requireEnabled() {

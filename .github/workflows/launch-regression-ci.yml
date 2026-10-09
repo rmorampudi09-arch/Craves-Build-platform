@@ -133,6 +133,9 @@ jobs:
       ADMIN_SESSION_TEST_DB_PASSWORD: postgres
       DELIVERY_FEEDBACK_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/delivery_feedback_test
       DELIVERY_FEEDBACK_TEST_DB_PASSWORD: postgres
+      OF02_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/of02_handoff_test
+      OF02_TEST_DB_USER: postgres
+      OF02_TEST_DB_PASSWORD: postgres
       REFUND_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/craves_refund_test
       REFUND_TEST_DB_USER: postgres
       REFUND_TEST_DB_PASSWORD: postgres
@@ -168,7 +171,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_ACTIONS" = true
           test "$CRAVES_DISPOSABLE_TEST_DATABASE" = true
-          for database in subscription_schema_test chef_ledger_test pdf_module_test craves_academy_ci craves_admin_session_ci auth_audit_test delivery_feedback_test craves_refund_test craves_email_test catalog_finance_test craves_explorer_test referral_owner_test chef_onboarding_test notification_delivery_test; do
+          for database in subscription_schema_test chef_ledger_test pdf_module_test craves_academy_ci craves_admin_session_ci auth_audit_test delivery_feedback_test craves_refund_test craves_email_test catalog_finance_test craves_explorer_test referral_owner_test of02_handoff_test chef_onboarding_test notification_delivery_test; do
             createdb "$database"
             if [[ "$database" != subscription_schema_test ]]; then
               psql -X --set=ON_ERROR_STOP=1 --dbname="$database" --command='CREATE EXTENSION IF NOT EXISTS postgis;'

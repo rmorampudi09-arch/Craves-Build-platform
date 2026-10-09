@@ -4,9 +4,10 @@ import copy
 import json
 import os
 from pathlib import Path
+import re
 import time
-from active_address_release import (SUBSCRIPTION, RG, CHEF, WEB, APIM, ACR, app, azure, run,
-    source_guard, build_image, verify_image, deploy_web, ready_web, environment, inspect, runtime, require)
+from active_address_release import (SUBSCRIPTION, RG, CHEF, WEB, APIM, ACR, FIREBASE, app, azure, run,
+    source_guard, build_image, verify_image, resolve_image, deploy_web, ready_web, environment, inspect, runtime, require)
 
 BANK='ca-craves-integration-service-pr'
 FLAG='CRAVES_CHEF_ONBOARDING_V2_ENABLED'
@@ -135,6 +136,68 @@ def activate(sha,output,allow_bank_unavailable=False):
     print('Chef onboarding pages activated; healthy revisions and unrelated runtime verified. Bank enrollment available: '+str(bank_ready),flush=True)
 
 
+# admin.craves.in is served by this app (verified by identical static chunks before every deploy).
+ADMIN='ca-craves-admin-r92-ffe80e7c'
+ADMIN_HOST='https://admin.craves.in'
+ADMIN_ROUTES=('/sign-in','/admin','/admin/chef-reviews','/admin/chef-onboarding')
+
+
+def chunks(url):
+    code,body=inspect.probe(url)
+    require(code==200,'Admin route verification failed: '+url)
+    found=sorted(set(re.findall(r'static/chunks/([A-Za-z0-9_~.-]+\.js)',body.decode('utf-8','replace'))))
+    require(bool(found),'Admin page returned no application bundle: '+url)
+    return found
+
+
+def admin_settled(value,target):
+    props=value['properties']
+    return (props.get('provisioningState')=='Succeeded' and props.get('runningStatus')=='Running' and
+            props.get('latestRevisionName')==props.get('latestReadyRevisionName') and image(value)==target)
+
+
+def admin_verified(value):
+    origin='https://'+value['properties']['configuration']['ingress']['fqdn']
+    require(chunks(ADMIN_HOST+'/sign-in')==chunks(origin+'/sign-in'),'admin.craves.in does not serve '+ADMIN+' yet')
+    for path in ADMIN_ROUTES:require(inspect.probe(origin+path)[0]==200,'Admin route verification failed: '+path)
+    require(inspect.probe(origin+'/api/admin/me')[0]==401,'Signed-out admin identity guard must return 401')
+
+
+def deploy_admin(source,sha,run_id,output):
+    """Image-only update of the admin portal from the same reviewed source; runtime settings are preserved."""
+    before=app(ADMIN)
+    origin='https://'+before['properties']['configuration']['ingress']['fqdn']
+    require(chunks(ADMIN_HOST+'/sign-in')==chunks(origin+'/sign-in'),'admin.craves.in is not served by '+ADMIN+'; deployment stopped')
+    old=resolve_image(image(before))
+    env=environment(app(WEB))
+    public={key:env[key]['value'] for key in FIREBASE if env.get(key,{}).get('value') and not env[key].get('secretRef')}
+    require(len(public)==len(FIREBASE),'Missing public admin build setting')
+    public.update(NEXT_PUBLIC_RAZORPAY_MODE='production',NEXT_PUBLIC_CRAVES_ALLOW_CATALOG_FALLBACK='false')
+    if env.get('NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY',{}).get('value'):public['NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY']=env['NEXT_PUBLIC_SYNCFUSION_LICENSE_KEY']['value']
+    target=build_image(source,'apps/customer-web-next','craves/admin-web',sha,public,dockerfile='Dockerfile.admin')
+    source_guard(source,sha,run_id)
+    current=app(ADMIN)
+    require(runtime.stable(current)==runtime.stable(before) and image(current)==image(before),'Concurrent admin runtime change; deployment stopped')
+    receipt={'app':ADMIN,'sourceSha':sha,'image':target,'previousImage':old}
+    output.write_text(json.dumps(receipt,indent=2)+'\n')
+    if image(current)!=target:azure('containerapp','update','-g',RG,'-n',ADMIN,'--image',target,'--no-wait')
+    try:
+        for attempt in range(120):
+            current=app(ADMIN)
+            require(runtime.stable(current)==runtime.stable(before),'Unrelated admin runtime setting changed; stop')
+            if admin_settled(current,target):
+                try:
+                    admin_verified(current);verify_image(image(current),sha)
+                    print(json.dumps({**receipt,'verified':True}),flush=True);return
+                except ValueError:pass
+            print('Waiting for the reviewed admin revision: '+str(attempt+1),flush=True);time.sleep(10)
+        raise ValueError('Admin deployment did not become verifiable within twenty minutes')
+    except Exception:
+        print('Restoring the previous admin image; other settings remain unchanged.',flush=True)
+        azure('containerapp','update','-g',RG,'-n',ADMIN,'--image',old,'--no-wait')
+        raise RuntimeError('Admin release failed; previous admin image restore requested, verify Azure revisions')
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--operation',choices=('preflight','backend','apim','web','activate'),default='preflight')
@@ -153,7 +216,9 @@ def main():
         run('bash',str(source/'scripts/apim/configure-chef-onboarding-v2-apim.sh'),env=dict(os.environ,CONFIRM_APIM_WRITE='true'))
         run('python3',str(source/'scripts/finance/configure_chef_ifsc_apim.py'),'--apply','--expected-source-sha',args.sha,'--output',str(args.output/'chef-ifsc-apim.json'))
         print('Chef onboarding and authenticated IFSC operations published.',flush=True)
-    elif args.operation=='web':applied(preflight());deploy_web(source,args.sha,args.regression_run,args.output/'chef-web.json')
+    elif args.operation=='web':
+        applied(preflight());deploy_web(source,args.sha,args.regression_run,args.output/'chef-web.json')
+        deploy_admin(source,args.sha,args.regression_run,args.output/'chef-admin.json')
     else:activate(args.sha,args.output/'chef-activation.json',args.allow_bank_unavailable)
 
 if __name__=='__main__':

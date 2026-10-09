@@ -145,7 +145,7 @@ def verify_image(image, sha):
     require(label == sha, "Running image is not the reviewed release source")
 
 
-def build_image(source, path, repo, sha, public=None):
+def build_image(source, path, repo, sha, public=None, dockerfile=None):
     image = LOGIN + "/" + repo + ":" + sha
     # Never silently replace a source tag. A previous verified build can be resumed.
     existing = subprocess.run(["az", "acr", "repository", "show", "-n", ACR, "--image", repo + ":" + sha,
@@ -157,6 +157,8 @@ def build_image(source, path, repo, sha, public=None):
     command = ["docker", "build", "--pull", "--label", "org.opencontainers.image.revision=" + sha, "-t", image]
     for key, value in (public or {}).items():
         command.extend(["--build-arg", key + "=" + value])
+    if dockerfile:
+        command.extend(["-f", str(source / path / dockerfile)])
     command.append(str(source / path))
     print("Building reviewed image for " + repo, flush=True)
     run(*command)

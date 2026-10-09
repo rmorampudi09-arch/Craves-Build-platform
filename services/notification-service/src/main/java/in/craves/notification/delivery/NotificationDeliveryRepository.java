@@ -146,7 +146,7 @@ public class NotificationDeliveryRepository {
             RETURNING request.id, request.recipient_identity_id, request.channel,
                       request.delivery_address, request.title, request.body,
                       request.target_type, request.target_id, request.priority,
-                      request.attempt_count
+                      request.attempt_count, request.recipient_role
             """;
         return jdbcTemplate.query(
             sql,
@@ -162,7 +162,8 @@ public class NotificationDeliveryRepository {
                 Map.of(),
                 rs.getInt("priority"),
                 rs.getInt("attempt_count"),
-                lockToken
+                lockToken,
+                rs.getString("recipient_role")
             ),
             channel, maxAttempts, staleLockMinutes, batchSize, lockToken
         );

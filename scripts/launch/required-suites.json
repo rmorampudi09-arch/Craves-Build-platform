@@ -20,6 +20,7 @@
       "AuthRequestReadConfigurationTest": 3,
       "AuthRequestReadTomcatTest": 2,
       "ConsumerSessionRegressionTest": 2,
+      "FailedLoginAuditDatabaseTest": 25,
       "EmailCanonicalPreservationTest": 2,
       "EmailVerificationControllerTest": 4,
       "EmailVerificationCryptoTest": 5,
@@ -160,6 +161,8 @@
       "SubscriptionPaymentServiceOwnershipTest": 6
     },
     "notification-service": {
+      "AcsEmailAdapterTest": 60,
+      "CustomerAdminEmailDeliveryDatabaseTest": 40,
       "RedisRevocationConsumerTest": 6,
       "AdminSessionRevocationWebConfigurationTest": 6,
       "AppNoticeCursorCodecTest": 2,

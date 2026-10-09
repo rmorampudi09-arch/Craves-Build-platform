@@ -117,9 +117,17 @@ jobs:
       DOCUMENT_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/pdf_module_test
       DOCUMENT_TEST_DB_USER: postgres
       DOCUMENT_TEST_DB_PASSWORD: postgres
+      NOTIFICATION_DELIVERY_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/notification_delivery_test
+      NOTIFICATION_DELIVERY_TEST_DB_USER: postgres
+      NOTIFICATION_DELIVERY_TEST_DB_PASSWORD: postgres
+      NOTIFICATION_DELIVERY_TEST_CONFIRM: YES_DISPOSABLE_NOTIFICATION_DELIVERY_ONLY
       ACADEMY_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/craves_academy_ci
       ACADEMY_TEST_DB_USER: postgres
       ACADEMY_TEST_DB_PASSWORD: postgres
+      AUTH_AUDIT_TEST_JDBC_URL: jdbc:postgresql://127.0.0.1:5432/auth_audit_test
+      AUTH_AUDIT_TEST_DB_USER: postgres
+      AUTH_AUDIT_TEST_DB_PASSWORD: postgres
+      AUTH_AUDIT_TEST_CONFIRM: YES_LOCAL_DISPOSABLE_AUTH_AUDIT_ONLY
       ADMIN_SESSION_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/craves_admin_session_ci
       ADMIN_SESSION_TEST_DB_USER: postgres
       ADMIN_SESSION_TEST_DB_PASSWORD: postgres
@@ -160,7 +168,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_ACTIONS" = true
           test "$CRAVES_DISPOSABLE_TEST_DATABASE" = true
-          for database in subscription_schema_test chef_ledger_test pdf_module_test craves_academy_ci craves_admin_session_ci delivery_feedback_test craves_refund_test craves_email_test catalog_finance_test craves_explorer_test referral_owner_test chef_onboarding_test; do
+          for database in subscription_schema_test chef_ledger_test pdf_module_test craves_academy_ci craves_admin_session_ci auth_audit_test delivery_feedback_test craves_refund_test craves_email_test catalog_finance_test craves_explorer_test referral_owner_test chef_onboarding_test notification_delivery_test; do
             createdb "$database"
             if [[ "$database" != subscription_schema_test ]]; then
               psql -X --set=ON_ERROR_STOP=1 --dbname="$database" --command='CREATE EXTENSION IF NOT EXISTS postgis;'

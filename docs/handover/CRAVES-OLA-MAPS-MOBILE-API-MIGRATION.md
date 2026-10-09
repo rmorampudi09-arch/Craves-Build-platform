@@ -217,7 +217,7 @@ Must not:
 
 | Setting | Where | Secret | Value |
 |---|---|---|---|
-| `OLA_MAPS_API_KEY` | `ca-craves-user-chef-service-prod`, `ca-craves-web-prodlow` | Yes | `secretref:ola-maps-api-key` (User/Chef: Key Vault reference; web: Container App secret) |
+| `OLA_MAPS_API_KEY` | `ca-craves-user-chef-service-prod`, `ca-craves-web-prodlow` | Yes | `secretref:ola-maps-api-key` -> Key Vault secret `ola-maps-api-key` |
 | `CRAVES_LOCATION_SEARCH_CENTER` | same apps | No | `17.3850,78.4867` |
 | `AZURE_MAPS_CLIENT_ID`, `AZURE_MAPS_ENDPOINT` | same apps | No | Retired; removed after the live Ola flows are verified (`operation=remove-azure-maps`) |
 

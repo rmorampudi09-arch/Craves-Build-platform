@@ -51,11 +51,11 @@ It never returns the Ola key, request URLs or raw provider bodies.
 Runtime environment variables on `ca-craves-web-prodlow` (and the same key on `ca-craves-user-chef-service-prod` for the mobile APIs):
 
 ```text
-OLA_MAPS_API_KEY=secretref:ola-maps-api-key      # secret: Container App secret (Key Vault reference where the app can read the vault)
+OLA_MAPS_API_KEY=secretref:ola-maps-api-key      # secret: Key Vault reference to ola-maps-api-key
 CRAVES_LOCATION_SEARCH_CENTER=17.3850,78.4867    # optional, not secret
 ```
 
-Bind them with `azure-pipelines-customer-location-ola-maps.yml` (`operation=bind`) after the key exists as `ola-maps-api-key`: in the User/Chef Key Vault, and as a Container App secret on the web app (its identity has no Key Vault access; `bind` reuses an existing app secret). The Ola credential's allowed domains must include `craves.in`; server calls identify themselves with `Origin: https://craves.in`.
+Bind them with `azure-pipelines-customer-location-ola-maps.yml` (`operation=bind`) after the key exists as `ola-maps-api-key` in the Key Vault User/Chef already uses. `bind` checks that each app identity can read it; an app that cannot may instead get an operator-created Container App secret of that name (never on User/Chef, whose releases require Key Vault-backed secrets). The Ola credential's allowed domains must include `craves.in`; server calls identify themselves with `Origin: https://craves.in`.
 
 ## Accuracy rule
 

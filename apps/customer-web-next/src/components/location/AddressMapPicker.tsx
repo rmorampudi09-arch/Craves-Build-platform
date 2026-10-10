@@ -77,11 +77,12 @@ function InteractiveAddressMap({
       if (!disposed) callbacksRef.current.onUnavailable();
     };
     const loadTimer = setTimeout(giveUp, LOAD_TIMEOUT_MS);
-    const start = knownCenterRef.current;
 
     void import("maplibre-gl")
       .then(({ Map, AttributionControl, getVersion, setWorkerUrl }) => {
         if (disposed || !containerRef.current) return;
+        // Read now, not at mount: the host may have moved the pin while the library loaded.
+        const start = knownCenterRef.current;
         // maplibre-gl 6 ships its worker separately; app/vendor/maplibre-gl-worker.mjs serves it same-origin.
         setWorkerUrl(`/vendor/maplibre-gl-worker.mjs?v=${getVersion()}`);
         map = new Map({
@@ -105,6 +106,7 @@ function InteractiveAddressMap({
         });
         mapRef.current = map;
         map.touchZoomRotate.disableRotation();
+        map.keyboard.disableRotation();
         map.addControl(
           new AttributionControl({
             compact: false,
@@ -115,15 +117,30 @@ function InteractiveAddressMap({
         );
         map.getCanvas().setAttribute("aria-label", ariaLabel);
 
-        let drawn = false;
+        let styleArrived = false;
+        let tilesDrawn = 0;
+        let failures = 0;
+        map.once("style.load", () => {
+          styleArrived = true;
+        });
+        map.on("sourcedata", (event) => {
+          if (event.tile) tilesDrawn += 1;
+        });
         map.once("load", () => {
-          drawn = true;
           clearTimeout(loadTimer);
-          if (!disposed) setReady(true);
+          // Nothing drew and requests failed (e.g. every tile refused upstream): static beats empty.
+          if (tilesDrawn === 0 && failures > 0) giveUp();
+          else if (!disposed) setReady(true);
         });
         map.on("error", () => {
-          // Before the first draw an error means no style (proxy or WebGL); later ones are single tiles.
-          if (!drawn) giveUp();
+          // Only a style that never arrived is fatal; a failed tile, glyph or sprite just leaves a gap.
+          if (!styleArrived) {
+            giveUp();
+            return;
+          }
+          failures += 1;
+          // A failed request schedules no frame, and "load" is only checked while drawing one.
+          map?.triggerRepaint();
         });
         map.on("movestart", (event: MapLibreEvent) => {
           if (!event.originalEvent) return;
@@ -169,7 +186,8 @@ function InteractiveAddressMap({
     const center = map.getCenter();
     if (sameCenter(next, { latitude: center.lat, longitude: center.lng })) return;
     map.easeTo({ center: [longitude, latitude], duration: prefersReducedMotion() ? 0 : 650 });
-  }, [latitude, longitude, ready]);
+    // Not keyed on `ready`: that would pull back a drag made while the tiles were still loading.
+  }, [latitude, longitude]);
 
   useEffect(() => {
     const map = mapRef.current;

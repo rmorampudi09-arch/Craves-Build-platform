@@ -14,18 +14,27 @@ let phoneConfirmation: Awaited<ReturnType<typeof signInWithPhoneNumber>> | null 
 
 export const firebaseAuth = {
   async beginPhoneSignIn(e164PhoneNumber: string): Promise<void> {
+    phoneConfirmation = null;
     phoneConfirmation = await signInWithPhoneNumber(getAuth(), e164PhoneNumber);
   },
   async confirmOtp(code: string): Promise<string> {
     if (!phoneConfirmation) {
       throw new Error('OTP_CHALLENGE_MISSING');
     }
-    const credential = await phoneConfirmation.confirm(code);
-    if (!credential?.user) {
-      throw new Error('OTP_CONFIRMATION_FAILED');
+    try {
+      const credential = await phoneConfirmation.confirm(code);
+      if (!credential?.user) {
+        phoneConfirmation = null;
+        throw new Error('OTP_CONFIRMATION_FAILED');
+      }
+      phoneConfirmation = null;
+      return getIdToken(credential.user, true);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'OTP_CONFIRMATION_FAILED') {
+        throw error;
+      }
+      throw error;
     }
-    phoneConfirmation = null;
-    return getIdToken(credential.user, true);
   },
   async signInWithEmail(email: string, password: string): Promise<string> {
     const credential = await signInWithEmailAndPassword(getAuth(), email.trim(), password);

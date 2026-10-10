@@ -86,6 +86,30 @@ for (const action of actions) {
   if (!validAuth.has(action.auth)) fail(`${action.id} has unsupported auth mode ${action.auth}.`);
   if (!action.path.startsWith('/api/v1/')) fail(`${action.id} is not an APIM /api/v1 route: ${action.path}`);
   if (/^https?:\/\//i.test(action.path)) fail(`${action.id} contains an absolute endpoint URL.`);
+  if (/\/mobile-contract\/|mobile-contract/i.test(action.path)) {
+    fail(`${action.id} uses a synthetic mobile-contract placeholder route: ${action.path}`);
+  }
+  if (/[\r\n`$]|\$\{/.test(action.path)) {
+    fail(`${action.id} contains an unresolved template fragment or unsafe control character: ${JSON.stringify(action.path)}`);
+  }
+  if (/\{value\}\{value\}/.test(action.path)) {
+    fail(`${action.id} contains adjacent unresolved path/query placeholders: ${action.path}`);
+  }
+  if (!/^\/api\/v1\/[A-Za-z0-9/_{}.-]+(?:\?[A-Za-z0-9_&={}.:-]+)?$/.test(action.path)) {
+    fail(`${action.id} contains characters outside the published mobile APIM route grammar: ${action.path}`);
+  }
+  if (action.requestModel !== `${action.id}.request`) {
+    fail(`${action.id} requestModel must be ${action.id}.request.`);
+  }
+  if (action.responseModel !== `${action.id}.response`) {
+    fail(`${action.id} responseModel must be ${action.id}.response.`);
+  }
+  if (action.requestValidator !== `${action.id}.requestValidator`) {
+    fail(`${action.id} requestValidator must be ${action.id}.requestValidator.`);
+  }
+  if (action.responseValidator !== `${action.id}.responseValidator`) {
+    fail(`${action.id} responseValidator must be ${action.id}.responseValidator.`);
+  }
 
   const sourcePath = path.join(mobileRoot, action.source);
   if (!fs.existsSync(sourcePath)) {

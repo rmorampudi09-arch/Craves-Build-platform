@@ -59,6 +59,6 @@ it("verifies a successful retry after Razorpay reports a declined first attempt"
   await waitFor(() => expect(fetch).toHaveBeenCalledWith(
     `/api/subscription-payments/invoices/${INVOICE_ID}/verify`, expect.anything()));
   expect(theme).toBe("#F62E18");
-  expect(await screen.findByText(/meal plan is active|subscription is active/i)).toBeTruthy();
+  expect(await screen.findByRole("heading", { name: "Your meal plan is active" })).toBeTruthy();
   expect(screen.queryByText("Card declined.")).toBeNull();
 });

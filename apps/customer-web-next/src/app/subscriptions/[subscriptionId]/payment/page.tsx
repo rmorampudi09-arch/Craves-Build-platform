@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { SubscriptionRazorpayPayment } from "@/components/subscription-razorpay-payment";
 import { isUuid } from "@/lib/server-api";
+import { MealPlanPage } from "../../meal-plan-page";
 
 export const metadata = {
-  title: "Meal plan payment | Craves",
+  title: "Pay for your meal plan | Craves",
   robots: { index: false, follow: false },
 };
 
@@ -15,25 +15,19 @@ export default async function SubscriptionPaymentPage({
   const { subscriptionId } = await params;
 
   return (
-    <main className="mx-auto min-h-screen max-w-3xl px-5 py-12 sm:px-8">
-      <Link href="/subscriptions" className="text-sm font-semibold text-[#F6B545]">
-        ← My meal plans
-      </Link>
-      <h1 className="mt-8 text-4xl font-bold text-[#1A1A1A] sm:text-5xl">
-        Complete your meal-plan payment.
-      </h1>
-      <p className="mt-4 text-slate-300">
-        Razorpay handles payment details securely. Craves confirms the signed payment result before activating the subscription.
-      </p>
-      <div className="mt-8">
-        {isUuid(subscriptionId) ? (
-          <SubscriptionRazorpayPayment subscriptionId={subscriptionId} />
-        ) : (
-          <section className="rounded-[28px] bg-[#FFF8EC] p-6 text-slate-950">
-            Invalid subscription ID.
-          </section>
-        )}
-      </div>
-    </main>
+    <MealPlanPage
+      title="Pay for your meal plan"
+      intro="You’ll pay securely with Razorpay. Your plan starts as soon as we confirm the payment."
+      back="/subscriptions"
+      backLabel="Back to your meal plans"
+    >
+      {isUuid(subscriptionId) ? (
+        <SubscriptionRazorpayPayment subscriptionId={subscriptionId} />
+      ) : (
+        <p className="rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]">
+          We couldn’t find this meal plan.
+        </p>
+      )}
+    </MealPlanPage>
   );
 }

@@ -6,7 +6,17 @@ import { parseCustomerSubscription, type CustomerSubscription } from "@/lib/subs
 import {
   parseSubscriptionPayment,
   type SubscriptionPayment,
+  type SubscriptionPaymentStatus,
 } from "@/lib/subscription-payment-contract";
+import { MEAL_PLAN_STATUS, planDay } from "@/lib/meal-plan-copy";
+
+const PAYMENT_STATUS: Record<SubscriptionPaymentStatus, string> = {
+  PAYMENT_REQUESTED: "Waiting for payment",
+  PAYMENT_PENDING: "Confirming payment",
+  PAID: "Paid",
+  FAILED: "Didn’t go through",
+};
+const START_FAILED = "We couldn’t start the payment. Nothing was charged. Please try again.";
 
 declare global {
   interface Window {
@@ -75,10 +85,10 @@ async function loadSubscription(subscriptionId: string): Promise<CustomerSubscri
   });
   const body = await response.json().catch(() => null);
   if (response.status === 401) throw new Error("Your session expired. Sign in again.");
-  if (!response.ok) throw new Error(responseMessage(body, "Meal subscription could not be loaded."));
+  if (!response.ok) throw new Error(responseMessage(body, "We couldn’t load your meal plan. Please try again."));
   const subscription = parseCustomerSubscription(body);
   if (!subscription || subscription.id !== subscriptionId) {
-    throw new Error("Craves returned an invalid subscription response.");
+    throw new Error("We couldn’t load your meal plan. Please try again.");
   }
   return subscription;
 }
@@ -91,10 +101,10 @@ async function loadPayment(subscriptionId: string): Promise<SubscriptionPayment 
   const body = await response.json().catch(() => null);
   if (response.status === 404) return null;
   if (response.status === 401) throw new Error("Your session expired. Sign in again.");
-  if (!response.ok) throw new Error(responseMessage(body, "Subscription payment status is temporarily unavailable."));
+  if (!response.ok) throw new Error(responseMessage(body, "We couldn’t check the payment right now. Please try again."));
   const payment = parseSubscriptionPayment(body);
   if (!payment || payment.subscriptionId !== subscriptionId) {
-    throw new Error("Craves returned an invalid subscription payment response.");
+    throw new Error("We couldn’t check the payment right now. Please try again.");
   }
   return payment;
 }
@@ -104,7 +114,7 @@ export function SubscriptionRazorpayPayment({ subscriptionId }: { subscriptionId
   const [payment, setPayment] = useState<SubscriptionPayment | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("Preparing your meal-plan payment…");
+  const [message, setMessage] = useState("Getting your bill ready…");
   const [error, setError] = useState("");
 
   const waitForActivation = useCallback(async () => {
@@ -112,7 +122,7 @@ export function SubscriptionRazorpayPayment({ subscriptionId }: { subscriptionId
       const current = await loadSubscription(subscriptionId);
       setSubscription(current);
       if (current.status === "ACTIVE") {
-        setMessage("Payment confirmed. Your meal subscription is active.");
+        setMessage("Payment confirmed.");
         return current;
       }
       if (current.status === "CANCELLED" || current.status === "EXPIRED") {
@@ -120,27 +130,27 @@ export function SubscriptionRazorpayPayment({ subscriptionId }: { subscriptionId
       }
       await sleep(ACTIVATION_WAIT_MS);
     }
-    setMessage("Payment is confirmed. Craves is finishing subscription activation; use Refresh if the status has not updated yet.");
+    setMessage("Payment confirmed. We’re starting your meal plan — check again in a minute if this doesn’t update.");
     return null;
   }, [subscriptionId]);
 
   const waitForInvoice = useCallback(async () => {
-    setMessage("Your subscription was created. Craves is preparing the first billing invoice…");
+    setMessage("Getting your bill ready…");
     for (let attempt = 0; attempt < INVOICE_ATTEMPTS; attempt += 1) {
       const current = await loadPayment(subscriptionId);
       if (current) {
         setPayment(current);
         setMessage(
           current.status === "PAID"
-            ? "Payment is confirmed. Checking subscription activation…"
-            : "Your invoice is ready. Continue with Razorpay when you are ready.",
+            ? "Payment confirmed. Starting your meal plan…"
+            : "Your bill is ready. Pay when you’re ready.",
         );
         if (current.status === "PAID") await waitForActivation();
         return current;
       }
       await sleep(INVOICE_WAIT_MS);
     }
-    setMessage("The billing invoice is still being prepared. Nothing was charged. Use Refresh invoice to check again.");
+    setMessage("Your bill is still being prepared. Nothing has been charged — check again in a minute.");
     return null;
   }, [subscriptionId, waitForActivation]);
 
@@ -151,16 +161,16 @@ export function SubscriptionRazorpayPayment({ subscriptionId }: { subscriptionId
       const current = await loadSubscription(subscriptionId);
       setSubscription(current);
       if (current.status === "ACTIVE") {
-        setMessage("This meal subscription is already active.");
+        setMessage(""); // The heading already says the plan is active.
         return;
       }
       if (current.status === "CANCELLED" || current.status === "EXPIRED") {
-        setMessage("This subscription is not payable in its current status.");
+        setMessage("This meal plan has ended, so there’s nothing to pay.");
         return;
       }
       await waitForInvoice();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Subscription payment could not be prepared.");
+      setError(caught instanceof Error ? caught.message : "We couldn’t get your bill ready. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -180,15 +190,15 @@ export function SubscriptionRazorpayPayment({ subscriptionId }: { subscriptionId
       const currentPayment = await loadPayment(subscriptionId);
       setPayment(currentPayment);
       if (!currentPayment) {
-        setMessage("The billing invoice is still being prepared. Nothing was charged.");
+        setMessage("Your bill is still being prepared. Nothing has been charged.");
       } else if (currentPayment.status === "PAID") {
-        setMessage("Payment is confirmed. Checking subscription activation…");
+        setMessage("Payment confirmed. Starting your meal plan…");
         await waitForActivation();
       } else {
-        setMessage(`Current payment status: ${currentPayment.status.replaceAll("_", " ").toLowerCase()}.`);
+        setMessage(`Payment: ${PAYMENT_STATUS[currentPayment.status].toLowerCase()}.`);
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Subscription payment status could not be refreshed.");
+      setError(caught instanceof Error ? caught.message : "We couldn’t check the payment right now. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -215,7 +225,7 @@ export function SubscriptionRazorpayPayment({ subscriptionId }: { subscriptionId
     try {
       let currentPayment = payment ?? await waitForInvoice();
       if (!currentPayment) {
-        throw new Error("The billing invoice is not ready yet. Refresh the invoice and try again.");
+        throw new Error("Your bill isn’t ready yet. Check again in a minute.");
       }
       if (currentPayment.status === "PAID") {
         await waitForActivation();
@@ -233,10 +243,10 @@ export function SubscriptionRazorpayPayment({ subscriptionId }: { subscriptionId
       );
       const body = await response.json().catch(() => null);
       if (response.status === 401) throw new Error("Your session expired. Sign in again.");
-      if (!response.ok) throw new Error(responseMessage(body, "Razorpay payment order could not be created."));
+      if (!response.ok) throw new Error(responseMessage(body, START_FAILED));
       const ordered = parseSubscriptionPayment(body);
       if (!ordered || ordered.subscriptionId !== subscriptionId || ordered.invoiceId !== currentPayment.invoiceId) {
-        throw new Error("Craves returned an invalid Razorpay subscription payment response.");
+        throw new Error(START_FAILED);
       }
       currentPayment = ordered;
       setPayment(ordered);
@@ -246,10 +256,10 @@ export function SubscriptionRazorpayPayment({ subscriptionId }: { subscriptionId
         return;
       }
       if (!ordered.checkoutKeyId || !ordered.providerOrderId) {
-        throw new Error("Razorpay did not return a valid checkout session. Nothing was charged.");
+        throw new Error(START_FAILED);
       }
 
-      setMessage("Opening secure Razorpay checkout.");
+      setMessage("Opening Razorpay…");
       await loadRazorpay();
       if (!window.Razorpay) throw new Error("Razorpay checkout is unavailable.");
       // Razorpay stays open after a declined attempt so the customer can retry
@@ -290,22 +300,23 @@ export function SubscriptionRazorpayPayment({ subscriptionId }: { subscriptionId
           providerPaymentId: result.razorpay_payment_id, providerSignature: result.razorpay_signature }),
       });
       const verificationBody = await verificationResponse.json().catch(() => null);
-      if (!verificationResponse.ok) throw new Error(responseMessage(verificationBody, "Razorpay payment verification failed."));
+      const unconfirmed = "We couldn’t confirm the payment yet. Please don’t pay again — check the status in a minute.";
+      if (!verificationResponse.ok) throw new Error(responseMessage(verificationBody, unconfirmed));
       const verified = parseSubscriptionPayment(verificationBody);
-      if (!verified || verified.invoiceId !== ordered.invoiceId) throw new Error("Craves returned an invalid verification response.");
+      if (!verified || verified.invoiceId !== ordered.invoiceId) throw new Error(unconfirmed);
       setPayment(verified);
-      setMessage("Razorpay checkout completed. Confirming subscription activation…");
+      setMessage("Payment received. Confirming…");
       const settled = await pollPaymentAfterCheckout();
       if (settled?.status === "PAID") {
-        setMessage("Payment confirmed. Activating your meal subscription…");
+        setMessage("Payment confirmed. Starting your meal plan…");
         await waitForActivation();
       } else if (settled?.status === "FAILED") {
-        setMessage("The payment was not completed. You can retry safely; no successful charge was recorded.");
+        setMessage("The payment didn’t go through. You haven’t been charged — you can try again.");
       } else {
-        setMessage("Razorpay confirmation is still pending. Use Refresh payment status; do not create a second subscription.");
+        setMessage("We’re still confirming your payment. Please don’t pay again — check the status in a minute.");
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Razorpay checkout could not be opened.");
+      setError(caught instanceof Error ? caught.message : START_FAILED);
     } finally {
       setBusy(false);
     }
@@ -316,78 +327,71 @@ export function SubscriptionRazorpayPayment({ subscriptionId }: { subscriptionId
   const paid = payment?.status === "PAID";
   const canPay = !loading && !active && !terminal && payment !== null && !paid;
 
-  return (
-    <section className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950 shadow-xl shadow-black/10 sm:p-8">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930CA]">Meal-plan payment · Razorpay secure checkout</p>
-      <h2 className="mt-3 text-3xl font-bold">
-        {active ? "Subscription active" : paid ? "Payment confirmed" : "Complete your meal-plan payment"}
-      </h2>
-      <p className="mt-3 text-sm leading-6 text-slate-600">
-        Card, UPI and banking details stay inside Razorpay hosted checkout. Craves verifies every payment server-side.
-      </p>
+  const linkClass =
+    "inline-flex min-h-11 items-center justify-center rounded-full bg-[#F1F3F5] px-5 text-sm font-bold text-[#1A1A1A]";
 
-      <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
-        <div className="rounded-2xl bg-white p-4">
-          <dt className="text-slate-500">Subscription status</dt>
-          <dd className="mt-1 font-semibold">{subscription?.status.replaceAll("_", " ") ?? "Loading"}</dd>
+  return (
+    <section className="max-w-2xl rounded-2xl border border-[#E5E7EB] bg-white p-5 text-[#1A1A1A] sm:p-6">
+      <h2 className="text-xl font-bold">
+        {active ? "Your meal plan is active" : paid ? "Payment confirmed" : "Your bill"}
+      </h2>
+
+      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+        <div className="rounded-xl bg-[#F1F3F5] p-4">
+          <dt className="text-[#6B6B6B]">Meal plan</dt>
+          <dd className="mt-1 font-semibold">{subscription ? MEAL_PLAN_STATUS[subscription.status] : "Loading…"}</dd>
         </div>
-        <div className="rounded-2xl bg-white p-4">
-          <dt className="text-slate-500">Payment status</dt>
-          <dd className="mt-1 font-semibold">{payment?.status.replaceAll("_", " ") ?? "Invoice pending"}</dd>
+        <div className="rounded-xl bg-[#F1F3F5] p-4">
+          <dt className="text-[#6B6B6B]">Payment</dt>
+          <dd className="mt-1 font-semibold">{payment ? PAYMENT_STATUS[payment.status] : "Bill being prepared"}</dd>
         </div>
         {payment && (
           <>
-            <div className="rounded-2xl bg-white p-4">
-              <dt className="text-slate-500">Amount</dt>
+            <div className="rounded-xl bg-[#F1F3F5] p-4">
+              <dt className="text-[#6B6B6B]">Amount</dt>
               <dd className="mt-1 font-semibold">{money(payment.amount, payment.currency)}</dd>
             </div>
-            <div className="rounded-2xl bg-white p-4">
-              <dt className="text-slate-500">Billing cycle</dt>
-              <dd className="mt-1 font-semibold">{payment.cycleStart} → {payment.cycleEnd}</dd>
+            <div className="rounded-xl bg-[#F1F3F5] p-4">
+              <dt className="text-[#6B6B6B]">Covers</dt>
+              <dd className="mt-1 font-semibold">{planDay(payment.cycleStart)} – {planDay(payment.cycleEnd)}</dd>
             </div>
           </>
         )}
       </dl>
 
-      {message && <p role="status" className="mt-5 rounded-2xl bg-white p-4 text-sm leading-6 text-slate-600">{message}</p>}
-      {error && <p role="alert" className="mt-5 rounded-2xl border border-red-200 bg-white p-4 text-sm font-semibold text-red-700">{error}</p>}
+      {message && <p role="status" className="mt-5 text-sm leading-6 text-[#1A1A1A]">{message}</p>}
+      {error && <p role="alert" className="mt-4 rounded-xl bg-[#F1F3F5] p-3 text-sm font-medium text-[#C4200F]">{error}</p>}
 
       <div className="mt-6 flex flex-wrap gap-3">
         {canPay && (
           <button
             type="button"
             disabled={busy}
+            aria-busy={busy}
             onClick={() => void openRazorpay()}
-            className="rounded-2xl bg-[#6930CA] px-5 py-3 font-bold text-white disabled:opacity-50"
+            className="craves-primary-action w-full sm:w-auto"
           >
-            {busy ? "Processing…" : payment?.status === "FAILED" ? "Retry with Razorpay" : "Pay with Razorpay"}
+            {busy
+              ? "Processing…"
+              : payment?.status === "FAILED"
+                ? "Try payment again"
+                : payment
+                  ? `Pay ${money(payment.amount, payment.currency)}`
+                  : "Pay"}
           </button>
         )}
-        {!active && !terminal && !payment && (
+        {!active && !terminal && (
           <button
             type="button"
             disabled={busy || loading}
             onClick={() => void refreshInvoice()}
-            className="rounded-2xl border border-[#6930CA] px-5 py-3 font-bold text-[#6930CA] disabled:opacity-50"
+            className="min-h-11 rounded-full !border-0 !bg-[#F1F3F5] px-5 text-sm font-bold !text-[#1A1A1A] !shadow-none"
           >
-            Refresh invoice
+            {payment ? "Check payment status" : "Check again"}
           </button>
         )}
-        {payment && !active && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void refreshInvoice()}
-            className="rounded-2xl border border-[#6930CA] px-5 py-3 font-bold text-[#6930CA] disabled:opacity-50"
-          >
-            Refresh payment status
-          </button>
-        )}
-        <Link href={`/subscriptions/${subscriptionId}`} className="rounded-2xl border border-slate-300 px-5 py-3 font-bold text-slate-700">
-          Subscription details
-        </Link>
-        <Link href="/subscriptions" className="rounded-2xl border border-slate-300 px-5 py-3 font-bold text-slate-700">
-          My meal plans
+        <Link href={`/subscriptions/${subscriptionId}`} className={linkClass}>
+          Plan details
         </Link>
       </div>
     </section>

@@ -27,7 +27,8 @@ const LOAD_TIMEOUT_MS = 12_000;
 const SAME_POINT = 1e-6;
 
 const sameCenter = (a: Coordinate, b: Coordinate) =>
-  Math.abs(a.latitude - b.latitude) < SAME_POINT && Math.abs(a.longitude - b.longitude) < SAME_POINT;
+  Math.abs(a.latitude - b.latitude) < SAME_POINT &&
+  Math.abs(a.longitude - b.longitude) < SAME_POINT;
 
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -263,7 +264,10 @@ function InteractiveAddressMap({
               <span className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 bg-[#1A1A1A]" />
             </span>
           ) : null}
-          <svg viewBox="0 0 40 52" className="h-[52px] w-10 drop-shadow-[0_8px_10px_rgba(26,26,26,0.28)]">
+          <svg
+            viewBox="0 0 40 52"
+            className="h-[52px] w-10 drop-shadow-[0_8px_10px_rgba(26,26,26,0.28)]"
+          >
             <path
               d="M20 51c-1.1 0-2.1-.6-2.7-1.6C11.4 39.6 2 30.6 2 19.8 2 9.4 10.1 1 20 1s18 8.4 18 18.8c0 10.8-9.4 19.8-15.3 29.6-.6 1-1.6 1.6-2.7 1.6z"
               fill="#F62E18"

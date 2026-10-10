@@ -1,6 +1,7 @@
 "use client";
 
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Clock3, Plus, RefreshCw, Store, Undo2 } from "lucide-react";
 import { loadSession } from "@/services/auth/cravesAuth";
@@ -22,11 +23,14 @@ import { EmptyCartState } from "@/components/cart/EmptyCartState";
 import { CartItemList } from "@/components/cart/CartItemList";
 import { CartCheckoutBar } from "@/components/cart/CartCheckoutBar";
 import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
+import { ease } from "@/lib/motion";
 
 const CHECKOUT_ID_KEY = "craves.checkout.id";
 const CHECKOUT_OPERATION_ID_KEY = "craves.checkout.operationId";
 const INSTRUCTIONS_KEY = "craves.checkout.instructions";
 const CART_NOTICE_KEY = "craves.cart.notice";
+/** Long enough to read and reach; paused while the snackbar is hovered or focused. */
+const UNDO_VISIBLE_MS = 8_000;
 
 export const routeMeta = {
   head: () => ({
@@ -54,6 +58,8 @@ async function resolveLeadMinutes(items: CartItem[]): Promise<number | null> {
 function CartPage() {
   const navigate = useNavigate();
   const undoTimerRef = useRef<number | null>(null);
+  const undoRemainingRef = useRef(UNDO_VISIBLE_MS);
+  const undoStartedAtRef = useRef(0);
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -119,15 +125,31 @@ function CartPage() {
     window.sessionStorage.setItem(INSTRUCTIONS_KEY, value);
   }
 
-  function showUndo(item: CartItem) {
-    setUndoItem(item);
-    if (undoTimerRef.current !== null) {
-      window.clearTimeout(undoTimerRef.current);
-    }
+  function startUndoTimer(ms: number) {
+    if (undoTimerRef.current !== null) window.clearTimeout(undoTimerRef.current);
+    undoRemainingRef.current = ms;
+    undoStartedAtRef.current = Date.now();
     undoTimerRef.current = window.setTimeout(() => {
       setUndoItem(null);
       undoTimerRef.current = null;
-    }, 5_000);
+    }, ms);
+  }
+
+  function pauseUndoTimer() {
+    if (undoTimerRef.current === null) return;
+    window.clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = null;
+    undoRemainingRef.current -= Date.now() - undoStartedAtRef.current;
+  }
+
+  function resumeUndoTimer() {
+    if (undoTimerRef.current !== null || !undoItem) return;
+    startUndoTimer(Math.max(undoRemainingRef.current, 2_000));
+  }
+
+  function showUndo(item: CartItem) {
+    setUndoItem(item);
+    startUndoTimer(UNDO_VISIBLE_MS);
   }
 
   // The row leaves at once; if Craves refuses, the cart service brings it back.
@@ -264,13 +286,14 @@ function CartPage() {
               />
 
               {kitchenId ? (
-                <a
-                  href={`/kitchen/${kitchenId}`}
-                  className="flex min-h-12 items-center gap-2 border-t border-[#F1F3F5] py-3 text-sm font-semibold text-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+                <Link
+                  to="/kitchen/$id"
+                  params={{ id: kitchenId }}
+                  className="flex min-h-12 items-center gap-2 border-t border-[#F1F3F5] py-3 text-sm font-semibold text-[#C4200F] transition-opacity duration-(--dur-micro) active:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
                 >
                   <Plus className="h-4 w-4" aria-hidden="true" />
                   Add more from this kitchen
-                </a>
+                </Link>
               ) : null}
             </section>
 
@@ -292,8 +315,8 @@ function CartPage() {
               </p>
             </section>
 
-            <section className="flex items-start gap-3 rounded-[8px] border border-[#F6B545]/35 bg-[#FFF8EC] p-4">
-              <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-[#F6A800]" aria-hidden="true" />
+            <section className="flex items-start gap-3 rounded-[8px] border border-[#E5E7EB] bg-[#F1F3F5] p-4">
+              <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" />
               <div>
                 <p className="text-sm font-semibold text-[#1A1A1A]">
                   This kitchen cooks your order fresh.
@@ -311,25 +334,39 @@ function CartPage() {
         {message && items.length > 0 ? (
           <p
             role="alert"
-            className="mt-4 rounded-[8px] border border-[#F62E18]/20 bg-[#F62E18]/5 p-3 text-sm font-medium text-[#C92716]"
+            className="mt-4 rounded-[8px] border border-[#F62E18]/20 bg-[#F1F3F5] p-3 text-sm font-medium text-[#C4200F]"
           >
             {message}
           </p>
         ) : null}
       </main>
 
-      {undoItem ? (
-        <div className="fixed inset-x-4 bottom-[calc(6.75rem+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl items-center gap-3 rounded-[8px] bg-[#1A1A1A] px-4 py-3 text-sm text-white shadow-xl">
-          <span className="min-w-0 flex-1 truncate">{undoItem.name} removed from cart</span>
-          <button
-            type="button"
-            onClick={() => void undoRemoval()}
-            className="inline-flex min-h-12 items-center gap-1.5 rounded-lg px-2 font-semibold text-[#F6B545] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+      <AnimatePresence>
+        {undoItem ? (
+          <motion.div
+            key="cart-undo"
+            role="status"
+            aria-live="polite"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0, transition: { duration: 0.2, ease: ease.out } }}
+            exit={{ opacity: 0, y: 16, transition: { duration: 0.15, ease: ease.in } }}
+            onPointerEnter={pauseUndoTimer}
+            onPointerLeave={resumeUndoTimer}
+            onFocus={pauseUndoTimer}
+            onBlur={resumeUndoTimer}
+            className="fixed inset-x-4 bottom-[calc(6.75rem+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl items-center gap-3 rounded-[8px] bg-[#1A1A1A] px-4 py-3 text-sm text-white shadow-xl"
           >
-            <Undo2 className="h-4 w-4" aria-hidden="true" /> Undo
-          </button>
-        </div>
-      ) : null}
+            <span className="min-w-0 flex-1 truncate">{undoItem.name} removed from cart</span>
+            <button
+              type="button"
+              onClick={() => void undoRemoval()}
+              className="inline-flex min-h-12 items-center gap-1.5 rounded-lg !border-transparent !bg-transparent px-2 font-bold !text-white !shadow-none transition-[background-color] duration-(--dur-micro) active:!bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+            >
+              <Undo2 className="h-4 w-4" aria-hidden="true" /> Undo
+            </button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {!loading && items.length > 0 ? (
         <CartCheckoutBar

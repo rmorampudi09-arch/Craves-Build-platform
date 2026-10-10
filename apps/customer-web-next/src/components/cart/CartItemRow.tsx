@@ -26,7 +26,7 @@ export function CartItemRow({
   onRemove,
 }: CartItemRowProps) {
   return (
-    <article className="grid grid-cols-[4.75rem_minmax(0,1fr)] gap-3 border-b border-[#F1F3F5] bg-white py-4 last:border-b-0 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-center">
+    <article className="grid grid-cols-[4.75rem_minmax(0,1fr)] gap-3 bg-white py-4 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-center">
       <div className="relative flex aspect-square w-[4.75rem] items-center justify-center overflow-hidden rounded-[8px] bg-[#F1F3F5] sm:w-[5.5rem]">
         <img
           src={item.img}

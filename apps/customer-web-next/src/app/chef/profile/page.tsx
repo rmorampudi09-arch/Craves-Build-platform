@@ -3,7 +3,7 @@
 import { chefApiError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BadgeIndianRupee, Bell, CalendarDays, ChevronRight, FileCheck2, MapPin, Store, UserRound } from "lucide-react";
+import { BadgeIndianRupee, Bell, CalendarDays, ChevronRight, FileCheck2, LifeBuoy, MapPin, Store, UserRound } from "lucide-react";
 import { ChefAccessBoundary } from "@/components/chef-access-boundary";
 import { ChefPageHeader } from "@/components/chef-page-header";
 
@@ -31,6 +31,7 @@ function ProfileContent(){
   {href:"/chef/meal-plans",icon:CalendarDays,title:"Meal Plans",desc:"Manage your dishes, schedules and availability"},
   {href:"/notifications",icon:Bell,title:"Notifications",desc:"Orders, payments and account updates"},
   {href:"/chef/application",icon:FileCheck2,title:"Documents & verification",desc:application?.status==="APPROVED"?"Application approved":"View your verification status"},
+  {href:"/chef/support",icon:LifeBuoy,title:"Help & support",desc:"Chat with Craves support about orders, payouts or your kitchen"},
  ];
  return <div className="space-y-5">
    <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 sm:p-8">

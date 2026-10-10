@@ -18,10 +18,18 @@ type Props = {
 const inputClass = "mt-2 min-h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10 disabled:opacity-50";
 const buttonClass = "min-h-10 rounded-xl border border-[#E5E7EB] bg-[#F1F3F5] px-4 text-xs font-black text-[#1A1A1A] hover:bg-white disabled:opacity-50";
 
+function matchesVerifiedEmail(state: EmailVerificationState | null, email: string | null) {
+  return email !== null && chefEmailEligible(state) && !state?.pending &&
+    state?.email?.trim().toLocaleLowerCase("en-IN") === email.trim().toLocaleLowerCase("en-IN");
+}
+
 export function EmailVerificationPanel({ initialEmail = "", required = false, compact = false, variant = "default", onStateChange, onVerified }: Props) {
   const id = useId();
   const [state, setState] = useState<EmailVerificationState | null>(null);
   const [email, setEmail] = useState(initialEmail);
+  // Responses expose only a masked pending recipient, including after sends/retries.
+  // Never infer that it belongs to the draft: another tab may have replaced it.
+  const [editing, setEditing] = useState(false);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
@@ -31,6 +39,7 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
   const [clock, setClock] = useState({ now: 0, started: 0, server: 0 });
   const [context, setContext] = useState(captureSessionContext);
   const inFlight = useRef(false);
+  const editedDraft = useRef<string | null>(null);
   const controller = useRef<AbortController | null>(null);
   const callbacks = useRef({ onStateChange, onVerified });
   const observedContext = useRef(context);
@@ -40,12 +49,16 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
   const allowInitialHydration = useRef(!getSession());
   useEffect(() => { callbacks.current = { onStateChange, onVerified }; }, [onStateChange, onVerified]);
 
-  const accept = useCallback((next: EmailVerificationState, owner: SessionContext) => {
+  const accept = useCallback((next: EmailVerificationState, owner: SessionContext, verifiedResponse = false) => {
     if (!owner.identityId || !isSessionContextCurrent(owner) || !isSessionReady()) return null;
     if (next.emailRevision < getSessionEmailRevision()) {
       const current = getSession()!;
       next = { ...next, email: current.email ?? null, emailVerified: current.emailVerified,
         emailRevision: getSessionEmailRevision(), pending: null };
+    }
+    if (chefEmailEligible(next) && !next.pending && (verifiedResponse ||
+      matchesVerifiedEmail(next, editedDraft.current))) {
+      editedDraft.current = null;
     }
     canonicalRevision.current = next.emailRevision;
     stateRef.current = next;
@@ -53,13 +66,27 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
     setState(next);
     const now = performance.now();
     setClock({ now, started: now, server: Date.parse(next.serverTime) });
-    callbacks.current.onStateChange?.(next);
+    callbacks.current.onStateChange?.(editedDraft.current !== null ? null : next);
     return next;
   }, []);
 
+  const abandonRequest = useCallback(() => {
+    controller.current?.abort(); controller.current = null; inFlight.current = false;
+    setBusy(false);
+  }, []);
+
+  function editEmail(value: string) {
+    abandonRequest();
+    const restored = matchesVerifiedEmail(stateRef.current, value);
+    editedDraft.current = restored ? null : value;
+    setEditing(true); setEmail(value);
+    callbacks.current.onStateChange?.(restored ? stateRef.current : null);
+    setCode(""); setRetrySend(null); setError(""); setNotice("");
+  }
+
   const rejectSession = useCallback(() => {
-    setSessionExpired(true); setState(null); stateRef.current = null;
-    setCode(""); setRetrySend(null); setNotice("");
+    setSessionExpired(true); setState(null); stateRef.current = null; editedDraft.current = null;
+    setCode(""); setRetrySend(null); setNotice(""); setEditing(false);
     callbacks.current.onStateChange?.(null);
   }, []);
 
@@ -73,17 +100,19 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
         initial.current = ""; setEmail(""); rejectSession(); setError(""); setBusy(false); setContext(next);
       } else if (getSessionEmailRevision() > canonicalRevision.current && stateRef.current && isSessionReady()) {
         // Another mounted panel verified a replacement. Never keep an older canonical email or challenge visible.
+        abandonRequest();
         const current = getSession()!;
         const nextState = { ...stateRef.current, email: current.email ?? null, emailVerified: current.emailVerified,
           emailRevision: getSessionEmailRevision(), pending: null };
+        if (matchesVerifiedEmail(nextState, editedDraft.current)) editedDraft.current = null;
         canonicalRevision.current = nextState.emailRevision; stateRef.current = nextState;
         setState(nextState); setCode(""); setRetrySend(null);
-        callbacks.current.onStateChange?.(nextState);
+        callbacks.current.onStateChange?.(editedDraft.current !== null ? null : nextState);
       }
     };
     const unsubscribe = subscribeSession(update); update();
     return unsubscribe;
-  }, [rejectSession]);
+  }, [abandonRequest, rejectSession]);
 
   const validResponse = useCallback((current: AbortController, owner: SessionContext) =>
     controller.current === current && !current.signal.aborted && isSessionContextCurrent(owner) && isSessionReady(), []);
@@ -139,7 +168,7 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
       const next = await fetchEmailVerification(attempt.action, attempt.body, current.signal);
       const accepted = validResponse(current, context) ? accept(next, context) : null;
       if (!accepted) return;
-      setRetrySend(null);
+      setRetrySend(null); setEditing(false);
       setNotice(accepted.pending ? "Check the delivery status below and use your latest code if it arrives." : "Your verified email is up to date.");
     } catch (caught) {
       if (!validResponse(current, context)) return;
@@ -153,17 +182,17 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
   }
 
   async function verify() {
-    if (inFlight.current || !state?.pending || !/^\d{6}$/.test(code) || !isSessionContextCurrent(context) || !isSessionReady()) return;
+    if (inFlight.current || editing || !state?.pending || !/^\d{6}$/.test(code) || !isSessionContextCurrent(context) || !isSessionReady()) return;
     inFlight.current = true;
     const current = new AbortController(); controller.current = current;
     setBusy(true); setError(""); setNotice("");
     const submitted = code; setCode("");
     try {
       const next = await fetchEmailVerification("verify", { challengeId: state.pending.challengeId, code: submitted }, current.signal);
-      const accepted = validResponse(current, context) ? accept(next, context) : null;
+      const accepted = validResponse(current, context) ? accept(next, context, true) : null;
       if (!accepted) return;
       setRetrySend(null);
-      if (chefEmailEligible(accepted)) {
+      if (chefEmailEligible(accepted) && !accepted.pending && editedDraft.current === null) {
         setEmail(accepted.email ?? ""); setNotice("Email verified successfully."); callbacks.current.onVerified?.(accepted);
       }
     } catch (caught) {
@@ -184,14 +213,15 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
 
   const timing = state ? emailVerificationTiming(state, clock.server + Math.max(0, clock.now - clock.started)) : { expiresIn: 0, resendIn: 0 };
   const verified = chefEmailEligible(state);
-  const pending = state?.pending;
+  const pending = editing ? null : state?.pending;
+  const displayedEmail = pending ? "" : email;
   const disabled = busy || sessionExpired || !state;
 
   if (variant === "onboarding") {
     const sameVerifiedEmail =
-      verified &&
+      (!editing || !state?.pending) && verified &&
       Boolean(state?.email) &&
-      email.trim().toLocaleLowerCase("en-IN") === state?.email?.trim().toLocaleLowerCase("en-IN");
+      displayedEmail.trim().toLocaleLowerCase("en-IN") === state?.email?.trim().toLocaleLowerCase("en-IN");
     const validEmail = Boolean(email.trim()) && verificationEmail.safeParse(email).success;
     const resendLabel = timing.resendIn > 0 ? `Resend code in ${timing.resendIn}s` : "Resend code";
     return (
@@ -206,18 +236,14 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
             autoComplete="email"
             inputMode="email"
             maxLength={EMAIL_VERIFICATION_MAX_LENGTH}
-            value={email}
+            value={displayedEmail}
             disabled={sessionExpired}
             readOnly={busy}
-            placeholder="you@example.com"
+            placeholder={pending ? pending.maskedEmail : "you@example.com"}
             aria-invalid={Boolean(error) || undefined}
             aria-describedby={`${id}-email-help`}
             className="cob-input cob-input--with-adornment"
-            onChange={(event) => {
-              setEmail(event.target.value);
-              setError("");
-              setNotice("");
-            }}
+            onChange={(event) => editEmail(event.target.value)}
           />
           <span className="cob-adornment">
             {busy && !pending ? (
@@ -324,7 +350,7 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
             {sameVerifiedEmail
               ? "Confirmed for your Craves account."
               : pending
-                ? "Enter the code from the email to verify this address."
+                ? "Enter the code for the masked verification address above, or edit your email to send a new code."
                 : required
                   ? "We’ll send a 6-digit code to verify your email."
                   : "Optional. Verify it to receive account updates."}
@@ -339,9 +365,9 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
 
   if (compact) {
     const sameVerifiedEmail =
-      verified &&
+      (!editing || !state?.pending) && verified &&
       Boolean(state?.email) &&
-      email.trim().toLocaleLowerCase("en-IN") ===
+      displayedEmail.trim().toLocaleLowerCase("en-IN") ===
         state?.email?.trim().toLocaleLowerCase("en-IN");
     const canSend =
       !pending &&
@@ -375,14 +401,11 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
             type="email"
             autoComplete="email"
             maxLength={EMAIL_VERIFICATION_MAX_LENGTH}
-            value={email}
+            value={displayedEmail}
             disabled={busy || sessionExpired}
             className="min-h-12 min-w-0 flex-1 rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10 disabled:opacity-50"
-            placeholder="you@example.com"
-            onChange={(event) => {
-              setEmail(event.target.value);
-              setError("");
-            }}
+            placeholder={pending ? pending.maskedEmail : "you@example.com"}
+            onChange={(event) => editEmail(event.target.value)}
           />
           {!sameVerifiedEmail && canSend ? (
             <button
@@ -401,6 +424,7 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
 
         {pending ? (
           <div className="mt-3 rounded-xl border border-[#E5E7EB] bg-white p-3">
+            <p className="text-xs text-[#6B6B6B]">Verification address: {pending.maskedEmail}</p>
             <label
               htmlFor={`${id}-code`}
               className="text-xs font-semibold text-[#1A1A1A]"
@@ -454,6 +478,7 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
         {error ? (
           <p role="alert" className="mt-2 text-xs font-semibold text-[#C92716]">
             {error}
+            {retrySend ? <button type="button" className="mt-2 text-xs font-bold text-[#F62E18] disabled:text-[#9CA3AF]" disabled={busy || sessionExpired} onClick={() => void send(retrySend)}>Retry send request</button> : null}
           </p>
         ) : null}
         {notice && sameVerifiedEmail ? (
@@ -485,8 +510,8 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
       {verified && pending && <p className="mt-2 text-sm text-[#6B6B6B]">Your current verified email stays active until you confirm the replacement.</p>}
       <div className="mt-4">
         <label htmlFor={`${id}-email`} className="text-sm font-semibold">{verified ? "Change email" : "Email address"}</label>
-        <input id={`${id}-email`} type="email" autoComplete="email" maxLength={EMAIL_VERIFICATION_MAX_LENGTH} value={email} disabled={busy || sessionExpired} className={inputClass} onChange={(event) => { setEmail(event.target.value); setError(""); }} />
-        <button type="button" disabled={disabled || timing.resendIn > 0 || !verificationEmail.safeParse(email).success || !!retrySend} className={`${buttonClass} mt-3`} onClick={() => void send(createEmailSendAttempt("challenges", email))}>
+        <input id={`${id}-email`} type="email" autoComplete="email" maxLength={EMAIL_VERIFICATION_MAX_LENGTH} value={displayedEmail} disabled={busy || sessionExpired} className={inputClass} placeholder={pending ? pending.maskedEmail : "you@example.com"} onChange={(event) => editEmail(event.target.value)} />
+        <button type="button" disabled={disabled || !!pending || !verificationEmail.safeParse(email).success || !!retrySend} className={`${buttonClass} mt-3`} onClick={() => void send(createEmailSendAttempt("challenges", email))}>
           {verified && email.trim() === state?.email ? "Keep verified email" : pending ? "Send code to this address" : "Send email code"}
         </button>
       </div>

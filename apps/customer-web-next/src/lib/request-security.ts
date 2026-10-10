@@ -67,3 +67,33 @@ export function isSameOrigin(request: NextRequest): boolean {
     host: request.headers.get("host"),
   });
 }
+
+/** Map image and tile loads send no Origin: accept a same-origin fetch or a Referer from this site. */
+export function isSameSitePublicRequest(request: NextRequest): boolean {
+  if (request.headers.get("sec-fetch-site") === "same-origin") return true;
+  const referer = request.headers.get("referer");
+  if (!referer) return false;
+  let origin: string;
+  try {
+    origin = new URL(referer).origin;
+  } catch {
+    return false;
+  }
+  return isRequestOriginAllowed({
+    origin,
+    requestUrl: request.url,
+    forwardedProto: request.headers.get("x-forwarded-proto"),
+    forwardedHost: request.headers.get("x-forwarded-host"),
+    host: request.headers.get("host"),
+  });
+}
+
+/** The origin the client used to reach this site (behind Front Door, the forwarded one). */
+export function publicRequestOrigin(request: NextRequest): string {
+  return (
+    forwardedOrigin(
+      request.headers.get("x-forwarded-proto"),
+      request.headers.get("x-forwarded-host") || request.headers.get("host"),
+    ) ?? new URL(request.url).origin
+  );
+}

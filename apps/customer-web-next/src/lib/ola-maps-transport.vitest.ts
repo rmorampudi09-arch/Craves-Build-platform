@@ -253,3 +253,53 @@ describe("Ola Maps static map transport without live requests", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("Ola Maps vector map transport without live requests", () => {
+  const base = "https://craves.in/api/location/map-tiles";
+
+  it("fetches the style with the key and hands back a document that points at the proxy", async () => {
+    const style = { version: 8, sources: { planet: { type: "vector", url: "https://api.olamaps.io/tiles/vector/v1/data/planet.json" } } };
+    const fetcher = vi.fn().mockResolvedValue(Response.json(style));
+    vi.stubGlobal("fetch", fetcher);
+    const { fetchOlaMapsVectorResource } = await import("./server/ola-maps");
+
+    const resource = await fetchOlaMapsVectorResource("styles/default-light-standard/style.json", new URLSearchParams(), base);
+    const url = new URL(String(fetcher.mock.calls[0][0]));
+    expect(url.pathname).toBe("/tiles/vector/v1/styles/default-light-standard/style.json");
+    expect(url.searchParams.get("api_key")).toBe(KEY);
+    expect(fetcher.mock.calls[0][1].headers.Origin).toBe("https://craves.in");
+    expect(resource.contentType).toBe("application/json");
+    const document = new TextDecoder().decode(resource.bytes);
+    expect(JSON.parse(document).sources.planet.url).toBe(`${base}/data/planet.json`);
+    expect(document).not.toContain(KEY);
+  });
+
+  it("fails closed if Ola ever echoes the key into a document", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ tiles: [`https://cdn.example/{z}/{x}/{y}.pbf?k=${KEY}`] })));
+    const { fetchOlaMapsVectorResource } = await import("./server/ola-maps");
+    await expect(fetchOlaMapsVectorResource("data/planet.json", new URLSearchParams(), base)).rejects.toThrow("document contained the credential");
+  });
+
+  it("passes tile bytes, accepts empty tiles and rejects unexpected bodies", async () => {
+    const tile = new Uint8Array([26, 3, 1]);
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(tile, { headers: { "content-type": "application/x-protobuf" } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response("<html>", { headers: { "content-type": "text/html" } }));
+    vi.stubGlobal("fetch", fetcher);
+    const { fetchOlaMapsVectorResource } = await import("./server/ola-maps");
+    const path = "data/planet/14/11712/7520.pbf";
+
+    expect(Array.from((await fetchOlaMapsVectorResource(path, new URLSearchParams(), base)).bytes)).toEqual([26, 3, 1]);
+    expect((await fetchOlaMapsVectorResource(path, new URLSearchParams(), base)).bytes.byteLength).toBe(0);
+    await expect(fetchOlaMapsVectorResource(path, new URLSearchParams(), base)).rejects.toThrow("unexpected content type");
+  });
+
+  it("reports the provider status so a missing tile can stay a 404", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 404 })));
+    const { fetchOlaMapsVectorResource, OlaMapsUnavailableError } = await import("./server/ola-maps");
+    const failure = await fetchOlaMapsVectorResource("data/planet/20/1/1.pbf", new URLSearchParams(), base).catch((error) => error);
+    expect(failure).toBeInstanceOf(OlaMapsUnavailableError);
+    expect(failure.status).toBe(404);
+  });
+});

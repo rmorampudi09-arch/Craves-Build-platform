@@ -29,6 +29,13 @@ export async function proxy(request: NextRequest) {
         return response;
       }
     }
+    // Signed-in visitors skip the marketing landing. The cookie is not validated
+    // here: /home already handles an expired session.
+    if (path === "/" && request.method === "GET" && request.cookies.has("craves_access_token")) {
+      const response = NextResponse.redirect(new URL(`/home${request.nextUrl.search}`, request.url), 307);
+      response.headers.set("Cache-Control", "private, no-store, max-age=0");
+      return response;
+    }
     return process.env.CRAVES_WEB_LAUNCH_BLOB_URL ? webLaunchGate(request) : NextResponse.next();
   }
 

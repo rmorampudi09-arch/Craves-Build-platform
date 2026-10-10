@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { PhoneAuthForm } from "@/components/phone-auth-form";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { safeReturnPath } from "@/lib/auth-contract";
+import { safeChefReturnTo } from "@/lib/chef-mode";
 import { isAdminDestination } from "@/lib/admin-navigation";
 import "@/styles/admin-control.css";
 
@@ -20,7 +22,11 @@ export default async function SignInPage({ searchParams }: {
   const returnTo = adminJourney ? (isAdminDestination(destination) ? destination : "/admin") : destination;
   // The admin portal signs in with Firebase phone auth; only hosts with the central MSG91 OTP use it.
   const centralOtp = process.env.CRAVES_CENTRAL_OTP_ENABLED === "true";
-  if (!adminJourney) return <main className="mx-auto flex min-h-screen max-w-xl items-center px-5 py-12"><PhoneAuthForm returnTo={returnTo} centralOtp={centralOtp}/></main>;
+  // Chef Mode has its own sign-in, so a chef return path never needs a second OTP.
+  const pathname = returnTo.split(/[?#]/, 1)[0];
+  if (!adminJourney && (pathname === "/chef" || pathname.startsWith("/chef/")))
+    redirect(`/chef/sign-in?returnTo=${encodeURIComponent(safeChefReturnTo(returnTo) ?? "/chef")}`);
+  if (!adminJourney) return <main className="flex min-h-screen items-center bg-[#F1F3F5] px-5 py-12"><div className="mx-auto w-full max-w-xl"><PhoneAuthForm returnTo={returnTo} centralOtp={centralOtp}/></div></main>;
 
   return <main className="cr-admin cr-login">
     <section className="cr-login-story" aria-labelledby="cr-login-title">

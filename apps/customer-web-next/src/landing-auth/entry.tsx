@@ -5,6 +5,7 @@ import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from 
 import { phoneCodeRequestError } from "@/lib/phone-auth-errors";
 import type { CravesIdentity } from "@/lib/auth-contract";
 import { parseCustomerProfile } from "@/lib/profile-contract";
+import { markChefModeVerified } from "@/lib/chef-mode";
 import {
   captureSessionContext,
   isSessionContextCurrent,
@@ -121,11 +122,11 @@ function CustomerAuth({ onClose }: { onClose: () => void }) {
     }
     ensureCurrent();
     if (!isSessionReady()) throw new Error("Your session is not ready. Please try again.");
-    const destination = request.role === "chef"
-      ? user.roles.some((role) => role.toUpperCase() === "CHEF") ? "/chef" : "/chef/application"
-      : "/home";
-    // The standalone document must load the application; role choice never grants Chef permission.
-    window.location.assign(destination);
+    // This OTP was the Home Chef sign-in, so Chef Mode opens without a second code. The chef sign-in
+    // page then picks the kitchen, the application or its status; role choice never grants Chef permission.
+    if (request.role === "chef") markChefModeVerified(user.id);
+    // Replace, so Back never returns to this sign-in popup.
+    window.location.replace(request.role === "chef" ? "/chef/sign-in?returnTo=/chef" : "/home");
   }
 
   return <AuthModal onClose={onClose} onRequestCode={requestCode} onVerifyCode={verifyCode} />;

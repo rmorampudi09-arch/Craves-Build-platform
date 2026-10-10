@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -15,7 +15,7 @@ import type {
   HomeDishSort,
   HomeFoodPreference,
 } from "@/lib/home-return-state";
-import { duration, ease, fadeUp, listItem } from "@/lib/motion";
+import { listItem } from "@/lib/motion";
 import type { Dish } from "@/services/api/dishes";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
@@ -170,27 +170,33 @@ export function DishesGrid({
             id="available-dishes-heading"
             className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-3xl lg:text-4xl"
           >
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.span key={heading} className="block" {...fadeUp} initial={{ opacity: 0 }}>
-                {heading}
-              </motion.span>
-            </AnimatePresence>
+            {/* Heading and count change with the list in one frame: no blank fade gap. */}
+            {heading}
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
             Freshly prepared by nearby home kitchens, made with care.
           </p>
         </div>
         {state === "ready" ? (
-          <span
-            className="rounded-full bg-[#F1F3F5] px-3.5 py-2 text-xs font-black text-[#6B6B6B]"
-            aria-live="polite"
-          >
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.span key={countLabel} className="block" {...fadeUp} initial={{ opacity: 0 }}>
-                {countLabel}
-              </motion.span>
-            </AnimatePresence>
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className="rounded-full bg-[#F1F3F5] px-3.5 py-2 text-xs font-black text-[#6B6B6B]"
+              aria-live="polite"
+            >
+              {countLabel}
+            </span>
+            {/* Beside the count, so turning a filter on never pushes the list down. */}
+            {hasFilters ? (
+              <button
+                type="button"
+                onClick={onRemoveFilters}
+                className="inline-flex min-h-[2rem] items-center gap-1.5 rounded-full !border !border-[#E5E7EB] !bg-white px-3 text-xs font-black !text-[#1A1A1A] !shadow-none transition-[scale] duration-(--dur-micro) active:scale-[0.96]"
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                Clear filters
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
@@ -216,7 +222,8 @@ export function DishesGrid({
                   type="button"
                   onClick={() => onSortChange(option.value)}
                   className={[
-                    "min-h-11 shrink-0 rounded-full !border !border-transparent px-4 text-sm font-black !shadow-none transition-[background-color,color,scale] duration-(--dur-component) active:scale-[0.96] active:duration-(--dur-micro) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/10 md:min-h-12 md:rounded-[0.9rem]",
+                    // The selected fill swaps at once (a fade leaves two half-selected chips); only the press scales.
+                    "min-h-11 shrink-0 rounded-full !border !border-transparent px-4 text-sm font-black !shadow-none transition-[scale] duration-(--dur-micro) active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/10 md:min-h-12 md:rounded-[0.9rem]",
                     selected
                       ? "!bg-[#1A1A1A] !text-white"
                       : "!bg-[#F1F3F5] !text-[#1A1A1A] md:!bg-transparent md:!text-[#6B6B6B] md:hover:!bg-[#F1F3F5] md:hover:!text-[#1A1A1A]",
@@ -228,17 +235,6 @@ export function DishesGrid({
               );
             })}
           </div>
-
-          {hasFilters ? (
-            <button
-              type="button"
-              onClick={onRemoveFilters}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full !border !border-[#E5E7EB] !bg-white px-4 text-sm font-black !text-[#6B6B6B] !shadow-none transition-[color,border-color,scale] duration-(--dur-micro) hover:!border-[#D7DADF] hover:!text-[#1A1A1A] active:scale-[0.96] md:min-h-12 md:rounded-[0.9rem]"
-            >
-              <RotateCcw className="h-4 w-4" aria-hidden="true" />
-              Remove Filters
-            </button>
-          ) : null}
         </div>
       ) : null}
 
@@ -348,23 +344,22 @@ export function DishesGrid({
 
       {state === "ready" && dishes.length > 0 ? (
         <>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={dishViewKey}
-              exit={{ opacity: 0, transition: { duration: duration.micro, ease: ease.in } }}
-              className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4"
-            >
-              {visibleDishes.map((dish, index) =>
-                index < 6 ? (
-                  <motion.div key={dish.id} {...listItem(index)}>
-                    <DishCard dish={dish} priorityImage={index < 4} />
-                  </motion.div>
-                ) : (
-                  <DishCard key={dish.id} dish={dish} />
-                ),
-              )}
-            </motion.div>
-          </AnimatePresence>
+          {/* A new view replaces the list at once (no exit phase, so no blank frames); its
+              first six cards fade and rise in on the compositor. */}
+          <div
+            key={dishViewKey}
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4"
+          >
+            {visibleDishes.map((dish, index) =>
+              index < 6 ? (
+                <motion.div key={dish.id} {...listItem(index)}>
+                  <DishCard dish={dish} priorityImage={index < 4} />
+                </motion.div>
+              ) : (
+                <DishCard key={dish.id} dish={dish} />
+              ),
+            )}
+          </div>
           {hasMoreDishes || hasMoreRemote || loadingMoreRemote ? (
             <div
               ref={loadMoreRef}

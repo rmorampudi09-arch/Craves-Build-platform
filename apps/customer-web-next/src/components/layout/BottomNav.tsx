@@ -13,13 +13,22 @@ import {
   useScrollChrome,
 } from "@/components/navigation/AutoHideCustomerHeader";
 import { AnimateCount } from "@/components/ui/AnimateCount";
-import { ease, spring } from "@/lib/motion";
+import { ease } from "@/lib/motion";
 import {
   cartCount,
   cartCurrency,
   cartTotal,
   subscribeCart,
 } from "@/services/api/cravesCart";
+
+/** Leave in 100 ms, arrive after it (80 ms delay, 180 ms): transform and opacity only. */
+const NAV_SWAP = {
+  hide: { opacity: 0, transform: "scale(0.98)", transition: { duration: 0.1, ease: ease.in } },
+  show: { opacity: 1, transform: "scale(1)", transition: { duration: 0.18, ease: ease.out, delay: 0.08 } },
+  pillOut: { opacity: 0, transform: "translateX(16px)" },
+  pillIn: { opacity: 1, transform: "translateX(0px)", transition: { duration: 0.18, ease: ease.out, delay: 0.08 } },
+  pillLeave: { opacity: 0, transform: "translateX(16px)", transition: { duration: 0.1, ease: ease.in } },
+};
 
 type NavKey =
   | "home"
@@ -145,13 +154,11 @@ export function BottomNav() {
         aria-label="Customer navigation"
       >
         <div className="relative mx-auto max-w-lg overflow-hidden rounded-t-[1.15rem] border-t border-[#ECEEF0] bg-white shadow-[0_-8px_24px_rgba(26,26,26,0.065)]">
+          {/* Tabs and the cart pill trade places as a fade-through: the leaving layer is gone
+              before the arriving one shows, so icons and the total are never drawn over each other. */}
           <motion.ul
             initial={false}
-            animate={{
-              opacity: cartExpanded ? 0 : 1,
-              scale: cartExpanded ? 0.98 : 1,
-            }}
-            transition={spring.ui}
+            animate={cartExpanded ? NAV_SWAP.hide : NAV_SWAP.show}
             className={[
               "grid grid-cols-5 items-stretch px-1.5 pb-[max(0.38rem,env(safe-area-inset-bottom))] pt-1.5",
               cartExpanded ? "pointer-events-none" : "",
@@ -224,10 +231,9 @@ export function BottomNav() {
             {cartExpanded ? (
               <motion.div
                 key="mobile-cart-expanded"
-                initial={{ opacity: 0, x: 24, scale: 0.96 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: 24, scale: 0.96 }}
-                transition={spring.ui}
+                initial={NAV_SWAP.pillOut}
+                animate={NAV_SWAP.pillIn}
+                exit={NAV_SWAP.pillLeave}
                 className="absolute inset-x-1.5 bottom-[max(0.38rem,env(safe-area-inset-bottom))] top-1.5 z-10"
               >
                 <Link

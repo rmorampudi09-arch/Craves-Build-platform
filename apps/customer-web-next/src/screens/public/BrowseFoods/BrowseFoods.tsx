@@ -3,7 +3,9 @@ import { AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import {
   useCallback,
+  useDeferredValue,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -82,16 +84,18 @@ const HomeBottomSections = dynamic(
   { ssr: false, loading: () => null },
 );
 
-const loadHomeSearchOverlay = () => import("@/components/home/HomeSearchOverlay");
+type SearchOverlay = typeof import("@/components/home/HomeSearchOverlay").HomeSearchOverlay;
 
-const HomeSearchOverlay = dynamic(
-  () => loadHomeSearchOverlay().then((module) => module.HomeSearchOverlay),
-  { ssr: false, loading: () => null },
-);
-
-/** Fetches the overlay as the finger lands, so it opens together with the keyboard. */
-function preloadHomeSearchOverlay() {
-  void loadHomeSearchOverlay();
+// The search overlay stays out of the first bundle. It is fetched when the page goes idle
+// or a finger lands on search, and kept in state rather than behind next/dynamic: a lazy
+// component suspends on its first mount, and React holds a revealed Suspense boundary back
+// for up to 300 ms, which made search open late even when the code was already loaded.
+let searchOverlayModule: Promise<SearchOverlay> | null = null;
+function loadHomeSearchOverlay(): Promise<SearchOverlay> {
+  searchOverlayModule ??= import("@/components/home/HomeSearchOverlay").then(
+    (module) => module.HomeSearchOverlay,
+  );
+  return searchOverlayModule;
 }
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
@@ -166,8 +170,22 @@ function BrowseFoodsPage() {
   const [homeCategory, setHomeCategory] = useState<CravingCategory | null>(null);
   const [dishSort, setDishSort] = useState<HomeDishSort>("recommended");
   const [foodPreference, setFoodPreference] = useState<HomeFoodPreference>("all");
+  // The rail, Veg switch and sort chips answer a tap in the next frame; the dish list
+  // re-renders from these right after, so a slow phone never delays the pressed state.
+  const listCategory = useDeferredValue(homeCategory);
+  const listSort = useDeferredValue(dishSort);
+  const listFoodPreference = useDeferredValue(foodPreference);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [HomeSearchOverlay, setHomeSearchOverlay] = useState<SearchOverlay | null>(null);
+  const preloadHomeSearchOverlay = useCallback(() => {
+    void loadHomeSearchOverlay()
+      .then((overlay) => setHomeSearchOverlay(() => overlay))
+      .catch(() => {
+        // Offline or a stale deploy: the next tap on search tries again.
+        searchOverlayModule = null;
+      });
+  }, []);
   const [cartItemCount, setCartItemCount] = useState(() => cartCount());
   const [cartItems, setCartItems] = useState<CartItem[]>(() => getCart());
   const [unavailableCartItems, setUnavailableCartItems] = useState<CartItem[]>([]);
@@ -354,35 +372,53 @@ function BrowseFoodsPage() {
     });
   }, [dishSort, foodPreference, homeCategory]);
 
+  // The search overlay is its own chunk: fetch it once the page is idle, so the first tap
+  // on search opens it at once instead of waiting for the download.
+  useEffect(() => {
+    if (typeof window.requestIdleCallback !== "function") {
+      const timer = window.setTimeout(preloadHomeSearchOverlay, 1500);
+      return () => window.clearTimeout(timer);
+    }
+    const handle = window.requestIdleCallback(preloadHomeSearchOverlay, { timeout: 3000 });
+    return () => window.cancelIdleCallback(handle);
+  }, [preloadHomeSearchOverlay]);
+
   // One way to bring the dish list into view after a category, Veg or sort
   // change: land the section just below the stuck rail, jump when it is more
   // than a screen away (a long smooth scroll would toggle all the chrome), and
-  // keep the chrome still while the page moves.
+  // keep the chrome still while the page moves. The move waits for the new list
+  // (layout effect below), so the page and the list change in the same frame.
+  const pendingRevealRef = useRef<{ onlyIfPast: boolean } | null>(null);
   const revealDishes = useCallback((onlyIfPast = false) => {
-    window.requestAnimationFrame(() => {
-      const section = document
-        .getElementById("available-dishes-heading")
-        ?.closest("section");
-      if (!section) return;
-      const rail = document.querySelector<HTMLElement>("[data-craves-category-rail]");
-      const chromeBottom = rail
-        ? (parseFloat(getComputedStyle(rail).top) || 0) + rail.offsetHeight
-        : 0;
-      const target = Math.max(
-        0,
-        Math.round(section.getBoundingClientRect().top + window.scrollY - chromeBottom),
-      );
-      const distance = Math.abs(target - window.scrollY);
-      if (distance < 2 || (onlyIfPast && window.scrollY <= target)) return;
-
-      holdScrollChrome();
-      if (distance > window.innerHeight || prefersReducedMotion()) {
-        forceInstantWindowScroll(target);
-      } else {
-        window.scrollTo({ top: target, behavior: "smooth" });
-      }
-    });
+    pendingRevealRef.current = { onlyIfPast };
   }, []);
+
+  useLayoutEffect(() => {
+    const request = pendingRevealRef.current;
+    pendingRevealRef.current = null;
+    if (!request) return;
+    const section = document
+      .getElementById("available-dishes-heading")
+      ?.closest("section");
+    if (!section) return;
+    const rail = document.querySelector<HTMLElement>("[data-craves-category-rail]");
+    const chromeBottom = rail
+      ? (parseFloat(getComputedStyle(rail).top) || 0) + rail.offsetHeight
+      : 0;
+    const target = Math.max(
+      0,
+      Math.round(section.getBoundingClientRect().top + window.scrollY - chromeBottom),
+    );
+    const distance = Math.abs(target - window.scrollY);
+    if (distance < 2 || (request.onlyIfPast && window.scrollY <= target)) return;
+
+    holdScrollChrome();
+    if (distance > window.innerHeight || prefersReducedMotion()) {
+      forceInstantWindowScroll(target);
+    } else {
+      window.scrollTo({ top: target, behavior: "smooth" });
+    }
+  }, [listCategory, listSort, listFoodPreference]);
 
   const changeFoodPreference = useCallback((next: HomeFoodPreference) => {
     setFoodPreference(next);
@@ -687,28 +723,28 @@ function BrowseFoodsPage() {
   const filteredKitchens = kitchens;
 
   const filteredDishes = useMemo(() => {
-    const homeKeywords = homeCategory ? HOME_CATEGORY_KEYWORDS[homeCategory] : null;
+    const homeKeywords = listCategory ? HOME_CATEGORY_KEYWORDS[listCategory] : null;
 
     const matchingDishes = nearbyDishes.filter((dish) => {
       const searchable = `${dish.name} ${dish.category} ${dish.desc}`.toLocaleLowerCase("en-IN");
       const categoryMatches =
         !homeKeywords || homeKeywords.some((keyword) => searchable.includes(keyword));
       const foodType = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
-      const foodTypeMatches = foodPreference !== "veg" || foodType === "VEG";
+      const foodTypeMatches = listFoodPreference !== "veg" || foodType === "VEG";
       return categoryMatches && foodTypeMatches;
     });
 
-    if (dishSort === "rating") {
+    if (listSort === "rating") {
       return [...matchingDishes].sort((left, right) => right.rating - left.rating);
     }
-    if (dishSort === "price-low-high") {
+    if (listSort === "price-low-high") {
       return [...matchingDishes].sort((left, right) => left.price - right.price);
     }
-    if (dishSort === "price-high-low") {
+    if (listSort === "price-high-low") {
       return [...matchingDishes].sort((left, right) => right.price - left.price);
     }
     return matchingDishes;
-  }, [dishSort, foodPreference, homeCategory, nearbyDishes]);
+  }, [listCategory, listFoodPreference, listSort, nearbyDishes]);
 
   const locationLabel = address
     ? Array.from(
@@ -842,7 +878,10 @@ function BrowseFoodsPage() {
         onLogout={() => setSignOutOpen(true)}
         searchTerm={searchTerm}
         onSearchTermChange={setSearchTerm}
-        onSearchFocus={() => setSearchOpen(true)}
+        onSearchFocus={() => {
+          preloadHomeSearchOverlay();
+          setSearchOpen(true);
+        }}
         onSearchIntent={preloadHomeSearchOverlay}
         foodPreference={foodPreference}
         onFoodPreferenceChange={changeFoodPreference}
@@ -862,7 +901,8 @@ function BrowseFoodsPage() {
           selected={homeCategory}
           images={categoryImages}
           onSelect={(nextCategory) => {
-            setHomeCategory(nextCategory);
+            // aria-pressed chips: tapping the selected one again shows every dish.
+            setHomeCategory((current) => (current === nextCategory ? null : nextCategory));
             setSearchTerm("");
             revealDishes();
           }}
@@ -884,13 +924,14 @@ function BrowseFoodsPage() {
 
         <DishesGrid
           dishes={filteredDishes}
-          selectedCategory={homeCategory ?? ALL_DISHES_CATEGORY}
+          selectedCategory={listCategory ?? ALL_DISHES_CATEGORY}
           searchTerm=""
           state={discoveryState}
           message={catalogMessage}
           sort={dishSort}
           foodPreference={foodPreference}
           onSortChange={(nextSort) => {
+            if (nextSort === dishSort) return;
             setDishSort(nextSort);
             revealDishes();
           }}
@@ -934,7 +975,7 @@ function BrowseFoodsPage() {
       />
 
       <AnimatePresence>
-        {searchOpen ? (
+        {searchOpen && HomeSearchOverlay ? (
           <HomeSearchOverlay
             key="home-search"
             dishes={searchDishes}

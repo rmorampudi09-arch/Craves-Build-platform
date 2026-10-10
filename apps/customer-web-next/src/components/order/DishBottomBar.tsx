@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Minus, Plus } from "lucide-react";
 
 import { CravesCartIcon } from "@/components/home/CravesCartIcon";
-import { duration, ease } from "@/lib/motion";
+import { swap } from "@/lib/motion";
 
 interface DishBottomBarProps {
   /** Item total: unit price × the quantity in the stepper. */
@@ -106,14 +106,13 @@ export function DishBottomBar({
           }
           className="craves-primary-action relative ml-auto flex-1 overflow-hidden !px-4 sm:min-w-52 sm:flex-none sm:!px-8"
         >
-          <AnimatePresence mode="popLayout" initial={false}>
-            {/* The new cart line shows at once, so there is no "Adding" label to flash. */}
+          <AnimatePresence mode="wait" initial={false}>
+            {/* The new cart line shows at once, so there is no "Adding" label to flash. One label
+                at a time: the old one leaves in 80 ms before the next fades in. */}
             <motion.span
               key={mode}
               className="inline-flex items-center justify-center gap-2"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1, transition: { duration: 0.15, ease: ease.out } }}
-              exit={{ opacity: 0, transition: { duration: duration.micro, ease: ease.in } }}
+              {...swap}
             >
               {mode === "add" ? (
                 <>

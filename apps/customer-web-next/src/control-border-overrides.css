@@ -63,6 +63,13 @@ body :is(
   --tw-ring-shadow: 0 0 #0000 !important;
 }
 
+/* A bare field inside a styled search pill: the pill draws the focus edge (focus-within),
+   so no detached rectangle appears inside its rounded shape. */
+input[data-craves-bare-input]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 body .chef-panel-theme
   :is(button, a, [role="button"], [role="tab"]):focus-visible {
   border-color: var(--color-grey-400) !important;

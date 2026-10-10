@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
-import { duration, ease } from "@/lib/motion";
+import { ease } from "@/lib/motion";
 
 export interface AnimateCountProps
   extends Omit<React.HTMLAttributes<HTMLSpanElement>, "children"> {
@@ -13,15 +13,14 @@ export interface AnimateCountProps
   format?: (value: number) => string;
 }
 
-/** Digits roll 6 px in the direction of change: in over 180 ms, out over 120 ms. */
+/**
+ * The old value leaves in 80 ms, then the new one settles 4 px in the direction of change
+ * over 150 ms. Values never overlap, so "₹1,026" to "₹807" never reads as a jumble.
+ */
 const roll = {
-  enter: (direction: number) => ({ opacity: 0, y: 6 * direction }),
-  center: { opacity: 1, y: 0, transition: { duration: 0.18, ease: ease.out } },
-  exit: (direction: number) => ({
-    opacity: 0,
-    y: -6 * direction,
-    transition: { duration: duration.micro, ease: ease.in },
-  }),
+  enter: (direction: number) => ({ opacity: 0, transform: `translateY(${4 * direction}px)` }),
+  center: { opacity: 1, transform: "translateY(0px)", transition: { duration: 0.15, ease: ease.out } },
+  exit: { opacity: 0, transition: { duration: 0.08, ease: ease.in } },
 };
 
 export function AnimateCount({
@@ -41,7 +40,7 @@ export function AnimateCount({
       className={`relative inline-grid min-w-[2ch] place-items-center tabular-nums tracking-tight ${className}`}
       {...props}
     >
-      <AnimatePresence mode="popLayout" initial={false} custom={shown.direction}>
+      <AnimatePresence mode="wait" initial={false} custom={shown.direction}>
         <motion.span
           key={count}
           custom={shown.direction}

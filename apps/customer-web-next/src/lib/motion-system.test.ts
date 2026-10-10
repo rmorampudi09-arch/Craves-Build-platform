@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { duration, ease, listItem, spring } from "./motion.ts";
+import { duration, ease, fadeUp, listItem, spring, swap } from "./motion.ts";
 
 function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
@@ -70,6 +70,14 @@ test("list entry stagger is capped at the first six items", () => {
   assert.equal(listItem(0).initial && typeof listItem(0).initial, "object");
   assert.equal(listItem(5).animate?.transition.delay, 0.1);
   assert.deepEqual(listItem(6), { initial: false });
+  // A transform string (not `y`) so framer-motion runs the rise on the compositor.
+  assert.deepEqual(fadeUp.initial, { opacity: 0, transform: "translateY(8px)" });
+  assert.equal(listItem(0).animate?.transform, "translateY(0px)");
+});
+
+test("in-place swaps leave before the next value arrives", () => {
+  assert.equal(swap.exit.transition.duration, 0.08);
+  assert.equal(swap.animate.transition.duration, 0.15);
 });
 
 test("button transitions are layered so Tailwind transition utilities win", () => {
@@ -102,9 +110,10 @@ test("counts roll quickly without blur and the Veg switch slides without oversho
   const toggle = source("../components/ui/AppleSwitch.tsx");
   const checkoutBar = source("../components/cart/CartCheckoutBar.tsx");
 
-  assert.match(count, /<AnimatePresence mode="popLayout" initial=\{false\}/);
-  assert.match(count, /duration: 0\.18/);
-  assert.match(count, /y: 6 \* direction/);
+  // The old value leaves first, so two totals are never drawn over each other.
+  assert.match(count, /<AnimatePresence mode="wait" initial=\{false\}/);
+  assert.match(count, /duration: 0\.15/);
+  assert.match(count, /translateY\(\$\{4 \* direction\}px\)/);
   assert.doesNotMatch(count, /blur|ANIMATE_COUNT_DURATION_MS = 450/);
   assert.match(checkoutBar, /<AnimateCount format=\{\(value\) => money\(value, currency\)\}>\{total\}<\/AnimateCount>/);
 

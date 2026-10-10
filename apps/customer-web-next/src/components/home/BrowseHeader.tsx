@@ -148,7 +148,7 @@ export function BrowseHeader({
             </span>
           </button>
 
-          <label className="ml-auto flex min-h-10 min-w-[8rem] flex-1 items-center gap-2 rounded-[1.05rem] border border-white/80 bg-[#F1F3F5] px-3 transition-[translate,background-color,box-shadow,border-color] duration-200 ease-out hover:-translate-y-0.5 hover:border-[#F62E18]/20 hover:bg-white/80 hover:shadow-[0_14px_34px_rgba(246,46,24,0.18),inset_0_1px_0_rgba(255,255,255,0.95)] focus-within:-translate-y-0.5 focus-within:border-[#F62E18]/30 focus-within:bg-white/90 focus-within:shadow-[0_14px_34px_rgba(246,46,24,0.18),inset_0_1px_0_rgba(255,255,255,0.95)] focus-within:ring-2 focus-within:ring-[#F62E18]/25 motion-reduce:transform-none lg:min-h-12 lg:min-w-[12rem] lg:gap-3 lg:px-4 xl:min-h-14 xl:max-w-[34rem] xl:px-5">
+          <label className="ml-auto flex min-h-10 min-w-[8rem] flex-1 items-center gap-2 rounded-[1.05rem] border border-white/80 bg-[#F1F3F5] px-3 transition-[background-color,box-shadow,border-color] duration-200 ease-out hover:border-[#D3D7DD] hover:bg-white focus-within:border-[#1A1A1A] focus-within:bg-white focus-within:shadow-[0_0_0_1px_#1A1A1A] lg:min-h-12 lg:min-w-[12rem] lg:gap-3 lg:px-4 xl:min-h-14 xl:max-w-[34rem] xl:px-5">
             <FaSearch className="h-4 w-4 shrink-0 text-[#F62E18] lg:h-5 lg:w-5" aria-hidden="true" />
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
@@ -157,6 +157,7 @@ export function BrowseHeader({
               onFocus={onSearchFocus}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search homemade dishes or kitchens"
+              data-craves-bare-input
               className="w-full appearance-none border-0 bg-transparent p-0 text-xs font-semibold text-[#1A1A1A] lg:text-sm shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
               type="text"
               inputMode="search"
@@ -276,7 +277,7 @@ export function BrowseHeader({
           </div>
 
           <div className="mt-2 flex items-stretch gap-2">
-            <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[0.95rem] border border-[#E5E7EB] bg-[#F6F7F8] px-3 shadow-[0_3px_12px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,border-color] duration-200 focus-within:border-[#F62E18]/25 focus-within:bg-white focus-within:shadow-[0_7px_20px_rgba(246,46,24,0.11)] focus-within:ring-2 focus-within:ring-[#F62E18]/15">
+            <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[0.95rem] border border-[#E5E7EB] bg-[#F6F7F8] px-3 shadow-[0_3px_12px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,border-color] duration-200 focus-within:border-[#1A1A1A] focus-within:bg-white focus-within:shadow-[0_0_0_1px_#1A1A1A]">
               <FaSearch className="h-[1.05rem] w-[1.05rem] shrink-0 text-[#F62E18]" aria-hidden="true" />
               <span className="sr-only">Search dishes or home kitchens</span>
               <input
@@ -285,6 +286,7 @@ export function BrowseHeader({
                 onFocus={onSearchFocus}
                 onChange={(event) => onSearchTermChange(event.target.value)}
                 placeholder="Search dishes, kitchens"
+                data-craves-bare-input
                 className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-[#1A1A1A] shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
                 type="text"
                 inputMode="search"
@@ -317,7 +319,7 @@ export function BrowseHeader({
         ].join(" ")}
       >
         <div className="mx-auto flex max-w-xl items-center gap-2">
-          <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[0.95rem] border border-[#E5E7EB] bg-[#F6F7F8] px-3 shadow-[0_3px_12px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,border-color] focus-within:border-[#F62E18]/25 focus-within:bg-white focus-within:shadow-[0_7px_20px_rgba(246,46,24,0.11)] focus-within:ring-2 focus-within:ring-[#F62E18]/15">
+          <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[0.95rem] border border-[#E5E7EB] bg-[#F6F7F8] px-3 shadow-[0_3px_12px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,border-color] focus-within:border-[#1A1A1A] focus-within:bg-white focus-within:shadow-[0_0_0_1px_#1A1A1A]">
             <FaSearch className="h-[1.05rem] w-[1.05rem] shrink-0 text-[#F62E18]" aria-hidden="true" />
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
@@ -326,6 +328,7 @@ export function BrowseHeader({
               onFocus={onSearchFocus}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search dishes or kitchens"
+              data-craves-bare-input
               className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-[#1A1A1A] shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
               type="text"
               inputMode="search"

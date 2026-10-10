@@ -1,5 +1,5 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { MapPin, Minus, Plus } from "lucide-react";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/lib/catalog-discovery-policy";
 import { hasHomeReturnState } from "@/lib/home-return-state";
@@ -86,7 +86,9 @@ function DishDetailPage() {
   const [justAdded, setJustAdded] = useState(false);
   const hasCartLine = Boolean(cartLine);
 
-  useEffect(() => {
+  // Layout effect: "Added" replaces "Add" before the browser paints, so "View cart" never
+  // shows for a frame in between.
+  useLayoutEffect(() => {
     if (!hasCartLine || !awaitingCartLineRef.current) return;
     awaitingCartLineRef.current = false;
     setJustAdded(true);

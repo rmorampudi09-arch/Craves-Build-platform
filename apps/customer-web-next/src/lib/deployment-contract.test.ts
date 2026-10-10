@@ -55,7 +55,9 @@ test("home first load keeps non-critical sections out of the initial bundle", ()
 
   assert.match(home, /from "next\/dynamic"/);
   assert.match(home, /const HomeBottomSections = dynamic/);
-  assert.match(home, /const HomeSearchOverlay = dynamic/);
+  // Search stays code-split: fetched at idle or on intent, never in the first bundle.
+  assert.match(home, /import\("@\/components\/home\/HomeSearchOverlay"\)/);
+  assert.doesNotMatch(home, /import \{ HomeSearchOverlay \} from "@\/components\/home\/HomeSearchOverlay"/);
   assert.doesNotMatch(
     home,
     /import \{ HomeBottomSections \} from "@\/components\/home\/HomeBottomSections"/,

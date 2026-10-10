@@ -23,9 +23,14 @@ test("mobile customer nav morphs into a View cart pill while browsing down", () 
   assert.match(nav, /const cartExpanded = hidden && itemCount > 0/);
   assert.doesNotMatch(nav, /addEventListener\("scroll"/);
   // Transform and opacity only: the pill slides in on x, never animates left/width.
-  assert.match(nav, /initial=\{\{ opacity: 0, x: 24, scale: 0\.96 \}\}/);
+  // Tabs and pill trade places as a fade-through (leave 100 ms, arrive after an 80 ms delay),
+  // so the two layers are never drawn over each other.
+  assert.match(nav, /initial=\{NAV_SWAP\.pillOut\}/);
+  assert.match(nav, /pillOut: \{ opacity: 0, transform: "translateX\(16px\)" \}/);
+  assert.match(nav, /hide: \{ opacity: 0, transform: "scale\(0\.98\)", transition: \{ duration: 0\.1, ease: ease\.in \} \}/);
+  assert.match(nav, /show: \{ opacity: 1, transform: "scale\(1\)", transition: \{ duration: 0\.18, ease: ease\.out, delay: 0\.08 \} \}/);
   assert.doesNotMatch(nav, /left: "/);
-  assert.match(nav, /transition=\{spring\.ui\}/);
+  assert.doesNotMatch(nav, /spring\.ui/);
   assert.match(nav, /key=\{itemCount\}/);
   assert.match(nav, /scale: \[1, 1\.18, 1\]/);
   assert.match(nav, /AnimatePresence/);
@@ -140,13 +145,21 @@ test("category, Veg and sort changes reveal dishes calmly instead of a long chro
   assert.match(home, /distance > window\.innerHeight \|\| prefersReducedMotion\(\)[\s\S]{0,60}forceInstantWindowScroll\(target\)/);
   assert.match(home, /holdScrollChrome\(\);\s*if \(distance > window\.innerHeight/);
   assert.match(home, /data-craves-category-rail/);
-  assert.match(home, /setHomeCategory\(nextCategory\);[\s\S]{0,60}revealDishes\(\);/);
+  // Rail chips are aria-pressed toggles: the selected one turns off on a second tap.
+  assert.match(home, /setHomeCategory\(\(current\) => \(current === nextCategory \? null : nextCategory\)\);[\s\S]{0,60}revealDishes\(\);/);
   assert.match(home, /setDishSort\(nextSort\);\s*revealDishes\(\);/);
   assert.match(home, /revealDishes\(true\)/);
   assert.doesNotMatch(home, /scrollIntoView/);
 
-  // The list cross-fades per view and never shrinks before the scroll lands.
-  assert.match(grid, /<AnimatePresence mode="wait" initial=\{false\}>\s*<motion\.div\s*key=\{dishViewKey\}/);
+  // A new view replaces the list at once (no exit phase, no blank frames) and never shrinks
+  // before the scroll lands; heading and count change in the same frame.
+  assert.match(grid, /<div\s*key=\{dishViewKey\}/);
+  assert.doesNotMatch(grid, /AnimatePresence/);
+  // Clearing filters sits beside the count, so turning one on never pushes the list down.
+  assert.match(grid, /Clear filters/);
+  // The scroll waits for the new list: one layout effect runs the reveal after the deferred render.
+  assert.match(home, /const listCategory = useDeferredValue\(homeCategory\)/);
+  assert.match(home, /\}, \[listCategory, listSort, listFoodPreference\]\);/);
   assert.match(grid, /listItem\(index\)/);
   assert.match(grid, /min-h-svh/);
   assert.match(grid, /paging\.key === dishViewKey \? paging\.count : INITIAL_DISH_COUNT/);
@@ -160,8 +173,9 @@ test("dish bottom bar confirms an add in place and keeps the action bar mounted"
 
   assert.match(bar, /data-craves-action-bar/);
   assert.match(bar, /const mode = inCart \? \(justAdded \? "added" : "view"\) : "add"/);
-  assert.match(bar, /<AnimatePresence mode="popLayout" initial=\{false\}>/);
-  assert.match(bar, /duration: 0\.15/);
+  // One label at a time: the old one leaves before the next fades in.
+  assert.match(bar, /<AnimatePresence mode="wait" initial=\{false\}>/);
+  assert.match(bar, /\{\.\.\.swap\}/);
   assert.match(bar, /Add<span className="hidden min-\[460px\]:inline"> to cart<\/span>/);
   assert.match(bar, /View cart<span className="hidden min-\[400px\]:inline"> · \{cartTotalLabel\}<\/span>/);
 });
@@ -174,10 +188,13 @@ test("overlays enter and leave smoothly and hand focus back", () => {
   const availability = source("../components/home/CartAddressAvailabilityDialog.tsx");
   const addressEditor = source("../components/profile/AddressEditorFlow.tsx");
 
-  // Search: the lazy chunk starts loading as the finger lands, and the overlay fades out.
+  // Search: the chunk loads at idle or as the finger lands, opens without a Suspense
+  // reveal delay (kept in state, not behind next/dynamic), and the overlay fades out.
   assert.match(home, /onSearchIntent=\{preloadHomeSearchOverlay\}/);
   assert.match(header, /onPointerDown=\{onSearchIntent\}/);
-  assert.match(home, /<AnimatePresence>\s*\{searchOpen \? \(/);
+  assert.match(home, /window\.requestIdleCallback\(preloadHomeSearchOverlay/);
+  assert.match(home, /<AnimatePresence>\s*\{searchOpen && HomeSearchOverlay \? \(/);
+  assert.doesNotMatch(home, /const HomeSearchOverlay = dynamic/);
   assert.match(search, /exit=\{\{ opacity: 0, transition: \{ duration: 0\.15/);
 
   // Kitchen replacement: bottom sheet on phones, scrim fade, focus in and back, closes on navigation.

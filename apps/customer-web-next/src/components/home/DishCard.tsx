@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import {
   ChefHat,
   Clock3,
@@ -57,7 +57,9 @@ function foodIndicator(dish: Dish): {
   return { label: "Non Veg", dotClass: "bg-[#F62E18]" };
 }
 
-export function DishCard({
+// Memoised: a filter tap re-renders the home page with the same dishes first, and
+// the cards skip that pass, so the pressed chip paints at once.
+export const DishCard = memo(function DishCard({
   dish,
   variant = "standard",
   priorityImage = false,
@@ -358,6 +360,6 @@ export function DishCard({
       </div>
     </article>
   );
-}
+});
 
 export default DishCard;

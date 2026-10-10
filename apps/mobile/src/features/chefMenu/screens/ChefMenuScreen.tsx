@@ -30,6 +30,7 @@ import {
   colors,
   elevation,
   fontWeight,
+  iconSize,
   radius,
   spacing,
   touchTarget,
@@ -370,7 +371,7 @@ export function ChefMenuScreen() {
 
       <View style={styles.searchRow}>
         <View style={styles.searchBox}>
-          <Icon color={colors.textSecondary} name="search" size={19} />
+          <Icon color={colors.textSecondary} name="search" size={iconSize.lg} surface={false} />
           <TextInput
             accessibilityLabel="Search menu items"
             onChangeText={setSearchQuery}

@@ -22,6 +22,7 @@ import {
   borderWidth,
   colors,
   fontWeight,
+  iconSize,
   radius,
   spacing,
   touchTarget,
@@ -239,7 +240,7 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
                 accessibilityRole="search"
                 onPress={() => openEditor({mode: 'add', start: 'search'})}
                 style={({pressed}) => [styles.searchField, pressed && styles.pressed]}>
-                <Icon color={colors.flameRedAccessible} name="search" size={20} surface={false} />
+                <Icon color={colors.flameRedAccessible} name="search" size={iconSize.lg} surface={false} />
                 <Text style={styles.searchPlaceholder}>Search for area, street or landmark</Text>
               </Pressable>
 
@@ -258,7 +259,6 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
                   </View>
                   <Icon color={colors.textSecondary} name="chevron-right" size={18} surface={false} />
                 </Pressable>
-                <View style={styles.actionDivider} />
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => openEditor({mode: 'add', start: 'search'})}
@@ -451,11 +451,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-  },
-  actionDivider: {
-    height: borderWidth.standard,
-    marginLeft: 68,
-    backgroundColor: colors.border,
   },
   currentTitle: {
     color: colors.flameRedAccessible,

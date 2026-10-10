@@ -206,18 +206,16 @@ function ProfileReadyContent({
       </View>
 
       <View style={styles.menuCard}>
-        {CUSTOMER_PROFILE_MENU_ROWS.map((row, index) => (
-          <React.Fragment key={row.id}>
-            {index > 0 ? <View style={styles.divider} /> : null}
-            <ProfileMenuRow
-              row={row}
-              disabled={
-                (loggingOut && row.id === 'logout') ||
-                (switchingRole && row.id === 'switch-chef')
-              }
-              onPress={() => onMenuPress(row)}
-            />
-          </React.Fragment>
+        {CUSTOMER_PROFILE_MENU_ROWS.map(row => (
+          <ProfileMenuRow
+            key={row.id}
+            row={row}
+            disabled={
+              (loggingOut && row.id === 'logout') ||
+              (switchingRole && row.id === 'switch-chef')
+            }
+            onPress={() => onMenuPress(row)}
+          />
         ))}
       </View>
     </View>
@@ -704,7 +702,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   menuRow: {
-    minHeight: 78,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
@@ -732,11 +729,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     color: colors.textSecondary,
     fontSize: typography.small,
-  },
-  divider: {
-    height: borderWidth.standard,
-    marginLeft: 72,
-    backgroundColor: colors.border,
   },
   rowPressed: {opacity: 0.72},
   skeletonWrap: {gap: spacing.md},

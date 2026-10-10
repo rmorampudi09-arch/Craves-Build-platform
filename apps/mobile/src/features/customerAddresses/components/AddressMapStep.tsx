@@ -1,5 +1,15 @@
-import React from 'react';
-import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import React, {useEffect, useRef} from 'react';
+import {
+  Animated,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import {motionDuration} from '../../../design/motion';
+import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {
   colors,
   elevation,
@@ -12,6 +22,7 @@ import {
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {Icon, type IconName} from '../../../shared/components/Icon';
+import {SkeletonBlock} from '../../../shared/components/Skeleton';
 import {OlaMapPicker, type MapPoint} from '../../maps/OlaMapPicker';
 import type {ReverseGeocodedCustomerAddress} from '../api/customerAddressesApi';
 
@@ -40,6 +51,44 @@ interface Props {
 
 /** The sheet overlaps the map by its corner radius; map controls stay above it. */
 const SHEET_OVERLAP = radius.xl;
+const TITLE_LINE = 24;
+const BODY_LINE = 19;
+
+/** Grey bars that pulse in the exact space the address text will take. */
+function AddressSkeleton({fontScale}: {fontScale: number}) {
+  const reduceMotion = useReducedMotionPreference();
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const half = motionDuration.skeletonCycle / 2;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {toValue: 0.45, duration: half, useNativeDriver: true}),
+        Animated.timing(pulse, {toValue: 1, duration: half, useNativeDriver: true}),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      pulse.setValue(1);
+    };
+  }, [pulse, reduceMotion]);
+
+  return (
+    <Animated.View style={[styles.statusCopy, {opacity: pulse}]}>
+      <View style={[styles.skeletonRow, {height: TITLE_LINE * fontScale}]}>
+        <SkeletonBlock borderRadius={radius.pill} height={14 * fontScale} width="55%" />
+      </View>
+      <View style={[styles.skeletonRow, {height: BODY_LINE * fontScale}]}>
+        <SkeletonBlock borderRadius={radius.pill} height={10 * fontScale} width="92%" />
+      </View>
+      <View style={[styles.skeletonRow, {height: BODY_LINE * fontScale}]}>
+        <SkeletonBlock borderRadius={radius.pill} height={10 * fontScale} width="68%" />
+      </View>
+    </Animated.View>
+  );
+}
 
 function StatusTile({icon, tone}: {icon: IconName; tone: 'pin' | 'error' | 'warning'}) {
   return (
@@ -74,8 +123,9 @@ export function AddressMapStep({
   onBack,
 }: Props) {
   const resolved = lookup.status === 'resolved' ? lookup.result : null;
-  const approximate =
-    resolved !== null && (resolved.confidence === 'Medium' || resolved.confidence === 'Low');
+  const {fontScale} = useWindowDimensions();
+  // Title is 1 line and address 2 lines in every state, so the sheet never jumps as the pin moves.
+  const copyHeight = (TITLE_LINE + 2 * BODY_LINE) * fontScale + spacing.xxs * 2;
 
   return (
     <View style={styles.root}>
@@ -103,7 +153,7 @@ export function AddressMapStep({
             accessibilityRole="button"
             onPress={onOpenSearch}
             style={({pressed}) => [styles.searchPill, pressed && styles.pressed]}>
-            <Icon color={colors.flameRedAccessible} name="search" size={18} surface={false} />
+            <Icon color={colors.flameRedAccessible} name="search" size={iconSize.lg} surface={false} />
             <Text numberOfLines={1} style={styles.searchPillText}>
               Search for area, street or landmark
             </Text>
@@ -122,51 +172,32 @@ export function AddressMapStep({
             </Text>
           ) : null}
 
-          {lookup.status === 'idle' ? (
-            <View style={styles.statusRow}>
-              <StatusTile icon="location" tone="pin" />
-              <View style={styles.statusCopy}>
-                <Text accessibilityRole="header" style={styles.title}>
-                  Set your delivery pin
-                </Text>
-                <Text style={styles.body}>Move the map to place the pin on your building.</Text>
-              </View>
-            </View>
-          ) : null}
-
-          {lookup.status === 'resolving' ? (
-            <View accessibilityLabel="Finding the address for this pin" accessibilityRole="progressbar">
+          {lookup.status === 'idle' || lookup.status === 'resolving' || resolved ? (
+            <View
+              accessibilityLabel={
+                lookup.status === 'resolving' ? 'Finding the address for this pin' : undefined
+              }
+              accessibilityRole={lookup.status === 'resolving' ? 'progressbar' : undefined}>
               <Text style={styles.overline}>Delivering to</Text>
-              <View style={styles.statusRow}>
+              <View style={[styles.statusRow, {height: copyHeight}]}>
                 <StatusTile icon="location" tone="pin" />
-                <View style={styles.statusCopy}>
-                  <View style={[styles.skeleton, styles.skeletonTitle]} />
-                  <View style={[styles.skeleton, styles.skeletonLine]} />
-                </View>
+                {lookup.status === 'resolving' ? (
+                  <AddressSkeleton fontScale={fontScale} />
+                ) : (
+                  <View style={styles.statusCopy}>
+                    <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
+                      {resolved
+                        ? resolved.area || resolved.city || resolved.district || 'Selected location'
+                        : 'Set your delivery pin'}
+                    </Text>
+                    <Text numberOfLines={2} style={styles.body}>
+                      {resolved
+                        ? resolved.formattedAddress
+                        : 'Move the map to place the pin on your building.'}
+                    </Text>
+                  </View>
+                )}
               </View>
-            </View>
-          ) : null}
-
-          {resolved ? (
-            <View>
-              <Text style={styles.overline}>Delivering to</Text>
-              <View style={styles.statusRow}>
-                <StatusTile icon="location" tone="pin" />
-                <View style={styles.statusCopy}>
-                  <Text accessibilityRole="header" style={styles.title}>
-                    {resolved.area || resolved.city || resolved.district || 'Selected location'}
-                  </Text>
-                  <Text style={styles.body}>{resolved.formattedAddress}</Text>
-                </View>
-              </View>
-              {approximate ? (
-                <View accessibilityRole="alert" style={styles.approximate}>
-                  <Icon color={colors.warningText} name="alert" size={18} surface={false} />
-                  <Text style={styles.approximateText}>
-                    This pin is approximate. Move the map so the pin sits on your building.
-                  </Text>
-                </View>
-              ) : null}
             </View>
           ) : null}
 
@@ -304,20 +335,9 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.heading - 2,
     fontWeight: fontWeight.bold,
+    lineHeight: TITLE_LINE,
   },
-  body: {color: colors.textSecondary, fontSize: typography.small + 1},
-  skeleton: {borderRadius: radius.sm, backgroundColor: colors.surfaceMuted},
-  skeletonTitle: {width: '45%', height: 18},
-  skeletonLine: {width: '90%', height: 14, marginTop: spacing.xs},
-  approximate: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
-    marginTop: spacing.md,
-    padding: spacing.sm,
-    borderRadius: radius.md,
-    backgroundColor: colors.warningSoft,
-  },
-  approximateText: {flex: 1, color: colors.warningText, fontSize: typography.small},
+  body: {color: colors.textSecondary, fontSize: typography.small + 1, lineHeight: BODY_LINE},
+  skeletonRow: {justifyContent: 'center'},
   actions: {gap: spacing.sm},
 });

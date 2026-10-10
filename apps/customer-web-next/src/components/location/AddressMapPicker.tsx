@@ -1,55 +1,49 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Crosshair, Loader2, MapPin, Minus, Plus, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import type { Map as MapLibreMap, MapLibreEvent } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { Crosshair, Loader2, Minus, Plus } from "lucide-react";
 
-type Coordinate = {
-  latitude: number;
-  longitude: number;
+import { MAP_STYLE_URL } from "@/lib/map-tiles";
+import {
+  StaticAddressMapPicker,
+  type AddressMapPickerProps,
+  type Coordinate,
+} from "./StaticAddressMapPicker";
+
+type Props = AddressMapPickerProps & {
+  /** Short line shown above the pin while it rests, e.g. where the order goes. */
+  pinHint?: string;
 };
 
-interface AddressMapPickerProps extends Coordinate {
-  onCenterChange: (next: Coordinate) => void;
-  onUseCurrentLocation: () => void;
-  locating?: boolean;
-  disabled?: boolean;
-  /** Accessible name for the map; defaults to the delivery-address wording. */
-  ariaLabel?: string;
-  /** Hide the built-in recenter control when the host renders its own location action. */
-  showLocateButton?: boolean;
+const START_ZOOM = 16.5;
+const MIN_ZOOM = 5;
+const MAX_ZOOM = 19.5;
+/** Resolve the address only once the hand has left the map. */
+const SETTLE_MS = 450;
+/** Fall back to the static map if the interactive one has not drawn by then. */
+const LOAD_TIMEOUT_MS = 12_000;
+const SAME_POINT = 1e-6;
+
+const sameCenter = (a: Coordinate, b: Coordinate) =>
+  Math.abs(a.latitude - b.latitude) < SAME_POINT && Math.abs(a.longitude - b.longitude) < SAME_POINT;
+
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * Swiggy-style picker: the map moves under a fixed centre pin. Ola vector tiles come through our
+ * same-origin proxy (the key stays server-side); without WebGL or the proxy it falls back to the
+ * static map so nobody is left without a way to place the pin.
+ */
+export function AddressMapPicker(props: Props) {
+  const [unavailable, setUnavailable] = useState(false);
+  if (unavailable) return <StaticAddressMapPicker {...props} />;
+  return <InteractiveAddressMap {...props} onUnavailable={() => setUnavailable(true)} />;
 }
 
-const STATIC_MAP_WIDTH = 900;
-const STATIC_MAP_HEIGHT = 520;
-const MIN_ZOOM = 12;
-const MAX_ZOOM = 20;
-
-function longitudeToWorldX(longitude: number, zoom: number): number {
-  const worldSize = 256 * 2 ** zoom;
-  return ((longitude + 180) / 360) * worldSize;
-}
-
-function latitudeToWorldY(latitude: number, zoom: number): number {
-  const worldSize = 256 * 2 ** zoom;
-  const clipped = Math.min(85.05112878, Math.max(-85.05112878, latitude));
-  const sin = Math.sin((clipped * Math.PI) / 180);
-  return (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * worldSize;
-}
-
-function worldXToLongitude(x: number, zoom: number): number {
-  const worldSize = 256 * 2 ** zoom;
-  const wrapped = ((x % worldSize) + worldSize) % worldSize;
-  return (wrapped / worldSize) * 360 - 180;
-}
-
-function worldYToLatitude(y: number, zoom: number): number {
-  const worldSize = 256 * 2 ** zoom;
-  const clipped = Math.min(worldSize, Math.max(0, y));
-  const n = Math.PI - (2 * Math.PI * clipped) / worldSize;
-  return (180 / Math.PI) * Math.atan(Math.sinh(n));
-}
-
-export function AddressMapPicker({
+function InteractiveAddressMap({
   latitude,
   longitude,
   onCenterChange,
@@ -58,219 +52,246 @@ export function AddressMapPicker({
   disabled = false,
   ariaLabel = "Delivery map. Drag the map or use arrow keys to move the delivery pin.",
   showLocateButton = true,
-}: AddressMapPickerProps) {
-  const [zoom, setZoom] = useState(17);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [imageLoading, setImageLoading] = useState(true);
-  const [imageFailed, setImageFailed] = useState(false);
-  const [imageAttempt, setImageAttempt] = useState(0);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const pointerRef = useRef<{
-    id: number;
-    clientX: number;
-    clientY: number;
-  } | null>(null);
-
-  const imageUrl = useMemo(() => {
-    const query = new URLSearchParams({
-      latitude: latitude.toFixed(7),
-      longitude: longitude.toFixed(7),
-      zoom: String(zoom),
-    });
-    query.set("attempt", String(imageAttempt));
-    return `/api/location/map-image?${query}`;
-  }, [imageAttempt, latitude, longitude, zoom]);
+  pinHint,
+  onUnavailable,
+}: Props & { onUnavailable: () => void }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  /** The point the host knows about; moves that end here are not reported again. */
+  const knownCenterRef = useRef<Coordinate>({ latitude, longitude });
+  const callbacksRef = useRef({ onCenterChange, onUnavailable });
+  const [ready, setReady] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [zoom, setZoom] = useState(START_ZOOM);
 
   useEffect(() => {
-    setImageLoading(true);
-    setImageFailed(false);
-  }, [latitude, longitude, zoom]);
+    callbacksRef.current = { onCenterChange, onUnavailable };
+  });
 
-  const moveByScreenPixels = (dx: number, dy: number) => {
-    const rect = viewportRef.current?.getBoundingClientRect();
-    const scaleX = rect?.width ? STATIC_MAP_WIDTH / rect.width : 1;
-    const scaleY = rect?.height ? STATIC_MAP_HEIGHT / rect.height : 1;
-    const centerX = longitudeToWorldX(longitude, zoom);
-    const centerY = latitudeToWorldY(latitude, zoom);
-    const nextX = centerX - dx * scaleX;
-    const nextY = centerY - dy * scaleY;
-    onCenterChange({
-      latitude: Number(worldYToLatitude(nextY, zoom).toFixed(7)),
-      longitude: Number(worldXToLongitude(nextX, zoom).toFixed(7)),
-    });
+  // Create the map once; later prop changes are applied by the effects below.
+  useEffect(() => {
+    let disposed = false;
+    let map: MapLibreMap | undefined;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    const giveUp = () => {
+      if (!disposed) callbacksRef.current.onUnavailable();
+    };
+    const loadTimer = setTimeout(giveUp, LOAD_TIMEOUT_MS);
+    const start = knownCenterRef.current;
+
+    void import("maplibre-gl")
+      .then(({ Map, AttributionControl, getVersion, setWorkerUrl }) => {
+        if (disposed || !containerRef.current) return;
+        // maplibre-gl 6 ships its worker separately; app/vendor/maplibre-gl-worker.mjs serves it same-origin.
+        setWorkerUrl(`/vendor/maplibre-gl-worker.mjs?v=${getVersion()}`);
+        map = new Map({
+          container: containerRef.current,
+          style: MAP_STYLE_URL,
+          center: [start.longitude, start.latitude],
+          zoom: START_ZOOM,
+          minZoom: MIN_ZOOM,
+          maxZoom: MAX_ZOOM,
+          attributionControl: false,
+          dragRotate: false,
+          pitchWithRotate: false,
+          touchPitch: false,
+          // Zooming keeps the chosen spot under the pin.
+          scrollZoom: { around: "center" },
+          touchZoomRotate: { around: "center" },
+          renderWorldCopies: false,
+          transformRequest: (url) => ({
+            url: url.startsWith("/") ? window.location.origin + url : url,
+          }),
+        });
+        mapRef.current = map;
+        map.touchZoomRotate.disableRotation();
+        map.addControl(
+          new AttributionControl({
+            compact: false,
+            customAttribution:
+              '<a href="https://maps.olakrutrim.com/" target="_blank" rel="noopener">© Ola Maps</a> | <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>',
+          }),
+          "bottom-left",
+        );
+        map.getCanvas().setAttribute("aria-label", ariaLabel);
+
+        let drawn = false;
+        map.once("load", () => {
+          drawn = true;
+          clearTimeout(loadTimer);
+          if (!disposed) setReady(true);
+        });
+        map.on("error", () => {
+          // Before the first draw an error means no style (proxy or WebGL); later ones are single tiles.
+          if (!drawn) giveUp();
+        });
+        map.on("movestart", (event: MapLibreEvent) => {
+          if (!event.originalEvent) return;
+          clearTimeout(settleTimer);
+          setMoving(true);
+        });
+        map.on("zoomend", () => setZoom(map?.getZoom() ?? START_ZOOM));
+        map.on("moveend", () => {
+          setMoving(false);
+          clearTimeout(settleTimer);
+          settleTimer = setTimeout(() => {
+            if (!map) return;
+            const center = map.getCenter();
+            const next = {
+              latitude: Number(center.lat.toFixed(7)),
+              longitude: Number(center.lng.toFixed(7)),
+            };
+            if (sameCenter(next, knownCenterRef.current)) return;
+            knownCenterRef.current = next;
+            callbacksRef.current.onCenterChange(next);
+          }, SETTLE_MS);
+        });
+      })
+      .catch(giveUp);
+
+    return () => {
+      disposed = true;
+      clearTimeout(loadTimer);
+      clearTimeout(settleTimer);
+      map?.remove();
+      mapRef.current = null;
+    };
+    // ariaLabel is applied once with the canvas; the map must not be recreated on prop changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // The host moved the pin (search result, current location): glide there without reporting it back.
+  useEffect(() => {
+    const next = { latitude, longitude };
+    knownCenterRef.current = next;
+    const map = mapRef.current;
+    if (!map) return;
+    const center = map.getCenter();
+    if (sameCenter(next, { latitude: center.lat, longitude: center.lng })) return;
+    map.easeTo({ center: [longitude, latitude], duration: prefersReducedMotion() ? 0 : 650 });
+  }, [latitude, longitude, ready]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    for (const handler of [map.dragPan, map.boxZoom, map.doubleClickZoom, map.keyboard]) {
+      if (disabled) handler.disable();
+      else handler.enable();
+    }
+    if (disabled) {
+      map.scrollZoom.disable();
+      map.touchZoomRotate.disable();
+    } else {
+      map.scrollZoom.enable({ around: "center" });
+      map.touchZoomRotate.enable({ around: "center" });
+      map.touchZoomRotate.disableRotation();
+    }
+  }, [disabled, ready]);
+
+  const zoomBy = (delta: number) => {
+    const map = mapRef.current;
+    if (!map || disabled) return;
+    map.easeTo({ zoom: map.getZoom() + delta, duration: prefersReducedMotion() ? 0 : 250 });
   };
 
-  const finishDrag = (event: React.PointerEvent<HTMLDivElement>, cancelled = false) => {
-    const active = pointerRef.current;
-    if (!active || active.id !== event.pointerId) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    pointerRef.current = null;
-    const offset = dragOffset;
-    setDragOffset({ x: 0, y: 0 });
-    if (!cancelled && (Math.abs(offset.x) > 2 || Math.abs(offset.y) > 2)) {
-      moveByScreenPixels(offset.x, offset.y);
-    }
-  };
+  const controlButton =
+    "flex h-10 w-10 items-center justify-center text-[#1A1A1A] transition-colors duration-150 hover:bg-[#F1F3F5] focus-visible:bg-[#F1F3F5] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
-    <div className="space-y-3">
-      <div
-        ref={viewportRef}
-        role="application"
-        tabIndex={disabled ? -1 : 0}
-        aria-label={ariaLabel}
-        onKeyDown={(event) => {
-          if (disabled) return;
-          const step = event.shiftKey ? 72 : 28;
-          if (event.key === "ArrowLeft") {
-            event.preventDefault();
-            moveByScreenPixels(step, 0);
-          } else if (event.key === "ArrowRight") {
-            event.preventDefault();
-            moveByScreenPixels(-step, 0);
-          } else if (event.key === "ArrowUp") {
-            event.preventDefault();
-            moveByScreenPixels(0, step);
-          } else if (event.key === "ArrowDown") {
-            event.preventDefault();
-            moveByScreenPixels(0, -step);
-          }
-        }}
-        onPointerDown={(event) => {
-          if (disabled) return;
-          if (event.pointerType === "mouse" && event.button !== 0) return;
-          // Pointer capture would retarget the click away from the zoom/recenter/retry buttons.
-          if ((event.target as HTMLElement).closest("button")) return;
-          event.currentTarget.setPointerCapture(event.pointerId);
-          pointerRef.current = {
-            id: event.pointerId,
-            clientX: event.clientX,
-            clientY: event.clientY,
-          };
-          setDragOffset({ x: 0, y: 0 });
-        }}
-        onPointerMove={(event) => {
-          const active = pointerRef.current;
-          if (!active || active.id !== event.pointerId || disabled) return;
-          setDragOffset({
-            x: event.clientX - active.clientX,
-            y: event.clientY - active.clientY,
-          });
-        }}
-        onPointerUp={(event) => finishDrag(event)}
-        onPointerCancel={(event) => finishDrag(event, true)}
-        className="relative aspect-[900/520] w-full touch-none overflow-hidden rounded-[1.6rem] border border-[#E5E7EB] bg-[#F1F3F5] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35"
-      >
-        {!imageFailed ? (
-          // Static Ola Maps bytes come from our same-origin BFF (the key stays server-side),
-          // so Next/Image optimization would only add another server hop.
-          <img
-            key={imageUrl}
-            src={imageUrl}
-            alt=""
-            aria-hidden="true"
-            draggable={false}
-            onLoad={() => {
-              setImageLoading(false);
-              setImageFailed(false);
-            }}
-            onError={() => {
-              setImageLoading(false);
-              setImageFailed(true);
-            }}
-            className="absolute inset-0 h-full w-full select-none object-cover"
-            style={{
-              transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)`,
-            }}
-          />
-        ) : (
-          <div className="absolute inset-0 grid place-items-center bg-[#F1F3F5] px-8 text-center">
-            <div>
-              <p className="text-sm font-semibold text-[#6B6B6B]">Map preview could not load.</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setImageLoading(true);
-                  setImageFailed(false);
-                  setImageAttempt((current) => current + 1);
-                }}
-                className="mx-auto mt-3 inline-flex min-h-10 items-center gap-2 rounded-full !border !border-[#E5E7EB] !bg-white px-4 text-xs font-black !text-[#1A1A1A] shadow-[0_3px_10px_rgba(26,26,26,0.07)] transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:!bg-[#F1F3F5] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none"
-              >
-                <RefreshCw className="h-4 w-4 text-[#F62E18]" />
-                Retry map
-              </button>
-            </div>
-          </div>
-        )}
-
-        {imageLoading && !imageFailed ? (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center bg-white/45 backdrop-blur-[2px]">
-            <Loader2 className="h-7 w-7 animate-spin text-[#F62E18]" />
-          </div>
-        ) : null}
-
-        <div
-          className="pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-full"
-          aria-hidden="true"
-        >
-          <MapPin
-            className="h-11 w-11 fill-[#F62E18] text-[#F62E18] drop-shadow-[0_5px_6px_rgba(26,26,26,0.24)]"
-            strokeWidth={2}
-          />
-          <span className="absolute left-1/2 top-[40%] h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
-        </div>
-
-        <div className="absolute right-3 top-3 z-30 flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setZoom((current) => Math.min(MAX_ZOOM, current + 1));
-              setImageLoading(true);
-              setImageFailed(false);
-            }}
-            disabled={disabled || zoom >= MAX_ZOOM}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/95 text-[#1A1A1A] shadow-[0_5px_16px_rgba(26,26,26,0.12)] backdrop-blur transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:bg-[#F1F3F5] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none disabled:opacity-45"
-            aria-label="Zoom in"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setZoom((current) => Math.max(MIN_ZOOM, current - 1));
-              setImageLoading(true);
-              setImageFailed(false);
-            }}
-            disabled={disabled || zoom <= MIN_ZOOM}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/95 text-[#1A1A1A] shadow-[0_5px_16px_rgba(26,26,26,0.12)] backdrop-blur transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:bg-[#F1F3F5] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none disabled:opacity-45"
-            aria-label="Zoom out"
-          >
-            <Minus className="h-4 w-4" />
-          </button>
-        </div>
-
-        {showLocateButton ? (
-          <button
-            type="button"
-            onClick={onUseCurrentLocation}
-            disabled={disabled || locating}
-            className="absolute bottom-3 right-3 z-30 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/80 bg-white/95 px-3 text-xs font-black text-[#1A1A1A] shadow-[0_5px_16px_rgba(26,26,26,0.12)] backdrop-blur transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:bg-[#F1F3F5] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none disabled:opacity-50"
-          >
-            {locating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Crosshair className="h-4 w-4 text-[#F62E18]" />
-            )}
-            Recenter
-          </button>
-        ) : null}
-
-        <span className="pointer-events-none absolute bottom-2 left-3 z-20 rounded bg-white/80 px-1.5 py-0.5 text-[9px] font-semibold text-[#6B6B6B] backdrop-blur">
-          © Ola Maps · Map data available under ODbL
-        </span>
+    <div
+      className={
+        "relative aspect-[4/3] w-full overflow-hidden rounded-[1.6rem] border border-[#E5E7EB] bg-[#F1F3F5] shadow-inner md:aspect-[900/520] " +
+        // Map chrome in the CRAVES palette.
+        "[&_.maplibregl-canvas]:outline-none [&_.maplibregl-canvas:focus-visible]:ring-2 [&_.maplibregl-canvas:focus-visible]:ring-inset [&_.maplibregl-canvas:focus-visible]:ring-[#F62E18]/40 " +
+        "[&_.maplibregl-ctrl-attrib]:!m-2 [&_.maplibregl-ctrl-attrib]:rounded-md [&_.maplibregl-ctrl-attrib]:!bg-white/85 [&_.maplibregl-ctrl-attrib]:!px-1.5 [&_.maplibregl-ctrl-attrib]:!py-0.5 [&_.maplibregl-ctrl-attrib]:text-[9px] [&_.maplibregl-ctrl-attrib]:font-semibold [&_.maplibregl-ctrl-attrib]:text-[#6B6B6B] [&_.maplibregl-ctrl-attrib_a]:!text-[#6B6B6B]"
+      }
+      aria-busy={!ready}
+    >
+      {/* maplibre-gl.css makes its container position:relative, so it must not be the absolute layer. */}
+      <div className="absolute inset-0">
+        <div ref={containerRef} className="h-full w-full" />
       </div>
+
+      {!ready ? (
+        <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-[#F1F3F5]">
+          <div className="absolute inset-0 animate-pulse bg-[linear-gradient(120deg,#F1F3F5_20%,#FFFFFF_45%,#F1F3F5_70%)] motion-reduce:animate-none" />
+          <span className="relative inline-flex items-center gap-2 rounded-full bg-white px-3.5 py-2 text-xs font-black text-[#1A1A1A] shadow-[0_6px_18px_rgba(26,26,26,0.10)]">
+            <Loader2 className="h-4 w-4 animate-spin text-[#F62E18]" aria-hidden="true" />
+            Loading map
+          </span>
+        </div>
+      ) : null}
+
+      {/* Fixed centre pin: its tip marks the chosen point; it lifts while the map moves. */}
+      <div className="pointer-events-none absolute left-1/2 top-1/2 z-20" aria-hidden="true">
+        <span
+          className={
+            "absolute left-0 top-0 h-2 w-5 -translate-x-1/2 -translate-y-1/2 rounded-[50%] bg-[#1A1A1A]/25 blur-[1px] transition-transform duration-200 ease-out motion-reduce:transition-none " +
+            (moving ? "scale-50" : "scale-100")
+          }
+        />
+        <div
+          className={
+            "absolute bottom-0 left-0 flex -translate-x-1/2 flex-col items-center transition-transform duration-200 ease-out motion-reduce:transition-none " +
+            (moving ? "-translate-y-3" : "translate-y-0")
+          }
+        >
+          {pinHint && ready && !moving ? (
+            <span className="relative mb-2 w-max max-w-[15rem] rounded-xl bg-[#1A1A1A] px-3 py-2 text-center shadow-[0_10px_24px_rgba(26,26,26,0.28)]">
+              <span className="block text-[11px] font-black leading-4 text-white">{pinHint}</span>
+              <span className="mt-0.5 block text-[10px] font-semibold leading-3.5 text-white/70">
+                Move the map to adjust the pin
+              </span>
+              <span className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 bg-[#1A1A1A]" />
+            </span>
+          ) : null}
+          <svg viewBox="0 0 40 52" className="h-[52px] w-10 drop-shadow-[0_8px_10px_rgba(26,26,26,0.28)]">
+            <path
+              d="M20 51c-1.1 0-2.1-.6-2.7-1.6C11.4 39.6 2 30.6 2 19.8 2 9.4 10.1 1 20 1s18 8.4 18 18.8c0 10.8-9.4 19.8-15.3 29.6-.6 1-1.6 1.6-2.7 1.6z"
+              fill="#F62E18"
+            />
+            <circle cx="20" cy="19.5" r="7.25" fill="#FFFFFF" />
+          </svg>
+        </div>
+      </div>
+
+      <div className="absolute right-3 top-3 z-30 flex flex-col overflow-hidden rounded-2xl bg-white/95 shadow-[0_8px_24px_rgba(26,26,26,0.14)] ring-1 ring-[#1A1A1A]/5 backdrop-blur">
+        <button
+          type="button"
+          onClick={() => zoomBy(1)}
+          disabled={disabled || !ready || zoom >= MAX_ZOOM}
+          className={controlButton}
+          aria-label="Zoom in"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+        <span className="mx-2 h-px bg-[#E5E7EB]" aria-hidden="true" />
+        <button
+          type="button"
+          onClick={() => zoomBy(-1)}
+          disabled={disabled || !ready || zoom <= MIN_ZOOM}
+          className={controlButton}
+          aria-label="Zoom out"
+        >
+          <Minus className="h-4 w-4" />
+        </button>
+      </div>
+
+      {showLocateButton ? (
+        <button
+          type="button"
+          onClick={onUseCurrentLocation}
+          disabled={disabled || locating}
+          className="absolute bottom-3 right-3 z-30 inline-flex min-h-10 items-center gap-2 rounded-full bg-white px-3.5 text-xs font-black text-[#1A1A1A] shadow-[0_8px_24px_rgba(26,26,26,0.14)] ring-1 ring-[#1A1A1A]/5 transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_26px_rgba(26,26,26,0.18)] active:translate-y-0 disabled:opacity-50 motion-reduce:transform-none"
+        >
+          {locating ? (
+            <Loader2 className="h-4 w-4 animate-spin text-[#F62E18]" />
+          ) : (
+            <Crosshair className="h-4 w-4 text-[#F62E18]" />
+          )}
+          Locate me
+        </button>
+      ) : null}
     </div>
   );
 }

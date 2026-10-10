@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { boundedFetch } from "@/lib/bounded-fetch";
-import { isRequestOriginAllowed } from "@/lib/request-security";
+import { isSameSitePublicRequest } from "@/lib/request-security";
 import { renderOlaMapsStaticImage } from "@/lib/server/ola-maps";
 
 const WINDOW_MS = 60_000;
@@ -26,26 +26,6 @@ function locationProxyBase(): URL | null {
   return base;
 }
 
-
-function publicOriginAllowed(request: NextRequest): boolean {
-  if (request.headers.get("sec-fetch-site") === "same-origin") return true;
-  const referer = request.headers.get("referer");
-  if (!referer) return false;
-  let origin: string | null = null;
-  try {
-    origin = new URL(referer).origin;
-  } catch {
-    return false;
-  }
-  return isRequestOriginAllowed({
-    origin,
-    requestUrl: request.url,
-    forwardedProto: request.headers.get("x-forwarded-proto"),
-    forwardedHost: request.headers.get("x-forwarded-host"),
-    host: request.headers.get("host"),
-  });
-}
-
 function admissionRetryAfter(): number | null {
   const now = Date.now();
   while (admittedAt.length > 0 && now - admittedAt[0] >= WINDOW_MS) {
@@ -64,7 +44,7 @@ function admissionRetryAfter(): number | null {
 }
 
 export async function GET(request: NextRequest) {
-  if (!publicOriginAllowed(request)) {
+  if (!isSameSitePublicRequest(request)) {
     return NextResponse.json(
       { error: "ORIGIN_REJECTED" },
       { status: 403, headers: { "Cache-Control": "no-store, private" } },

@@ -5,6 +5,7 @@ import {
   parseOlaReverseGeocode,
   type ReverseGeocodedAddress,
 } from "@/lib/location-contract";
+import { rewriteMapDocument } from "@/lib/map-tiles";
 
 const OLA_MAPS_ENDPOINT = "https://api.olamaps.io";
 // The Ola credential restricts callers by domain; server calls are made on behalf of this site.
@@ -33,7 +34,7 @@ export type LocationSearchResult = {
 type JsonObject = Record<string, unknown>;
 
 export class OlaMapsUnavailableError extends Error {
-  constructor(operation: string, reason: string) {
+  constructor(operation: string, reason: string, readonly status?: number) {
     super(`Ola Maps ${operation} unavailable: ${reason}`);
     this.name = "OlaMapsUnavailableError";
   }
@@ -65,9 +66,9 @@ function validCoordinates(latitude: unknown, longitude: unknown): latitude is nu
 const fixed = (value: number) => value.toFixed(7);
 
 /** Operational signal only: never the URL (it carries the key), coordinates, queries or bodies. */
-function unavailable(operation: string, reason: string, requestId?: string): OlaMapsUnavailableError {
+function unavailable(operation: string, reason: string, requestId?: string, status?: number): OlaMapsUnavailableError {
   console.warn(`[location] Ola Maps ${operation} unavailable: ${reason}${requestId ? ` (request ${requestId})` : ""}`);
-  return new OlaMapsUnavailableError(operation, reason);
+  return new OlaMapsUnavailableError(operation, reason, status);
 }
 
 async function olaRequest(
@@ -116,6 +117,7 @@ async function olaRequest(
       operation,
       response.status === 429 ? "rate limited (HTTP 429)" : `HTTP ${response.status}`,
       requestId,
+      response.status,
     );
   }
   return response;
@@ -245,4 +247,55 @@ export async function renderOlaMapsStaticImage(
     bytes: new Uint8Array(await response.arrayBuffer()),
     contentType,
   };
+}
+
+const VECTOR_CONTENT_TYPES: Record<string, readonly string[]> = {
+  pbf: ["application/x-protobuf", "application/vnd.mapbox-vector-tile", "application/octet-stream"],
+  mvt: ["application/x-protobuf", "application/vnd.mapbox-vector-tile", "application/octet-stream"],
+  png: ["image/png"],
+  webp: ["image/webp"],
+};
+
+/**
+ * One resource of the interactive Ola map (`path` is relative to /tiles/vector/v1 and already validated).
+ * Style and TileJSON documents come back pointing at `proxyBase`, so the browser never needs the key.
+ */
+export async function fetchOlaMapsVectorResource(
+  path: string,
+  query: URLSearchParams,
+  proxyBase: string,
+): Promise<{ bytes: Uint8Array; contentType: string }> {
+  const extension = path.slice(path.lastIndexOf(".") + 1);
+  const document = extension === "json";
+  const response = await olaRequest(
+    "vector map",
+    `/tiles/vector/v1/${path}`,
+    Object.fromEntries(query),
+    document ? "application/json" : extension === "png" || extension === "webp" ? `image/${extension}` : "application/x-protobuf",
+    10_000,
+    document ? 2 * 1024 * 1024 : 4 * 1024 * 1024,
+  );
+
+  if (document) {
+    let rewritten: string;
+    try {
+      rewritten = rewriteMapDocument(await response.text(), proxyBase);
+    } catch {
+      throw unavailable("vector map", "invalid JSON document");
+    }
+    // Fail closed rather than hand the credential to a browser if Ola ever echoes it.
+    if (rewritten.includes(process.env.OLA_MAPS_API_KEY?.trim() || "\u0000")) {
+      throw unavailable("vector map", "document contained the credential");
+    }
+    return { bytes: new TextEncoder().encode(rewritten), contentType: "application/json" };
+  }
+
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const contentType = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
+  // An empty tile (e.g. open sea) may arrive as 204 with no type.
+  if (bytes.byteLength === 0) return { bytes, contentType: "application/x-protobuf" };
+  if (!VECTOR_CONTENT_TYPES[extension]?.includes(contentType)) {
+    throw unavailable("vector map", "unexpected content type");
+  }
+  return { bytes, contentType };
 }

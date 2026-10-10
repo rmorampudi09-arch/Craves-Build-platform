@@ -24,6 +24,8 @@ target 'CravesMobile' do
   )
 
   post_install do |installer|
+    # MapLibre Native for @maplibre/maplibre-react-native comes from Swift Package Manager.
+    $MLRN.post_install(installer)
     react_native_post_install(
       installer,
       config[:reactNativePath],

@@ -757,28 +757,48 @@ export function AddressEditorFlow({
                       latitude={point.latitude}
                       longitude={point.longitude}
                       locating={locating}
-                      disabled={busy || mapResolving}
+                      // The map stays movable while an address resolves; the newest pin wins.
+                      disabled={busy}
+                      pinHint="Your order will be delivered here"
                       onCenterChange={handleMapCenterChange}
                       onUseCurrentLocation={() => void handleUseCurrentLocation()}
                     />
                   ) : null}
 
-                  <div className="mt-4 flex items-start gap-3 rounded-2xl bg-[#F1F3F5] p-4">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
+                  <div
+                    className="mt-4 flex items-start gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[0_6px_18px_rgba(26,26,26,0.06)]"
+                    aria-live="polite"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F62E18]/10 text-[#F62E18]">
                       {mapResolving ? (
                         <Loader2 className="h-4.5 w-4.5 animate-spin" />
                       ) : (
                         <MapPin className="h-4.5 w-4.5" />
                       )}
                     </span>
-                    <div className="min-w-0">
-                      <p className="text-xs font-black uppercase tracking-[0.1em] text-[#6B6B6B]">
-                        Delivery location
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[#F62E18]">
+                        Delivering to
                       </p>
-                      <p className="mt-1 text-sm font-bold leading-6 text-[#1A1A1A]">
-                        {resolvedAddress || "Complete the location details below."}
-                      </p>
+                      {mapResolving ? (
+                        <p className="mt-1.5 space-y-1.5" aria-label="Finding the address under the pin">
+                          <span className="block h-3.5 w-4/5 animate-pulse rounded-full bg-[#F1F3F5] motion-reduce:animate-none" />
+                          <span className="block h-3.5 w-1/2 animate-pulse rounded-full bg-[#F1F3F5] motion-reduce:animate-none" />
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-sm font-bold leading-6 text-[#1A1A1A]">
+                          {resolvedAddress || "Complete the location details below."}
+                        </p>
+                      )}
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setStep("locate")}
+                      disabled={busy}
+                      className="shrink-0 rounded-full px-3 py-1.5 text-xs font-black text-[#F62E18] transition-colors duration-150 hover:bg-[#F62E18]/10 focus-visible:bg-[#F62E18]/10 focus-visible:outline-none disabled:opacity-50"
+                    >
+                      Change
+                    </button>
                   </div>
 
                   <div className="mt-6 grid gap-4">

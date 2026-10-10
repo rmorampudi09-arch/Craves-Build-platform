@@ -8,12 +8,18 @@ import { ChefModeGuard, isOpenInChefMode } from "../components/layout/ChefModeGu
 import ChefLayout from "../app/chef/layout";
 import ChefMorePage from "../app/chef/profile/page";
 import ChefNotificationsPage from "../app/chef/notifications/page";
+import LegacyChefProfilePage from "../app/chef/[id]/page";
 import { isChefModeVerified, markChefModeVerified } from "./chef-mode";
 import { captureSessionContext, getSession, invalidateSession, setSessionIdentity } from "../services/auth/cravesAuth";
 import type { CravesIdentity } from "./auth-contract";
 
 const mocks = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn(), assign: vi.fn(), locationReplace: vi.fn() }));
-vi.mock("next/navigation", () => ({ usePathname: vi.fn(() => "/home"), useRouter: () => ({ replace: mocks.replace, push: mocks.push }) }));
+vi.mock("next/navigation", () => ({
+  usePathname: vi.fn(() => "/home"),
+  useRouter: () => ({ replace: mocks.replace, push: mocks.push }),
+  notFound: () => { throw new Error("NEXT_NOT_FOUND"); },
+  redirect: (href: string) => { throw new Error(`NEXT_REDIRECT ${href}`); },
+}));
 
 const chef: CravesIdentity = { id: "61111111-1111-4111-8111-111111111111", phoneNumber: "+910000000002", displayName: "Asha Rao", email: null, emailVerified: false, status: "ACTIVE", roles: ["CUSTOMER", "CHEF"] };
 let me: CravesIdentity | null;
@@ -129,5 +135,13 @@ describe("Chef notifications", () => {
     fireEvent.click(await screen.findByRole("link", { name: "Back to home" }));
     expect(mocks.push).toHaveBeenCalledWith("/chef");
     expect(mocks.push).not.toHaveBeenCalledWith("/home");
+  });
+});
+
+describe("Legacy public chef links", () => {
+  it("redirect kitchen ids to the kitchen page and never turn other segments into a kitchen", async () => {
+    await expect(LegacyChefProfilePage({ params: Promise.resolve({ id: chef.id }) })).rejects.toThrow(`NEXT_REDIRECT /kitchen/${chef.id}`);
+    for (const id of ["orderz", "earnings", "123", "61111111-1111-4111-8111-11111111111"])
+      await expect(LegacyChefProfilePage({ params: Promise.resolve({ id }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 });

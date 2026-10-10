@@ -152,6 +152,7 @@ test("dish and customer kitchen detail pages recover live data and return to sav
   assert.match(customerKitchenRoute, /ChefProfilePage/);
   assert.doesNotMatch(customerKitchenRoute, /ChefAccessBoundary|ChefWorkspaceNavigation/);
   assert.match(legacyChefRoute, /redirect\(`\/kitchen\/\$\{encodeURIComponent\(id\)\}`\)/);
+  assert.match(legacyChefRoute, /if \(!KITCHEN_ID\.test\(id\)\) notFound\(\);/);
 });
 
 test("home kitchen and dish details share one live floating cart without forcing checkout", () => {
@@ -289,6 +290,8 @@ test("customer headers stay lean and share the same responsive scroll behavior",
 
   assert.doesNotMatch(homeHeader, /PersistentCustomerServiceNav/);
   assert.doesNotMatch(detailHeader, /forceServiceNav/);
+  // Approved chefs see "Switch to chef mode" on dish and kitchen pages too.
+  assert.match(detailHeader, /user=\{getSession\(\) \?\? undefined\}/);
 
   for (const surface of [
     homeHeader,

@@ -10,6 +10,7 @@ import {
 import {
   clearSession,
   getAddress,
+  getSession,
   loadSelectedAddress,
 } from "@/services/auth/cravesAuth";
 
@@ -74,6 +75,7 @@ export function DetailBrowseHeader({ returnPath, onBack }: DetailBrowseHeaderPro
 
   return (
     <BrowseHeader
+      user={getSession() ?? undefined}
       locationLabel={locationLabel}
       locationTypeLabel={locationTypeLabel}
       onOpenLocation={() => navigate({ to: "/addresses" })}

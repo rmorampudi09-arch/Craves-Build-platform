@@ -46,7 +46,7 @@ class SupportAssistantTest {
         claude.reply(toolUse("t1", "get_order_details", "{\"order_id\":\"" + ORDER + "\"}"));
         claude.reply(text("Your Pesarattu is out for delivery."));
 
-        var response = assistant.reply(CUSTOMER, "CUSTOMER", "Bearer caller", null, chat("where is my order?"));
+        var response = assistant.reply(CUSTOMER, "CUSTOMER", "WEB", "Bearer caller", null, chat("where is my order?"));
 
         assertEquals("Your Pesarattu is out for delivery.", response.reply());
         assertNull(response.supportCase());
@@ -63,7 +63,7 @@ class SupportAssistantTest {
             "{\"subject\":\"Refund\",\"details\":\"Wants a refund\",\"order_id\":\"" + ORDER + "\"}"));
         claude.reply(text("I couldn't find that order on your account."));
 
-        var response = assistant.reply(CUSTOMER, "CUSTOMER", "Bearer caller", null, chat("refund order " + ORDER));
+        var response = assistant.reply(CUSTOMER, "CUSTOMER", "WEB", "Bearer caller", null, chat("refund order " + ORDER));
 
         assertNull(response.supportCase());
         assertTrue(cases.created.isEmpty());
@@ -78,7 +78,7 @@ class SupportAssistantTest {
         claude.reply(toolUse("t1", "create_support_ticket", create), toolUse("t2", "create_support_ticket", create));
         claude.reply(text("Done."));
 
-        var response = assistant.reply(CUSTOMER, "CUSTOMER", "Bearer caller", ORDER,
+        var response = assistant.reply(CUSTOMER, "CUSTOMER", "WEB", "Bearer caller", ORDER,
             chat("food was cold, my card is 4111 1111 1111 1111, yes open a ticket"));
 
         assertEquals("CR-TEST", response.supportCase().caseNumber());
@@ -100,7 +100,7 @@ class SupportAssistantTest {
             claude.reply(toolUse("t" + i, "get_my_recent_orders", "{}"));
         }
 
-        var response = assistant.reply(CUSTOMER, "CUSTOMER", "Bearer caller", null, chat("hi"));
+        var response = assistant.reply(CUSTOMER, "CUSTOMER", "WEB", "Bearer caller", null, chat("hi"));
 
         assertEquals(SupportAssistant.FALLBACK, response.reply());
         assertEquals(SupportAssistant.MAX_ROUNDS, claude.sent.size());
@@ -112,7 +112,7 @@ class SupportAssistantTest {
     void sendsOnlyThePublicGuideTheUsersChatAndRole() throws Exception {
         claude.reply(text("Hello!"));
 
-        assistant.reply(CUSTOMER, "CUSTOMER", "Bearer caller", ORDER, List.of(
+        assistant.reply(CUSTOMER, "CUSTOMER", "WEB", "Bearer caller", ORDER, List.of(
             new ChatMessage("assistant", "earlier reply cut off by the client"),
             new ChatMessage("user", "hello")));
 
@@ -122,6 +122,9 @@ class SupportAssistantTest {
         assertTrue(sent.path("system").get(0).path("text").asText().startsWith("You are the Craves support assistant"));
         assertEquals("ephemeral", sent.path("system").get(0).path("cache_control").path("type").asText());
         assertTrue(sent.path("system").get(1).path("text").asText().contains(ORDER.toString()));
+        assertTrue(sent.path("system").get(1).path("text").asText().contains("Craves website"));
+        assertTrue(sent.path("system").get(0).path("text").asText().contains("https://craves.in/addresses"));
+        assertFalse(sent.path("system").get(0).path("text").asText().contains("/admin"));
         assertFalse(sent.toString().contains("+919999999999"));
         assertFalse(sent.toString().contains(CUSTOMER.identityId().toString()));
     }
@@ -131,7 +134,7 @@ class SupportAssistantTest {
         claude.reply(toolUse("t1", "create_support_ticket", "{\"subject\":\"Help\",\"details\":\"Call me\"}"));
         claude.failNext = true;
 
-        var response = assistant.reply(CUSTOMER, "CUSTOMER", "Bearer caller", null, chat("please open a ticket"));
+        var response = assistant.reply(CUSTOMER, "CUSTOMER", "WEB", "Bearer caller", null, chat("please open a ticket"));
 
         assertEquals("CR-TEST", response.supportCase().caseNumber());
         assertTrue(response.reply().contains("CR-TEST"));
@@ -145,7 +148,7 @@ class SupportAssistantTest {
         claude.reply(toolUse("t1", "create_support_ticket", "{\"subject\":\"Cold food\",\"details\":\"again\"}"));
         claude.reply(text("You already have ticket CR-EARLIER."));
 
-        var response = assistant.reply(CUSTOMER, "CUSTOMER", "Bearer caller", null, chat("open a ticket"));
+        var response = assistant.reply(CUSTOMER, "CUSTOMER", "WEB", "Bearer caller", null, chat("open a ticket"));
 
         assertNull(response.supportCase());
         assertTrue(cases.created.isEmpty());
@@ -166,7 +169,7 @@ class SupportAssistantTest {
         claude.reply(four);
         claude.reply(text("Here you go."));
 
-        assistant.reply(CUSTOMER, "CUSTOMER", "Bearer caller", null, history);
+        assistant.reply(CUSTOMER, "CUSTOMER", "WEB", "Bearer caller", null, history);
 
         JsonNode messages = claude.sent.get(0).path("messages");
         int chars = 0;

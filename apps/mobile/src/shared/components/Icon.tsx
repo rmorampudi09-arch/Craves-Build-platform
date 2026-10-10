@@ -39,7 +39,11 @@ export type IconName =
   | 'translate'
   | 'theme'
   | 'document'
-  | 'info';
+  | 'info'
+  | 'sparkles'
+  | 'send'
+  | 'alert'
+  | 'refresh';
 
 interface Props {
   name: IconName;
@@ -86,6 +90,10 @@ const GLYPHS: Record<IconName, string> = {
   theme: 'theme-light-dark',
   document: 'file-document-outline',
   info: 'information-outline',
+  sparkles: 'creation',
+  send: 'send',
+  alert: 'alert-circle-outline',
+  refresh: 'refresh',
 };
 
 export function Icon({

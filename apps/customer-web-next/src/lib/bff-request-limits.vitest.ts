@@ -80,6 +80,19 @@ describe("BFF actual-stream request limits", () => {
       expect((output as NextResponse).status).toBe(415);
     }
   });
+  it("accepts a bodyless DELETE that arrives as an empty stream, but not an untyped body", async () => {
+    const empty = new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } });
+    const removal = new NextRequest("https://craves.in/api/chef/menu/11111111-1111-4111-8111-111111111111/images/22222222-2222-4222-8222-222222222222",
+      { method: "DELETE", body: empty, headers: { Origin: "https://craves.in" }, duplex: "half" } as ConstructorParameters<typeof NextRequest>[1]);
+    expect(removal.body).not.toBeNull();
+    const output = await boundBffRequest(removal);
+    expect(output).toBeInstanceOf(NextRequest);
+    expect((output as NextRequest).method).toBe("DELETE");
+
+    const untyped = new NextRequest("https://craves.in/api/cart/items", { method: "POST", body: new Blob(["{}"]), headers: { Origin: "https://craves.in" } });
+    expect(untyped.headers.get("content-type")).toBeNull();
+    expect(((await boundBffRequest(untyped)) as NextResponse).status).toBe(415);
+  });
   it("keeps multipart parsing available only at owned upload routes", async () => {
     const form = new FormData(); form.set("file", new File(["fixture"], "meal.png", { type: "image/png" }));
     const input = new NextRequest("https://craves.in/api/chef/menu/11111111-1111-4111-8111-111111111111/images",

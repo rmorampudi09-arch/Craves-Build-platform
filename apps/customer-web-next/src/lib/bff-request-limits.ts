@@ -21,7 +21,9 @@ export async function boundBffRequest(request: NextRequest, options: { maxBytes?
   if (multipart && !/^\/api\/chef\/(?:application\/proof-files|menu\/[0-9a-f-]{36}\/images)$/.test(pathname)) {
     return rejected(415, "JSON_REQUIRED");
   }
-  if (request.body && !multipart && !/^application\/json(?:\s*;|$)/.test(contentType)) {
+  const json = /^application\/json(?:\s*;|$)/.test(contentType);
+  // A bodyless DELETE/PUT carries no content type but can still arrive with an empty stream; judge it after reading.
+  if (request.body && !multipart && !json && contentType) {
     return rejected(415, "JSON_REQUIRED");
   }
   const encoding = request.headers.get("content-encoding")?.trim().toLowerCase();
@@ -42,6 +44,7 @@ export async function boundBffRequest(request: NextRequest, options: { maxBytes?
   if (multipart) uploadReads += 1; else jsonReads += 1;
   try {
     const bytes = await readDocumentBytes(request.body, limit, timeoutMs);
+    if (!multipart && !json && bytes.byteLength > 0) return rejected(415, "JSON_REQUIRED");
     const headers = new Headers(request.headers);
     headers.delete("transfer-encoding");
     headers.set("content-length", String(bytes.byteLength));

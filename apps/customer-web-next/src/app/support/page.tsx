@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Sparkles } from "lucide-react";
 import { SupportChat } from "@/components/support/SupportChat";
 import { isUuid } from "@/lib/server-api";
 
@@ -25,9 +25,14 @@ export default async function SupportPage({
         >
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Link>
-        <div>
-          <h1 className="text-lg font-bold text-[#1A1A1A]">Craves support</h1>
-          {order ? <p className="text-xs text-[#6B6B6B]">About order #{order.slice(-8).toUpperCase()}</p> : null}
+        <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F62E18] text-white shadow-[0_2px_8px_rgba(246,46,24,0.25)]">
+          <Sparkles className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <h1 className="text-lg leading-6 font-bold text-[#1A1A1A]">Craves support</h1>
+          <p className="truncate text-xs text-[#6B6B6B]">
+            {order ? `About order #${order.slice(-8).toUpperCase()} · ` : ""}AI assistant · replies in seconds
+          </p>
         </div>
       </header>
       <SupportChat contextRole="CUSTOMER" orderId={order} />

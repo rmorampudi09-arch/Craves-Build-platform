@@ -291,7 +291,7 @@
       "ClaudeMessagesClientTest": 3,
       "SupportOrderClientTest": 3,
       "SupportAssistantTest": 9,
-      "SupportChatControllerTest": 3
+      "SupportChatControllerTest": 4
     }
   },
   "web": {

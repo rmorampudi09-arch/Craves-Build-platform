@@ -40,6 +40,7 @@ describe('supportChatApi', () => {
     expect(path).toBe(SUPPORT_CHAT_PATH);
     expect(options).toEqual({timeout: 45_000});
     expect(body.contextRole).toBe('CUSTOMER');
+    expect(body.channel).toBe('APP');
     expect(body.orderId).toBe(orderId);
     expect(body.messages).toHaveLength(20);
     expect(body.messages[0].content).toBe('message 5');

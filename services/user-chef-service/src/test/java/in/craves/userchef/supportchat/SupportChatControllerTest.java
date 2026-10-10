@@ -18,7 +18,7 @@ class SupportChatControllerTest {
 
     @Test
     void acceptsAValidConversation() {
-        assertDoesNotThrow(() -> SupportChatController.validate(new SupportChatRequest("CUSTOMER", null, List.of(
+        assertDoesNotThrow(() -> SupportChatController.validate(new SupportChatRequest("CUSTOMER", "WEB", null, List.of(
             new ChatMessage("user", "hi"), new ChatMessage("assistant", "hello"), new ChatMessage("user", "where is my order")))));
     }
 
@@ -36,9 +36,18 @@ class SupportChatControllerTest {
             List.of(new ChatMessage("user", " ")),
             List.of(new ChatMessage("user", "x".repeat(SupportChatController.MAX_MESSAGE_CHARS + 1))))) {
             ApiException error = assertThrows(ApiException.class,
-                () -> SupportChatController.validate(new SupportChatRequest(null, null, messages)));
+                () -> SupportChatController.validate(new SupportChatRequest(null, null, null, messages)));
             assertEquals("SUPPORT_CHAT_INVALID", error.getCode());
         }
+    }
+
+    @Test
+    void channelIsWebOrAppOrUnknown() {
+        assertEquals("APP", SupportChatController.channel("app"));
+        assertEquals("WEB", SupportChatController.channel("WEB"));
+        assertEquals(null, SupportChatController.channel(null));
+        assertEquals("SUPPORT_CHAT_INVALID", assertThrows(ApiException.class,
+            () -> SupportChatController.channel("ADMIN")).getCode());
     }
 
     @Test

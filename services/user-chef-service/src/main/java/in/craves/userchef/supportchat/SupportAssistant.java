@@ -121,6 +121,7 @@ public class SupportAssistant {
     public SupportChatResponse reply(
         CurrentUser user,
         String role,
+        String channel,
         String bearer,
         UUID contextOrderId,
         List<ChatMessage> history
@@ -146,7 +147,7 @@ public class SupportAssistant {
             }
             JsonNode response;
             try {
-                response = claude.create(request(role, contextOrderId, conversation, round == MAX_ROUNDS),
+                response = claude.create(request(role, channel, contextOrderId, conversation, round == MAX_ROUNDS),
                     Duration.ofMillis(Math.min(left, MAX_CALL.toMillis())));
             } catch (ApiException exception) {
                 if (turn.ticket == null) {
@@ -183,7 +184,7 @@ public class SupportAssistant {
         return new SupportChatResponse(turn.ticket == null ? FALLBACK : ticketOpened(turn.ticket), turn.ticket);
     }
 
-    private ObjectNode request(String role, UUID contextOrderId, ArrayNode conversation, boolean lastRound) {
+    private ObjectNode request(String role, String channel, UUID contextOrderId, ArrayNode conversation, boolean lastRound) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("max_tokens", MAX_TOKENS);
         ArrayNode system = body.putArray("system");
@@ -191,7 +192,12 @@ public class SupportAssistant {
         system.addObject().put("type", "text").put("text", guide)
             .putObject("cache_control").put("type", "ephemeral");
         system.addObject().put("type", "text").put("text", "Signed-in user role: " + role
-            + ". Today is " + LocalDate.now(IST) + " (India time)."
+            + ". " + switch (channel == null ? "" : channel) {
+                case "WEB" -> "The user is chatting on the Craves website (craves.in).";
+                case "APP" -> "The user is chatting in the Craves mobile app.";
+                default -> "It is not known whether the user is on the website or the app; if steps differ, give both briefly.";
+            }
+            + " Today is " + LocalDate.now(IST) + " (India time)."
             + (contextOrderId == null ? "" : " The user opened this chat from order " + contextOrderId + "."));
         body.set("tools", tools);
         // On the last round the model must answer in text instead of asking for another tool.

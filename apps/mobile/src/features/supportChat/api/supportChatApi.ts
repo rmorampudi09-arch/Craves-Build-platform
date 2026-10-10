@@ -79,7 +79,8 @@ export const supportChatApi = {
 
     const response = await httpClient.post<unknown>(
       SUPPORT_CHAT_PATH,
-      request.data,
+      // Tells the assistant to give in-app navigation steps rather than website ones.
+      {...request.data, channel: 'APP'},
       {
         timeout: SUPPORT_CHAT_TIMEOUT_MS,
       },

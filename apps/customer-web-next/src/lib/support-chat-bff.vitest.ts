@@ -20,7 +20,7 @@ describe("support chat BFF", () => {
     expect(await response.json()).toEqual({ reply: "It is on the way.", supportCase: null });
     const [, path, init, timeout] = upstream.mock.calls[0];
     expect(path).toBe("/support/chat");
-    expect(JSON.parse(init.body)).toEqual(valid);
+    expect(JSON.parse(init.body)).toEqual({ ...valid, channel: "WEB" });
     expect(timeout).toBe(40_000);
   });
 

@@ -40,11 +40,12 @@ public class SupportChatController {
     ) {
         String role = contextRole(user, request == null ? null : request.contextRole());
         validate(request);
+        String channel = channel(request.channel());
         if (!assistant.available()) {
             throw SupportAssistant.unavailable();
         }
         limiter.admit(user.identityId());
-        return assistant.reply(user, role, authorization, request.orderId(), request.messages());
+        return assistant.reply(user, role, channel, authorization, request.orderId(), request.messages());
     }
 
     /** Same error body as {@link AppErrorHandler}, plus Retry-After, which that handler cannot set. */
@@ -93,11 +94,23 @@ public class SupportChatController {
         }
     }
 
+    /** WEB or APP, so navigation help matches where the user is chatting; null when the client didn't say. */
+    static String channel(String requested) {
+        if (requested == null || requested.isBlank()) {
+            return null;
+        }
+        String channel = requested.trim().toUpperCase(Locale.ROOT);
+        if (!channel.equals("WEB") && !channel.equals("APP")) {
+            throw invalid("channel must be WEB or APP.");
+        }
+        return channel;
+    }
+
     private static ApiException invalid(String message) {
         return ApiException.badRequest("SUPPORT_CHAT_INVALID", message);
     }
 
-    public record SupportChatRequest(String contextRole, UUID orderId, List<ChatMessage> messages) {
+    public record SupportChatRequest(String contextRole, String channel, UUID orderId, List<ChatMessage> messages) {
     }
 
     public record ChatMessage(String role, String content) {

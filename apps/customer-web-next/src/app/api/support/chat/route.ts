@@ -29,7 +29,8 @@ export async function POST(request: NextRequest) {
     const upstream = await authenticatedApiFetch(bounded, "/support/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input.data),
+      // Set here, not by the browser: tells the assistant to give website navigation.
+      body: JSON.stringify({ ...input.data, channel: "WEB" }),
     }, 40_000);
     const body: unknown = await upstream.json().catch(() => null);
     const response = body && typeof body === "object"

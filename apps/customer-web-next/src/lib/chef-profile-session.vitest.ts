@@ -51,6 +51,12 @@ async function normal(input: RequestInfo | URL): Promise<Response> {
 beforeEach(() => { identity = a; setSessionIdentity(a); navigate.mockReset(); vi.mocked(usePathname).mockReturnValue("/profile"); fetcher = vi.fn<typeof fetch>(normal); vi.stubGlobal("fetch", fetcher); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 function change(owner: CravesIdentity) { identity = owner; act(() => { setSessionIdentity(owner); }); }
+/** Profile asks before signing out: the card opens the dialog, whose own "Sign out" confirms. */
+async function confirmSignOut() {
+  fireEvent.click(await screen.findByRole("button", { name: "Sign out" }));
+  await screen.findByRole("dialog", { name: "Sign out of Craves?" });
+  fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+}
 
 describe("Chef navigation placement", () => {
   it("keeps fixed bottom navigation outside the filtered sticky header", () => {
@@ -213,10 +219,10 @@ describe("profile owner privacy", () => {
     fetcher.mockImplementation(input => String(input) === "/api/auth/logout" ? late.promise : normal(input));
     render(createElement(ProfilePage));
     await screen.findByRole("heading", { name: "Chef A Fixture" });
-    fireEvent.click(await screen.findByRole("button", { name: "Sign out" }));
+    await confirmSignOut();
     expect(screen.queryByText(/Chef A private address/)).toBeNull();
     await act(async () => { late.resolve(Response.json({ signedOut: false }, { status: 503 })); });
-    await screen.findByRole("button", { name: "Retry sign out" });
+    await screen.findByRole("button", { name: "Try again" });
     expect(navigate).not.toHaveBeenCalled();
     expect(getSession()?.id).toBe(a.id);
   });
@@ -234,9 +240,9 @@ describe("profile owner privacy", () => {
       }
       return normal(input);
     });
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await confirmSignOut();
     await act(async () => { late.resolve(Response.json({ signedOut: false }, { status: 503 })); });
-    await screen.findByRole("button", { name: "Retry sign out" });
+    await screen.findByRole("button", { name: "Try again" });
     await screen.findByText("Your account details are temporarily unavailable. Sign-out controls remain available below.");
     expect(navigate).not.toHaveBeenCalled();
     expect(screen.queryByText(/Chef A private address/)).toBeNull();
@@ -245,7 +251,7 @@ describe("profile owner privacy", () => {
       if (String(input) === "/api/auth/logout") { identity = null; return Promise.resolve(Response.json({ signedOut: true })); }
       return normal(input);
     });
-    fireEvent.click(screen.getByRole("button", { name: "Retry sign out" }));
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/" }));
     expect(getSession()).toBeNull();
   });
@@ -255,11 +261,11 @@ describe("profile owner privacy", () => {
     fetcher.mockImplementation(input => String(input) === "/api/auth/logout" ? late.promise : normal(input));
     render(createElement(ProfilePage));
     await screen.findByRole("heading", { name: "Chef A Fixture" });
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await confirmSignOut();
     change(a);
-    await screen.findByRole("heading", { name: "Chef A Fixture" });
+    await screen.findByRole("heading", { name: "Chef A Fixture", hidden: true });
     await act(async () => { late.resolve(Response.json({ signedOut: false }, { status: 503 })); });
-    expect(screen.queryByRole("button", { name: "Retry sign out" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     expect(navigate).not.toHaveBeenCalled();
   });
@@ -269,15 +275,16 @@ describe("profile owner privacy", () => {
     fetcher.mockImplementation(input => String(input) === "/api/auth/logout" ? (++calls === 1 ? first.promise : second.promise) : normal(input));
     render(createElement(ProfilePage));
     await screen.findByRole("heading", { name: "Chef A Fixture" });
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await confirmSignOut();
     change(b);
-    await screen.findByRole("heading", { name: "Chef B Fixture" });
+    await screen.findByRole("heading", { name: "Chef B Fixture", hidden: true });
+    // The dialog stays open for the new owner; its "Sign out" starts their own logout.
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     await act(async () => { first.resolve(Response.json({ signedOut: false }, { status: 503 })); });
     expect((screen.getByRole("button", { name: "Signing out…" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.queryByRole("button", { name: "Retry sign out" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     await act(async () => { second.resolve(Response.json({ signedOut: false }, { status: 503 })); });
-    await screen.findByRole("button", { name: "Retry sign out" });
+    await screen.findByRole("button", { name: "Try again" });
     expect(getSession()?.id).toBe(b.id);
     expect(navigate).not.toHaveBeenCalled();
   });

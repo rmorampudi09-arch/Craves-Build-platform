@@ -113,6 +113,7 @@ function ProfileSignOutAction({ onSignOut }: ProfileContentProps) {
     <button
       type="button"
       onClick={onSignOut}
+      aria-label="Sign out"
       className="flex min-h-[76px] w-full items-center gap-3 rounded-2xl !border-[#E5E7EB] !bg-white p-3.5 text-left !shadow-none transition-[box-shadow] hover:!shadow-[0_8px_22px_rgba(26,26,26,0.07)] sm:p-4"
     >
       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">

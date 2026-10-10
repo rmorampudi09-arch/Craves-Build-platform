@@ -19,7 +19,7 @@ test("customer and chef surfaces use the single shared Craves logo component", (
     "../components/profile/ProfileHeader.tsx",
     "../components/tracking/TrackingHeader.tsx",
     "../screens/OrderHistory/OrderHistory.tsx",
-    "../app/chef/layout.tsx",
+    "../components/chef-app-header.tsx",
   ];
 
   for (const path of sharedLogoSurfaces) {
@@ -51,8 +51,10 @@ test("canonical component, browser icons and build output use the uploaded versi
   const compatibilitySvg = source("../../public/brand/craves-logo.svg");
 
   assert.match(logo, new RegExp(canonicalLogoPath.replaceAll("/", "\\/")));
-  assert.match(logo, /window\.history\.pushState/);
-  assert.match(logo, /PopStateEvent/);
+  // An enclosing link (Chef Mode links the logo to /chef) navigates; a bare logo uses the App Router.
+  assert.match(logo, /event\.currentTarget\.closest\("a"\)/);
+  assert.match(logo, /router\.push\("\/home"\)/);
+  assert.doesNotMatch(logo, /PopStateEvent/);
   assert.match(logo, /cursor-pointer/);
   assert.match(logo, /unoptimized/);
   assert.match(rootLayout, new RegExp(canonicalLogoPath.replaceAll("/", "\\/")));

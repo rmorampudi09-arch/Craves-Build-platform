@@ -2,51 +2,102 @@
 
 import { chefApiError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { BadgeIndianRupee, Bell, CalendarDays, ChevronRight, FileCheck2, MapPin, Store, UserRound } from "lucide-react";
+import { useEffect, useState, type ComponentType } from "react";
+import {
+  ArrowLeftRight,
+  BadgeIndianRupee,
+  Bell,
+  CalendarDays,
+  ChevronRight,
+  FileCheck2,
+  FileText,
+  Gauge,
+  Images,
+  Landmark,
+  LifeBuoy,
+  LogOut,
+  ShieldCheck,
+  Store,
+  UserRound,
+} from "lucide-react";
 import { ChefAccessBoundary } from "@/components/chef-access-boundary";
+import { switchToCustomerApp, useChefSignOut } from "@/components/chef-account-menu";
 import { ChefPageHeader } from "@/components/chef-page-header";
 
-type Application = { firstName:string|null; lastName:string|null; email:string|null; phoneNumber:string|null; status:string };
-type Kitchen = { kitchenName:string; description:string|null; addressLine1:string; addressLine2:string|null; areaName:string|null; city:string; state:string; postalCode:string|null; status:string };
+type Application = { firstName:string|null; lastName:string|null; status:string };
+type Kitchen = { kitchenName:string };
+type Item = { label: string; description: string; icon: ComponentType<{ className?: string }> } & ({ href: string } | { action: "switch" | "sign-out" });
 
-const PROFILE_UNAVAILABLE="Your profile could not load. Please try again.";
+const PROFILE_UNAVAILABLE = "Your profile could not load. Please try again.";
+// Buttons need ! because the unlayered theme styles every <button>.
+const ROW = "flex min-h-[72px] w-full items-center gap-4 px-5 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-flame-red)] sm:px-6";
+const LINK_ROW = `${ROW} hover:bg-[#F1F3F5]`;
+const BUTTON_ROW = `${ROW} !rounded-none !border-x-0 !border-t-0 !border-b-[#E5E7EB] last:!border-b-0 !bg-white !shadow-none hover:!bg-[#F1F3F5] disabled:opacity-60`;
 
-function ProfileContent(){
+/** Every chef page that is not a tab, grouped so none is left without a way in. */
+function groups(kitchen: Kitchen | null): { title: string; items: Item[] }[] {
+  return [
+    { title: "Kitchen", items: [
+      { href: "/chef/kitchen", icon: Store, label: "Kitchen details", description: kitchen?.kitchenName || "Name, description and pickup address" },
+      { href: "/chef/menu/media", icon: Images, label: "Menu photos", description: "Photos customers see on each dish" },
+      { href: "/chef/meal-plans", icon: CalendarDays, label: "Meal plans", description: "Weekly and monthly plans from your dishes" },
+      { href: "/chef/capacity", icon: Gauge, label: "Capacity", description: "How many plan meals you can cook" },
+      { href: "/chef/operations", icon: ShieldCheck, label: "Operations", description: "Approval, documents and kitchen readiness" },
+    ] },
+    { title: "Money", items: [
+      { href: "/chef/earnings", icon: BadgeIndianRupee, label: "Earnings", description: "What you earned from completed orders" },
+      { href: "/chef/finance", icon: Landmark, label: "Finance & payouts", description: "Available balance, bank details and payout requests" },
+      { href: "/chef/statements", icon: FileText, label: "Statements", description: "Dated PDF statements of orders and earnings" },
+    ] },
+    { title: "Account", items: [
+      { href: "/chef/application/status", icon: FileCheck2, label: "Your application", description: "Status and the details you submitted" },
+      { href: "/chef/notifications", icon: Bell, label: "Notifications", description: "Orders, payments and account updates" },
+      { href: "/contact", icon: LifeBuoy, label: "Help", description: "Contact Craves support" },
+      { action: "switch", icon: ArrowLeftRight, label: "Switch to customer app", description: "Order food as a customer" },
+      { action: "sign-out", icon: LogOut, label: "Sign out", description: "Sign out of Craves on this device" },
+    ] },
+  ];
+}
+
+function RowContent({ item, label }: { item: Item; label: string }) {
+  const Icon = item.icon;
+  return <>
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]"><Icon className="h-5 w-5" aria-hidden="true"/></span>
+    <span className="min-w-0 flex-1"><strong className="block text-sm text-[#1A1A1A]">{label}</strong><span className="mt-1 block truncate text-sm text-[#6B6B6B]">{item.description}</span></span>
+    {"href" in item ? <ChevronRight className="h-5 w-5 shrink-0 text-[#6B6B6B]" aria-hidden="true"/> : null}
+  </>;
+}
+
+function MoreHub(){
  const [application,setApplication]=useState<Application|null>(null);
  const [kitchen,setKitchen]=useState<Kitchen|null>(null);
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState("");
  const [retry,setRetry]=useState(0);
- useEffect(()=>{let active=true; setLoading(true); setError(""); void Promise.all([fetch("/api/chef/application",{cache:"no-store"}),fetch("/api/chef/kitchen",{cache:"no-store"})]).then(async([a,k])=>{if(!a.ok) throw chefApiError(a,await a.json().catch(()=>null),PROFILE_UNAVAILABLE);if(!k.ok) throw chefApiError(k,await k.json().catch(()=>null),PROFILE_UNAVAILABLE);const av=a.ok?await a.json().catch(()=>null):null;const kv=k.ok?await k.json().catch(()=>null):null;if(active){setApplication(av);setKitchen(kv);setLoading(false)}}).catch((cause:unknown)=>{if(active){setError(chefErrorText(cause,PROFILE_UNAVAILABLE));setLoading(false)}});return()=>{active=false}},[retry]);
- if(loading)return <div className="h-80 animate-pulse rounded-3xl bg-[#F1F3F5]" aria-label="Loading profile"/>;
- if(error)return <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6"><p role="alert">{error}</p><button type="button" onClick={()=>setRetry(value=>value+1)} className="mt-4 min-h-12 rounded-md bg-primary px-5 text-white">Try again</button></section>;
+ const signOut=useChefSignOut();
+ useEffect(()=>{let active=true; setLoading(true); setError(""); void Promise.all([fetch("/api/chef/application",{cache:"no-store"}),fetch("/api/chef/kitchen",{cache:"no-store"})]).then(async([a,k])=>{if(!a.ok) throw chefApiError(a,await a.json().catch(()=>null),PROFILE_UNAVAILABLE);if(!k.ok) throw chefApiError(k,await k.json().catch(()=>null),PROFILE_UNAVAILABLE);const av=await a.json().catch(()=>null);const kv=await k.json().catch(()=>null);if(active){setApplication(av);setKitchen(kv);setLoading(false)}}).catch((cause:unknown)=>{if(active){setError(chefErrorText(cause,PROFILE_UNAVAILABLE));setLoading(false)}});return()=>{active=false}},[retry]);
  const name=[application?.firstName,application?.lastName].filter(Boolean).join(" ")||"Chef";
- const address=[kitchen?.addressLine1,kitchen?.addressLine2,kitchen?.areaName,kitchen?.city,kitchen?.state,kitchen?.postalCode].filter(Boolean).join(", ");
- const items=[
-  {href:"/chef/application",icon:UserRound,title:"Personal details",desc:name},
-  {href:"/chef/kitchen",icon:Store,title:"Kitchen details",desc:kitchen?.kitchenName||"Add your kitchen details"},
-  {href:"/chef/kitchen",icon:MapPin,title:"Kitchen location",desc:address||"Add your pickup location"},
-  {href:"/chef/earnings",icon:BadgeIndianRupee,title:"Earnings & payouts",desc:"See what you get from completed orders"},
-  {href:"/chef/meal-plans",icon:CalendarDays,title:"Meal Plans",desc:"Manage your dishes, schedules and availability"},
-  {href:"/notifications",icon:Bell,title:"Notifications",desc:"Orders, payments and account updates"},
-  {href:"/chef/application",icon:FileCheck2,title:"Documents & verification",desc:application?.status==="APPROVED"?"Application approved":"View your verification status"},
- ];
- return <div className="space-y-5">
-   <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 sm:p-8">
-    <div className="flex items-start gap-4">
-      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[var(--color-flame-red)]/10 text-[var(--color-flame-red)]"><UserRound className="h-7 w-7" aria-hidden="true"/></div>
-      <div className="min-w-0"><p className="text-sm font-semibold text-[var(--color-flame-red)]">Chef profile</p><h2 className="mt-1 text-2xl font-bold text-[#1A1A1A]">{name}</h2><p className="mt-1 text-sm text-[#6B6B6B]">{kitchen?.kitchenName||"Your kitchen"} · {application?.status==="APPROVED"?"Verified chef":"Application in progress"}</p></div>
+ return <div className="space-y-6">
+   <section className="rounded-3xl border border-[#E5E7EB] bg-white p-5 sm:p-6" aria-busy={loading}>
+    {loading ? <div className="h-16 animate-pulse rounded-2xl bg-[#F1F3F5] motion-reduce:animate-none" aria-label="Loading profile"/>
+     : error ? <div><p role="alert" className="text-sm text-[#1A1A1A]">{error}</p><button type="button" onClick={()=>setRetry(value=>value+1)} className="craves-primary-action mt-4">Try again</button></div>
+     : <div className="flex items-center gap-4">
+        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]"><UserRound className="h-6 w-6" aria-hidden="true"/></span>
+        <div className="min-w-0"><h2 className="truncate text-xl font-bold text-[#1A1A1A]">{name}</h2><p className="mt-1 truncate text-sm text-[#6B6B6B]">{kitchen?.kitchenName||"Your kitchen"} · {application?.status==="APPROVED"?"Verified chef":"Application in progress"}</p></div>
+       </div>}
+   </section>
+   {groups(kitchen).map(group=><section key={group.title} aria-labelledby={`more-${group.title}`}>
+    <h2 id={`more-${group.title}`} className="mb-2 px-1 text-sm font-semibold text-[#6B6B6B]">{group.title}</h2>
+    <div className="divide-y divide-[#E5E7EB] overflow-hidden rounded-3xl border border-[#E5E7EB] bg-white">
+     {group.items.map(item=>"href" in item
+      ? <Link key={item.label} href={item.href} className={LINK_ROW}><RowContent item={item} label={item.label}/></Link>
+      : <button key={item.label} type="button" className={BUTTON_ROW} disabled={item.action==="sign-out"&&signOut.busy} onClick={()=>item.action==="switch"?switchToCustomerApp():void signOut.signOut()}><RowContent item={item} label={item.action==="sign-out"&&signOut.busy?"Signing out…":item.label}/></button>)}
     </div>
-   </section>
-   <section className="overflow-hidden rounded-3xl border border-[#E5E7EB] bg-white">
-    {items.map((item,index)=>{const Icon=item.icon;return <Link key={item.href+item.title} href={item.href} className={`flex min-h-[76px] items-center gap-4 px-5 py-4 transition hover:bg-[#F7F8F7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-flame-red)] sm:px-6 ${index?"border-t border-[#E5E7EB]":""}`}><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[var(--color-flame-red)]"><Icon className="h-5 w-5" aria-hidden="true"/></span><span className="min-w-0 flex-1"><strong className="block text-sm text-[#1A1A1A]">{item.title}</strong><span className="mt-1 block truncate text-sm text-[#6B6B6B]">{item.desc}</span></span><ChevronRight className="h-5 w-5 shrink-0 text-[#6B6B6B]" aria-hidden="true"/></Link>})}
-   </section>
-   <section className="grid gap-3 sm:grid-cols-2" aria-label="Additional verification"><div className="rounded-2xl border border-[#E5E7EB] bg-white p-5"><h3 className="font-semibold">Food safety details</h3><p className="mt-2 text-sm text-[#6B6B6B]">FSSAI submission is not available yet. Chef identity approval does not confirm food-business compliance.</p></div><div className="rounded-2xl border border-[#E5E7EB] bg-white p-5"><h3 className="font-semibold">Kitchen photos</h3><p className="mt-2 text-sm text-[#6B6B6B]">Kitchen photo uploads are not available yet.</p></div></section>
-   <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 text-sm text-[#6B6B6B]"><p className="font-semibold text-[#1A1A1A]">Keep your details current</p><p className="mt-1 leading-6">Customers see your kitchen information, while payout and verification information stays protected behind your signed-in Chef access.</p></section>
+   </section>)}
+   {signOut.error?<p role="alert" className="text-sm font-medium text-[#C4200F]">{signOut.error}</p>:null}
  </div>;
 }
 
-export default function ChefProfilePage(){
- return <main className="mx-auto min-h-screen max-w-4xl px-4 py-6 md:px-6 md:py-8"><ChefAccessBoundary><ChefPageHeader eyebrow="Your account" title="Profile" description="Keep your personal details, kitchen information, documents and payout links easy to find."/><div className="mt-6"><ProfileContent/></div></ChefAccessBoundary></main>;
+export default function ChefMorePage(){
+ return <main className="mx-auto min-h-screen max-w-4xl px-4 py-6 md:px-6 md:py-8"><ChefAccessBoundary><ChefPageHeader eyebrow="Chef Mode" title="More" description="Your kitchen, money and account in one place."/><div className="mt-6"><MoreHub/></div></ChefAccessBoundary></main>;
 }

@@ -6,18 +6,34 @@ function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
-test("chef workspace navigation exposes every implemented backend area", () => {
+test("chef workspace navigation and the More hub expose every implemented backend area", () => {
   const navigation = source("../components/chef-workspace-navigation.tsx");
-  for (const route of [
-    "/chef/application",
-    "/chef/kitchen",
-    "/chef/menu",
-    "/chef/orders",
-    "/chef/earnings",
-    "/chef/operations",
-  ]) {
-    assert.match(navigation, new RegExp(route.replaceAll("/", "\\/")));
+  const more = source("../app/chef/profile/page.tsx");
+  const earnings = source("../app/chef/earnings/page.tsx");
+  for (const route of ["/chef", "/chef/orders", "/chef/menu", "/chef/earnings", "/chef/profile"]) {
+    assert.match(navigation, new RegExp(`href: "${route.replaceAll("/", "\\/")}"`), route);
   }
+  assert.match(navigation, /label: "More"/);
+  for (const route of [
+    "/chef/kitchen",
+    "/chef/menu/media",
+    "/chef/meal-plans",
+    "/chef/capacity",
+    "/chef/operations",
+    "/chef/earnings",
+    "/chef/finance",
+    "/chef/statements",
+    "/chef/application/status",
+    "/chef/notifications",
+    "/contact",
+  ]) {
+    assert.match(more, new RegExp(`href: "${route.replaceAll("/", "\\/")}"`), route);
+  }
+  assert.match(more, /Switch to customer app/);
+  assert.match(more, /Sign out/);
+  assert.doesNotMatch(more, /not available yet/i);
+  assert.match(earnings, /href="\/chef\/finance"/);
+  assert.match(earnings, /Open your available balance/);
 });
 
 test("dashboard loads only live chef service state", () => {

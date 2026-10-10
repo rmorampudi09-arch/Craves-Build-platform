@@ -7,10 +7,15 @@ const layout = readFileSync(
   new URL("../app/chef/layout.tsx", import.meta.url),
   "utf8",
 );
+const header = readFileSync(
+  new URL("../components/chef-app-header.tsx", import.meta.url),
+  "utf8",
+);
 const navigation = readFileSync(
   new URL("../components/chef-workspace-navigation.tsx", import.meta.url),
   "utf8",
 );
+const moreHub = readFileSync(new URL("../app/chef/profile/page.tsx", import.meta.url), "utf8");
 const dashboard = readFileSync(
   new URL("../components/chef-mode-dashboard.tsx", import.meta.url),
   "utf8",
@@ -53,13 +58,18 @@ const deferredDashboardRoutes = [
 
 test("every chef route inherits the responsive Craves workspace shell", () => {
   assert.match(layout, /className="chef-panel-theme[^"]*min-h-screen/);
-  assert.match(layout, /chef-panel-header[^"]*bg-white/);
+  assert.match(layout, /<ChefAppHeader\/>/);
   assert.match(layout, /ChefWorkspaceNavigation/);
-  assert.match(layout, /href="\/home"/);
-  assert.match(layout, /Back to Craves/);
-  assert.match(layout, /max-w-7xl/);
+  assert.match(header, /chef-panel-header[^"]*bg-white/);
+  assert.match(header, /max-w-7xl/);
+  // Chef Mode is its own app: the logo stays in it and leaving is an explicit account action.
+  assert.match(header, /<Link href="\/chef"/);
+  assert.match(header, /<ChefAccountMenu \/>/);
+  for (const shell of [layout, header]) {
+    assert.doesNotMatch(shell, /href="\/home"|Back to Craves|Customer home/);
+  }
   for (const route of workspaceRoutes) {
-    assert.match(navigation, new RegExp(route.replaceAll("/", "\\/")));
+    assert.match(`${navigation}\n${moreHub}`, new RegExp(`"${route.replaceAll("/", "\\/")}"`), route);
   }
   assert.match(navigation, /aria-current=\{active \? "page" : undefined\}/);
 });
@@ -116,7 +126,7 @@ test("chef dashboard keeps daily actions visible and defers advanced areas", () 
 });
 
 test("chef workspace shell is wide while focused setup flows stay readable", () => {
-  assert.match(layout, /max-w-7xl/);
+  assert.match(header, /max-w-7xl/);
   assert.match(applicationPage, /max-w-3xl/);
   assert.match(kitchenPage, /max-w-3xl/);
   assert.doesNotMatch(applicationPage, /max-w-7xl/);

@@ -58,22 +58,28 @@ describe("Chef navigation placement", () => {
   it("keeps fixed bottom navigation outside the filtered sticky header", () => {
     vi.mocked(usePathname).mockReturnValue("/chef/menu");
     render(createElement(ChefLayout, null, createElement("main", null, "Chef fixture")));
-    const header = screen.getByRole("link", { name: "Craves home" }).closest("header")!;
+    const header = screen.getByRole("link", { name: "Chef Mode home" }).closest("header")!;
+    expect(screen.getByRole("link", { name: "Chef Mode home" }).getAttribute("href")).toBe("/chef");
+    expect(header.contains(screen.getByRole("button", { name: "Account menu" }))).toBe(true);
+    expect(screen.queryByRole("link", { name: /Back to Craves|Customer home/ })).toBeNull();
     expect(header.contains(screen.getByRole("navigation", { name: "Chef workspace" }))).toBe(true);
     expect(header.contains(screen.getByRole("navigation", { name: "Chef primary navigation" }))).toBe(false);
     expect(screen.getByRole("navigation", { name: "Chef primary navigation" }).closest(".chef-panel-theme")).toBeTruthy();
   });
-  it.each([["/chef", "Home"], ["/chef/orders/fixture", "Orders"], ["/chef/menu", "Menu"], ["/chef/earnings", "Earnings"], ["/chef/profile", "Profile"]])("keeps labeled active navigation for %s", (pathname, label) => {
+  it.each([["/chef", "Home"], ["/chef/orders/fixture", "Orders"], ["/chef/menu", "Menu"], ["/chef/earnings", "Earnings"], ["/chef/profile", "More"], ["/chef/finance", "More"], ["/chef/kitchen", "More"]])("keeps labeled active navigation for %s", (pathname, label) => {
     vi.mocked(usePathname).mockReturnValue(pathname);
     render(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
     const links = screen.getAllByRole("link");
-    expect(links.map(link => link.textContent)).toEqual(["Home", "Orders", "Menu", "Earnings", "Profile"]);
+    expect(links.map(link => link.textContent)).toEqual(["Home", "Orders", "Menu", "Earnings", "More"]);
     expect(screen.getByRole("link", { name: label }).getAttribute("aria-current")).toBe("page");
     expect(links.filter(link => link.hasAttribute("aria-current"))).toHaveLength(1);
   });
   it("retains onboarding and Chef-access visibility boundaries", () => {
     vi.mocked(usePathname).mockReturnValue("/chef/application");
     const view = render(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
+    expect(screen.queryByRole("navigation")).toBeNull();
+    vi.mocked(usePathname).mockReturnValue("/chef/sign-in");
+    view.rerender(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
     expect(screen.queryByRole("navigation")).toBeNull();
     vi.mocked(usePathname).mockReturnValue("/chef/menu");
     view.rerender(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));

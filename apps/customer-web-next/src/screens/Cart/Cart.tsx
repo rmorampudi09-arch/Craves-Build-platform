@@ -66,7 +66,6 @@ function CartPage() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
-  const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
   const [instructions, setInstructions] = useState("");
   const [leadMinutes, setLeadMinutes] = useState<number | null>(null);
@@ -140,41 +139,34 @@ function CartPage() {
     }, 5_000);
   }
 
-  async function removeItem(item: CartItem) {
-    setBusyItemId(item.id);
+  // The row leaves at once; if Craves refuses, the cart service brings it back.
+  function removeItem(item: CartItem) {
     setMessage("");
-    try {
-      await removeFromCart(item.id);
-      showUndo(item);
-    } catch (error) {
+    showUndo(item);
+    removeFromCart(item.id).catch((error: unknown) => {
+      setUndoItem((current) => (current?.id === item.id ? null : current));
       setMessage(
         error instanceof Error
           ? error.message
           : "The cart item could not be removed.",
       );
-    } finally {
-      setBusyItemId(null);
-    }
+    });
   }
 
-  async function changeQuantity(item: CartItem, quantity: number) {
+  // Quantities update instantly; quick taps are written to Craves as one change.
+  function changeQuantity(item: CartItem, quantity: number) {
     if (quantity <= 0) {
-      await removeItem(item);
+      removeItem(item);
       return;
     }
-    setBusyItemId(item.id);
     setMessage("");
-    try {
-      await setQty(item.id, quantity);
-    } catch (error) {
+    setQty(item.id, quantity).catch((error: unknown) => {
       setMessage(
         error instanceof Error
           ? error.message
           : "The cart quantity could not be updated.",
       );
-    } finally {
-      setBusyItemId(null);
-    }
+    });
   }
 
   async function undoRemoval() {
@@ -277,14 +269,13 @@ function CartPage() {
 
               <CartItemList
                 items={items}
-                busyItemId={busyItemId}
                 onRemove={(id) => {
                   const item = items.find((candidate) => candidate.id === id);
-                  if (item) void removeItem(item);
+                  if (item) removeItem(item);
                 }}
                 onSetQty={(id, quantity) => {
                   const item = items.find((candidate) => candidate.id === id);
-                  if (item) void changeQuantity(item, quantity);
+                  if (item) changeQuantity(item, quantity);
                 }}
               />
 
@@ -361,7 +352,7 @@ function CartPage() {
           total={subtotal}
           currency={currency}
           itemCount={itemCount}
-          disabled={validating || busyItemId !== null}
+          disabled={validating}
           onContinue={() => void continueToCheckout()}
         />
       ) : null}

@@ -98,3 +98,24 @@ test("Razorpay payment is contract validated and backend verified", () => {
   assert.match(payment, /router\.replace\(\`\/orders\/\$\{orderId\}\`\)/);
   assert.doesNotMatch(payment, /amount\s*:\s*Math\.round\(/);
 });
+
+test("cart quantities are optimistic: steppers never dim and Continue waits only for validation", () => {
+  const cartService = source("../services/api/cravesCart.ts");
+  const page = source("../screens/Cart/Cart.tsx");
+  const row = source("../components/cart/CartItemRow.tsx");
+  const card = source("../components/home/DishCard.tsx");
+
+  // Behaviour is exercised in optimistic-cart.vitest.ts; these pin the wiring.
+  assert.match(cartService, /QUANTITY_WRITE_DELAY_MS = 250/);
+  assert.match(cartService, /function serialized</);
+  assert.match(cartService, /if \(intents\.get\(menuItemId\)\?\.seq === seq\) settle\(menuItemId, error\)/);
+  assert.match(cartService, /await settleIntents\(\);\s*return cartRequest\("\/api\/cart\/validate"/);
+  assert.match(cartService, /await cartRequest\("\/api\/cart", \{ method: "DELETE" \}, true\)/);
+
+  assert.match(page, /disabled=\{validating\}/);
+  assert.doesNotMatch(page, /busyItemId/);
+  assert.doesNotMatch(row, /disabled=\{disabled|disabled:opacity/);
+  assert.doesNotMatch(card, /disabled=\{state === "busy"|disabled:opacity-50/);
+  // "Added" is announced, not shown as a line that pushes every card below it down.
+  assert.match(card, /<p className="sr-only" role="status" aria-live="polite">/);
+});

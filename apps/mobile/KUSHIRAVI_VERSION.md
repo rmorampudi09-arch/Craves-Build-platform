@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.24.3 Android System Bars
+# KUSHIRAVI App Build - Version 1.25.1 Ola Maps Address Flow
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,15 +9,86 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `38`
-- Installed Android versionName: `1.24.3`
+- Installed Android versionCode: `40`
+- Installed Android versionName: `1.25.1`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed release: `1.24.3` local build from the Downloads export (no git repository there, so no commit or tag yet); APK checkpoint `C:\cm\artifacts\KUSHIRAVI-app-v1.24.3.apk`. Previous release: `KUSHIRAVI-app-v1.24.2`, source/tag checkpoint `983a24898a5f7ff3535ce64b8162e70b2d081f7c`. Chef sign-in, verified email, current-location address fill, submission and matching Admin pending request are verified. Subsequent document upload fails and is under investigation; no approval is claimed.
-- Last installation: `2026-10-10 14:01:47` Asia/Calcutta, device `GURKT4DYYPUW7DX8` / Xiaomi 22041216I (Android 14); replace-install succeeded without clearing app data.
+- Installed release: `KUSHIRAVI-app-v1.25.1`, source/tag checkpoint `0bd37e0c810f749de8dd45a09a9c0f265583adfa` (local branch in the `C:\mscratch` worktree, not pushed). Previous: `KUSHIRAVI-app-v1.25.0` (`4bdc5109837cfb4f3d5436bf9de8b537ed8b8f1f`) and the 1.24.3 + liquid-glass build recorded as commit `7c89bb2a6`. Earlier release: `KUSHIRAVI-app-v1.24.2`, source/tag checkpoint `983a24898a5f7ff3535ce64b8162e70b2d081f7c`. Chef sign-in, verified email, current-location address fill, submission and matching Admin pending request are verified. Subsequent document upload fails and is under investigation; no approval is claimed.
+- Last installation: `2026-10-10 19:57:24` Asia/Calcutta, device `GURKT4DYYPUW7DX8` / Xiaomi 22041216I (Android 14); replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.25.1 - Ola Maps Address Flow, 2026-10-10
+
+- User approved the address designs (Design canvas "Craves Address & Ola Maps
+  Screens") and asked to integrate Ola Maps per the CRAVES APK guide and the
+  location rate-limit patch, validated against GitHub `main`, then build and
+  install. Validated on `origin/main` `c9fbe9ed2`: User/Chef
+  `CustomerAddressGeocodingController`, `OlaMapsClient` records and
+  `LocationRateLimiter` (60 searches / 30 reverse geocodes per customer per
+  minute, `429 LOCATION_RATE_LIMITED` + `Retry-After`) match the guide.
+  Live probes: both APIM routes answer 401 without a token; the craves.in
+  tile proxy serves the Ola style (200 with the craves.in Referer, 403
+  without), rewrites every URL to itself and exposes no `api_key`.
+- Baseline: the phone ran an uncommitted 1.24.3 + liquid-glass build from
+  `C:\cm\mobile` (APK SHA-256 `178a2413…8ff5`, installed 18:24). Its source
+  was taken byte-for-byte as commit `7c89bb2a6` so nothing installed is lost.
+- Map: `@maplibre/maplibre-react-native` 11.5.0 and `OlaMapPicker` /
+  `olaMapTiles` from `main` (`8364ab604`), Ola vector tiles through
+  `https://craves.in/api/location/map-tiles`; no Ola key in the APK and no
+  `api.olamaps.io` call (bundle checked). iOS Podfile hook as on `main`.
+- Address editor is now search -> map pin -> details:
+  `POST /customer/addresses/location-search` (350 ms debounce, from 3 letters,
+  stale requests cancelled, bias sent as a full lat/lng pair or omitted),
+  settled pin -> existing `reverse-geocode`. Flat/house is filled only from a
+  precise house number, otherwise empty and required. Area, pincode, city,
+  district and state come from the pin in an editable card. Saving still
+  requires a pin (manual entry keeps the placed pin).
+- States per the guide: empty results, 503 search / reverse geocode (manual
+  entry and current location stay available), permission denied (search
+  still works; permission asked only on "Use current location"), 429
+  (`AppApiError.retryAfterSeconds`; lookups wait Retry-After, retry once).
+- Location sheet: search, use current location, add new address, saved
+  addresses as radios, "Set map pin" for saved addresses without a pin,
+  "Manage addresses". Saving or picking from a delivery picker selects that
+  address (and the cart address on Cart). Default header shows label +
+  address line (Home, Chefs, Orders, Favorites, Notifications); compact
+  header unchanged. Home without a location offers GPS, search or saved.
+- 1.25.0 (code 39, tag `KUSHIRAVI-app-v1.25.0`) installed at 19:42:20 IST.
+  On the phone the header label read "Ho…" (this Xiaomi under-measures bold
+  text; existing "Subscription" is clipped the same way) and in landscape the
+  map sheet left a thin strip. 1.25.1 fixes both: the title fills its row
+  with an inline chevron; the map sheet is capped at 50% with scrolling copy.
+- Android 1.25.1 / code 40, tag `KUSHIRAVI-app-v1.25.1`. ARM64 release via
+  `scripts\build-kushiravi-release-apk.ps1 -PhoneOnly -SkipNpmCi` from
+  `C:\mscratch\apps\mobile` (1.25.0: 15m 52s, 907 tasks; 1.25.1: 3m 43s, 41
+  executed). Signer SHA-256 `fac61745…3b9c`, same as installed; v2/v3 verify.
+- APKs: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.25.1.apk` SHA-256
+  `2BD12DEA1D0349824E7ED28B7A93B3726A9263EFC53695307ED106D1DB0A9CD9`;
+  `KUSHIRAVI-app-v1.25.0.apk` SHA-256
+  `8F84D2AA7AA79E999503E7A5300A42C60C84487CD3D61BD2F631F71C863A237E`.
+  Source ZIP `KUSHIRAVI-app-v1.25.1-source.zip` SHA-256
+  `1976B871CCC55E7C0AA137B9AFB87B7061CB7C743526A12CD9A8C1E7F4263A51`,
+  1,155 entries, no `.env`.
+- Checks: TypeScript, ESLint (zero warnings) on changed files, `git diff
+  --check`; Jest 207 suites / 1,149 tests pass with `--maxWorkers=4` (two
+  unrelated screen suites time out under default workers and pass alone),
+  including new search-contract, Retry-After and editor-flow tests.
+- Phone verification (landscape, phone lying flat): replace-install kept the
+  session (the first launch of 1.25.0 showed "We couldn't restore your
+  session"; Try again restored it. Auth refresh answered normally from the
+  PC; ART was optimising the new APK at that moment; cause not confirmed.
+  The 1.25.1 launch restored the session directly).
+  Header, sheet, live search ("Madhapur" -> Ola results), map with Ola tiles,
+  reverse geocode with approximate-pin warning, drag-to-re-resolve, details
+  form (house empty + hint, street and area from the pin), denied-permission
+  notice (the permission dialog was dismissed, permission left as it was)
+  and discard all work; no crash or JS error. No address was saved and no
+  permission was granted: saving and GPS are left for the owner to try.
+- Observed, not changed: on this phone bold text sometimes renders regular
+  between launches, and pre-existing bold labels with one-line truncation
+  (header "Subscription") can be clipped.
 
 ### Version 1.24.3 - Android System Bars, 2026-10-10
 

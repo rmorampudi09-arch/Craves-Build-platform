@@ -24,7 +24,7 @@ test("chef workspace navigation and the More hub expose every implemented backen
     "/chef/statements",
     "/chef/application/status",
     "/chef/notifications",
-    "/contact",
+    "/chef/support",
   ]) {
     assert.match(more, new RegExp(`href: "${route.replaceAll("/", "\\/")}"`), route);
   }

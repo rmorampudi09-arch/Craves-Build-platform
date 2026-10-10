@@ -115,7 +115,7 @@ describe("More hub", () => {
       ["Kitchen details", "/chef/kitchen"], ["Meal plans", "/chef/meal-plans"],
       ["Capacity", "/chef/capacity"], ["Kitchen status", "/chef/operations"], ["Earnings", "/chef/earnings"],
       ["Finance & payouts", "/chef/finance"], ["Statements", "/chef/statements"], ["Your application", "/chef/application/status"],
-      ["Notifications", "/chef/notifications"], ["Help", "/contact"],
+      ["Notifications", "/chef/notifications"], ["Help & support", "/chef/support"],
     ]) expect(screen.getByRole("link", { name: new RegExp(`^${label}`) }).getAttribute("href")).toBe(href);
     expect(screen.queryByText(/not available yet/i)).toBeNull();
   });

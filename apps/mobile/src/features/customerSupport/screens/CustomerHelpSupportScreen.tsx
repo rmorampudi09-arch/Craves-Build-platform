@@ -105,7 +105,6 @@ export function CustomerHelpSupportScreen() {
   const configuration = customerSupportIntegrationBoundary.supportConfiguration;
   const helpContent = customerSupportIntegrationBoundary.helpContent;
   const availability = customerSupportIntegrationBoundary.supportAvailability;
-  const chat = customerSupportIntegrationBoundary.chatSession;
   const ticket = customerSupportIntegrationBoundary.supportTicket;
 
   return (
@@ -197,11 +196,12 @@ export function CustomerHelpSupportScreen() {
                 onPress={() => { emailSupport().catch(() => undefined); }}
               />
               <View style={styles.divider} />
-              <DisabledSupportAction
+              <EnabledSupportAction
                 icon="account"
                 title="Start Chat"
-                detail="Chat support is temporarily unavailable."
-                testID={`support-blocker-${chat.blocker}`}
+                detail="Chat with the Craves AI assistant about orders, payments, refunds or your account."
+                testID="support-start-chat"
+                onPress={() => navigation.navigate('CustomerSupportChat')}
               />
               <View style={styles.divider} />
               <DisabledSupportAction
@@ -216,7 +216,7 @@ export function CustomerHelpSupportScreen() {
             <View style={styles.reassuranceBanner}>
               <Icon name="shield" size={iconSize.sm} color={colors.espressoBrown} />
               <Text style={styles.reassuranceText}>
-                Email support is available. Phone, chat and ticket actions remain disabled until Craves publishes their production configuration.
+                Email and chat support are available. Phone and ticket actions remain disabled until Craves publishes their production configuration.
               </Text>
             </View>
           </View>

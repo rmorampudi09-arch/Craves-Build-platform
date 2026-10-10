@@ -294,7 +294,10 @@ export function CustomerOrderDetailScreen() {
 
   const openHelp = () => {
     const tabs = navigation.getParent<NavigationProp<CustomerTabParamList>>();
-    tabs?.navigate('Profile', {screen: 'CustomerSettingsSupport'});
+    tabs?.navigate('Profile', {
+      screen: 'CustomerSupportChat',
+      params: {orderId: order.id},
+    });
   };
 
   const showContactChefUnavailable = () => {

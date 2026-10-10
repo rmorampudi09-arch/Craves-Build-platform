@@ -19,6 +19,7 @@ export class AppApiError extends Error {
     readonly retriable = false,
     readonly cancelled = false,
     readonly details: readonly string[] = [],
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = 'AppApiError';
@@ -51,6 +52,12 @@ function correlationIdFrom(error: AxiosError<BackendErrorPayload>): string | und
     readHeader(error.response?.headers, 'x-correlation-id') ??
     readHeader(error.config?.headers, 'x-correlation-id')
   );
+}
+
+// Only the delta-seconds form of Retry-After is honored; HTTP-date values are ignored.
+function retryAfterSecondsFrom(error: AxiosError<BackendErrorPayload>): number | undefined {
+  const seconds = Number(readHeader(error.response?.headers, 'retry-after'));
+  return Number.isInteger(seconds) && seconds > 0 ? seconds : undefined;
 }
 
 function normalizedBackendCode(value: unknown, status?: number): string {
@@ -159,6 +166,7 @@ export function toAppApiError(error: unknown): AppApiError {
       isRetriableFailure(status, error.code),
       false,
       details,
+      retryAfterSecondsFrom(error),
     );
   }
 

@@ -117,7 +117,7 @@ it.each(["2050-01-01T00:00:00Z", "2010-01-01T00:00:00Z"])("does not change expir
   expect((screen.getByRole("button", { name: "Resend email code" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
-it("uses only the effective current revision for a delayed verification callback and input", async () => {
+it("discards the old verification callback after another panel verifies a replacement", async () => {
   const delayed = deferred(); const completed = vi.fn();
   fetcher.mockImplementation(async (url) => String(url).endsWith("/verify") ? delayed.promise : Response.json(pending));
   render(createElement(EmailVerificationPanel, { onVerified: completed }));
@@ -126,7 +126,7 @@ it("uses only the effective current revision for a delayed verification callback
   await waitFor(() => expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/verify"))).toBe(true));
   act(() => setSessionEmailVerification(id, { ...verified, email: "current@example.invalid", emailRevision: 8 }));
   await act(async () => delayed.resolve(Response.json({ ...verified, emailRevision: 7 })));
-  expect(completed).toHaveBeenLastCalledWith(expect.objectContaining({ email: "current@example.invalid", emailRevision: 8 }));
-  expect((screen.getByLabelText("Change email") as HTMLInputElement).value).toBe("current@example.invalid");
+  expect(completed).not.toHaveBeenCalled();
+  expect(screen.getByText("Verified email: current@example.invalid")).toBeTruthy();
   expect(screen.queryByText(`Verified email: ${verified.email}`)).toBeNull();
 });

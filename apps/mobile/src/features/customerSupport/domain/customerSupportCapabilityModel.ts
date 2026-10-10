@@ -13,7 +13,6 @@ export type CustomerSupportBlocker =
   | 'CUSTOMER_SUPPORT_CONFIGURATION_CONTRACT_UNAVAILABLE'
   | 'CUSTOMER_SUPPORT_HELP_CONTENT_CONTRACT_UNAVAILABLE'
   | 'CUSTOMER_SUPPORT_AVAILABILITY_CONTRACT_UNAVAILABLE'
-  | 'CUSTOMER_SUPPORT_CHAT_CONTRACT_UNAVAILABLE'
   | 'CUSTOMER_SUPPORT_TICKET_CONTRACT_UNAVAILABLE';
 
 export interface CustomerSupportCapabilityUnavailable {
@@ -22,14 +21,23 @@ export interface CustomerSupportCapabilityUnavailable {
   readonly reason: string;
 }
 
+export interface CustomerSupportCapabilityAvailable {
+  readonly status: 'available';
+  readonly reason: string;
+}
+
 export type CustomerSupportIntegrationBoundary = Readonly<
-  Record<CustomerSupportCapability, CustomerSupportCapabilityUnavailable>
+  Record<
+    Exclude<CustomerSupportCapability, 'chatSession'>,
+    CustomerSupportCapabilityUnavailable
+  > & {chatSession: CustomerSupportCapabilityAvailable}
 >;
 
 /**
  * P76 integration boundary. These capabilities stay unavailable until an exact,
  * approved repository contract is registered. The UI must never infer contact
- * details, article data, chat behavior, or ticket success locally.
+ * details, article data, or ticket success locally. Chat is backed by the
+ * POST /api/v1/support/chat assistant contract.
  */
 export const customerSupportIntegrationBoundary: CustomerSupportIntegrationBoundary = {
   supportConfiguration: {
@@ -48,9 +56,8 @@ export const customerSupportIntegrationBoundary: CustomerSupportIntegrationBound
     reason: 'No approved support-hours or availability contract is registered.',
   },
   chatSession: {
-    status: 'unavailable',
-    blocker: 'CUSTOMER_SUPPORT_CHAT_CONTRACT_UNAVAILABLE',
-    reason: 'No approved customer support chat contract is registered.',
+    status: 'available',
+    reason: 'Customer support chat is served by the Craves AI support assistant.',
   },
   supportTicket: {
     status: 'unavailable',

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   ChevronDown,
+  LifeBuoy,
   MapPin,
   Phone,
   RefreshCw,
@@ -128,6 +129,12 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
       <ChefPageHead
         back={{ href: "/chef/orders", label: "Orders" }}
         title={`Order #${shortOrderNumber(order.id)}`}
+        action={
+          <Link href={`/chef/support?orderId=${order.id}`} className="chef-btn">
+            <LifeBuoy className="h-4 w-4" aria-hidden="true" />
+            Get help
+          </Link>
+        }
         subtitle={
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <ChefPill tone={status.tone}>{status.label}</ChefPill>

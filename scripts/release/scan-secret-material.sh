@@ -9,7 +9,7 @@ mapfile -t FILES < <(git ls-files -z | xargs -0 -n1 printf '%s\n' | grep -Ev '(^
 
 # Match credential values, not ordinary source identifiers such as getConnectionString().
 PATTERN=$(cat <<'REGEX'
-^[[:space:]]*-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----[[:space:]]*$|Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._-]{20,}|AIza[0-9A-Za-z_-]{30,}|AKIA[0-9A-Z]{16}|access[_-]?key["']?[[:space:]]*[:=][[:space:]]*["'][A-Za-z0-9+/=]{20,}["']|client[_-]?secret["']?[[:space:]]*[:=][[:space:]]*["'][A-Za-z0-9._~+/-]{16,}["']|connection[_-]?string["']?[[:space:]]*[:=][[:space:]]*["']?(Endpoint=|Server=|Host=|DefaultEndpointsProtocol=)[^"'[:space:]]{16,}
+^[[:space:]]*-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----[[:space:]]*$|Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._-]{20,}|AIza[0-9A-Za-z_-]{30,}|AKIA[0-9A-Z]{16}|sk-ant-[A-Za-z0-9_-]{20,}|access[_-]?key["']?[[:space:]]*[:=][[:space:]]*["'][A-Za-z0-9+/=]{20,}["']|client[_-]?secret["']?[[:space:]]*[:=][[:space:]]*["'][A-Za-z0-9._~+/-]{16,}["']|connection[_-]?string["']?[[:space:]]*[:=][[:space:]]*["']?(Endpoint=|Server=|Host=|DefaultEndpointsProtocol=)[^"'[:space:]]{16,}
 REGEX
 )
 

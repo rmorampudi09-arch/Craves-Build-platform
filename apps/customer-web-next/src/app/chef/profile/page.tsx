@@ -48,7 +48,7 @@ function groups(kitchen: Kitchen | null): { title: string; items: Item[] }[] {
     { title: "Account", items: [
       { href: "/chef/application/status", icon: FileCheck2, label: "Your application", description: "Status and the details you submitted" },
       { href: "/chef/notifications", icon: Bell, label: "Notifications", description: "Orders, payments and account updates" },
-      { href: "/contact", icon: LifeBuoy, label: "Help", description: "Contact Craves support" },
+      { href: "/chef/support", icon: LifeBuoy, label: "Help & support", description: "Chat with Craves support about orders, payouts or your kitchen" },
       { action: "switch", icon: ArrowLeftRight, label: "Switch to customer app", description: "Order food as a customer" },
       { action: "sign-out", icon: LogOut, label: "Sign out", description: "Sign out of Craves on this device" },
     ] },

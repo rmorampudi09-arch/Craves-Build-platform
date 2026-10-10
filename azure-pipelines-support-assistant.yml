@@ -1,0 +1,59 @@
+# Support assistant (Claude) production wiring. Manual runs only.
+#
+# Order of use (see docs/support-assistant/README.md):
+#   1. inspect  read-only report (Key Vault secret presence, current bindings)
+#   2. bind     after an operator stores the key in Key Vault as "anthropic-api-key" and the
+#               User/Chef release containing POST /api/v1/support/chat is live
+#   3. apim     add the /api/v1/support and /api/v1/admin/support gateway routes
+#   unbind      kill switch: the chat returns 503 and apps fall back to email support
+# Mutating operations need confirmProductionChange=true and must not overlap another Craves release.
+trigger: none
+pr: none
+
+parameters:
+  - name: operation
+    type: string
+    default: inspect
+    values: [inspect, bind, apim, unbind]
+  - name: confirmProductionChange
+    type: boolean
+    default: false
+
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 1
+    persistCredentials: false
+
+  - script: |
+      set -euo pipefail
+      bash -n scripts/release/support-assistant-runtime.sh
+      bash -n scripts/apim/configure-support-assistant-apim.sh
+    displayName: Validate support assistant scripts
+
+  - task: AzureCLI@2
+    displayName: Support assistant runtime (${{ parameters.operation }})
+    condition: and(succeeded(), ne('${{ parameters.operation }}', 'apim'))
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: bash scripts/release/support-assistant-runtime.sh
+    env:
+      OPERATION: ${{ parameters.operation }}
+      CONFIRM: ${{ parameters.confirmProductionChange }}
+
+  - task: AzureCLI@2
+    displayName: Support assistant APIM routes
+    condition: and(succeeded(), eq('${{ parameters.operation }}', 'apim'), eq('${{ parameters.confirmProductionChange }}', 'True'))
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: CONFIRM_APIM_WRITE=true bash scripts/apim/configure-support-assistant-apim.sh

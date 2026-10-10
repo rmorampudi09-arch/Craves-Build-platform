@@ -45,6 +45,7 @@ import {CustomerKitchenDishesScreen} from '../../features/kitchenProfile/screens
 import {CustomerKitchenProfileScreen} from '../../features/kitchenProfile/screens/CustomerKitchenProfileScreen';
 import {CustomerNotificationsRouteScreen} from '../../features/notifications/screens/CustomerNotificationsRouteScreen';
 import {CustomerPaymentMethodsRouteScreen} from '../../features/payment/screens/CustomerPaymentMethodsRouteScreen';
+import {CustomerSupportChatRouteScreen} from '../../features/supportChat/screens/SupportChatRouteScreens';
 import {invalidateCustomerLocationDependentQueries} from '../../features/customerShell/query/customerLocationReconciliation';
 import {
   loadPersistedCustomerLocation,
@@ -407,6 +408,7 @@ function CustomerProfileStackNavigator() {
       <ProfileStack.Screen name="CustomerSettingsShare" component={CustomerSettingsShareScreen} />
       <ProfileStack.Screen name="CustomerSettingsReferral" component={CustomerSettingsReferralScreen} />
       <ProfileStack.Screen name="CustomerSettingsSupport" component={CustomerHelpSupportRouteScreen} />
+      <ProfileStack.Screen name="CustomerSupportChat" component={CustomerSupportChatRouteScreen} />
       <ProfileStack.Screen name="CustomerSettingsSubscription" component={CustomerSettingsSubscriptionScreen} />
       <ProfileStack.Screen name="CustomerSettingsLegal" component={CustomerSettingsLegalScreen} />
       <ProfileStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />

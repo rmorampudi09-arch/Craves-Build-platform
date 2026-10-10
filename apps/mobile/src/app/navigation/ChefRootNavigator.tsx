@@ -40,6 +40,7 @@ import {
   useChefOperationalState,
 } from '../../features/chefShell/state/ChefOperationalProvider';
 import {ChefSubscriptionPlanScreen} from '../../features/chefSubscription/screens/ChefSubscriptionPlanScreen';
+import {ChefSupportChatRouteScreen} from '../../features/supportChat/screens/SupportChatRouteScreens';
 import {Icon} from '../../shared/components/Icon';
 import {
   CHEF_TAB_ACTIVE_COLOR,
@@ -198,6 +199,10 @@ function ChefProfileNavigator() {
         <ProfileStack.Screen
           name="ChefAppPreferences"
           component={ChefAppPreferencesScreen}
+        />
+        <ProfileStack.Screen
+          name="ChefSupportChat"
+          component={ChefSupportChatRouteScreen}
         />
         <ProfileStack.Screen
           name="ChefEditProfile"

@@ -37,7 +37,8 @@ export function AnimateCount({
 
   return (
     <span
-      className={`relative inline-grid min-w-[2ch] place-items-center tabular-nums tracking-tight ${className}`}
+      // Width comes from the caller (min-w-[1ch], w-9…): a default here fought theirs and left a gap.
+      className={`relative inline-grid place-items-center tabular-nums tracking-tight ${className}`}
       {...props}
     >
       <AnimatePresence mode="wait" initial={false} custom={shown.direction}>

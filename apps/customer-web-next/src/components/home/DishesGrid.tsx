@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   MapPin,
@@ -30,16 +30,6 @@ const SORT_OPTIONS: readonly { value: HomeDishSort; label: string }[] = [
 
 type ThumbBox = { x: number; y: number; width: number; height: number; radius: number };
 
-const sameBox = (a: ThumbBox | null, b: ThumbBox | null) =>
-  a === b ||
-  (!!a &&
-    !!b &&
-    a.x === b.x &&
-    a.y === b.y &&
-    a.width === b.width &&
-    a.height === b.height &&
-    a.radius === b.radius);
-
 // Every thumb part moves on the same curve and clock, so the pill keeps its shape mid-slide.
 const THUMB_PART =
   "pointer-events-none absolute left-0 top-0 bg-[#1A1A1A] transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none";
@@ -49,7 +39,8 @@ const THUMB_PART =
  * drawn as two round caps and a 1px bar scaled between them, so position and width animate
  * as transforms on the compositor: the slide stays smooth while the new list is rendering.
  * Labels use difference blending: dark on the chips, light on the thumb, inverting exactly
- * where the thumb passes.
+ * where the thumb passes. Chip boxes are cached by a ResizeObserver (read after layout), so a
+ * tap never forces a layout of the page.
  */
 function SortChoices({
   sort,
@@ -59,49 +50,60 @@ function SortChoices({
   onSortChange: (sort: HomeDishSort) => void;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
-  const placedRef = useRef(false);
-  const [thumb, setThumb] = useState<ThumbBox | null>(null);
+  const [boxes, setBoxes] = useState<Partial<Record<HomeDishSort, ThumbBox>>>({});
+  const [placed, setPlaced] = useState(false);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const row = rowRef.current;
     if (!row) return;
-    const chosen = () => row.querySelector<HTMLElement>('button[aria-pressed="true"]');
-    const measure = () => {
-      const button = chosen();
-      const next = button
-        ? {
-            x: button.offsetLeft,
-            y: button.offsetTop,
-            width: button.offsetWidth,
-            height: button.offsetHeight,
-            // rounded-full computes to an enormous radius: a pill's is half its height.
-            radius: Math.min(
-              parseFloat(getComputedStyle(button).borderTopLeftRadius) || 0,
-              button.offsetHeight / 2,
-            ),
-          }
-        : null;
-      setThumb((current) => (sameBox(current, next) ? current : next));
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      const next: Partial<Record<HomeDishSort, ThumbBox>> = {};
+      row.querySelectorAll<HTMLElement>("button[data-sort]").forEach((button) => {
+        next[button.dataset.sort as HomeDishSort] = {
+          x: button.offsetLeft,
+          y: button.offsetTop,
+          width: button.offsetWidth,
+          height: button.offsetHeight,
+          // rounded-full computes to an enormous radius: a pill's is half its height.
+          radius: Math.min(
+            parseFloat(getComputedStyle(button).borderTopLeftRadius) || 0,
+            button.offsetHeight / 2,
+          ),
+        };
+      });
+      setBoxes(next);
+      // The first placement jumps; only later changes slide.
+      if (!frame) frame = window.requestAnimationFrame(() => setPlaced(true));
+    });
+    observer.observe(row);
+    row.querySelectorAll("button[data-sort]").forEach((button) => observer.observe(button));
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frame);
     };
-    measure();
-    // Keep the chosen chip fully visible in the swipeable phone row (the row only, never the page).
-    const button = chosen();
-    if (button && row.scrollWidth > row.clientWidth) {
+  }, []);
+
+  useEffect(() => {
+    // Keep the chosen chip fully visible in the swipeable phone row (the row only, never the
+    // page). Read in the next frame, when the browser lays the page out anyway.
+    const frame = window.requestAnimationFrame(() => {
+      const row = rowRef.current;
+      const button = row?.querySelector<HTMLElement>('button[aria-pressed="true"]');
+      if (!row || !button || row.scrollWidth <= row.clientWidth) return;
       const gutter = 16;
       const start = button.offsetLeft - gutter;
       const end = button.offsetLeft + button.offsetWidth + gutter - row.clientWidth;
       const left = row.scrollLeft > start ? start : row.scrollLeft < end ? end : null;
       const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-      if (left !== null) {
-        row.scrollTo({ left, behavior: placedRef.current && !reduce ? "smooth" : "auto" });
-      }
-    }
-    placedRef.current = true;
-    const observer = new ResizeObserver(measure);
-    row.querySelectorAll("button").forEach((item) => observer.observe(item));
-    return () => observer.disconnect();
+      if (left !== null) row.scrollTo({ left, behavior: placed && !reduce ? "smooth" : "auto" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+    // Only a new choice moves the row; placement just switches the slide on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort]);
 
+  const thumb = boxes[sort] ?? null;
   const cap = thumb ? thumb.radius * 2 : 0;
   return (
     <div
@@ -111,7 +113,12 @@ function SortChoices({
       aria-label="Sort dishes"
     >
       {thumb ? (
-        <span aria-hidden="true" data-sort-thumb>
+        // Out of the flex flow (no gap before the first chip); the parts are placed from its corner.
+        <span
+          aria-hidden="true"
+          data-sort-thumb
+          className={`pointer-events-none absolute left-0 top-0 ${placed ? "" : "[&>span]:!transition-none"}`}
+        >
           <span
             className={THUMB_PART}
             style={{
@@ -149,6 +156,7 @@ function SortChoices({
           <button
             key={option.value}
             type="button"
+            data-sort={option.value}
             onClick={() => onSortChange(option.value)}
             className={[
               "min-h-11 shrink-0 rounded-full !border !border-transparent !bg-[#F1F3F5] px-4 text-sm font-black !shadow-none md:min-h-12 md:rounded-[0.9rem] md:!bg-transparent",

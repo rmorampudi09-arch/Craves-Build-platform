@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ChefApplicationSessionBoundary } from "../components/chef-application-session-boundary";
 import { ChefApplicationWorkspace } from "../components/chef-application-workspace";
-import { captureSessionContext, getSession, invalidateSession, isSessionReady, setSessionIdentity, setSessionEmailVerification } from "../services/auth/cravesAuth";
+import { captureSessionContext, clearSession, getSession, invalidateSession, isSessionReady, setSessionIdentity, setSessionEmailVerification } from "../services/auth/cravesAuth";
 import type { CravesIdentity } from "./auth-contract";
 import { markChefModeVerified } from "./chef-mode";
 
@@ -321,4 +321,19 @@ it("keeps a successfully loaded pending application editable through the guided 
   expect(screen.getByRole("alert").textContent).toContain("First name is required");
   expect(fetcher.mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
 
+});
+
+it("keeps the application closed without an error while a sign-out settles", async () => {
+  const logout = deferred<Response>();
+  fetcher.mockImplementation(input => String(input) === "/api/auth/logout" ? logout.promise : normal(input));
+  boundary(); await screen.findByLabelText("Private chef draft");
+  let signingOut!: Promise<void>;
+  act(() => { signingOut = clearSession(); });
+  expect(screen.queryByLabelText("Private chef draft")).toBeNull();
+  await act(async () => { await Promise.resolve(); });
+  expect(screen.queryByText("We couldn’t open your application")).toBeNull();
+  expect(navigation.replace).not.toHaveBeenCalled();
+  current = null;
+  await act(async () => { logout.resolve(Response.json({ signedOut: true })); await signingOut; });
+  await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith(expect.stringMatching(/^\/chef\/sign-in\?returnTo=/)));
 });

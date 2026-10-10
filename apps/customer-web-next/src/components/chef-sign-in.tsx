@@ -71,7 +71,7 @@ export function ChefSignIn({ returnTo, centralOtp }: { returnTo: string | null; 
   }
 
   return (
-    <main className="min-h-dvh bg-[#F1F3F5] px-4 py-8">
+    <main className="chef-sign-in min-h-dvh bg-[#F1F3F5] px-4 py-8">
       <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-md flex-col justify-center">
         <div className="mb-5 flex items-center gap-3">
           <CravesLogo size="md" priority />

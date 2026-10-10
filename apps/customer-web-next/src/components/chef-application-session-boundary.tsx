@@ -56,7 +56,8 @@ export function ChefApplicationSessionBoundary({ children }: { children: ReactNo
           if (isChefModeVerified(user.id)) setCheck({ scope: sessionScope(), state: "ready" });
           else signIn();
         } else if (!user && !getSession()) signIn();
-        else setCheck({ scope, state: "unavailable", signInHref });
+        // No identity while one is still held and not ready: a sign-out is settling and navigates on its own.
+        else if (user || isSessionReady()) setCheck({ scope, state: "unavailable", signInHref });
       })
       .catch((failure) => {
         if (!active) return;

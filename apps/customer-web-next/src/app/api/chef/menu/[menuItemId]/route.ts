@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { boundedFetch } from "@/lib/bounded-fetch";
 import { boundBffRequest } from "@/lib/bff-request-limits";
 import { isSameOrigin } from "@/lib/request-security";
@@ -25,8 +26,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ men
   try {
     const upstream = await boundedFetch(`${apiBaseUrl()}/kitchens/me/menu-items/${encodeURIComponent(menuItemId)}`, { method: "PUT", headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify(input), cache: "no-store", signal: controller.signal }, 40_000);
     if (!upstream.ok) {
-      const failure = chefMenuFailure(upstream.status, await upstream.json().catch(() => null));
-      const response = NextResponse.json(failure ?? { code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 404 ? "MENU_ITEM_NOT_FOUND" : "MENU_ITEM_UPDATE_FAILED" }, { status: upstream.status, headers: { "Cache-Control": "no-store" } });
+      const raw: unknown = await upstream.json().catch(() => null);
+      const failure = chefMenuFailure(upstream.status, raw);
+      const response = NextResponse.json(failure ?? { code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 404 ? "MENU_ITEM_NOT_FOUND" : "MENU_ITEM_UPDATE_FAILED", ...chefUpstream(raw) }, { status: upstream.status, headers: { "Cache-Control": "no-store" } });
       if (upstream.status === 401) response.cookies.delete("craves_access_token");
       return response;
     }

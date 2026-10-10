@@ -269,7 +269,11 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
         type="submit"
         form="chef-bank-form"
         className="cob-primary"
-        disabled={busy || (flow.bankUnavailable && !bankCanContinue(flow.bank))}
+        // Without automatic bank setup there is nothing to submit; the note above says why.
+        disabled={
+          busy ||
+          (!bankCanContinue(flow.bank) && (flow.bankUnavailable || !flow.bank?.automaticActivation))
+        }
       >
         {busy ? <Spinner /> : null}
         {busy ? "Saving…" : bankMode === "entry" ? "Continue" : saveLabel}

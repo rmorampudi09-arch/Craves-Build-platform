@@ -243,6 +243,62 @@ describe("Redesigned Chef onboarding popup", () => {
     expect(screen.queryByRole("link", { name: /dashboard/i })).toBeNull();
   });
 
+  it("names the missing address fields and goes to them instead of failing a photo upload", async () => {
+    saved.details = { ...saved.details!, kitchenName: "", city: "", postalCode: "", latitude: null, longitude: null };
+    saved.documents = saved.documents.filter((item) => !item.documentType.startsWith("KITCHEN_PHOTO"));
+    const sent: unknown[] = [];
+    vi.stubGlobal(
+      "XMLHttpRequest",
+      class {
+        upload = {};
+        open() {}
+        abort() {}
+        send(body: unknown) {
+          sent.push(body);
+        }
+      },
+    );
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: /Kitchen details/ }));
+    await screen.findByRole("heading", { name: "Your kitchen" });
+    // The photos card says what the upload waits for, in screen order, before anything is tapped.
+    expect(screen.getByText("Finish your kitchen address to add photos")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /^Go to / }).map((chip) => chip.textContent)).toEqual([
+      "Kitchen name",
+      "Map pin",
+      "PIN code",
+      "City",
+    ]);
+    expect(screen.getByLabelText(/^Street \/ area/).getAttribute("aria-required")).toBeNull();
+    expect(screen.getByLabelText("City").getAttribute("aria-required")).toBe("true");
+    // Tapping a photo tile marks every missing field and moves to the first one; nothing is sent.
+    fireEvent.click(screen.getAllByRole("button", { name: /Add photo/ })[0]!);
+    await waitFor(() => expect(window.document.activeElement?.id).toBe("chef-kitchenName"));
+    expect(screen.getByText("Add your kitchen name.")).toBeTruthy();
+    expect(screen.getByText("Add your city.")).toBeTruthy();
+    expect(screen.getByLabelText("Kitchen name").getAttribute("aria-invalid")).toBe("true");
+    expect(sent).toHaveLength(0);
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+    // A chip jumps to its field, and fixing a field clears only its own message.
+    fireEvent.click(screen.getByRole("button", { name: "Go to City" }));
+    await waitFor(() => expect(window.document.activeElement?.id).toBe("chef-city"));
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Hyderabad" } });
+    expect(screen.queryByText("Add your city.")).toBeNull();
+    expect(screen.getByText("Add your kitchen name.")).toBeTruthy();
+  });
+
+  it("shows every missing kitchen field on save and moves to the first one", async () => {
+    saved.details = { ...saved.details!, kitchenName: "", state: "" };
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: /Kitchen details/ }));
+    await screen.findByRole("heading", { name: "Your kitchen" });
+    fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
+    await waitFor(() => expect(window.document.activeElement?.id).toBe("chef-kitchenName"));
+    expect(screen.getByText("Add your kitchen name.")).toBeTruthy();
+    expect(screen.getByText("Add your state.")).toBeTruthy();
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+  });
+
   it("uploads a chosen kitchen photo without a second confirmation step", async () => {
     saved.documents = saved.documents.filter((item) => item.documentType !== "KITCHEN_PHOTO_2");
     const sent: FormData[] = [];

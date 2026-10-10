@@ -40,7 +40,13 @@ function ChefBankOnboardingContent() {
   const pending = useRef<z.infer<typeof bankSubmissionSchema> | null>(null);
   const mounted = useRef(true);
   const loading = useRef(false);
-  const refresh = useCallback(async () => {
+  const bankRef = useRef<BankStatus | null>(null);
+  useEffect(() => {
+    bankRef.current = bank;
+  }, [bank]);
+  // A background check (every 15 s or on focus) never wipes the form or a message the chef is
+  // reading: it keeps the last known status when it fails and leaves messages alone.
+  const refresh = useCallback(async (quiet = false) => {
     if (loading.current) return;
     loading.current = true;
     try {
@@ -52,16 +58,20 @@ function ChefBankOnboardingContent() {
       const status = bankStatusSchema.parse(await bankResponse.json());
       if (mounted.current) {
         setName([profile.firstName, profile.lastName].filter(Boolean).join(" "));
-        setRegistered(["PENDING", "APPROVED"].includes(profile.status)); setBank(status);setAvailabilityError(false);setMessage("");
+        setRegistered(["PENDING", "APPROVED"].includes(profile.status)); setBank(status);setAvailabilityError(false);if (!quiet) setMessage("");
       }
-    } catch (error) {if (mounted.current) {setBank(null);setAvailabilityError(true);setMessage(chefErrorText(error, "Bank profile unavailable"));}}
+    } catch (error) {
+      if (!mounted.current || (quiet && bankRef.current)) return;
+      setBank(null);setAvailabilityError(true);setMessage(chefErrorText(error, "Bank profile unavailable"));
+    }
     finally {loading.current = false;}
   }, []);
   useEffect(() => {
     mounted.current = true; void refresh();
-    const timer = setInterval(() => {if (document.visibilityState === "visible") void refresh();}, 15000);
-    window.addEventListener("focus", refresh);
-    return () => {mounted.current = false;clearInterval(timer);window.removeEventListener("focus", refresh);};
+    const quietly = () => void refresh(true);
+    const timer = setInterval(() => {if (document.visibilityState === "visible") quietly();}, 15000);
+    window.addEventListener("focus", quietly);
+    return () => {mounted.current = false;clearInterval(timer);window.removeEventListener("focus", quietly);};
   }, [refresh]);
   function edit(action: () => void) {pending.current = null; action();}
   async function save(event: FormEvent<HTMLFormElement>) {

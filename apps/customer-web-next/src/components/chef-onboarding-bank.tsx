@@ -270,7 +270,7 @@ export function ChefOnboardingBank({
         <Note tone="neutral" role="status">
           {unavailable
             ? "We couldn’t load your bank details. Your application is still saved."
-            : "Bank setup isn’t available right now. You can save your application and come back later."}
+            : "Adding a bank account isn’t open on Craves yet, so this step can’t be finished right now. Everything else you’ve entered is saved."}
           <br />
           <button type="button" className="cob-link" disabled={busy} onClick={onRefresh}>
             <RefreshCw size={15} aria-hidden="true" />

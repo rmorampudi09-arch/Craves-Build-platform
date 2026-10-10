@@ -458,6 +458,16 @@ describe("Authoritative status and bank verification", () => {
     expect(screen.queryByRole("link", { name: "Open Chef Dashboard" })).toBeNull();
     expect(screen.queryByRole("link", { name: /dashboard/i })).toBeNull();
   });
+  it("explains a switched-off bank setup instead of offering a Continue that does nothing", async () => {
+    saved = { ...saved, bankEnrollmentRequired: true };
+    bank = { ...bankFixture, id: null, state: "NOT_SUBMITTED", automaticActivation: false };
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: /Bank details/ }));
+    await screen.findByRole("heading", { name: "Bank details" });
+    expect(await screen.findByText(/Adding a bank account isn’t open on Craves yet/)).toBeTruthy();
+    expect(screen.queryByLabelText("Bank account number")).toBeNull();
+    expect((primary("Continue") as HTMLButtonElement).disabled).toBe(true);
+  });
   it("keeps bank re-entry in the same step, confirms masked details and retries with the same key", async () => {
     const onSaved = vi.fn(),
       onBusy = vi.fn();

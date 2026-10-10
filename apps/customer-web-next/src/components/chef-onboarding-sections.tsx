@@ -44,6 +44,7 @@ import {
   completedSections,
   evidenceComplete,
   kitchenAddress,
+  missingKitchenFields,
   type ChefFormSection,
 } from "@/lib/chef-onboarding-flow";
 import { ChefOnboardingUpload, useSavedPreview } from "@/components/chef-onboarding-upload";
@@ -67,7 +68,7 @@ import { chefOnboardingApi, type ChefOnboardingFlow } from "@/components/use-che
 type Props = { flow: ChefOnboardingFlow };
 
 function fieldError(flow: ChefOnboardingFlow, name: string) {
-  return flow.fieldError?.field === name ? flow.fieldError.message : null;
+  return flow.fieldErrors.find((item) => item.field === name)?.message || null;
 }
 
 type TextFieldProps = Props & {
@@ -111,6 +112,7 @@ function TextField({
         min={type === "date" ? "1900-01-01" : undefined}
         maxLength={maxLength}
         disabled={flow.busy}
+        aria-required={optional ? undefined : true}
         aria-invalid={Boolean(error) || undefined}
         aria-describedby={describedBy(id, error, helper)}
         onChange={(event) =>
@@ -128,7 +130,15 @@ function Upload({
   photo,
   helper,
   emptyTitle,
-}: Props & { type: string; label: string; photo?: boolean; helper?: string; emptyTitle?: string }) {
+  beforePick,
+}: Props & {
+  type: string;
+  label: string;
+  photo?: boolean;
+  helper?: string;
+  emptyTitle?: string;
+  beforePick?: () => boolean;
+}) {
   return (
     <ChefOnboardingUpload
       type={type}
@@ -136,6 +146,7 @@ function Upload({
       photo={photo}
       helper={helper}
       emptyTitle={emptyTitle}
+      beforePick={beforePick}
       disabled={flow.busy}
       fieldError={fieldError(flow, type)}
       evidence={flow.state?.documents.find((document) => document.documentType === type)}
@@ -352,6 +363,8 @@ export function ChefKitchenDetails({ flow }: Props) {
   );
   const description = d.kitchenDescription ?? "";
   const locationFieldError = fieldError(flow, "location");
+  // Photos are saved with the application, which needs these details first (server rule).
+  const missing = missingKitchenFields(d);
   return (
     <div className="cob-stack">
       <Card
@@ -538,6 +551,7 @@ export function ChefKitchenDetails({ flow }: Props) {
               flow={flow}
               name="addressLine2"
               label="Street / area"
+              optional
               autoComplete="address-line2"
             />
             <TextField
@@ -582,6 +596,28 @@ export function ChefKitchenDetails({ flow }: Props) {
         subtitle="Two clear photos of where you cook."
         done={photosDone}
       >
+        {missing.length && !photosDone ? (
+          <div className="cob-requires" aria-labelledby="chef-photos-requires">
+            <p id="chef-photos-requires">
+              <strong>Finish your kitchen address to add photos</strong>
+              Photos are saved with your address. Still needed:
+            </p>
+            <ul className="cob-requires-list">
+              {missing.map((item) => (
+                <li key={item.field}>
+                  <button
+                    type="button"
+                    className="cob-requires-chip"
+                    aria-label={`Go to ${item.label}`}
+                    onClick={() => flow.goToField(item.field)}
+                  >
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div className="cob-photo-grid">
           <Upload
             flow={flow}
@@ -589,6 +625,7 @@ export function ChefKitchenDetails({ flow }: Props) {
             label="Overall kitchen photo"
             photo
             helper="Show the full kitchen space where you prepare food."
+            beforePick={flow.kitchenReadyForPhotos}
           />
           <Upload
             flow={flow}
@@ -596,6 +633,7 @@ export function ChefKitchenDetails({ flow }: Props) {
             label="Cooking setup photo"
             photo
             helper="Show your stove and the cooking equipment you use."
+            beforePick={flow.kitchenReadyForPhotos}
           />
           <p className="cob-formats">JPG, PNG, HEIC or WebP · up to 10 MB each</p>
         </div>

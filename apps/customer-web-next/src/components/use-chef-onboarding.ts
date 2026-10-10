@@ -21,7 +21,9 @@ import {
   activeChefSections,
   correctionSections,
   firstIncompleteSection,
-  validateChefSection,
+  listInWords,
+  missingKitchenFields,
+  validateChefSectionAll,
   type ChefFieldError,
   type ChefFormScreen,
   type ChefFormSection,
@@ -104,8 +106,10 @@ export function useChefOnboarding() {
   const [busy, setBusy] = useState(false),
     [dirty, setDirty] = useState(false),
     [error, setError] = useState("");
-  const [fieldError, setFieldError] = useState<ChefFieldError | null>(null),
+  // Every field problem on the screen, in screen order; the first one gets focus.
+  const [fieldErrors, setFieldErrors] = useState<ChefFieldError[]>([]),
     [notice, setNotice] = useState("");
+  const fieldError = fieldErrors[0] ?? null;
   const [fromReview, setFromReview] = useState(false),
     [terms, setTerms] = useState(false),
     [callback, setCallback] = useState<CallbackRequest | null>(null);
@@ -261,11 +265,25 @@ export function useChefOnboarding() {
       return next;
     });
     setDirty(true);
-    setFieldError(null);
+    setFieldErrors((errors) => errors.filter((item) => item.field !== key));
     setError("");
     setNotice("");
   }
   function updateDetails(update: (previous: OnboardingDetails) => OnboardingDetails) {
+    // Clear the errors this change fixes: the pin feeds "location", first and last name "fullName".
+    const before = currentDetails.current;
+    const after = update(before);
+    const fixed = new Set<string>(
+      (Object.keys(after) as (keyof OnboardingDetails)[])
+        .filter((key) => after[key] !== before[key])
+        .map((key) =>
+          key === "latitude" || key === "longitude"
+            ? "location"
+            : key === "firstName" || key === "lastName"
+              ? "fullName"
+              : key,
+        ),
+    );
     setDetails((previous) => {
       const next = update(previous);
       currentDetails.current = next;
@@ -273,6 +291,7 @@ export function useChefOnboarding() {
     });
     setDirty(true);
     setError("");
+    if (fixed.size) setFieldErrors((errors) => errors.filter((item) => !fixed.has(item.field)));
   }
   const onEmail = useCallback((next: EmailVerificationState | null) => {
     setEmail(next);
@@ -319,19 +338,45 @@ export function useChefOnboarding() {
       if (current()) setBusy(false);
     }
   }
-  function focusError(next: ChefFieldError) {
-    setFieldError(next);
+  /** Shows every error at its field and moves to the first one. */
+  function focusError(next: ChefFieldError | ChefFieldError[]) {
+    const errors = Array.isArray(next) ? next : [next];
+    if (!errors.length) return;
+    setFieldErrors(errors);
     requestAnimationFrame(() => {
-      const element = document.getElementById(`chef-${next.field}`);
-      element?.focus();
+      const element = document.getElementById(`chef-${errors[0]!.field}`);
+      element?.focus({ preventScroll: true });
       element?.scrollIntoView({ block: "center", behavior: "instant" });
     });
+  }
+  /** Jumps to a required kitchen field from the photo checklist and says what it needs. */
+  function goToField(field: string) {
+    const missing = missingKitchenFields(currentDetails.current).find((item) => item.field === field);
+    if (missing)
+      setFieldErrors((errors) =>
+        errors.some((item) => item.field === field) ? errors : [...errors, { field, message: missing.message }],
+      );
+    requestAnimationFrame(() => {
+      const element = document.getElementById(`chef-${field}`);
+      element?.focus({ preventScroll: true });
+      element?.scrollIntoView({ block: "center", behavior: "instant" });
+    });
+  }
+  /**
+   * Photos are saved to the application record, which the server creates only once the
+   * kitchen details are complete. Before a photo is picked, show what is missing and go there.
+   */
+  function kitchenReadyForPhotos(): boolean {
+    const missing = missingKitchenFields(currentDetails.current);
+    if (!missing.length) return true;
+    focusError(missing.map(({ field, message }) => ({ field, message })));
+    return false;
   }
   /** Shows a screen and clears transient messages from the previous one. */
   function show(next: ChefFormScreen) {
     setScreen(next);
     setFssaiGuideState(false);
-    setFieldError(null);
+    setFieldErrors([]);
     setError("");
     setNotice("");
   }
@@ -353,13 +398,13 @@ export function useChefOnboarding() {
   async function saveSection(section: ChefFormSection) {
     const existing = currentState.current;
     if (!existing) return;
-    const invalid = validateChefSection(
+    const invalid = validateChefSectionAll(
       section,
       currentDetails.current,
       existing,
       chefEmailEligible(email),
     );
-    if (invalid) {
+    if (invalid.length) {
       focusError(invalid);
       return;
     }
@@ -388,7 +433,7 @@ export function useChefOnboarding() {
   }
   function setFssaiGuide(open: boolean) {
     setFssaiGuideState(open);
-    setFieldError(null);
+    setFieldErrors([]);
     setError("");
     setNotice("");
   }
@@ -448,6 +493,12 @@ export function useChefOnboarding() {
   }
   async function uploadFile(type: string, file: File, progress: (value: number) => void) {
     if (inFlight.current || !current()) throw new Error("Wait for the current save to finish.");
+    if (type.startsWith("KITCHEN_PHOTO") && !kitchenReadyForPhotos())
+      throw new ChefError(
+        `Add your ${listInWords(missingKitchenFields(currentDetails.current).map((item) => item.noun))} first. Photos are saved with your kitchen address.`,
+        "KITCHEN_DETAILS_REQUIRED",
+        0,
+      );
     inFlight.current = true;
     setBusy(true);
     setError("");
@@ -604,6 +655,7 @@ export function useChefOnboarding() {
     dirty,
     error,
     fieldError,
+    fieldErrors,
     notice,
     setNotice,
     fromReview,
@@ -629,6 +681,8 @@ export function useChefOnboarding() {
     back,
     exit,
     uploadFile,
+    kitchenReadyForPhotos,
+    goToField,
     removeFile,
     requestCallback,
     savedBank,

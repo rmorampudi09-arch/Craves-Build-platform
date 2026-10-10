@@ -53,6 +53,8 @@
 .cob [tabindex="-1"]:focus-visible,
 .cob [tabindex="-1"]:focus {
   outline: none !important;
+  /* The global focus ring adds a white halo too, which drew a box around the screen title. */
+  box-shadow: none !important;
 }
 
 /* ---------- Popup ---------- */
@@ -818,6 +820,56 @@ select.cob-input {
   font-size: 13px;
   font-weight: 400;
   color: var(--cob-muted);
+}
+
+/* ---------- Photos wait for the address: what is still needed, each a jump to its field ---------- */
+.cob-requires {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--cob-neutral);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--cob-muted);
+}
+.cob-requires p {
+  margin: 0;
+}
+.cob-requires strong {
+  display: block;
+  color: var(--cob-ink);
+  font-weight: 700;
+}
+.cob-requires-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cob .cob-requires-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px !important;
+  padding: 0 14px;
+  border: 1px solid var(--cob-line-strong) !important;
+  border-radius: 999px;
+  background: var(--cob-white) !important;
+  color: var(--cob-ink);
+  font-size: 13px;
+  font-weight: 600;
+  transition: border-color 150ms var(--cob-ease), scale 120ms var(--cob-ease);
+}
+.cob .cob-requires-chip:active {
+  scale: 0.97;
+}
+@media (hover: hover) {
+  .cob .cob-requires-chip:hover {
+    border-color: var(--cob-ink) !important;
+  }
 }
 
 /* ---------- Uploads ---------- */

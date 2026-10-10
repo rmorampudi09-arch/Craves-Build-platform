@@ -7,7 +7,7 @@ import { ChefOnboardingWorkspace } from "@/components/chef-onboarding-workspace"
 import { EMPTY_ONBOARDING } from "./chef-onboarding-v2-contract";
 import { setSessionIdentity } from "../services/auth/cravesAuth";
 const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
+vi.mock("next/navigation", () => ({ useRouter: () => navigation, usePathname: () => "/chef/application", useSearchParams: () => new URLSearchParams() }));
 vi.mock("@/components/auth/EmailVerificationPanel", () => ({ EmailVerificationPanel: () => null }));
 vi.mock("@/components/location/AddressMapPicker", () => ({ AddressMapPicker: () => null }));
 const id = "12345678-1234-4123-8123-123456789012";
@@ -101,7 +101,7 @@ it("shows the selected-language empty state without claiming translated content"
   );
   expect(screen.queryByRole("button", { name: "Submit application" })).toBeNull();
 });
-it("keeps an approved Chef's dashboard available without forcing new application submission", async () => {
+it("keeps an approved Chef's kitchen available without forcing new application submission", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async () =>
@@ -113,7 +113,7 @@ it("keeps an approved Chef's dashboard available without forcing new application
     ),
   );
   mount();
-  expect((await screen.findByRole("link", { name: "Open Chef Dashboard" })).getAttribute("href")).toBe(
+  expect((await screen.findByRole("link", { name: "Open your kitchen" })).getAttribute("href")).toBe(
     "/chef",
   );
   expect(screen.queryByRole("button", { name: "Submit application" })).toBeNull();

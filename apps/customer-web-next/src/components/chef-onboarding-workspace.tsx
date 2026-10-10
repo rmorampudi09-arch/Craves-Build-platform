@@ -14,6 +14,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { ChefOnboardingShell, type ChefSaveState } from "@/components/chef-onboarding-shell";
+import { switchToCustomerApp } from "@/components/chef-account-menu";
 import { ChefOnboardingBank, type BankFormMode } from "@/components/chef-onboarding-bank";
 import {
   ChefBasicDetails,
@@ -150,7 +151,7 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
         title="Sign in to continue"
         message="Your saved application stays with your Craves account."
       >
-        <Link href="/sign-in?returnTo=/chef/application" className="cob-primary">
+        <Link href="/chef/sign-in?returnTo=%2Fchef%2Fapplication" className="cob-primary">
           Sign in
         </Link>
       </PageState>
@@ -225,16 +226,16 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
     footer =
       phase === "APPROVED" ? (
         <Link href="/chef" className="cob-primary">
-          Open Chef Dashboard
+          Open your kitchen
         </Link>
       ) : phase === "MORE_INFORMATION_REQUIRED" ? (
         primary("Update application", {
           onClick: () => flow.open(flow.nextCorrection()),
         })
       ) : phase === "REJECTED" ? (
-        <Link href="/home" className="cob-secondary">
-          Continue browsing as a customer
-        </Link>
+        <button type="button" className="cob-secondary" onClick={switchToCustomerApp}>
+          Switch to customer app
+        </button>
       ) : (
         <>
           <button
@@ -246,9 +247,9 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
             {flow.loading ? <Spinner /> : null}
             {flow.loading ? "Checking status…" : "Refresh status"}
           </button>
-          <Link href="/home" className="cob-link cob-link--ink cob-link--center">
-            Continue browsing as a customer
-          </Link>
+          <button type="button" className="cob-link cob-link--ink cob-link--center" onClick={switchToCustomerApp}>
+            Switch to customer app
+          </button>
         </>
       );
   else if (screen === "resume")

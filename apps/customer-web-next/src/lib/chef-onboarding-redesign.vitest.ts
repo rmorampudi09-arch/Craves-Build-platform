@@ -14,7 +14,7 @@ import {
 } from "../services/auth/cravesAuth";
 
 const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
+vi.mock("next/navigation", () => ({ useRouter: () => navigation, usePathname: () => "/chef/application", useSearchParams: () => new URLSearchParams() }));
 vi.mock("../components/location/AddressMapPicker", () => ({ AddressMapPicker: () => null }));
 vi.mock("../components/auth/EmailVerificationPanel", () => ({
   EmailVerificationPanel: ({ onStateChange }: { onStateChange: (value: unknown) => void }) => {

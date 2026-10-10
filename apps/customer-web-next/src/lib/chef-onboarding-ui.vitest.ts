@@ -24,7 +24,7 @@ import { markChefModeVerified } from "./chef-mode";
 import type { BankStatus } from "./bank-onboarding-contract";
 
 const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
+vi.mock("next/navigation", () => ({ useRouter: () => navigation, usePathname: () => "/chef/application", useSearchParams: () => new URLSearchParams() }));
 vi.mock("../components/location/AddressMapPicker", () => ({
   AddressMapPicker: ({ onCenterChange }: { onCenterChange: (value: unknown) => void }) =>
     createElement(
@@ -402,6 +402,9 @@ describe("Chef onboarding navigation and persistence", () => {
     expect(screen.getByRole("link", { name: "View application status" }).getAttribute("href")).toBe(
       "/chef/application/status",
     );
+    // Replace, so Back from the status page cannot reopen the submitted form.
+    expect(navigation.replace).toHaveBeenCalledWith("/chef/application/status");
+    expect(navigation.push).not.toHaveBeenCalledWith("/home");
     expect(screen.queryByRole("link", { name: "Go to dashboard" })).toBeNull();
   });
 });

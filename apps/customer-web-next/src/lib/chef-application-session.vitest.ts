@@ -9,7 +9,7 @@ import type { CravesIdentity } from "./auth-contract";
 import { markChefModeVerified } from "./chef-mode";
 
 const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
+vi.mock("next/navigation", () => ({ useRouter: () => navigation, usePathname: () => "/chef/application", useSearchParams: () => new URLSearchParams() }));
 
 let verifiedEmail = false;
 vi.mock("../components/auth/EmailVerificationPanel", () => ({ EmailVerificationPanel: ({ onStateChange }: { onStateChange: (state: unknown) => void }) => {

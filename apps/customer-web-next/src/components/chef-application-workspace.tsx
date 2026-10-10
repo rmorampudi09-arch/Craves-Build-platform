@@ -23,6 +23,8 @@ import { parseChefApplication, type ChefApplication } from "@/lib/chef-applicati
 import type { CustomerProfile } from "@/lib/profile-contract";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
 import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel";
+import { switchToCustomerApp } from "@/components/chef-account-menu";
+import { useStepHistory } from "@/components/use-step-history";
 import { chefEmailEligible, type EmailVerificationState } from "@/lib/email-verification-contract";
 
 type FormState = {
@@ -68,6 +70,14 @@ const EMPTY: FormState = {
 };
 
 const PENDING_UPDATE_LABEL = "Update pending application";
+// Steps an applicant can return to with browser Back (?step=<id>); waiting and approved follow the saved status.
+const FORM_STEPS: readonly ApplicationStep[] = ["welcome", "about", "account", "kitchen", "address", "kitchen-photos", "fssai"];
+const EVIDENCE_STEPS: readonly ApplicationStep[] = ["documents-intro", "documents", "review"];
+function urlStepFor(application: ChefApplication, step: string | null): ApplicationStep | null {
+  if (!step || application.status === "APPROVED") return null;
+  const steps = application.status === "NOT_SUBMITTED" ? FORM_STEPS : [...FORM_STEPS, ...EVIDENCE_STEPS];
+  return steps.includes(step as ApplicationStep) ? (step as ApplicationStep) : null;
+}
 const INPUT_CLASS =
   "mt-2 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-base text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10 disabled:bg-[#F1F3F5]";
 
@@ -204,6 +214,18 @@ export function ChefApplicationWorkspace() {
   const [invalidField, setInvalidField] = useState<keyof FormState | null>(null);
   const [validationAttempt, setValidationAttempt] = useState(0);
   const locationRequest = useRef(0);
+  // The step behind the bare /chef/application URL, chosen from the saved application on load.
+  const entry = useRef<ApplicationStep>("welcome");
+  const loaded = useRef<ChefApplication | null>(null);
+  const { urlStep, showStep } = useStepHistory((next) => {
+    const saved = loaded.current;
+    if (!saved || busy) return;
+    show(next === null ? entry.current : (urlStepFor(saved, next) ?? entry.current));
+  });
+  const requestedStep = useRef(urlStep);
+  useEffect(() => {
+    requestedStep.current = urlStep;
+  }, [urlStep]);
 
   useEffect(() => {
     if (!invalidField) return;
@@ -237,12 +259,13 @@ export function ChefApplicationWorkspace() {
   }
   async function openReview() {
     setBusy(true);
-    try { await load(); setStep("review"); }
+    try { await load(false); go("review"); }
     catch { setMessage("We couldn’t refresh your application. Please try again."); }
     finally { setBusy(false); }
   }
 
-  async function load() {
+  /** fromUrl: open the ?step= the page was loaded with; a status refresh opens what the status calls for. */
+  async function load(fromUrl = true) {
     setLoadFailed(false);
     const signal = AbortSignal.timeout(45_000);
     const [applicationResult, profileResult, addressesResult] = await Promise.allSettled([
@@ -271,17 +294,20 @@ export function ChefApplicationWorkspace() {
 
     setApplication(applicationBody);
     setProfile(nextProfile);
+    loaded.current = applicationBody;
     if (applicationBody.status === "NOT_SUBMITTED") {
       setForm(prefillNewApplication(applicationBody, nextProfile, Array.isArray(addresses) ? addresses : []));
-      setStep("welcome");
+      entry.current = "welcome";
     } else {
       setForm(fromApplication(applicationBody));
-      if (applicationBody.status === "APPROVED") setStep("approved");
-      else if (needsPhotoCorrection(applicationBody) && !hasRequiredEvidence(applicationBody)) setStep("documents-intro");
-      else if (applicationBody.status === "REJECTED") setStep("review");
-      else if (hasRequiredEvidence(applicationBody)) setStep("waiting");
-      else setStep("documents-intro");
+      if (applicationBody.status === "APPROVED") entry.current = "approved";
+      else if (needsPhotoCorrection(applicationBody) && !hasRequiredEvidence(applicationBody)) entry.current = "documents-intro";
+      else if (applicationBody.status === "REJECTED") entry.current = "review";
+      else if (hasRequiredEvidence(applicationBody)) entry.current = "waiting";
+      else entry.current = "documents-intro";
     }
+    // A ?step= this application can no longer show opens the step its status calls for.
+    setStep((fromUrl ? urlStepFor(applicationBody, requestedStep.current) : null) ?? entry.current);
     setMessage("");
   }
 
@@ -299,11 +325,16 @@ export function ChefApplicationWorkspace() {
     if (invalidField === name) { setInvalidField(null); setMessage(""); }
   }
 
-  function go(next: ApplicationStep) {
+  function show(next: ApplicationStep) {
     setMessage("");
     setInvalidField(null);
     setStep(next);
     window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }
+  /** Each step gets its own history entry (?step=<id>), so browser Back returns to the previous step. */
+  function go(next: ApplicationStep) {
+    show(next);
+    if (next !== "waiting" && next !== "approved") showStep(next === entry.current ? null : next);
   }
 
   function continueAbout() {
@@ -377,17 +408,17 @@ export function ChefApplicationWorkspace() {
     const locked = application?.status === "APPROVED";
     if (locked || loadFailed || busy || !application) return;
     if (!chefEmailEligible(emailVerification)) {
-      setStep("account");
+      go("account");
       setMessage("Verify your email before submitting your chef application.");
       return;
     }
     if (!emailVerification?.email || !form.firstName.trim() || !form.lastName.trim()) {
-      setStep(!form.firstName.trim() || !form.lastName.trim() ? "about" : "account");
+      go(!form.firstName.trim() || !form.lastName.trim() ? "about" : "account");
       invalidate(!form.firstName.trim() ? "firstName" : !form.lastName.trim() ? "lastName" : "email", "Complete your required contact details.");
       return;
     }
     if (!form.addressLine1.trim() || !form.city.trim() || !form.state.trim()) {
-      setStep("address");
+      go("address");
       invalidate(!form.addressLine1.trim() ? "addressLine1" : !form.city.trim() ? "city" : "state", !form.addressLine1.trim() ? "House or building is required." : !form.city.trim() ? "City is required." : "State is required.");
       return;
     }
@@ -418,11 +449,11 @@ export function ChefApplicationWorkspace() {
           : chefApiError(response, raw, "We couldn’t save your details. Please try again.");
       }
       setApplication(body);
+      loaded.current = body;
       setForm(fromApplication(body));
-      setMessage("");
-      if (body.status === "APPROVED") setStep("approved");
-      else if (hasRequiredEvidence(body)) setStep("review");
-      else setStep("documents-intro");
+      if (body.status === "APPROVED") go("approved");
+      else if (hasRequiredEvidence(body)) go("review");
+      else go("documents-intro");
     } catch (error) {
       setMessage(error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")
         ? chefErrorText(new ChefError("Saving took too long. Check your application status before trying again.", "TIMEOUT", 0), "")
@@ -436,7 +467,8 @@ export function ChefApplicationWorkspace() {
     setBusy(true);
     setMessage("Checking your application status…");
     try {
-      await load();
+      await load(false);
+      showStep(null);
     } catch (error) {
       setMessage(chefErrorText(error, "We couldn’t check your status right now."));
     } finally {
@@ -467,7 +499,7 @@ export function ChefApplicationWorkspace() {
         <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">Share your homemade food with thousands of customers</h1>
         <div className="mt-6 space-y-3 text-sm">{["Earn from your cooking", "Reach nearby customers", "Manage your kitchen easily"].map(item => <p key={item} className="flex items-center gap-3"><Check className="h-5 w-5 text-primary" aria-hidden="true" />{item}</p>)}</div>
         <Button className="mt-7 w-full" onClick={() => go("about")}>Become a Chef <ChevronRight className="h-4 w-4" /></Button>
-        <Button asChild variant="ghost" className="mt-2 w-full"><Link href="/sign-in?returnTo=/chef">Already a Chef? Login</Link></Button>
+        <Button asChild variant="ghost" className="mt-2 w-full"><Link href="/chef/sign-in">Already a Chef? Login</Link></Button>
       </div>
     </section>;
   }
@@ -588,7 +620,7 @@ export function ChefApplicationWorkspace() {
         {message ? <p role="status" className="mx-auto mt-4 max-w-xl text-sm text-[#6B6B6B]">{message}</p> : null}
         <button type="button" onClick={() => void refreshStatus()} disabled={busy} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white disabled:opacity-50 sm:w-auto">{busy ? "Checking…" : "Check status"}</button>
         <div className="mt-3">
-          <Link href="/home" className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">Switch to Customer Mode</Link>
+          <button type="button" onClick={switchToCustomerApp} className="inline-flex min-h-11 items-center justify-center rounded-full !border-0 !bg-[#F1F3F5] px-5 text-sm font-semibold !text-[#1A1A1A] !shadow-none transition hover:!bg-[#E5E7EB]">Switch to customer app</button>
         </div>
       </section>
     );

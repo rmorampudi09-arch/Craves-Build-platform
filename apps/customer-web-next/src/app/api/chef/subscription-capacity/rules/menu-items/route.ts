@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { parseMenuRuleInput } from "@/lib/chef-subscription-capacity-contract";
@@ -17,7 +18,7 @@ export async function PUT(request: NextRequest) {
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
     });
     const body = await upstream.json().catch(() => null);
-    if (!upstream.ok) return NextResponse.json({ code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "CHEF_ACCESS_REQUIRED" : "MENU_CAPACITY_RULE_FAILED", message: typeof body?.message === "string" ? body.message : "Menu capacity rule could not be saved." }, { status: upstream.status });
+    if (!upstream.ok) return NextResponse.json({ code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "CHEF_ACCESS_REQUIRED" : "MENU_CAPACITY_RULE_FAILED", message: typeof body?.message === "string" ? body.message : "Menu capacity rule could not be saved." , ...chefUpstream(body) }, { status: upstream.status });
     return NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof SessionRequiredError) return NextResponse.json({ code: "SESSION_EXPIRED" }, { status: 401 });

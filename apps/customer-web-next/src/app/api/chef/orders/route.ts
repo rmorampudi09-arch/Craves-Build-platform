@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefOrdersResponse } from "@/lib/chef-order-contract";
 import {
@@ -7,8 +8,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
-function failure(status: number, code: string, message: string) {
-  return NextResponse.json({ code, message }, { status });
+function failure(status: number, code: string, message: string, raw: unknown = null) {
+  return NextResponse.json({ code, message, ...chefUpstream(raw) }, { status });
 }
 
 export async function GET(request: NextRequest) {
@@ -26,6 +27,7 @@ export async function GET(request: NextRequest) {
         upstream.status === 403
           ? "An approved chef role is required to view kitchen orders."
           : "Chef orders are temporarily unavailable.",
+        raw
       );
     }
     const orders = parseChefOrdersResponse(raw);

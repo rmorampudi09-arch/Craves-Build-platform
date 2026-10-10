@@ -1,5 +1,6 @@
 "use client";
 
+import { chefErrorText } from "@/lib/chef-errors";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { z } from "zod";
 import { bankConsentVersion, bankStatusSchema, bankSubmissionSchema, type BankStatus } from "@/lib/bank-onboarding-contract";
@@ -51,7 +52,7 @@ function ChefBankOnboardingContent() {
         setName([profile.firstName, profile.lastName].filter(Boolean).join(" "));
         setRegistered(["PENDING", "APPROVED"].includes(profile.status)); setBank(status);setAvailabilityError(false);setMessage("");
       }
-    } catch (error) {if (mounted.current) {setBank(null);setAvailabilityError(true);setMessage(error instanceof Error ? error.message : "Bank profile unavailable");}}
+    } catch (error) {if (mounted.current) {setBank(null);setAvailabilityError(true);setMessage(chefErrorText(error, "Bank profile unavailable"));}}
     finally {loading.current = false;}
   }, []);
   useEffect(() => {
@@ -78,7 +79,7 @@ function ChefBankOnboardingContent() {
       const result = bankStatusSchema.parse(await response.json());
       setBank(result); setAccount("");setConfirmation("");setIfsc("");setConsent(false);pending.current = null;
       setMessage(result.automaticActivation ? "Bank details saved securely. Automatic Razorpay validation remains subject to the reported status." : "Bank details were saved. Automatic validation is currently unavailable; refresh status before taking further action.");
-    } catch (error) {setMessage(error instanceof Error ? error.message : "Bank submission not confirmed");}
+    } catch (error) {setMessage(chefErrorText(error, "Bank submission not confirmed"));}
     finally {setBusy(false);}
   }
   return <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 text-slate-900">

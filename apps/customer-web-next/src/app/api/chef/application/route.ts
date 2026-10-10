@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { boundedFetch } from "@/lib/bounded-fetch";
 import { boundBffRequest } from "@/lib/bff-request-limits";
 import { isSameOrigin } from "@/lib/request-security";
@@ -26,6 +27,7 @@ function upstreamFailure(
     typeof body.code === "string" && /^[A-Z0-9_]{3,80}$/.test(body.code)
       ? body.code
       : null;
+  const precise = chefUpstream(raw).message;
   if (status === 401) {
     return {
       code: "SESSION_EXPIRED",
@@ -49,18 +51,18 @@ function upstreamFailure(
     return {
       code: upstreamCode ?? "CHEF_APPLICATION_CONFLICT",
       message:
-        "The chef application changed in the backend. Reload and try again.",
+        precise ?? "The chef application changed in the backend. Reload and try again.",
     };
   }
   if (status === 400) {
     return {
       code: upstreamCode ?? "INVALID_CHEF_APPLICATION",
-      message: "Complete all required chef details using valid values.",
+      message: precise ?? "Complete all required chef details using valid values.",
     };
   }
   return {
     code: upstreamCode ?? "CHEF_APPLICATION_REQUEST_FAILED",
-    message: "Chef application is temporarily unavailable.",
+    message: precise ?? "Chef application is temporarily unavailable.",
   };
 }
 

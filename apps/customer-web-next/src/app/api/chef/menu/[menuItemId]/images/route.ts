@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { boundedFetch } from "@/lib/bounded-fetch";
 import { boundBffRequest } from "@/lib/bff-request-limits";
 import { isSameOrigin } from "@/lib/request-security";
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ me
       // Pass through Catalog's own media reason (no provider detail) so the chef and support see why.
       const body = await upstream.json().catch(() => null) as { code?: unknown } | null;
       const known = typeof body?.code === "string" && MEDIA_CODES.has(body.code) ? body.code : null;
-      const response = NextResponse.json({ code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 404 ? "MENU_ITEM_NOT_FOUND" : known ?? "MENU_IMAGE_UPLOAD_FAILED" }, { status: upstream.status });
+      const response = NextResponse.json({ code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 404 ? "MENU_ITEM_NOT_FOUND" : known ?? "MENU_IMAGE_UPLOAD_FAILED", ...chefUpstream(body) }, { status: upstream.status });
       if (upstream.status === 401) response.cookies.delete("craves_access_token");
       return response;
     }

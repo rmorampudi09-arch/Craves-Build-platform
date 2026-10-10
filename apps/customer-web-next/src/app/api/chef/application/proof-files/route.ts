@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { boundedFetch } from "@/lib/bounded-fetch";
 import { boundBffRequest } from "@/lib/bff-request-limits";
 import { isSameOrigin } from "@/lib/request-security";
@@ -109,6 +110,7 @@ export async function POST(request: NextRequest) {
                 : upstream.status === 409
                   ? "This document cannot be replaced in its current review state."
                   : "Proof upload is temporarily unavailable.",
+          ...(knownCode ? {} : chefUpstream(upstreamError)),
         },
         { status: upstream.status },
       );

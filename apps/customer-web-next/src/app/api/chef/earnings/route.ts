@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefEarnings } from "@/lib/chef-earnings-contract";
 import {
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
             upstream.status === 403
               ? "An approved chef role is required to view this ledger."
               : "Chef earnings are temporarily unavailable.",
+          ...chefUpstream(raw),
         },
         { status: upstream.status },
       );

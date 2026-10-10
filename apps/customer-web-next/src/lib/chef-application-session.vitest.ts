@@ -122,7 +122,7 @@ it("shows repeated load failures after retry without an unhandled rejection", as
   render(createElement(ChefApplicationWorkspace));
   fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(6));
-  await screen.findByText("We couldn’t load your application right now.");
+  await screen.findByText(/^We couldn’t load your application right now\. \(Ref: HTTP_503\)$/);
   expect(screen.getByRole("button", { name: "Try again" }).hasAttribute("disabled")).toBe(false);
 });
 
@@ -149,7 +149,7 @@ it("resubmits corrected rejected applications and does not fake a pending state 
   const submit = await screen.findByRole("button", { name: "Resubmit for verification" });
   await waitFor(() => expect(submit.hasAttribute("disabled")).toBe(false));
   fireEvent.click(submit);
-  await screen.findByText("We couldn’t confirm your verified email right now.");
+  await screen.findByText(/^We couldn’t confirm your verified email right now\. \(Ref: EMAIL_AUTHORITY_UNAVAILABLE\)$/);
   expect(screen.queryByText("Application under review")).toBeNull();
   succeeds = true;
   fireEvent.click(screen.getByRole("button", { name: "Resubmit for verification" }));
@@ -244,7 +244,7 @@ it("never accepts a delayed response after unmount", async () => {
 it("shows failed application reads truthfully and keeps private editing unavailable until retry succeeds", async () => {
   fetcher.mockResolvedValue(Response.json({}, { status: 503 }));
   render(createElement(ChefApplicationWorkspace));
-  await screen.findByText("We couldn’t load your application right now.");
+  await screen.findByText(/^We couldn’t load your application right now\. \(Ref: HTTP_503\)$/);
   expect(screen.queryByRole("button", { name: "Start my application" })).toBeNull();
   expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
 

@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefMealPlan, parseChefMealPlanInput } from "@/lib/chef-subscription-plan-contract";
@@ -7,8 +8,8 @@ import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/serve
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ planId: string }> };
 
-function failure(status: number) {
-  return NextResponse.json({ code: status === 401 ? "SESSION_EXPIRED" : status === 403 ? "CHEF_ACCESS_REQUIRED" : status === 404 ? "MEAL_PLAN_NOT_FOUND" : "CHEF_MEAL_PLAN_REQUEST_FAILED" }, { status });
+function failure(status: number, raw: unknown = null) {
+  return NextResponse.json({ code: status === 401 ? "SESSION_EXPIRED" : status === 403 ? "CHEF_ACCESS_REQUIRED" : status === 404 ? "MEAL_PLAN_NOT_FOUND" : "CHEF_MEAL_PLAN_REQUEST_FAILED", ...chefUpstream(raw) }, { status });
 }
 
 export async function GET(request: NextRequest, context: Context) {
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const upstream = await authenticatedApiFetch(request, `/chef/subscription-plans/${planId}`);
     const body = await upstream.json().catch(() => null);
-    if (!upstream.ok) return failure(upstream.status);
+    if (!upstream.ok) return failure(upstream.status, await upstream.json().catch(() => null));
     const plan = parseChefMealPlan(body);
     return plan ? NextResponse.json(plan, { headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ code: "INVALID_CHEF_MEAL_PLAN_RESPONSE" }, { status: 502 });
   } catch (error) {
@@ -43,7 +44,7 @@ export async function PUT(request: NextRequest, context: Context) {
       body: JSON.stringify(input),
     });
     const body = await upstream.json().catch(() => null);
-    if (!upstream.ok) return failure(upstream.status);
+    if (!upstream.ok) return failure(upstream.status, await upstream.json().catch(() => null));
     const plan = parseChefMealPlan(body);
     return plan ? NextResponse.json(plan, { headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ code: "INVALID_CHEF_MEAL_PLAN_RESPONSE" }, { status: 502 });
   } catch (error) {

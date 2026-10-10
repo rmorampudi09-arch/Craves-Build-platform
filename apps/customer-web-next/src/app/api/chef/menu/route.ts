@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { boundedFetch } from "@/lib/bounded-fetch";
 import { boundBffRequest } from "@/lib/bff-request-limits";
 import { isSameOrigin } from "@/lib/request-security";
@@ -15,9 +16,11 @@ async function requestUpstream(request: NextRequest, method: "GET" | "POST", bod
   try {
     const upstream = await boundedFetch(`${apiBaseUrl()}/kitchens/me/menu-items`, { method, headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(body === undefined ? {} : { "Content-Type": "application/json" }) }, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", signal: controller.signal }, 40_000);
     if (!upstream.ok) {
-      const failure = chefMenuFailure(upstream.status, await upstream.json().catch(() => null));
+      const raw: unknown = await upstream.json().catch(() => null);
+      const failure = chefMenuFailure(upstream.status, raw);
       const response = NextResponse.json(failure ?? {
         code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "CHEF_ACCESS_REQUIRED" : "MENU_REQUEST_FAILED",
+        ...chefUpstream(raw),
       }, { status: upstream.status, headers: { "Cache-Control": "no-store" } });
       if (upstream.status === 401) response.cookies.delete("craves_access_token");
       return response;

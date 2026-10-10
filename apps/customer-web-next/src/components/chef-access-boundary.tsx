@@ -1,5 +1,6 @@
 "use client";
 
+import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { parseChefApplication } from "@/lib/chef-application-contract";
@@ -15,6 +16,7 @@ import {
   type CravesUser,
 } from "@/services/auth/cravesAuth";
 
+const ACCESS_UNAVAILABLE = "Your application status is temporarily unavailable. Retry before opening chef tools.";
 type AccessState = "synchronizing" | "ready" | "sign-in" | "not-approved" | "unavailable";
 
 function hasChefRole(user: CravesUser | null): boolean {
@@ -41,7 +43,7 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
     navigation.current = router;
   }, [router]);
   const scope = useSyncExternalStore(subscribeSession, accessScope, serverScope);
-  const [access, setAccess] = useState<{ scope: string; state: AccessState }>({
+  const [access, setAccess] = useState<{ scope: string; state: AccessState; detail?: string }>({
     scope: "server",
     state: "synchronizing",
   });
@@ -80,11 +82,15 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
         signal: AbortSignal.timeout(15000),
       });
       const application = response.ok ? parseChefApplication(await response.json()) : null;
+      const failureBody: unknown = response.ok ? null : await response.json().catch(() => null);
       if (!active || !isSessionContextCurrent(applicationContext)) return;
       if (!application) {
         setAccess({
           scope: accessScope(),
           state: response.status === 401 ? "sign-in" : "unavailable",
+          detail: response.status === 401 ? undefined : chefErrorText(response.ok
+            ? new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, "INVALID_CHEF_APPLICATION_RESPONSE", response.status)
+            : chefApiError(response, failureBody, ACCESS_UNAVAILABLE), ACCESS_UNAVAILABLE),
         });
         return;
       }
@@ -107,9 +113,11 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
             ? "ready"
             : "sign-in",
       });
-    })().catch(() => {
+    })().catch((error: unknown) => {
       if (active)
-        setAccess({ scope, state: isSessionReady() ? "unavailable" : "sign-in" });
+        setAccess(isSessionReady()
+          ? { scope, state: "unavailable", detail: chefErrorText(error, ACCESS_UNAVAILABLE) }
+          : { scope, state: "sign-in" });
     });
 
     return () => {
@@ -143,7 +151,7 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
           {state === "not-approved"
             ? "You are signed in. View your application for the latest review status."
             : state === "unavailable"
-              ? "Your application status is temporarily unavailable. Retry before opening chef tools."
+              ? (access.scope === scope && access.detail) || ACCESS_UNAVAILABLE
               : "Verify your mobile number to open your chef tools."}
         </p>
       )}

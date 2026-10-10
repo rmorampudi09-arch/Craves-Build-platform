@@ -1,5 +1,6 @@
 "use client";
 
+import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -183,26 +184,6 @@ function dayLabel(value: string, period: ChefMealPlanPeriod): string {
   return `Day ${day}`;
 }
 
-function errorMessage(body: unknown, fallback: string): string {
-  if (!body || typeof body !== "object") return fallback;
-  const raw = body as Record<string, unknown>;
-  if (typeof raw.message === "string" && raw.message.trim()) return raw.message;
-  if (raw.details && typeof raw.details === "object") {
-    const details = raw.details as Record<string, unknown>;
-    if (typeof details.message === "string" && details.message.trim()) {
-      return details.message;
-    }
-    if (
-      details.details &&
-      typeof details.details === "object" &&
-      typeof (details.details as Record<string, unknown>).message === "string"
-    ) {
-      return String((details.details as Record<string, unknown>).message);
-    }
-  }
-  return fallback;
-}
-
 function StatusPill({ status }: { status: ChefMealPlan["status"] }) {
   const meta = statusMeta(status);
   const Icon = meta.icon;
@@ -382,16 +363,14 @@ export function ChefSubscriptionPlanManager() {
       ]);
 
     if (plansResponse.status === 401 || menuResponse.status === 401) {
-      throw new Error("Chef session expired. Sign in again.");
+      throw new ChefError("Chef session expired. Sign in again.", "SESSION_EXPIRED", 401);
     }
     if (plansResponse.status === 403 || menuResponse.status === 403) {
-      throw new Error("Approved CHEF access is required.");
+      throw new ChefError("Approved CHEF access is required.", "CHEF_ACCESS_REQUIRED", 403);
     }
     if (!plansResponse.ok) {
       const body = await plansResponse.json().catch(() => null);
-      throw new Error(
-        errorMessage(body, "Your meal plans are temporarily unavailable."),
-      );
+      throw chefApiError(plansResponse, body, "Your meal plans are temporarily unavailable.");
     }
     const menuBody: unknown = await menuResponse.json().catch(() => null);
     const missingKitchen =
@@ -402,9 +381,7 @@ export function ChefSubscriptionPlanManager() {
       "code" in menuBody &&
       menuBody.code === "KITCHEN_PROFILE_REQUIRED";
     if (!menuResponse.ok && !missingKitchen) {
-      throw new Error(
-        errorMessage(menuBody, "Your available menu is temporarily unavailable."),
-      );
+      throw chefApiError(menuResponse, menuBody, "Your available menu is temporarily unavailable.");
     }
 
     const planBody = await plansResponse.json();
@@ -452,9 +429,7 @@ export function ChefSubscriptionPlanManager() {
 
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      throw new Error(
-        errorMessage(body, "Meal schedule could not be loaded."),
-      );
+      throw chefApiError(response, body, "Meal schedule could not be loaded.");
     }
 
     const schedule = (await response.json()) as ChefMealSchedule;
@@ -469,9 +444,7 @@ export function ChefSubscriptionPlanManager() {
       })
       .catch((error) => {
         setMessage(
-          error instanceof Error
-            ? error.message
-            : "Meal plans are unavailable.",
+          chefErrorText(error, "Meal plans are unavailable."),
         );
         setMessageTone("error");
       });
@@ -489,9 +462,7 @@ export function ChefSubscriptionPlanManager() {
 
     void loadSchedule(selected).catch((error) => {
       setMessage(
-        error instanceof Error
-          ? error.message
-          : "Meal schedule is unavailable.",
+        chefErrorText(error, "Meal schedule is unavailable."),
       );
       setMessageTone("error");
     });
@@ -596,9 +567,7 @@ export function ChefSubscriptionPlanManager() {
       const body = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(
-          errorMessage(body, "Meal plan draft could not be created."),
-        );
+        throw chefApiError(response, body, "Meal plan draft could not be created.");
       }
 
       const created = body as ChefMealPlan;
@@ -613,9 +582,7 @@ export function ChefSubscriptionPlanManager() {
       );
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Meal plan draft could not be created.",
+        chefErrorText(error, "Meal plan draft could not be created."),
       );
     } finally {
       setBusy(false);
@@ -644,9 +611,7 @@ export function ChefSubscriptionPlanManager() {
       const body = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(
-          errorMessage(body, "Plan details could not be saved."),
-        );
+        throw chefApiError(response, body, "Plan details could not be saved.");
       }
 
       const updated = body as ChefMealPlan;
@@ -656,9 +621,7 @@ export function ChefSubscriptionPlanManager() {
       setSuccessMessage("Plan details saved.");
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Plan details could not be saved.",
+        chefErrorText(error, "Plan details could not be saved."),
       );
     } finally {
       setBusy(false);
@@ -755,14 +718,10 @@ export function ChefSubscriptionPlanManager() {
       const saveBody = await save.json().catch(() => null);
 
       if (!save.ok) {
-        throw new Error(
-          errorMessage(
-            saveBody,
-            save.status === 409
-              ? "One of the selected dishes is no longer active, available or owned by your kitchen."
-              : "Meal schedule could not be saved.",
-          ),
-        );
+        const failure = chefApiError(save, saveBody, "Meal schedule could not be saved.");
+        throw save.status === 409 && !CHEF_ERROR_MESSAGES[failure.ref]
+          ? new ChefError("One of the selected dishes is no longer active, available or owned by your kitchen.", failure.ref, 409)
+          : failure;
       }
 
       const savedSchedule = saveBody as ChefMealSchedule;
@@ -787,12 +746,7 @@ export function ChefSubscriptionPlanManager() {
       const submitBody = await submit.json().catch(() => null);
 
       if (!submit.ok) {
-        throw new Error(
-          errorMessage(
-            submitBody,
-            "The plan is not ready for approval yet. Check the schedule and selected dishes.",
-          ),
-        );
+        throw chefApiError(submit, submitBody, "The plan is not ready for approval yet. Check the schedule and selected dishes.");
       }
 
       const submitted = submitBody as ChefMealPlan;
@@ -805,9 +759,7 @@ export function ChefSubscriptionPlanManager() {
       );
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Meal plan could not be saved.",
+        chefErrorText(error, "Meal plan could not be saved."),
       );
     } finally {
       setBusy(false);
@@ -869,9 +821,7 @@ export function ChefSubscriptionPlanManager() {
       const body = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(
-          errorMessage(body, "Subscription capacity could not be saved."),
-        );
+        throw chefApiError(response, body, "Subscription capacity could not be saved.");
       }
 
       const refreshed = await fetch("/api/chef/subscription-capacity", {
@@ -887,9 +837,7 @@ export function ChefSubscriptionPlanManager() {
       );
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Subscription capacity could not be saved.",
+        chefErrorText(error, "Subscription capacity could not be saved."),
       );
     } finally {
       setBusy(false);
@@ -927,9 +875,7 @@ export function ChefSubscriptionPlanManager() {
       setSuccessMessage("Meal-plan workspace refreshed.");
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "The meal-plan workspace could not be refreshed.",
+        chefErrorText(error, "The meal-plan workspace could not be refreshed."),
       );
     } finally {
       setRefreshing(false);

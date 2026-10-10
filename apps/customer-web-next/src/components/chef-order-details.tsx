@@ -1,5 +1,6 @@
 "use client";
 
+import { ChefError, chefApiError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -47,15 +48,6 @@ function itemMetadata(item: ChefOrder["items"][number]): string {
     .join(" · ");
 }
 
-function responseMessage(value: unknown, fallback: string): string {
-  return value &&
-    typeof value === "object" &&
-    "message" in value &&
-    typeof value.message === "string"
-    ? value.message
-    : fallback;
-}
-
 export function ChefOrderDetails({ orderId }: { orderId: string }) {
   const [order, setOrder] = useState<ChefOrder | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,23 +66,18 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(
-          responseMessage(
-            body,
-            response.status === 404 || response.status === 403
-              ? "This order isn’t available for your kitchen."
-              : "We couldn’t load this order right now.",
-          ),
-        );
+        throw chefApiError(response, body, response.status === 404 || response.status === 403
+          ? "This order isn’t available for your kitchen."
+          : "We couldn’t load this order right now.");
       }
       const parsed = parseChefOrderResponse(body);
       if (!parsed || parsed.id.toLowerCase() !== orderId.toLowerCase()) {
-        throw new Error("We couldn’t read this order. Please refresh it.");
+        throw new ChefError("We couldn’t read this order. Please refresh it.", "INVALID_CHEF_ORDER_RESPONSE", response.status);
       }
       setOrder(parsed);
       setLastUpdatedAt(new Date());
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "We couldn’t load this order right now.");
+      setError(chefErrorText(caught, "We couldn’t load this order right now."));
     } finally {
       setLoading(false);
       setRefreshing(false);

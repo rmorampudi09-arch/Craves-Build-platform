@@ -1,5 +1,6 @@
 "use client";
 
+import { chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChefApplicationEvidenceUploader } from "@/components/chef-application-evidence-uploader";
 import {
@@ -31,14 +32,14 @@ export function ChefApplicationDocumentPanel({
     setError("");
     try {
       const response = await fetch("/api/chef/application", { cache: "no-store", signal: controller.signal });
-      if (!response.ok) throw new DocumentLoadError(response.status === 401 ? "Please sign in again to view your documents." : "We couldn’t load your application. Please try again.");
+      if (!response.ok) throw new ChefError(response.status === 401 ? "Please sign in again to view your documents." : "We couldn’t load your application. Please try again.", chefApiError(response, await response.json().catch(() => null), "").ref, response.status);
       const application = parseChefApplication(await response.json());
       if (!application || (application.status !== "NOT_SUBMITTED" && !application.id)) throw new DocumentLoadError("We couldn’t confirm your application details. Please try again.");
       const applicationReady = Boolean(application.id);
       let documents: ChefEvidenceMetadata[] = [];
       if (applicationReady) {
         const documentResponse = await fetch("/api/chef/application/evidence-status", { cache: "no-store", signal: controller.signal });
-        if (!documentResponse.ok) throw new DocumentLoadError(documentResponse.status === 401 ? "Please sign in again to view your documents." : "We couldn’t load your document history. Please try again.");
+        if (!documentResponse.ok) throw new ChefError(documentResponse.status === 401 ? "Please sign in again to view your documents." : "We couldn’t load your document history. Please try again.", chefApiError(documentResponse, await documentResponse.json().catch(() => null), "").ref, documentResponse.status);
         const parsed = parseChefEvidenceList(await documentResponse.json());
         if (!parsed) throw new DocumentLoadError("We couldn’t confirm your document history. Please try again.");
         documents = parsed;
@@ -50,7 +51,9 @@ export function ChefApplicationDocumentPanel({
     } catch (cause) {
       if (request.current !== controller) return;
       setData(null); // Unavailable evidence is not zero uploaded documents.
-      setError(controller.signal.aborted ? "Your document check took too long. Please try again." : cause instanceof DocumentLoadError ? cause.message : "We couldn’t load your documents. Please try again.");
+      // Plain errors from elsewhere may carry private diagnostics: only our own sentences and browser failures are shown.
+      const shown = cause instanceof DocumentLoadError || cause instanceof ChefError || (cause instanceof Error && cause.name !== "Error") ? cause : null;
+      setError(chefErrorText(controller.signal.aborted ? new ChefError("Your document check took too long. Please try again.", "TIMEOUT", 0) : shown, "We couldn’t load your documents. Please try again."));
     } finally {
       window.clearTimeout(timeout);
       if (request.current === controller) setLoading(false);

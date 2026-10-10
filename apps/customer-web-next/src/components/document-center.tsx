@@ -1,5 +1,6 @@
 "use client";
 
+import { chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, FileText, Mail, RefreshCw } from "lucide-react";
 import { documentCapabilitiesSchema, documentEmailSchema, documentError, documentLabels, documentPageSchema, documentRequestSchema, documentSummarySchema, type DocumentCapabilities, type DocumentSummary, type DocumentType } from "@/lib/document-contract";
@@ -16,7 +17,7 @@ async function jsonRequest(path: string, signal: AbortSignal, init: RequestInit 
   const raw: unknown = await response.json();
   if (!response.ok) {
     const code = raw && typeof raw === "object" && "code" in raw && typeof raw.code === "string" ? raw.code : "DOCUMENT_OPERATION_FAILED";
-    throw new Error(documentError(code));
+    throw new ChefError(documentError(code), code, response.status);
   }
   return raw;
 }
@@ -50,7 +51,7 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
   useEffect(() => {
     const abort = new AbortController(); lifetime.current = abort;
     void jsonRequest("/api/documents/capabilities", abort.signal).then((raw) => setCapabilities(documentCapabilitiesSchema.parse(raw))).catch((caught) => {
-      if (!abort.signal.aborted) setError(caught instanceof Error ? caught.message : "Document capabilities are unavailable.");
+      if (!abort.signal.aborted) setError(chefErrorText(caught, "Document capabilities are unavailable."));
     });
     return () => { abort.abort(); lifetime.current = null; };
   }, []);
@@ -68,14 +69,14 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
   useEffect(() => {
     historyEpoch.current += 1;
     if (!capabilities?.enabled) return;
-    void loadHistory().catch((caught) => { if (!lifetime.current?.signal.aborted) setError(caught instanceof Error ? caught.message : "Document history is unavailable."); });
+    void loadHistory().catch((caught) => { if (!lifetime.current?.signal.aborted) setError(chefErrorText(caught, "Document history is unavailable.")); });
   }, [capabilities?.enabled, loadHistory]);
 
   async function action(work: () => Promise<void>) {
     if (busy || !lifetime.current) return;
     setBusy(true); setError(""); setMessage("");
     try { await work(); } catch (caught) {
-      if (!lifetime.current?.signal.aborted) setError(caught instanceof Error ? caught.message : "The document operation failed.");
+      if (!lifetime.current?.signal.aborted) setError(chefErrorText(caught, "The document operation failed."));
     } finally { setBusy(false); }
   }
   async function pollDocument(document: DocumentSummary, signal: AbortSignal) {
@@ -99,7 +100,7 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
   async function download(item: DocumentSummary) {
     const signal = lifetime.current!.signal;
     const response = await fetch(`/api/documents/${item.id}/download`, { credentials: "same-origin", cache: "no-store", signal: AbortSignal.any([signal, AbortSignal.timeout(45000)]) });
-    if (!response.ok) throw new Error("The PDF could not be downloaded. Refresh the history and try again.");
+    if (!response.ok) throw new ChefError("The PDF could not be downloaded. Refresh the history and try again.", chefApiError(response, await response.json().catch(() => null), "").ref, response.status);
     const bytes = await readDocumentBytes(response.body, 4 * 1024 * 1024, 30000);
     if (new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-" || bytes.length !== item.bytes) throw new Error("The document failed the file-integrity check.");
     const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes.buffer as ArrayBuffer))).map((value) => value.toString(16).padStart(2, "0")).join("");

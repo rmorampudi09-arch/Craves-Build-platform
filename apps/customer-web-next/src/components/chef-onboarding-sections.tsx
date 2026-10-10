@@ -1,5 +1,6 @@
 "use client";
 
+import { chefApiError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -334,9 +335,7 @@ export function ChefKitchenDetails({ flow }: Props) {
     } catch (failure) {
       if (mounted.current && request === generation.current)
         setLocationError(
-          failure instanceof Error
-            ? failure.message
-            : "Address search is unavailable right now. Use your current location or enter the address below.",
+          chefErrorText(failure, "Address search is unavailable right now. Use your current location or enter the address below."),
         );
     } finally {
       if (mounted.current && request === generation.current) setSearching(false);
@@ -711,7 +710,7 @@ function FssaiGuide({ flow }: Props) {
       signal: controller.signal,
     })
       .then(async (response) => {
-        if (!response.ok) throw new Error("The video guide is unavailable right now.");
+        if (!response.ok) throw chefApiError(response, await response.json().catch(() => null), "The video guide is unavailable right now.");
         const raw: unknown = await response.json();
         if (!Array.isArray(raw) || raw.length > 100 || !raw.every(isLearningContent))
           throw new Error("The video guide could not be loaded.");
@@ -724,9 +723,7 @@ function FssaiGuide({ flow }: Props) {
       .catch((failure) => {
         if (!controller.signal.aborted)
           setError(
-            failure instanceof Error
-              ? failure.message
-              : "The video guide is unavailable right now.",
+            chefErrorText(failure, "The video guide is unavailable right now."),
           );
       })
       .finally(() => {
@@ -750,7 +747,7 @@ function FssaiGuide({ flow }: Props) {
         throw new Error("The video could not be opened. Please try again.");
       setPlayback((previous) => ({ ...previous, [item.id]: result.url as string }));
     } catch (failure) {
-      setVideoError(failure instanceof Error ? failure.message : "The video could not be opened.");
+      setVideoError(chefErrorText(failure, "The video could not be opened."));
     } finally {
       setOpening(null);
     }

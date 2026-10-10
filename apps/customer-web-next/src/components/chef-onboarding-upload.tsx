@@ -1,5 +1,6 @@
 "use client";
 
+import { chefErrorText } from "@/lib/chef-errors";
 import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
@@ -181,7 +182,7 @@ export function ChefOnboardingUpload({
         setFile(null);
         setError("");
       } else
-        setError(failure instanceof Error ? failure.message : "Upload failed. Please try again.");
+        setError(chefErrorText(failure, "Upload failed. Please try again."));
     } finally {
       if (mounted.current) setBusy(false);
     }
@@ -197,7 +198,7 @@ export function ChefOnboardingUpload({
       if (mounted.current) {
         setBusy(false);
         setFile(null);
-        setError(failure instanceof Error ? failure.message : "Choose another file.");
+        setError(chefErrorText(failure, "Choose another file."));
       }
       return;
     }
@@ -216,7 +217,7 @@ export function ChefOnboardingUpload({
         setUploadedName(null);
       }
     } catch (failure) {
-      if (mounted.current) setError(failure instanceof Error ? failure.message : "Removal failed.");
+      if (mounted.current) setError(chefErrorText(failure, "Removal failed."));
     } finally {
       if (mounted.current) setBusy(false);
     }

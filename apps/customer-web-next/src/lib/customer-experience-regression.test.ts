@@ -184,3 +184,20 @@ test("navigation shows page-shaped skeletons the moment a dish, kitchen or cart 
   assert.match(skeleton, /data-craves-action-bar/);
   assert.match(kitchens, /\$\{skeletonStyles\.block\} aspect-\[16\/9\]/);
 });
+
+test("photos show instantly from cache and dish photos swipe natively", () => {
+  const progressiveImage = source("../components/media/ProgressiveImage.tsx");
+  const dishHeader = source("../components/order/DishImageHeader.tsx");
+  const card = source("../components/home/DishCard.tsx");
+
+  assert.match(progressiveImage, /image\?\.complete && image\.naturalWidth > 0/);
+  assert.match(progressiveImage, /instant \? "transition-\[scale\]" : "transition-\[opacity,scale\]"/);
+  assert.doesNotMatch(card, /transition-transform/);
+  assert.match(card, /className="object-cover group-hover:scale-\[1\.03\]"/);
+
+  // No remount per photo: a snap strip follows the finger; arrows and thumbnails scroll it.
+  assert.doesNotMatch(dishHeader, /key=\{activeImage\}/);
+  assert.match(dishHeader, /snap-x snap-mandatory overflow-x-auto/);
+  assert.match(dishHeader, /onClick=\{\(\) => showIndex\(index\)\}/);
+  assert.doesNotMatch(dishHeader, /backdrop-blur/);
+});

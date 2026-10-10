@@ -79,7 +79,9 @@ test("profile edit stays focused on name, phone and optional OTP email verificat
 
   assert.match(edit, /Phone number/);
   assert.match(edit, /readOnly/);
-  assert.match(edit, /body\.style\.overflow = "hidden"/);
+  // The shared Sheet owns scroll lock, focus trap and Back-to-close.
+  assert.match(edit, /<Sheet/);
+  assert.match(edit, /closeOnOutsideTap=\{!typed\}/);
   assert.match(edit, /overscroll-contain/);
   assert.match(edit, /replace\(\/\^\\\+91/);
   assert.match(edit, /EmailVerificationPanel initialEmail=\{initialEmail\} compact/);

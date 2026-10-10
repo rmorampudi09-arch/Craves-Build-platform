@@ -80,7 +80,7 @@ test("signed-in home loads live discovery and opens customer kitchen details wit
   assert.match(returnState, /scrollY/);
   assert.match(returnState, /searchTerm/);
   assert.match(returnState, /homeCategory/);
-  assert.match(signOut, /role="dialog"/);
+  assert.match(signOut, /<Dialog/);
   assert.match(signOut, /Sign out of Craves\?/);
   assert.match(signOut, /Stay signed in/);
   assert.match(kitchensService, /export function allKitchens\(\)/);

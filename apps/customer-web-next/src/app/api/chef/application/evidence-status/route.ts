@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefEvidenceList } from "@/lib/chef-application-evidence-contract";
 import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
     const upstream = await authenticatedApiFetch(request, "/chef/application?evidence=true");
     if (!upstream.ok) {
       return NextResponse.json(
-        { code: upstream.status === 401 ? "SESSION_EXPIRED" : "EVIDENCE_STATUS_UNAVAILABLE" },
+        { code: upstream.status === 401 ? "SESSION_EXPIRED" : "EVIDENCE_STATUS_UNAVAILABLE", ...chefUpstream(await upstream.json().catch(() => null)) },
         { status: upstream.status, headers: { "Cache-Control": "no-store" } },
       );
     }

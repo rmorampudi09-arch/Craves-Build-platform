@@ -43,7 +43,7 @@ const nextConfig: NextConfig = {
       },
       {
         source:
-          "/:path(chef|chefs|home|discover|cart|checkout|orders|payment|profile|subscriptions|tracking|wishlist|sign-in|contact|products-pricing|privacy|terms|refunds-cancellations|security|addresses|confirmation|kitchen|kitchens|dish)(.*)",
+          "/:path(chef|chefs|home|discover|cart|checkout|orders|payment|profile|subscriptions|tracking|wishlist|sign-in|contact|products-pricing|privacy|terms|refunds-cancellations|security|addresses|confirmation|kitchen|kitchens|dish|support)(.*)",
         headers: [
           {
             key: "Cache-Control",

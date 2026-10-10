@@ -6,6 +6,7 @@ import {
   FaBagShopping,
   FaBell,
   FaCalendarDays,
+  FaComments,
   FaCreditCard,
   FaGift,
   FaHeadset,
@@ -574,6 +575,12 @@ function ProfileContent({
               icon={FaHeadset}
               title="Contact us"
               subtitle="Help and support"
+            />
+            <ProfileLinkCard
+              to="/support"
+              icon={FaComments}
+              title="Chat with support"
+              subtitle="Get quick answers about orders and payments"
             />
 
             <ProfileSignOutAction

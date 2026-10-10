@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Clock3,
+  LifeBuoy,
   MapPin,
   Phone,
   RefreshCw,
@@ -130,7 +131,10 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
 
   return (
     <div className="space-y-5">
-      <Link href="/chef/orders" className="inline-flex min-h-11 items-center gap-2 rounded-full px-2 text-sm font-semibold text-[#1A1A1A] hover:bg-[#F1F3F5]"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to orders</Link>
+      <div className="flex items-center justify-between gap-3">
+        <Link href="/chef/orders" className="inline-flex min-h-11 items-center gap-2 rounded-full px-2 text-sm font-semibold text-[#1A1A1A] hover:bg-[#F1F3F5]"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to orders</Link>
+        <Link href={`/chef/support?orderId=${order.id}`} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#1A1A1A] hover:bg-[#F1F3F5]"><LifeBuoy className="h-4 w-4 text-[#F62E18]" aria-hidden="true" /> Get help</Link>
+      </div>
 
       <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4">

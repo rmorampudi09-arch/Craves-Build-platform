@@ -286,7 +286,12 @@
       "ChefOnboardingPolicyTest": 6,
       "ChefOnboardingPhotoValidationTest": 1,
       "ChefApplicationReadinessTest": 10,
-      "ChefApplicationReadinessHttpTest": 4
+      "ChefApplicationReadinessHttpTest": 4,
+      "SupportChatLimiterTest": 3,
+      "ClaudeMessagesClientTest": 3,
+      "SupportOrderClientTest": 3,
+      "SupportAssistantTest": 9,
+      "SupportChatControllerTest": 3
     }
   },
   "web": {

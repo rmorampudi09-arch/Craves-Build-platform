@@ -177,6 +177,23 @@ describe('typed HTTP client foundation', () => {
     expect(normalized.message).toBe('Enter a valid phone number.');
   });
 
+  it('exposes delta-seconds Retry-After on rate-limited responses', () => {
+    const config = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
+    const rateLimited = (retryAfter: string) =>
+      toAppApiError(
+        new AxiosError('limited', 'ERR_BAD_REQUEST', config, undefined, {
+          data: {code: 'SUPPORT_CHAT_RATE_LIMITED'},
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: new AxiosHeaders({'Retry-After': retryAfter}),
+          config,
+        }),
+      );
+
+    expect(rateLimited('30').retryAfterSeconds).toBe(30);
+    expect(rateLimited('Wed, 21 Oct 2026 07:28:00 GMT').retryAfterSeconds).toBeUndefined();
+  });
+
   it('preserves only bounded safe validation details for field reconciliation', () => {
     const config = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
     const normalized = toAppApiError(

@@ -1,5 +1,6 @@
 "use client";
 
+import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
 import { Button } from "@/components/ui/buttons/button";
 import { useEffect, useMemo, useState } from "react";
@@ -53,6 +54,8 @@ type Snapshot = {
   orders: ChefOrder[];
   earnings: ChefEarning[];
   unavailable: string[];
+  /** Why each unavailable part failed, as shown to the chef. */
+  details: string[];
 };
 
 type PriorityAction = {
@@ -72,6 +75,7 @@ const EMPTY: Snapshot = {
   orders: [],
   earnings: [],
   unavailable: [],
+  details: [],
 };
 
 function hasChefRole(user: CravesUser | null): boolean {
@@ -206,6 +210,12 @@ export function ChefModeDashboard() {
 
       if (!active) return;
       const unavailable: string[] = [];
+      const details: string[] = [];
+      const fail = (label: string, failure: unknown) => {
+        unavailable.push(label);
+        details.push(`${label.charAt(0).toUpperCase()}${label.slice(1)}: ${chefErrorText(failure, "It couldn’t be loaded.")}`);
+      };
+      const unreadable = (label: string, ref: string) => fail(label, new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, ref, 200));
       let application: ChefApplication | null = null;
       let kitchen: ChefKitchen | null = null;
       let menu: ChefMenuItem[] = [];
@@ -216,28 +226,40 @@ export function ChefModeDashboard() {
         const result = requests[index];
         const label = ["application", "kitchen", "menu", "orders", "earnings"][index]!;
         if (index === 2 && result.status === "fulfilled" && result.value === null) continue;
-        if (result.status !== "fulfilled" || !result.value?.ok) {
-          unavailable.push(label);
+        if (result.status !== "fulfilled") {
+          fail(label, result.reason);
+          continue;
+        }
+        if (!result.value?.ok) {
+          fail(label, result.value ? chefApiError(result.value, await result.value.json().catch(() => null), "") : null);
           continue;
         }
         const raw = await result.value.json().catch(() => undefined);
         if (index === 0) application = parseChefApplication(raw);
         if (index === 1) {
           kitchen = raw === null ? null : parseChefKitchen(raw);
-          if (raw !== null && !kitchen) unavailable.push(label);
+          if (raw !== null && !kitchen) unreadable(label, "INVALID_KITCHEN_RESPONSE");
         }
         if (index === 2) {
           const parsedMenu = parseChefMenuItems(raw);
           if (parsedMenu) menu = parsedMenu;
-          else unavailable.push(label);
+          else unreadable(label, "INVALID_MENU_RESPONSE");
         }
-        if (index === 3) orders = parseChefOrdersResponse(raw) ?? [];
-        if (index === 4) earnings = parseChefEarnings(raw) ?? [];
+        if (index === 3) {
+          const parsedOrders = parseChefOrdersResponse(raw);
+          if (parsedOrders) orders = parsedOrders;
+          else unreadable(label, "INVALID_CHEF_ORDERS_RESPONSE");
+        }
+        if (index === 4) {
+          const parsedEarnings = parseChefEarnings(raw);
+          if (parsedEarnings) earnings = parsedEarnings;
+          else unreadable(label, "INVALID_CHEF_EARNINGS_RESPONSE");
+        }
       }
 
       if (!active) return;
       setUser(current);
-      setSnapshot({ application, kitchen, menu, orders, earnings, unavailable });
+      setSnapshot({ application, kitchen, menu, orders, earnings, unavailable, details });
       if (application?.status === "APPROVED" && !unavailable.includes("kitchen")) {
         const noticeKey = `craves-chef-approved:${application.id ?? current.id}:${application.reviewedAt ?? "approved"}`;
         setApprovalNoticeKey(noticeKey);
@@ -574,6 +596,7 @@ export function ChefModeDashboard() {
         {snapshot.unavailable.length > 0 ? (
           <p role="status" className="rounded-2xl bg-[#F1F3F5] px-4 py-3 text-sm text-[#6B6B6B]">
             Some information couldn’t refresh. You can still use the parts shown below.
+            {snapshot.details.map((detail) => <span key={detail} className="mt-1 block">{detail}</span>)}
           </p>
         ) : null}
 

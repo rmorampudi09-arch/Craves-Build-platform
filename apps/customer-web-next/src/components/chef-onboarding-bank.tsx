@@ -1,5 +1,6 @@
 "use client";
 
+import { chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import { useEffect, useRef, useState } from "react";
 import { Building2, CheckCircle2, Eye, EyeOff, Landmark, Lock, RefreshCw } from "lucide-react";
 import {
@@ -94,7 +95,7 @@ export function ChefOnboardingBank({
       .catch((failure) => {
         if (!controller.signal.aborted) {
           setLookup("failed");
-          setLookupError(failure instanceof Error ? failure.message : "Bank branch lookup failed.");
+          setLookupError(chefErrorText(failure, "Bank branch lookup failed."));
         }
       });
     return () => controller.abort();
@@ -158,7 +159,7 @@ export function ChefOnboardingBank({
       });
       const raw: unknown = await response.json().catch(() => null);
       if (!response.ok)
-        throw new Error(
+        throw new ChefError(
           response.status === 401
             ? "Your session expired. Sign in again to save your bank details."
             : response.status === 409
@@ -166,6 +167,8 @@ export function ChefOnboardingBank({
               : response.status === 429
                 ? "The bank-change limit has been reached. Try again after the current limit resets."
                 : "We could not confirm your bank submission. Retry uses the same request, so it will not create a duplicate.",
+          chefApiError(response, raw, "").ref,
+          response.status,
         );
       const result = bankStatusSchema.parse(raw);
       onSaved(result);
@@ -183,7 +186,7 @@ export function ChefOnboardingBank({
     } catch (failure) {
       setError({
         field: "form",
-        message: failure instanceof Error ? failure.message : "Bank details could not be saved.",
+        message: chefErrorText(failure, "Bank details could not be saved."),
       });
     } finally {
       inFlight.current = false;

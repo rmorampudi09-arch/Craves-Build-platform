@@ -1,5 +1,6 @@
 "use client";
 
+import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -31,15 +32,6 @@ import {
 } from "@/lib/chef-menu-contract";
 
 type LoadState = "loading" | "ready" | "error";
-
-function responseMessage(value: unknown, fallback: string): string {
-  return value &&
-    typeof value === "object" &&
-    "message" in value &&
-    typeof value.message === "string"
-    ? value.message
-    : fallback;
-}
 
 function statusTone(ready: boolean): string {
   return ready
@@ -89,45 +81,26 @@ export function ChefOperationsWorkspace() {
         readinessResponse.json().catch(() => null),
       ]);
 
-      if (!applicationResponse.ok) {
-        throw new Error(
-          responseMessage(
-            applicationRaw,
-            "Chef application status could not be loaded.",
-          ),
-        );
-      }
-      if (!kitchenResponse.ok) {
-        throw new Error(
-          responseMessage(kitchenRaw, "Kitchen operations could not be loaded."),
-        );
-      }
-      if (!menuResponse.ok) {
-        throw new Error(
-          responseMessage(menuRaw, "Menu operations could not be loaded."),
-        );
-      }
-      if (!readinessResponse.ok) {
-        throw new Error(
-          responseMessage(readinessRaw, "Application readiness could not be loaded."),
-        );
-      }
+      if (!applicationResponse.ok) throw chefApiError(applicationResponse, applicationRaw, "Chef application status could not be loaded.");
+      if (!kitchenResponse.ok) throw chefApiError(kitchenResponse, kitchenRaw, "Kitchen operations could not be loaded.");
+      if (!menuResponse.ok) throw chefApiError(menuResponse, menuRaw, "Menu operations could not be loaded.");
+      if (!readinessResponse.ok) throw chefApiError(readinessResponse, readinessRaw, "Application readiness could not be loaded.");
 
       const parsedApplication = parseChefApplication(applicationRaw);
       const parsedKitchen = kitchenRaw === null ? null : parseChefKitchen(kitchenRaw);
       const parsedMenu = parseChefMenuItems(menuRaw);
       const parsedReadiness = parseChefApplicationReadiness(readinessRaw);
       if (!parsedApplication) {
-        throw new Error("Craves returned an invalid chef application response.");
+        throw new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, "INVALID_CHEF_APPLICATION_RESPONSE", 0);
       }
       if (kitchenRaw !== null && !parsedKitchen) {
-        throw new Error("Craves returned an invalid kitchen response.");
+        throw new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, "INVALID_KITCHEN_RESPONSE", 0);
       }
       if (!parsedMenu) {
-        throw new Error("Craves returned an invalid chef menu response.");
+        throw new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, "INVALID_MENU_RESPONSE", 0);
       }
       if (!parsedReadiness) {
-        throw new Error("Craves returned an invalid application readiness response.");
+        throw new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, "INVALID_READINESS_RESPONSE", 0);
       }
 
       setApplication(parsedApplication);
@@ -138,9 +111,7 @@ export function ChefOperationsWorkspace() {
       setLastUpdatedAt(new Date());
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : "Chef operations are temporarily unavailable.",
+        chefErrorText(caught, "Chef operations are temporarily unavailable."),
       );
       setState("error");
     } finally {

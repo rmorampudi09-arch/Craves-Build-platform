@@ -1,5 +1,6 @@
 "use client";
 
+import { ChefError, chefApiError, chefErrorText } from "@/lib/chef-errors";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ImagePlus, Plus, UtensilsCrossed } from "lucide-react";
@@ -92,31 +93,7 @@ function requiresKitchen(response: Response, body: unknown): boolean {
 }
 
 function apiError(response: Response, body: unknown, fallback: string) {
-  const code =
-    body &&
-    typeof body === "object" &&
-    "code" in body &&
-    typeof body.code === "string" &&
-    /^[A-Z_]{3,80}$/.test(body.code)
-      ? body.code
-      : "";
-  const reason =
-    chefMenuFailure(response.status, body)?.message ?? (requiresKitchen(response, body)
-      ? "Set up your kitchen before adding or managing dishes."
-      : response.status === 401
-      ? "Your session has expired. Sign in again to continue."
-      : response.status === 403
-        ? "Your account or kitchen is not eligible for this action. Check Chef approval, kitchen setup and payout readiness."
-        : response.status === 404
-          ? "This dish or kitchen could not be found. Reload your menu."
-          : response.status === 400
-            ? "The service could not accept these details. Check the highlighted fields and packed weight."
-            : response.status === 413
-              ? "The photo is too large. Choose a photo of 8 MB or less."
-              : response.status === 429
-                ? "Too many requests. Please wait a moment and try again."
-                : fallback);
-  return `${reason} (${code || `HTTP ${response.status}`})`;
+  return chefApiError(response, body, fallback);
 }
 function FoodIndicator({ type }: { type: FoodType }) {
   const food = FOOD_TYPES.find((option) => option.value === type)!;
@@ -156,7 +133,7 @@ export function ChefMenuManager() {
       const kitchenResponse = await fetch("/api/chef/kitchen", { cache: "no-store" });
       const kitchenBody: unknown = await kitchenResponse.json().catch(() => undefined);
       if (!kitchenResponse.ok)
-        throw new Error(apiError(kitchenResponse, kitchenBody, "Your kitchen could not be checked. Please retry."));
+        throw apiError(kitchenResponse, kitchenBody, "Your kitchen could not be checked. Please retry.");
       if (kitchenBody === null) {
         setItems([]);
         setKitchenRequired(true);
@@ -164,7 +141,7 @@ export function ChefMenuManager() {
         return true;
       }
       if (!parseChefKitchen(kitchenBody))
-        throw new Error("Your kitchen could not be verified. Please retry. (INVALID_KITCHEN_RESPONSE)");
+        throw new ChefError("Your kitchen could not be verified. Please retry.", "INVALID_KITCHEN_RESPONSE", 0);
       const response = await fetch("/api/chef/menu", { cache: "no-store" });
       const body: unknown = await response.json().catch(() => null);
       if (requiresKitchen(response, body)) {
@@ -174,18 +151,16 @@ export function ChefMenuManager() {
         return true;
       }
       if (!response.ok)
-        throw new Error(apiError(response, body, "Your menu could not be loaded. Please retry."));
+        throw apiError(response, body, "Your menu could not be loaded. Please retry.");
       const next = parseChefMenuItems(body);
       if (!next)
-        throw new Error("The menu response was incomplete. Please retry. (INVALID_MENU_RESPONSE)");
+        throw new ChefError("The menu response was incomplete. Please retry.", "INVALID_MENU_RESPONSE", 0);
       setItems(next);
       setKitchenRequired(false);
       setLoadError("");
       return true;
     } catch (error) {
-      setLoadError(
-        error instanceof Error ? error.message : "Could not connect to your menu. Please retry.",
-      );
+      setLoadError(chefErrorText(error, "Could not connect to your menu. Please retry."));
       return false;
     } finally {
       if (initial) setLoading(false);
@@ -314,19 +289,11 @@ export function ChefMenuManager() {
           setKitchenRequired(true);
           setEditing(false);
         }
-        throw new Error(
-          apiError(
-            response,
-            body,
-            "The service did not confirm the save. Reload your menu before trying again.",
-          ),
-        );
+        throw apiError(response, body, "The service did not confirm the save. Reload your menu before trying again.");
       }
       saved = parseChefMenuItem(body);
       if (!saved)
-        throw new Error(
-          "The service returned an incomplete save response. Reload your menu to check the result. (INVALID_MENU_RESPONSE)",
-        );
+        throw new ChefError("The service returned an incomplete save response. Reload your menu to check the result.", "INVALID_MENU_RESPONSE", 0);
       upsert(saved);
       setForm(toForm(saved));
       // Upload one at a time; each confirmed photo leaves the queue so a retry never duplicates it.
@@ -341,28 +308,21 @@ export function ChefMenuManager() {
         });
         const imageBody: unknown = await upload.json().catch(() => null);
         if (!upload.ok)
-          throw new Error(
-            apiError(upload, imageBody, "The photo could not be uploaded. Please retry."),
-          );
+          throw apiError(upload, imageBody, "The photo could not be uploaded. Please retry.");
         if (
           !imageBody ||
           typeof imageBody !== "object" ||
           !("uploaded" in imageBody) ||
           imageBody.uploaded !== true
         )
-          throw new Error(
-            "The photo upload was not confirmed. Please reload your menu to check it.",
-          );
+          throw new ChefError("The photo upload was not confirmed. Please reload your menu to check it.", "INVALID_MENU_IMAGE_RESPONSE", 0);
         setImageFiles((current) => current.filter((entry) => entry !== file));
       }
       setEditing(false);
       setNotice(creating ? "Dish added successfully" : "Dish updated successfully");
       await load();
     } catch (error) {
-      const detail =
-        error instanceof Error
-          ? error.message
-          : "Connection interrupted. Please reload your menu to check the result.";
+      const detail = chefErrorText(error, "Connection interrupted. Please reload your menu to check the result.");
       if (saved) {
         setMessage(`Dish details saved, but a photo was not confirmed. Photos still listed as New were not uploaded. ${detail}`);
         // Show photos that did upload before the failure.
@@ -395,23 +355,15 @@ export function ChefMenuManager() {
           setItems([]);
           setKitchenRequired(true);
         }
-        throw new Error(
-          apiError(response, body, "Availability was not confirmed. Reload the menu to check it."),
-        );
+        throw apiError(response, body, "Availability was not confirmed. Reload the menu to check it.");
       }
       const updated = parseChefMenuItem(body);
       if (!updated)
-        throw new Error(
-          "Availability returned an incomplete response. Reload the menu to check it.",
-        );
+        throw new ChefError("Availability returned an incomplete response. Reload the menu to check it.", "INVALID_MENU_RESPONSE", 0);
       upsert(updated);
       setNotice(updated.available ? "Dish is now available" : "Dish is now unavailable");
     } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Availability could not be confirmed. Reload the menu to check it.",
-      );
+      setMessage(chefErrorText(error, "Availability could not be confirmed. Reload the menu to check it."));
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -429,13 +381,13 @@ export function ChefMenuManager() {
         method: action === "remove" ? "DELETE" : "PUT",
       });
       const body: unknown = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(apiError(response, body, "The photo change was not confirmed. Reload the menu to check it."));
+      if (!response.ok) throw apiError(response, body, "The photo change was not confirmed. Reload the menu to check it.");
       const updated = parseChefMenuItem(body);
-      if (!updated) throw new Error("The photo change returned an incomplete response. Reload the menu to check it.");
+      if (!updated) throw new ChefError("The photo change returned an incomplete response. Reload the menu to check it.", "INVALID_MENU_RESPONSE", 0);
       upsert(updated);
       setNotice(action === "remove" ? "Photo removed" : "Cover photo updated");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The photo change could not be confirmed. Reload the menu to check it.");
+      setMessage(chefErrorText(error, "The photo change could not be confirmed. Reload the menu to check it."));
     } finally {
       busyRef.current = false;
       setBusy(false);

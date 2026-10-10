@@ -1,5 +1,6 @@
 "use client";
 
+import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
 import { useState } from "react";
 import { z } from "zod";
@@ -10,11 +11,16 @@ export function ChefLedgerStatementPanel() {
   async function load() {
     setBusy(true);setMessage("");setStatement(null);
     try {
-      const period = statementPeriodSchema.parse({from, to, kind});
+      const checked = statementPeriodSchema.safeParse({from, to, kind});
+      if (!checked.success) throw new ChefError(CHEF_ERROR_MESSAGES.INVALID_STATEMENT_PERIOD, "INVALID_STATEMENT_PERIOD", 0);
+      const period = checked.data;
       const response = await fetch(`/api/chef/finance/statement?${new URLSearchParams(period)}`, {cache: "no-store"});
-      if (!response.ok) throw new Error(response.status === 422 ? "This period contains too many records. Choose a shorter period; no rows were silently omitted." : "Statement data is unavailable. Check your session and the selected dates.");
+      if (!response.ok) {
+        const failure = chefApiError(response, await response.json().catch(() => null), "Statement data is unavailable. Check the selected dates.");
+        throw response.status === 422 ? new ChefError("This period contains too many records. Choose a shorter period; no rows were silently omitted.", failure.ref, 422) : failure;
+      }
       setStatement(chefStatementSchema.parse(await response.json()));
-    } catch (error) {setMessage(error instanceof Error ? error.message : "Statement unavailable");} finally {setBusy(false);}
+    } catch (error) {setMessage(chefErrorText(error, "Statement unavailable"));} finally {setBusy(false);}
   }
   return <section className="mt-6 space-y-4 rounded-2xl border border-slate-200 bg-white p-6 text-slate-900">
     <h2 className="text-xl font-semibold">Your dated ledger statement</h2><p className="text-sm text-slate-600">View the original fee, GST on the Craves fee, other reviewed withholding and the outstanding-liability reconciliation. Legacy entries remain separate. Dates use India time and the end date is excluded.</p>

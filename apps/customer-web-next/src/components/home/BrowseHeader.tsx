@@ -304,6 +304,7 @@ export function BrowseHeader({
 
       <div
         aria-hidden={!mobileCompact}
+        inert={!mobileCompact}
         className={[
           "fixed inset-x-0 top-0 z-50 border-b border-[#ECEEF0] bg-white px-3 py-2 shadow-[0_7px_22px_rgba(26,26,26,0.065)] transition-[translate,opacity] duration-(--dur-chrome) ease-(--ease-standard) motion-reduce:transition-none md:hidden",
           mobileCompact

@@ -130,3 +130,27 @@ test("review totals are optional and never block dish or kitchen rendering", () 
   assert.match(dish, /\.catch\(\(\) =>/);
   assert.match(kitchen, /\.catch\(\(\) =>/);
 });
+
+test("category, Veg and sort changes reveal dishes calmly instead of a long chrome-toggling scroll", () => {
+  const home = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
+  const grid = source("../components/home/DishesGrid.tsx");
+
+  // One helper for every view change; far targets jump, near ones glide, chrome holds still.
+  assert.match(home, /const revealDishes = useCallback\(\(onlyIfPast = false\)/);
+  assert.match(home, /distance > window\.innerHeight \|\| prefersReducedMotion\(\)[\s\S]{0,60}forceInstantWindowScroll\(target\)/);
+  assert.match(home, /holdScrollChrome\(\);\s*if \(distance > window\.innerHeight/);
+  assert.match(home, /data-craves-category-rail/);
+  assert.match(home, /setHomeCategory\(nextCategory\);[\s\S]{0,60}revealDishes\(\);/);
+  assert.match(home, /setDishSort\(nextSort\);\s*revealDishes\(\);/);
+  assert.match(home, /revealDishes\(true\)/);
+  assert.doesNotMatch(home, /scrollIntoView/);
+
+  // The list cross-fades per view and never shrinks before the scroll lands.
+  assert.match(grid, /<AnimatePresence mode="wait" initial=\{false\}>\s*<motion\.div\s*key=\{dishViewKey\}/);
+  assert.match(grid, /listItem\(index\)/);
+  assert.match(grid, /min-h-svh/);
+  assert.match(grid, /paging\.key === dishViewKey \? paging\.count : INITIAL_DISH_COUNT/);
+  assert.doesNotMatch(grid, /setVisibleCount|scrollIntoView|@radix-ui\/react-popover/);
+  assert.match(grid, /aria-label="Sort dishes"/);
+  assert.match(grid, /"!bg-\[#1A1A1A\] !text-white"/);
+});

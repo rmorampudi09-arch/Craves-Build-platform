@@ -1,8 +1,14 @@
-"use client";
+import { redirect } from "next/navigation";
+import { isUuid } from "@/lib/delivery-status";
 
-import ConfirmationPage from "@/screens/OrderSuccess/OrderSuccess";
-import { Suspense } from "react";
-
-export default function ConfirmationRoute() {
-  return <Suspense fallback={<div className="min-h-screen bg-cream p-8 text-center text-sm text-muted-foreground">Loading order…</div>}><ConfirmationPage /></Suspense>;
+// One post-order screen: old /confirmation?id= links land on the order's status page,
+// where checkout itself sends customers after payment.
+export default async function ConfirmationRoute({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string | string[] }>;
+}) {
+  const { id } = await searchParams;
+  const orderId = typeof id === "string" ? id.trim() : "";
+  redirect(isUuid(orderId) ? `/orders/${orderId}` : "/orders");
 }

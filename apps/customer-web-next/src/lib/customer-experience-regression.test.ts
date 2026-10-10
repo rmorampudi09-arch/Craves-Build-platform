@@ -98,9 +98,10 @@ test("reviewed checkout never traps the customer while restoring the cart", () =
   assert.match(checkout, /ensureCheckoutCart\(currentCheckout\.orders\)/);
   assert.match(checkout, /handleBackToCart/);
   assert.match(checkout, /removeItem\(CHECKOUT_ID_KEY\)/);
-  assert.match(checkout, /Step 1/);
-  assert.match(checkout, /Step 2/);
-  assert.match(checkout, /Step 3/);
+  // Clear section titles, no "Step n" eyebrows; each problem shows in the section that fixes it.
+  assert.doesNotMatch(checkout, /Step \d/);
+  assert.match(checkout, /addressProblem/);
+  assert.match(checkout, /cartProblem/);
   assert.match(checkout, /CART_NOTICE_KEY/);
   assert.match(checkout, /navigate\(\{ to: "\/cart" \}\)/);
   assert.match(checkout, /Promise\.race/);

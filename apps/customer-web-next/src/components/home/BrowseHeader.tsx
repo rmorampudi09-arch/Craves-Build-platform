@@ -29,6 +29,8 @@ interface BrowseHeaderProps {
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
   onSearchFocus: () => void;
+  /** Pointer down on a search field: a chance to fetch the search UI before focus. */
+  onSearchIntent?: () => void;
   foodPreference?: HomeFoodPreference;
   onFoodPreferenceChange?: (preference: HomeFoodPreference) => void;
   returnPath?: string;
@@ -81,6 +83,7 @@ export function BrowseHeader({
   searchTerm,
   onSearchTermChange,
   onSearchFocus,
+  onSearchIntent,
   foodPreference,
   onFoodPreferenceChange,
   returnPath = "/home",
@@ -150,6 +153,7 @@ export function BrowseHeader({
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
               value={searchTerm}
+              onPointerDown={onSearchIntent}
               onFocus={onSearchFocus}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search homemade dishes or kitchens"
@@ -277,6 +281,7 @@ export function BrowseHeader({
               <span className="sr-only">Search dishes or home kitchens</span>
               <input
                 value={searchTerm}
+                onPointerDown={onSearchIntent}
                 onFocus={onSearchFocus}
                 onChange={(event) => onSearchTermChange(event.target.value)}
                 placeholder="Search dishes, kitchens"
@@ -317,6 +322,7 @@ export function BrowseHeader({
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
               value={searchTerm}
+              onPointerDown={onSearchIntent}
               onFocus={onSearchFocus}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search dishes or kitchens"

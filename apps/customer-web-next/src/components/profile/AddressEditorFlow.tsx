@@ -35,6 +35,7 @@ import {
 } from "@/services/location/searchLocation";
 import { getAddress } from "@/services/auth/cravesAuth";
 import { sessionFetch } from "@/services/auth/sessionFetch";
+import { duration, ease } from "@/lib/motion";
 
 type Step = "locate" | "details";
 
@@ -519,8 +520,6 @@ export function AddressEditorFlow({
     }
   };
 
-  if (!open) return null;
-
   const point = currentPoint(draft);
   const missingLocationFields = [
     ["districtName", "District"],
@@ -547,7 +546,7 @@ export function AddressEditorFlow({
       : "border-[#E5E7EB] focus:border-[#1A1A1A] focus:ring-[#1A1A1A]/10");
 
   const actionClass =
-    "transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none";
+    "transition-[background-color,box-shadow,translate,scale] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none";
 
   return (
     <Dialog.Root
@@ -557,15 +556,12 @@ export function AddressEditorFlow({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[90] bg-black/35 backdrop-blur-[2px]" />
+        <Dialog.Overlay className="fixed inset-0 z-[90] bg-black/35 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-(--dur-component) data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-(--dur-sheet-out)" />
         <Dialog.Content
           aria-labelledby="address-flow-title"
-          className="fixed bottom-0 left-1/2 z-[91] flex max-h-[96svh] w-full max-w-2xl -translate-x-1/2 flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-[0_30px_90px_rgba(26,26,26,0.25)] outline-none md:bottom-auto md:top-1/2 md:max-h-[92vh] md:-translate-y-1/2 md:rounded-[2rem] md:border md:border-[#E5E7EB]"
+          // Phones: a sheet that slides up (320 ms ease-out) and down (220 ms ease-in); md+: a centered dialog.
+          className="fixed bottom-0 left-1/2 z-[91] flex max-h-[96svh] w-full max-w-2xl -translate-x-1/2 flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-[0_30px_90px_rgba(26,26,26,0.25)] outline-none data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom data-[state=open]:duration-(--dur-sheet-in) data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=closed]:duration-(--dur-sheet-out) data-[state=closed]:ease-in md:bottom-auto md:top-1/2 md:max-h-[92vh] md:-translate-y-1/2 md:rounded-[2rem] md:border md:border-[#E5E7EB] md:data-[state=open]:slide-in-from-bottom-0 md:data-[state=open]:fade-in-0 md:data-[state=open]:zoom-in-95 md:data-[state=closed]:slide-out-to-bottom-0 md:data-[state=closed]:fade-out-0 md:data-[state=closed]:zoom-out-95"
         >
-          <div
-            className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-[#D7DADF] md:hidden"
-            aria-hidden="true"
-          />
 
           <div className="flex items-start gap-3 border-b border-[#F1F3F5] px-5 py-5 md:px-7 md:py-6">
             {step === "details" ? (
@@ -622,15 +618,15 @@ export function AddressEditorFlow({
             </button>
           </div>
 
-          <div className="overflow-y-auto px-5 py-5 md:px-7 md:py-6">
-            <AnimatePresence mode="wait" initial={false}>
+          <div className="relative overflow-y-auto overscroll-contain px-5 py-5 md:px-7 md:py-6">
+            {/* popLayout: the next step enters while the last one leaves (no blank gap). */}
+            <AnimatePresence mode="popLayout" initial={false}>
               {step === "locate" ? (
                 <motion.div
                   key="locate"
                   initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  transition={{ duration: 0.2, ease: [0.23, 0.88, 0.26, 0.92] }}
+                  animate={{ opacity: 1, x: 0, transition: { duration: duration.component, ease: ease.out } }}
+                  exit={{ opacity: 0, x: -10, transition: { duration: duration.micro, ease: ease.in } }}
                 >
                   <label htmlFor="address-location-search" className="sr-only">
                     Search for your area, street or landmark
@@ -748,9 +744,8 @@ export function AddressEditorFlow({
                 <motion.div
                   key="details"
                   initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  transition={{ duration: 0.2, ease: [0.23, 0.88, 0.26, 0.92] }}
+                  animate={{ opacity: 1, x: 0, transition: { duration: duration.component, ease: ease.out } }}
+                  exit={{ opacity: 0, x: 10, transition: { duration: duration.micro, ease: ease.in } }}
                 >
                   {point ? (
                     <AddressMapPicker
@@ -769,7 +764,7 @@ export function AddressEditorFlow({
                     className="mt-4 flex items-start gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[0_6px_18px_rgba(26,26,26,0.06)]"
                     aria-live="polite"
                   >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F62E18]/10 text-[#F62E18]">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
                       {mapResolving ? (
                         <Loader2 className="h-4.5 w-4.5 animate-spin" />
                       ) : (
@@ -795,7 +790,7 @@ export function AddressEditorFlow({
                       type="button"
                       onClick={() => setStep("locate")}
                       disabled={busy}
-                      className="shrink-0 rounded-full px-3 py-1.5 text-xs font-black text-[#F62E18] transition-colors duration-150 hover:bg-[#F62E18]/10 focus-visible:bg-[#F62E18]/10 focus-visible:outline-none disabled:opacity-50"
+                      className="shrink-0 rounded-full px-3 py-1.5 text-xs font-black text-[#F62E18] transition-colors duration-150 hover:bg-[#F1F3F5] focus-visible:bg-[#F1F3F5] focus-visible:outline-none disabled:opacity-50"
                     >
                       Change
                     </button>
@@ -914,7 +909,7 @@ export function AddressEditorFlow({
                               }))
                             }
                             className={
-                              "flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-sm font-black transition-[background-color,box-shadow,transform] duration-200 ease-out " +
+                              "flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-sm font-black transition-[background-color,box-shadow,translate] duration-200 ease-out " +
                               (selected
                                 ? "bg-white text-[#1A1A1A] shadow-[0_3px_10px_rgba(26,26,26,0.08)]"
                                 : "text-[#6B6B6B] hover:-translate-y-0.5 hover:bg-white hover:text-[#1A1A1A] hover:shadow-[0_5px_14px_rgba(26,26,26,0.08)]") +

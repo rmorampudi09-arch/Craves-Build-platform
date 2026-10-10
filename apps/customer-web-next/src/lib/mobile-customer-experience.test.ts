@@ -165,3 +165,40 @@ test("dish bottom bar confirms an add in place and keeps the action bar mounted"
   assert.match(bar, /Add<span className="hidden min-\[460px\]:inline"> to cart<\/span>/);
   assert.match(bar, /View cart<span className="hidden min-\[400px\]:inline"> · \{cartTotalLabel\}<\/span>/);
 });
+
+test("overlays enter and leave smoothly and hand focus back", () => {
+  const home = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
+  const header = source("../components/home/BrowseHeader.tsx");
+  const search = source("../components/home/HomeSearchOverlay.tsx");
+  const replacement = source("../components/cart/CartKitchenReplacementDialogHost.tsx");
+  const availability = source("../components/home/CartAddressAvailabilityDialog.tsx");
+  const addressEditor = source("../components/profile/AddressEditorFlow.tsx");
+
+  // Search: the lazy chunk starts loading as the finger lands, and the overlay fades out.
+  assert.match(home, /onSearchIntent=\{preloadHomeSearchOverlay\}/);
+  assert.match(header, /onPointerDown=\{onSearchIntent\}/);
+  assert.match(home, /<AnimatePresence>\s*\{searchOpen \? \(/);
+  assert.match(search, /exit=\{\{ opacity: 0, transition: \{ duration: 0\.15/);
+
+  // Kitchen replacement: bottom sheet on phones, scrim fade, focus in and back, closes on navigation.
+  assert.match(replacement, /initial: \{ y: "100%" \}/);
+  assert.match(replacement, /duration: duration\.sheetIn, ease: ease\.out/);
+  assert.match(replacement, /duration: duration\.sheetOut, ease: ease\.in/);
+  assert.match(replacement, /bg-\[#1A1A1A\]\/48/);
+  assert.match(replacement, /returnFocusRef\.current\?\.focus/);
+  assert.match(replacement, /settle\(false\);\s*\}, \[pathname, settle\]\)/);
+  assert.match(replacement, /event\.key === "Escape"/);
+
+  assert.match(availability, /<AnimatePresence>/);
+  assert.match(availability, /exit=\{\{ opacity: 0, y: 12/);
+  assert.doesNotMatch(availability, /bg-\[#F62E18\]\/10|backdrop-blur/);
+
+  // Address sheet: animates in and out, steps overlap instead of leaving a blank gap.
+  assert.doesNotMatch(addressEditor, /if \(!open\) return null/);
+  assert.match(addressEditor, /data-\[state=open\]:slide-in-from-bottom data-\[state=open\]:duration-\(--dur-sheet-in\)/);
+  assert.match(addressEditor, /data-\[state=closed\]:slide-out-to-bottom data-\[state=closed\]:duration-\(--dur-sheet-out\)/);
+  assert.match(addressEditor, /<AnimatePresence mode="popLayout" initial=\{false\}>/);
+  assert.match(addressEditor, /overscroll-contain/);
+  assert.doesNotMatch(addressEditor, /h-1 w-10 shrink-0 rounded-full bg-\[#D7DADF\]/);
+  assert.doesNotMatch(addressEditor, /bg-\[#F62E18\]\/10/);
+});

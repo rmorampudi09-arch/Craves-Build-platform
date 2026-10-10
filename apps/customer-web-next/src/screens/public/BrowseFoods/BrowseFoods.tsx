@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import {
   useCallback,
@@ -81,13 +82,17 @@ const HomeBottomSections = dynamic(
   { ssr: false, loading: () => null },
 );
 
+const loadHomeSearchOverlay = () => import("@/components/home/HomeSearchOverlay");
+
 const HomeSearchOverlay = dynamic(
-  () =>
-    import("@/components/home/HomeSearchOverlay").then(
-      (module) => module.HomeSearchOverlay,
-    ),
+  () => loadHomeSearchOverlay().then((module) => module.HomeSearchOverlay),
   { ssr: false, loading: () => null },
 );
+
+/** Fetches the overlay as the finger lands, so it opens together with the keyboard. */
+function preloadHomeSearchOverlay() {
+  void loadHomeSearchOverlay();
+}
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
@@ -838,6 +843,7 @@ function BrowseFoodsPage() {
         searchTerm={searchTerm}
         onSearchTermChange={setSearchTerm}
         onSearchFocus={() => setSearchOpen(true)}
+        onSearchIntent={preloadHomeSearchOverlay}
         foodPreference={foodPreference}
         onFoodPreferenceChange={changeFoodPreference}
       />
@@ -927,20 +933,23 @@ function BrowseFoodsPage() {
         }}
       />
 
-      {searchOpen ? (
-        <HomeSearchOverlay
-          dishes={searchDishes}
-          kitchens={kitchens}
-          searchTerm={searchTerm}
-          vegOnly={foodPreference === "veg"}
-          onSearchTermChange={setSearchTerm}
-          onDisableVeg={() => setFoodPreference("all")}
-          onClose={() => {
-            setSearchTerm("");
-            setSearchOpen(false);
-          }}
-        />
-      ) : null}
+      <AnimatePresence>
+        {searchOpen ? (
+          <HomeSearchOverlay
+            key="home-search"
+            dishes={searchDishes}
+            kitchens={kitchens}
+            searchTerm={searchTerm}
+            vegOnly={foodPreference === "veg"}
+            onSearchTermChange={setSearchTerm}
+            onDisableVeg={() => setFoodPreference("all")}
+            onClose={() => {
+              setSearchTerm("");
+              setSearchOpen(false);
+            }}
+          />
+        ) : null}
+      </AnimatePresence>
 
       <CustomerSignOutDialog
         open={signOutOpen}

@@ -327,10 +327,16 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
       </main>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white">
-        <div className="mx-auto max-w-md px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+        <div className="mx-auto flex max-w-md gap-3 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          <a
+            href={"/support?orderId=" + order.id}
+            className="flex min-h-[48px] flex-1 items-center justify-center rounded-[11px] border border-[#E5E7EB] px-5 py-[13px] text-[15px] font-semibold text-[#1A1A1A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+          >
+            Get help
+          </a>
           <a
             href={"/orders/" + order.id + "/tracking"}
-            className="flex min-h-[48px] w-full items-center justify-center rounded-[11px] border border-[#F62E18] px-5 py-[13px] text-[15px] font-semibold text-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+            className="flex min-h-[48px] flex-1 items-center justify-center rounded-[11px] border border-[#F62E18] px-5 py-[13px] text-[15px] font-semibold text-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
           >
             Track order
           </a>

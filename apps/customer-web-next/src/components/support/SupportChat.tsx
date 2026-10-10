@@ -1,8 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { AlertCircle, Check, Clock3, RotateCw, SendHorizontal, Sparkles, Ticket } from "lucide-react";
+import { AlertCircle, Check, Clock3, RotateCw, SendHorizontal, Ticket } from "lucide-react";
 import { sessionFetch } from "@/services/auth/sessionFetch";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -80,26 +81,23 @@ function useReveal(text: string, enabled: boolean, onStep: () => void) {
   return shown >= words.length ? text : words.slice(0, shown).join("");
 }
 
-function AssistantAvatar() {
-  return (
-    <span aria-hidden="true" className="mb-5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F62E18] text-white shadow-[0_2px_8px_rgba(246,46,24,0.25)]">
-      <Sparkles className="h-4 w-4" />
-    </span>
-  );
+/** The assistant speaks as Craves, so it wears the Craves logo. Not CravesLogo: that one navigates home on click and would drop the chat. */
+export function AssistantAvatar({ size = 32, className = "" }: { size?: number; className?: string }) {
+  return <Image src="/brand/craves-logo-20260805.png" alt="" aria-hidden="true" width={size} height={size} unoptimized className={`shrink-0 ${className}`.trim()} />;
 }
 
 function AssistantBubble({ message, first, onStep }: { message: Bubble; first: boolean; onStep: () => void }) {
   const text = useReveal(message.content, Boolean(message.reveal), onStep);
   return (
     <li className="craves-chat-in flex items-end gap-2 pr-10">
-      {first ? <AssistantAvatar /> : <span className="w-8 shrink-0" aria-hidden="true" />}
+      {first ? <AssistantAvatar className="mb-5" /> : <span className="w-8 shrink-0" aria-hidden="true" />}
       <div className="min-w-0">
         {first ? <p className="mb-1 ml-1 text-xs font-semibold text-[#1A1A1A]">{ASSISTANT}</p> : null}
         <p className="w-fit max-w-full whitespace-pre-wrap rounded-[20px] rounded-bl-md bg-[#F1F3F5] px-4 py-2.5 text-[15px] leading-6 text-[#1A1A1A]">
           {first ? null : <span className="sr-only">{ASSISTANT}: </span>}
           {richText(text)}
         </p>
-        <p className="mt-1 ml-1 text-[11px] text-[#6B6B6B]">{clock(message.at)}</p>
+        {message.at ? <p className="mt-1 ml-1 text-[11px] text-[#6B6B6B]">{clock(message.at)}</p> : null}
       </div>
     </li>
   );
@@ -134,7 +132,7 @@ function UserBubble({ message, last, onRetry }: { message: Bubble; last: boolean
 function TypingBubble() {
   return (
     <li className="craves-chat-in flex items-end gap-2" aria-hidden="true">
-      <AssistantAvatar />
+      <AssistantAvatar className="mb-5" />
       <span className="mb-5 flex items-center gap-1 rounded-[20px] rounded-bl-md bg-[#F1F3F5] px-4 py-3.5">
         {[0, 1, 2].map(dot => <span key={dot} className="craves-chat-typing-dot h-2 w-2 rounded-full bg-[#6B6B6B]" />)}
       </span>
@@ -149,13 +147,13 @@ export function SupportChat({ contextRole, orderId }: { contextRole: "CUSTOMER" 
   const [error, setError] = useState<ReactNode>(null);
   const [caseNumber, setCaseNumber] = useState("");
   const [announcement, setAnnouncement] = useState("");
-  const [greetedAt] = useState(() => Date.now());
   const listRef = useRef<HTMLOListElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const nextId = useRef(1);
   const signInPath = `${contextRole === "CHEF" ? "/chef/support" : "/support"}${orderId ? `?orderId=${orderId}` : ""}`;
 
-  const scrollToEnd = useCallback(() => listRef.current?.lastElementChild?.scrollIntoView?.({ block: "end" }), []);
+  // Braces matter: newer browsers return a Promise from scrollIntoView, and an effect must not return one.
+  const scrollToEnd = useCallback(() => { listRef.current?.lastElementChild?.scrollIntoView?.({ block: "end" }); }, []);
   useEffect(scrollToEnd, [messages.length, pending, scrollToEnd]);
 
   // The composer grows with the message, up to about five lines.
@@ -223,7 +221,8 @@ export function SupportChat({ contextRole, orderId }: { contextRole: "CUSTOMER" 
   const greeting: Bubble = {
     id: 0,
     role: "assistant",
-    at: greetedAt,
+    // No time on the greeting: it is server-rendered, and the server clock's time zone differs from the visitor's.
+    at: 0,
     content: `Hi! I'm the Craves support assistant. Ask me about ${contextRole === "CHEF" ? "your kitchen's orders, your menu or where to find something" : "your orders, payments, or where to find something on Craves"}.`,
   };
   const thread = [greeting, ...messages];

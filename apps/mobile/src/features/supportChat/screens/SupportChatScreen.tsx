@@ -3,6 +3,7 @@ import {
   AccessibilityInfo,
   Animated,
   FlatList,
+  Image,
   Linking,
   Pressable,
   StyleSheet,
@@ -145,22 +146,17 @@ function useReveal(text: string, animate: boolean): string {
   return shown >= words.length ? text : words.slice(0, shown).join('');
 }
 
+const CRAVES_LOGO = require('../../../../assets/brand/craves-app-icon-1024.png');
+
+/** The assistant speaks as Craves, so it wears the Craves logo. */
 function Avatar({size = 32}: {size?: number}) {
   return (
-    <View
+    <Image
       accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      style={[
-        styles.avatar,
-        {width: size, height: size, borderRadius: size / 2},
-      ]}>
-      <Icon
-        name="sparkles"
-        size={Math.round(size * 0.55)}
-        color={colors.white}
-        surface={false}
-      />
-    </View>
+      importantForAccessibility="no"
+      source={CRAVES_LOGO}
+      style={{width: size, height: size, borderRadius: size / 2}}
+    />
   );
 }
 
@@ -512,11 +508,6 @@ const styles = StyleSheet.create({
   subtitle: {
     color: colors.textSecondary,
     fontSize: typography.small,
-  },
-  avatar: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.flameRed,
   },
   avatarSpace: {width: 32},
   list: {

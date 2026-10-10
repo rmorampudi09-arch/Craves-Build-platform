@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { boundedFetch } from "@/lib/bounded-fetch";
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -62,6 +63,7 @@ export async function POST(
             upstream.status === 409
               ? "The order state changed and can no longer be marked ready for pickup."
               : "The order could not be marked ready for pickup.",
+          ...chefUpstream(await upstream.json().catch(() => null)),
         },
         { status: upstream.status },
       );

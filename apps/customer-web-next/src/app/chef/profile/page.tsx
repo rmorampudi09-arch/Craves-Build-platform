@@ -1,5 +1,6 @@
 "use client";
 
+import { chefApiError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BadgeIndianRupee, Bell, CalendarDays, ChevronRight, FileCheck2, MapPin, Store, UserRound } from "lucide-react";
@@ -9,15 +10,17 @@ import { ChefPageHeader } from "@/components/chef-page-header";
 type Application = { firstName:string|null; lastName:string|null; email:string|null; phoneNumber:string|null; status:string };
 type Kitchen = { kitchenName:string; description:string|null; addressLine1:string; addressLine2:string|null; areaName:string|null; city:string; state:string; postalCode:string|null; status:string };
 
+const PROFILE_UNAVAILABLE="Your profile could not load. Please try again.";
+
 function ProfileContent(){
  const [application,setApplication]=useState<Application|null>(null);
  const [kitchen,setKitchen]=useState<Kitchen|null>(null);
  const [loading,setLoading]=useState(true);
- const [error,setError]=useState(false);
+ const [error,setError]=useState("");
  const [retry,setRetry]=useState(0);
- useEffect(()=>{let active=true; setLoading(true); setError(false); void Promise.all([fetch("/api/chef/application",{cache:"no-store"}),fetch("/api/chef/kitchen",{cache:"no-store"})]).then(async([a,k])=>{if(!a.ok || !k.ok) throw new Error("Profile unavailable");const av=a.ok?await a.json().catch(()=>null):null;const kv=k.ok?await k.json().catch(()=>null):null;if(active){setApplication(av);setKitchen(kv);setLoading(false)}}).catch(()=>{if(active){setError(true);setLoading(false)}});return()=>{active=false}},[retry]);
+ useEffect(()=>{let active=true; setLoading(true); setError(""); void Promise.all([fetch("/api/chef/application",{cache:"no-store"}),fetch("/api/chef/kitchen",{cache:"no-store"})]).then(async([a,k])=>{if(!a.ok) throw chefApiError(a,await a.json().catch(()=>null),PROFILE_UNAVAILABLE);if(!k.ok) throw chefApiError(k,await k.json().catch(()=>null),PROFILE_UNAVAILABLE);const av=a.ok?await a.json().catch(()=>null):null;const kv=k.ok?await k.json().catch(()=>null):null;if(active){setApplication(av);setKitchen(kv);setLoading(false)}}).catch((cause:unknown)=>{if(active){setError(chefErrorText(cause,PROFILE_UNAVAILABLE));setLoading(false)}});return()=>{active=false}},[retry]);
  if(loading)return <div className="h-80 animate-pulse rounded-3xl bg-[#F1F3F5]" aria-label="Loading profile"/>;
- if(error)return <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6"><p role="alert">Your profile could not load. Please try again.</p><button type="button" onClick={()=>setRetry(value=>value+1)} className="mt-4 min-h-12 rounded-md bg-primary px-5 text-white">Try again</button></section>;
+ if(error)return <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6"><p role="alert">{error}</p><button type="button" onClick={()=>setRetry(value=>value+1)} className="mt-4 min-h-12 rounded-md bg-primary px-5 text-white">Try again</button></section>;
  const name=[application?.firstName,application?.lastName].filter(Boolean).join(" ")||"Chef";
  const address=[kitchen?.addressLine1,kitchen?.addressLine2,kitchen?.areaName,kitchen?.city,kitchen?.state,kitchen?.postalCode].filter(Boolean).join(", ");
  const items=[

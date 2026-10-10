@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChefModeGuard, isOpenInChefMode } from "../components/layout/ChefModeGuard";
 import ChefLayout from "../app/chef/layout";
 import ChefMorePage from "../app/chef/profile/page";
+import ChefNotificationsPage from "../app/chef/notifications/page";
 import { isChefModeVerified, markChefModeVerified } from "./chef-mode";
 import { captureSessionContext, getSession, invalidateSession, setSessionIdentity } from "../services/auth/cravesAuth";
 import type { CravesIdentity } from "./auth-contract";
@@ -31,6 +32,7 @@ beforeEach(() => {
     if (url === "/api/auth/logout") { me = null; return Response.json({ signedOut: true }); }
     if (url === "/api/chef/application") return Response.json({ firstName: "Asha", lastName: "Rao", status: "APPROVED", documents: [] });
     if (url === "/api/chef/kitchen") return Response.json({ kitchenName: "Asha's Kitchen" });
+    if (url.startsWith("/api/notifications/in-app")) return Response.json([]);
     return Response.json({}, { status: 404 });
   }));
 });
@@ -117,5 +119,15 @@ describe("More hub", () => {
     await waitFor(() => expect(mocks.locationReplace).toHaveBeenCalledExactlyOnceWith("/"));
     expect(isChefModeVerified(chef.id)).toBe(false);
     expect(getSession()).toBeNull();
+  });
+});
+
+describe("Chef notifications", () => {
+  it("shows the shared notifications inside Chef Mode and goes back to the chef home", async () => {
+    vi.mocked(usePathname).mockReturnValue("/chef/notifications");
+    render(createElement(ChefNotificationsPage));
+    fireEvent.click(await screen.findByRole("link", { name: "Back to home" }));
+    expect(mocks.push).toHaveBeenCalledWith("/chef");
+    expect(mocks.push).not.toHaveBeenCalledWith("/home");
   });
 });

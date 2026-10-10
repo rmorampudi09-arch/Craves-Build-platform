@@ -86,3 +86,6 @@
 @keyframes chefFieldShake { 0%,100% { transform: translateX(0); } 30% { transform: translateX(-3px); } 65% { transform: translateX(3px); } }
 
 .chef-panel-theme :is(input,textarea,select)[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--chef-error) 14%, transparent); }
+
+/* The shared notifications screen scrolls under the Chef Mode header instead of sticking over it. */
+.chef-notifications [data-craves-auto-hide-header] { position: static; translate: none; transform: none; }

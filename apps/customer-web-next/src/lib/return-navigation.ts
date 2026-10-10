@@ -4,6 +4,7 @@ export type CustomerReturnRoute =
   | "/home"
   | "/profile"
   | "/chefs"
+  | "/chef"
   | `/dish/${string}`
   | `/kitchen/${string}`;
 
@@ -18,7 +19,7 @@ export function toCustomerReturnRoute(
   value: string,
   fallback: CustomerReturnRoute = "/home",
 ): CustomerReturnRoute {
-  if (value === "/home" || value === "/profile" || value === "/chefs") {
+  if (value === "/home" || value === "/profile" || value === "/chefs" || value === "/chef") {
     return value;
   }
   return DETAIL_RETURN_ROUTE.test(value)

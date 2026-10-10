@@ -40,7 +40,6 @@ export type IconName =
   | 'theme'
   | 'document'
   | 'info'
-  | 'sparkles'
   | 'send'
   | 'alert'
   | 'refresh';
@@ -90,7 +89,6 @@ const GLYPHS: Record<IconName, string> = {
   theme: 'theme-light-dark',
   document: 'file-document-outline',
   info: 'information-outline',
-  sparkles: 'creation',
   send: 'send',
   alert: 'alert-circle-outline',
   refresh: 'refresh',

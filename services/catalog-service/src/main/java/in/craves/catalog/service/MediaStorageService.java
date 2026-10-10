@@ -79,7 +79,7 @@ public class MediaStorageService {
     public String publicBaseUrl() {
         return StringUtils.hasText(properties.getPublicMediaBaseUrl())
             ? properties.getPublicMediaBaseUrl().replaceAll("/+$", "")
-            : containerClient().getBlobContainerUrl();
+            : buildContainerClient().getBlobContainerUrl();
     }
 
     /**
@@ -113,18 +113,22 @@ public class MediaStorageService {
     }
 
     private BlobContainerClient containerClient() {
+        BlobContainerClient client = buildContainerClient();
+        client.createIfNotExists();
+        return client;
+    }
+
+    BlobContainerClient buildContainerClient() {
         if (!StringUtils.hasText(properties.getEndpointValue())) {
             throw new ApiException(500, "MEDIA_STORE_NOT_CONFIGURED", "Catalog media storage is not configured");
         }
         try {
-            BlobContainerClientBuilder builder = new BlobContainerClientBuilder()
-                .containerName(properties.getMediaContainer());
+            BlobContainerClientBuilder builder = new BlobContainerClientBuilder();
             BlobContainerClientBuilder.class
                 .getMethod("connection" + "String", String.class)
                 .invoke(builder, properties.getEndpointValue());
-            BlobContainerClient client = builder.buildClient();
-            client.createIfNotExists();
-            return client;
+            // Named after the connection string: its "BlobEndpoint=https://…/" sets an empty container, i.e. $root (writes failed InvalidUri).
+            return builder.containerName(properties.getMediaContainer()).buildClient();
         } catch (ReflectiveOperationException ex) {
             throw new ApiException(500, "MEDIA_STORE_CONFIGURATION_FAILED", "Catalog media storage could not be configured");
         }

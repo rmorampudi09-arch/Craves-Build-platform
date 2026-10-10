@@ -2,8 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import ChefHat from 'lucide-react-native/icons/chef-hat';
 import UserRound from 'lucide-react-native/icons/user-round';
-import Check from 'lucide-react-native/icons/check';
-import { colors, spacing } from '../../../design/tokens';
+import { spacing } from '../../../design/tokens';
 import type { AuthRole } from '../domain/types';
 import { AuthSurfaceFinish } from './AuthSurfaceFinish';
 import { loginColors, loginFonts } from './loginVisuals';
@@ -15,6 +14,7 @@ interface Props {
   welcome?: boolean;
   descriptions?: boolean;
   compact?: boolean;
+  slim?: boolean;
 }
 
 export function AuthRoleCards({
@@ -24,6 +24,7 @@ export function AuthRoleCards({
   welcome = false,
   descriptions = true,
   compact = false,
+  slim = false,
 }: Props) {
   return (
     <View style={styles.row}>
@@ -31,6 +32,18 @@ export function AuthRoleCards({
         const selected = value === role;
         const ChefOrCustomer = role === 'CHEF' ? ChefHat : UserRound;
         const label = role === 'CHEF' ? 'Chef' : 'Customer';
+        // Compact tiles keep both lines beside the icon; full tiles put the description underneath.
+        const side = compact || !descriptions;
+        const title = <Text style={styles.label}>{label}</Text>;
+        const description = descriptions ? (
+          <Text
+            style={[styles.description, compact && styles.compactDescription]}
+          >
+            {role === 'CUSTOMER'
+              ? 'Discover amazing food\nfrom home chefs'
+              : 'Share your passion\nand earn'}
+          </Text>
+        ) : null;
         return (
           <Pressable
             key={role}
@@ -46,30 +59,25 @@ export function AuthRoleCards({
             style={({ pressed }) => [
               styles.card,
               selected && styles.selected,
-              welcome && styles.welcomeCard,
-              (compact || !descriptions) && styles.compactCard,
+              side && styles.compactCard,
+              slim && styles.slimCard,
               disabled && styles.disabled,
               pressed && styles.pressed,
             ]}
           >
             <AuthSurfaceFinish selected={selected} radius={16} />
-            <View
-              style={[
-                styles.body,
-                (compact || !descriptions) && styles.compactBody,
-              ]}
-            >
+            <View style={[styles.body, side && styles.compactBody]}>
               <View
                 style={[
                   styles.icon,
                   selected && styles.selectedIcon,
-                  welcome && styles.welcomeIcon,
-                  (compact || !descriptions) && styles.compactIcon,
+                  side && styles.compactIcon,
+                  slim && styles.slimIcon,
                 ]}
               >
                 <AuthSurfaceFinish radius={30} selected={selected} />
                 <ChefOrCustomer
-                  size={welcome ? 29 : compact || !descriptions ? 25 : 27}
+                  size={slim ? 21 : side ? 25 : welcome ? 22 : 21}
                   color={
                     role === 'CUSTOMER' || selected
                       ? loginColors.red
@@ -79,34 +87,16 @@ export function AuthRoleCards({
                   strokeWidth={role === 'CUSTOMER' ? 0 : 2}
                 />
               </View>
-              <View style={styles.copy}>
-                <Text style={[styles.label, welcome && styles.welcomeLabel]}>
-                  {label}
-                </Text>
-                {descriptions ? (
-                  <Text
-                    style={[
-                      styles.description,
-                      compact && styles.compactDescription,
-                    ]}
-                  >
-                    {role === 'CUSTOMER'
-                      ? 'Discover amazing food\nfrom home chefs'
-                      : 'Share your passion\nand earn'}
-                  </Text>
-                ) : null}
-              </View>
+              {side ? (
+                <View style={styles.copy}>
+                  {title}
+                  {description}
+                </View>
+              ) : (
+                title
+              )}
             </View>
-            {selected ? (
-              <View
-                style={[
-                  styles.check,
-                  (compact || !descriptions) && styles.compactCheck,
-                ]}
-              >
-                <Check color={colors.white} size={13} strokeWidth={3} />
-              </View>
-            ) : null}
+            {side ? null : description}
           </Pressable>
         );
       })}
@@ -119,8 +109,7 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     minWidth: 0,
-    minHeight: 112,
-    padding: 14,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#E1E3E7',
     borderRadius: 16,
@@ -136,15 +125,15 @@ const styles = StyleSheet.create({
       { offsetX: 0, offsetY: 5, blurRadius: 18, color: 'rgba(246,46,24,0.17)' },
     ],
   },
-  welcomeCard: { minHeight: 140, padding: 16 },
   compactCard: { minHeight: 68, padding: 10 },
-  body: { gap: 6 },
-  compactBody: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  slimCard: { minHeight: 48, paddingVertical: 6 },
+  body: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  compactBody: { gap: 8 },
   copy: { flexShrink: 1, minWidth: 0 },
   icon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.85)',
     backgroundColor: 'rgba(255,255,255,0.6)',
@@ -152,32 +141,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   selectedIcon: { backgroundColor: 'rgba(255,255,255,0.5)' },
-  welcomeIcon: { width: 54, height: 54, borderRadius: 27 },
   compactIcon: { width: 40, height: 40, borderRadius: 20 },
-  label: { fontSize: 17, fontFamily: loginFonts.bold, color: loginColors.ink },
-  welcomeLabel: { fontSize: 18 },
-  check: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 21,
-    height: 21,
-    borderRadius: 11,
-    backgroundColor: loginColors.red,
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: [
-      { offsetX: 0, offsetY: 3, blurRadius: 8, color: 'rgba(246,46,24,0.22)' },
-    ],
+  slimIcon: { width: 34, height: 34, borderRadius: 17 },
+  label: {
+    flexShrink: 1,
+    fontSize: 17,
+    fontFamily: loginFonts.bold,
+    color: loginColors.ink,
   },
-  compactCheck: { top: 5, right: 5, width: 17, height: 17, borderRadius: 9 },
   description: {
     color: loginColors.body,
     fontFamily: loginFonts.regular,
     fontSize: 12,
-    marginTop: 3,
+    marginTop: 6,
   },
-  compactDescription: { fontSize: 10.5 },
+  compactDescription: { fontSize: 10.5, marginTop: 3 },
   disabled: { opacity: 0.6 },
   pressed: { opacity: 0.84 },
 });

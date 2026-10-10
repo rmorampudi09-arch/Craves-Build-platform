@@ -56,7 +56,7 @@ const HOME_RADIUS_METERS = 10_000;
 const TOP_KITCHENS_PAGE_SIZE = 12;
 const TOP_KITCHEN_DISH_PAGE_SIZE = 100;
 const MAX_TOP_KITCHENS = 8;
-const PROMO_AUTO_ADVANCE_MS = 5_000;
+export const PROMO_AUTO_ADVANCE_MS = 2_000;
 
 type HomeNavigation = NativeStackNavigationProp<
   CustomerHomeStackParamList,
@@ -72,7 +72,7 @@ interface TopKitchenCardModel {
   startingPriceLabel: string;
 }
 
-function PromoCarousel({
+export function PromoCarousel({
   banners,
   active,
   width,
@@ -86,12 +86,19 @@ function PromoCarousel({
   const listRef = useRef<FlatList<HomeBanner>>(null);
   const activeIndexRef = useRef(0);
   const isDraggingRef = useRef(false);
+  // A manual swipe gets a full interval on its slide before auto-advance resumes.
+  const lastSwipeAtRef = useRef(0);
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
     if (!active || width <= 0 || banners.length < 2) return undefined;
     const interval = setInterval(() => {
-      if (isDraggingRef.current) return;
+      if (
+        isDraggingRef.current ||
+        Date.now() - lastSwipeAtRef.current < PROMO_AUTO_ADVANCE_MS
+      ) {
+        return;
+      }
       const nextIndex =
         (activeIndexRef.current + 1) % banners.length;
       listRef.current?.scrollToOffset({
@@ -115,6 +122,10 @@ function PromoCarousel({
         Math.round(event.nativeEvent.contentOffset.x / width),
       ),
     );
+    // Android also reports momentum for programmatic scrolls; only a drag counts as a swipe.
+    if (isDraggingRef.current) {
+      lastSwipeAtRef.current = Date.now();
+    }
     isDraggingRef.current = false;
     activeIndexRef.current = nextIndex;
     setActiveIndex(nextIndex);

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -27,9 +28,16 @@ export function AuthOtpInput({
   ...props
 }: Props) {
   const [focused, setFocused] = useState(false);
+  const input = useRef<TextInput>(null);
   return (
     <View>
-      <View style={styles.row}>
+      {/* Taps only focus the input, so they can't move its caret or select-all: digits always append. */}
+      <Pressable
+        accessible={false}
+        disabled={disabled}
+        onPress={() => input.current?.focus()}
+        style={styles.row}
+      >
         <View
           style={styles.cells}
           pointerEvents="none"
@@ -59,25 +67,28 @@ export function AuthOtpInput({
             </View>
           ))}
         </View>
-        <TextInput
-          {...props}
-          value={value}
-          editable={!disabled}
-          autoComplete="sms-otp"
-          accessibilityState={{ disabled: Boolean(disabled) }}
-          caretHidden
-          selectionColor="transparent"
-          style={styles.nativeInput}
-          onFocus={event => {
-            setFocused(true);
-            onFocus?.(event);
-          }}
-          onBlur={event => {
-            setFocused(false);
-            onBlur?.(event);
-          }}
-        />
-      </View>
+        <View pointerEvents="none" style={styles.nativeInput}>
+          <TextInput
+            {...props}
+            ref={input}
+            value={value}
+            editable={!disabled}
+            autoComplete="sms-otp"
+            accessibilityState={{ disabled: Boolean(disabled) }}
+            caretHidden
+            selectionColor="transparent"
+            style={styles.hiddenText}
+            onFocus={event => {
+              setFocused(true);
+              onFocus?.(event);
+            }}
+            onBlur={event => {
+              setFocused(false);
+              onBlur?.(event);
+            }}
+          />
+        </View>
+      </Pressable>
       {error ? (
         <Text
           accessibilityRole="alert"
@@ -112,16 +123,9 @@ const styles = StyleSheet.create({
   },
   errorBorder: { borderColor: colors.error },
   digit: { fontSize: 26, fontFamily: loginFonts.bold, color: loginColors.ink },
-  nativeInput: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    color: 'transparent',
-    backgroundColor: 'transparent',
-    fontSize: 22,
-  },
+  nativeInput: StyleSheet.absoluteFill,
+  // Android draws the text even with a transparent colour; near-zero opacity keeps iOS code autofill working.
+  hiddenText: { flex: 1, opacity: 0.01, fontSize: 22 },
   error: {
     fontSize: 13,
     fontFamily: loginFonts.regular,

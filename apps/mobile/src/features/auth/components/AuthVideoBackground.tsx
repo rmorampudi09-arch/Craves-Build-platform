@@ -27,6 +27,7 @@ function LocalVideoPlayback() {
     instance.muted = true;
     instance.volume = 0;
     instance.audioMixingMode = 'mixWithOthers';
+    instance.playbackRate = 2;
   });
 
   useEffect(() => {
@@ -87,19 +88,13 @@ function LocalVideoPlayback() {
   );
 }
 
-/** One local player behind the auth stack; never one decoder per stacked form. */
-export function AuthVideoBackground({
-  enabled,
-  heroFraction = 1,
-}: {
-  enabled: boolean;
-  heroFraction?: number;
-}) {
+/** One full-screen local player behind the auth stack; never one decoder per stacked form. */
+export function AuthVideoBackground({ enabled }: { enabled: boolean }) {
   const reduceMotion = useReducedMotionPreference();
   return (
     <View
       testID="auth-video-background"
-      style={[styles.viewport, { height: `${heroFraction * 100}%` }]}
+      style={StyleSheet.absoluteFill}
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
@@ -117,7 +112,3 @@ export function AuthVideoBackground({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  viewport: { position: 'absolute', top: 0, left: 0, right: 0 },
-});

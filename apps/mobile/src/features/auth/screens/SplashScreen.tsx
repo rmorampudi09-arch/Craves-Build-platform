@@ -7,25 +7,37 @@ import {
   StatusBar,
   StyleSheet,
   View,
-  type ImageSourcePropType,
 } from 'react-native';
-import cravesLogo from '../../../assets/brand/craves-splash-logo.png';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {
+  CravesWordmark,
+  SPLASH_WORDMARK_OFFSET_Y,
+  SPLASH_WORDMARK_WIDTH,
+  WELCOME_WORDMARK_WIDTH,
+  welcomeWordmarkTop,
+  wordmarkHeight,
+} from '../components/CravesWordmark';
 
 type SplashScreenProps = {
-  logoSource?: ImageSourcePropType;
   onFinish?: () => void;
   readyToLeave?: boolean;
+  /** Asked when leaving: true flies the lettering up into the welcome screen's wordmark. */
+  movesToWelcome?: () => boolean;
 };
 
 const CRAVES_RED = '#ff1707';
 const ICON_SIZE = 118;
 
 export function SplashScreen({
-  logoSource = cravesLogo,
   onFinish,
   readyToLeave = false,
+  movesToWelcome,
 }: SplashScreenProps) {
   const {width, height} = Dimensions.get('window');
+  const insets = useSafeAreaInsets();
+  const [rootHeight, setRootHeight] = React.useState(height);
+  const fly = React.useRef(new Animated.Value(0)).current;
+  const backgroundOpacity = React.useRef(new Animated.Value(1)).current;
   const expand = React.useRef(new Animated.Value(0)).current;
   const finishOpacity = React.useRef(new Animated.Value(1)).current;
   const introCompleteRef = React.useRef(false);
@@ -45,25 +57,50 @@ export function SplashScreen({
     }
 
     exitStartedRef.current = true;
-    Animated.parallel([
-      Animated.timing(finishOpacity, {
-        toValue: 0,
-        duration: 420,
-        easing: Easing.inOut(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(logoScale, {
-        toValue: 0.92,
-        duration: 420,
-        easing: Easing.inOut(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start(({finished}) => {
+    const exit = movesToWelcome?.()
+      ? Animated.parallel([
+          Animated.timing(fly, {
+            toValue: 1,
+            duration: 850,
+            easing: Easing.bezier(0.65, 0, 0.35, 1),
+            useNativeDriver: true,
+          }),
+          Animated.timing(backgroundOpacity, {
+            toValue: 0,
+            duration: 600,
+            delay: 100,
+            easing: Easing.bezier(0, 0, 0.58, 1),
+            useNativeDriver: true,
+          }),
+        ])
+      : Animated.parallel([
+          Animated.timing(finishOpacity, {
+            toValue: 0,
+            duration: 420,
+            easing: Easing.inOut(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(logoScale, {
+            toValue: 0.92,
+            duration: 420,
+            easing: Easing.inOut(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]);
+    exit.start(({finished}) => {
       if (finished) {
         onFinish?.();
       }
     });
-  }, [finishOpacity, logoScale, onFinish, readyToLeave]);
+  }, [
+    backgroundOpacity,
+    finishOpacity,
+    fly,
+    logoScale,
+    movesToWelcome,
+    onFinish,
+    readyToLeave,
+  ]);
 
   React.useEffect(() => {
     const animation = Animated.sequence([
@@ -146,10 +183,27 @@ export function SplashScreen({
     outputRange: ['-1.15deg', '0deg', '1.15deg'],
   });
 
+  // Centre-to-centre path from the splash lettering to the welcome wordmark.
+  const welcomeCenterY =
+    welcomeWordmarkTop(insets.top) +
+    wordmarkHeight(WELCOME_WORDMARK_WIDTH) / 2;
+  const flyY = fly.interpolate({
+    inputRange: [0, 1],
+    outputRange: [SPLASH_WORDMARK_OFFSET_Y, welcomeCenterY - rootHeight / 2],
+  });
+  const flyScale = fly.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, WELCOME_WORDMARK_WIDTH / SPLASH_WORDMARK_WIDTH],
+  });
+
   return (
     <Animated.View
       pointerEvents="none"
-      style={[styles.root, {opacity: finishOpacity}]}>
+      style={[styles.root, {opacity: finishOpacity}]}
+      onLayout={event => setRootHeight(event.nativeEvent.layout.height)}>
+      <Animated.View
+        style={[styles.background, {opacity: backgroundOpacity}]}
+      />
       <StatusBar
         animated
         backgroundColor={CRAVES_RED}
@@ -162,25 +216,24 @@ export function SplashScreen({
             styles.expandingIcon,
             {
               borderRadius: iconRadius,
+              opacity: backgroundOpacity,
               transform: [{scale: iconScale}],
             },
           ]}
         />
-        <Animated.Image
-          source={logoSource}
-          resizeMode="contain"
-          style={[
-            styles.logo,
-            {
-              opacity: logoOpacity,
-              transform: [
-                {translateX: logoTranslateX},
-                {rotate: logoRotate},
-                {scale: logoScale},
-              ],
-            },
-          ]}
-        />
+        <Animated.View
+          style={{
+            opacity: logoOpacity,
+            transform: [
+              {translateY: flyY},
+              {translateX: logoTranslateX},
+              {rotate: logoRotate},
+              {scale: logoScale},
+              {scale: flyScale},
+            ],
+          }}>
+          <CravesWordmark width={SPLASH_WORDMARK_WIDTH} shadow={fly} />
+        </Animated.View>
       </View>
     </Animated.View>
   );
@@ -189,7 +242,6 @@ export function SplashScreen({
 const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
-    backgroundColor: CRAVES_RED,
     bottom: 0,
     justifyContent: 'center',
     left: 0,
@@ -197,6 +249,10 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     zIndex: 100,
+  },
+  background: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: CRAVES_RED,
   },
   centerStage: {
     alignItems: 'center',
@@ -209,9 +265,5 @@ const styles = StyleSheet.create({
     height: ICON_SIZE,
     position: 'absolute',
     width: ICON_SIZE,
-  },
-  logo: {
-    height: 240,
-    width: 240,
   },
 });

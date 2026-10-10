@@ -100,8 +100,8 @@ android {
         applicationId "com.cravesapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 43
-        versionName "1.25.4"
+        versionCode 53
+        versionName "1.25.14"
     }
     signingConfigs {
         debug {
@@ -136,6 +136,8 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    // SMS User Consent for one-tap OTP autofill (CravesSmsConsentModule).
+    implementation("com.google.android.gms:play-services-auth-api-phone:18.0.2")
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

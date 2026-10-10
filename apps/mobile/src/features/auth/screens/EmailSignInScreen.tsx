@@ -117,7 +117,6 @@ export function EmailSignInScreen({ navigation, route }: Props) {
 
   return (
     <VideoAuthLayout
-      variant="email"
       onBack={() => navigation.goBack()}
       backDisabled={busy}
     >

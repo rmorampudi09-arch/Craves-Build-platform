@@ -42,8 +42,10 @@ export function sanitizeNationalPhone(
 ): string {
   const digits = value.replace(/\D/g, '');
   const dialDigits = country.dialCode.replace(/\D/g, '');
+  // Only a full dial code + number is stripped, so an 11th typed digit on a 91… number is just dropped.
   const withoutDialCode =
-    digits.length > country.nationalDigits && digits.startsWith(dialDigits)
+    digits.length >= country.nationalDigits + dialDigits.length &&
+    digits.startsWith(dialDigits)
       ? digits.slice(dialDigits.length)
       : digits;
 

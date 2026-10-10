@@ -1,6 +1,6 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
-import { StyleSheet, TextInput } from 'react-native';
+import { Dimensions, StyleSheet, TextInput } from 'react-native';
 import { RoleSelectionScreen } from './RoleSelectionScreen';
 import { PhoneSignInScreen } from './PhoneSignInScreen';
 import { EmailSignInScreen } from './EmailSignInScreen';
@@ -21,6 +21,15 @@ jest.mock('../../../app/store/hooks', () => ({
 }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 24, bottom: 24, left: 0, right: 0 }),
+}));
+let mockSmsCode: ((code: string) => void) | null = null;
+jest.mock('../sms/otpSmsConsent', () => ({
+  listenForOtpSms: (onCode: (code: string) => void) => {
+    mockSmsCode = onCode;
+    return () => {
+      mockSmsCode = null;
+    };
+  },
 }));
 jest.mock('../state/authService', () => ({
   authService: {
@@ -64,17 +73,19 @@ describe('reference login styling preserves auth contracts', () => {
   });
   it('matches the reference split and chosen role without adding a login footer', () => {
     render(<RoleSelectionScreen {...props()} />);
+    act(() => jest.advanceTimersByTime(700));
+    const sheet = StyleSheet.flatten(
+      tree.root.findAll(
+        node =>
+          node.props.testID === 'auth-white-panel' &&
+          typeof node.type === 'string',
+      )[0].props.style,
+    );
+    // The welcome sheet shows a third of the screen; the rest of it waits below the edge.
     expect(
-      StyleSheet.flatten(
-        tree.root.findAllByProps({ testID: 'auth-video-window' })[0].props
-          .style,
-      ).flex,
-    ).toBe(0.465);
-    expect(
-      StyleSheet.flatten(
-        tree.root.findAllByProps({ testID: 'auth-white-panel' })[0].props.style,
-      ).flex,
-    ).toBeCloseTo(0.535);
+      (sheet.height - sheet.transform[0].translateY) /
+        Dimensions.get('window').height,
+    ).toBeCloseTo(1 / 3);
     expect(JSON.stringify(tree.toJSON())).not.toContain(
       'Already have an account',
     );
@@ -89,8 +100,12 @@ describe('reference login styling preserves auth contracts', () => {
     async role => {
       render(<PhoneSignInScreen {...props(role)} />);
       expect(button('Send OTP').props.disabled).toBe(true);
+      // A native maxLength would truncate the pasted +91 number before it is sanitized.
+      expect(
+        tree.root.findByType(AuthTextField).props.maxLength,
+      ).toBeUndefined();
       act(() =>
-        tree.root.findByType(AuthTextField).props.onChangeText('9876541234'),
+        tree.root.findByType(AuthTextField).props.onChangeText('+919876541234'),
       );
       await act(async () => {
         await button('Send OTP').props.onPress();
@@ -176,9 +191,13 @@ describe('reference login styling preserves auth contracts', () => {
   it('renders six digits through one native autofill input without changing the pending role', async () => {
     authTransitionMemory.setPendingPhone('+919876541234');
     render(<OtpVerificationScreen {...props('CHEF')} />);
-    expect(tree.root.findByType(AuthRoleCards).props.onChange).toBeUndefined();
+    // The role was picked on earlier screens, so the OTP screen only names it.
+    expect(tree.root.findAllByType(AuthRoleCards)).toHaveLength(0);
+    expect(JSON.stringify(tree.toJSON())).toContain('Chef');
     expect(tree.root.findAllByType(TextInput)).toHaveLength(1);
     const native = tree.root.findByType(TextInput);
+    // Select-all on focus made the next digit replace the first one on Android.
+    expect(native.props.selectTextOnFocus).toBeUndefined();
     expect(native.props.textContentType).toBe('oneTimeCode');
     expect(native.props.autoComplete).toBe('sms-otp');
     expect(JSON.stringify(tree.toJSON())).toContain('******1234');
@@ -190,6 +209,15 @@ describe('reference login styling preserves auth contracts', () => {
     });
     expect(authService.confirmOtp).toHaveBeenCalledWith('123456');
     expect(authTransitionMemory.getPendingPhone()).toBeNull();
+  });
+  it('fills and verifies the code from the OTP SMS once the user allows it', async () => {
+    authTransitionMemory.setPendingPhone('+919876541234');
+    render(<OtpVerificationScreen {...props('CUSTOMER')} />);
+    await act(async () => {
+      mockSmsCode?.('857678');
+    });
+    expect(tree.root.findByType(AuthOtpInput).props.value).toBe('857678');
+    expect(authService.confirmOtp).toHaveBeenCalledWith('857678');
   });
   it('retains resend cooldown and the pending Chef phone contract', async () => {
     authTransitionMemory.setPendingPhone('+919876541234');

@@ -35,6 +35,7 @@ class SubscriptionBillingServiceTest {
                 mock(SubscriptionBillingRepository.class)
             );
             context.getBeanFactory().registerSingleton("objectMapper", new ObjectMapper());
+            context.getBeanFactory().registerSingleton("deliveryAddresses", mock(in.craves.subscription.address.SubscriptionDeliveryAddressClient.class));
             context.register(SubscriptionBillingService.class);
             context.refresh();
 

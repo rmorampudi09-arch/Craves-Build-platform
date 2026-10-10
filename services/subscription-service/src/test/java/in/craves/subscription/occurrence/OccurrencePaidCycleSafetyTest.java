@@ -14,7 +14,8 @@ class OccurrencePaidCycleSafetyTest {
         ));
 
         assertThat(source)
-            .contains("SELECT status FROM subscription_schema.customer_subscription WHERE id = ? FOR UPDATE")
+            .contains("SELECT id FROM subscription_schema.customer_subscription WHERE id = ? AND customer_identity_id = ? ")
+            .contains("AND status = 'ACTIVE' AND generation_lock_token = ? AND next_service_date = ? FOR UPDATE")
             .contains("status = 'PAID'")
             .contains("cycle_start <= ? AND cycle_end > ?")
             .contains("paidCycle ? \"READY_FOR_ORDER\" : \"BILLING_PENDING\"")

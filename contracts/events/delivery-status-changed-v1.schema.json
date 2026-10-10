@@ -73,8 +73,35 @@
           "type": ["string", "null"],
           "format": "uri"
         },
-        "observedAt": { "type": "string", "format": "date-time" }
-      }
+        "observedAt": { "type": "string", "format": "date-time" },
+        "handoffFromProviderId": { "enum": ["borzo", null] },
+        "handoffFromProviderDeliveryId": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "handoffContinuation": { "enum": [true, null] }
+      },
+      "allOf": [
+        {
+          "if": {
+            "anyOf": [
+              { "required": ["handoffFromProviderId"], "properties": { "handoffFromProviderId": { "type": "string" } } },
+              { "required": ["handoffFromProviderDeliveryId"], "properties": { "handoffFromProviderDeliveryId": { "type": "string" } } },
+              { "required": ["handoffContinuation"], "properties": { "handoffContinuation": { "type": "boolean" } } }
+            ]
+          },
+          "then": {
+            "required": ["handoffFromProviderId", "handoffFromProviderDeliveryId"],
+            "properties": {
+              "providerId": { "const": "pidge" },
+              "handoffFromProviderId": { "const": "borzo" },
+              "handoffFromProviderDeliveryId": { "type": "string" }
+            }
+          }
+        }
+      ]
     }
   }
 }

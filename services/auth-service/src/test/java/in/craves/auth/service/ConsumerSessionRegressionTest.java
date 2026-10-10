@@ -42,7 +42,7 @@ class ConsumerSessionRegressionTest {
         when(generator.generate()).thenReturn("synthetic-replacement");
         when(jwt.issueAccessToken(identity, List.of("CUSTOMER", "CHEF"))).thenReturn("synthetic-access");
         var service = new AuthService(null, new JwtProperties(), identities, mock(AuthRoleRepository.class), roles,
-            refreshes, mock(LoginAttemptRepository.class), mock(AuthAuditRepository.class), jwt, generator, hash, admin);
+            refreshes, mock(LoginAttemptRepository.class), mock(AuthAuditRepository.class), jwt, generator, hash, admin, null, mock(org.springframework.transaction.PlatformTransactionManager.class));
         Instant before = Instant.now();
         var response = service.refresh("synthetic-old", null, new MockHttpServletRequest());
         assertEquals(900, response.expiresIn());

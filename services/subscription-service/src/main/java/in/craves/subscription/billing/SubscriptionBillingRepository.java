@@ -30,7 +30,7 @@ public class SubscriptionBillingRepository {
                    AND cs.next_billing_date <= current_date + ?
                    AND sp.status = 'ACTIVE'
                    AND (cs.billing_lock_token IS NULL OR cs.billing_locked_at < now() - (? * INTERVAL '1 minute'))
-                 ORDER BY cs.next_billing_date, cs.created_at
+                 ORDER BY cs.billing_locked_at NULLS FIRST, cs.next_billing_date, cs.created_at
                  FOR UPDATE OF cs SKIP LOCKED
                  LIMIT ?
             )
@@ -40,7 +40,7 @@ public class SubscriptionBillingRepository {
              WHERE cs.id = c.id
                AND sp.id = cs.plan_id
             RETURNING cs.id, cs.customer_identity_id, cs.plan_id, cs.chef_identity_id,
-                      cs.next_billing_date, sp.billing_period, sp.amount, sp.currency
+                      cs.next_billing_date, sp.billing_period, sp.amount, sp.currency, cs.delivery_address_id
             """;
         return jdbcTemplate.query(
             sql,
@@ -53,7 +53,8 @@ public class SubscriptionBillingRepository {
                 rs.getString("billing_period"),
                 rs.getBigDecimal("amount"),
                 rs.getString("currency"),
-                lockToken
+                lockToken,
+                rs.getObject("delivery_address_id", UUID.class)
             ),
             horizonDays, staleLockMinutes, batchSize, lockToken
         );
@@ -67,6 +68,16 @@ public class SubscriptionBillingRepository {
         UUID outboxId,
         JsonNode payload
     ) {
+        // Serialize the eligibility check and all billing artifacts with customer lifecycle changes.
+        // A claim is a lease for one exact cycle, not permission to bill after that lease is revoked.
+        if (jdbcTemplate.queryForList(
+            "SELECT id FROM subscription_schema.customer_subscription WHERE id = ? AND customer_identity_id = ? " +
+                "AND status IN ('PENDING_PAYMENT', 'ACTIVE', 'PAYMENT_FAILED') " +
+                "AND billing_lock_token = ? AND next_billing_date = ? FOR UPDATE",
+            UUID.class, claim.subscriptionId(), claim.customerIdentityId(), claim.lockToken(), claim.cycleStart()
+        ).isEmpty()) {
+            throw new IllegalStateException("Subscription billing claim was lost");
+        }
         int inserted = jdbcTemplate.update(
             "INSERT INTO subscription_schema.subscription_invoice " +
                 "(id, subscription_id, plan_id, customer_identity_id, chef_identity_id, cycle_start, cycle_end, amount, currency, status, created_at, updated_at) " +
@@ -107,12 +118,22 @@ public class SubscriptionBillingRepository {
     public void releaseAndAdvance(BillingClaim claim, LocalDate nextBillingDate) {
         int updated = jdbcTemplate.update(
             "UPDATE subscription_schema.customer_subscription SET next_billing_date = ?, billing_lock_token = NULL, billing_locked_at = NULL, updated_at = now() " +
-                "WHERE id = ? AND billing_lock_token = ?",
-            nextBillingDate, claim.subscriptionId(), claim.lockToken()
+                "WHERE id = ? AND customer_identity_id = ? AND billing_lock_token = ? AND next_billing_date = ? " +
+                "AND status IN ('PENDING_PAYMENT', 'ACTIVE', 'PAYMENT_FAILED')",
+            nextBillingDate, claim.subscriptionId(), claim.customerIdentityId(), claim.lockToken(), claim.cycleStart()
         );
         if (updated != 1) {
             throw new IllegalStateException("Subscription billing claim was lost");
         }
+    }
+
+    /** Reuse the bounded stale-claim window as an address-check retry cooldown; never advance the cycle. */
+    public void deferAddressFailure(BillingClaim claim) {
+        jdbcTemplate.update(
+            "UPDATE subscription_schema.customer_subscription SET billing_locked_at = now() " +
+                "WHERE id = ? AND billing_lock_token = ?",
+            claim.subscriptionId(), claim.lockToken()
+        );
     }
 
     public void releaseAfterFailure(BillingClaim claim) {
@@ -195,7 +216,8 @@ public class SubscriptionBillingRepository {
         String billingPeriod,
         BigDecimal amount,
         String currency,
-        UUID lockToken
+        UUID lockToken,
+        UUID deliveryAddressId
     ) {
     }
 

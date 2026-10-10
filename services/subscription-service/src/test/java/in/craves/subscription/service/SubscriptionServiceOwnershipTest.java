@@ -25,7 +25,8 @@ class SubscriptionServiceOwnershipTest {
 
     private final SubscriptionRepository repository = mock(SubscriptionRepository.class);
     private final CapacityService capacityService = mock(CapacityService.class);
-    private final SubscriptionService service = new SubscriptionService(repository, capacityService);
+    private final in.craves.subscription.address.SubscriptionDeliveryAddressClient addresses = mock(in.craves.subscription.address.SubscriptionDeliveryAddressClient.class);
+    private final SubscriptionService service = new SubscriptionService(repository, capacityService, addresses);
 
     @Test
     void chefCannotUseAdministratorPlanListing() {
@@ -86,6 +87,29 @@ class SubscriptionServiceOwnershipTest {
         Object response = service.getMine(subscriptionId, customer);
 
         assertThat(response.toString()).doesNotContain(CUSTOMER_ID.toString(), CHEF_ID.toString());
+    }
+
+    @Test
+    void unverifiedAddressMustNotCreateEnrollmentOrCapacityHold() {
+        var customer = new CurrentUser(CUSTOMER_ID, "firebase-customer", "+918888888888", List.of("CUSTOMER"));
+        var plan = plan(CHEF_ID, "ACTIVE");
+        var addressId = UUID.fromString("77777777-7777-4777-8777-777777777777");
+        var start = LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).plusDays(1);
+        var request = new in.craves.subscription.web.ApiDtos.CreateSubscriptionRequest(plan.id(), start, addressId, null);
+        when(repository.findSubscriptionByEnrollmentKey(CUSTOMER_ID, "cp03-repro-01")).thenReturn(Optional.empty());
+        when(repository.findActivePlanById(plan.id())).thenReturn(Optional.of(plan));
+        when(capacityService.isPlanBookable(plan)).thenReturn(true);
+        var stored = new SubscriptionResponse(UUID.randomUUID(), CUSTOMER_ID, plan.id(), CHEF_ID,
+            "PENDING_PAYMENT", start, null, start, addressId, null, Instant.now(), Instant.now());
+        org.mockito.Mockito.doThrow(ApiException.notFound("DELIVERY_ADDRESS_NOT_AVAILABLE", "Unavailable fixture"))
+            .when(addresses).requireEligible(CUSTOMER_ID, addressId);
+
+        assertThatThrownBy(() -> service.createSubscription(request, "cp03-repro-01", customer))
+            .isInstanceOf(ApiException.class);
+        org.mockito.Mockito.verify(repository, org.mockito.Mockito.never()).createSubscription(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(capacityService, org.mockito.Mockito.never()).acquireEnrollmentHold(org.mockito.ArgumentMatchers.any());
     }
 
     private static PlanResponse plan(UUID chefIdentityId, String status) {

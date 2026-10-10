@@ -1,6 +1,7 @@
 package in.craves.integration.web;
 
 import in.craves.integration.config.PaymentApiProperties;
+import in.craves.integration.security.CravesPrincipal;
 import in.craves.integration.subscription.SubscriptionPaymentModels.CreateSubscriptionPaymentOrderRequest;
 import in.craves.integration.subscription.SubscriptionPaymentModels.SubscriptionPaymentResponse;
 import in.craves.integration.subscription.SubscriptionPaymentModels.VerifySubscriptionPaymentRequest;
@@ -8,6 +9,7 @@ import in.craves.integration.subscription.SubscriptionPaymentService;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -50,10 +52,11 @@ public class SubscriptionPaymentController {
     public SubscriptionPaymentResponse createOrder(
         @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
         @PathVariable UUID invoiceId,
-        @Valid @RequestBody CreateSubscriptionPaymentOrderRequest request
+        @Valid @RequestBody CreateSubscriptionPaymentOrderRequest request,
+        @AuthenticationPrincipal CravesPrincipal principal
     ) {
         apiProperties.requireOrderExecutionEnabled();
-        return service.createProviderOrder(authorization, invoiceId, request);
+        return service.createProviderOrder(authorization, invoiceId, request, principal);
     }
 
     @PostMapping("/invoices/{invoiceId}/verify")

@@ -226,6 +226,13 @@ public class RefundRepository {
 
     private void insertStatusOutbox(SerializedRefundStatusEvent event) {
         if(referralRefunds!=null){event=referralRefunds.customerEvent(event);if(event==null)return;}
+        else if(Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM payment_schema.referral_refund_allocation WHERE chef_order_id=?)",
+            Boolean.class,event.subject()))) {
+            // A disabled optional runtime cannot turn persisted split funding into a gateway-only refund.
+            // Keep verified provider evidence; customer publication waits for the restoration runtime.
+            return;
+        }
         jdbcTemplate.update(
             """
                 INSERT INTO payment_schema.refund_status_outbox (

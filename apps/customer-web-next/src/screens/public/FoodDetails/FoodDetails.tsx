@@ -12,7 +12,11 @@ import {
   loadDish,
   type Dish,
 } from "@/services/api/dishes";
-import { addToCart, CartKeptError } from "@/services/api/cravesCart";
+import {
+  addToCart,
+  CartKeptError,
+  setQty as setCartQuantity,
+} from "@/services/api/cravesCart";
 import { loadKitchenReviewSummary } from "@/services/api/reviews";
 import { DetailBrowseHeader } from "@/components/navigation/DetailBrowseHeader";
 import { DishImageHeader } from "@/components/order/DishImageHeader";
@@ -28,6 +32,7 @@ import { CravesCartIcon } from "@/components/home/CravesCartIcon";
 import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
 import {
   CustomerFloatingCart,
+  useCartLine,
   useCustomerCartSummary,
 } from "@/components/cart/CustomerFloatingCart";
 
@@ -49,11 +54,11 @@ export const routeMeta = {
 
 const routeApi = getRouteApi("/dish/$id");
 
-function priceLabel(price: number, currency = "INR"): string {
+function priceLabel(price: number, currency = "INR", maximumFractionDigits = 2): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency,
-    maximumFractionDigits: 2,
+    maximumFractionDigits,
   }).format(price);
 }
 
@@ -71,10 +76,23 @@ function DishDetailPage() {
   const [qty, setQty] = useState(1);
   const [message, setMessage] = useState("");
   const [adding, setAdding] = useState(false);
-  const [messageKind, setMessageKind] = useState<"error" | "success" | null>(null);
+  const [messageKind, setMessageKind] = useState<"error" | "success" | "info" | null>(null);
   const [reviewSummary, setReviewSummary] = useState<KitchenReviewSummary | null>(null);
   const cartSummary = useCustomerCartSummary();
+  const cartLine = useCartLine(dish?.id);
   const feedbackTimerRef = useRef<number | null>(null);
+  // The bar confirms "Added" once the new line appears in the cart, then offers "View cart".
+  const awaitingCartLineRef = useRef(false);
+  const [justAdded, setJustAdded] = useState(false);
+  const hasCartLine = Boolean(cartLine);
+
+  useEffect(() => {
+    if (!hasCartLine || !awaitingCartLineRef.current) return;
+    awaitingCartLineRef.current = false;
+    setJustAdded(true);
+    const timer = window.setTimeout(() => setJustAdded(false), 900);
+    return () => window.clearTimeout(timer);
+  }, [hasCartLine]);
 
   useEffect(() => {
     let active = true;
@@ -214,6 +232,7 @@ function DishDetailPage() {
     setAdding(true);
     setMessage("");
     setMessageKind(null);
+    awaitingCartLineRef.current = !cartLine;
     try {
       await addToCart(
         {
@@ -240,8 +259,9 @@ function DishDetailPage() {
         feedbackTimerRef.current = null;
       }, 1800);
     } catch (error) {
-      // "success" is the neutral status style; keeping the current cart is not a failure.
-      setMessageKind(error instanceof CartKeptError ? "success" : "error");
+      awaitingCartLineRef.current = false;
+      // Keeping the current cart is the customer's choice: a neutral note, not a failure.
+      setMessageKind(error instanceof CartKeptError ? "info" : "error");
       setMessage(
         error instanceof Error
           ? error.message
@@ -252,11 +272,25 @@ function DishDetailPage() {
     }
   };
 
+  const changeCartQuantity = (next: number) => {
+    if (!cartLine) return;
+    setMessage("");
+    setMessageKind(null);
+    setCartQuantity(cartLine.id, next).catch((error: unknown) => {
+      setMessageKind("error");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "The cart quantity could not be updated.",
+      );
+    });
+  };
+
   const location = locationLabel(dish);
   const itemTotal = dish.price * qty;
 
   return (
-    <div className={`min-h-screen bg-white text-[#1A1A1A] ${cartSummary.itemCount > 0 ? "pb-32" : "pb-28 lg:pb-14"}`}>
+    <div className="min-h-screen bg-white pb-32 text-[#1A1A1A] lg:pb-14">
       <DetailBrowseHeader returnPath={`/dish/${id}`} onBack={handleBack} />
 
       <main className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
@@ -323,7 +357,8 @@ function DishDetailPage() {
                 </div>
               ) : null}
 
-              <div className="mt-5 rounded-2xl border border-[#E5E7EB] p-3.5">
+              {/* Phones add from the bottom bar; one add control per screen. */}
+              <div className="mt-5 hidden rounded-2xl border border-[#E5E7EB] p-3.5 lg:block">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-[0.65rem] font-black uppercase tracking-[0.1em] text-[#6B6B6B]">Quantity</p>
@@ -364,7 +399,7 @@ function DishDetailPage() {
                 type="button"
                 onClick={() => void handleAddToCart()}
                 disabled={adding}
-                className="!mt-4 !inline-flex !min-h-12 !w-full !items-center !justify-center !gap-2 !rounded-full !bg-[#F62E18] !px-6 !text-sm !font-black !text-white !shadow-[0_9px_24px_rgba(246,46,24,0.18)] transition-shadow hover:!shadow-[0_12px_30px_rgba(246,46,24,0.25)] disabled:cursor-wait disabled:opacity-60"
+                className="!mt-4 !inline-flex !min-h-12 !w-full !items-center !justify-center !gap-2 !rounded-full !bg-[#F62E18] !px-6 !text-sm !font-black !text-white !shadow-[0_9px_24px_rgba(246,46,24,0.18)] transition-[box-shadow,scale] duration-(--dur-micro) hover:!shadow-[0_12px_30px_rgba(246,46,24,0.25)] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 max-lg:!hidden"
               >
                 <CravesCartIcon className="h-4 w-4" />
                 {adding ? "Adding…" : "Add to cart"}
@@ -374,10 +409,10 @@ function DishDetailPage() {
             {message ? (
               <p
                 role={messageKind === "error" ? "alert" : "status"}
-                className={`mt-3 rounded-2xl border p-4 text-sm font-bold ${
-                  messageKind === "success"
-                    ? "border-[#E5E7EB] bg-[#F1F3F5] text-[#1A1A1A]"
-                    : "border-[#F62E18]/20 bg-[#F1F3F5] text-[#F62E18]"
+                className={`mt-3 hidden rounded-2xl border p-4 text-sm font-bold lg:block ${
+                  messageKind === "error"
+                    ? "border-[#F62E18]/20 bg-[#F1F3F5] text-[#C4200F]"
+                    : "border-[#E5E7EB] bg-[#F1F3F5] text-[#1A1A1A]"
                 }`}
               >
                 {message}
@@ -391,18 +426,40 @@ function DishDetailPage() {
         </div>
       </main>
 
-      {cartSummary.itemCount === 0 ? (
-        <DishBottomBar
-          price={itemTotal}
-          quantity={qty}
-          onDecrease={() => setQty((value) => Math.max(1, value - 1))}
-          onIncrease={() => setQty((value) => Math.min(50, value + 1))}
-          onAddToCart={() => void handleAddToCart()}
-          disabled={adding}
-        />
-      ) : null}
+      <DishBottomBar
+        price={cartLine ? cartLine.lineTotal : itemTotal}
+        quantity={cartLine ? cartLine.qty : qty}
+        inCart={Boolean(cartLine)}
+        justAdded={justAdded}
+        cartTotalLabel={priceLabel(cartSummary.total, cartSummary.currency, 0)}
+        onDecrease={() =>
+          cartLine
+            ? changeCartQuantity(cartLine.qty - 1)
+            : setQty((value) => Math.max(1, value - 1))
+        }
+        onIncrease={() =>
+          cartLine
+            ? changeCartQuantity(cartLine.qty + 1)
+            : setQty((value) => Math.min(50, value + 1))
+        }
+        onAddToCart={() => void handleAddToCart()}
+        onViewCart={() => navigate({ to: "/cart" })}
+        disabled={adding && !cartLine}
+        message={
+          message && messageKind !== "success"
+            ? { text: message, error: messageKind === "error" }
+            : null
+        }
+      />
+      {/* Success is shown by the bar itself; this keeps it announced on phones. */}
+      <p className="sr-only lg:hidden" role="status">
+        {messageKind === "success" ? message : ""}
+      </p>
 
-      <CustomerFloatingCart />
+      {/* Below lg the bottom bar already opens the cart. */}
+      <div className="hidden lg:contents">
+        <CustomerFloatingCart />
+      </div>
     </div>
   );
 }

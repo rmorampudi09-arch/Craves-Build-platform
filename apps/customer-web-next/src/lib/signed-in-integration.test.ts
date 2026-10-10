@@ -171,7 +171,13 @@ test("home kitchen and dish details share one live floating cart without forcing
 
   assert.match(kitchen, /useCustomerCartSummary\(\)/);
   assert.match(dish, /useCustomerCartSummary\(\)/);
-  assert.match(dish, /cartSummary\.itemCount === 0 \? \(/);
+  // Phones keep one add control: the bottom bar stays mounted and turns into View cart.
+  assert.match(dish, /<DishBottomBar\s+price=/);
+  assert.doesNotMatch(dish, /cartSummary\.itemCount === 0 \? \(/);
+  assert.match(dish, /inCart=\{Boolean\(cartLine\)\}/);
+  assert.match(dish, /justAdded=\{justAdded\}/);
+  assert.match(dish, /mt-5 hidden rounded-2xl border border-\[#E5E7EB\] p-3\.5 lg:block/);
+  assert.match(dish, /max-lg:!hidden/);
   assert.match(dish, /messageKind === "success"/);
   assert.match(dish, /was added to your cart/);
   assert.doesNotMatch(dish, /navigate\(\{ to: "\/cart" \}\);/);

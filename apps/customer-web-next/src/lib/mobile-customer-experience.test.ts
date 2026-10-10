@@ -154,3 +154,14 @@ test("category, Veg and sort changes reveal dishes calmly instead of a long chro
   assert.match(grid, /aria-label="Sort dishes"/);
   assert.match(grid, /"!bg-\[#1A1A1A\] !text-white"/);
 });
+
+test("dish bottom bar confirms an add in place and keeps the action bar mounted", () => {
+  const bar = source("../components/order/DishBottomBar.tsx");
+
+  assert.match(bar, /data-craves-action-bar/);
+  assert.match(bar, /const mode = inCart \? \(justAdded \? "added" : "view"\) : "add"/);
+  assert.match(bar, /<AnimatePresence mode="popLayout" initial=\{false\}>/);
+  assert.match(bar, /duration: 0\.15/);
+  assert.match(bar, /Add<span className="hidden min-\[460px\]:inline"> to cart<\/span>/);
+  assert.match(bar, /View cart<span className="hidden min-\[400px\]:inline"> · \{cartTotalLabel\}<\/span>/);
+});

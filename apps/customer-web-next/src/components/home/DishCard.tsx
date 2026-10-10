@@ -11,12 +11,11 @@ import {
   UsersRound,
 } from "lucide-react";
 
+import { useCartLine } from "@/components/cart/CustomerFloatingCart";
 import {
   addToCart,
   CartKeptError,
-  getCart,
   setQty,
-  subscribeCart,
 } from "@/services/api/cravesCart";
 import {
   customerFavoritesLoaded,
@@ -72,9 +71,7 @@ export function DishCard({
   const [error, setError] = useState<string | null>(null);
   // Screen-reader confirmation only: the stepper and the tab bar badge show it visually.
   const [announcement, setAnnouncement] = useState<string | null>(null);
-  const [cartLine, setCartLine] = useState(() =>
-    getCart().find((item) => item.menuItemId === dish.id),
-  );
+  const cartLine = useCartLine(dish.id);
   const [favorite, setFavorite] = useState(() =>
     getCustomerFavoriteIds().has(dish.id),
   );
@@ -87,18 +84,6 @@ export function DishCard({
   const featured = variant === "featured";
   const indicator = foodIndicator(dish);
   const quantity = cartLine?.qty ?? 0;
-
-  useEffect(() => {
-    const syncCartLine = () => {
-      const next = getCart().find((item) => item.menuItemId === dish.id);
-      // Every cart change notifies every card; only this dish's line re-renders it.
-      setCartLine((current) =>
-        current?.id === next?.id && current?.qty === next?.qty ? current : next,
-      );
-    };
-    syncCartLine();
-    return subscribeCart(syncCartLine);
-  }, [dish.id]);
 
   useEffect(() => {
     if (!announcement) return;

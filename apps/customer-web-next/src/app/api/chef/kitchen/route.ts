@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { boundedFetch } from "@/lib/bounded-fetch";
 import { boundBffRequest } from "@/lib/bff-request-limits";
 import { isSameOrigin } from "@/lib/request-security";
@@ -50,22 +51,24 @@ async function call(
         headers: PRIVATE_HEADERS,
       });
     if (!upstream.ok) {
+      const precise = chefUpstream(raw);
       const response = NextResponse.json(
         {
+          reason: precise.reason,
           code:
             upstream.status === 401
               ? "SESSION_EXPIRED"
               : upstream.status === 403
                 ? "CHEF_ACCESS_REQUIRED"
                 : "KITCHEN_REQUEST_FAILED",
-          message:
+          message: precise.message ?? (
             upstream.status === 401
               ? "Your session expired. Sign in again."
               : upstream.status === 403
                 ? "An approved CHEF role is required. Sign out and sign in again after approval."
                 : upstream.status === 400
                   ? "Complete the required kitchen fields using valid values."
-                  : "Kitchen profile is temporarily unavailable.",
+                  : "Kitchen profile is temporarily unavailable."),
         },
         { status: upstream.status, headers: PRIVATE_HEADERS },
       );

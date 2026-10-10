@@ -3,6 +3,8 @@ import { Dialog, secondaryActionClass } from "@/components/ui/overlays/overlay";
 interface CustomerSignOutDialogProps {
   open: boolean;
   busy: boolean;
+  /** Shown inside the dialog so the retry is right there. */
+  error?: string;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -10,6 +12,7 @@ interface CustomerSignOutDialogProps {
 export function CustomerSignOutDialog({
   open,
   busy,
+  error = "",
   onCancel,
   onConfirm,
 }: CustomerSignOutDialogProps) {
@@ -39,11 +42,17 @@ export function CustomerSignOutDialog({
             aria-busy={busy}
             className="craves-primary-action w-full sm:w-auto"
           >
-            {busy ? "Signing out…" : "Sign out"}
+            {busy ? "Signing out…" : error ? "Try again" : "Sign out"}
           </button>
         </>
       }
-    />
+    >
+      {error ? (
+        <p role="alert" className="mt-4 rounded-xl bg-[#F1F3F5] p-3 text-sm font-medium text-[#C4200F]">
+          {error}
+        </p>
+      ) : null}
+    </Dialog>
   );
 }
 

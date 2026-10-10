@@ -90,8 +90,7 @@ input.craves-otp-field:focus-visible {
   border-color: var(--color-grey-400) !important;
 }
 
-/* Customer order filters keep a neutral tactile hover. */
-nav[aria-label="Filter orders"] button:hover,
+/* Customer order filters keep a neutral tactile hover (pointer devices only). */
 nav[aria-label="Filter orders"] button:focus-visible {
   background: var(--color-grey-50) !important;
   border-color: var(--color-grey-200) !important;
@@ -100,7 +99,20 @@ nav[aria-label="Filter orders"] button:focus-visible {
   transform: translateY(-1px) !important;
 }
 
-nav[aria-label="Filter orders"] button[aria-pressed="false"]:hover::after,
 nav[aria-label="Filter orders"] button[aria-pressed="false"]:focus-visible::after {
   transform: scaleX(0) !important;
+}
+
+@media (hover: hover) {
+  nav[aria-label="Filter orders"] button:hover {
+    background: var(--color-grey-50) !important;
+    border-color: var(--color-grey-200) !important;
+    color: var(--color-black) !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07) !important;
+    transform: translateY(-1px) !important;
+  }
+
+  nav[aria-label="Filter orders"] button[aria-pressed="false"]:hover::after {
+    transform: scaleX(0) !important;
+  }
 }

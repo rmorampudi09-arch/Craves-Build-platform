@@ -324,7 +324,7 @@ export function KitchensGrid({
           <AlertTriangle className="mx-auto h-9 w-9 text-[#F62E18]" aria-hidden="true" />
           <h3 className="mt-4 font-display text-xl font-black text-[#1A1A1A]">Nearby kitchens could not be loaded</h3>
           <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">{message}</p>
-          <button type="button" onClick={onRetry} className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 text-sm font-black text-[#F62E18] transition hover:bg-[#F62E18] hover:text-white">
+          <button type="button" onClick={onRetry} className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 text-sm font-black text-[#F62E18] transition-colors hover:bg-[#F62E18] hover:text-white">
             <RefreshCw className="h-4 w-4" aria-hidden="true" /> Try again
           </button>
         </div>
@@ -342,7 +342,7 @@ export function KitchensGrid({
               : message || "No active home kitchens are available for this delivery location yet."}
           </p>
           {!normalizedSearch ? (
-            <button type="button" onClick={onRetry} className="mt-5 min-h-10 rounded-full border border-[#F62E18] bg-white px-4 text-xs font-black text-[#F62E18] transition hover:bg-[#F62E18] hover:text-white">Refresh nearby chefs</button>
+            <button type="button" onClick={onRetry} className="mt-5 min-h-10 rounded-full border border-[#F62E18] bg-white px-4 text-xs font-black text-[#F62E18] transition-colors hover:bg-[#F62E18] hover:text-white">Refresh nearby chefs</button>
           ) : null}
         </div>
       ) : null}

@@ -120,7 +120,7 @@ export function CartAddressAvailabilityDialog({
               type="button"
               onClick={onChooseAddress}
               disabled={busy}
-              className={`${allUnavailable ? "!bg-[#F62E18] !text-white shadow-[0_10px_24px_rgba(246,46,24,0.2)]" : "!border !border-[#E5E7EB] !bg-white !text-[#1A1A1A] hover:!border-[#F62E18]/35 hover:!bg-[#F1F3F5]"} inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black transition-all hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50`}
+              className={`${allUnavailable ? "!bg-[#F62E18] !text-white shadow-[0_10px_24px_rgba(246,46,24,0.2)]" : "!border !border-[#E5E7EB] !bg-white !text-[#1A1A1A] hover:!border-[#F62E18]/35 hover:!bg-[#F1F3F5]"} inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black transition-[translate,scale,background-color,box-shadow] duration-(--dur-micro) hover:-translate-y-0.5 active:scale-[0.97] disabled:translate-y-0 disabled:opacity-50`}
             >
               <MapPin className={`h-4.5 w-4.5 ${allUnavailable ? "text-white" : "text-[#F62E18]"}`} aria-hidden="true" />
               Choose another address
@@ -129,7 +129,7 @@ export function CartAddressAvailabilityDialog({
               type="button"
               onClick={onResolve}
               disabled={busy}
-              className={`${allUnavailable ? "!border !border-[#E5E7EB] !bg-white !text-[#1A1A1A] hover:!bg-[#F1F3F5]" : "!bg-[#F62E18] !text-white shadow-[0_10px_24px_rgba(246,46,24,0.2)]"} min-h-12 rounded-xl px-4 text-sm font-black transition-all hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-60`}
+              className={`${allUnavailable ? "!border !border-[#E5E7EB] !bg-white !text-[#1A1A1A] hover:!bg-[#F1F3F5]" : "!bg-[#F62E18] !text-white shadow-[0_10px_24px_rgba(246,46,24,0.2)]"} min-h-12 rounded-xl px-4 text-sm font-black transition-[translate,scale,background-color,box-shadow] duration-(--dur-micro) hover:-translate-y-0.5 active:scale-[0.97] disabled:translate-y-0 disabled:opacity-60`}
             >
               {busy
                 ? "Updating cart…"

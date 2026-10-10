@@ -407,7 +407,7 @@ export function DishesGrid({
           <button
             type="button"
             onClick={onRetry}
-            className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 text-sm font-black text-[#F62E18] transition hover:bg-[#F62E18] hover:text-white"
+            className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 text-sm font-black text-[#F62E18] transition-colors hover:bg-[#F62E18] hover:text-white"
           >
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             Try again
@@ -436,7 +436,7 @@ export function DishesGrid({
             <button
               type="button"
               onClick={onRetry}
-              className="mt-5 min-h-10 rounded-full border border-[#F62E18] bg-white px-4 text-xs font-black text-[#F62E18] transition hover:bg-[#F62E18] hover:text-white"
+              className="mt-5 min-h-10 rounded-full border border-[#F62E18] bg-white px-4 text-xs font-black text-[#F62E18] transition-colors hover:bg-[#F62E18] hover:text-white"
             >
               Refresh live catalog
             </button>

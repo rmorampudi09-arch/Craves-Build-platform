@@ -216,7 +216,7 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
               key={`${image}-${index}`}
               type="button"
               onClick={() => setActiveIndex(index)}
-              className={`relative !h-[4rem] !w-[5.15rem] shrink-0 overflow-hidden rounded-xl !border !bg-[#F1F3F5] !p-0 transition sm:!h-[4.4rem] sm:!w-[5.8rem] ${
+              className={`relative !h-[4rem] !w-[5.15rem] shrink-0 overflow-hidden rounded-xl !border !bg-[#F1F3F5] !p-0 transition-[border-color,box-shadow] sm:!h-[4.4rem] sm:!w-[5.8rem] ${
                 index === safeIndex
                   ? "!border-[#F62E18] !shadow-[0_0_0_2px_rgba(246,46,24,0.12)]"
                   : "!border-[#E5E7EB] hover:!border-[#F62E18]/45"

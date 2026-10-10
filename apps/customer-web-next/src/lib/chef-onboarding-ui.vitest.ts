@@ -278,7 +278,7 @@ describe("Chef onboarding navigation and persistence", () => {
         : normal(url, init),
     );
     fireEvent.click(primary("Save and return to review"));
-    await screen.findByText("Storage unavailable");
+    await screen.findByText(/^Storage unavailable \(Ref: HTTP_503\)$/);
     expect(screen.getByText("Unsaved changes")).toBeTruthy();
     expect((screen.getByLabelText("Kitchen name") as HTMLInputElement).value).toBe(
       "Unsaved Kitchen",
@@ -369,7 +369,7 @@ describe("Chef onboarding navigation and persistence", () => {
         : normal(url, init),
     );
     fireEvent.click(primary("Submit application"));
-    await screen.findByText("Current bank enrollment requires correction");
+    await screen.findByText(/^Current bank enrollment requires correction \(Ref: HTTP_400\)$/);
     expect(screen.queryByRole("heading", { name: "Application submitted" })).toBeNull();
   });
   it("prevents duplicate submissions and routes confirmed submissions to application status", async () => {

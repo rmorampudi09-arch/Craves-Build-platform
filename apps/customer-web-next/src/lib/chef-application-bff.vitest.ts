@@ -54,7 +54,7 @@ it("does not reinterpret another menu rejection as a missing kitchen", async () 
   upstream.mockResolvedValue(Response.json({ code: "INVALID_PACKAGE_WEIGHT", message: "private diagnostics" }, { status: 400 }));
   const response = await readMenu(menuRequest("GET"));
   expect(response.status).toBe(400);
-  expect(await response.json()).toEqual({ code: "MENU_REQUEST_FAILED" });
+  expect(await response.json()).toEqual({ code: "MENU_REQUEST_FAILED", reason: "INVALID_PACKAGE_WEIGHT" }); // the code, never the private message
 });
 
 it.each(["POST", "PUT", "PATCH"] as const)("preserves a confirmed chef approval hold for menu %s without exposing upstream diagnostics", async method => {

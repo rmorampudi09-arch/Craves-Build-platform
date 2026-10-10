@@ -364,7 +364,7 @@ export function CheckoutPaymentButton({
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white shadow-[0_-8px_28px_rgba(17,24,39,0.06)] lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:shadow-none">
       <div className="mx-auto flex max-w-2xl items-center gap-4 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-6 lg:max-w-none lg:flex-col lg:items-stretch lg:gap-3 lg:px-0 lg:pb-0 lg:pt-4">
-        <div className="min-w-[7.5rem] lg:hidden">
+        <div className="shrink-0 lg:hidden">
           <p className="text-xl font-bold tabular-nums text-[#1A1A1A]">
             {authoritativeAmount !== null
               ? money(authoritativeAmount, checkout?.currency ?? currency)
@@ -384,17 +384,18 @@ export function CheckoutPaymentButton({
           disabled={busy || disabled || Boolean(failure && !failure.retryAllowed)}
           aria-busy={busy}
           onClick={() => void openPayment()}
-          className="craves-primary-action ml-auto flex-1 sm:flex-none sm:min-w-52 lg:ml-0 lg:w-full lg:min-w-0 lg:flex-none"
+          className="craves-primary-action ml-auto flex-1 !px-4 sm:flex-none sm:min-w-52 sm:!px-6 lg:ml-0 lg:w-full lg:min-w-0 lg:flex-none"
         >
           {busy ? (
             <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
           ) : (
             <LockKeyhole className="h-5 w-5" aria-hidden="true" />
           )}
+          {/* Short busy labels keep the 19px label on one line at 360px. */}
           {busy
             ? checkout
-              ? "Opening Razorpay…"
-              : "Preparing total…"
+              ? "Opening…"
+              : "Preparing…"
             : buttonLabel}
         </button>
       </div>

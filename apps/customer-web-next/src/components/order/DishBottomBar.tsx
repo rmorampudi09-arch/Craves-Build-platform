@@ -61,12 +61,12 @@ export function DishBottomBar({
           disabled={disabled}
           aria-busy={disabled}
           aria-label={disabled ? undefined : "Add to cart"}
-          className="craves-primary-action ml-auto flex-1 whitespace-nowrap px-4 sm:flex-none sm:px-8"
+          className="craves-primary-action ml-auto flex-1 !px-4 sm:flex-none sm:!px-8"
         >
           {disabled ? (
             <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
           ) : (
-            <CravesCartIcon className="h-5 w-5" />
+            <CravesCartIcon className="hidden h-5 w-5 min-[400px]:block" />
           )}
           {/* One line on 360px phones: "Add", growing to "Add to cart" when there's room. */}
           {disabled ? "Adding…" : (

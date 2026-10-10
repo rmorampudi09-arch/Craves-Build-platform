@@ -120,6 +120,26 @@ function checkoutMessage(error: unknown): string {
   ) {
     return "Ordering is paused for a short while. Your cart is saved, so please try again soon.";
   }
+  if (normalized.includes("address is incomplete")) {
+    return "This address is missing some details. Edit it to add them, or choose another address above.";
+  }
+  if (normalized.includes("select a saved delivery address") || normalized.includes("select a delivery address")) {
+    return "Choose a delivery address above to continue.";
+  }
+  if (normalized.includes("another kitchen")) {
+    return "Your cart has dishes from another kitchen. Review your cart, then try again.";
+  }
+  if (normalized.includes("cart changed") || normalized.includes("cart has changed")) {
+    return "Your cart changed while you were checking out. Review it, then try again.";
+  }
+
+  // Plain, human backend sentences (e.g. "Please sign in again.") pass through; engineer text never does.
+  const technical =
+    /configur|validation|response|launch|projection|backend|service|null|undefined|exception|http|uuid|coordinates|policy/i.test(message) ||
+    /[A-Z_]{4,}/.test(message);
+  if (message && message.length <= 160 && !technical) {
+    return message;
+  }
 
   return "We couldn’t prepare checkout right now. Your cart is safe — please try again.";
 }

@@ -182,9 +182,10 @@ body :is(button, [role="tab"], .btn-primary, .craves-button-link, .chef-panel-na
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-height: 3.25rem;
+  min-height: 3rem;
   padding: 0 1.5rem;
   border: 0;
+  white-space: nowrap;
   border-radius: var(--radius-pill);
   background: var(--color-flame-red);
   color: var(--color-white);

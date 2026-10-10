@@ -19,7 +19,7 @@ export default async function SubscriptionPaymentPage({
       <Link href="/subscriptions" className="text-sm font-semibold text-[#F6B545]">
         ← My meal plans
       </Link>
-      <h1 className="mt-8 text-4xl font-bold text-white sm:text-5xl">
+      <h1 className="mt-8 text-4xl font-bold text-[#1A1A1A] sm:text-5xl">
         Complete your meal-plan payment.
       </h1>
       <p className="mt-4 text-slate-300">

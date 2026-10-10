@@ -8,7 +8,7 @@ import {
   signInWithPhoneNumber,
 } from "firebase/auth";
 import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from "@/lib/msg91-browser";
-import { phoneCodeRequestError } from "@/lib/phone-auth-errors";
+import { phoneCodeRequestError, phoneCodeVerifyError } from "@/lib/phone-auth-errors";
 import { getFirebaseBrowserClient } from "@/lib/firebase-client";
 import {
   loadSession,
@@ -351,7 +351,7 @@ export function AuthModal({
       reset();
       onClose();
     } catch (caught) {
-      if (currentAttempt()) setError(caught instanceof Error ? caught.message : "The verification code could not be confirmed.");
+      if (currentAttempt()) setError(phoneCodeVerifyError(caught));
     } finally {
       if (authAttempt.current === attempt) setBusy(false);
     }

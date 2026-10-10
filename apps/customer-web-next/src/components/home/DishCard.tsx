@@ -160,8 +160,13 @@ export function DishCard({
       setMessage(`${dish.name} was added to the cart.`);
       window.setTimeout(() => setMessage(null), 1600);
     } catch (error) {
-      // Keeping the current cart is the customer's own choice: a status, not an error.
-      setState(error instanceof CartKeptError ? "idle" : "error");
+      // Keeping the current cart is the customer's own choice: closing the dialog is feedback enough.
+      if (error instanceof CartKeptError) {
+        setState("idle");
+        setMessage(null);
+        return;
+      }
+      setState("error");
       setMessage(
         error instanceof Error
           ? error.message

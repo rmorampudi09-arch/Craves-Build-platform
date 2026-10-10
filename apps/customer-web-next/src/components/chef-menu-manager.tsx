@@ -3,12 +3,12 @@
 import { ChefError, chefApiError, chefErrorText } from "@/lib/chef-errors";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ImagePlus, Plus, UtensilsCrossed } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ImagePlus, Plus, Store, UtensilsCrossed } from "lucide-react";
+import { ChefEmpty, ChefPageHead, ChefSection, ChefSkeleton } from "@/components/chef-ui";
 import { FaPepperHot } from "react-icons/fa";
 import { Button } from "@/components/ui/buttons/button";
 import { Input } from "@/components/ui/forms/input";
 import { Switch } from "@/components/ui/forms/switch";
-import { Skeleton } from "@/components/ui/feedback/skeleton";
 import { parseChefKitchen } from "@/lib/chef-kitchen-contract";
 import { chefMenuFailure } from "@/lib/chef-menu-errors";
 import {
@@ -62,7 +62,7 @@ const FOOD_TYPES = [
   { value: "NON_VEG", label: "Non-Veg", color: "bg-[#F62E18]" },
   { value: "EGG", label: "Egg", color: "bg-[#D99A00]" },
 ] as const;
-const SECTION = "rounded-2xl border border-border bg-white p-5 shadow-sm sm:p-6";
+const SECTION = "chef-section p-4 md:p-5";
 const CONTROL =
   "mt-2 min-h-12 w-full aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive";
 
@@ -398,15 +398,12 @@ export function ChefMenuManager() {
   const feedback = (
     <>
       {notice ? (
-        <p role="status" className="rounded-xl border border-border bg-white p-4 text-sm shadow-sm">
+        <p role="status" className="chef-notice">
           {notice}
         </p>
       ) : null}
       {message ? (
-        <p
-          role="alert"
-          className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
-        >
+        <p role="alert" className="chef-notice is-danger !text-[#C4200F]">
           {message}
         </p>
       ) : null}
@@ -414,133 +411,97 @@ export function ChefMenuManager() {
   );
 
   if (kitchenRequired && !loading && !loadError)
-    return <section className={SECTION}>
-      <h2 className="text-2xl font-semibold">Set up your kitchen first</h2>
-      <p className="mt-3 text-muted-foreground">Your Chef account is approved. Save your kitchen name and pickup address before adding dishes.</p>
-      <div className="mt-5 flex flex-wrap gap-3">
-        <Button asChild><Link href="/chef/kitchen">Set up my kitchen</Link></Button>
-        <Button variant="outline" disabled={busy || loading} onClick={() => void load(true)}>Check my kitchen</Button>
-      </div>
-    </section>;
+    return <div>
+      <ChefPageHead title="Menu" />
+      <ChefSection>
+        <ChefEmpty
+          icon={Store}
+          title="Set up your kitchen first"
+          text="Save your kitchen name and pickup address, then add your dishes."
+          action={<div className="flex flex-wrap justify-center gap-2"><Link href="/chef/kitchen" className="chef-btn is-primary">Set up my kitchen</Link><button type="button" className="chef-btn" disabled={busy || loading} onClick={() => void load(true)}>Check again</button></div>}
+        />
+      </ChefSection>
+    </div>;
 
-  if (!editing)
+  if (!editing) {
+    const availableCount = items.filter((item) => item.status === "ACTIVE" && item.available).length;
     return (
-      <div className="space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-semibold">Your menu</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Manage dishes, prices and availability.
-            </p>
-          </div>
-          <Button onClick={() => start()} disabled={loading || busy || !!loadError}>
-            <Plus className="size-4" /> Add Dish
-          </Button>
-        </div>
-        {feedback}
-        {loadError ? (
-          <div role="alert" className={SECTION}>
-            <p>{loadError}</p>
-            <Button
-              className="mt-4"
-              variant="outline"
-              disabled={busy || loading}
-              onClick={() => void load(true)}
-            >
-              Reload menu
-            </Button>
-          </div>
-        ) : null}
-        {loading ? (
-          <div
-            aria-label="Loading menu"
-            role="status"
-            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-          >
-            {[1, 2, 3].map((key) => (
-              <div key={key} className={SECTION}>
-                <Skeleton className="h-40 w-full rounded-xl" />
-                <Skeleton className="mt-4 h-6 w-2/3" />
-                <Skeleton className="mt-3 h-5 w-1/2" />
-              </div>
-            ))}
-          </div>
-        ) : !loadError && items.length === 0 ? (
-          <div className={`${SECTION} py-12 text-center`}>
-            <UtensilsCrossed className="mx-auto size-10 text-muted-foreground" />
-            <h3 className="mt-4 text-xl font-semibold">Your first dish starts here</h3>
-            <p className="mt-2 text-muted-foreground">Share something you love to cook.</p>
-            <Button className="mt-5" onClick={() => start()}>
-              Add your first dish
-            </Button>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((item) => (
-              <article
-                key={item.id}
-                className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm"
-              >
-                <div className="flex aspect-[16/10] items-center justify-center bg-muted">
-                  {primaryImage(item) ? (
-                    <img
-                      src={primaryImage(item)!}
-                      alt={item.itemName}
-                      className="size-full object-cover"
+      <div>
+        <ChefPageHead
+          title="Menu"
+          subtitle={loading ? "Loading your dishes…" : items.length ? `${items.length} dish${items.length === 1 ? "" : "es"} · ${availableCount} available to order` : "Dishes customers can order from your kitchen."}
+          action={
+            <button type="button" className="chef-btn is-primary" onClick={() => start()} disabled={loading || busy || !!loadError}>
+              <Plus className="h-5 w-5" aria-hidden="true" /> Add dish
+            </button>
+          }
+        />
+        <div className="chef-stack">
+          {feedback}
+          {loadError ? (
+            <ChefSection>
+              <ChefEmpty icon={AlertTriangle} title="Your menu couldn’t load" text={loadError} action={<button type="button" className="chef-btn" disabled={busy || loading} onClick={() => void load(true)}>Reload menu</button>} />
+            </ChefSection>
+          ) : null}
+          {loading ? (
+            <div aria-label="Loading menu" role="status" className="chef-section chef-list">
+              {[1, 2, 3, 4].map((key) => (
+                <div key={key} className="chef-row">
+                  <ChefSkeleton className="h-16 w-16 !rounded-xl" />
+                  <div className="grid flex-1 gap-2"><ChefSkeleton className="h-4 w-2/3" /><ChefSkeleton className="h-3 w-1/3" /></div>
+                </div>
+              ))}
+            </div>
+          ) : !loadError && items.length === 0 ? (
+            <ChefSection>
+              <ChefEmpty
+                icon={UtensilsCrossed}
+                title="Add your first dish"
+                text="Start with something you cook often. You can add photos, price and how many people it serves."
+                action={<button type="button" className="chef-btn is-primary" onClick={() => start()}>Add your first dish</button>}
+              />
+            </ChefSection>
+          ) : items.length ? (
+            <ul className="chef-section chef-list">
+              {items.map((item) => {
+                const live = item.status === "ACTIVE" && item.available;
+                const image = primaryImage(item);
+                return (
+                  <li key={item.id} className="flex items-center gap-1 pr-3 md:pr-4">
+                    <button type="button" className="chef-row min-w-0 flex-1 !border-0 !bg-transparent" aria-label={`Edit ${item.itemName}`} onClick={() => start(item)} disabled={busy}>
+                      <span className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-[#F1F3F5]">
+                        {image ? <img src={image} alt="" className="h-full w-full object-cover" /> : <UtensilsCrossed className="absolute inset-0 m-auto h-6 w-6 text-[#8A8F98]" aria-hidden="true" />}
+                      </span>
+                      <span className="chef-row-main">
+                        <span className="chef-row-title line-clamp-2 block">{item.itemName}</span>
+                        <span className="chef-row-meta flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <FoodIndicator type={item.foodType} />
+                          <span aria-hidden="true">·</span>
+                          <span className="chef-amount font-semibold text-[#1A1A1A]">{item.currency === "INR" ? "₹" : `${item.currency} `}{item.price.toFixed(2)}</span>
+                        </span>
+                        <span className={`mt-1 block text-[0.8125rem] font-semibold ${live ? "text-[#12805C]" : "text-[#6B6B6B]"}`}>
+                          {item.status === "DRAFT" ? "Draft · not on your menu yet" : item.status !== "ACTIVE" ? "Not published" : item.available ? "Available to order" : "Hidden from customers"}
+                        </span>
+                      </span>
+                    </button>
+                    <Switch
+                      aria-label={`${item.itemName} available to order`}
+                      checked={live}
+                      disabled={busy || item.status !== "ACTIVE"}
+                      onCheckedChange={(value) => void setAvailability(item, value)}
                     />
-                  ) : (
-                    <UtensilsCrossed className="size-10 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="space-y-4 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="font-semibold">{item.itemName}</h3>
-                    <span className="shrink-0 font-semibold">
-                      {item.currency === "INR" ? "₹" : `${item.currency} `}
-                      {item.price.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <FoodIndicator type={item.foodType} />
-                    <span className="text-xs text-muted-foreground">
-                      {item.status === "DRAFT"
-                        ? "Draft"
-                        : item.available
-                          ? "Available"
-                          : "Unavailable"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
-                    <Button
-                      variant="outline"
-                      aria-label={`Edit ${item.itemName}`}
-                      onClick={() => start(item)}
-                      disabled={busy}
-                    >
-                      Edit<span className="sr-only"> {item.itemName}</span>
-                    </Button>
-                    <label className="flex min-h-12 items-center gap-2 text-sm">
-                      <span>Available</span>
-                      <Switch
-                        aria-label={`Availability for ${item.itemName}`}
-                        checked={item.available && item.status === "ACTIVE"}
-                        disabled={busy || item.status !== "ACTIVE"}
-                        onCheckedChange={(value) => void setAvailability(item, value)}
-                      />
-                    </label>
-                  </div>
-                  {item.status !== "ACTIVE" ? (
-                    <p className="text-xs text-muted-foreground">
-                      Edit this dish and turn on Currently Available to publish it.
-                    </p>
-                  ) : null}
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          {items.some((item) => item.status !== "ACTIVE") ? (
+            <p className="text-[0.8125rem] leading-5 text-[#6B6B6B]">To publish a draft dish, open it and turn on “Currently available”.</p>
+          ) : null}
+        </div>
       </div>
     );
+  }
 
   return (
     <form
@@ -767,7 +728,7 @@ export function ChefMenuManager() {
                 {FOOD_TYPES.map((food, index) => (
                   <label
                     key={food.value}
-                    className={`flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-md border px-2 focus-within:ring-2 focus-within:ring-[var(--color-flame-red)]/30 ${form.foodType === food.value ? "border-[var(--color-flame-red)] bg-[var(--color-flame-red)]/5" : "border-border"} ${errors.foodType ? "border-destructive" : ""}`}
+                    className={`flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-md border px-2 focus-within:ring-2 focus-within:ring-[#1A1A1A] ${form.foodType === food.value ? "border-[#1A1A1A] bg-white shadow-[inset_0_0_0_1px_#1A1A1A]" : "border-border"} ${errors.foodType ? "border-destructive" : ""}`}
                   >
                     <input
                       {...(index === 0 ? fieldProps("foodType") : {})}

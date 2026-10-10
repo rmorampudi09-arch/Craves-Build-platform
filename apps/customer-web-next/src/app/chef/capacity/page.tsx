@@ -9,16 +9,14 @@ export const metadata = {
 
 export default function ChefCapacityPage() {
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-4 py-6 md:px-6 md:py-8">
+    <main className="chef-page">
       <ChefAccessBoundary>
         <ChefPageHeader
-          eyebrow="Subscription availability"
-          title="Choose availability only when you want to customize it"
-          description="Craves automatically creates safe missing limits when you submit a meal plan. Use this single workspace only when you want to choose specific weekdays, menu items, a calendar date, or your own limits."
+          title="Meal plan capacity"
+          description="How many meal-plan portions you can cook. Craves sets safe limits when you submit a plan; change them here only if you want to."
+          back={{ href: "/chef/meal-plans", label: "Meal plans" }}
         />
-        <div className="mt-6">
-          <ChefCapacityQuickSetup />
-        </div>
+        <ChefCapacityQuickSetup />
       </ChefAccessBoundary>
     </main>
   );

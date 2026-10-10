@@ -184,9 +184,6 @@ export function KitchensGrid({
     >
       <div className="mb-3 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">
-            From real home kitchens
-          </p>
           <h2
             id="nearby-kitchens-heading"
             className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-3xl lg:text-4xl"

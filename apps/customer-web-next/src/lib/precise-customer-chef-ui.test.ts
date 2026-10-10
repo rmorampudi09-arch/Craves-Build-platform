@@ -259,10 +259,11 @@ test("customer cart and notifications use white page surfaces", () => {
   assert.doesNotMatch(notifications, /border-b border-border bg-cream\/95/);
 });
 
-test("chef accept and reject fields use one neutral border with no focus outline or ring", () => {
+test("chef accept and reject fields use one neutral border with no extra focus ring", () => {
   assert.match(chefActions, /data-craves-single-border="true"/);
-  assert.match(chefActions, /border border-border/);
-  assert.match(chefActions, /focus:outline-none focus:ring-0/);
+  // One 1px border; Chef Mode's own focus style darkens that edge instead of adding a ring.
+  assert.match(chefActions, /rounded-xl border bg-white/);
+  assert.doesNotMatch(chefActions, /focus:ring-2|ring-\[#F62E18\]/);
   assert.match(theme, /outline:\s*none\s*!important/);
   assert.match(
     theme,

@@ -43,7 +43,6 @@ export function ChefInfoCard({
           <ChefHat className="h-6 w-6" aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#F62E18]">Home kitchen</p>
           <p className="mt-0.5 truncate font-display text-lg font-black tracking-[-0.025em] text-[#1A1A1A]">{chefName}</p>
           <p className="mt-1 text-xs font-semibold text-[#6B6B6B]">Freshly prepared by a Craves home chef</p>
         </div>

@@ -9,7 +9,7 @@ export const metadata = {
 export default function ChefApplicationStatusPage() {
   return (
     <ChefApplicationSessionBoundary>
-      <main className="mx-auto min-h-screen max-w-3xl px-4 py-6">
+      <main className="chef-page is-narrow">
         <ChefApplicationStatus
           draftsEnabled={process.env.CRAVES_CHEF_ONBOARDING_V2_ENABLED === "true"}
         />

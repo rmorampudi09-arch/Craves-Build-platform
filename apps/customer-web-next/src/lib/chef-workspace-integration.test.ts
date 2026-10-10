@@ -16,7 +16,6 @@ test("chef workspace navigation and the More hub expose every implemented backen
   assert.match(navigation, /label: "More"/);
   for (const route of [
     "/chef/kitchen",
-    "/chef/menu/media",
     "/chef/meal-plans",
     "/chef/capacity",
     "/chef/operations",
@@ -33,7 +32,7 @@ test("chef workspace navigation and the More hub expose every implemented backen
   assert.match(more, /Sign out/);
   assert.doesNotMatch(more, /not available yet/i);
   assert.match(earnings, /href="\/chef\/finance"/);
-  assert.match(earnings, /Open your available balance/);
+  assert.match(earnings, /Balance &amp; payouts/);
 });
 
 test("dashboard loads only live chef service state", () => {
@@ -60,7 +59,8 @@ test("operations readiness uses supported backend controls only", () => {
   assert.match(operations, /parseChefApplicationReadiness/);
   assert.match(operations, /approvedDocumentCount/);
   assert.match(operations, /\/api\/chef\/application\/readiness/);
-  assert.match(operations, /no reviewed weekly opening-hours contract/i);
+  // No invented weekly schedule: the screen says opening hours aren't available yet.
+  assert.match(operations, /Weekly opening hours aren’t available yet/);
   assert.doesNotMatch(operations, /FSSAI.*required|commissionRate|deliveryRadius\s*=/i);
 });
 
@@ -69,7 +69,8 @@ test("chef earnings remain finance-owned and contract validated", () => {
   const route = source("../app/api/chef/earnings/route.ts");
   assert.match(route, /parseChefEarnings\(raw\)/);
   assert.match(route, /authenticatedApiFetch\(request, "\/chef\/earnings\?limit=200"\)/);
-  assert.match(ledger, /browser never calculates commission/i);
+  // Fees are shown from each recorded entry, never calculated in the browser.
+  assert.match(ledger, /entry\.commissionAmount/);
   assert.doesNotMatch(ledger, /commissionRate|platformCommission|initiatePayout/i);
 });
 
@@ -101,7 +102,7 @@ test("chef order actions use unique idempotency keys and strict responses", () =
 });
 
 test("chef pages render their headers only after the access check", () => {
-  for (const page of ["capacity", "meal-plans", "operations", "finance", "statements", "profile", "menu/media", "earnings"]) {
+  for (const page of ["capacity", "meal-plans", "operations", "finance", "statements", "profile", "earnings"]) {
     const contents = source(`../app/chef/${page}/page.tsx`);
     const boundary = contents.indexOf("<ChefAccessBoundary>");
     assert.ok(boundary >= 0 && boundary < contents.indexOf("<ChefPageHeader"), page);

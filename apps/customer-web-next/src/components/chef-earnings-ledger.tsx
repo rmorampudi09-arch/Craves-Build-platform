@@ -5,39 +5,27 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BadgeIndianRupee,
-  Clock3,
-  FileCheck2,
+  ChevronDown,
   RefreshCw,
-  RotateCcw,
-  WalletCards,
 } from "lucide-react";
 import {
-  formatChefEarningStatus,
   parseChefEarnings,
   type ChefEarning,
   type ChefEarningStatus,
 } from "@/lib/chef-earnings-contract";
+import {
+  ChefEmpty,
+  ChefNotice,
+  ChefPill,
+  ChefSection,
+  ChefSkeleton,
+  dateTime,
+  formatInr,
+  type ChefTone,
+} from "@/components/chef-ui";
+import { shortOrderNumber } from "@/lib/order-number";
 
 type LedgerView = "ALL" | ChefEarningStatus;
-
-function money(value: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 2,
-    }).format(value);
-  } catch {
-    return `${currency} ${value.toFixed(2)}`;
-  }
-}
-
-function statusClass(status: ChefEarningStatus): string {
-  if (status === "SETTLED") return "bg-success/10 text-success";
-  if (status === "REVERSED") return "bg-error/10 text-error";
-  if (status === "SETTLEMENT_PENDING") return "bg-warning/10 text-warning";
-  return "bg-secondary text-contrast-red";
-}
 
 export function ChefEarningsLedger() {
   const [entries, setEntries] = useState<ChefEarning[]>([]);
@@ -102,205 +90,125 @@ export function ChefEarningsLedger() {
     .filter((entry) => entry.status === "SETTLEMENT_PENDING")
     .reduce((sum, entry) => sum + entry.netPayable, 0);
 
-  return (
-    <div className="space-y-6">
-      <section className="grid gap-4 sm:grid-cols-3">
-        {[
-          {
-            label: "Net earnings in listed records",
-            value: money(approvedPayable, currency),
-            icon: FileCheck2,
-          },
-          {
-            label: "Settlement pending",
-            value: money(pendingPayable, currency),
-            icon: Clock3,
-          },
-          {
-            label: "Recorded settled",
-            value: money(settledPayable, currency),
-            icon: WalletCards,
-          },
-        ].map((metric) => (
-          <article
-            key={metric.label}
-            className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)]"
-          >
-            <metric.icon className="h-5 w-5 text-primary" aria-hidden="true" />
-            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              {metric.label}
-            </p>
-            <p className="mt-1 font-display text-2xl font-bold text-ink">
-              {metric.value}
-            </p>
-          </article>
-        ))}
-      </section>
+  const filters: { value: LedgerView; label: string }[] = [
+    { value: "ALL", label: "All" },
+    { value: "SETTLEMENT_PENDING", label: STATUS_LABEL.SETTLEMENT_PENDING },
+    { value: "SETTLED", label: STATUS_LABEL.SETTLED },
+    { value: "APPROVED", label: STATUS_LABEL.APPROVED },
+    { value: "DRAFT", label: STATUS_LABEL.DRAFT },
+    { value: "REVERSED", label: STATUS_LABEL.REVERSED },
+  ];
 
-      <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="craves-overline text-primary">Audited financial ledger</p>
-            <h2 className="mt-1 font-display text-2xl font-bold tracking-[-0.035em] text-ink">
-              Chef earning allocations
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              Paid and delivered orders appear automatically after their accounting is recorded. Older manually approved entries remain visible. The browser never calculates commission, tax withholding or payout timing. These listed totals are not your available balance; refunds, holds and later adjustments appear in your balance breakdown.
-            </p>
+  return (
+    <div className="chef-stack">
+      <ChefSection flush>
+        <div className="chef-stats is-three">
+          <div className="chef-stat">
+            <p className="chef-stat-label">Earned</p>
+            <p className="chef-stat-value">{loading ? "—" : formatInr(approvedPayable, { currency })}</p>
           </div>
-          <button
-            type="button"
-            disabled={refreshing || loading}
-            onClick={() => void load(true)}
-            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold text-ink hover:border-primary disabled:opacity-50"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-              aria-hidden="true"
-            />
+          <div className="chef-stat">
+            <p className="chef-stat-label">Waiting for payout</p>
+            <p className="chef-stat-value">{loading ? "—" : formatInr(pendingPayable, { currency })}</p>
+          </div>
+          <div className="chef-stat">
+            <p className="chef-stat-label">Paid out</p>
+            <p className="chef-stat-value">{loading ? "—" : formatInr(settledPayable, { currency })}</p>
+          </div>
+        </div>
+        <p className="border-t border-[#E3E6EA] px-4 py-3 text-[0.8125rem] leading-5 text-[#6B6B6B] md:px-5">
+          Totals of the earnings listed below. Refunds, holds and later adjustments are included in your available balance under Balance &amp; payouts.
+        </p>
+      </ChefSection>
+
+      <ChefSection
+        title="Earnings by order"
+        flush
+        labelledBy="chef-earnings-list"
+        action={
+          <button type="button" disabled={refreshing || loading} onClick={() => void load(true)} className="chef-btn is-small" aria-busy={refreshing}>
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin motion-reduce:animate-none" : ""}`} aria-hidden="true" />
             Refresh
           </button>
-        </div>
-
-        <div className="mt-5 flex gap-2 overflow-x-auto pb-1" aria-label="Filter earning ledger">
-          {(
-            [
-              "ALL",
-              "DRAFT",
-              "APPROVED",
-              "SETTLEMENT_PENDING",
-              "SETTLED",
-              "REVERSED",
-            ] as const
-          ).map((status) => (
-            <button
-              key={status}
-              type="button"
-              onClick={() => setView(status)}
-              aria-pressed={view === status}
-              className={`min-h-11 shrink-0 rounded-full border px-4 text-sm font-semibold ${
-                view === status
-                  ? "border-primary bg-primary text-white"
-                  : "border-border bg-white text-ink hover:border-primary"
-              }`}
-            >
-              {status === "ALL"
-                ? "All"
-                : formatChefEarningStatus(status)}
+        }
+      >
+        <div className="chef-chips px-4 md:px-5" role="group" aria-label="Filter earnings">
+          {filters.map((filter) => (
+            <button key={filter.value} type="button" onClick={() => setView(filter.value)} aria-pressed={view === filter.value} className="chef-chip min-h-[40px]">
+              {filter.label}
             </button>
           ))}
         </div>
 
         {loading ? (
-          <div className="mt-6 space-y-3" aria-hidden="true">
-            {Array.from({ length: 4 }, (_, index) => (
-              <div key={index} className="h-36 animate-pulse rounded-2xl bg-grey-200" />
-            ))}
+          <div className="grid gap-2 p-4 md:p-5" aria-busy="true">
+            {Array.from({ length: 4 }, (_, index) => <ChefSkeleton key={index} className="h-14" />)}
           </div>
         ) : error && entries.length === 0 ? (
-          <div className="mt-6 rounded-2xl border border-error/20 bg-error/5 p-8 text-center">
-            <AlertTriangle className="mx-auto h-9 w-9 text-error" aria-hidden="true" />
-            <h3 className="mt-4 font-display text-xl font-bold text-ink">
-              Earnings ledger unavailable
-            </h3>
-            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-              {error}
-            </p>
-            <button type="button" onClick={() => void load()} className="btn-primary mt-6">
-              <RefreshCw className="h-4 w-4" aria-hidden="true" /> Retry
-            </button>
-          </div>
+          <ChefEmpty
+            icon={AlertTriangle}
+            title="Earnings couldn’t load"
+            text={error}
+            action={<button type="button" onClick={() => void load()} className="chef-btn is-primary">Try again</button>}
+          />
         ) : entries.length === 0 ? (
-          <div className="mt-6 rounded-2xl border border-dashed border-border bg-cream p-8 text-center">
-            <BadgeIndianRupee className="mx-auto h-10 w-10 text-muted-foreground" aria-hidden="true" />
-            <h3 className="mt-4 font-display text-xl font-bold text-ink">
-              No earning allocations yet
-            </h3>
-            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-              Earnings will appear here once a paid and delivered order has been recorded. No earnings are estimated from unpaid or unfinished orders.
-            </p>
-          </div>
+          <ChefEmpty
+            icon={BadgeIndianRupee}
+            title="No earnings yet"
+            text="Your earning for an order appears here after it is paid and delivered. Nothing is estimated from unfinished orders."
+          />
         ) : visibleEntries.length === 0 ? (
-          <div className="mt-6 rounded-2xl border border-dashed border-border bg-cream p-8 text-center text-sm text-muted-foreground">
-            No ledger entries match this status.
-          </div>
+          <ChefEmpty icon={BadgeIndianRupee} title="Nothing in this filter" text="Choose All to see every earning." />
         ) : (
-          <div className="mt-6 space-y-4">
+          <ul className="chef-list mt-3 border-t border-[#E3E6EA]">
             {visibleEntries.map((entry) => (
-              <article
-                key={entry.id}
-                className="rounded-2xl border border-border bg-cream p-5"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${statusClass(entry.status)}`}>
-                      {formatChefEarningStatus(entry.status)}
+              <li key={entry.id}>
+                <details className="group">
+                  <summary className="chef-row cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                    <span className="chef-row-main">
+                      <span className="chef-row-title block">Order #{shortOrderNumber(entry.orderId)}{entry.orderSource === "SUBSCRIPTION" ? " · Meal plan" : ""}</span>
+                      <span className="chef-row-meta flex flex-wrap items-center gap-2">
+                        {dateTime(entry.createdAt)}
+                        <ChefPill tone={STATUS_TONE[entry.status]}>{STATUS_LABEL[entry.status]}</ChefPill>
+                      </span>
                     </span>
-                    <h3 className="mt-3 font-display text-lg font-bold text-ink">
-                      Order #{entry.orderId.slice(-8).toUpperCase()}
-                    </h3>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {entry.orderSource.replaceAll("_", " ")} · {entry.allocationReference}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                      Net payable
-                    </p>
-                    <p className="font-display text-2xl font-bold text-ink">
-                      {money(entry.netPayable, entry.currency)}
-                    </p>
-                  </div>
-                </div>
-
-                <dl className="mt-5 grid gap-3 border-t border-border pt-4 text-sm sm:grid-cols-4">
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Gross</dt>
-                    <dd className="mt-1 font-semibold text-ink">{money(entry.grossAmount, entry.currency)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Total service fee</dt>
-                    <dd className="mt-1 font-semibold text-ink">-{money(entry.commissionAmount, entry.currency)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Tax withheld</dt>
-                    <dd className="mt-1 font-semibold text-ink">-{money(entry.taxWithheldAmount, entry.currency)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Adjustment</dt>
-                    <dd className="mt-1 font-semibold text-ink">{money(entry.adjustmentAmount, entry.currency)}</dd>
-                  </div>
-                </dl>
-
-                <p className="mt-4 rounded-xl bg-white p-3 text-xs leading-5 text-muted-foreground">
-                  Finance note: {entry.reason}
-                </p>
-                <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                  {entry.status === "REVERSED" ? (
-                    <RotateCcw className="h-3.5 w-3.5 text-error" aria-hidden="true" />
-                  ) : (
-                    <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-                  )}
-                  Updated {new Date(entry.updatedAt).toLocaleString("en-IN")}
-                </p>
-              </article>
+                    <span className={`chef-row-value chef-amount ${entry.status === "REVERSED" ? "text-[#6B6B6B] line-through" : ""}`}>{formatInr(entry.netPayable, { currency: entry.currency })}</span>
+                    <ChevronDown className="chef-chevron h-5 w-5 transition-transform group-open:rotate-180" aria-hidden="true" />
+                  </summary>
+                  <dl className="grid gap-2 bg-[#F7F8FA] px-4 py-3 text-[0.875rem] md:px-5">
+                    <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Order value</dt><dd className="chef-amount font-semibold">{formatInr(entry.grossAmount, { currency: entry.currency })}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Craves service fee</dt><dd className="chef-amount font-semibold">−{formatInr(entry.commissionAmount, { currency: entry.currency })}</dd></div>
+                    <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Tax withheld</dt><dd className="chef-amount font-semibold">−{formatInr(entry.taxWithheldAmount, { currency: entry.currency })}</dd></div>
+                    {entry.adjustmentAmount !== 0 ? <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Adjustment</dt><dd className="chef-amount font-semibold">{formatInr(entry.adjustmentAmount, { currency: entry.currency })}</dd></div> : null}
+                    <div className="flex justify-between gap-3 border-t border-[#E3E6EA] pt-2"><dt className="font-semibold">Your earning</dt><dd className="chef-amount font-bold">{formatInr(entry.netPayable, { currency: entry.currency })}</dd></div>
+                    {entry.reason ? <p className="pt-1 text-[0.8125rem] leading-5 text-[#6B6B6B]">{entry.reason}</p> : null}
+                    <p className="text-[0.8125rem] text-[#6B6B6B]">Reference {entry.allocationReference} · Updated {dateTime(entry.updatedAt)}</p>
+                  </dl>
+                </details>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-
-        {lastUpdatedAt && (
-          <p className="mt-5 text-xs text-muted-foreground">
-            Last refreshed {lastUpdatedAt.toLocaleTimeString("en-IN")}
-          </p>
-        )}
-        {error && entries.length > 0 && (
-          <p role="alert" className="mt-4 rounded-xl border border-error/20 bg-error/5 p-3 text-sm font-medium text-error">
-            {error}
-          </p>
-        )}
-      </section>
+        {error && entries.length > 0 ? <div className="p-4 md:p-5"><ChefNotice icon={AlertTriangle} tone="danger" role="alert">{error}</ChefNotice></div> : null}
+        {lastUpdatedAt && !loading ? <p className="border-t border-[#E3E6EA] px-4 py-3 text-[0.8125rem] text-[#6B6B6B] md:px-5">Updated {lastUpdatedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }).toLowerCase()}</p> : null}
+      </ChefSection>
     </div>
   );
 }
+
+const STATUS_LABEL: Record<ChefEarningStatus, string> = {
+  DRAFT: "Being recorded",
+  APPROVED: "Approved",
+  SETTLEMENT_PENDING: "Payout pending",
+  SETTLED: "Paid out",
+  REVERSED: "Reversed",
+};
+const STATUS_TONE: Record<ChefEarningStatus, ChefTone> = {
+  DRAFT: "muted",
+  APPROVED: "active",
+  SETTLEMENT_PENDING: "warning",
+  SETTLED: "success",
+  REVERSED: "danger",
+};
 
 export default ChefEarningsLedger;

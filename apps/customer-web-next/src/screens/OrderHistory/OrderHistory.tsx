@@ -41,7 +41,7 @@ function money(amount: number, currency: string): string {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency,
-      minimumFractionDigits: 0,
+      minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
       maximumFractionDigits: 2,
     }).format(amount);
   } catch {
@@ -272,9 +272,6 @@ export default function OrdersPage() {
           </Link>
 
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#1A1A1A]">
-              Craves account
-            </p>
             <h1 className="mt-0.5 text-xl font-semibold leading-tight text-[#1A1A1A]">
               Your orders
             </h1>

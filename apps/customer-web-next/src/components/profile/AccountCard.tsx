@@ -52,9 +52,6 @@ export function AccountCard({
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">
-                Customer account
-              </p>
               <h2
                 id="customer-profile-name"
                 className="mt-1.5 truncate text-xl font-black tracking-[-0.025em] text-[#1A1A1A] sm:text-2xl"

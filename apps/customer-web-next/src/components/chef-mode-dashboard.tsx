@@ -2,21 +2,27 @@
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
-import { Button } from "@/components/ui/buttons/button";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   AlertTriangle,
-  BadgeIndianRupee,
   ChefHat,
   CheckCircle2,
   ChevronRight,
-  ClipboardList,
-  Bell,
   RefreshCw,
-  ShieldCheck,
   Store,
   Utensils,
 } from "lucide-react";
+import {
+  ChefEmpty,
+  ChefNotice,
+  ChefPill,
+  ChefSection,
+  ChefSkeleton,
+  chefOrderStatus,
+  formatInr,
+  timeAgo,
+} from "@/components/chef-ui";
+import { shortOrderNumber } from "@/lib/order-number";
 import {
   parseChefApplication,
   type ChefApplication,
@@ -66,18 +72,6 @@ const EMPTY: Snapshot = {
   unavailable: [],
   details: [],
 };
-
-function money(value: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch {
-    return `${currency} ${value.toFixed(0)}`;
-  }
-}
 
 function isThisWeek(value: string): boolean {
   const date = new Date(value);
@@ -246,13 +240,10 @@ export function ChefModeDashboard() {
 
   if (state === "loading") {
     return (
-      <div className="space-y-4" aria-hidden="true">
-        <div className="h-56 animate-pulse rounded-3xl bg-[#F1F3F5]" />
-        <div className="grid gap-4 sm:grid-cols-3">
-          {Array.from({ length: 3 }, (_, index) => (
-            <div key={index} className="h-32 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-          ))}
-        </div>
+      <div className="chef-stack" aria-busy="true">
+        <ChefSkeleton className="h-16 w-2/3" />
+        <ChefSkeleton className="h-44" />
+        <ChefSkeleton className="h-40" />
         <p className="sr-only" role="status">Loading Chef Mode</p>
       </div>
     );
@@ -260,21 +251,19 @@ export function ChefModeDashboard() {
 
   if (state === "error") {
     return (
-      <section className="mx-auto max-w-2xl rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center">
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]">
-          <AlertTriangle className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
-        </span>
-        <h1 className="mt-5 text-2xl font-bold text-[#1A1A1A]">Chef Mode couldn’t load</h1>
-        <p className="mt-2 text-sm text-[#6B6B6B]">{message}</p>
-        <button
-          type="button"
-          onClick={() => setRefreshTick((value) => value + 1)}
-          className="mt-6 inline-flex min-h-12 items-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white"
-        >
-          <RefreshCw className="h-4 w-4" aria-hidden="true" />
-          Try again
-        </button>
-      </section>
+      <ChefSection>
+        <ChefEmpty
+          icon={AlertTriangle}
+          title="Chef Mode couldn’t load"
+          text={message}
+          action={
+            <button type="button" onClick={() => setRefreshTick((value) => value + 1)} className="chef-btn is-primary">
+              <RefreshCw className="h-5 w-5" aria-hidden="true" />
+              Try again
+            </button>
+          }
+        />
+      </ChefSection>
     );
   }
 
@@ -306,16 +295,6 @@ export function ChefModeDashboard() {
       href: "/chef/menu",
       icon: Utensils,
     };
-  } else if (stats.actionOrders.length > 0) {
-    const first = stats.actionOrders[0]!;
-    priority = {
-      eyebrow: "Needs your answer",
-      title: `${stats.actionOrders.length} new order${stats.actionOrders.length === 1 ? "" : "s"} waiting`,
-      description: "Open the order and tell us if you can cook it now.",
-      action: "See the order",
-      href: `/chef/orders/${first.id}`,
-      icon: ClipboardList,
-    };
   } else if (stats.activeOrders.length > 0) {
     const first = stats.activeOrders[0]!;
     priority = {
@@ -329,139 +308,180 @@ export function ChefModeDashboard() {
   } else {
     priority = {
       eyebrow: "Today",
-      title: "No orders yet — you’re all set",
-      description: "Your menu is ready. New orders will appear here when customers choose your food.",
-      action: "Refresh",
+      title: "No new orders right now",
+      description: "Your menu is live. New orders show up here and in Orders as soon as customers choose your food.",
+      action: "Check for new orders",
       refresh: true,
       icon: ChefHat,
     };
   }
 
   const kitchenOpen = snapshot.kitchen?.status === "ACTIVE";
-  const menuSummary = snapshot.menu.length
-    ? `${snapshot.menu.length} dish${snapshot.menu.length === 1 ? "" : "es"}`
-    : "Add your first dish";
-  const earningsSummary = stats.weekAmount > 0
-    ? money(stats.weekAmount, stats.weekCurrency)
-    : "Appears after your first earning";
+  const kitchenName = snapshot.kitchen?.kitchenName || "Your Craves kitchen";
+  const firstName = user?.firstName || user?.username || "Chef";
+  const ordersUnknown = snapshot.unavailable.includes("orders");
+  const newOrders = stats.actionOrders;
 
   return (
     <>
       {showApprovalNotice ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4" role="presentation">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#1A1A1A]/50 p-0 sm:items-center sm:p-4" role="presentation">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="chef-approved-title"
-            className="w-full max-w-lg rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center shadow-[0_18px_50px_rgba(0,0,0,0.18)] md:p-9"
+            className="chef-step w-full max-w-md rounded-t-3xl bg-white p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] text-[#1A1A1A] shadow-[0_-12px_40px_rgba(26,26,26,0.16)] sm:rounded-3xl sm:pb-6"
           >
-            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F1F3F5]">
-              <CheckCircle2 className="h-8 w-8 text-[#F62E18]" aria-hidden="true" />
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F1F3F5]">
+              <CheckCircle2 className="h-6 w-6 text-[#F62E18]" aria-hidden="true" />
             </span>
-            <p className="mt-5 text-sm font-semibold text-[#F62E18]">You’re approved</p>
-            <h2 id="chef-approved-title" className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A]">Congratulations! You’re now a Craves chef</h2>
-            <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">{snapshot.kitchen ? "Your Chef Mode is ready. Add your first dish so customers can discover what you cook." : "Your Chef Mode is ready. Save your kitchen name and pickup address, then add your first dish."}</p>
-            <Link
-              href={snapshot.kitchen ? "/chef/menu" : "/chef/kitchen"}
-              onClick={dismissApprovalNotice}
-              className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white"
-            >
-              {snapshot.kitchen ? "Add my first dish" : "Set up my kitchen"}
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
-            <button
-              type="button"
-              onClick={dismissApprovalNotice}
-              className="mt-3 min-h-11 w-full rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]"
-            >
-              Go to Chef home
-            </button>
+            <h2 id="chef-approved-title" className="mt-4 font-display text-2xl font-bold tracking-tight text-[#1A1A1A]">You’re a Craves chef</h2>
+            <p className="mt-2 text-[0.9375rem] leading-6 text-[#6B6B6B]">{snapshot.kitchen ? "Your kitchen is set up. Add your first dish so customers can find what you cook." : "Save your kitchen name and pickup address, then add your first dish."}</p>
+            <div className="mt-6 grid gap-2">
+              <Link href={snapshot.kitchen ? "/chef/menu" : "/chef/kitchen"} onClick={dismissApprovalNotice} className="chef-btn is-primary is-block">
+                {snapshot.kitchen ? "Add my first dish" : "Set up my kitchen"}
+              </Link>
+              <button type="button" onClick={dismissApprovalNotice} className="chef-btn is-quiet is-block">
+                Not now
+              </button>
+            </div>
           </section>
         </div>
       ) : null}
 
-      <div className="space-y-5">
-        <div>
-          <p className="text-sm font-semibold text-[#F62E18]">Chef Mode</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A] md:text-4xl">
-            Hello, {user?.firstName || user?.username || "Chef"}
-          </h1>
-          <div className="mt-3 flex flex-wrap items-center gap-3"><span className="rounded-full bg-[#F1F3F5] px-3 py-2 text-sm font-semibold">{snapshot.kitchen?.kitchenName || "Your Craves kitchen"}</span><span className="inline-flex items-center gap-1 text-sm text-primary"><ShieldCheck className="h-4 w-4" />Approved Chef</span><Button asChild variant="ghost" size="icon"><Link href="/chef/notifications" aria-label="Chef notifications"><Bell className="h-5 w-5" /></Link></Button></div>
-        </div>
+      <div className="chef-stack">
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="chef-page-title">{greeting()}, {firstName}</h1>
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.9375rem] text-[#6B6B6B]">
+              <span className="truncate font-semibold text-[#1A1A1A]">{kitchenName}</span>
+              <ChefPill tone={kitchenOpen ? "success" : "muted"}>{kitchenOpen ? "Accepting orders" : "Not accepting orders"}</ChefPill>
+            </p>
+          </div>
+        </header>
 
         {snapshot.unavailable.length > 0 ? (
-          <p role="status" className="rounded-2xl bg-[#F1F3F5] px-4 py-3 text-sm text-[#6B6B6B]">
-            Some information couldn’t refresh. You can still use the parts shown below.
-            {snapshot.details.map((detail) => <span key={detail} className="mt-1 block">{detail}</span>)}
-          </p>
+          <ChefNotice icon={AlertTriangle} role="status">
+            <p>Some information couldn’t refresh. Everything shown below is up to date.</p>
+            {snapshot.details.map((detail) => <p key={detail} className="mt-1 text-[#6B6B6B]">{detail}</p>)}
+          </ChefNotice>
         ) : null}
 
-        <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-8">
-          <div className="flex items-start gap-4">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5]">
-              <priority.icon className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-[#F62E18]">{priority.eyebrow}</p>
-              <h2 className="mt-1 text-2xl font-bold text-[#1A1A1A] md:text-3xl">{priority.title}</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B6B6B]">{priority.description}</p>
-            </div>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-5">
+          <div className="chef-stack">
+            {newOrders.length > 0 ? (
+              <ChefSection
+                title={`${newOrders.length} new order${newOrders.length === 1 ? "" : "s"} waiting`}
+                note="Tell the customer you can cook it. Waiting orders show here first."
+                flush
+                labelledBy="chef-new-orders"
+              >
+                <ul className="chef-list border-t border-[#E3E6EA]">
+                  {newOrders.map((order) => (
+                    <li key={order.id}>
+                      <Link href={`/chef/orders/${order.id}`} className="chef-row">
+                        <span className="chef-row-main">
+                          <span className="flex flex-wrap items-center gap-2">
+                            <ChefPill tone="attention">New</ChefPill>
+                            <span className="chef-row-meta !mt-0">#{shortOrderNumber(order.id)} · {timeAgo(order.createdAt)}</span>
+                          </span>
+                          <span className="chef-row-title mt-1.5 line-clamp-2 block">{itemSummary(order)}</span>
+                        </span>
+                        <span className="chef-row-value chef-amount">{formatInr(order.foodSubtotal, { currency: order.currency })}</span>
+                        <ChevronRight className="chef-chevron h-5 w-5" aria-hidden="true" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </ChefSection>
+            ) : (
+              <ChefSection>
+                <div className="flex items-start gap-4">
+                  <span className="chef-row-icon"><priority.icon className="h-5 w-5" aria-hidden="true" /></span>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="chef-section-title">{priority.title}</h2>
+                    <p className="mt-1 text-[0.9375rem] leading-6 text-[#6B6B6B]">{priority.description}</p>
+                    {priority.href ? (
+                      <Link href={priority.href} className="chef-btn is-primary mt-4 w-full sm:w-auto">
+                        {priority.action}
+                      </Link>
+                    ) : (
+                      <button type="button" onClick={() => priority.refresh && setRefreshTick((value) => value + 1)} className="chef-btn mt-4 w-full sm:w-auto">
+                        <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                        {priority.action}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </ChefSection>
+            )}
+
+            {stats.activeOrders.length > 0 ? (
+              <ChefSection
+                title="In progress"
+                flush
+                labelledBy="chef-active-orders"
+                action={<Link href="/chef/orders" className="chef-btn is-small">All orders</Link>}
+              >
+                <ul className="chef-list border-t border-[#E3E6EA]">
+                  {stats.activeOrders.map((order) => {
+                    const status = chefOrderStatus(order.status);
+                    return (
+                      <li key={order.id}>
+                        <Link href={`/chef/orders/${order.id}`} className="chef-row">
+                          <span className="chef-row-main">
+                            <span className="flex flex-wrap items-center gap-2">
+                              <ChefPill tone={status.tone}>{status.label}</ChefPill>
+                              <span className="chef-row-meta !mt-0">#{shortOrderNumber(order.id)}{order.prepTimeMinutes ? ` · ${order.prepTimeMinutes} min prep` : ""}</span>
+                            </span>
+                            <span className="chef-row-title mt-1.5 line-clamp-2 block">{itemSummary(order)}</span>
+                          </span>
+                          <ChevronRight className="chef-chevron h-5 w-5" aria-hidden="true" />
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </ChefSection>
+            ) : null}
           </div>
-          {priority.href ? (
-            <Link href={priority.href} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto">
-              {priority.action}
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
-          ) : (
-            <button
-              type="button"
-              onClick={() => priority.refresh && setRefreshTick((value) => value + 1)}
-              className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto"
-            >
-              <RefreshCw className="h-4 w-4" aria-hidden="true" />
-              {priority.action}
-            </button>
-          )}
-        </section>
 
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Kitchen summary">
-          <Link href="/chef/orders" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)]"><ClipboardList className="h-5 w-5 text-primary" /><p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Today’s orders</p><p className="mt-1 text-2xl font-bold">{snapshot.unavailable.includes("orders") ? "—" : stats.todayOrders}</p></Link>
-          <Link href="/chef/kitchen" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
-              <Store className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-            </span>
-            <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Your kitchen</p>
-            <p className="mt-1 font-bold text-[#1A1A1A]">{kitchenOpen ? "Accepting orders" : "Not accepting orders"}</p>
-          </Link>
-          <Link href="/chef/menu" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
-              <Utensils className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-            </span>
-            <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Your menu</p>
-            <p className="mt-1 font-bold text-[#1A1A1A]">{menuSummary}</p>
-          </Link>
-          <Link href="/chef/earnings" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
-              <BadgeIndianRupee className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-            </span>
-            <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">This week</p>
-            <p className="mt-1 font-bold text-[#1A1A1A]">{earningsSummary}</p>
-          </Link>
-        </section>
-
-        {snapshot.orders.length > 0 ? (
-          <details className="rounded-2xl border border-[#E5E7EB] bg-white p-5">
-            <summary className="cursor-pointer font-semibold text-[#1A1A1A]">More options</summary>
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              <Link href="/chef/application" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">Your details</Link>
-              <Link href="/chef/orders" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">Previous orders</Link>
-              <Link href="/chef/earnings" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">What you’ve earned</Link>
+          <ChefSection title="Today" flush labelledBy="chef-today">
+            <div className="chef-stats mt-1 border-t border-[#E3E6EA]">
+              <Link href="/chef/orders" className="chef-stat">
+                <p className="chef-stat-label">Orders today</p>
+                <p className="chef-stat-value">{ordersUnknown ? "—" : stats.todayOrders}</p>
+              </Link>
+              <Link href="/chef/orders" className="chef-stat">
+                <p className="chef-stat-label">Cooking now</p>
+                <p className="chef-stat-value">{ordersUnknown ? "—" : stats.activeOrders.length}</p>
+              </Link>
+              <Link href="/chef/menu" className="chef-stat">
+                <p className="chef-stat-label">Dishes available</p>
+                <p className="chef-stat-value">{snapshot.menu.length ? `${stats.availableMenu.length} of ${snapshot.menu.length}` : "0"}</p>
+              </Link>
+              <Link href="/chef/earnings" className="chef-stat">
+                <p className="chef-stat-label">Earned this week</p>
+                <p className="chef-stat-value">{stats.weekAmount > 0 ? formatInr(stats.weekAmount, { currency: stats.weekCurrency, decimals: 0 }) : "₹0"}</p>
+              </Link>
             </div>
-          </details>
-        ) : null}
+          </ChefSection>
+        </div>
       </div>
     </>
   );
+}
+
+/** Good morning/afternoon/evening in India time. */
+function greeting(): string {
+  const hour = Number(new Intl.DateTimeFormat("en-IN", { hour: "numeric", hourCycle: "h23", timeZone: "Asia/Kolkata" }).format(new Date()));
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function itemSummary(order: ChefOrder): string {
+  return order.items.map((item) => `${item.quantity}× ${item.itemName}`).join(", ") || "Food order";
 }
 
 export default ChefModeDashboard;

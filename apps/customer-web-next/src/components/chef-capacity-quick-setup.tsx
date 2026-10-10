@@ -226,8 +226,7 @@ export function ChefCapacityQuickSetup() {
     <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-3xl">
-          <p className="craves-overline text-primary">Simple subscription setup</p>
-          <h2 className="mt-1 font-display text-2xl font-bold text-ink">Choose when and what you can serve</h2>
+                    <h2 className="mt-1 font-display text-2xl font-bold text-ink">Choose when and what you can serve</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             Everything below is optional. When you submit a meal plan, Craves now fills any missing capacity automatically from that plan.
             The safe default is <strong className="text-ink">5 subscription units per selected dish</strong>.
@@ -316,7 +315,7 @@ export function ChefCapacityQuickSetup() {
             </label>
           </div>
           {activeMenu.length === 0 ? (
-            <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">No active and available dishes were found.</p>
+            <p className="mt-4 rounded-xl bg-[#F1F3F5] p-3 text-sm text-[#1A1A1A]">No active and available dishes were found.</p>
           ) : (
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {activeMenu.map(item => (
@@ -391,7 +390,7 @@ export function ChefCapacityQuickSetup() {
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
           {readiness.map(item => (
-            <div key={item.day} className={`rounded-xl border p-3 ${item.ready ? "border-success/20 bg-success/5" : "border-amber-200 bg-amber-50"}`}>
+            <div key={item.day} className={`rounded-xl border p-3 ${item.ready ? "border-success/20 bg-success/5" : "border-[#E3E6EA] bg-[#F1F3F5]"}`}>
               <p className="font-bold text-ink">{item.label.slice(0, 3)}</p>
               <p className="mt-1 text-xs">{item.ready ? "Ready ✓" : "Server default on submit"}</p>
               {item.rule && <p className="mt-1 text-xs text-muted-foreground">{item.rule.subscriptionCapacityUnits} limit · {item.rule.recurringAvailableUnits} free</p>}

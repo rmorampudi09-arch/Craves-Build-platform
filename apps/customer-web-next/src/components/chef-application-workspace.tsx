@@ -494,9 +494,10 @@ export function ChefApplicationWorkspace() {
 
   if (step === "welcome") {
     return <section className="chef-step overflow-hidden rounded-3xl border border-[#E5E7EB] bg-white shadow-[var(--shadow-card)]">
-      <img src="/home/cravings/craves-home-banner.webp" alt="Homemade food prepared for sharing" className="aspect-[16/7] w-full object-cover object-right" fetchPriority="high" />
-      <div className="p-6 md:p-9"><p className="text-sm font-semibold text-primary">Become a Craves Chef</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">Share your homemade food with thousands of customers</h1>
+      <img src="/chef/chef-welcome.webp" alt="A home chef cooking in her kitchen" className="aspect-[16/9] w-full object-cover object-[center_35%]" fetchPriority="high" />
+      <div className="p-6 md:p-9">
+        <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Cook for your neighbourhood on Craves</h1>
+        <p className="mt-2 text-[0.9375rem] leading-6 text-[#6B6B6B]">Apply in a few steps. Your progress is saved, so you can finish later.</p>
         <div className="mt-6 space-y-3 text-sm">{["Earn from your cooking", "Reach nearby customers", "Manage your kitchen easily"].map(item => <p key={item} className="flex items-center gap-3"><Check className="h-5 w-5 text-primary" aria-hidden="true" />{item}</p>)}</div>
         <Button className="mt-7 w-full" onClick={() => go("about")}>Become a Chef <ChevronRight className="h-4 w-4" /></Button>
         <Button asChild variant="ghost" className="mt-2 w-full"><Link href="/chef/sign-in">Already a Chef? Login</Link></Button>
@@ -582,7 +583,7 @@ export function ChefApplicationWorkspace() {
     return <form onSubmit={submit} className="chef-step rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-9">
       <StepHeader part={8} label="Review your application" onBack={() => go("documents")} />
       <div className="mt-7 flex items-center gap-5"><div role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Available application details complete" className="grid h-20 w-20 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(var(--color-flame-red) ${completion}%, #e5e7eb 0)` }}><span className="grid h-16 w-16 place-items-center rounded-full bg-white text-lg font-bold">{completion}%</span></div><div><h1 className="text-3xl font-bold">Your Chef Profile</h1><p className="mt-2 text-sm text-[#6B6B6B]">Available application details complete</p></div></div>
-      {application?.rejectionReason ? <p role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm">{application.rejectionReason}</p> : null}
+      {application?.rejectionReason ? <p role="alert" className="mt-5 rounded-xl bg-[#F1F3F5] p-4 text-sm text-[#C4200F]">{application.rejectionReason}</p> : null}
       <div className="mt-5"><EmailVerificationPanel compact required onStateChange={setEmailVerification} /></div>
       <p className="mt-5 font-semibold">{form.firstName} {form.lastName}</p><p className="mt-1 text-sm text-[#6B6B6B]">{addressSummary(form)}</p>
       <div className="mt-6 space-y-2">{checklist.map(item => <button key={item.label} type="button" onClick={() => go(item.target)} className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-[#E5E7EB] bg-white px-4 text-left text-sm"><Check className={`h-5 w-5 ${item.complete ? "text-primary" : "text-[#9CA3AF]"}`} /><span className="flex-1">{item.label}</span><span className="text-xs text-[#6B6B6B]">{item.complete ? "Saved" : "Needs attention"}</span><ChevronRight className="h-4 w-4" /></button>)}</div>

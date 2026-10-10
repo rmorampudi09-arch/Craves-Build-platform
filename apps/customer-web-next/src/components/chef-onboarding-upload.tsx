@@ -323,7 +323,7 @@ export function ChefOnboardingUpload({
           <span
             className="cob-thumb"
             aria-hidden="true"
-            style={{ background: "#FEEDEA", color: "#C4200F" }}
+            style={{ background: "#F1F3F5", color: "#C4200F" }}
           >
             <AlertCircle size={24} />
           </span>

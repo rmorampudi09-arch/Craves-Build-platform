@@ -46,7 +46,7 @@ export function ChefWorkspaceNavigation({ placement }: { placement: "header" | "
     return placement === "header" ? (
       <Link key={link.href} href={link.href} aria-current={active ? "page" : undefined} className={`chef-desktop-nav-link ${active ? "is-active" : ""}`}><link.icon className="h-4 w-4" aria-hidden="true" /><span>{link.label}</span></Link>
     ) : (
-      <Link key={link.href} href={link.href} aria-current={active ? "page" : undefined} className={`chef-mobile-nav-link ${active ? "is-active" : ""}`}><span className="chef-mobile-nav-icon"><link.icon className="h-[1.12rem] w-[1.12rem] shrink-0" aria-hidden="true" /></span><span>{link.label}</span></Link>
+      <Link key={link.href} href={link.href} aria-current={active ? "page" : undefined} className={`chef-mobile-nav-link ${active ? "is-active" : ""}`}><span className="chef-mobile-nav-icon"><link.icon className="h-[1.375rem] w-[1.375rem] shrink-0" strokeWidth={active ? 2.25 : 1.9} aria-hidden="true" /></span><span>{link.label}</span></Link>
     );
   });
 

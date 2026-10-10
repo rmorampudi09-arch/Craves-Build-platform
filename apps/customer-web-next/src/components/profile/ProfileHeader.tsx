@@ -26,9 +26,6 @@ export function ProfileHeader() {
         </Link>
 
         <div className="min-w-0">
-          <p className="text-[0.58rem] font-black uppercase tracking-[0.14em] text-[#F62E18]">
-            Craves account
-          </p>
           <h1 className="mt-0.5 text-lg font-black tracking-[-0.02em] text-[#1A1A1A] md:text-xl">
             Profile
           </h1>

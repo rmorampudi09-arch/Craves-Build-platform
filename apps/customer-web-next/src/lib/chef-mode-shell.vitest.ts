@@ -112,8 +112,8 @@ describe("More hub", () => {
     render(createElement(ChefMorePage));
     await screen.findByRole("heading", { name: "Asha Rao" });
     for (const [label, href] of [
-      ["Kitchen details", "/chef/kitchen"], ["Menu photos", "/chef/menu/media"], ["Meal plans", "/chef/meal-plans"],
-      ["Capacity", "/chef/capacity"], ["Operations", "/chef/operations"], ["Earnings", "/chef/earnings"],
+      ["Kitchen details", "/chef/kitchen"], ["Meal plans", "/chef/meal-plans"],
+      ["Capacity", "/chef/capacity"], ["Kitchen status", "/chef/operations"], ["Earnings", "/chef/earnings"],
       ["Finance & payouts", "/chef/finance"], ["Statements", "/chef/statements"], ["Your application", "/chef/application/status"],
       ["Notifications", "/chef/notifications"], ["Help", "/contact"],
     ]) expect(screen.getByRole("link", { name: new RegExp(`^${label}`) }).getAttribute("href")).toBe(href);

@@ -271,12 +271,13 @@ test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   for (const page of [
     "../app/chef/kitchen/page.tsx",
     "../app/chef/menu/page.tsx",
-    "../app/chef/menu/media/page.tsx",
     "../app/chef/orders/page.tsx",
     "../app/chef/orders/[orderId]/page.tsx",
   ]) {
     assert.match(source(page), /ChefAccessBoundary/, page);
   }
+  // The old menu photos URL only forwards to the protected menu page.
+  assert.match(source("../app/chef/menu/media/page.tsx"), /redirect\("\/chef\/menu"\)/);
 });
 
 test("customer headers stay lean and share the same responsive scroll behavior", () => {

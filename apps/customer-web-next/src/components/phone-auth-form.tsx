@@ -250,10 +250,10 @@ export function PhoneAuthForm({
             />
           </>
         ) : prefilled ? (
-          <div className="flex min-h-12 items-center justify-between gap-3 rounded-2xl bg-[#F1F3F5] py-2 pl-4 pr-2">
+          <div className="flex min-h-12 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-2xl bg-[#F1F3F5] py-2 pl-4 pr-2">
             <span className="min-w-0">
               <span className="block text-xs font-semibold text-[#6B6B6B]">Signed in as</span>
-              <strong className="block truncate text-base text-[#1A1A1A]">{phone}</strong>
+              <strong className="block text-base tabular-nums text-[#1A1A1A]">{phone}</strong>
             </span>
             <button
               type="button"
@@ -288,7 +288,7 @@ export function PhoneAuthForm({
         {!otpStage && (
           <div
             id="craves-recaptcha"
-            className="min-h-20 overflow-hidden rounded-2xl border border-[#E5E7EB] bg-[#F1F3F5] p-2"
+            className="min-h-20 overflow-hidden rounded-2xl border border-[#E5E7EB] bg-[#F1F3F5] p-2 empty:min-h-0 empty:border-0 empty:p-0"
           />
         )}
         <div
@@ -332,7 +332,7 @@ export function PhoneAuthForm({
 
       <p
         aria-live="polite"
-        className="mt-5 rounded-2xl bg-[#F1F3F5] px-4 py-3 text-sm text-[#1A1A1A]"
+        className="mt-4 text-sm leading-6 text-[#1A1A1A]"
       >
         {message}
       </p>

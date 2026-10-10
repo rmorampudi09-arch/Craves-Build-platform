@@ -166,9 +166,6 @@ export function DishesGrid({
     >
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">
-            Made close to you
-          </p>
           <h2
             id="available-dishes-heading"
             className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-3xl lg:text-4xl"

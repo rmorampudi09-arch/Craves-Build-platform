@@ -71,7 +71,7 @@ function statusLabel(document: ChefEvidenceMetadata | undefined): string {
 function statusClasses(document: ChefEvidenceMetadata | undefined): string {
   if (!document) return "bg-slate-50 text-slate-700";
   if (document.status === "APPROVED") return "bg-emerald-50 text-emerald-800";
-  if (document.status === "REJECTED") return "bg-red-50 text-red-800";
+  if (document.status === "REJECTED") return "bg-[#F1F3F5] text-[#C4200F]";
   return "bg-slate-50 text-primary";
 }
 
@@ -244,7 +244,7 @@ export function ChefApplicationEvidenceUploader({
       )}
 
       {rejectedCount > 0 && !locked && (
-        <div className="mt-5 flex gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-950">
+        <div className="mt-5 flex gap-3 rounded-2xl border border-[#E3E6EA] bg-[#F1F3F5] p-4 text-sm text-[#1A1A1A]">
           <XCircle className="mt-0.5 h-5 w-5 shrink-0" />
           <div><strong>{rejectedCount} document{rejectedCount === 1 ? " needs" : "s need"} replacement.</strong><p className="mt-1">Replace only the red document{rejectedCount === 1 ? "" : "s"}. Your approved documents remain accepted.</p></div>
         </div>
@@ -265,7 +265,7 @@ export function ChefApplicationEvidenceUploader({
             <article key={requirement.type} className={`rounded-2xl border bg-white p-4 sm:p-5 ${rejected ? "border-red-200" : approved ? "border-emerald-200" : "border-slate-200"}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex min-w-0 gap-3">
-                  <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${approved ? "bg-emerald-50 text-emerald-700" : rejected ? "bg-red-50 text-red-700" : uploaded ? "bg-slate-50 text-primary" : "bg-slate-50 text-slate-700"}`}>
+                  <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${approved ? "bg-emerald-50 text-emerald-700" : rejected ? "bg-[#F1F3F5] text-[#C4200F]" : uploaded ? "bg-slate-50 text-primary" : "bg-slate-50 text-slate-700"}`}>
                     {approved ? <CheckCircle2 className="h-5 w-5" /> : rejected ? <XCircle className="h-5 w-5" /> : uploaded ? <ShieldCheck className="h-5 w-5" /> : <FileUp className="h-5 w-5" />}
                   </div>
                   <div className="min-w-0">
@@ -279,7 +279,7 @@ export function ChefApplicationEvidenceUploader({
               </div>
 
               {rejected && (
-                <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-950">
+                <div className="mt-4 rounded-2xl border border-[#E3E6EA] bg-[#F1F3F5] p-4 text-sm text-[#1A1A1A]">
                   <strong>Why this document was rejected</strong>
                   <p className="mt-1 leading-6">{uploaded.reviewReason || "Craves requested a replacement for this document."}</p>
                   <p className="mt-2 text-xs font-semibold">Only this document needs a replacement. Other approved documents stay locked and accepted.</p>
@@ -332,7 +332,7 @@ export function ChefApplicationEvidenceUploader({
       </div>
 
       {onComplete ? <Button className="mt-6 w-full" disabled={!applicationReady || locked || uploadedCount !== REQUIREMENTS.length || rejectedCount > 0} onClick={onComplete}>Review application</Button> : null}
-      <div className={`mt-5 rounded-2xl p-4 text-sm ${approvedCount === 4 ? "bg-emerald-50 text-emerald-900" : rejectedCount > 0 ? "bg-red-50 text-red-950" : "bg-white text-slate-700"}`}>
+      <div className={`mt-5 rounded-2xl p-4 text-sm ${approvedCount === 4 ? "bg-emerald-50 text-emerald-900" : rejectedCount > 0 ? "bg-[#F1F3F5] text-[#1A1A1A]" : "bg-white text-slate-700"}`}>
         {locked
           ? incompleteApprovedHistory ? "Your application approval has not changed. Missing history has not been marked as verified." : "Your application and all four documents are approved."
           : approvedCount === 4

@@ -46,20 +46,27 @@ export function ChefReadinessPanel() {
     };
   }, [load]);
 
-  return <section className="rounded-3xl border border-slate-200 bg-white p-6" aria-busy={state === "loading"}>
-    <h2 className="text-xl font-bold">Application readiness</h2>
+  return <section className="chef-section p-5 md:p-6" aria-busy={state === "loading"}>
+    <h2 className="chef-section-title">Documents</h2>
     {state === "loading" ? <p role="status" className="mt-2 text-sm">Checking current approval requirements…</p>
       : state === "error" ? <p role="alert" className="mt-2 text-sm">{errorText || READINESS_UNAVAILABLE}</p>
       : data ? <>
         <p className="mt-2 text-sm">{chefReadinessSummary(data)}</p>
         <ul className="mt-4 space-y-2 text-sm">
-          {data.documents.map(document => <li key={document.documentType} className="rounded-xl bg-slate-50 p-3">
-            <span>{document.documentType.replaceAll("_", " ")}: {document.status.replaceAll("_", " ")}</span>
-            {document.rejectionReason ? <p className="mt-1 text-red-700">{document.rejectionReason}</p> : null}
+          {data.documents.map(document => <li key={document.documentType} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#F1F3F5] px-4 py-3">
+            <span className="font-semibold text-[#1A1A1A]">{sentence(document.documentType)}</span>
+            <span className={`text-[0.8125rem] font-semibold ${document.status === "APPROVED" ? "text-[#12805C]" : document.status === "REJECTED" ? "text-[#C4200F]" : "text-[#6B6B6B]"}`}>{sentence(document.status)}</span>
+            {document.rejectionReason ? <p className="w-full text-[0.8125rem] text-[#C4200F]">{document.rejectionReason}</p> : null}
           </li>)}
         </ul>
-        <p className="mt-3 text-xs text-slate-600">These checks cover your Chef application. They do not certify food-business compliance or enable payouts.</p>
+        <p className="mt-3 text-[0.8125rem] leading-5 text-[#6B6B6B]">These checks are for your chef application only. They don’t certify food safety compliance or set up payouts.</p>
       </> : null}
-    <button type="button" disabled={state === "loading"} onClick={() => void load()} className="mt-4 min-h-11 rounded-full border border-slate-300 px-5 text-sm font-semibold disabled:opacity-50">Refresh readiness</button>
+    <button type="button" disabled={state === "loading"} onClick={() => void load()} className="chef-btn is-small mt-4">Refresh</button>
   </section>;
+}
+
+/** APPLICANT_PHOTO -> "Applicant photo", MISSING -> "Missing". */
+function sentence(code: string): string {
+  const words = code.toLowerCase().split("_").filter(Boolean).join(" ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }

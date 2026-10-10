@@ -9,16 +9,13 @@ export const metadata = {
 
 export default function ChefOperationsPage() {
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-4 py-6 md:px-6 md:py-8">
+    <main className="chef-page">
       <ChefAccessBoundary>
         <ChefPageHeader
-          eyebrow="Readiness and compliance"
-          title="Kitchen operations"
-          description="Review the real backend states that control chef approval, proof evidence, kitchen discovery, location readiness, menu availability and customer-facing images. Unsupported weekly schedules or legal eligibility rules are never fabricated."
+          title="Kitchen status"
+          description="What customers need before they can find and order from your kitchen: your approval, documents, location, menu and photos."
         />
-        <div className="mt-6">
-          <ChefOperationsWorkspace />
-        </div>
+        <ChefOperationsWorkspace />
       </ChefAccessBoundary>
     </main>
   );

@@ -223,9 +223,6 @@ export function HomeCategoryRail({
         className="mx-auto max-w-[88rem] bg-white px-4 pt-3 md:px-7 md:pt-4 lg:px-10 lg:pt-5"
         aria-labelledby="craving-categories-heading"
       >
-        <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[var(--color-flame-red)]">
-          Find your comfort food
-        </p>
         <h2
           id="craving-categories-heading"
           className="mt-1 font-display text-[1.45rem] font-black tracking-[-0.04em] text-[#1A1A1A] md:text-[1.7rem] lg:text-3xl"

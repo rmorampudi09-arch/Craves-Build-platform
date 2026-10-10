@@ -10,7 +10,7 @@ export const metadata = {
 
 export default function ChefModePage() {
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-4 py-6 md:px-6 md:py-8">
+    <main className="chef-page">
       <ChefAccessBoundary><ChefModeDashboard /></ChefAccessBoundary>
     </main>
   );

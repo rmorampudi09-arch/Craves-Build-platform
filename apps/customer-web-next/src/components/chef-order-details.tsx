@@ -5,42 +5,28 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
-  ArrowLeft,
-  Clock3,
+  ChevronDown,
   MapPin,
   Phone,
   RefreshCw,
-  Utensils,
 } from "lucide-react";
+import {
+  ChefEmpty,
+  ChefNotice,
+  ChefPageHead,
+  ChefPill,
+  ChefSection,
+  ChefSkeleton,
+  chefOrderStatus,
+  dateTime,
+  formatInr,
+} from "@/components/chef-ui";
+import { shortOrderNumber } from "@/lib/order-number";
 import { ChefOrderActions } from "@/components/chef-order-actions";
 import {
   parseChefOrderResponse,
   type ChefOrder,
 } from "@/lib/chef-order-contract";
-
-function money(value: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 2,
-    }).format(value);
-  } catch {
-    return `${currency} ${value.toFixed(2)}`;
-  }
-}
-
-function friendlyStatus(status: string): string {
-  if (status === "CHEF_ACCEPTANCE_PENDING") return "Needs your answer";
-  if (status === "CHEF_ACCEPTED" || status === "PREPARING") return "Cooking";
-  if (status === "READY_FOR_PICKUP") return "Ready for pickup";
-  if (status === "OUT_FOR_DELIVERY") return "On the way";
-  if (status === "DELIVERED") return "Delivered";
-  if (status === "CHEF_REJECTED") return "Not taken";
-  if (status === "CANCELLED") return "Cancelled";
-  if (status.startsWith("REFUND")) return "Closed";
-  return "Order received";
-}
 
 function itemMetadata(item: ChefOrder["items"][number]): string {
   return [item.category, item.foodType?.replaceAll("_", " ")]
@@ -90,10 +76,10 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
 
   if (loading) {
     return (
-      <div className="space-y-4" aria-hidden="true">
-        <div className="h-36 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-        <div className="h-64 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-        <div className="h-56 animate-pulse rounded-2xl bg-[#F1F3F5]" />
+      <div className="chef-stack" aria-busy="true">
+        <ChefSkeleton className="h-16 w-1/2" />
+        <ChefSkeleton className="h-48" />
+        <ChefSkeleton className="h-56" />
         <p className="sr-only" role="status">Loading chef order</p>
       </div>
     );
@@ -101,15 +87,22 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
 
   if (!order) {
     return (
-      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center md:p-10">
-        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5]"><AlertTriangle className="h-6 w-6 text-[#F62E18]" aria-hidden="true" /></span>
-        <h1 className="mt-4 text-2xl font-bold text-[#1A1A1A]">This order couldn’t open</h1>
-        <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#6B6B6B]">{error}</p>
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <button type="button" onClick={() => void load()} className="min-h-12 rounded-full bg-[#F62E18] px-5 font-semibold text-white">Try again</button>
-          <Link href="/chef/orders" className="inline-flex min-h-12 items-center justify-center rounded-full border border-[#E5E7EB] bg-white px-5 font-semibold text-[#1A1A1A]">Back to orders</Link>
-        </div>
-      </section>
+      <div>
+        <ChefPageHead back={{ href: "/chef/orders", label: "Orders" }} title="Order" />
+        <ChefSection>
+          <ChefEmpty
+            icon={AlertTriangle}
+            title="This order couldn’t open"
+            text={error}
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                <button type="button" onClick={() => void load()} className="chef-btn is-primary">Try again</button>
+                <Link href="/chef/orders" className="chef-btn">Back to orders</Link>
+              </div>
+            }
+          />
+        </ChefSection>
+      </div>
     );
   }
 
@@ -127,63 +120,80 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
         .join(", ")
     : null;
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  const status = chefOrderStatus(order.status);
+  const currency = { currency: order.currency };
 
   return (
-    <div className="space-y-5">
-      <Link href="/chef/orders" className="inline-flex min-h-11 items-center gap-2 rounded-full px-2 text-sm font-semibold text-[#1A1A1A] hover:bg-[#F1F3F5]"><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to orders</Link>
+    <div>
+      <ChefPageHead
+        back={{ href: "/chef/orders", label: "Orders" }}
+        title={`Order #${shortOrderNumber(order.id)}`}
+        subtitle={
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <ChefPill tone={status.tone}>{status.label}</ChefPill>
+            <span>Placed {dateTime(order.createdAt)}{order.prepTimeMinutes ? ` · ${order.prepTimeMinutes} min prep` : ""}</span>
+          </span>
+        }
+      />
 
-      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <span className="inline-flex rounded-full bg-[#F62E18]/10 px-3 py-1 text-xs font-semibold text-[#F62E18]">{friendlyStatus(order.status)}</span>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-[#1A1A1A]">{order.kitchenName ?? "Kitchen order"}</h1>
-            <p className="mt-1 text-xs text-[#6B6B6B]">Order #{order.id.slice(-8).toUpperCase()}</p>
-          </div>
-          <div className="text-right"><p className="text-xs text-[#6B6B6B]">Food value</p><strong className="mt-1 block text-xl text-[#1A1A1A]">{money(order.foodSubtotal, order.currency)}</strong></div>
-        </div>
-        <p className="mt-4 inline-flex items-center gap-2 text-xs text-[#6B6B6B]"><Clock3 className="h-3.5 w-3.5" aria-hidden="true" />Ordered {new Date(order.createdAt).toLocaleString("en-IN")}{order.prepTimeMinutes ? ` · ${order.prepTimeMinutes} min prep` : ""}</p>
-      </section>
+      <div className="chef-stack">
+        <ChefSection
+          title={`${itemCount} item${itemCount === 1 ? "" : "s"} to cook`}
+          flush
+          labelledBy="chef-order-items"
+          action={<span className="chef-amount text-[0.9375rem] font-bold">{formatInr(order.foodSubtotal, currency)}</span>}
+        >
+          <ul className="chef-list border-t border-[#E3E6EA]">
+            {order.items.map((item) => {
+              const metadata = itemMetadata(item);
+              return (
+                <li key={item.id} className="chef-row items-start">
+                  <span className="chef-amount grid h-9 min-w-9 shrink-0 place-items-center rounded-xl bg-[#F1F3F5] px-2 text-[0.9375rem] font-bold text-[#1A1A1A]">{item.quantity}×</span>
+                  <span className="chef-row-main">
+                    <span className="chef-row-title block text-base">{item.itemName}</span>
+                    {metadata ? <span className="chef-row-meta block capitalize">{metadata.toLowerCase()}</span> : null}
+                  </span>
+                  <span className="chef-row-value chef-amount text-[0.9375rem] font-semibold">{formatInr(item.lineTotal, currency)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </ChefSection>
 
-      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-8">
-        <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#F1F3F5]"><Utensils className="h-5 w-5 text-[#F62E18]" aria-hidden="true" /></span><div><p className="text-sm font-semibold text-[#F62E18]">What they ordered</p><h2 className="text-xl font-bold text-[#1A1A1A]">{itemCount} item{itemCount === 1 ? "" : "s"}</h2></div></div>
-        <div className="mt-5 divide-y divide-[#E5E7EB]">
-          {order.items.map((item) => {
-            const metadata = itemMetadata(item);
-            return (
-              <article key={item.id} className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0">
-                <div className="min-w-0"><h3 className="font-semibold text-[#1A1A1A]">{item.quantity}× {item.itemName}</h3>{metadata ? <p className="mt-1 text-xs text-[#6B6B6B]">{metadata}</p> : null}</div>
-                <strong className="shrink-0 text-[#1A1A1A]">{money(item.lineTotal, order.currency)}</strong>
-              </article>
-            );
-          })}
-        </div>
-      </section>
+        <ChefOrderActions order={order} onUpdated={setOrder} />
 
-      <ChefOrderActions order={order} onUpdated={setOrder} />
-
-      <details className="rounded-3xl border border-[#E5E7EB] bg-white p-5 md:p-6">
-        <summary className="cursor-pointer font-semibold text-[#1A1A1A]">More order details</summary>
         {order.deliveryAddress && address ? (
-          <div className="mt-5 rounded-2xl bg-[#F1F3F5] p-5">
-            <div className="flex items-center gap-2"><MapPin className="h-5 w-5 text-[#F62E18]" aria-hidden="true" /><h2 className="font-semibold text-[#1A1A1A]">Delivery details</h2></div>
-            <p className="mt-4 font-semibold text-[#1A1A1A]">{order.deliveryAddress.recipientName}</p>
-            <p className="mt-2 flex items-center gap-2 text-sm text-[#6B6B6B]"><Phone className="h-4 w-4" aria-hidden="true" />{order.deliveryAddress.contactPhoneNumber}</p>
-            <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{address}</p>
-          </div>
+          <ChefSection title="Delivery" labelledBy="chef-order-delivery">
+            <p className="font-semibold text-[#1A1A1A]">{order.deliveryAddress.recipientName}</p>
+            <p className="mt-1 flex items-center gap-2 text-[0.9375rem] text-[#6B6B6B]"><Phone className="h-4 w-4" aria-hidden="true" />{order.deliveryAddress.contactPhoneNumber}</p>
+            <p className="mt-2 flex gap-2 text-[0.9375rem] leading-6 text-[#6B6B6B]"><MapPin className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />{address}</p>
+          </ChefSection>
         ) : null}
-        <dl className="mt-5 space-y-3 text-sm">
-          <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Food</dt><dd className="font-semibold text-[#1A1A1A]">{money(order.foodSubtotal, order.currency)}</dd></div>
-          <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Platform fee</dt><dd className="font-semibold text-[#1A1A1A]">{money(order.platformFee, order.currency)}</dd></div>
-          <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Tax</dt><dd className="font-semibold text-[#1A1A1A]">{money(order.taxAmount, order.currency)}</dd></div>
-          <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Delivery</dt><dd className="font-semibold text-[#1A1A1A]">{money(order.deliveryFee, order.currency)}</dd></div>
-          <div className="flex justify-between gap-3 border-t border-[#E5E7EB] pt-3"><dt className="font-semibold text-[#1A1A1A]">Customer total</dt><dd className="font-bold text-[#1A1A1A]">{money(order.grandTotal, order.currency)}</dd></div>
-        </dl>
-        <p className="mt-4 text-xs leading-5 text-[#6B6B6B]">This customer total is not your final earning. Your recorded earnings appear separately in “What I’ve earned.”</p>
-      </details>
 
-      <button type="button" disabled={refreshing} onClick={() => void load(true)} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#1A1A1A] disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />Refresh order</button>
-      {lastUpdatedAt ? <p className="text-center text-xs text-[#6B6B6B]">Last refreshed {lastUpdatedAt.toLocaleTimeString("en-IN")}</p> : null}
-      {error ? <p role="alert" className="rounded-2xl bg-[#F1F3F5] p-4 text-sm font-medium text-[#F62E18]">{error}</p> : null}
+        <details className="chef-section group">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 font-semibold text-[#1A1A1A] md:px-5 [&::-webkit-details-marker]:hidden">
+            Customer’s bill
+            <ChevronDown className="h-5 w-5 text-[#6B6B6B] transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          <dl className="space-y-2.5 border-t border-[#E3E6EA] px-4 py-4 text-[0.9375rem] md:px-5">
+            <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Food</dt><dd className="chef-amount font-semibold">{formatInr(order.foodSubtotal, currency)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Platform fee</dt><dd className="chef-amount font-semibold">{formatInr(order.platformFee, currency)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Tax</dt><dd className="chef-amount font-semibold">{formatInr(order.taxAmount, currency)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Delivery</dt><dd className="chef-amount font-semibold">{formatInr(order.deliveryFee, currency)}</dd></div>
+            <div className="flex justify-between gap-3 border-t border-[#E3E6EA] pt-2.5"><dt className="font-semibold">Customer paid</dt><dd className="chef-amount font-bold">{formatInr(order.grandTotal, currency)}</dd></div>
+            <p className="pt-1 text-[0.8125rem] leading-5 text-[#6B6B6B]">This is what the customer paid, not your earning. Your earning for this order appears in Earnings once it is delivered.</p>
+          </dl>
+        </details>
+
+        <div className="flex flex-col items-center gap-2 pt-1">
+          <button type="button" disabled={refreshing} onClick={() => void load(true)} className="chef-btn is-small" aria-busy={refreshing}>
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin motion-reduce:animate-none" : ""}`} aria-hidden="true" />
+            Refresh order
+          </button>
+          {lastUpdatedAt ? <p className="text-[0.8125rem] text-[#6B6B6B]">Updated {lastUpdatedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }).toLowerCase()}</p> : null}
+        </div>
+        {error ? <ChefNotice icon={AlertTriangle} tone="danger" role="alert">{error}</ChefNotice> : null}
+      </div>
     </div>
   );
 }

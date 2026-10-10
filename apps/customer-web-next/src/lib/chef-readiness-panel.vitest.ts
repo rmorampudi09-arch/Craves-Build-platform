@@ -29,6 +29,6 @@ it("replaces unavailable readiness with an explicit error and can retry", async 
   render(createElement(ChefReadinessPanel));
   expect(await screen.findByRole("alert")).toBeTruthy();
   expect(screen.queryByRole("list")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Refresh readiness" }));
+  fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
   expect(await screen.findByText("0 of 4 required documents approved.")).toBeTruthy();
 });

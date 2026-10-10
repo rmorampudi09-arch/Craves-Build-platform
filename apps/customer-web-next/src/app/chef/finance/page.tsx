@@ -4,13 +4,12 @@ import { ChefWithdrawalPanel } from "@/components/chef-withdrawal-panel";
 import { ChefLedgerStatementPanel } from "@/components/chef-ledger-statement-panel";
 import { ChefBankOnboardingPanel } from "@/components/chef-bank-onboarding-panel";
 import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel";
-export const metadata = {title: "Chef balance and withdrawals | Craves", robots: {index: false, follow: false}};
+export const metadata = {title: "Balance and payouts | Craves Chef", robots: {index: false, follow: false}};
 export default function ChefFinancePage() {
-  return <main className="mx-auto min-h-screen max-w-7xl px-4 py-6">
+  return <main className="chef-page is-narrow">
     <ChefAccessBoundary>
-      <ChefPageHeader eyebrow="Chef finance" title="Balance and withdrawal requests"
-        description="View earned balances, manual Craves payment requests and statements. Historical earnings retain their original accounting." />
-      <div className="mt-6 space-y-6"><EmailVerificationPanel required /><ChefBankOnboardingPanel /><ChefWithdrawalPanel /><ChefLedgerStatementPanel /></div>
+      <ChefPageHeader title="Balance & payouts" description="What you can withdraw, where it’s paid and your payout history." back={{href: "/chef/earnings", label: "Earnings"}} />
+      <div className="chef-stack"><ChefWithdrawalPanel /><ChefBankOnboardingPanel /><EmailVerificationPanel required /><ChefLedgerStatementPanel /></div>
     </ChefAccessBoundary>
   </main>;
 }

@@ -126,13 +126,13 @@ function statusMeta(status: ChefMealPlan["status"]) {
       return {
         label: "Waiting for review",
         icon: Clock3,
-        className: "border-[#F3D7A1] bg-[#FFF7E6] text-[#92400E]",
+        className: "border-[#E3E6EA] bg-[#F1F3F5] text-[#8A5300]",
       };
     case "REJECTED":
       return {
         label: "Changes requested",
         icon: AlertTriangle,
-        className: "border-[#F6C6C3] bg-[#FFF0EF] text-[#B91C1C]",
+        className: "border-[#E3E6EA] bg-[#F1F3F5] text-[#C4200F]",
       };
     case "INACTIVE":
       return {
@@ -218,9 +218,9 @@ function StepIndicator({ current }: { current: number }) {
             key={number}
             className={`flex min-h-11 items-center gap-3 rounded-xl border px-3 py-2 ${
               active
-                ? "border-[var(--color-flame-red)] bg-[var(--color-flame-red)]/5"
+                ? "border-[#1A1A1A] bg-white shadow-[inset_0_0_0_1px_#1A1A1A]"
                 : complete
-                  ? "border-[var(--color-flame-red)]/20 bg-[var(--color-flame-red)]/5"
+                  ? "border-[#E3E6EA] bg-[#F7F8FA]"
                   : "border-[#E5E7EB] bg-[#F8F9FA]"
             }`}
           >
@@ -896,31 +896,25 @@ export function ChefSubscriptionPlanManager() {
     messageTone === "success"
       ? "border-[#BBE8D0] bg-[#F3FBF6] text-[#166534]"
       : messageTone === "error"
-        ? "border-[#F6C6C3] bg-[#FFF5F4] text-[#991B1B]"
+        ? "border-[#E3E6EA] bg-[#F1F3F5] text-[#C4200F]"
         : "border-[#D8DEE3] bg-[#F8F9FA] text-[#1A1A1A]";
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          ["Plans", String(plans.length), "All Chef meal plans"],
-          ["Live", String(activeCount), "Approved plans"],
-          ["In review", String(pendingCount), "Waiting for Admin"],
-          ["Needs work", String(draftCount), "Drafts or changes requested"],
-        ].map(([label, value, helper]) => (
-          <div
-            key={label}
-            className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[var(--shadow-card)]"
-          >
-            <p className="text-xs font-bold uppercase tracking-[0.08em] text-[#6B6B6B]">
-              {label}
-            </p>
-            <p className="mt-1 text-2xl font-bold tracking-tight text-[#1A1A1A]">
-              {value}
-            </p>
-            <p className="mt-1 text-xs text-[#6B6B6B]">{helper}</p>
-          </div>
-        ))}
+      <section className="chef-section" aria-label="Meal plan summary">
+        <div className="chef-stats is-four">
+          {[
+            ["Plans", String(plans.length)],
+            ["Live", String(activeCount)],
+            ["In review", String(pendingCount)],
+            ["Needs your changes", String(draftCount)],
+          ].map(([label, value]) => (
+            <div key={label} className="chef-stat">
+              <p className="chef-stat-label">{label}</p>
+              <p className="chef-stat-value">{value}</p>
+            </div>
+          ))}
+        </div>
       </section>
 
       {message ? (
@@ -1035,7 +1029,7 @@ export function ChefSubscriptionPlanManager() {
                       aria-pressed={selectedId === plan.id}
                       className={`w-full rounded-xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-flame-red)] focus-visible:ring-offset-2 ${
                         selectedId === plan.id
-                          ? "border-[var(--color-flame-red)] bg-[var(--color-flame-red)]/5"
+                          ? "border-[#1A1A1A] bg-white shadow-[inset_0_0_0_1px_#1A1A1A]"
                           : "border-[#E5E7EB] bg-white hover:border-[#B9DCC8]"
                       }`}
                     >
@@ -1117,11 +1111,11 @@ export function ChefSubscriptionPlanManager() {
               className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)] md:p-6"
             >
               <div className="flex items-start gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-flame-red)]/5 text-[var(--color-flame-red)]">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F1F3F5] text-[#1A1A1A]">
                   <FileText className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-flame-red)]">
+                  <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                     Step 1
                   </p>
                   <h2 className="mt-1 text-2xl font-bold tracking-tight text-[#1A1A1A]">
@@ -1238,8 +1232,8 @@ export function ChefSubscriptionPlanManager() {
                     </p>
                   </div>
 
-                  <div className="rounded-2xl bg-[var(--color-flame-red)]/5 px-5 py-4 text-right">
-                    <p className="text-xs font-bold uppercase tracking-[0.08em] text-[#6B6B6B]">
+                  <div className="rounded-2xl bg-[#F1F3F5] px-5 py-4 text-right">
+                    <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                       Recurring price
                     </p>
                     <p className="mt-1 text-2xl font-bold text-[var(--color-flame-red)]">
@@ -1255,7 +1249,7 @@ export function ChefSubscriptionPlanManager() {
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-3">
                   <div className="rounded-xl bg-[#F8F9FA] p-3">
-                    <p className="text-xs font-bold uppercase tracking-[0.06em] text-[#6B6B6B]">
+                    <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                       Created
                     </p>
                     <p className="mt-1 text-sm font-semibold text-[#1A1A1A]">
@@ -1263,7 +1257,7 @@ export function ChefSubscriptionPlanManager() {
                     </p>
                   </div>
                   <div className="rounded-xl bg-[#F8F9FA] p-3">
-                    <p className="text-xs font-bold uppercase tracking-[0.06em] text-[#6B6B6B]">
+                    <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                       Submitted
                     </p>
                     <p className="mt-1 text-sm font-semibold text-[#1A1A1A]">
@@ -1271,7 +1265,7 @@ export function ChefSubscriptionPlanManager() {
                     </p>
                   </div>
                   <div className="rounded-xl bg-[#F8F9FA] p-3">
-                    <p className="text-xs font-bold uppercase tracking-[0.06em] text-[#6B6B6B]">
+                    <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                       Reviewed
                     </p>
                     <p className="mt-1 text-sm font-semibold text-[#1A1A1A]">
@@ -1285,7 +1279,7 @@ export function ChefSubscriptionPlanManager() {
                 </p>
 
                 {selected.reviewReason ? (
-                  <div className="mt-4 rounded-xl border border-[#F3D7A1] bg-[#FFF7E6] p-4">
+                  <div className="mt-4 rounded-xl border border-[#E3E6EA] bg-[#F1F3F5] p-4">
                     <div className="flex items-start gap-3">
                       <AlertTriangle
                         className="mt-0.5 h-5 w-5 shrink-0 text-[#92400E]"
@@ -1362,7 +1356,7 @@ export function ChefSubscriptionPlanManager() {
                         type="button"
                         disabled={busy}
                         onClick={() => void saveDetails()}
-                        className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--color-flame-red)] bg-white px-4 text-sm font-bold text-[var(--color-flame-red)] hover:bg-[var(--color-flame-red)]/5 disabled:opacity-50"
+                        className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--color-flame-red)] bg-white px-4 text-sm font-bold text-[var(--color-flame-red)] hover:bg-[#F7F8FA] disabled:opacity-50"
                       >
                         <Save className="h-4 w-4" aria-hidden="true" />
                         Save plan details
@@ -1375,11 +1369,11 @@ export function ChefSubscriptionPlanManager() {
               <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex items-start gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-flame-red)]/5 text-[var(--color-flame-red)]">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F1F3F5] text-[#1A1A1A]">
                       <CalendarDays className="h-5 w-5" aria-hidden="true" />
                     </span>
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-flame-red)]">
+                      <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                         Step 2
                       </p>
                       <h3 className="mt-1 text-xl font-bold text-[#1A1A1A]">
@@ -1415,7 +1409,7 @@ export function ChefSubscriptionPlanManager() {
                 ) : (
                   <>
                     {availableMenu.length === 0 ? (
-                      <div className="mt-5 rounded-xl border border-[#F3D7A1] bg-[#FFF7E6] p-4">
+                      <div className="mt-5 rounded-xl border border-[#E3E6EA] bg-[#F1F3F5] p-4">
                         <div className="flex items-start gap-3">
                           <AlertTriangle
                             className="mt-0.5 h-5 w-5 shrink-0 text-[#92400E]"
@@ -1466,7 +1460,7 @@ export function ChefSubscriptionPlanManager() {
                           </span>
                         </label>
                         <div className="rounded-xl border border-[#D8DEE3] bg-white p-3">
-                          <p className="text-xs font-bold uppercase tracking-[0.06em] text-[#6B6B6B]">
+                          <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                             Timezone
                           </p>
                           <p className="mt-1 text-sm font-semibold text-[#1A1A1A]">
@@ -1490,7 +1484,7 @@ export function ChefSubscriptionPlanManager() {
                         >
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
-                              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-flame-red)]/5 text-sm font-bold text-[var(--color-flame-red)]">
+                              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F1F3F5] text-sm font-bold text-[#1A1A1A]">
                                 {index + 1}
                               </span>
                               <div>
@@ -1525,7 +1519,7 @@ export function ChefSubscriptionPlanManager() {
                           </div>
 
                           <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_1.7fr_.8fr_.8fr]">
-                            <label className="text-xs font-bold uppercase tracking-[0.05em] text-[#6B6B6B]">
+                            <label className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                               {selected.billingPeriod === "WEEKLY"
                                 ? "Day"
                                 : "Day of month"}
@@ -1565,7 +1559,7 @@ export function ChefSubscriptionPlanManager() {
                               )}
                             </label>
 
-                            <label className="text-xs font-bold uppercase tracking-[0.05em] text-[#6B6B6B]">
+                            <label className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                               Meal
                               <select
                                 value={row.mealSlotCode}
@@ -1586,7 +1580,7 @@ export function ChefSubscriptionPlanManager() {
                               </select>
                             </label>
 
-                            <label className="text-xs font-bold uppercase tracking-[0.05em] text-[#6B6B6B]">
+                            <label className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                               Dish
                               <select
                                 value={row.menuItemId}
@@ -1609,7 +1603,7 @@ export function ChefSubscriptionPlanManager() {
                               </select>
                             </label>
 
-                            <label className="text-xs font-bold uppercase tracking-[0.05em] text-[#6B6B6B]">
+                            <label className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                               Time
                               <input
                                 type="time"
@@ -1625,7 +1619,7 @@ export function ChefSubscriptionPlanManager() {
                               />
                             </label>
 
-                            <label className="text-xs font-bold uppercase tracking-[0.05em] text-[#6B6B6B]">
+                            <label className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                               Qty
                               <input
                                 type="number"
@@ -1661,7 +1655,7 @@ export function ChefSubscriptionPlanManager() {
                       onClick={() =>
                         setRows((current) => [...current, emptyMeal()])
                       }
-                      className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-dashed border-[var(--color-flame-red)] bg-[#F8FFFA] px-4 text-sm font-bold text-[var(--color-flame-red)] hover:bg-[var(--color-flame-red)]/5 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-dashed border-[var(--color-flame-red)] bg-white px-4 text-sm font-bold text-[var(--color-flame-red)] hover:bg-[#F7F8FA] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Plus className="h-4 w-4" aria-hidden="true" />
                       Add another meal
@@ -1710,11 +1704,11 @@ export function ChefSubscriptionPlanManager() {
               <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex items-start gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-flame-red)]/5 text-[var(--color-flame-red)]">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F1F3F5] text-[#1A1A1A]">
                       <Gauge className="h-5 w-5" aria-hidden="true" />
                     </span>
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-flame-red)]">
+                      <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                         Capacity
                       </p>
                       <h3 className="mt-1 text-xl font-bold text-[#1A1A1A]">
@@ -1727,7 +1721,7 @@ export function ChefSubscriptionPlanManager() {
                   </div>
                   <Link
                     href="/chef/capacity"
-                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#D8DEE3] bg-white px-4 text-sm font-bold text-[var(--color-flame-red)] hover:border-[var(--color-flame-red)] hover:bg-[var(--color-flame-red)]/5"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#D8DEE3] bg-white px-4 text-sm font-bold text-[var(--color-flame-red)] hover:border-[var(--color-flame-red)] hover:bg-[#F7F8FA]"
                   >
                     Advanced capacity
                     <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -1735,7 +1729,7 @@ export function ChefSubscriptionPlanManager() {
                 </div>
 
                 {capacity?.adminSalesFrozen ? (
-                  <div className="mt-5 rounded-xl border border-[#F6C6C3] bg-[#FFF5F4] p-4">
+                  <div className="mt-5 rounded-xl border border-[#E3E6EA] bg-[#F1F3F5] p-4">
                     <div className="flex items-start gap-3">
                       <LockKeyhole
                         className="mt-0.5 h-5 w-5 shrink-0 text-[#B91C1C]"
@@ -1756,7 +1750,7 @@ export function ChefSubscriptionPlanManager() {
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-3">
                   <div className="rounded-xl bg-[#F8F9FA] p-4">
-                    <p className="text-xs font-bold uppercase tracking-[0.06em] text-[#6B6B6B]">
+                    <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                       Slot rules
                     </p>
                     <p className="mt-1 text-2xl font-bold text-[#1A1A1A]">
@@ -1764,7 +1758,7 @@ export function ChefSubscriptionPlanManager() {
                     </p>
                   </div>
                   <div className="rounded-xl bg-[#F8F9FA] p-4">
-                    <p className="text-xs font-bold uppercase tracking-[0.06em] text-[#6B6B6B]">
+                    <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                       Available units
                     </p>
                     <p className="mt-1 text-2xl font-bold text-[#1A1A1A]">
@@ -1777,7 +1771,7 @@ export function ChefSubscriptionPlanManager() {
                     </p>
                   </div>
                   <div className="rounded-xl bg-[#F8F9FA] p-4">
-                    <p className="text-xs font-bold uppercase tracking-[0.06em] text-[#6B6B6B]">
+                    <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                       Open incidents
                     </p>
                     <p
@@ -1917,7 +1911,7 @@ export function ChefSubscriptionPlanManager() {
                     type="button"
                     disabled={busy || capacity?.adminSalesFrozen}
                     onClick={() => void saveCapacity()}
-                    className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--color-flame-red)] bg-white px-4 text-sm font-bold text-[var(--color-flame-red)] hover:bg-[var(--color-flame-red)]/5 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--color-flame-red)] bg-white px-4 text-sm font-bold text-[var(--color-flame-red)] hover:bg-[#F7F8FA] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Gauge className="h-4 w-4" aria-hidden="true" />
                     Save capacity
@@ -1927,11 +1921,11 @@ export function ChefSubscriptionPlanManager() {
 
               <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
                 <div className="flex items-start gap-3">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-flame-red)]/5 text-[var(--color-flame-red)]">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F1F3F5] text-[#1A1A1A]">
                     <Send className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-flame-red)]">
+                    <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
                       Step 3
                     </p>
                     <h3 className="mt-1 text-xl font-bold text-[#1A1A1A]">
@@ -2017,7 +2011,7 @@ export function ChefSubscriptionPlanManager() {
                         type="button"
                         disabled={busy}
                         onClick={() => void saveSchedule(false)}
-                        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[var(--color-flame-red)] bg-white px-5 text-sm font-bold text-[var(--color-flame-red)] hover:bg-[var(--color-flame-red)]/5 disabled:opacity-50"
+                        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[var(--color-flame-red)] bg-white px-5 text-sm font-bold text-[var(--color-flame-red)] hover:bg-[#F7F8FA] disabled:opacity-50"
                       >
                         <Save className="h-4 w-4" aria-hidden="true" />
                         Save draft
@@ -2067,7 +2061,7 @@ export function ChefSubscriptionPlanManager() {
             </>
           ) : (
             <section className="rounded-2xl border border-dashed border-[#D8DEE3] bg-white p-10 text-center shadow-[var(--shadow-card)]">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--color-flame-red)]/5 text-[var(--color-flame-red)]">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F1F3F5] text-[#1A1A1A]">
                 <CalendarDays className="h-7 w-7" aria-hidden="true" />
               </div>
               <h2 className="mt-4 text-2xl font-bold tracking-tight text-[#1A1A1A]">

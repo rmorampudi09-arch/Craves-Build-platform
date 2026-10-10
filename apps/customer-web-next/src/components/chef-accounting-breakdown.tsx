@@ -1,21 +1,21 @@
+import { formatInr } from "@/components/chef-ui";
 import type { ChefAccounting } from "@/lib/finance-contract";
 
 export function ChefAccountingBreakdown({accounting}: {accounting: ChefAccounting | undefined}) {
-  if (!accounting) return <p role="status" className="text-sm text-slate-600">The earnings breakdown is unavailable. Refresh before reconciling a payment.</p>;
-  const rows = [
+  if (!accounting) return <p role="status" className="text-[0.875rem] text-[#6B6B6B]">The breakdown couldn’t load. Refresh your balance before checking a payment.</p>;
+  const rows: [string, string][] = [
     ["Food earnings before deductions", accounting.grossFood],
-    ["Total Craves service fee (including fee GST)", accounting.totalServiceFee],
-    ["Withholding recorded", accounting.withholding],
-    ["Original net earnings", accounting.originalNetEarnings],
-    ["Other posted adjustments", accounting.otherLedgerMovements],
-    ["Confirmed payments, after bank reversals", accounting.recordedPayments],
-    ["Recorded outstanding balance", accounting.outstanding],
+    ["Craves service fee (incl. GST on the fee)", accounting.totalServiceFee],
+    ["Tax withheld", accounting.withholding],
+    ["Net earnings", accounting.originalNetEarnings],
+    ["Other adjustments", accounting.otherLedgerMovements],
+    ["Payments made to you (after bank returns)", accounting.recordedPayments],
+    ["Outstanding balance", accounting.outstanding],
   ];
-  return <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-    <h3 className="font-semibold">Earnings breakdown</h3>
-    <p className="text-sm text-slate-600">{accounting.recordedOrders} paid and delivered orders recorded by the new accounting system. These totals cover all recorded history, not only the latest page.</p>
-    <dl className="divide-y divide-slate-100">{rows.map(([label, amount]) => <div key={label} className="flex flex-wrap justify-between gap-2 py-2 text-sm"><dt>{label}</dt><dd className="font-semibold tabular-nums">₹{amount}</dd></div>)}</dl>
-    <p className="text-xs text-slate-600">Within the total fee: ₹{accounting.feeBeforeGst} service fee and ₹{accounting.feeGst} fee GST—not an extra deduction. Customer food GST is separate. Outstanding money may be held or reserved and is not necessarily available to withdraw.</p>
-    {accounting.legacyRecords > 0 && <p className="text-sm text-slate-600">{accounting.legacyRecords} older manually entered earnings records are kept separately. They are not automatically added to the new withdrawable balance.</p>}
-  </section>;
+  return <div className="grid gap-3">
+    <p className="text-[0.875rem] leading-6 text-[#6B6B6B]">Covers all {accounting.recordedOrders} paid and delivered orders recorded so far.</p>
+    <dl className="divide-y divide-[#E3E6EA] text-[0.875rem]">{rows.map(([label, amount]) => <div key={label} className="flex flex-wrap justify-between gap-2 py-2.5"><dt className="text-[#1A1A1A]">{label}</dt><dd className="chef-amount font-semibold">{formatInr(amount)}</dd></div>)}</dl>
+    <p className="text-[0.8125rem] leading-5 text-[#6B6B6B]">The service fee total includes {formatInr(accounting.feeBeforeGst)} fee and {formatInr(accounting.feeGst)} GST on the fee, not an extra deduction. GST on customers’ food is separate. Part of the outstanding balance may be held or reserved, so it isn’t always available to withdraw.</p>
+    {accounting.legacyRecords > 0 && <p className="text-[0.8125rem] leading-5 text-[#6B6B6B]">{accounting.legacyRecords} older earnings entered by hand are kept separately and aren’t added to your withdrawable balance automatically.</p>}
+  </div>;
 }

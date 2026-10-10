@@ -8,7 +8,7 @@
   --cob-red: #f62e18;
   --cob-red-hover: #e02a15;
   --cob-red-text: #c4200f;
-  --cob-tint: #feedea;
+  --cob-tint: #f1f3f5;
   --cob-ink: #1a1a1a;
   --cob-muted: #6b6b6b;
   --cob-neutral: #f1f3f5;
@@ -279,7 +279,7 @@
   transition: background-color 160ms ease;
 }
 .cob .cob-outline-red:hover:not(:disabled) {
-  background: #fff7f5;
+  background: #f7f8fa;
 }
 .cob .cob-outline-red:disabled,
 .cob .cob-secondary:disabled {
@@ -858,7 +858,7 @@ select.cob-input {
 .cob .cob-dropzone:hover:not(:disabled),
 .cob .cob-dropzone[data-drag="true"] {
   border-color: var(--cob-red);
-  background: #fff8f7;
+  background: #f7f8fa;
 }
 .cob-dropzone-icon {
   display: grid;

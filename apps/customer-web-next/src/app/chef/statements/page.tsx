@@ -7,9 +7,9 @@ export const dynamic = "force-dynamic";
 
 export default function ChefStatementsPage() {
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-4 py-6 md:px-6 md:py-8">
+    <main className="chef-page">
       <ChefAccessBoundary>
-        <ChefPageHeader eyebrow="Private documents" title="Your orders, earnings and settlement statements" description="Create dated PDF snapshots from your own recorded orders and finance entries. These statements do not initiate payouts or determine commissions, tax or settlement policy." />
+        <ChefPageHeader title="Statements" description="PDF statements of your orders, earnings and payouts for any period. They’re records only and don’t change payouts or fees." back={{ href: "/chef/finance", label: "Balance & payouts" }} />
         <DocumentCenter mode="chef" />
       </ChefAccessBoundary>
     </main>

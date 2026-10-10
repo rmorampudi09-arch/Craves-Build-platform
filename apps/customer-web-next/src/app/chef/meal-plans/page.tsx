@@ -11,28 +11,25 @@ export const metadata = {
 
 export default function ChefMealPlansPage() {
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-4 py-6 md:px-6 md:py-8">
+    <main className="chef-page">
       <ChefAccessBoundary>
         <ChefPageHeader
-          eyebrow="Subscriptions"
-          title="Create meal plans from what you cook"
-          description="Build weekly or monthly plans using only dishes from your own available menu. Confirm your subscription capacity, then submit; Craves Admin only reviews and approves or requests changes before customers can see the plan."
+          title="Meal plans"
+          description="Weekly or monthly plans built from dishes on your menu. Craves reviews each plan before customers can subscribe."
           action={
             <div className="flex flex-wrap gap-2">
-              <Link href="/chef/menu" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#1A1A1A] transition hover:border-[#F62E18] hover:text-[#F62E18]">
+              <Link href="/chef/menu" className="chef-btn is-small">
                 <UtensilsCrossed className="h-4 w-4" aria-hidden="true" />
                 Manage dishes
               </Link>
-              <Link href="/chef/capacity" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#1A1A1A] transition hover:border-[#F62E18] hover:text-[#F62E18]">
+              <Link href="/chef/capacity" className="chef-btn is-small">
                 <Gauge className="h-4 w-4" aria-hidden="true" />
                 Capacity
               </Link>
             </div>
           }
         />
-        <div className="mt-6">
-          <ChefSubscriptionPlanManager />
-        </div>
+        <ChefSubscriptionPlanManager />
       </ChefAccessBoundary>
     </main>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
+import { sentenceCase } from "@/components/chef-ui";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -195,14 +196,13 @@ export function ChefOperationsWorkspace() {
               <ShieldAlert className="mt-1 h-7 w-7 shrink-0 text-warning" aria-hidden="true" />
             )}
             <div>
-              <p className="craves-overline text-ink/65">Customer discovery readiness</p>
-              <h2 className="mt-1 font-display text-2xl font-bold text-ink">
+                            <h2 className="mt-1 font-display text-2xl font-bold text-ink">
                 {discoverable
-                  ? "Kitchen is operationally discoverable"
-                  : "Complete the required operational states"}
+                  ? "Customers can find your kitchen"
+                  : "A few steps before customers can find you"}
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                Discovery requires an approved chef application, an ACTIVE kitchen with a confirmed mapped location and at least one ACTIVE and available menu item. The backend remains authoritative for every request.
+                Customers can find your kitchen when your application is approved, your kitchen is open with its location confirmed on the map, and at least one dish is available.
               </p>
             </div>
           </div>
@@ -228,14 +228,14 @@ export function ChefOperationsWorkspace() {
               <ShieldCheck className="h-5 w-5" aria-hidden="true" />
             </span>
             <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusTone(applicationApproved)}`}>
-              {application?.status.replaceAll("_", " ")}
+              {sentenceCase(application?.status)}
             </span>
           </div>
           <h3 className="mt-4 font-display text-lg font-bold text-ink">
             Chef approval
           </h3>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Admin review controls access to chef-owned kitchen, menu, order and finance APIs.
+            Craves approves chefs before they can run a kitchen, take orders and receive payouts.
           </p>
           {application?.reviewedAt && (
             <p className="mt-3 text-xs text-muted-foreground">
@@ -243,7 +243,7 @@ export function ChefOperationsWorkspace() {
             </p>
           )}
           {application?.rejectionReason && (
-            <p className="mt-3 rounded-xl bg-error/5 p-3 text-xs leading-5 text-error">
+            <p className="mt-3 rounded-xl bg-[#F1F3F5] p-3 text-xs leading-5 text-[#C4200F]">
               Review note: {application.rejectionReason}
             </p>
           )}
@@ -265,12 +265,12 @@ export function ChefOperationsWorkspace() {
             Supported proof evidence
           </h3>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Approval readiness uses the four current evidence types reported by the backend: applicant photo, government ID front, government ID back and PAN / tax ID card.
+            Approval needs four documents: your photo, the front and back of a government ID, and your PAN card.
           </p>
           <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
             {(readiness?.documents ?? []).map((document) => (
               <li key={document.documentType} className="flex items-center justify-between gap-3 rounded-lg bg-cream px-3 py-2">
-                <span>{document.documentType.replaceAll("_", " ")}</span>
+                <span>{sentenceCase(document.documentType)}</span>
                 <strong className="text-ink">{document.status}</strong>
               </li>
             ))}
@@ -293,7 +293,7 @@ export function ChefOperationsWorkspace() {
             Kitchen availability
           </h3>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Kitchen status is the current backend-supported operational switch. INACTIVE pauses discovery without fabricating weekly opening hours.
+            Open or close your kitchen here. While it’s closed, customers can’t find it or order.
           </p>
           <Link href="/chef/kitchen" className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-contrast-red">
             Manage kitchen
@@ -362,7 +362,7 @@ export function ChefOperationsWorkspace() {
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             Active dishes without approved public images remain valid but show the Craves placeholder to customers.
           </p>
-          <Link href="/chef/menu/media" className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-contrast-red">
+          <Link href="/chef/menu" className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-contrast-red">
             Images and availability
           </Link>
         </article>
@@ -376,7 +376,7 @@ export function ChefOperationsWorkspace() {
               Schedule support without invented rules
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              The current backend exposes kitchen status and per-item availability, but no reviewed weekly opening-hours contract. This workspace therefore uses only those real controls. A weekly schedule must be designed and approved in the functional and architecture documents before implementation.
+              Weekly opening hours aren’t available yet. For now, open or close your kitchen, and turn individual dishes on or off from your menu.
             </p>
           </div>
         </div>

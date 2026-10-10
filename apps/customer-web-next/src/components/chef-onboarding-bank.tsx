@@ -266,7 +266,11 @@ export function ChefOnboardingBank({
         </Card>
       ) : null}
 
-      {unavailable || !editable ? (
+      {!bank && !unavailable ? (
+        <Note tone="neutral" role="status">
+          Checking bank account setup…
+        </Note>
+      ) : unavailable || !editable ? (
         <Note tone="neutral" role="status">
           {unavailable
             ? "We couldn’t load your bank details. Your application is still saved."

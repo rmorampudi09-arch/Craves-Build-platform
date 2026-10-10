@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Check,
   ChevronRight,
@@ -143,6 +143,11 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
   const flow = useChefOnboarding();
   const { state, screen, busy } = flow;
   const [bankMode, setBankMode] = useState<BankFormMode>("entry");
+  const { bank: loadedBank, bankUnavailable, refreshBank } = flow;
+  useEffect(() => {
+    // An optional bank step is read only when the chef opens it (the application never needs it).
+    if (screen === "bank" && !loadedBank && !bankUnavailable) void refreshBank();
+  }, [screen, loadedBank, bankUnavailable, refreshBank]);
   if (flow.unavailable || (state && (!state.enabled || state.legacy) && screen !== "status"))
     return <>{fallback}</>;
   if (flow.signedOut)

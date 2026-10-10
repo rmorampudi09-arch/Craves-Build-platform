@@ -17,6 +17,21 @@ function bankOwnerScope(): string {
 }
 const serverBankScope = () => "server";
 
+// Chef-facing words for the bank enrollment states (never the raw enum).
+const BANK_STATE_LABEL: Record<string, string> = {
+  NOT_SUBMITTED: "Not added yet",
+  QUEUED: "Saved",
+  SUBMITTING: "Verifying",
+  VALIDATING: "Verifying",
+  UNKNOWN: "Checking with the bank",
+  WAITING_APPROVAL: "Verified, waiting for approval",
+  VERIFIED: "Verified",
+  VALIDATION_FAILED: "Couldn’t verify",
+  NAME_MISMATCH: "Name doesn’t match",
+  APPLICANT_ACTION_REQUIRED: "Needs your attention",
+  SUPERSEDED: "Replaced",
+};
+
 export function ChefBankOnboardingPanel() {
   const scope = useSyncExternalStore(subscribeSession, bankOwnerScope, serverBankScope);
   // The application page also hosts this panel before CHEF role approval.
@@ -90,7 +105,7 @@ function ChefBankOnboardingContent() {
         : "We couldn’t confirm your bank details were saved. Keep this page open and tap Refresh status. Trying again won’t create a duplicate.");
       const result = bankStatusSchema.parse(await response.json());
       setBank(result); setAccount("");setConfirmation("");setIfsc("");setConsent(false);pending.current = null;
-      setMessage(result.automaticActivation ? "Bank details saved. We’re verifying the account; the status above updates when it’s done." : "Bank details saved. Automatic verification isn’t available right now, so tap Refresh status before doing anything else.");
+      setMessage("Bank details saved securely. The status above shows what happens next.");
     } catch (error) {setMessage(chefErrorText(error, "Bank submission not confirmed"));}
     finally {setBusy(false);}
   }
@@ -100,7 +115,7 @@ function ChefBankOnboardingContent() {
       {message ? <ChefNotice icon={Info} role="status">{message}</ChefNotice> : null}
       {bank?.automaticActivation ? <div className="flex items-center gap-3 rounded-xl bg-[#F1F3F5] p-4">
         <span className="chef-row-icon !bg-white"><Landmark className="h-5 w-5" aria-hidden="true" /></span>
-        <div className="min-w-0"><p className="font-semibold capitalize">{bank.state.replaceAll("_", " ").toLowerCase()}{bank.lastFour ? ` · account ending ${bank.lastFour}` : ""}</p>{bank.message ? <p className="mt-0.5 text-[0.875rem] text-[#6B6B6B]">{bank.message}</p> : null}</div>
+        <div className="min-w-0"><p className="font-semibold">{BANK_STATE_LABEL[bank.state] ?? "Bank account"}{bank.lastFour ? ` · account ending ${bank.lastFour}` : ""}</p>{bank.message ? <p className="mt-0.5 text-[0.875rem] text-[#6B6B6B]">{bank.message}</p> : null}</div>
       </div> : null}
       {!bank ? (availabilityError ? <p className="text-[0.875rem] text-[#6B6B6B]">Tap Refresh status to check again. You can’t add an account until it’s confirmed.</p> : <ChefSkeleton className="h-16" />)
       : !bank.automaticActivation ? null
@@ -113,7 +128,7 @@ function ChefBankOnboardingContent() {
               <label className="text-sm font-semibold">Confirm account number<input className={inputClass} inputMode="numeric" autoComplete="off" maxLength={24} value={confirmation} disabled={busy} onChange={event => edit(() => setConfirmation(event.target.value))} required /></label></div>
             <label className="block text-sm font-semibold">IFSC<input className={`${inputClass} uppercase`} maxLength={11} value={ifsc} disabled={busy} onChange={event => edit(() => setIfsc(event.target.value.toUpperCase()))} required /></label>
             <label className="flex items-start gap-3 text-[0.875rem] leading-6"><input className="mt-1 h-5 w-5 shrink-0 accent-[#1A1A1A]" type="checkbox" checked={consent} disabled={busy} onChange={event => edit(() => setConsent(event.target.checked))} required /><span>I confirm this is my bank account and consent to Craves sharing these details and my saved contact information with Razorpay for account validation and eligible chef payouts.</span></label>
-            <button type="submit" aria-busy={busy} disabled={busy || !bank?.automaticActivation} className="chef-btn is-primary is-block">{busy ? "Saving securely…" : "Save and verify account"}</button>
+            <button type="submit" aria-busy={busy} disabled={busy || !bank?.automaticActivation} className="chef-btn is-primary is-block">{busy ? "Saving securely…" : "Save bank details"}</button>
           </form>
         </details>}
       <p className="text-[0.8125rem] leading-5 text-[#6B6B6B]">Account numbers are never stored in your browser. Changing your account creates a new version, and payouts go only to an account that passed verification.</p>

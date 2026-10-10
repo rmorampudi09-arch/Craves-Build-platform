@@ -223,6 +223,17 @@ describe("Chef onboarding navigation and persistence", () => {
     expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith("/submit"))).toHaveLength(1);
     expect(screen.queryByRole("link", { name: "Go to dashboard" })).toBeNull();
   });
+  it("lets an applicant save optional bank details early, reading bank status only when they choose to", async () => {
+    saved.bankEnrollmentRequired = false;
+    bank = { ...bankFixture, id: null, state: "NOT_SUBMITTED", lastFour: null, ifsc: null, bankValidated: false, automaticActivation: true, message: "Add your bank details once." };
+    open();
+    await review();
+    expect(screen.getByText(/one less step when payouts open/)).toBeTruthy();
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes("/chef-onboarding/bank"))).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Add bank details now" }));
+    await screen.findByLabelText("Bank account number");
+    expect(fetcher.mock.calls.some(([url]) => String(url) === "/api/chef-onboarding/bank")).toBe(true);
+  });
   it("skips deferred bank on document save and back navigation without changing other sections", async () => {
     saved.bankEnrollmentRequired = false;
     open();

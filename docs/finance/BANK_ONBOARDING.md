@@ -139,6 +139,15 @@ Existing merchant payout credentials required by the adapter remain `CRAVES_RAZO
 5. Run the configuration pipeline with `publishBankRoutes=true` only after deployed bank authentication is available. The helper creates/reuses two exact leaf APIs, checks ownership, refuses body/credential diagnostics and unreviewed inherited logging/fragment policies, and verifies anonymous rejection. It does not publish private identity or financial posting endpoints. Existing parent API routing and data-plane reachability must be reviewed during acceptance; a plan or anonymous 401 is not proof of every authenticated operation.
 6. After merchant prerequisites and a controlled authorized acceptance test pass, enable the provider runtime flag and the admin automation controls. Previously queued requests may then trigger provider validation fees. This release did not execute that activation.
 
+### Save now, validate later (before RazorpayX is live)
+
+Chefs can save bank details before the RazorpayX account is active. Saving needs only encrypted storage (`CRAVES_BANK_DATA_KEYS_JSON` and `CRAVES_BANK_DATA_ACTIVE_KEY_ID`), the applicant identity link (`CRAVES_BANK_USER_CHEF_BASE_URL` and a matching `CRAVES_BANK_INTERNAL_KEY` in Integration and User/Chef), and the admin switch **submissions** on. **Validation** stays off and `CRAVES_BANK_PROVIDER_ENABLED=false`.
+
+- A save is stored encrypted as `QUEUED`; the chef sees "We'll verify them with your bank as soon as payouts open". No provider call is made and nothing is charged.
+- Go-live: set the `rzp_live_` key ID, secret and account number, `CRAVES_BANK_PROVIDER_ENABLED=true`, `CRAVES_BANK_VALIDATION_TYPE=penniless` and `CRAVES_BANK_WORKER_ENABLED=true` (new revision), then turn **validation** on. The worker validates the saved rows oldest first; each may incur a validation fee.
+- Turning submissions off stops new saves. Pausing validation later keeps saving open; changed details wait as `QUEUED` and payouts need a verified current account.
+- If a chef's name, email, phone or application changes while their row waits, the worker marks it `APPLICANT_ACTION_REQUIRED` at go-live and the chef saves it again.
+
 `--apply` checks the exact local Git SHA, not an inferred production image. Secret/env and APIM scripts are tested with mocked Azure interfaces; no actual Azure subscription run is claimed. They intentionally fail rather than bypass inherited policy, role, route, key or one-replica discrepancies.
 
 ## Verification and reproduction

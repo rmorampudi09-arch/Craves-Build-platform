@@ -40,6 +40,7 @@ import {
 import {
   CHEF_SECTION_LABELS,
   adultCutoff,
+  bankCanContinue,
   chefFullName,
   completedSections,
   evidenceComplete,
@@ -1361,13 +1362,27 @@ export function ChefReviewDetails({ flow }: Props) {
             </span>
             <div className="cob-card-title">
               <h2 id="review-bank">Bank details</h2>
-              <StatusChip tone="idle">Add later</StatusChip>
+              {bankCanContinue(flow.bank) ? (
+                <StatusChip tone="complete">Saved</StatusChip>
+              ) : (
+                <StatusChip tone="idle">Add later</StatusChip>
+              )}
             </div>
           </div>
           <p className="cob-helper" style={{ fontSize: 14 }}>
-            You can add bank details later. They aren’t needed to submit your application for
-            review.
+            {bankCanContinue(flow.bank)
+              ? `Account ending ${flow.bank?.lastFour ?? ""} is saved. ${flow.bank?.message ?? ""}`
+              : "You can add bank details later. They aren’t needed to submit your application for review. Saving them now means one less step when payouts open."}
           </p>
+          <button
+            type="button"
+            className="cob-link"
+            style={{ marginTop: 8 }}
+            disabled={flow.busy}
+            onClick={() => flow.edit("bank")}
+          >
+            {bankCanContinue(flow.bank) ? "Change bank details" : "Add bank details now"}
+          </button>
         </section>
       ) : (
         <ReviewCard

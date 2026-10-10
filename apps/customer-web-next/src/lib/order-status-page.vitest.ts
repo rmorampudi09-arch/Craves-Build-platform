@@ -95,6 +95,20 @@ describe("order status after payment", () => {
     expect(screen.getByText("“Preparing fresh”")).toBeTruthy();
   });
 
+  it("marks the step that is actually in progress", async () => {
+    for (const [status, current] of [
+      ["PREPARING", "Cooking your order"],
+      ["READY_FOR_PICKUP", "Waiting for pickup"],
+      ["OUT_FOR_DELIVERY", "On the way to you"],
+    ] as const) {
+      serve(order(status));
+      render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
+      const step = (await screen.findByText(current)).closest("li")!;
+      expect(step.getAttribute("aria-current")).toBe("step");
+      cleanup();
+    }
+  });
+
   it("offers the next useful step when the order is over", async () => {
     serve(order("DELIVERED"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));

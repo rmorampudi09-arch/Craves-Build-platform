@@ -230,7 +230,7 @@ describe("Chef onboarding navigation and persistence", () => {
     await review();
     expect(screen.getByText(/one less step when payouts open/)).toBeTruthy();
     expect(fetcher.mock.calls.some(([url]) => String(url).includes("/chef-onboarding/bank"))).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: "Add bank details now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add or check bank details" }));
     await screen.findByLabelText("Bank account number");
     expect(fetcher.mock.calls.some(([url]) => String(url) === "/api/chef-onboarding/bank")).toBe(true);
   });

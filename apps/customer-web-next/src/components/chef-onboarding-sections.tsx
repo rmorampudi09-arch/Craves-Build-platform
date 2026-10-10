@@ -1381,7 +1381,11 @@ export function ChefReviewDetails({ flow }: Props) {
             disabled={flow.busy}
             onClick={() => flow.edit("bank")}
           >
-            {bankCanContinue(flow.bank) ? "Change bank details" : "Add bank details now"}
+            {bankCanContinue(flow.bank)
+              ? "Change bank details"
+              : flow.bank
+                ? "Add bank details now"
+                : "Add or check bank details"}
           </button>
         </section>
       ) : (

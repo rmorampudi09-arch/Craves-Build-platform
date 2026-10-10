@@ -207,7 +207,8 @@ async function writeIntent(menuItemId: string): Promise<void> {
     try {
       await send("/api/cart", { cache: "no-store" }, true);
       if (intents.get(menuItemId)?.seq !== seq) return;
-      intent.qty = Math.min(MAX_QUANTITY, Math.max(0, confirmedQty(menuItemId) + change));
+      // A remove stays a remove; other changes are re-applied to what the server now has.
+      intent.qty = intent.qty === 0 ? 0 : Math.min(MAX_QUANTITY, Math.max(0, confirmedQty(menuItemId) + change));
       await writeLine(menuItemId, intent);
     } catch {
       if (intents.get(menuItemId)?.seq === seq) settle(menuItemId, error);

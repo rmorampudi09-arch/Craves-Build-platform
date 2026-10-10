@@ -193,6 +193,19 @@ describe("optimistic cart", () => {
     expect(cart.getCart()).toEqual([]);
   });
 
+  it("removes the dish even when another tab re-created it on a new line", async () => {
+    server = [line(ids.dosa, ids.kitchenA, 2, 120, ids.lineDosa)];
+    const cart = await loadedCart();
+    // Another tab replaced the line: same dish, new line id, quantity 5.
+    server = [line(ids.dosa, ids.kitchenA, 5, 120, "88888888-8888-4888-8888-888888888888")];
+    const removed = cart.removeFromCart(ids.lineDosa);
+    await vi.runAllTimersAsync();
+    await removed;
+    // The customer asked to remove the dish: it is gone, not lowered to 3.
+    expect(server).toEqual([]);
+    expect(cart.getCart()).toEqual([]);
+  });
+
   it("validates only after waiting quantity writes have landed", async () => {
     const cart = await loadedCart();
     void cart.setQty(ids.lineDosa, 2);

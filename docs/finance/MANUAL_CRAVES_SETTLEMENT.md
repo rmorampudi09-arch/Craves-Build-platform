@@ -10,7 +10,7 @@ Before source checkout opens, configure the compatible Integration finalizer and
 
 For new manual reservations, `CRAVES_MANUAL_SETTLEMENT_ENABLED=true`, an active policy with `ledgerEnabled=true` and `manualWithdrawalsEnabled=true` are required. Keep `automaticPayoutsEnabled=false` and the RazorpayX production/worker gates off during this mode. Do not reinterpret the chef-triggered historical `mode=MANUAL` as an external Craves payment: only the new `payout_channel=CRAVES_MANUAL` denotes this channel. Existing rows retain `RAZORPAYX`, their beneficiary, provider evidence, allocations and journals.
 
-Bank enrollment is available only when encryption, the approved validation provider, worker and both administrative submission/validation switches are ready. Otherwise status reports `automaticActivation=false`, the chef form is hidden, and direct submissions fail before collecting or saving details. Historical validation evidence is preserved. Keep bank provider and validation switches off until separately approved; this module does not initiate FAV calls.
+Saving bank details needs encrypted storage and the administrative submissions switch; validation additionally needs the approved provider, the worker and the validation switch, and saved details wait as `QUEUED` until then (see BANK_ONBOARDING.md, "Save now, validate later"). Without submissions, status reports `automaticActivation=false`, the chef form is hidden, and direct submissions fail before collecting or saving details. Historical validation evidence is preserved. Keep bank provider and validation switches off until separately approved; this module does not initiate FAV calls.
 
 ## Operator procedure
 

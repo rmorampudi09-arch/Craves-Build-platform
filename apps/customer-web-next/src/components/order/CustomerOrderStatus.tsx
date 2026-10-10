@@ -77,7 +77,7 @@ const ORDER_STAGE: Record<string, number> = {
   PAID: 1,
   CHEF_ACCEPTANCE_PENDING: 1,
   CHEF_ACCEPTED: 2,
-  PREPARING: 3,
+  PREPARING: 2,
   READY_FOR_PICKUP: 3,
   OUT_FOR_DELIVERY: 4,
   DELIVERED: 5,
@@ -91,11 +91,11 @@ function timeline(order: CustomerOrder): TimelineStep[] {
     { key: "payment", done: "Payment received", next: "Confirming your payment" },
     { key: "accepted", done: `Accepted by ${kitchen}`, next: `Waiting for ${kitchen} to accept` },
     { key: "cooking", done: "Cooked and packed", next: "Cooking your order" },
-    { key: "delivery", done: "Picked up for delivery", next: "Out for delivery" },
-    { key: "delivered", done: "Delivered", next: "Delivered" },
+    { key: "delivery", done: "Picked up for delivery", next: "Waiting for pickup" },
+    { key: "delivered", done: "Delivered", next: "On the way to you" },
   ];
   return steps.map((step, index) => {
-    const done = stage > index || (index === 4 && stage === 5);
+    const done = stage > index;
     const active = !done && stage === index;
     return { key: step.key, label: done ? step.done : step.next, done, active };
   });
@@ -145,7 +145,7 @@ function summary(order: CustomerOrder): { title: string; next: string; tone: Ton
     case "CHEF_REJECTED":
       return {
         title: `${kitchen} couldn’t take this order`,
-        next: "You won’t be charged for it. Your refund appears here as it moves.",
+        next: "Craves refunds this order to your original payment method. The refund shows here as it moves.",
         tone: "problem",
       };
     case "REFUND_PENDING":

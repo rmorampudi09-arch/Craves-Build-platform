@@ -252,16 +252,38 @@ export function SubscriptionRazorpayPayment({ subscriptionId }: { subscriptionId
       setMessage("Opening secure Razorpay checkout.");
       await loadRazorpay();
       if (!window.Razorpay) throw new Error("Razorpay checkout is unavailable.");
-      const result = await new Promise<RazorpaySuccess>((resolve, reject) => {
+      // Razorpay stays open after a declined attempt so the customer can retry
+      // there; only success or closing the window settles this payment.
+      let bankFailure = "";
+      const result = await new Promise<RazorpaySuccess | null>((resolve, reject) => {
+        let settled = false;
         const checkout = new window.Razorpay!({
           key: ordered.checkoutKeyId!, amount: Math.round(ordered.amount * 100), currency: ordered.currency,
           order_id: ordered.providerOrderId!, name: "Craves", description: `Meal-plan invoice ${ordered.invoiceId.slice(-8).toUpperCase()}`,
-          handler: resolve, modal: { ondismiss: () => reject(new Error("Razorpay checkout was closed before payment confirmation.")) },
-          theme: { color: "#6930CA" },
+          handler: response => {
+            if (settled) return;
+            settled = true;
+            resolve(response);
+          },
+          modal: {
+            ondismiss: () => {
+              if (settled) return;
+              settled = true;
+              if (bankFailure) reject(new Error(`${bankFailure} You haven’t been charged. You can try again.`));
+              else resolve(null);
+            },
+          },
+          theme: { color: "#F62E18" },
         });
-        checkout.on("payment.failed", response => reject(new Error(response.error?.description || "Razorpay payment failed.")));
+        checkout.on("payment.failed", response => {
+          bankFailure = response.error?.description || "Your bank declined the payment.";
+        });
         checkout.open();
       });
+      if (!result) {
+        setMessage("Payment cancelled. You haven’t been charged.");
+        return;
+      }
       const verificationResponse = await fetch(`/api/subscription-payments/invoices/${encodeURIComponent(ordered.invoiceId)}/verify`, {
         method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subscriptionId, providerOrderId: result.razorpay_order_id,

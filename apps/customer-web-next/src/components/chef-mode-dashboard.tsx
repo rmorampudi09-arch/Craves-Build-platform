@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   AlertTriangle,
   ChefHat,
-  CheckCircle2,
   ChevronRight,
   RefreshCw,
   Store,
@@ -39,6 +38,7 @@ import {
   type ChefEarning,
 } from "@/lib/chef-earnings-contract";
 import { getSession, subscribeSession } from "@/services/auth/cravesAuth";
+import { Sheet, secondaryActionClass } from "@/components/ui/overlays/overlay";
 
 type DashboardState = "loading" | "approved" | "error";
 
@@ -324,30 +324,33 @@ export function ChefModeDashboard() {
 
   return (
     <>
-      {showApprovalNotice ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#1A1A1A]/50 p-0 sm:items-center sm:p-4" role="presentation">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="chef-approved-title"
-            className="chef-step w-full max-w-md rounded-t-3xl bg-white p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] text-[#1A1A1A] shadow-[0_-12px_40px_rgba(26,26,26,0.16)] sm:rounded-3xl sm:pb-6"
-          >
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F1F3F5]">
-              <CheckCircle2 className="h-6 w-6 text-[#F62E18]" aria-hidden="true" />
-            </span>
-            <h2 id="chef-approved-title" className="mt-4 font-display text-2xl font-bold tracking-tight text-[#1A1A1A]">You’re a Craves chef</h2>
-            <p className="mt-2 text-[0.9375rem] leading-6 text-[#6B6B6B]">{snapshot.kitchen ? "Your kitchen is set up. Add your first dish so customers can find what you cook." : "Save your kitchen name and pickup address, then add your first dish."}</p>
-            <div className="mt-6 grid gap-2">
-              <Link href={snapshot.kitchen ? "/chef/menu" : "/chef/kitchen"} onClick={dismissApprovalNotice} className="chef-btn is-primary is-block">
-                {snapshot.kitchen ? "Add my first dish" : "Set up my kitchen"}
-              </Link>
-              <button type="button" onClick={dismissApprovalNotice} className="chef-btn is-quiet is-block">
-                Not now
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
+      {/* The shared sheet: focus moves in and back, Esc and Back close it, phones get a bottom sheet. */}
+      <Sheet
+        open={showApprovalNotice}
+        onOpenChange={(open) => {
+          if (!open) dismissApprovalNotice();
+        }}
+        title="You’re a Craves chef"
+        description={
+          snapshot.kitchen
+            ? "Your kitchen is set up. Add your first dish so customers can find what you cook."
+            : "Save your kitchen name and pickup address, then add your first dish."
+        }
+        footer={
+          <>
+            <button type="button" onClick={dismissApprovalNotice} className={secondaryActionClass}>
+              Not now
+            </button>
+            <Link
+              href={snapshot.kitchen ? "/chef/menu" : "/chef/kitchen"}
+              onClick={dismissApprovalNotice}
+              className="craves-primary-action w-full sm:w-auto"
+            >
+              {snapshot.kitchen ? "Add my first dish" : "Set up my kitchen"}
+            </Link>
+          </>
+        }
+      />
 
       <div className="chef-stack">
         <header className="flex flex-wrap items-end justify-between gap-3">

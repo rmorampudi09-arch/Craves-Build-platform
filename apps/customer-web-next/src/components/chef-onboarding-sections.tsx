@@ -486,12 +486,11 @@ export function ChefKitchenDetails({ flow }: Props) {
               </span>
             ) : null}
             {results.length ? (
-              <div id="chef-location-results" className="cob-results" role="list">
+              <ul id="chef-location-results" className="cob-results">
                 {results.map((result) => (
+                  <li key={result.id}>
                   <button
-                    key={result.id}
                     type="button"
-                    role="listitem"
                     className="cob-result"
                     onClick={() => {
                       setResults([]);
@@ -502,8 +501,9 @@ export function ChefKitchenDetails({ flow }: Props) {
                     <MapPin size={16} aria-hidden="true" />
                     <span>{result.formattedAddress}</span>
                   </button>
+                  </li>
                 ))}
-              </div>
+              </ul>
             ) : null}
           </div>
 
@@ -597,7 +597,7 @@ export function ChefKitchenDetails({ flow }: Props) {
         done={photosDone}
       >
         {missing.length && !photosDone ? (
-          <div className="cob-requires" aria-labelledby="chef-photos-requires">
+          <div className="cob-requires" role="group" aria-labelledby="chef-photos-requires">
             <p id="chef-photos-requires">
               <strong>Finish your kitchen address to add photos</strong>
               Photos are saved with your address. Still needed:
@@ -694,7 +694,7 @@ export function ChefFssaiDetails({ flow }: Props) {
                 flow.field("fssaiNumber", event.target.value.replace(/\D/g, "").slice(0, 14))
               }
             />
-            <span className="cob-adornment" aria-live="polite">
+            <span className="cob-adornment">
               {reviewed ? (
                 <VerifiedBadge label="Verified by Craves" />
               ) : complete ? (
@@ -1051,28 +1051,36 @@ export function ChefIdentityDetails({ flow }: Props) {
         title="Document type"
       >
         <div className="cob-fields">
-          <div className="cob-choices" role="radiogroup" aria-label="Identity document">
+          {/* Native radios: one Tab stop and arrow keys, drawn as chips. */}
+          <fieldset className="cob-choices">
+            <legend className="sr-only">Identity document</legend>
             {PROOF_OPTIONS.map(([key]) => {
               const selected = proof === key;
+              const disabled = flow.busy || (locked && !selected);
               return (
-                <button
+                <label
                   key={key}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
                   className="cob-choice"
-                  disabled={flow.busy || (locked && !selected)}
-                  onClick={() => {
-                    flow.field("proofKind", key as ProofKind);
-                    if (key !== "OTHER_GOVERNMENT_ID") flow.field("proofHasBack", null);
-                  }}
+                  data-checked={selected || undefined}
+                  data-disabled={disabled || undefined}
                 >
+                  <input
+                    type="radio"
+                    name="chef-proof-kind"
+                    className="sr-only"
+                    checked={selected}
+                    disabled={disabled}
+                    onChange={() => {
+                      flow.field("proofKind", key as ProofKind);
+                      if (key !== "OTHER_GOVERNMENT_ID") flow.field("proofHasBack", null);
+                    }}
+                  />
                   {selected ? <Check size={16} strokeWidth={3} aria-hidden="true" /> : null}
                   {PROOF_SHORT[key]}
-                </button>
+                </label>
               );
             })}
-          </div>
+          </fieldset>
           {proofError ? (
             <FieldError>{proofError}</FieldError>
           ) : (
@@ -1395,7 +1403,6 @@ export function ChefReviewDetails({ flow }: Props) {
         <label className="cob-check">
           <input
             type="checkbox"
-            aria-label="Accept terms and privacy policy"
             checked={flow.terms}
             disabled={flow.busy}
             onChange={(event) => flow.setTerms(event.target.checked)}

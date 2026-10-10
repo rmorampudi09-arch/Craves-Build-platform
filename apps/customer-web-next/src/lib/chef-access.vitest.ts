@@ -88,7 +88,9 @@ it("sends a signed-in customer who has not opened Chef Mode in this tab to the c
 
 it("shows the next chef tab at once, without checking access again", async () => {
   me = chef;
+  // A sign-in ends Chef Mode; the chef sign-in marks the tab again right after.
   setSessionIdentity(chef);
+  markChefModeVerified(chef.id);
   const first = open();
   await screen.findByText("Chef earnings");
   first.unmount();

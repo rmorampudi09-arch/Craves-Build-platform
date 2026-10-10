@@ -43,6 +43,14 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 
 /** The customer chose "Keep current cart": a neutral outcome, not a failure. */
 export class CartKeptError extends Error {}
+/** A cart request Craves refused, with its HTTP status (0 when the request never completed). */
+class CartRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+/** A stalled request must not hold every later cart write in the queue. */
+const CART_REQUEST_TIMEOUT_MS = 20_000;
 const PLACEHOLDER_IMAGE = "/brand/craves-logo.svg";
 const MAX_QUANTITY = 50;
 /** Quick +/- taps on one dish are coalesced into a single write. */
@@ -154,35 +162,57 @@ function settle(menuItemId: string, error?: unknown) {
   else intent.reject(error);
 }
 
+function confirmedQty(menuItemId: string): number {
+  return cart?.items.find((item) => item.menuItemId === menuItemId)?.quantity ?? 0;
+}
+
+/** One write that makes the confirmed line for a dish hold `qty` (runs inside the queue). */
+async function writeLine(menuItemId: string, intent: Intent): Promise<void> {
+  const line = cart?.items.find((item) => item.menuItemId === menuItemId);
+  if (intent.qty === 0) {
+    if (line) {
+      await send(`/api/cart/items/${encodeURIComponent(line.id)}`, { method: "DELETE" });
+    }
+  } else if (!line) {
+    // A first add, or a line removed meanwhile (an earlier minus, or another device): add it.
+    await send("/api/cart/items", {
+      method: "POST",
+      body: JSON.stringify({ menuItemId, quantity: intent.qty }),
+    });
+    intent.draft = null;
+  } else if (line.quantity !== intent.qty) {
+    await send(`/api/cart/items/${encodeURIComponent(line.id)}`, {
+      method: "PUT",
+      body: JSON.stringify({ quantity: intent.qty }),
+    });
+  }
+}
+
 /** Makes the server line for one dish match the newest intent (runs inside the queue). */
 async function writeIntent(menuItemId: string): Promise<void> {
   const intent = intents.get(menuItemId);
   if (!intent) return;
   const seq = intent.seq;
-  const line = cart?.items.find((item) => item.menuItemId === menuItemId);
   try {
-    if (intent.qty === 0) {
-      if (line) {
-        await send(`/api/cart/items/${encodeURIComponent(line.id)}`, { method: "DELETE" });
-      }
-    } else if (!line) {
-      if (intent.draft) {
-        await send("/api/cart/items", {
-          method: "POST",
-          body: JSON.stringify({ menuItemId, quantity: intent.qty }),
-        });
-        intent.draft = null;
-      }
-    } else if (line.quantity !== intent.qty) {
-      await send(`/api/cart/items/${encodeURIComponent(line.id)}`, {
-        method: "PUT",
-        body: JSON.stringify({ quantity: intent.qty }),
-      });
-    }
+    await writeLine(menuItemId, intent);
   } catch (error) {
-    // Only the newest intent decides; an older failed write is superseded by the next one.
-    if (intents.get(menuItemId)?.seq === seq) settle(menuItemId, error);
-    return;
+    if (intents.get(menuItemId)?.seq !== seq) return; // superseded: the newer intent decides
+    // 404/409: the confirmed cart this write was based on is out of date (an order consumed it,
+    // or another tab or device changed it). Reload it and apply the same change to it once.
+    if (!(error instanceof CartRequestError) || (error.status !== 404 && error.status !== 409)) {
+      settle(menuItemId, error);
+      return;
+    }
+    const change = intent.qty - confirmedQty(menuItemId);
+    try {
+      await send("/api/cart", { cache: "no-store" }, true);
+      if (intents.get(menuItemId)?.seq !== seq) return;
+      intent.qty = Math.min(MAX_QUANTITY, Math.max(0, confirmedQty(menuItemId) + change));
+      await writeLine(menuItemId, intent);
+    } catch {
+      if (intents.get(menuItemId)?.seq === seq) settle(menuItemId, error);
+      return;
+    }
   }
   if (intents.get(menuItemId)?.seq === seq) settle(menuItemId);
 }
@@ -233,11 +263,14 @@ async function settleIntents(): Promise<void> {
 
 /** Forgets unconfirmed quantities when the whole cart is replaced or cleared. */
 function dropIntents() {
+  if (!intents.size) return;
   for (const intent of intents.values()) {
     if (intent.timer) clearTimeout(intent.timer);
     intent.resolve();
   }
   intents.clear();
+  // Show the confirmed cart again, in case the request that follows fails.
+  render();
 }
 
 function checkoutCartItems(orders: CustomerOrder[]): CheckoutCartItem[] {
@@ -272,23 +305,32 @@ async function send(
   init?: RequestInit,
   quiet = false,
 ): Promise<CustomerCart> {
-  const response = await sessionFetch(path, {
-    ...init,
-    credentials: "same-origin",
-    headers: {
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...init?.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await sessionFetch(path, {
+      ...init,
+      signal:
+        init?.signal ??
+        (typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(CART_REQUEST_TIMEOUT_MS) : undefined),
+      credentials: "same-origin",
+      headers: {
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
+        ...init?.headers,
+      },
+    });
+  } catch {
+    throw new CartRequestError("Craves didn’t respond. Check your connection and try again.", 0);
+  }
   const body = (await response.json().catch(() => null)) as
     | CustomerCart
     | { message?: string }
     | null;
   if (!response.ok || !body || !("items" in body)) {
-    throw new Error(
+    throw new CartRequestError(
       body && "message" in body && typeof body.message === "string"
         ? body.message
         : "Your cart could not be loaded from Craves.",
+      response.status,
     );
   }
   cart = body;

@@ -379,7 +379,7 @@ function DishDetailPage() {
                     >
                       <Minus className="h-4 w-4" aria-hidden="true" />
                     </button>
-                    <span className="min-w-8 text-center text-sm font-black" aria-live="polite">{qty}</span>
+                    <span className="min-w-8 text-center text-sm font-black" aria-live="polite" aria-atomic="true"><span className="sr-only">Quantity </span>{qty}</span>
                     <button
                       type="button"
                       onClick={() => setQty((value) => Math.min(50, value + 1))}

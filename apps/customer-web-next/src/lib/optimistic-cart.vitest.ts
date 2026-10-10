@@ -64,6 +64,9 @@ beforeEach(() => {
     }
     const payload = init?.body ? JSON.parse(String(init.body)) : {};
     const itemId = path.split("/").pop();
+    // Like Order Service: a line that is gone (an order used it, another device removed it) is a 404.
+    if ((method === "PUT" || (method === "DELETE" && path !== "/api/cart")) && !server.some((l) => l.id === itemId))
+      return { ok: false, status: 404, json: async () => ({ message: "Cart item was not found." }) };
     if (method === "PUT") server = server.map((l) => (l.id === itemId ? { ...l, quantity: payload.quantity, lineTotal: l.unitPrice * payload.quantity } : l));
     if (method === "DELETE") server = path === "/api/cart" ? [] : server.filter((l) => l.id !== itemId);
     if (method === "POST" && path === "/api/cart/items") {
@@ -163,6 +166,31 @@ describe("optimistic cart", () => {
     expect(counts.length).toBeGreaterThan(0);
     expect(counts).not.toContain(0);
     expect(cart.getCart().map((item) => item.menuItemId)).toEqual([ids.cake]);
+  });
+
+  it("re-applies an add to the cart Craves holds now when an order already used the one on screen", async () => {
+    server = [line(ids.dosa, ids.kitchenA, 2, 120, ids.lineDosa)];
+    const cart = await loadedCart();
+    server = []; // the paid order consumed the server cart; this page still shows 2
+    const added = cart.addToCart({ id: ids.dosa, name: "Dosa", chef: "Amma", price: 120, img: "", kitchenId: ids.kitchenA });
+    await vi.runAllTimersAsync();
+    await added;
+    expect(calls).toEqual(["PUT /api/cart/items/" + ids.lineDosa, "GET /api/cart", "POST /api/cart/items"]);
+    // The customer's +1 lands on the real cart, not on top of the stale 2.
+    expect(server.map((l) => [l.menuItemId, l.quantity])).toEqual([[ids.dosa, 1]]);
+    expect(cart.getCart().map((l) => l.qty)).toEqual([1]);
+  });
+
+  it("keeps a line removed elsewhere removed when a minus was based on it", async () => {
+    server = [line(ids.dosa, ids.kitchenA, 2, 120, ids.lineDosa)];
+    const cart = await loadedCart();
+    server = [];
+    const lowered = cart.setQty(ids.lineDosa, 1);
+    await vi.runAllTimersAsync();
+    await lowered;
+    expect(calls).toEqual(["PUT /api/cart/items/" + ids.lineDosa, "GET /api/cart"]);
+    expect(server).toEqual([]);
+    expect(cart.getCart()).toEqual([]);
   });
 
   it("validates only after waiting quantity writes have landed", async () => {

@@ -71,7 +71,8 @@ test("every chef route inherits the responsive Craves workspace shell", () => {
   for (const route of workspaceRoutes) {
     assert.match(`${navigation}\n${moreHub}`, new RegExp(`"${route.replaceAll("/", "\\/")}"`), route);
   }
-  assert.match(navigation, /aria-current=\{active \? "page" : undefined\}/);
+  assert.match(navigation, /const ariaCurrent = active \? \(pathname === link\.href \? "page" : "true"\) : undefined;/);
+  assert.equal(navigation.match(/aria-current=\{ariaCurrent\}/g)?.length, 2);
 });
 
 function navigationStyles(selector: string, width: number) {

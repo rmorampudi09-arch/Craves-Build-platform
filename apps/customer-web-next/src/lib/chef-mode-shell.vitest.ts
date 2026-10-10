@@ -90,7 +90,7 @@ describe("Chef Mode shell", () => {
     setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
     render(createElement(ChefLayout, null, createElement("main", null, "Application hub")));
     expect(screen.getByRole("button", { name: "Account menu" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Chef Mode home" }).getAttribute("href")).toBe("/chef");
+    expect(screen.getByRole("link", { name: "Craves Chef home" }).getAttribute("href")).toBe("/chef");
     expect(screen.queryByRole("navigation")).toBeNull();
   });
 

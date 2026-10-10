@@ -65,7 +65,8 @@ export function UndoToast({
           <button
             type="button"
             onClick={onUndo}
-            className="min-h-11 shrink-0 rounded-lg !border-0 !bg-transparent px-3 text-sm font-bold !text-white underline underline-offset-4 !shadow-none"
+            // White ring: the global ink ring would vanish on this dark toast.
+            className="min-h-11 shrink-0 rounded-lg !border-0 !bg-transparent px-3 text-sm font-bold !text-white underline underline-offset-4 !shadow-none focus-visible:!outline-2 focus-visible:!outline-white focus-visible:!outline-offset-2"
           >
             Undo
           </button>

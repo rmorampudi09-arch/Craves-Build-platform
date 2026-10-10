@@ -244,6 +244,7 @@ export function HomeCategoryRail({
           <div
             ref={scrollerRef}
             className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto bg-transparent px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-3 md:gap-3.5 md:pb-2.5 lg:gap-4"
+            role="group"
             aria-label="Craving filters"
           >
             {categories.map(({ label, value, fallbackImage, icon: Icon }, index) => {

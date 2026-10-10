@@ -30,7 +30,8 @@ const CHECKOUT_OPERATION_ID_KEY = "craves.checkout.operationId";
 const INSTRUCTIONS_KEY = "craves.checkout.instructions";
 const CART_NOTICE_KEY = "craves.cart.notice";
 /** Long enough to read and reach; paused while the snackbar is hovered or focused. */
-const UNDO_VISIBLE_MS = 8_000;
+// Long enough to read and reach Undo; hovering or focusing the snackbar pauses it.
+const UNDO_VISIBLE_MS = 10_000;
 
 export const routeMeta = {
   head: () => ({
@@ -58,6 +59,9 @@ async function resolveLeadMinutes(items: CartItem[]): Promise<number | null> {
 function CartPage() {
   const navigate = useNavigate();
   const undoTimerRef = useRef<number | null>(null);
+  const undoButtonRef = useRef<HTMLButtonElement>(null);
+  // Keyboard users get focus moved to Undo, since the row they were on just left.
+  const keyboardInputRef = useRef(false);
   const undoRemainingRef = useRef(UNDO_VISIBLE_MS);
   const undoStartedAtRef = useRef(0);
   const [items, setItems] = useState<CartItem[]>([]);
@@ -150,7 +154,23 @@ function CartPage() {
   function showUndo(item: CartItem) {
     setUndoItem(item);
     startUndoTimer(UNDO_VISIBLE_MS);
+    if (keyboardInputRef.current) window.requestAnimationFrame(() => undoButtonRef.current?.focus());
   }
+
+  useEffect(() => {
+    const keyboard = (event: KeyboardEvent) => {
+      if (event.key === "Tab" || event.key === "Enter" || event.key === " ") keyboardInputRef.current = true;
+    };
+    const pointer = () => {
+      keyboardInputRef.current = false;
+    };
+    window.addEventListener("keydown", keyboard, true);
+    window.addEventListener("pointerdown", pointer, true);
+    return () => {
+      window.removeEventListener("keydown", keyboard, true);
+      window.removeEventListener("pointerdown", pointer, true);
+    };
+  }, []);
 
   // The row leaves at once; if Craves refuses, the cart service brings it back.
   function removeItem(item: CartItem) {
@@ -341,32 +361,38 @@ function CartPage() {
         ) : null}
       </main>
 
-      <AnimatePresence>
-        {undoItem ? (
-          <motion.div
-            key="cart-undo"
-            role="status"
-            aria-live="polite"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0, transition: { duration: 0.2, ease: ease.out } }}
-            exit={{ opacity: 0, y: 16, transition: { duration: 0.15, ease: ease.in } }}
-            onPointerEnter={pauseUndoTimer}
-            onPointerLeave={resumeUndoTimer}
-            onFocus={pauseUndoTimer}
-            onBlur={resumeUndoTimer}
-            className="fixed inset-x-4 bottom-[calc(6.75rem+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl items-center gap-3 rounded-[8px] bg-[#1A1A1A] px-4 py-3 text-sm text-white shadow-xl"
-          >
-            <span className="min-w-0 flex-1 truncate">{undoItem.name} removed from cart</span>
-            <button
-              type="button"
-              onClick={() => void undoRemoval()}
-              className="inline-flex min-h-12 items-center gap-1.5 rounded-lg !border-transparent !bg-transparent px-2 font-bold !text-white !shadow-none transition-[background-color] duration-(--dur-micro) active:!bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+      {/* The live region stays mounted, so screen readers announce the message when it appears. */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="pointer-events-none fixed inset-x-4 bottom-[calc(6.75rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-xl"
+      >
+        <AnimatePresence>
+          {undoItem ? (
+            <motion.div
+              key="cart-undo"
+              initial={{ opacity: 0, transform: "translateY(16px)" }}
+              animate={{ opacity: 1, transform: "translateY(0px)", transition: { duration: 0.2, ease: ease.out } }}
+              exit={{ opacity: 0, transform: "translateY(16px)", transition: { duration: 0.15, ease: ease.in } }}
+              onPointerEnter={pauseUndoTimer}
+              onPointerLeave={resumeUndoTimer}
+              onFocus={pauseUndoTimer}
+              onBlur={resumeUndoTimer}
+              className="pointer-events-auto flex items-center gap-3 rounded-[8px] bg-[#1A1A1A] px-4 py-3 text-sm text-white shadow-xl"
             >
-              <Undo2 className="h-4 w-4" aria-hidden="true" /> Undo
-            </button>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+              <span className="min-w-0 flex-1 truncate">{undoItem.name} removed from cart</span>
+              <button
+                ref={undoButtonRef}
+                type="button"
+                onClick={() => void undoRemoval()}
+                className="inline-flex min-h-12 items-center gap-1.5 rounded-lg !border-transparent !bg-transparent px-2 font-bold !text-white !shadow-none transition-[background-color] duration-(--dur-micro) active:!bg-white/15 focus-visible:!outline-2 focus-visible:!outline-white focus-visible:!outline-offset-2"
+              >
+                <Undo2 className="h-4 w-4" aria-hidden="true" /> Undo
+              </button>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
 
       {!loading && items.length > 0 ? (
         <CartCheckoutBar

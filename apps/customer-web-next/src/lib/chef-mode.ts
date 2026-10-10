@@ -8,6 +8,8 @@ import { safeReturnPath } from "./auth-contract.ts";
 export const CHEF_MODE_KEY = "craves.chef-mode";
 
 type ChefModeMarker = { userId: string; verifiedAt: number };
+/** A verified tab stays in Chef Mode for a working day; after that the chef confirms the phone again. */
+export const CHEF_MODE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 function storage(): Storage | null {
   try {
@@ -30,7 +32,10 @@ export function isChefModeVerified(userId: string | null | undefined): boolean {
   if (!userId) return false;
   try {
     const marker = JSON.parse(storage()?.getItem(CHEF_MODE_KEY) ?? "null") as Partial<ChefModeMarker> | null;
-    return marker?.userId === userId && typeof marker.verifiedAt === "number";
+    if (marker?.userId !== userId || typeof marker.verifiedAt !== "number") return false;
+    const age = Date.now() - marker.verifiedAt;
+    // A minute of clock skew is fine; an older or future-dated marker is not.
+    return age < CHEF_MODE_MAX_AGE_MS && age > -60_000;
   } catch {
     return false;
   }

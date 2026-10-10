@@ -304,13 +304,12 @@ export function ChefOnboardingUpload({
           {thumb}
           <div className="cob-file-text">
             <strong>{name}</strong>
-            <span role="status">
+            <span>
               {meta}
-              {progress >= 100
-                ? " · Confirming"
-                : progress > 0
-                  ? ` · ${progress}%`
-                  : " · Preparing"}
+              <span role="status">
+                {progress >= 100 ? " · Confirming" : progress > 0 ? " · Uploading" : " · Preparing"}
+              </span>
+              {progress > 0 && progress < 100 ? <span aria-hidden="true"> {progress}%</span> : null}
             </span>
             <div className="cob-progress" aria-hidden="true">
               <span style={{ width: `${Math.max(4, progress)}%` }} />

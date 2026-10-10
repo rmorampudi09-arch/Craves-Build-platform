@@ -216,7 +216,7 @@ describe("Chef onboarding navigation and persistence", () => {
     fireEvent.click(primary("Submit application"));
     await screen.findByText("Accept the terms before submitting your application.");
     expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/submit"))).toBe(false);
-    fireEvent.click(screen.getByLabelText("Accept terms and privacy policy"));
+    fireEvent.click(screen.getByLabelText(/I confirm these details are correct/));
     fireEvent.click(primary("Submit application"));
     await screen.findByRole("heading", { name: "Application submitted" });
     expect(fetcher.mock.calls.some(([url]) => String(url).includes("/chef-onboarding/bank"))).toBe(false);
@@ -358,7 +358,7 @@ describe("Chef onboarding navigation and persistence", () => {
   it("shows a backend eligibility rejection without fabricating submission", async () => {
     open();
     await review();
-    fireEvent.click(screen.getByLabelText("Accept terms and privacy policy"));
+    fireEvent.click(screen.getByLabelText(/I confirm these details are correct/));
     fetcher.mockImplementation((url, init) =>
       String(url).endsWith("/submit")
         ? Promise.resolve(
@@ -376,7 +376,7 @@ describe("Chef onboarding navigation and persistence", () => {
   it("prevents duplicate submissions and routes confirmed submissions to application status", async () => {
     open();
     await review();
-    fireEvent.click(screen.getByLabelText("Accept terms and privacy policy"));
+    fireEvent.click(screen.getByLabelText(/I confirm these details are correct/));
     let resolve!: (response: Response) => void;
     fetcher.mockImplementation((url, init) =>
       String(url).endsWith("/submit")

@@ -81,7 +81,7 @@ export function DishBottomBar({
           >
             <Minus className="h-4 w-4" aria-hidden="true" />
           </button>
-          <span className="min-w-8 text-center text-sm font-black tabular-nums text-[#1A1A1A]" aria-live="polite">{quantity}</span>
+          <span className="min-w-8 text-center text-sm font-black tabular-nums text-[#1A1A1A]" aria-live="polite" aria-atomic="true"><span className="sr-only">Quantity </span>{quantity}</span>
           <button
             type="button"
             onClick={onIncrease}

@@ -168,6 +168,8 @@ export function DishesGrid({
         <div>
           <h2
             id="available-dishes-heading"
+            // Focus lands here when "Clear filters" (which then disappears) is pressed.
+            tabIndex={-1}
             className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-3xl lg:text-4xl"
           >
             {/* Heading and count change with the list in one frame: no blank fade gap. */}
@@ -203,6 +205,7 @@ export function DishesGrid({
       {state === "ready" ? (
         <div
           className="mb-5 flex flex-wrap items-center gap-2.5 md:mb-6"
+          role="group"
           aria-label="Dish filters"
         >
           {/* Sort applies on tap: a swipeable chip row on phones, a segmented control on md+. */}

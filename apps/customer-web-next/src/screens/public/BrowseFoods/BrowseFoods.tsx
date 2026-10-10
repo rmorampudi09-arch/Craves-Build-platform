@@ -940,6 +940,10 @@ function BrowseFoodsPage() {
             setHomeCategory(null);
             setDishSort("recommended");
             revealDishes();
+            // The button goes away with the filters: keep keyboard focus on the list it changed.
+            window.requestAnimationFrame(() =>
+              document.getElementById("available-dishes-heading")?.focus({ preventScroll: true }),
+            );
           }}
           onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}

@@ -55,7 +55,7 @@ export function ChefReadinessPanel() {
         <ul className="mt-4 space-y-2 text-sm">
           {data.documents.map(document => <li key={document.documentType} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#F1F3F5] px-4 py-3">
             <span className="font-semibold text-[#1A1A1A]">{sentence(document.documentType)}</span>
-            <span className={`text-[0.8125rem] font-semibold ${document.status === "APPROVED" ? "text-[#12805C]" : document.status === "REJECTED" ? "text-[#C4200F]" : "text-[#6B6B6B]"}`}>{sentence(document.status)}</span>
+            <span className={`text-[0.8125rem] font-semibold ${document.status === "APPROVED" ? "text-[#0E6B4C]" : document.status === "REJECTED" ? "text-[#C4200F]" : "text-[#6B6B6B]"}`}>{sentence(document.status)}</span>
             {document.rejectionReason ? <p className="w-full text-[0.8125rem] text-[#C4200F]">{document.rejectionReason}</p> : null}
           </li>)}
         </ul>

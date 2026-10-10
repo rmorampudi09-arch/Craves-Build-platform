@@ -11,6 +11,7 @@ import {
 import type { CustomerCheckout } from "@/lib/checkout-contract";
 import { loadSession } from "@/services/auth/cravesAuth";
 import { sessionFetch } from "@/services/auth/sessionFetch";
+import { loadCart } from "@/services/api/cravesCart";
 
 type CheckoutWindow = Window & {
   Razorpay?: new (options: RazorpayCheckoutOptions) => RazorpayCheckout;
@@ -201,6 +202,8 @@ export function CheckoutPaymentButton({
     }
 
     forgetPendingPayment();
+    // The order used the cart: refresh it so the tab bar badge and "Order again" start from it.
+    void loadCart().catch(() => undefined);
     window.sessionStorage.removeItem("craves.checkout.instructions");
     window.sessionStorage.removeItem("craves.checkout.id");
     window.sessionStorage.removeItem("craves.checkout.operationId");

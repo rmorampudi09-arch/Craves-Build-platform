@@ -86,9 +86,15 @@ test("mobile browse keeps dish proportions and cart glass with larger craving im
   assert.match(grid, /aspect-\[16\/9\] sm:aspect-\[16\/10\]/);
   assert.doesNotMatch(grid, /aspect-\[4\/3\]/);
   assert.match(cravings, /h-\[5\.75rem\] w-\[5\.75rem\]/);
-  // Near-opaque chrome is solid: no backdrop blur on the tab bar or its cart pill.
-  assert.match(nav, /bg-\[#1A1A1A\]/);
-  assert.doesNotMatch(nav, /backdrop-blur/);
+  // The cart bar is frosted glass over the page; only View cart is coloured (leaf green, AA).
+  assert.match(nav, /bg-white\/72[^"]*backdrop-blur-\[14px\]/);
+  assert.match(nav, /bg-\[#17803D\][^"]*text-white/);
+  assert.doesNotMatch(nav, /bg-\[#1A1A1A\]/);
+  // The selected tab is marked by a pill, not by colour alone, and the badge passes AA.
+  assert.match(nav, /active \? "bg-\[#F1F3F5\] text-\[#F62E18\]"/);
+  assert.match(nav, /bg-\[#C4200F\][^"]*text-white/);
+  // Keyboard users keep the tabs: the bar never makes them inert while navigating by keys.
+  assert.match(nav, /const cartExpanded = hidden && itemCount > 0 && !keyboardNavigation;/);
   assert.match(homeStyles, /backdrop-filter: blur\(8px\) saturate\(145%\)/);
   assert.match(homeStyles, /\.floatingCartGlass::before/);
   assert.match(homeStyles, /\.floatingCartGlass::after/);

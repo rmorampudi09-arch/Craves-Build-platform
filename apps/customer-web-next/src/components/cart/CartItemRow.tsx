@@ -72,12 +72,13 @@ export function CartItemRow({
           >
             <FaMinus className="text-xs" aria-hidden="true" />
           </button>
-          <AnimateCount
-            className="w-9 text-center text-sm font-bold text-[#1A1A1A]"
-            aria-live="polite"
-          >
-            {item.qty}
-          </AnimateCount>
+          {/* Announced with its dish ("Egg Dum Biryani, quantity 3"), not as a bare number. */}
+          <span aria-live="polite" aria-atomic="true">
+            <span className="sr-only">{item.name}, quantity </span>
+            <AnimateCount className="w-9 text-center text-sm font-bold text-[#1A1A1A]">
+              {item.qty}
+            </AnimateCount>
+          </span>
           <button
             type="button"
             data-craves-borderless="true"

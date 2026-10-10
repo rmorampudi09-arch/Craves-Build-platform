@@ -23,7 +23,7 @@ export function ChefAppHeader() {
   return (
     <header className="chef-panel-header">
       <div className="chef-header-bar">
-        <Link href="/chef" className="chef-brand" aria-label="Chef Mode home">
+        <Link href="/chef" className="chef-brand" aria-label="Craves Chef home">
           <CravesLogo size="sm" decorative />
           <span className="chef-brand-name">Craves</span>
           <span className="chef-brand-tag">Chef</span>

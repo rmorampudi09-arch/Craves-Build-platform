@@ -106,8 +106,7 @@ it("discards the prior owner's private form when its pending profile fails durin
   boundary();
   fireEvent.change(await screen.findByLabelText("Private chef draft"), { target: { value: "private draft A" } });
   current = { ...owner, id: "22222222-2222-4222-8222-222222222222", displayName: "Fixture B" };
-  markChefModeVerified(current.id);
-  act(() => { setSessionIdentity(current!); });
+  act(() => { setSessionIdentity(current!); markChefModeVerified(current!.id); });
   expect(screen.queryByLabelText("Private chef draft")).toBeNull();
   await act(async () => { priorProfile.resolve(Response.json({}, { status: 503 })); });
   expect(screen.queryByLabelText("Private chef draft")).toBeNull();
@@ -235,8 +234,7 @@ it("clears private drafts on account switch and keeps same-owner email updates",
   act(() => setSessionEmailVerification(owner.id, { email: "replacement@example.invalid", emailVerified: true, emailRevision: 2, pending: null, serverTime: "2026-09-17T00:00:00Z" }));
   expect((screen.getByLabelText("Private chef draft") as HTMLInputElement).value).toBe("private draft A");
   current = { ...owner, id: "22222222-2222-4222-8222-222222222222" };
-  markChefModeVerified(current.id);
-  act(() => { setSessionIdentity(current!); });
+  act(() => { setSessionIdentity(current!); markChefModeVerified(current!.id); });
   expect(screen.queryByLabelText("Private chef draft")).toBeNull();
   expect((await screen.findByLabelText("Private chef draft") as HTMLInputElement).value).toBe("");
 });

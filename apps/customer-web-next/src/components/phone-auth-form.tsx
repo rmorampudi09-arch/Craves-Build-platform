@@ -246,6 +246,8 @@ export function PhoneAuthForm({
               }
               autoComplete="one-time-code"
               inputMode="numeric"
+              // Mounts only after "Send OTP", replacing the focused phone field.
+              autoFocus
               required
             />
           </>

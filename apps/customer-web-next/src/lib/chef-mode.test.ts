@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CHEF_MODE_KEY,
+  CHEF_MODE_MAX_AGE_MS,
   clearChefMode,
   isChefModeVerified,
   markChefModeVerified,
@@ -37,6 +38,13 @@ test("chef mode is verified only for the user who signed in to it in this tab", 
     markChefModeVerified(owner);
     clearChefMode();
     assert.equal(isChefModeVerified(owner), false);
+    // A verification older than a working day (or dated in the future) no longer counts.
+    items.set(CHEF_MODE_KEY, JSON.stringify({ userId: owner, verifiedAt: Date.now() - CHEF_MODE_MAX_AGE_MS - 1 }));
+    assert.equal(isChefModeVerified(owner), false);
+    items.set(CHEF_MODE_KEY, JSON.stringify({ userId: owner, verifiedAt: Date.now() + 10 * 60_000 }));
+    assert.equal(isChefModeVerified(owner), false);
+    items.set(CHEF_MODE_KEY, JSON.stringify({ userId: owner, verifiedAt: Date.now() - 60_000 }));
+    assert.equal(isChefModeVerified(owner), true);
   } finally {
     Reflect.deleteProperty(globalThis, "window");
   }

@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CustomerOrder } from "./order-contract";
 
-const cart = vi.hoisted(() => ({ addToCart: vi.fn(async () => undefined) }));
+const cart = vi.hoisted(() => ({ addToCart: vi.fn(async () => undefined), loadCart: vi.fn(async () => []) }));
 const menu = vi.hoisted(() => ({ loadKitchenMenu: vi.fn() }));
-vi.mock("@/services/api/cravesCart", () => ({ addToCart: cart.addToCart, CartKeptError: class extends Error {} }));
+vi.mock("@/services/api/cravesCart", () => ({ addToCart: cart.addToCart, loadCart: cart.loadCart, CartKeptError: class extends Error {} }));
 vi.mock("@/services/api/dishes", () => ({ loadKitchenMenu: menu.loadKitchenMenu }));
 
 import { reorderIntoCart } from "@/screens/OrderHistory/OrderHistory";
@@ -24,6 +24,7 @@ const dish = (id: string, name: string) => ({ id, name, chef: "Fixture kitchen",
 
 beforeEach(() => {
   cart.addToCart.mockClear();
+  cart.loadCart.mockClear();
   menu.loadKitchenMenu.mockReset();
 });
 
@@ -33,6 +34,8 @@ describe("order again", () => {
     const result = await reorderIntoCart(order);
 
     expect(menu.loadKitchenMenu).toHaveBeenCalledWith(KITCHEN);
+    // Starts from the cart Craves holds now (a paid order may have used the one on screen).
+    expect(cart.loadCart).toHaveBeenCalledTimes(1);
     expect(cart.addToCart.mock.calls).toEqual([
       [expect.objectContaining({ id: PANEER, kitchenId: KITCHEN }), 2],
       [expect.objectContaining({ id: ROTI, kitchenId: KITCHEN }), 50],

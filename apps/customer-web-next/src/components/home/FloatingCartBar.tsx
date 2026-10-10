@@ -60,7 +60,8 @@ export function FloatingCartBar({
             key={`${itemCount}-${total}`}
             className={`${styles.cartSummaryPulse} flex items-center gap-1 truncate text-xs font-black text-[#1A1A1A] min-[360px]:text-sm sm:text-base`}
           >
-            <AnimateCount className="inline-grid min-w-[1ch]" aria-live="polite">
+            {/* No live region here: the summary is re-keyed on change, and adds are announced by the dish. */}
+            <AnimateCount className="inline-grid min-w-[1ch]">
               {itemCount}
             </AnimateCount>
             <span>

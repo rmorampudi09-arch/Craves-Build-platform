@@ -7,6 +7,7 @@ import type {
   DeliveryReadyAddress,
 } from "@/lib/address-contract";
 import { selectDefaultDeliveryAddress } from "@/lib/address-selection";
+import { clearChefMode } from "@/lib/chef-mode";
 import {
   parseCustomerProfile,
   type CustomerProfile,
@@ -142,6 +143,8 @@ export function isSessionReady(): boolean { return !sessionEnding && session?.st
 function invalidatePendingSessionWork() { sessionGeneration += 1; roleSynchronization = null; }
 export function invalidateSession(context: SessionContext): void { if (isSessionContextCurrent(context)) forgetSession(); }
 function forgetSession() {
+  // Chef Mode never outlives the session that verified it.
+  clearChefMode();
   invalidatePendingSessionWork(); sessionEnding = false; session = null; sessionEmailRevision = -1; selectedLocation = null; persistSessionSnapshot(null); persistAddressSnapshot(null); notify();
 }
 let selectedLocation: CravesAddress | null = null;
@@ -226,6 +229,8 @@ async function hydrateCustomerProfile(current: CravesUser, context = captureSess
 
 export function setSessionIdentity(identity: CravesIdentity): CravesUser {
   // An explicit phone sign-in establishes a new session generation even for the same owner.
+  // It also ends Chef Mode in this tab; the chef sign-in marks it again right after.
+  clearChefMode();
   invalidatePendingSessionWork();
   sessionEnding = false;
   sessionEmailRevision = -1;

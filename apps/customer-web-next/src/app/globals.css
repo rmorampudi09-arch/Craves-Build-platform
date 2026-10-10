@@ -16,6 +16,8 @@ html {
   background: var(--craves-white);
   scroll-behavior: smooth;
   scroll-padding-top: 6rem;
+  /* Focused fields never end up hidden behind the fixed bottom tab bars on phones. */
+  scroll-padding-bottom: 6rem;
 }
 body {
   min-height: 100vh;

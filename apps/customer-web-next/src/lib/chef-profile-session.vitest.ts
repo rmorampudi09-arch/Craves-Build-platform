@@ -51,7 +51,8 @@ async function normal(input: RequestInfo | URL): Promise<Response> {
 }
 beforeEach(() => { identity = a; setSessionIdentity(a); markChefModeVerified(a.id); navigate.mockReset(); vi.mocked(usePathname).mockReturnValue("/profile"); fetcher = vi.fn<typeof fetch>(normal); vi.stubGlobal("fetch", fetcher); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
-function change(owner: CravesIdentity) { identity = owner; markChefModeVerified(owner.id); act(() => { setSessionIdentity(owner); }); }
+// Like /chef/sign-in: a new sign-in ends Chef Mode, then the OTP-verified chef marks it again.
+function change(owner: CravesIdentity) { identity = owner; act(() => { setSessionIdentity(owner); markChefModeVerified(owner.id); }); }
 const toChefSignIn = expect.stringMatching(/^\/chef\/sign-in\?returnTo=/);
 /** Profile asks before signing out: the card opens the dialog, whose own "Sign out" confirms. */
 async function confirmSignOut() {
@@ -64,20 +65,20 @@ describe("Chef navigation placement", () => {
   it("keeps fixed bottom navigation outside the filtered sticky header", () => {
     vi.mocked(usePathname).mockReturnValue("/chef/menu");
     render(createElement(ChefLayout, null, createElement("main", null, "Chef fixture")));
-    const header = screen.getByRole("link", { name: "Chef Mode home" }).closest("header")!;
-    expect(screen.getByRole("link", { name: "Chef Mode home" }).getAttribute("href")).toBe("/chef");
+    const header = screen.getByRole("link", { name: "Craves Chef home" }).closest("header")!;
+    expect(screen.getByRole("link", { name: "Craves Chef home" }).getAttribute("href")).toBe("/chef");
     expect(header.contains(screen.getByRole("button", { name: "Account menu" }))).toBe(true);
     expect(screen.queryByRole("link", { name: /Back to Craves|Customer home/ })).toBeNull();
     expect(header.contains(screen.getByRole("navigation", { name: "Chef workspace" }))).toBe(true);
     expect(header.contains(screen.getByRole("navigation", { name: "Chef primary navigation" }))).toBe(false);
     expect(screen.getByRole("navigation", { name: "Chef primary navigation" }).closest(".chef-panel-theme")).toBeTruthy();
   });
-  it.each([["/chef", "Home"], ["/chef/orders/fixture", "Orders"], ["/chef/menu", "Menu"], ["/chef/earnings", "Earnings"], ["/chef/profile", "More"], ["/chef/finance", "More"], ["/chef/kitchen", "More"]])("keeps labeled active navigation for %s", (pathname, label) => {
+  it.each([["/chef", "Home", "page"], ["/chef/orders/fixture", "Orders", "true"], ["/chef/menu", "Menu", "page"], ["/chef/earnings", "Earnings", "page"], ["/chef/profile", "More", "page"], ["/chef/finance", "More", "true"], ["/chef/kitchen", "More", "true"]])("keeps labeled active navigation for %s", (pathname, label, current) => {
     vi.mocked(usePathname).mockReturnValue(pathname);
     render(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
     const links = screen.getAllByRole("link");
     expect(links.map(link => link.textContent)).toEqual(["Home", "Orders", "Menu", "Earnings", "More"]);
-    expect(screen.getByRole("link", { name: label }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: label }).getAttribute("aria-current")).toBe(current);
     expect(links.filter(link => link.hasAttribute("aria-current"))).toHaveLength(1);
   });
   it("retains onboarding and Chef-access visibility boundaries", () => {
@@ -689,7 +690,8 @@ describe("Chef menu save and recovery", () => {
 describe("Approved Chef first step", () => {
   beforeEach(() => {
     window.localStorage.clear();
-    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    // The approval prompt is the shared Sheet, which follows the wide-screen query.
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })));
   });
   it.each([false, true])("offers the correct approval action when a saved kitchen exists: %s", async hasKitchen => {
     fetcher.mockImplementation(input => {

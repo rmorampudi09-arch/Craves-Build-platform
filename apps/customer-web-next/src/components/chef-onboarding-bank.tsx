@@ -303,6 +303,11 @@ export function ChefOnboardingBank({
                   aria-label="Bank account number"
                   className="cob-input cob-input--with-trailing-icon cob-mono"
                   autoComplete="off"
+                  // Masked, but not a password: password managers should not offer to save it.
+                  data-1p-ignore
+                  data-lpignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
                   type={showAccount ? "text" : "password"}
                   inputMode="numeric"
                   maxLength={24}

@@ -197,7 +197,7 @@ describe("Redesigned Chef onboarding popup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
     await screen.findByRole("heading", { name: "Review your application" });
     expect(screen.getByText("Not added yet")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Accept terms and privacy policy"));
+    fireEvent.click(screen.getByLabelText(/I confirm these details are correct/));
     fireEvent.click(screen.getByRole("button", { name: "Submit application" }));
     await screen.findByRole("heading", { name: "FSSAI details" });
     expect((await screen.findByRole("alert")).textContent).toContain("Add your 14-digit FSSAI");
@@ -362,7 +362,7 @@ describe("Redesigned Chef onboarding popup", () => {
     open();
     fireEvent.click(await screen.findByRole("button", { name: "Review application" }));
     await screen.findByRole("heading", { name: "Review your application" });
-    fireEvent.click(screen.getByLabelText("Accept terms and privacy policy"));
+    fireEvent.click(screen.getByLabelText(/I confirm these details are correct/));
     fireEvent.click(screen.getByRole("button", { name: "Submit application" }));
     expect((await screen.findByRole("alert")).textContent).toContain(
       "Complete the kitchen photos before submitting.",

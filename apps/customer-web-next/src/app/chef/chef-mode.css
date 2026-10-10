@@ -21,7 +21,7 @@
   --chef-border: var(--chef-line);
   --chef-input: #f1f3f5;
   --chef-accent-text: #c4200f;
-  --chef-success: #12805c;
+  --chef-success: #0e6b4c;
   --chef-warning: #8a5300;
   --chef-error: #c4200f;
   --chef-info: #1a1a1a;
@@ -168,9 +168,18 @@
     text-decoration: none;
     transition: color 150ms var(--chef-ease);
   }
-  .chef-mobile-nav-link.is-active { color: var(--chef-action); }
+  /* The selected tab is marked by shape and weight, not colour alone: ink label, icon in a pill. */
+  .chef-mobile-nav-link.is-active { color: var(--chef-text); font-weight: 700; }
   .chef-mobile-nav-link:active { background: var(--chef-input); }
-  .chef-mobile-nav-icon { display: grid; place-items: center; height: 1.375rem; }
+  .chef-mobile-nav-icon {
+    display: grid;
+    place-items: center;
+    height: 1.75rem;
+    width: 3rem;
+    border-radius: 999px;
+    transition: background-color 200ms var(--chef-ease);
+  }
+  .chef-mobile-nav-link.is-active .chef-mobile-nav-icon { background: var(--chef-page); color: var(--chef-action); }
 }
 .chef-mobile-nav-link:focus-visible,
 .chef-desktop-nav-link:focus-visible { outline: 2px solid var(--chef-text); outline-offset: 2px; }
@@ -263,6 +272,8 @@
 .chef-list { margin: 0; padding: 0; list-style: none; }
 .chef-list > li + li,
 .chef-list > .chef-row + .chef-row { border-top: 1px solid var(--chef-line); }
+/* Rows sit flush in sections that clip overflow, so their focus ring is drawn inside. */
+.chef-panel-theme .chef-row:focus-visible { outline-offset: -3px !important; }
 .chef-row {
   display: flex;
   min-height: 4rem;
@@ -320,7 +331,8 @@ button.chef-row:active { background: var(--chef-input); }
   border-radius: 999px;
   background: currentColor;
 }
-.chef-pill.is-attention { background: var(--chef-action); color: #fff; }
+/* Small white text needs 4.5:1: the deeper brand red (5.9:1) instead of Flame Red (3.95:1). */
+.chef-pill.is-attention { background: var(--chef-accent-text); color: #fff; }
 .chef-pill.is-active::before { background: var(--chef-text); }
 .chef-pill.is-success { color: var(--chef-success); }
 .chef-pill.is-warning { color: var(--chef-warning); }
@@ -398,7 +410,7 @@ body .chef-panel-theme .chef-chip[aria-pressed="true"] { border-color: var(--che
 .chef-chip-count {
   min-width: 1.25rem;
   border-radius: 999px;
-  background: var(--chef-action);
+  background: var(--chef-accent-text);
   padding: 0 0.3125rem;
   color: #fff;
   font-size: 0.6875rem;
@@ -543,3 +555,23 @@ body .chef-panel-theme .chef-primary-action { border-color: var(--chef-action) !
 body .chef-notifications [aria-label="Notification filters"] button { border-color: transparent !important; box-shadow: none; }
 /* The sign-in page has no bottom navigation to make room for. */
 .chef-panel-theme:has(.chef-sign-in) { padding-bottom: 0; }
+
+/* Keyboard users jump past the header and tabs; hidden until focused. */
+.chef-skip-link {
+  position: fixed;
+  top: 8px;
+  left: 12px;
+  z-index: 80;
+  transform: translateY(-200%);
+  border-radius: 999px;
+  background: var(--chef-text);
+  padding: 10px 18px;
+  color: #ffffff;
+  font-weight: 700;
+}
+.chef-skip-link:focus-visible {
+  transform: none;
+}
+.chef-panel-content:focus {
+  outline: none;
+}

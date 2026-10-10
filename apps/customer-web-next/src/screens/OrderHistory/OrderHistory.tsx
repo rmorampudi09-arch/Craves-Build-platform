@@ -16,7 +16,7 @@ import {
 } from "@/lib/order-contract";
 import { shortOrderNumber } from "@/lib/order-number";
 import { loadSession } from "@/services/auth/cravesAuth";
-import { addToCart, CartKeptError } from "@/services/api/cravesCart";
+import { addToCart, CartKeptError, loadCart } from "@/services/api/cravesCart";
 import { loadKitchenMenu } from "@/services/api/dishes";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
@@ -97,6 +97,8 @@ function statusClass(status: string): string {
  * note for the cart page about dishes that are no longer on the menu.
  */
 export async function reorderIntoCart(order: CustomerOrder): Promise<{ added: number; note: string }> {
+  // Start from the cart Craves holds now: a paid order may have used the one this page last saw.
+  await loadCart();
   const menu = new Map((await loadKitchenMenu(order.kitchenId)).map((dish) => [dish.id, dish]));
   const unavailable: string[] = [];
   let added = 0;

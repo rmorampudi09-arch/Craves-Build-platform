@@ -130,7 +130,7 @@ test("cart rows leave smoothly and the undo snackbar can actually be reached", (
   assert.match(list, /key=\{item\.menuItemId\}/);
 
   // Undo: 8 s, announced, pauses while hovered or focused.
-  assert.match(page, /UNDO_VISIBLE_MS = 8_000/);
+  assert.match(page, /UNDO_VISIBLE_MS = 10_000/);
   assert.match(page, /role="status"\s*aria-live="polite"/);
   assert.match(page, /onPointerEnter=\{pauseUndoTimer\}/);
   assert.match(page, /onFocus=\{pauseUndoTimer\}/);

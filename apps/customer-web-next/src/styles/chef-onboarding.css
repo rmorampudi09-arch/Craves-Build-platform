@@ -640,6 +640,10 @@ select.cob-input {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 .cob .cob-choice {
   display: inline-flex;
@@ -657,19 +661,30 @@ select.cob-input {
     background-color 160ms ease,
     box-shadow 160ms ease;
 }
-.cob .cob-choice:hover:not(:disabled):not([aria-checked="true"]) {
-  background: #e8ebee;
+.cob .cob-choice {
+  cursor: pointer;
 }
-.cob .cob-choice[aria-checked="true"] {
+@media (hover: hover) {
+  .cob .cob-choice:hover:not([data-disabled]):not([data-checked]) {
+    background: #e8ebee;
+  }
+}
+.cob .cob-choice[data-checked] {
   background: var(--cob-tint);
   box-shadow: inset 0 0 0 1.5px var(--cob-red);
   color: var(--cob-ink);
 }
-.cob .cob-choice[aria-checked="true"] svg {
+.cob .cob-choice[data-checked] svg {
   color: var(--cob-red-text);
 }
-.cob .cob-choice:disabled:not([aria-checked="true"]) {
+.cob .cob-choice[data-disabled]:not([data-checked]) {
   opacity: 0.5;
+  cursor: not-allowed;
+}
+/* The radio is visually hidden, so its chip shows keyboard focus. */
+.cob .cob-choice:has(:focus-visible) {
+  outline: 2px solid var(--cob-red-text);
+  outline-offset: 2px;
 }
 
 /* ---------- Notices ---------- */
@@ -771,6 +786,9 @@ select.cob-input {
 }
 .cob-results {
   display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
   overflow: hidden;
   border-radius: 14px;
   background: var(--cob-white);
@@ -788,8 +806,9 @@ select.cob-input {
   font-size: 14px;
   line-height: 1.45;
   font-weight: 500;
+  width: 100%;
 }
-.cob .cob-result + .cob-result {
+.cob-results > li + li {
   border-top: 1px solid var(--cob-line);
 }
 .cob .cob-result:hover,

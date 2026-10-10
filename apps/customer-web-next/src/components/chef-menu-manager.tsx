@@ -479,7 +479,7 @@ export function ChefMenuManager() {
                           <span aria-hidden="true">·</span>
                           <span className="chef-amount font-semibold text-[#1A1A1A]">{item.currency === "INR" ? "₹" : `${item.currency} `}{item.price.toFixed(2)}</span>
                         </span>
-                        <span className={`mt-1 block text-[0.8125rem] font-semibold ${live ? "text-[#12805C]" : "text-[#6B6B6B]"}`}>
+                        <span className={`mt-1 block text-[0.8125rem] font-semibold ${live ? "text-[#0E6B4C]" : "text-[#6B6B6B]"}`}>
                           {item.status === "DRAFT" ? "Draft · not on your menu yet" : item.status !== "ACTIVE" ? "Not published" : item.available ? "Available to order" : "Hidden from customers"}
                         </span>
                       </span>

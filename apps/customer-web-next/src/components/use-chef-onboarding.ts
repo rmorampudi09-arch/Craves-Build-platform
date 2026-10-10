@@ -1,5 +1,6 @@
 "use client";
 
+import { chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { captureSessionContext, isSessionContextCurrent } from "@/services/auth/cravesAuth";
@@ -44,12 +45,14 @@ export async function chefOnboardingApi(
       raw && typeof raw === "object" && "message" in raw && typeof raw.message === "string"
         ? raw.message
         : null;
-    throw new Error(
+    throw new ChefError(
       response.status === 401
         ? "Your session expired. Sign in again to continue."
         : response.status === 409
           ? (message ?? "Your saved application changed. Reload it before trying again.")
           : (message ?? "We could not complete this request. Your saved progress is preserved."),
+      chefApiError(response, raw, "").ref,
+      response.status,
     );
   }
   return raw;
@@ -147,7 +150,7 @@ export function useChefOnboarding() {
         setUnavailable(true);
         return;
       }
-      if (!response.ok) throw new Error("We could not load your saved application. Please retry.");
+      if (!response.ok) throw new ChefError("We could not load your saved application. Please retry.", chefApiError(response, await response.json().catch(() => null), "").ref, response.status);
       const next = verifiedState(await response.json());
       const nextBank = next.bankEnrollmentRequired === false ? null : await refreshBank();
       if (!current()) return;
@@ -196,7 +199,7 @@ export function useChefOnboarding() {
         setNotice("Your saved details are ready to review.");
     } catch (failure) {
       if (current())
-        setError(failure instanceof Error ? failure.message : "Your application is unavailable.");
+        setError(chefErrorText(failure, "Your application is unavailable."));
     } finally {
       if (current()) setLoading(false);
     }
@@ -263,9 +266,7 @@ export function useChefOnboarding() {
     } catch (failure) {
       if (current())
         setError(
-          failure instanceof Error
-            ? failure.message
-            : "This step could not be completed. Please retry.",
+          chefErrorText(failure, "This step could not be completed. Please retry."),
         );
     } finally {
       inFlight.current = false;
@@ -403,10 +404,10 @@ export function useChefOnboarding() {
           if (event.lengthComputable && current())
             progress(Math.round((event.loaded / event.total) * 100));
         };
-        xhr.onerror = () => reject(new Error("The upload connection failed. Please retry."));
-        xhr.ontimeout = () => reject(new Error("The upload timed out. Please retry."));
+        xhr.onerror = () => reject(new ChefError("The upload connection failed. Check your internet connection and retry.", "NETWORK_ERROR", 0));
+        xhr.ontimeout = () => reject(new ChefError("The upload timed out. Please retry.", "TIMEOUT", 0));
         xhr.onabort = () =>
-          reject(new Error("Upload cancelled. Your saved application is preserved."));
+          reject(new ChefError("Upload cancelled. Your saved application is preserved.", "UPLOAD_CANCELLED", 0));
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             let id = "";
@@ -419,20 +420,13 @@ export function useChefOnboarding() {
             resolve(id);
             return;
           }
-          let message = "Upload failed. Please retry.";
+          let raw: unknown = null;
           try {
-            const raw: unknown = JSON.parse(xhr.responseText);
-            if (
-              raw &&
-              typeof raw === "object" &&
-              "message" in raw &&
-              typeof raw.message === "string"
-            )
-              message = raw.message;
+            raw = JSON.parse(xhr.responseText);
           } catch {
             /* Keep safe fallback. */
           }
-          reject(new Error(message));
+          reject(chefApiError({ status: xhr.status }, raw, "Upload failed. Please retry."));
         };
         xhr.send(form);
       });

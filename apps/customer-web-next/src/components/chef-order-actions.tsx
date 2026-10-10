@@ -1,5 +1,6 @@
 "use client";
 
+import { CHEF_ERROR_MESSAGES, ChefError, chefApiError, chefErrorText } from "@/lib/chef-errors";
 import { useState } from "react";
 import {
   ArrowLeft,
@@ -24,15 +25,6 @@ const DECLINE_REASONS = [
   "My kitchen is closed today",
   "Something else",
 ] as const;
-
-function responseMessage(value: unknown, fallback: string): string {
-  return value &&
-    typeof value === "object" &&
-    "message" in value &&
-    typeof value.message === "string"
-    ? value.message
-    : fallback;
-}
 
 export function ChefOrderActions({
   order,
@@ -66,20 +58,20 @@ export function ChefOrderActions({
       });
       const result = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(
-          response.status === 409
-            ? "This order changed while you were looking at it. Refresh the order and check it again."
-            : responseMessage(result, "We couldn’t save your answer. Please try again."),
-        );
+        const failure = chefApiError(response, result, "We couldn’t save your answer. Please try again.");
+        // A conflict we have no exact text for keeps the plain "order changed" advice.
+        throw response.status === 409 && !CHEF_ERROR_MESSAGES[failure.ref]
+          ? new ChefError("This order changed while you were looking at it. Refresh the order and check it again.", failure.ref, 409)
+          : failure;
       }
       const updated = parseChefOrderResponse(result);
       if (!updated || updated.id.toLowerCase() !== order.id.toLowerCase()) {
-        throw new Error("We couldn’t confirm the updated order. Please refresh it.");
+        throw new ChefError("We couldn’t confirm the updated order. Please refresh it.", "INVALID_CHEF_ORDER_RESPONSE", response.status);
       }
       onUpdated(updated);
       setMessage(path === "ready-for-pickup" ? "Food marked ready for pickup." : "Your answer is saved.");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "We couldn’t save your answer. Please try again.");
+      setError(chefErrorText(caught, "We couldn’t save your answer. Please try again."));
       setMessage("");
     } finally {
       setBusyAction(null);

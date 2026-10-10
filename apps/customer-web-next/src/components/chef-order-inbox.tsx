@@ -1,5 +1,6 @@
 "use client";
 
+import { ChefError, chefApiError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -79,20 +80,9 @@ export function ChefOrderInbox() {
         credentials: "same-origin",
       });
       const raw = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message =
-          raw &&
-          typeof raw === "object" &&
-          "message" in raw &&
-          typeof raw.message === "string"
-            ? raw.message
-            : response.status === 403
-              ? "Your chef approval needs to finish before orders can open."
-              : "We couldn’t load your orders right now.";
-        throw new Error(message);
-      }
+      if (!response.ok) throw chefApiError(response, raw, "We couldn’t load your orders right now.");
       const parsed = parseChefOrdersResponse(raw);
-      if (!parsed) throw new Error("We couldn’t read the latest orders. Please refresh.");
+      if (!parsed) throw new ChefError("We couldn’t read the latest orders. Please refresh.", "INVALID_CHEF_ORDERS_RESPONSE", response.status);
       setOrders(
         [...parsed].sort(
           (left, right) =>
@@ -101,7 +91,7 @@ export function ChefOrderInbox() {
       );
       setLastUpdatedAt(new Date());
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "We couldn’t load your orders right now.");
+      setError(chefErrorText(caught, "We couldn’t load your orders right now."));
     } finally {
       setLoading(false);
       setRefreshing(false);

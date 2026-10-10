@@ -1,4 +1,5 @@
 "use client";
+import { chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import { ChefAccountingBreakdown } from "@/components/chef-accounting-breakdown";
 
 import { useEffect, useRef, useState } from "react";
@@ -10,22 +11,22 @@ export function ChefWithdrawalPanel() {
   const request = useRef<{requestKey: string; expectedAvailableAmount: string} | null>(null);
   async function load() {
     const response = await fetch("/api/chef/finance/balance", {cache: "no-store"});
-    if (!response.ok) throw new Error("Your finance balance is unavailable. No amount is being estimated.");
+    if (!response.ok) throw chefApiError(response, await response.json().catch(() => null), "Your finance balance is unavailable. No amount is being estimated.");
     return chefBalanceSchema.parse(await response.json());
   }
-  useEffect(() => {let active = true;load().then(data => {if (active) {setBalance(data);setMessage("");}}).catch(error => {if (active) setMessage(error instanceof Error ? error.message : "Balance unavailable");});return () => {active = false;};}, []);
-  async function refresh() {setBusy(true);try {setBalance(await load());setMessage("");} catch (error) {setMessage(error instanceof Error ? error.message : "Balance unavailable");} finally {setBusy(false);}}
+  useEffect(() => {let active = true;load().then(data => {if (active) {setBalance(data);setMessage("");}}).catch(error => {if (active) setMessage(chefErrorText(error, "Balance unavailable"));});return () => {active = false;};}, []);
+  async function refresh() {setBusy(true);try {setBalance(await load());setMessage("");} catch (error) {setMessage(chefErrorText(error, "Balance unavailable"));} finally {setBusy(false);}}
   async function withdraw() {
     if (!balance || busy) return;
     if (!request.current) request.current = {requestKey: crypto.randomUUID(), expectedAvailableAmount: balance.available};
     setBusy(true);
     try {
       const response = await fetch("/api/chef/finance/withdrawals", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(request.current)});
-      if (!response.ok) throw new Error("Withdrawal was not confirmed. Refresh your balance and review any existing request before retrying.");
+      if (!response.ok) throw new ChefError("Withdrawal was not confirmed. Refresh your balance and review any existing request before retrying.", chefApiError(response, await response.json().catch(() => null), "").ref, response.status);
       const result = payoutSchema.parse(await response.json());request.current = null;
       setMessage(`Withdrawal request ${result.id} is ${result.status.toLowerCase()}. Bank payment is confirmed only when marked PAID.`);
       setBalance(await load());
-    } catch (error) {setMessage(error instanceof Error ? error.message : "The request outcome is uncertain. Do not create another transfer.");}
+    } catch (error) {setMessage(chefErrorText(error instanceof ChefError ? error : new ChefError("The request outcome is uncertain. Do not create another transfer.", "WITHDRAWAL_OUTCOME_UNCERTAIN", 0), ""));}
     finally {setBusy(false);}
   }
   return <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 text-slate-900">

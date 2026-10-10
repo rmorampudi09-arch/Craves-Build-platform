@@ -1,15 +1,29 @@
 import Link from "next/link";
 import { SubscriptionEnrollmentForm } from "@/components/subscription-enrollment-form";
 import { isUuid } from "@/lib/server-api";
+import { MealPlanPage } from "../meal-plan-page";
 
-export const metadata = { title: "Start a subscription | Craves", robots: { index: false, follow: false } };
+export const metadata = { title: "Start a meal plan | Craves", robots: { index: false, follow: false } };
 
 export default async function NewSubscriptionPage({ searchParams }: { searchParams: Promise<{ planId?: string }> }) {
   const { planId } = await searchParams;
-  return <main className="mx-auto min-h-screen max-w-3xl px-5 py-12 sm:px-8">
-    <Link href="/subscriptions/plans" className="text-sm font-semibold text-[#F6B545]">← Meal plans</Link>
-    <h1 className="mt-8 text-4xl font-bold text-[#1A1A1A] sm:text-5xl">Start your meal subscription.</h1>
-    <p className="mt-4 text-slate-300">Choose a saved address and a start date. Subscription Service remains authoritative for status and scheduling.</p>
-    <div className="mt-8">{planId && isUuid(planId) ? <SubscriptionEnrollmentForm planId={planId} /> : <section className="rounded-[28px] bg-[#FFF8EC] p-6 text-slate-950">Select an active plan first.</section>}</div>
-  </main>;
+  return (
+    <MealPlanPage
+      title="Start your meal plan"
+      intro="Choose where to deliver and when to start. You’ll pay on the next step."
+      back="/subscriptions/plans"
+      backLabel="Back to meal plans"
+    >
+      {planId && isUuid(planId) ? (
+        <SubscriptionEnrollmentForm planId={planId} />
+      ) : (
+        <p className="rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]">
+          Choose a meal plan first.{" "}
+          <Link href="/subscriptions/plans" className="font-bold underline underline-offset-2">
+            See meal plans
+          </Link>
+        </p>
+      )}
+    </MealPlanPage>
+  );
 }

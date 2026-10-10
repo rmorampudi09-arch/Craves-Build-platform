@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check, MapPin, RefreshCw } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { AlertTriangle, Check, Clock3, MapPin, RefreshCw } from "lucide-react";
 import {
   formatOrderStatus,
   parseCustomerOrder,
   type CustomerOrder,
 } from "@/lib/order-contract";
+import { shortOrderNumber } from "@/lib/order-number";
 
 interface TimelineStep {
   key: string;
@@ -96,7 +98,7 @@ function headline(order: CustomerOrder): string {
     order.items.length === 1 ? order.items[0]?.itemName : "order";
   if (order.status === "PAYMENT_PENDING") return "Payment is being confirmed";
   if (order.status === "PAID" || order.status === "CHEF_ACCEPTANCE_PENDING") {
-    return "Your order is with " + order.kitchenName;
+    return order.kitchenName + " has your order";
   }
   if (order.status === "CHEF_ACCEPTED" || order.status === "PREPARING") {
     return order.kitchenName + " is starting your " + itemName;
@@ -109,6 +111,27 @@ function headline(order: CustomerOrder): string {
   }
   if (order.status === "DELIVERED") return "Your order has arrived";
   return formatOrderStatus(order.status);
+}
+
+/** Drawn once when the order is placed; static for reduced motion. */
+function PlacedTick() {
+  const reduceMotion = useReducedMotion();
+  return (
+    <svg viewBox="0 0 64 64" className="mx-auto h-16 w-16" aria-hidden="true">
+      <circle cx="32" cy="32" r="32" fill="#F62E18" />
+      <motion.path
+        d="M19 33.5l8.5 8.5L45.5 23"
+        fill="none"
+        stroke="#FFFFFF"
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        initial={reduceMotion ? false : { pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+      />
+    </svg>
+  );
 }
 
 function responseMessage(value: unknown, fallback: string): string {
@@ -145,16 +168,16 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
         );
         const raw = await response.json().catch(() => null);
         if (!response.ok) {
-          throw new Error(responseMessage(raw, "Order could not be loaded."));
+          throw new Error(responseMessage(raw, "We couldn’t load this order. Please try again."));
         }
         const parsed = parseCustomerOrder(raw);
         if (!parsed || parsed.id.toLowerCase() !== orderId.toLowerCase()) {
-          throw new Error("Craves returned an invalid order response.");
+          throw new Error("We couldn’t load this order. Please try again.");
         }
         setOrder(parsed);
       } catch (caught) {
         setError(
-          caught instanceof Error ? caught.message : "Order could not be loaded.",
+          caught instanceof Error ? caught.message : "We couldn’t load this order. Please try again.",
         );
       } finally {
         refreshingRef.current = false;
@@ -196,18 +219,18 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
   if (!order) {
     return (
       <div className="min-h-screen bg-white px-4 py-10 text-[#1A1A1A]">
-        <section className="mx-auto max-w-md rounded-[14px] border border-[#F62E18]/20 bg-white p-8 text-center shadow-[0_4px_18px_rgba(26,26,26,0.06)]">
-          <AlertTriangle className="mx-auto h-9 w-9 text-[#F62E18]" aria-hidden="true" />
+        <section className="mx-auto max-w-md rounded-[14px] border border-[#E5E7EB] bg-white p-8 text-center shadow-[0_4px_18px_rgba(26,26,26,0.06)]">
+          <AlertTriangle className="mx-auto h-9 w-9 text-[#C4200F]" aria-hidden="true" />
           <h1 className="mt-4 text-xl font-semibold">Order status unavailable</h1>
           <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">
-            {error || "The order could not be loaded."}
+            {error || "We couldn’t load this order. Please try again."}
           </p>
           <button
             type="button"
             onClick={() => void refresh()}
-            className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-[11px] bg-[#F62E18] px-5 text-sm font-semibold text-white"
+            className="craves-primary-action mt-5"
           >
-            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Try again
+            <RefreshCw className="h-5 w-5" aria-hidden="true" /> Try again
           </button>
         </section>
       </div>
@@ -220,25 +243,58 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
     order.status.startsWith("REFUND");
   const steps = timeline(order);
   const updatedAt = new Date(order.updatedAt);
+  const awaitingPayment = order.status === "PAYMENT_PENDING";
 
   return (
     <div className="min-h-screen bg-white pb-28 text-[#1A1A1A]">
       <main className="mx-auto max-w-md px-4 pb-8 pt-8">
         <div className="text-center">
-          <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-[#F1F3F5] text-5xl">
-            👩‍🍳
-          </div>
+          {rejected || awaitingPayment ? (
+            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
+              {rejected ? (
+                <AlertTriangle className="h-7 w-7" aria-hidden="true" />
+              ) : (
+                <Clock3 className="h-7 w-7" aria-hidden="true" />
+              )}
+            </span>
+          ) : (
+            <PlacedTick />
+          )}
           <h1 className="mt-5 text-[24px] font-semibold leading-8 tracking-[-0.025em]">
             {headline(order)}
           </h1>
-          <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">
-            {order.status === "PAYMENT_PENDING"
-              ? "Craves is waiting for payment confirmation."
-              : "Paid " +
-                money(order.grandTotal, order.currency) +
-                ". We'll call if anything changes."}
+          <p className="mt-1 text-sm font-medium text-[#6B6B6B]">
+            Order #{shortOrderNumber(order.id)}
           </p>
+          {awaitingPayment ? (
+            <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">
+              Craves is waiting for payment confirmation.
+            </p>
+          ) : null}
         </div>
+
+        <section
+          aria-label="Your order"
+          className="mt-6 rounded-[14px] border border-[#E5E7EB] bg-white p-4 shadow-[0_4px_18px_rgba(26,26,26,0.05)]"
+        >
+          <ul className="space-y-2 text-sm">
+            {order.items.map((item) => (
+              <li key={item.id} className="flex items-start justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="font-semibold tabular-nums">{item.quantity} ×</span>{" "}
+                  {item.itemName}
+                </span>
+                <span className="shrink-0 tabular-nums text-[#6B6B6B]">
+                  {money(item.lineTotal, order.currency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 flex items-center justify-between gap-3 border-t border-[#E5E7EB] pt-3 text-sm font-semibold">
+            <span>{awaitingPayment ? "Total" : "Total paid"}</span>
+            <span className="tabular-nums">{money(order.grandTotal, order.currency)}</span>
+          </p>
+        </section>
 
         {rejected ? (
           <section className="mt-6 rounded-[14px] border border-[#E5E7EB] bg-white p-4">

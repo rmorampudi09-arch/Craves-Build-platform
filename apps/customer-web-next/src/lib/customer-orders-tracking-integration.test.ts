@@ -14,10 +14,10 @@ test("order history validates and sorts backend orders", () => {
   assert.doesNotMatch(page, /const orders = \[/);
 });
 
-test("each order links to its own tracking identity", () => {
+test("each order links to its own tracking identity, active orders first", () => {
   const page = source("../screens/OrderHistory/OrderHistory.tsx");
-  assert.match(page, /to="\/tracking"/);
-  assert.match(page, /search=\{\{ id: order\.id \}\}/);
+  assert.match(page, /`\/orders\/\$\{order\.id\}\/tracking`/);
+  assert.match(page, /title: "In progress"[\s\S]{0,200}title: "Past orders"/);
   assert.match(page, /order\.items\.reduce/);
 });
 

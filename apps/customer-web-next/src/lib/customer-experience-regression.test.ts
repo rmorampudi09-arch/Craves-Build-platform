@@ -84,7 +84,9 @@ test("profile edit stays focused on name, phone and optional OTP email verificat
 
   assert.match(edit, /Phone number/);
   assert.match(edit, /readOnly/);
-  assert.match(edit, /body\.style\.overflow = "hidden"/);
+  // The shared Sheet owns scroll lock, focus trap and Back-to-close.
+  assert.match(edit, /<Sheet/);
+  assert.match(edit, /closeOnOutsideTap=\{!typed\}/);
   assert.match(edit, /overscroll-contain/);
   assert.match(edit, /replace\(\/\^\\\+91/);
   assert.match(edit, /EmailVerificationPanel initialEmail=\{initialEmail\} compact/);
@@ -101,9 +103,10 @@ test("reviewed checkout never traps the customer while restoring the cart", () =
   assert.match(checkout, /ensureCheckoutCart\(currentCheckout\.orders\)/);
   assert.match(checkout, /handleBackToCart/);
   assert.match(checkout, /removeItem\(CHECKOUT_ID_KEY\)/);
-  assert.match(checkout, /Step 1/);
-  assert.match(checkout, /Step 2/);
-  assert.match(checkout, /Step 3/);
+  // Clear section titles, no "Step n" eyebrows; each problem shows in the section that fixes it.
+  assert.doesNotMatch(checkout, /Step \d/);
+  assert.match(checkout, /addressProblem/);
+  assert.match(checkout, /cartProblem/);
   assert.match(checkout, /CART_NOTICE_KEY/);
   assert.match(checkout, /navigate\(\{ to: "\/cart" \}\)/);
   assert.match(checkout, /Promise\.race/);
@@ -144,7 +147,7 @@ test("profile destinations preserve contextual back navigation", () => {
   assert.match(policy, /data-contextual-back="true"/);
 });
 
-test("favorites hydrate the shared cart and notifications expose only supported clear actions", () => {
+test("favorites hydrate the shared cart and notifications offer read-all and undoable clears", () => {
   const wishlist = source("../screens/Wishlist/Wishlist.tsx");
   const notifications = source("../screens/Notifications/Notifications.tsx");
   const readAll = source("../app/api/notifications/in-app/read-all/route.ts");
@@ -152,8 +155,9 @@ test("favorites hydrate the shared cart and notifications expose only supported 
   assert.match(wishlist, /loadCart\(\)/);
   assert.match(wishlist, /CustomerFloatingCart/);
   assert.match(wishlist, /CustomerPageSkeleton/);
-  assert.doesNotMatch(notifications, /Mark all read/);
-  assert.doesNotMatch(notifications, /\/read/);
+  assert.match(notifications, /Mark all as read/);
+  assert.match(notifications, /fetch\("\/api\/notifications\/in-app\/read-all"/);
+  assert.match(notifications, /<UndoToast/);
   assert.match(notifications, /CustomerPageSkeleton/);
   assert.match(notifications, /Clear read/);
   assert.match(notifications, /Clear all/);

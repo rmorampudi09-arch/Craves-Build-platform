@@ -7,20 +7,23 @@ import {
   FaArrowRight,
   FaArrowRotateRight,
   FaBagShopping,
-  FaChevronRight,
   FaCircleExclamation,
-  FaReceipt,
 } from "react-icons/fa6";
 import {
   formatOrderStatus,
   parseCustomerOrders,
   type CustomerOrder,
 } from "@/lib/order-contract";
+import { shortOrderNumber } from "@/lib/order-number";
 import { loadSession } from "@/services/auth/cravesAuth";
+import { addToCart, CartKeptError } from "@/services/api/cravesCart";
+import { loadKitchenMenu } from "@/services/api/dishes";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 
-type OrderView = "ACTIVE" | "PAST" | "ALL";
+// Read and cleared by the cart page, which shows it once (same key as checkout uses).
+const CART_NOTICE_KEY = "craves.cart.notice";
+const dishList = new Intl.ListFormat("en-IN", { type: "conjunction" });
 
 const ACTIVE_STATUSES = new Set([
   "PAYMENT_PENDING",
@@ -75,20 +78,44 @@ function itemSummary(order: CustomerOrder): string {
 }
 
 function statusClass(status: string): string {
-  if (status === "DELIVERED" || status === "PAID") {
-    return "bg-[#F1F3F5] text-[#247A3D]";
-  }
   if (
     status === "CHEF_REJECTED" ||
     status === "CANCELLED" ||
     status === "REFUND_FAILED"
   ) {
-    return "bg-[#F1F3F5] text-[#C92716]";
+    return "bg-[#F1F3F5] text-[#C4200F]";
   }
   if (status.startsWith("REFUND")) {
     return "bg-[#F1F3F5] text-[#6B6B6B]";
   }
-  return "bg-[#F1F3F5] text-[#F62E18]";
+  return "bg-[#F1F3F5] text-[#1A1A1A]";
+}
+
+/**
+ * Puts a delivered order's dishes back in the cart with the existing cart
+ * functions (which ask before replacing another kitchen's cart). Returns a
+ * note for the cart page about dishes that are no longer on the menu.
+ */
+export async function reorderIntoCart(order: CustomerOrder): Promise<{ added: number; note: string }> {
+  const menu = new Map((await loadKitchenMenu(order.kitchenId)).map((dish) => [dish.id, dish]));
+  const unavailable: string[] = [];
+  let added = 0;
+  for (const item of order.items) {
+    const dish = menu.get(item.menuItemId);
+    if (!dish) {
+      unavailable.push(item.itemName);
+      continue;
+    }
+    await addToCart(
+      { id: dish.id, name: dish.name, chef: dish.chef, price: dish.price, img: dish.img, kitchenId: order.kitchenId },
+      Math.min(item.quantity, 50),
+    );
+    added += 1;
+  }
+  const note = unavailable.length
+    ? `${dishList.format(unavailable)} ${unavailable.length === 1 ? "isn’t" : "aren’t"} available right now, so we added the rest of your order.`
+    : "";
+  return { added, note };
 }
 
 function CutleryIcon() {
@@ -124,8 +151,8 @@ function OrderSkeleton() {
 export default function OrdersPage() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
-  const [view, setView] = useState<OrderView>("ACTIVE");
   const [loading, setLoading] = useState(true);
+  const [reorder, setReorder] = useState<{ orderId: string; busy: boolean; message: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
@@ -186,23 +213,43 @@ export default function OrdersPage() {
     };
   }, [load, navigate]);
 
-  const counts = useMemo(
-    () => ({
-      ACTIVE: orders.filter((order) => ACTIVE_STATUSES.has(order.status)).length,
-      PAST: orders.filter((order) => !ACTIVE_STATUSES.has(order.status)).length,
-      ALL: orders.length,
-    }),
+  // Orders that are still on their way come first, then everything else.
+  const sections = useMemo(
+    () =>
+      [
+        { title: "In progress", orders: orders.filter((order) => ACTIVE_STATUSES.has(order.status)) },
+        { title: "Past orders", orders: orders.filter((order) => !ACTIVE_STATUSES.has(order.status)) },
+      ].filter((section) => section.orders.length > 0),
     [orders],
   );
 
-  const visibleOrders = useMemo(() => {
-    if (view === "ALL") return orders;
-    return orders.filter((order) =>
-      view === "ACTIVE"
-        ? ACTIVE_STATUSES.has(order.status)
-        : !ACTIVE_STATUSES.has(order.status),
-    );
-  }, [orders, view]);
+  async function orderAgain(order: CustomerOrder) {
+    if (reorder?.busy) return;
+    setReorder({ orderId: order.id, busy: true, message: "" });
+    try {
+      const { added, note } = await reorderIntoCart(order);
+      if (added === 0) {
+        setReorder({ orderId: order.id, busy: false, message: "None of these dishes are available right now." });
+        return;
+      }
+      if (note) window.sessionStorage.setItem(CART_NOTICE_KEY, note);
+      navigate({ to: "/cart" });
+    } catch (error) {
+      // "Keep current cart" was the customer's choice: nothing to report.
+      setReorder(
+        error instanceof CartKeptError
+          ? null
+          : {
+              orderId: order.id,
+              busy: false,
+              message:
+                error instanceof Error && error.message
+                  ? error.message
+                  : "We couldn’t add these dishes to your cart. Please try again.",
+            },
+      );
+    }
+  }
 
   return (
     <div className="min-h-screen bg-white pb-20 text-ink">
@@ -229,22 +276,15 @@ export default function OrdersPage() {
               Craves account
             </p>
             <h1 className="mt-0.5 text-xl font-semibold leading-tight text-[#1A1A1A]">
-              My Orders
+              Your orders
             </h1>
           </div>
-        </div>
-      </AutoHideCustomerHeader>
 
-      <main className="mx-auto max-w-4xl px-4 pb-8 pt-4 md:px-6 md:pb-10 md:pt-5">
-        <div className="flex min-h-10 items-center justify-between gap-4">
-          <p className="text-sm text-[#6B6B6B]">
-            Your recent orders will appear here.
-          </p>
           <button
             type="button"
             disabled={refreshing || loading}
             onClick={() => void load(true)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-colors hover:bg-[#E5E7EB] disabled:opacity-50"
+            className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full !border-0 !bg-[#F1F3F5] !text-[#1A1A1A] !shadow-none disabled:opacity-50"
             aria-label="Refresh orders"
           >
             <FaArrowRotateRight
@@ -258,41 +298,10 @@ export default function OrdersPage() {
             </span>
           )}
         </div>
+      </AutoHideCustomerHeader>
 
-        <nav
-          className="mt-4 flex gap-7 border-b border-[#E5E7EB] sm:gap-9"
-          aria-label="Filter orders"
-        >
-          {(["ACTIVE", "PAST", "ALL"] as const).map((nextView) => {
-            const selected = view === nextView;
-            const label =
-              nextView === "ACTIVE"
-                ? "Active"
-                : nextView === "PAST"
-                  ? "Past"
-                  : "All";
-
-            return (
-              <button
-                key={nextView}
-                type="button"
-                onClick={() => setView(nextView)}
-                aria-pressed={selected}
-                className={`group relative min-h-11 appearance-none border-0 !bg-transparent px-3 pb-2 pt-2 text-sm font-semibold shadow-none outline-none transition-colors duration-200 hover:!bg-transparent focus:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent ${
-                  selected
-                    ? "after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:rounded-full after:bg-[#F62E18]"
-                    : "after:absolute after:inset-x-2 after:bottom-[-1px] after:h-0.5 after:origin-center after:scale-x-0 after:rounded-full after:bg-[#F62E18]"
-                }`}
-              >
-                <span className="text-[#1A1A1A] transition-colors duration-200 group-hover:text-[#F62E18] group-focus-visible:text-[#F62E18]">
-                  {label} ({counts[nextView]})
-                </span>
-              </button>
-            );
-          })}
-        </nav>
-
-        <section className="mt-5" aria-live="polite">
+      <main className="mx-auto max-w-4xl px-4 pb-8 pt-4 md:px-6 md:pb-10 md:pt-5">
+        <section aria-live="polite">
           {loading ? (
             <>
               <OrderSkeleton />
@@ -302,7 +311,7 @@ export default function OrdersPage() {
             </>
           ) : error && orders.length === 0 ? (
             <div className="rounded-2xl border border-[#D8DADD] bg-white p-8 text-center shadow-[0_3px_10px_rgba(0,0,0,0.07)] md:p-10">
-              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#C4200F]">
                 <FaCircleExclamation className="text-xl" aria-hidden="true" />
               </span>
               <h2 className="mt-4 text-xl font-semibold text-[#1A1A1A]">
@@ -314,10 +323,10 @@ export default function OrdersPage() {
               <button
                 type="button"
                 onClick={() => void load()}
-                className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#F62E18] px-5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                className="craves-primary-action mt-6"
               >
-                <FaArrowRotateRight className="text-sm" aria-hidden="true" />
-                Retry
+                <FaArrowRotateRight className="text-base" aria-hidden="true" />
+                Try again
               </button>
             </div>
           ) : orders.length === 0 ? (
@@ -334,76 +343,90 @@ export default function OrdersPage() {
               <button
                 type="button"
                 onClick={() => navigate({ to: "/home" })}
-                className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#F62E18] px-5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                className="craves-primary-action mt-6"
               >
                 Browse food
                 <FaArrowRight className="text-sm" aria-hidden="true" />
               </button>
             </div>
-          ) : visibleOrders.length === 0 ? (
-            <div className="rounded-2xl border border-[#D8DADD] bg-white p-8 text-center shadow-[0_3px_10px_rgba(0,0,0,0.05)]">
-              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-                <FaReceipt className="text-xl" aria-hidden="true" />
-              </span>
-              <h2 className="mt-4 text-xl font-semibold text-[#1A1A1A]">
-                No {view === "ACTIVE" ? "active" : "past"} orders
-              </h2>
-              <p className="mt-2 text-sm text-[#6B6B6B]">
-                Choose another filter to view your remaining orders.
-              </p>
-            </div>
           ) : (
-            <div className="space-y-3">
-              {visibleOrders.map((order) => (
-                <Link
-                  key={order.id}
-                  to="/tracking"
-                  search={{ id: order.id }}
-                  aria-label={`Track order from ${order.kitchenName}`}
-                  className="group relative block rounded-2xl border border-[#D8DADD] bg-white p-4 pr-11 shadow-[0_3px_10px_rgba(0,0,0,0.07)] transition-[border-color,box-shadow] duration-200 hover:border-[#C9CCD0] hover:shadow-[0_4px_14px_rgba(0,0,0,0.09)] md:p-5 md:pr-12"
-                >
-                  <div className="flex items-start gap-3.5">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-                      <CutleryIcon />
-                    </span>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <h2 className="truncate text-base font-semibold text-[#1A1A1A]">
-                            {order.kitchenName}
-                          </h2>
-                          <p className="mt-1 text-[13px] font-medium text-[#1A1A1A]">
-                            Order #{order.id.slice(-8).toUpperCase()}
-                          </p>
-                        </div>
-                        <span
-                          className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-4 ${statusClass(order.status)}`}
+            <div className="space-y-7">
+              {sections.map((section) => (
+                <section key={section.title} aria-label={section.title}>
+                  <h2 className="mb-3 text-sm font-semibold text-[#1A1A1A]">
+                    {section.title} ({section.orders.length})
+                  </h2>
+                  <ul className="space-y-3">
+                    {section.orders.map((order) => {
+                      const active = ACTIVE_STATUSES.has(order.status);
+                      const reordering = reorder?.orderId === order.id ? reorder : null;
+                      return (
+                        <li
+                          key={order.id}
+                          className="relative rounded-2xl border border-[#D8DADD] bg-white p-4 shadow-[0_3px_10px_rgba(0,0,0,0.07)] transition-[border-color,box-shadow] duration-200 hover:border-[#C9CCD0] hover:shadow-[0_4px_14px_rgba(0,0,0,0.09)] md:p-5"
                         >
-                          {formatOrderStatus(order.status)}
-                        </span>
-                      </div>
+                          <div className="flex items-start gap-3.5">
+                            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
+                              <CutleryIcon />
+                            </span>
 
-                      <p className="mt-1 text-[13px] text-[#6B6B6B]">
-                        {formatOrderDate(order.createdAt)}
-                      </p>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <h3 className="truncate text-base font-semibold text-[#1A1A1A]">
+                                    {/* The whole card opens the order; its ::after covers the card. */}
+                                    <Link
+                                      to={active ? `/orders/${order.id}/tracking` : `/orders/${order.id}`}
+                                      aria-label={`${active ? "Track order" : "View order"} from ${order.kitchenName}`}
+                                      className="after:absolute after:inset-0 after:rounded-2xl"
+                                    >
+                                      {order.kitchenName}
+                                    </Link>
+                                  </h3>
+                                  <p className="mt-1 text-[13px] text-[#6B6B6B]">
+                                    Order #{shortOrderNumber(order.id)} · {formatOrderDate(order.createdAt)}
+                                  </p>
+                                </div>
+                                <span
+                                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-4 ${statusClass(order.status)}`}
+                                >
+                                  {formatOrderStatus(order.status)}
+                                </span>
+                              </div>
 
-                      <div className="mt-3 flex items-end justify-between gap-4 border-t border-[#E5E7EB] pt-3">
-                        <p className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#1A1A1A]">
-                          {itemSummary(order)}
-                        </p>
-                        <p className="shrink-0 text-sm font-semibold text-[#1A1A1A]">
-                          Total Paid: {money(order.grandTotal, order.currency)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                              <p className="mt-2 truncate text-[13px] font-medium text-[#1A1A1A]">
+                                {itemSummary(order)}
+                              </p>
 
-                  <FaChevronRight
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#1A1A1A] transition-transform group-hover:translate-x-0.5 md:right-5"
-                    aria-hidden="true"
-                  />
-                </Link>
+                              <div className="mt-3 flex min-h-11 items-center justify-between gap-4 border-t border-[#E5E7EB] pt-3">
+                                <p className="text-sm font-semibold text-[#1A1A1A]">
+                                  {money(order.grandTotal, order.currency)}
+                                  <span className="font-normal text-[#6B6B6B]"> total paid</span>
+                                </p>
+                                {order.status === "DELIVERED" ? (
+                                  <button
+                                    type="button"
+                                    disabled={reorder?.busy}
+                                    aria-busy={reordering?.busy}
+                                    onClick={() => void orderAgain(order)}
+                                    className="relative z-10 min-h-11 shrink-0 rounded-full !border-0 !bg-[#F1F3F5] px-4 text-sm font-bold !text-[#1A1A1A] !shadow-none"
+                                  >
+                                    {reordering?.busy ? "Adding…" : "Order again"}
+                                  </button>
+                                ) : null}
+                              </div>
+                              {reordering?.message ? (
+                                <p role="status" className="relative z-10 mt-2 text-sm font-medium text-[#C4200F]">
+                                  {reordering.message}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
               ))}
             </div>
           )}
@@ -411,7 +434,7 @@ export default function OrdersPage() {
           {error && orders.length > 0 && (
             <p
               role="alert"
-              className="mt-5 rounded-xl border border-[#F62E18]/20 bg-white p-3 text-sm font-medium text-[#C92716]"
+              className="mt-5 rounded-xl bg-[#F1F3F5] p-3 text-sm font-medium text-[#C4200F]"
             >
               {error}
             </p>

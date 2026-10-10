@@ -55,12 +55,12 @@ export function AccountCard({
               <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">
                 Customer account
               </p>
-              <h1
+              <h2
                 id="customer-profile-name"
                 className="mt-1.5 truncate text-xl font-black tracking-[-0.025em] text-[#1A1A1A] sm:text-2xl"
               >
                 {displayName}
-              </h1>
+              </h2>
             </div>
 
             <button

@@ -200,12 +200,14 @@ test("home cart bar uses a balanced true frosted-glass blur", () => {
   assert.match(floatingCart, /@supports not/);
 });
 
-test("meal plans keep their previous card layout and navigation flow", () => {
-  assert.match(mealPlans, /meal-plans-legacy-ui/);
-  assert.match(mealPlans, /rounded-\[28px\] bg-\[#FFF8EC\]/);
+test("meal plans keep their navigation flow on the brand palette", () => {
   assert.match(mealPlans, /subscriptions\/new\?planId=/);
-  assert.match(mealPlans, /craves-button-link/);
-  assert.match(mealPlanPage, /bg-\[#0B1426\]/);
+  assert.match(mealPlans, /craves-primary-action/);
+  assert.match(mealPlanPage, /<MealPlanPage/);
+  // No cream, gold, purple, navy or slate on customer meal-plan screens.
+  for (const screen of [mealPlans, mealPlanPage]) {
+    assert.doesNotMatch(screen, /#FFF8EC|#F6B545|#6930CA|#0B1426|slate-/i);
+  }
 });
 
 test("checkout is one page with saved addresses, ASAP delivery and the shared address sheet", () => {

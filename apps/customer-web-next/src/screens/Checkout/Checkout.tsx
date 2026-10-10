@@ -63,9 +63,16 @@ function money(amount: number, currency = "INR") {
   }
 }
 
+type CheckoutProblem = { message: string; section?: "address" | "cart" };
+
 function checkoutMessage(error: unknown): string {
+  return checkoutProblem(error).message;
+}
+
+/** Customer copy for a checkout error, plus the section whose controls fix it. */
+export function checkoutProblem(error: unknown): CheckoutProblem {
   if (!(error instanceof Error)) {
-    return "We couldn’t prepare checkout right now. Your cart is safe — please try again.";
+    return { message: "We couldn’t prepare checkout right now. Your cart is safe — please try again." };
   }
 
   const message = error.message.trim();
@@ -76,7 +83,7 @@ function checkoutMessage(error: unknown): string {
     normalized.includes("network") ||
     normalized.includes("timeout")
   ) {
-    return "Craves is having trouble connecting right now. Your cart is safe — check your connection and try again.";
+    return { message: "Craves is having trouble connecting right now. Your cart is safe — check your connection and try again." };
   }
 
   if (
@@ -85,7 +92,7 @@ function checkoutMessage(error: unknown): string {
     normalized.includes("checkout attempt") ||
     normalized.includes("could not be loaded")
   ) {
-    return "We couldn’t refresh your checkout details right now. Your cart is safe — please try again.";
+    return { message: "We couldn’t refresh your checkout details right now. Your cart is safe — please try again." };
   }
 
   if (
@@ -93,24 +100,24 @@ function checkoutMessage(error: unknown): string {
     normalized.includes("session_expired") ||
     normalized.includes("session expired")
   ) {
-    return "We’re reconnecting your Craves session. Please try again in a moment.";
+    return { message: "We’re reconnecting your Craves session. Please try again in a moment." };
   }
 
   // Known backend sentences become customer copy; anything else falls back so engineer text never shows.
   if (normalized.includes("outside") && normalized.includes("service area")) {
-    return "We don’t deliver to this address yet. Choose another address above or add a new one.";
+    return { section: "address", message: "We don’t deliver to this address yet. Choose another address above or add a new one." };
   }
   if (normalized.includes("minimum order")) {
-    return "This order is below the minimum order value. Add a little more from this kitchen to continue.";
+    return { section: "cart", message: "This order is below the minimum order value. Add a little more from this kitchen to continue." };
   }
   if (normalized.includes("coordinates are required")) {
-    return "We couldn’t check delivery for this address. Edit it and re-pin it on the map, or choose another address.";
+    return { section: "address", message: "We couldn’t check delivery for this address. Edit it and re-pin it on the map, or choose another address." };
   }
   if (normalized.includes("inactive or does not belong")) {
-    return "This address is no longer available. Choose another address above or add a new one.";
+    return { section: "address", message: "This address is no longer available. Choose another address above or add a new one." };
   }
   if (normalized.includes("pickup profile is incomplete")) {
-    return "This home chef can’t take orders right now. Your cart is saved, so please try again later.";
+    return { message: "This home chef can’t take orders right now. Your cart is saved, so please try again later." };
   }
   if (
     normalized.includes("launch policy") ||
@@ -118,19 +125,19 @@ function checkoutMessage(error: unknown): string {
     normalized.includes("not configured correctly") ||
     normalized.includes("incomplete response")
   ) {
-    return "Ordering is paused for a short while. Your cart is saved, so please try again soon.";
+    return { message: "Ordering is paused for a short while. Your cart is saved, so please try again soon." };
   }
   if (normalized.includes("address is incomplete")) {
-    return "This address is missing some details. Edit it to add them, or choose another address above.";
+    return { section: "address", message: "This address is missing some details. Edit it to add them, or choose another address above." };
   }
   if (normalized.includes("select a saved delivery address") || normalized.includes("select a delivery address")) {
-    return "Choose a delivery address above to continue.";
+    return { section: "address", message: "Choose a delivery address above to continue." };
   }
   if (normalized.includes("another kitchen")) {
-    return "Your cart has dishes from another kitchen. Review your cart, then try again.";
+    return { section: "cart", message: "Your cart has dishes from another kitchen. Review your cart, then try again." };
   }
   if (normalized.includes("cart changed") || normalized.includes("cart has changed")) {
-    return "Your cart changed while you were checking out. Review it, then try again.";
+    return { section: "cart", message: "Your cart changed while you were checking out. Review it, then try again." };
   }
 
   // Plain, human backend sentences (e.g. "Please sign in again.") pass through; engineer text never does.
@@ -138,10 +145,10 @@ function checkoutMessage(error: unknown): string {
     /configur|validation|response|launch|projection|backend|service|null|undefined|exception|http|uuid|coordinates|policy/i.test(message) ||
     /[A-Z_]{4,}/.test(message);
   if (message && message.length <= 160 && !technical) {
-    return message;
+    return { message };
   }
 
-  return "We couldn’t prepare checkout right now. Your cart is safe — please try again.";
+  return { message: "We couldn’t prepare checkout right now. Your cart is safe — please try again." };
 }
 
 function responseMessage(body: unknown, fallback: string): string {
@@ -301,6 +308,17 @@ export default function CheckoutPage() {
   const prepareCheckout = useCallback(async () => {
     setLoading(true);
     setError("");
+    let leaving = false;
+    const openPaidOrder = (restored: CustomerCheckout | null) => {
+      const orderId = restored?.status === "PAID" ? restored.orders[0]?.id : undefined;
+      if (!orderId) return false;
+      leaving = true;
+      for (const key of [CHECKOUT_ID_KEY, CHECKOUT_OPERATION_ID_KEY, INSTRUCTIONS_KEY]) {
+        window.sessionStorage.removeItem(key);
+      }
+      navigate({ to: `/orders/${orderId}`, replace: true });
+      return true;
+    };
     try {
       const session = await loadSession();
       if (!session) {
@@ -334,6 +352,7 @@ export default function CheckoutPage() {
       if (storedCheckoutId) {
         try {
           const restored = await fetchCheckout(storedCheckoutId);
+          if (openPaidOrder(restored)) return;
           if (restored?.status === "PAYMENT_PENDING") {
             setCheckout(restored);
             setSelectedId(restored.deliveryAddressId ?? preferred?.id ?? "");
@@ -355,6 +374,7 @@ export default function CheckoutPage() {
           const operation = await fetchCheckoutOperation(storedOperationId);
           if (operation) {
             const restored = await fetchCheckout(operation.checkoutId);
+            if (openPaidOrder(restored)) return;
             if (restored?.status === "PAYMENT_PENDING") {
               window.sessionStorage.setItem(
                 CHECKOUT_ID_KEY,
@@ -395,7 +415,8 @@ export default function CheckoutPage() {
       setLeadMinutes(null);
       setError(checkoutMessage(caught));
     } finally {
-      setLoading(false);
+      // Keep the skeleton while a paid order opens instead of flashing checkout.
+      if (!leaving) setLoading(false);
     }
   }, [navigate]);
 
@@ -502,10 +523,7 @@ export default function CheckoutPage() {
     setReviewing(true);
     void ensureCheckout()
       .catch((caught) => {
-        setPaymentFailure({
-          message: checkoutMessage(caught),
-          retryAllowed: true,
-        });
+        setPaymentFailure({ ...checkoutProblem(caught), retryAllowed: true });
       })
       .finally(() => setReviewing(false));
   }, [
@@ -588,6 +606,9 @@ export default function CheckoutPage() {
   const selectedAddress = addresses.find((address) => address.id === selectedId);
   const visibleAddresses = showAllAddresses ? addresses : addresses.slice(0, 3);
   const hasCheckoutContext = items.length > 0 || checkout !== null;
+  const addressProblem =
+    error || (paymentFailure?.section === "address" ? paymentFailure.message : "");
+  const cartProblem = paymentFailure?.section === "cart" ? paymentFailure.message : "";
 
   if (loading) {
     return <CustomerPageSkeleton label="Preparing your checkout" />;
@@ -609,29 +630,26 @@ export default function CheckoutPage() {
             <div className="h-52 animate-pulse rounded-[1.25rem] bg-[#F1F3F5]" />
           </div>
         ) : error && !hasCheckoutContext ? (
-          <section className="rounded-[1.25rem] border border-[#F62E18]/20 bg-white p-8 text-center shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
-            <AlertTriangle className="mx-auto h-9 w-9 text-[#F62E18]" aria-hidden="true" />
-            <h1 className="mt-4 text-xl font-semibold">Checkout could not be prepared</h1>
+          <section className="rounded-[1.25rem] border border-[#E5E7EB] bg-white p-8 text-center shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
+            <AlertTriangle className="mx-auto h-9 w-9 text-[#C4200F]" aria-hidden="true" />
+            <h2 className="mt-4 text-xl font-semibold">We couldn’t prepare checkout</h2>
             <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{error}</p>
             <button
               type="button"
               onClick={() => void prepareCheckout()}
-              className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#F62E18] px-5 text-sm font-semibold text-white"
+              className="craves-primary-action mt-6"
             >
-              <RefreshCw className="h-4 w-4" aria-hidden="true" /> Try again
+              <RefreshCw className="h-5 w-5" aria-hidden="true" /> Try again
             </button>
           </section>
         ) : (
           <div>
             <div className="mb-6 hidden lg:block">
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#F62E18]">
-                Secure checkout
-              </p>
-              <div className="mt-1 flex items-end justify-between gap-6">
+              <div className="flex items-end justify-between gap-6">
                 <div>
-                  <h1 className="text-3xl font-black tracking-[-0.04em] text-[#1A1A1A]">
+                  <h2 className="text-3xl font-black tracking-[-0.04em] text-[#1A1A1A]">
                     Delivery & payment
-                  </h1>
+                  </h2>
                   <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6B6B6B]">
                     Choose where to deliver. Craves calculates the final total automatically before payment.
                   </p>
@@ -644,40 +662,19 @@ export default function CheckoutPage() {
 
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start lg:gap-7 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="space-y-4">
-                {paymentFailure ? (
-                  <section
-                    role="alert"
-                    className="rounded-[1.25rem] border border-[#C92716]/20 bg-[#FFF2F0] p-4"
-                  >
-                    <h2 className="text-sm font-semibold text-[#9F2114]">
-                      {checkout
-                        ? "Payment didn't go through"
-                        : "Order could not be prepared"}
-                    </h2>
-                    <p className="mt-1 text-xs leading-5 text-[#7A2C22]">
-                      {paymentFailure.message}
-                    </p>
-                  </section>
-                ) : null}
-
                 <section className="overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white shadow-[0_8px_28px_rgba(26,26,26,0.055)]">
                   <div className="flex items-center justify-between gap-3 border-b border-[#F1F3F5] px-4 py-4 sm:px-5">
                     <div className="flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FFF1EF] text-[#F62E18]">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
                         <MapPin className="h-5 w-5" aria-hidden="true" />
                       </span>
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.13em] text-[#F62E18]">
-                          Step 1
-                        </p>
-                        <h2 className="text-base font-bold">Delivery address</h2>
-                      </div>
+                      <h2 className="text-base font-bold">Delivery address</h2>
                     </div>
                     <button
                       type="button"
                       onClick={openAddressEditor}
                       disabled={addressChangeBusy}
-                      className="inline-flex min-h-9 items-center gap-1.5 rounded-[10px] border border-[#D7DADF] bg-white px-3 text-xs font-bold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:border-[#F62E18]/25 hover:bg-[#FFF8F6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/25 disabled:pointer-events-none disabled:opacity-45"
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-[10px] border border-[#D7DADF] bg-white px-3 text-xs font-bold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:!bg-[#F1F3F5] disabled:pointer-events-none disabled:opacity-45"
                     >
                       <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                       Add new
@@ -731,7 +728,7 @@ export default function CheckoutPage() {
                         <button
                           type="button"
                           onClick={() => setShowAllAddresses((current) => !current)}
-                          className="min-h-11 rounded-[1rem] border border-dashed border-[#D7DADF] bg-[#FAFAFA] px-4 text-sm font-bold text-[#1A1A1A] transition hover:border-[#F62E18]/30 hover:bg-[#FFF8F6] sm:col-span-2 lg:col-span-1 xl:col-span-2"
+                          className="min-h-11 rounded-[1rem] border border-dashed border-[#D7DADF] !bg-[#F1F3F5] px-4 text-sm font-bold text-[#1A1A1A] !shadow-none transition hover:!bg-white sm:col-span-2 lg:col-span-1 xl:col-span-2"
                         >
                           {showAllAddresses
                             ? "Show fewer addresses"
@@ -749,31 +746,35 @@ export default function CheckoutPage() {
                         type="button"
                         onClick={openAddressEditor}
                         disabled={addressChangeBusy}
-                        className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#F62E18] px-4 text-sm font-semibold text-white disabled:pointer-events-none disabled:opacity-45"
+                        className="craves-primary-action mt-4"
                       >
-                        <Plus className="h-4 w-4" aria-hidden="true" />
+                        <Plus className="h-5 w-5" aria-hidden="true" />
                         Add a new address
                       </button>
                     </div>
                   )}
+
+                  {addressProblem ? (
+                    <p
+                      role="alert"
+                      className="mx-3 mb-3 flex items-start gap-2.5 rounded-[1rem] bg-[#F1F3F5] p-3 text-sm leading-5 text-[#1A1A1A] sm:mx-4 sm:mb-4"
+                    >
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#C4200F]" aria-hidden="true" />
+                      {addressProblem}
+                    </p>
+                  ) : null}
                 </section>
 
                 <section className="rounded-[1.45rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_8px_28px_rgba(26,26,26,0.05)] sm:p-5">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FFF8EC] text-[#B86E00]">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
                       <Clock3 className="h-5 w-5" aria-hidden="true" />
                     </span>
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.13em] text-[#F62E18]">
-                        Step 2
-                      </p>
-                      <h2 className="text-base font-bold">Delivery timing</h2>
-                    </div>
+                    <h2 className="text-base font-bold">Delivery timing</h2>
                   </div>
-                  <div className="mt-4 flex items-start gap-3 rounded-[1rem] border border-[#F6B545]/35 bg-[#FFF8EC] p-4">
-                    <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#F6B545]" />
+                  <div className="mt-4 rounded-[1rem] bg-[#F1F3F5] p-4">
                     <div>
-                      <p className="text-xs font-semibold text-[#7B5A1A]">Earliest delivery</p>
+                      <p className="text-xs font-semibold text-[#6B6B6B]">Earliest delivery</p>
                       <p className="mt-0.5 text-base font-black text-[#1A1A1A]">As soon as possible</p>
                       <p className="mt-1 text-xs leading-5 text-[#6B6B6B]">
                         {leadMinutes
@@ -796,20 +797,15 @@ export default function CheckoutPage() {
                 <section className="overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white shadow-[0_12px_36px_rgba(26,26,26,0.07)]">
                   <div className="border-b border-[#F1F3F5] px-4 py-4 sm:px-5">
                     <div className="flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EDF8F0] text-[#16803D]">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
                         <ReceiptText className="h-5 w-5" aria-hidden="true" />
                       </span>
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.13em] text-[#F62E18]">
-                          Step 3
-                        </p>
-                        <h2 className="text-base font-bold">Bill details</h2>
-                      </div>
+                      <h2 className="text-base font-bold">Bill details</h2>
                     </div>
                   </div>
 
                   <div className="px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
-                    <div className="mb-4 rounded-[1rem] bg-[#F8F9FA] px-3.5 py-3">
+                    <div className="mb-4 rounded-[1rem] bg-[#F1F3F5] px-3.5 py-3">
                       <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-[#6B6B6B]">
                         Order summary
                       </p>
@@ -858,7 +854,7 @@ export default function CheckoutPage() {
                         </>
                       ) : (
                         <div className="mt-3 flex items-start gap-2 border-t border-[#E5E7EB] pt-4">
-                          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#16A34A]" aria-hidden="true" />
+                          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#6B6B6B]" aria-hidden="true" />
                           <p className="text-xs leading-5 text-[#6B6B6B]">
                             {reviewing
                               ? "Calculating delivery fee, tax and your final total…"
@@ -868,7 +864,26 @@ export default function CheckoutPage() {
                       )}
                     </dl>
 
-                    <div className="mt-4 flex items-start gap-2.5 rounded-[0.9rem] bg-[#EDF8F0] px-3 py-2.5 text-[#176B38]">
+                    {cartProblem ? (
+                      <div
+                        role="alert"
+                        className="mt-4 rounded-[0.9rem] bg-[#F1F3F5] p-3 text-sm leading-5 text-[#1A1A1A]"
+                      >
+                        <p className="flex items-start gap-2.5">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#C4200F]" aria-hidden="true" />
+                          {cartProblem}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void handleBackToCart()}
+                          className="mt-2 min-h-11 rounded-full !border-0 !bg-white px-4 text-sm font-bold !text-[#1A1A1A] !shadow-none"
+                        >
+                          Review cart
+                        </button>
+                      </div>
+                    ) : null}
+
+                    <div className="mt-4 flex items-start gap-2.5 rounded-[0.9rem] bg-[#F1F3F5] px-3 py-2.5 text-[#1A1A1A]">
                       <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                       <p className="text-[11px] font-semibold leading-5">
                         Secure payment. Your order is placed only after Craves confirms payment.
@@ -897,15 +912,6 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {error && hasCheckoutContext ? (
-          <div
-            role="status"
-            className="mt-4 flex items-start gap-2.5 rounded-xl border border-[#F6B545]/40 bg-[#FFF8EC] p-3 text-sm font-medium text-[#6B5526]"
-          >
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#B86E00]" aria-hidden="true" />
-            <p>{error}</p>
-          </div>
-        ) : null}
       </main>
 
       <AddressEditorFlow

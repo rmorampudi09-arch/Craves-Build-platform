@@ -1135,7 +1135,7 @@ export function ChefSubscriptionPlanManager() {
                     onChange={(event) => setField("name", event.target.value)}
                     maxLength={160}
                     placeholder="Weekly home lunch plan"
-                    className="mt-2 min-h-12 w-full rounded-xl border border-[#D8DEE3] bg-white px-4 text-[#1A1A1A] outline-none transition focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
+                    className="mt-2 min-h-12 w-full rounded-xl border border-[#D8DEE3] bg-white px-4 text-[#1A1A1A] outline-none transition focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[#1A1A1A]/15"
                     required
                   />
                   <span className="mt-1 block text-xs font-normal text-[#6B6B6B]">
@@ -1152,7 +1152,7 @@ export function ChefSubscriptionPlanManager() {
                       setField("billingPeriod", period);
                       setRows([emptyMeal()]);
                     }}
-                    className="mt-2 min-h-12 w-full rounded-xl border border-[#D8DEE3] bg-white px-4 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
+                    className="mt-2 min-h-12 w-full rounded-xl border border-[#D8DEE3] bg-white px-4 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[#1A1A1A]/15"
                   >
                     <option value="WEEKLY">Weekly</option>
                     <option value="MONTHLY">Monthly</option>
@@ -1169,7 +1169,7 @@ export function ChefSubscriptionPlanManager() {
                     step="0.01"
                     inputMode="decimal"
                     placeholder="0.00"
-                    className="mt-2 min-h-12 w-full rounded-xl border border-[#D8DEE3] bg-white px-4 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
+                    className="mt-2 min-h-12 w-full rounded-xl border border-[#D8DEE3] bg-white px-4 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[#1A1A1A]/15"
                     required
                   />
                 </label>
@@ -1183,7 +1183,7 @@ export function ChefSubscriptionPlanManager() {
                     }
                     maxLength={2000}
                     placeholder="Example: 5 homemade lunches every week, prepared fresh by my kitchen."
-                    className="mt-2 min-h-28 w-full resize-y rounded-xl border border-[#D8DEE3] bg-white p-4 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
+                    className="mt-2 min-h-28 w-full resize-y rounded-xl border border-[#D8DEE3] bg-white p-4 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[#1A1A1A]/15"
                   />
                   <span className="mt-1 block text-xs font-normal text-[#6B6B6B]">
                     Explain what the customer receives. Avoid internal kitchen terminology.
@@ -1307,7 +1307,7 @@ export function ChefSubscriptionPlanManager() {
                           setField("name", event.target.value)
                         }
                         maxLength={160}
-                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] px-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
+                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] px-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[#1A1A1A]/15"
                       />
                     </label>
                     <label className="text-sm font-semibold text-[#1A1A1A]">
@@ -1320,7 +1320,7 @@ export function ChefSubscriptionPlanManager() {
                             event.target.value as ChefMealPlanPeriod,
                           )
                         }
-                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] px-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
+                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] px-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[#1A1A1A]/15"
                       >
                         <option value="WEEKLY">Weekly</option>
                         <option value="MONTHLY">Monthly</option>
@@ -1337,7 +1337,7 @@ export function ChefSubscriptionPlanManager() {
                         min="0"
                         step="0.01"
                         inputMode="decimal"
-                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] px-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
+                        className="mt-2 min-h-11 w-full rounded-xl border border-[#D8DEE3] px-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[#1A1A1A]/15"
                       />
                     </label>
                     <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">
@@ -1348,7 +1348,7 @@ export function ChefSubscriptionPlanManager() {
                           setField("description", event.target.value)
                         }
                         maxLength={2000}
-                        className="mt-2 min-h-20 w-full resize-y rounded-xl border border-[#D8DEE3] p-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
+                        className="mt-2 min-h-20 w-full resize-y rounded-xl border border-[#D8DEE3] p-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[#1A1A1A]/15"
                       />
                     </label>
                     <div className="sm:col-span-2">
@@ -2002,7 +2002,7 @@ export function ChefSubscriptionPlanManager() {
                         value={note}
                         onChange={(event) => setNote(event.target.value)}
                         placeholder="Anything the reviewer should know about this plan."
-                        className="mt-2 min-h-24 w-full resize-y rounded-xl border border-[#D8DEE3] p-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[var(--color-flame-red)]/15"
+                        className="mt-2 min-h-24 w-full resize-y rounded-xl border border-[#D8DEE3] p-3 text-[#1A1A1A] outline-none focus:border-[var(--color-flame-red)] focus:ring-2 focus:ring-[#1A1A1A]/15"
                       />
                     </label>
 

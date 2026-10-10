@@ -39,7 +39,7 @@ interface BrowseHeaderProps {
 }
 
 const headerIconActionClass =
-  "h-9 w-9 items-center justify-center rounded-full !bg-[#F1F3F5] lg:h-10 lg:w-10 !text-[#F62E18] transition-[background-color,color,box-shadow] duration-200 ease-out hover:!bg-white hover:!text-[#F62E18] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30";
+  "h-9 w-9 items-center justify-center rounded-full !bg-[#F1F3F5] lg:h-10 lg:w-10 !text-[#F62E18] transition-[background-color,color,box-shadow] duration-200 ease-out hover:!bg-white hover:!text-[#F62E18] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30";
 
 function FoodPreferenceQuickToggles({
   value,
@@ -123,7 +123,7 @@ export function BrowseHeader({
             <button
               type="button"
               onClick={onBack}
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] p-0 text-[#1A1A1A] transition-[background-color,color,box-shadow] hover:bg-white hover:text-[#F62E18] hover:shadow-[0_6px_16px_rgba(26,26,26,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] p-0 text-[#1A1A1A] transition-[background-color,color,box-shadow] hover:bg-white hover:text-[#F62E18] hover:shadow-[0_6px_16px_rgba(26,26,26,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
               aria-label={backLabel}
               title={backLabel}
             >
@@ -133,7 +133,7 @@ export function BrowseHeader({
 
           <Link
             to="/home"
-            className="flex shrink-0 items-center gap-2 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+            className="flex shrink-0 items-center gap-2 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
             aria-label="Craves home"
           >
             <CravesLogo size="md" />
@@ -143,7 +143,7 @@ export function BrowseHeader({
             type="button"
             onClick={openLocation}
             data-craves-location-button="desktop"
-            className="flex min-h-10 min-w-0 max-w-[11.5rem] items-center gap-2 rounded-[1.1rem] border border-[#E5E7EB] !bg-white px-2.5 text-left !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.06)] transition-[border-color,box-shadow,scale] duration-200 ease-out hover:border-[#F62E18]/30 hover:shadow-[0_8px_20px_rgba(26,26,26,0.10)] active:scale-[0.98] lg:min-h-11 lg:max-w-[14rem] lg:gap-2.5 lg:px-3 xl:max-w-[16rem]"
+            className="flex min-h-10 min-w-0 max-w-[11.5rem] items-center gap-2 rounded-[1.1rem] border border-[#E5E7EB] !bg-white px-2.5 text-left !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.06)] transition-[border-color,box-shadow,scale] duration-200 ease-out hover:border-[#D7DADF] hover:shadow-[0_8px_20px_rgba(26,26,26,0.10)] active:scale-[0.98] lg:min-h-11 lg:max-w-[14rem] lg:gap-2.5 lg:px-3 xl:max-w-[16rem]"
             aria-label={locationTypeLabel + " delivery address: " + locationLabel + ". Manage address"}
           >
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18] lg:h-8 lg:w-8">
@@ -215,7 +215,7 @@ export function BrowseHeader({
 
           <Link
             to={chefDestination}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F62E18] lg:h-10 lg:w-10 text-white shadow-[0_8px_18px_rgba(246,46,24,0.22)] transition-[translate,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(246,46,24,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 motion-reduce:transform-none"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F62E18] lg:h-10 lg:w-10 text-white shadow-[0_8px_18px_rgba(26,26,26,0.14)] transition-[translate,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(26,26,26,0.14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/35 motion-reduce:transform-none"
             aria-label={chefActionLabel}
             title={chefActionLabel}
           >
@@ -239,7 +239,7 @@ export function BrowseHeader({
               <button
                 type="button"
                 onClick={onBack}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] p-0 text-[#1A1A1A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] p-0 text-[#1A1A1A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
                 aria-label={backLabel}
                 title={backLabel}
               >
@@ -251,7 +251,7 @@ export function BrowseHeader({
               type="button"
               onClick={openLocation}
               data-craves-location-button="mobile"
-              className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-[1.1rem] border border-[#E5E7EB] !bg-white px-2.5 py-2 text-left !text-[#1A1A1A] shadow-[0_4px_16px_rgba(26,26,26,0.07)] transition-[scale] duration-(--dur-micro) active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+              className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-[1.1rem] border border-[#E5E7EB] !bg-white px-2.5 py-2 text-left !text-[#1A1A1A] shadow-[0_4px_16px_rgba(26,26,26,0.07)] transition-[scale] duration-(--dur-micro) active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
               aria-label={locationTypeLabel + " delivery address: " + locationLabel + ". Manage address"}
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
@@ -279,7 +279,7 @@ export function BrowseHeader({
 
             <Link
               to={chefDestination}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F62E18] text-white shadow-[0_7px_16px_rgba(246,46,24,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F62E18] text-white shadow-[0_7px_16px_rgba(26,26,26,0.14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/35"
               aria-label={chefActionLabel}
               title={chefActionLabel}
             >

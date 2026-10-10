@@ -542,7 +542,7 @@ export function AddressEditorFlow({
   const inputClass = (key: FieldKey) =>
     "mt-1.5 w-full rounded-xl border bg-white px-3.5 py-3 text-sm text-[#1A1A1A] outline-none transition-[border-color,box-shadow] placeholder:text-[#9A9A9A] focus:ring-2 " +
     (fieldErrors[key]
-      ? "border-[#F62E18] focus:border-[#F62E18] focus:ring-[#F62E18]/10"
+      ? "border-[#F62E18] focus:border-[#F62E18] focus:ring-[#1A1A1A]/10"
       : "border-[#E5E7EB] focus:border-[#1A1A1A] focus:ring-[#1A1A1A]/10");
 
   const actionClass =

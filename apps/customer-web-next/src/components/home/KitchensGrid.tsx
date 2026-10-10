@@ -219,12 +219,12 @@ export function KitchensGrid({
           </span>
           <h3 className="mt-4 font-display text-xl font-black text-[#1A1A1A]">Choose your delivery location</h3>
           <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">{message}</p>
-          <button type="button" onClick={onManageAddress} className="mt-6 min-h-11 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white transition-shadow hover:shadow-[0_7px_18px_rgba(246,46,24,0.16)]">Choose location</button>
+          <button type="button" onClick={onManageAddress} className="mt-6 min-h-11 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white transition-shadow hover:shadow-[0_7px_18px_rgba(26,26,26,0.14)]">Choose location</button>
         </div>
       ) : null}
 
       {state === "error" ? (
-        <div className="rounded-[2rem] border border-[#F62E18]/25 bg-white p-8 text-center md:p-12">
+        <div className="rounded-[2rem] border border-[#E5E7EB] bg-white p-8 text-center md:p-12">
           <AlertTriangle className="mx-auto h-9 w-9 text-[#F62E18]" aria-hidden="true" />
           <h3 className="mt-4 font-display text-xl font-black text-[#1A1A1A]">Nearby kitchens could not be loaded</h3>
           <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">{message}</p>
@@ -270,7 +270,7 @@ export function KitchensGrid({
                     onSelectKitchen(kitchen);
                   }
                 }}
-                className="group cursor-pointer overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-white text-left text-[#1A1A1A] shadow-[0_7px_22px_rgba(26,26,26,0.065)] transition-[border-color,box-shadow] duration-300 hover:border-[#F62E18]/20 hover:shadow-[0_14px_32px_rgba(26,26,26,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+                className="group cursor-pointer overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-white text-left text-[#1A1A1A] shadow-[0_7px_22px_rgba(26,26,26,0.065)] transition-[border-color,box-shadow] duration-300 hover:border-[#D7DADF] hover:shadow-[0_14px_32px_rgba(26,26,26,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
                 aria-label={`Open ${name}`}
               >
                   <KitchenDishPreview name={name} images={previews} priority={index < 4} />

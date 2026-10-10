@@ -346,7 +346,7 @@ export function CheckoutAddressDialog({
               type="button"
               onClick={captureLocation}
               disabled={locating || busy}
-              className="mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border border-[#F62E18]/30 bg-[#F62E18]/5 p-3 text-sm font-bold text-[#F62E18] disabled:opacity-50"
+              className="mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F1F3F5] p-3 text-sm font-bold text-[#F62E18] disabled:opacity-50"
             >
               {locating ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Crosshair className="h-4 w-4" aria-hidden="true" />}
               {locating ? "Detecting your address…" : "Use my current location"}

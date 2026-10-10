@@ -322,7 +322,7 @@ export function HomeCategoryRail({
               type="button"
               onClick={() => scrollCategories(-1)}
               aria-label="Show previous craving categories"
-              className="absolute left-1.5 top-[3.25rem] z-20 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] transition-[box-shadow,scale] duration-200 hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] active:scale-[0.94] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-flame-red)]/30 md:left-4 md:top-[3.75rem] md:flex lg:left-7 lg:top-[4rem]"
+              className="absolute left-1.5 top-[3.25rem] z-20 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] transition-[box-shadow,scale] duration-200 hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] active:scale-[0.94] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30 md:left-4 md:top-[3.75rem] md:flex lg:left-7 lg:top-[4rem]"
             >
               <FaChevronLeft
                 className="h-4 w-4 lg:h-5 lg:w-5"
@@ -343,7 +343,7 @@ export function HomeCategoryRail({
               type="button"
               onClick={() => scrollCategories(1)}
               aria-label="Show more craving categories"
-              className="absolute right-1.5 top-[3.25rem] z-20 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] transition-[box-shadow,scale] duration-200 hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] active:scale-[0.94] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-flame-red)]/30 md:right-4 md:top-[3.75rem] md:flex lg:right-7 lg:top-[4rem]"
+              className="absolute right-1.5 top-[3.25rem] z-20 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] transition-[box-shadow,scale] duration-200 hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] active:scale-[0.94] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30 md:right-4 md:top-[3.75rem] md:flex lg:right-7 lg:top-[4rem]"
             >
               <FaChevronRight
                 className="h-4 w-4 lg:h-5 lg:w-5"

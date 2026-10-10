@@ -231,8 +231,8 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
               onClick={() => showIndex(index)}
               className={`relative !h-[4rem] !w-[5.15rem] shrink-0 overflow-hidden rounded-xl !border !bg-[#F1F3F5] !p-0 transition-[border-color,box-shadow] sm:!h-[4.4rem] sm:!w-[5.8rem] ${
                 index === safeIndex
-                  ? "!border-[#F62E18] !shadow-[0_0_0_2px_rgba(246,46,24,0.12)]"
-                  : "!border-[#E5E7EB] hover:!border-[#F62E18]/45"
+                  ? "!border-[#F62E18] !shadow-[0_0_0_2px_rgba(26,26,26,0.12)]"
+                  : "!border-[#E5E7EB] hover:!border-[#D7DADF]"
               }`}
               aria-label={`Show photo ${index + 1} of ${images.length}`}
               aria-pressed={index === safeIndex}

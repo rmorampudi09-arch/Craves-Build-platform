@@ -20,7 +20,7 @@ const SECONDARY_BUTTON =
 const TERTIARY_BUTTON =
   "min-h-12 w-full rounded-full !border-0 !bg-[#F1F3F5] px-5 font-semibold !text-[#1A1A1A] !shadow-none disabled:opacity-50";
 const FIELD =
-  "min-h-12 w-full rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10";
+  "min-h-12 w-full rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10";
 
 /**
  * Phone OTP sign-in shared by /sign-in, the admin portal and Chef Mode.

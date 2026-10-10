@@ -25,7 +25,7 @@ export function CheckoutHeader({
         </button>
         <Link
           to="/home"
-          className="shrink-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+          className="shrink-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
           aria-label="Craves home"
         >
           <CravesLogo size="sm" decorative />

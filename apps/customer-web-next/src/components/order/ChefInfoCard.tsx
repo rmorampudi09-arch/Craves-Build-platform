@@ -37,7 +37,7 @@ export function ChefInfoCard({
           : "Reviews unavailable";
 
   const content = (
-    <section className="rounded-[1.6rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_8px_28px_rgba(26,26,26,0.05)] transition-[border-color,box-shadow] duration-200 hover:border-[#F62E18]/30 hover:shadow-[0_14px_34px_rgba(246,46,24,0.10)] sm:p-5">
+    <section className="rounded-[1.6rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_8px_28px_rgba(26,26,26,0.05)] transition-[border-color,box-shadow] duration-200 hover:border-[#D7DADF] hover:shadow-[0_14px_34px_rgba(26,26,26,0.10)] sm:p-5">
       <div className="flex items-center gap-3.5">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.15rem] bg-[#F1F3F5] text-[#F62E18] shadow-[inset_0_0_0_1px_rgba(26,26,26,0.03)]">
           <ChefHat className="h-6 w-6" aria-hidden="true" />
@@ -75,7 +75,7 @@ export function ChefInfoCard({
     <Link
       to="/kitchen/$id"
       params={{ id: chefId }}
-      className="group mt-5 block rounded-[1.6rem] focus:outline-none focus:ring-2 focus:ring-[#F62E18]/35"
+      className="group mt-5 block rounded-[1.6rem] focus:outline-none focus:ring-2 focus:ring-[#1A1A1A]/35"
       aria-label={"View " + chefName + " home kitchen"}
     >
       {content}

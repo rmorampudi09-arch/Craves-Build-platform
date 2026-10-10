@@ -233,7 +233,7 @@ export function CustomerPageSkeleton({
         <div className="mx-auto flex max-w-[88rem] items-center gap-3">
           <Link
             href="/home"
-            className="shrink-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+            className="shrink-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
             aria-label="Craves home"
           >
             <CravesLogo size="sm" decorative />

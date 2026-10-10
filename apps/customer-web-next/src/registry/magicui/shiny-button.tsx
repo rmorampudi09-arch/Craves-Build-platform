@@ -16,7 +16,7 @@ export function ShinyButton({
   return (
     <button
       type={type}
-      className={`group/shiny relative isolate overflow-hidden rounded-full border border-white bg-white/90 font-black text-[#1A1A1A] shadow-[inset_0_1px_0_rgba(255,255,255,1),0_6px_18px_rgba(26,26,26,0.08)] transition-[border-color,box-shadow,transform] duration-200 hover:border-[#F62E18]/25 hover:shadow-[0_10px_24px_rgba(246,46,24,0.14)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 motion-reduce:transform-none ${className}`}
+      className={`group/shiny relative isolate overflow-hidden rounded-full border border-white bg-white/90 font-black text-[#1A1A1A] shadow-[inset_0_1px_0_rgba(255,255,255,1),0_6px_18px_rgba(26,26,26,0.08)] transition-[border-color,box-shadow,transform] duration-200 hover:border-[#D7DADF] hover:shadow-[0_10px_24px_rgba(26,26,26,0.14)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/35 motion-reduce:transform-none ${className}`}
       {...props}
     >
       <span

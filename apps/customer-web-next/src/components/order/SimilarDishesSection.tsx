@@ -20,7 +20,7 @@ export function SimilarDishesSection({ dishes }: { dishes: Dish[] }) {
             key={dish.id}
             to="/dish/$id"
             params={{ id: dish.id }}
-            className="w-40 shrink-0 overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white transition hover:border-[#F62E18]/40"
+            className="w-40 shrink-0 overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white transition hover:border-[#D7DADF]"
           >
             <div className="relative aspect-square bg-[#F1F3F5]">
               <img

@@ -21,11 +21,11 @@ export default async function SupportPage({
         <Link
           href={order ? `/orders/${order}` : "/profile"}
           aria-label={order ? "Back to order" : "Back to profile"}
-          className="flex h-11 w-11 items-center justify-center rounded-full text-[#1A1A1A] hover:bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+          className="flex h-11 w-11 items-center justify-center rounded-full text-[#1A1A1A] hover:bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
         >
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Link>
-        <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F62E18] text-white shadow-[0_2px_8px_rgba(246,46,24,0.25)]">
+        <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F62E18] text-white shadow-[0_2px_8px_rgba(26,26,26,0.14)]">
           <Sparkles className="h-5 w-5" />
         </span>
         <div className="min-w-0">

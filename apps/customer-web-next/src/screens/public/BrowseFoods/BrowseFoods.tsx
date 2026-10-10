@@ -850,7 +850,7 @@ function BrowseFoodsPage() {
               setDefaultAddressResolved(false);
               setSessionRetryNonce((current) => current + 1);
             }}
-            className="mt-5 min-h-11 rounded-xl !border-transparent !bg-[#F62E18] px-5 text-sm font-bold !text-white shadow-[0_6px_18px_rgba(246,46,24,0.18)] active:!bg-[#C4200F]"
+            className="mt-5 min-h-11 rounded-xl !border-transparent !bg-[#F62E18] px-5 text-sm font-bold !text-white shadow-[0_6px_18px_rgba(26,26,26,0.14)] active:!bg-[#C4200F]"
           >
             Try again
           </button>

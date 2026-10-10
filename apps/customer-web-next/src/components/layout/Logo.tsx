@@ -18,7 +18,7 @@ export function Logo(props: { light?: boolean }) {
   return (
     <Link
       href="/"
-      className="inline-flex items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+      className="inline-flex items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
       aria-label="Craves home"
     >
       <CravesLogo size="lg" decorative priority className="h-14 w-14" />

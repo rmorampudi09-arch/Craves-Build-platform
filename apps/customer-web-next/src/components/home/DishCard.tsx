@@ -215,7 +215,7 @@ export const DishCard = memo(function DishCard({
         <Link
           to="/dish/$id"
           params={{ id: dish.id }}
-          className="absolute inset-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#F62E18]/35 focus-visible:ring-inset"
+          className="absolute inset-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#1A1A1A]/35 focus-visible:ring-inset"
           aria-label={`View ${dish.name} details`}
         >
           <ProgressiveImage
@@ -242,7 +242,7 @@ export const DishCard = memo(function DishCard({
           aria-pressed={favorite}
           aria-label={favorite ? `Remove ${dish.name} from saved dishes` : `Save ${dish.name}`}
           title={favoriteError ?? (favorite ? "Saved" : "Save dish")}
-          className="absolute right-2.5 top-2.5 z-10 flex h-9 w-9 items-center justify-center rounded-full !border !border-white/80 !bg-[#F1F3F5] !text-[#F62E18] shadow-[0_8px_22px_rgba(26,26,26,0.12)] transition-[background-color,box-shadow,scale] duration-(--dur-micro) ease-out hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:scale-[0.9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 motion-reduce:transform-none disabled:cursor-wait disabled:opacity-60 sm:right-3.5 sm:top-3.5 sm:h-10 sm:w-10"
+          className="absolute right-2.5 top-2.5 z-10 flex h-9 w-9 items-center justify-center rounded-full !border !border-white/80 !bg-[#F1F3F5] !text-[#F62E18] shadow-[0_8px_22px_rgba(26,26,26,0.12)] transition-[background-color,box-shadow,scale] duration-(--dur-micro) ease-out hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:scale-[0.9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30 motion-reduce:transform-none disabled:cursor-wait disabled:opacity-60 sm:right-3.5 sm:top-3.5 sm:h-10 sm:w-10"
         >
           <Heart
             className={`h-[1.05rem] w-[1.05rem] transition-colors ${
@@ -278,7 +278,7 @@ export const DishCard = memo(function DishCard({
             <Link
               to="/dish/$id"
               params={{ id: dish.id }}
-              className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35"
+              className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/35"
             >
               <h3
                 className={`font-display font-black leading-tight tracking-[-0.03em] text-[#1A1A1A] transition-colors group-hover:text-[#F62E18] ${

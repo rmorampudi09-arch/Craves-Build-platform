@@ -427,7 +427,7 @@ export function AuthModal({
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="inline-flex rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+              className="inline-flex rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
               aria-label="Craves home"
             >
               <CravesLogo size="sm" />

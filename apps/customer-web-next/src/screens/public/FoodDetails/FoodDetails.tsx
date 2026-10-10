@@ -404,7 +404,7 @@ function DishDetailPage() {
                 type="button"
                 onClick={() => void handleAddToCart()}
                 disabled={adding}
-                className="!mt-4 !inline-flex !min-h-12 !w-full !items-center !justify-center !gap-2 !rounded-full !bg-[#F62E18] !px-6 !text-sm !font-black !text-white !shadow-[0_9px_24px_rgba(246,46,24,0.18)] transition-[box-shadow,scale] duration-(--dur-micro) hover:!shadow-[0_12px_30px_rgba(246,46,24,0.25)] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 max-lg:!hidden"
+                className="!mt-4 !inline-flex !min-h-12 !w-full !items-center !justify-center !gap-2 !rounded-full !bg-[#F62E18] !px-6 !text-sm !font-black !text-white !shadow-[0_9px_24px_rgba(26,26,26,0.14)] transition-[box-shadow,scale] duration-(--dur-micro) hover:!shadow-[0_12px_30px_rgba(26,26,26,0.14)] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 max-lg:!hidden"
               >
                 <CravesCartIcon className="h-4 w-4" />
                 {adding ? "Adding…" : "Add to cart"}
@@ -416,7 +416,7 @@ function DishDetailPage() {
                 role={messageKind === "error" ? "alert" : "status"}
                 className={`mt-3 hidden rounded-2xl border p-4 text-sm font-bold lg:block ${
                   messageKind === "error"
-                    ? "border-[#F62E18]/20 bg-[#F1F3F5] text-[#C4200F]"
+                    ? "border-[#E5E7EB] bg-[#F1F3F5] text-[#C4200F]"
                     : "border-[#E5E7EB] bg-[#F1F3F5] text-[#1A1A1A]"
                 }`}
               >

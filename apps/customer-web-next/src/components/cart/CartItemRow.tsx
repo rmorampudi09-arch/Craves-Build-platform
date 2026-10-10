@@ -93,7 +93,7 @@ export function CartItemRow({
         <button
           type="button"
           onClick={onRemove}
-          className="inline-flex min-h-12 items-center gap-2 rounded-[8px] px-3 text-sm font-semibold text-[#6B6B6B] transition-[background-color,color,scale] duration-(--dur-micro) hover:bg-[#F1F3F5] hover:text-[#C4200F] active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+          className="inline-flex min-h-12 items-center gap-2 rounded-[8px] px-3 text-sm font-semibold text-[#6B6B6B] transition-[background-color,color,scale] duration-(--dur-micro) hover:bg-[#F1F3F5] hover:text-[#C4200F] active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
         >
           <FaTrashCan className="text-xs" aria-hidden="true" />
           Remove

@@ -230,14 +230,14 @@
   letter-spacing: -0.2px;
   text-align: center;
   text-decoration: none;
-  box-shadow: 0 6px 14px rgb(246 46 24 / 0.18);
+  box-shadow: 0 6px 14px rgb(26 26 26 / 0.14);
   transition:
     background-color 160ms ease,
     transform 160ms ease;
 }
 .cob .cob-primary:not(:disabled):hover {
   background: var(--cob-red-hover);
-  box-shadow: 0 8px 18px rgb(246 46 24 / 0.22);
+  box-shadow: 0 8px 18px rgb(26 26 26 / 0.14);
 }
 .cob .cob-primary:disabled {
   cursor: progress;
@@ -473,9 +473,9 @@ select.cob-input {
 }
 .cob .cob-input:focus,
 .cob .cob-input:focus-visible {
-  border-color: var(--cob-red);
+  border-color: var(--cob-ink);
   background-color: var(--cob-white);
-  box-shadow: 0 0 0 3px rgb(246 46 24 / 0.1);
+  box-shadow: 0 0 0 3px rgb(26 26 26 / 0.1);
   outline: none !important;
 }
 .cob-input[aria-invalid="true"] {
@@ -1277,7 +1277,7 @@ a.cob-thumb:focus-visible {
   border-radius: 999px;
   background: var(--cob-red);
   color: var(--cob-white);
-  box-shadow: 0 8px 22px rgb(246 46 24 / 0.35);
+  box-shadow: 0 8px 22px rgb(26 26 26 / 0.14);
   transition: transform 180ms var(--cob-ease);
 }
 .cob .cob-video-poster:hover .cob-play {

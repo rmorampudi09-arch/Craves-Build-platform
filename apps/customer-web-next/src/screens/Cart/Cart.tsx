@@ -266,7 +266,7 @@ function CartPage() {
       <CartHeader onBack={() => navigate({ to: "/home" })} />
       <main className="mx-auto max-w-2xl px-4 pb-8 pt-5 md:px-6 md:pt-7">
         {message && items.length === 0 ? (
-          <div className="rounded-[8px] border border-[#F62E18]/20 bg-white p-8 text-center shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
+          <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-8 text-center shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
             <AlertTriangle className="mx-auto h-9 w-9 text-[#F62E18]" aria-hidden="true" />
             <h2 className="mt-4 text-xl font-semibold">Cart unavailable</h2>
             <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{message}</p>
@@ -309,7 +309,7 @@ function CartPage() {
                 <Link
                   to="/kitchen/$id"
                   params={{ id: kitchenId }}
-                  className="flex min-h-12 items-center gap-2 border-t border-[#F1F3F5] py-3 text-sm font-semibold text-[#C4200F] transition-opacity duration-(--dur-micro) active:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+                  className="flex min-h-12 items-center gap-2 border-t border-[#F1F3F5] py-3 text-sm font-semibold text-[#C4200F] transition-opacity duration-(--dur-micro) active:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
                 >
                   <Plus className="h-4 w-4" aria-hidden="true" />
                   Add more from this kitchen
@@ -328,7 +328,7 @@ function CartPage() {
                 rows={3}
                 onChange={(event) => persistInstructions(event.target.value)}
                 placeholder="Any special requests for the chef?"
-                className="mt-2 w-full resize-none rounded-[8px] border border-[#E5E7EB] bg-white px-3.5 py-3 text-sm outline-none placeholder:text-[#9A9A9A] focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10"
+                className="mt-2 w-full resize-none rounded-[8px] border border-[#E5E7EB] bg-white px-3.5 py-3 text-sm outline-none placeholder:text-[#9A9A9A] focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10"
               />
               <p className="mt-1 text-right text-xs tabular-nums text-[#6B6B6B]">
                 {instructions.length}/200
@@ -354,7 +354,7 @@ function CartPage() {
         {message && items.length > 0 ? (
           <p
             role="alert"
-            className="mt-4 rounded-[8px] border border-[#F62E18]/20 bg-[#F1F3F5] p-3 text-sm font-medium text-[#C4200F]"
+            className="mt-4 rounded-[8px] border border-[#E5E7EB] bg-[#F1F3F5] p-3 text-sm font-medium text-[#C4200F]"
           >
             {message}
           </p>

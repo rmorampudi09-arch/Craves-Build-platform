@@ -77,7 +77,7 @@ export function LocalDiscoveryPage({ city, food, mode }: LocalDiscoveryPageProps
         </div>
 
         {city ? (
-          <section className="mt-10 rounded-3xl bg-[#FFF5F3] p-7">
+          <section className="mt-10 rounded-3xl bg-[#F1F3F5] p-7">
             <h2 className="font-display text-2xl font-bold">
               Areas Craves is preparing for in {city.searchName}
             </h2>
@@ -100,7 +100,7 @@ export function LocalDiscoveryPage({ city, food, mode }: LocalDiscoveryPageProps
                 <Link
                   key={item.slug}
                   href={href}
-                  className="rounded-2xl border border-black/10 p-4 text-sm font-semibold text-black/75 transition hover:border-[#F62E18]/40 hover:text-[#F62E18]"
+                  className="rounded-2xl border border-black/10 p-4 text-sm font-semibold text-black/75 transition hover:border-[#D7DADF] hover:text-[#F62E18]"
                 >
                   {item.name}
                 </Link>

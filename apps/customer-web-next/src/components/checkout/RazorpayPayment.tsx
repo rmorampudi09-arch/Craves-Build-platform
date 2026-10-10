@@ -551,7 +551,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
 
             <Link
               to="/orders"
-              className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#C9CDD2] bg-white px-4 text-sm font-semibold text-ink transition-colors hover:border-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/20"
+              className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#C9CDD2] bg-white px-4 text-sm font-semibold text-ink transition-colors hover:border-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/20"
             >
               <ArrowLeft
                 className="h-4 w-4"

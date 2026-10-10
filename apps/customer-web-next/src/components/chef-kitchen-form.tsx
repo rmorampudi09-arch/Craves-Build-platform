@@ -53,7 +53,7 @@ const EMPTY: FormState = {
 };
 
 const INPUT_CLASS =
-  "mt-2 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-base text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10 disabled:bg-[#F1F3F5]";
+  "mt-2 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-base text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10 disabled:bg-[#F1F3F5]";
 
 function fromKitchen(kitchen: ChefKitchen | null, registeredPhone = ""): FormState {
   if (!kitchen) return EMPTY;

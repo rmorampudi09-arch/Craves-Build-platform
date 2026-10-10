@@ -15,7 +15,7 @@ type Props = {
   onVerified?: (state: EmailVerificationState) => void;
 };
 
-const inputClass = "mt-2 min-h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10 disabled:opacity-50";
+const inputClass = "mt-2 min-h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10 disabled:opacity-50";
 const buttonClass = "min-h-10 rounded-xl border border-[#E5E7EB] bg-[#F1F3F5] px-4 text-xs font-black text-[#1A1A1A] hover:bg-white disabled:opacity-50";
 
 function matchesVerifiedEmail(state: EmailVerificationState | null, email: string | null) {
@@ -403,7 +403,7 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
             maxLength={EMAIL_VERIFICATION_MAX_LENGTH}
             value={displayedEmail}
             disabled={busy || sessionExpired}
-            className="min-h-12 min-w-0 flex-1 rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10 disabled:opacity-50"
+            className="min-h-12 min-w-0 flex-1 rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10 disabled:opacity-50"
             placeholder={pending ? pending.maskedEmail : "you@example.com"}
             onChange={(event) => editEmail(event.target.value)}
           />
@@ -442,7 +442,7 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
                 maxLength={6}
                 value={code}
                 disabled={disabled || timing.expiresIn === 0}
-                className="min-h-11 min-w-0 flex-1 rounded-xl border border-[#E5E7EB] bg-white px-3 text-center text-base font-bold tracking-[0.24em] text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10"
+                className="min-h-11 min-w-0 flex-1 rounded-xl border border-[#E5E7EB] bg-white px-3 text-center text-base font-bold tracking-[0.24em] text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10"
                 onChange={(event) =>
                   setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
                 }

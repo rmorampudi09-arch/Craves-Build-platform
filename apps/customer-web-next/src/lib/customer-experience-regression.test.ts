@@ -38,12 +38,15 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.doesNotMatch(kitchens, /ChevronRight/);
   assert.doesNotMatch(kitchens, /kitchenPreviewTrack/);
   assert.doesNotMatch(kitchens, /\b3000\b/);
-  assert.match(kitchens, /onPointerDown/);
+  // A native snap strip follows the finger; dots track the scroll with opacity/scale only.
+  assert.match(kitchens, /snap-x snap-mandatory overflow-x-auto/);
+  assert.doesNotMatch(kitchens, /onPointerDown|setPointerCapture|duration-500/);
   assert.match(kitchens, /new window\.Image\(\)/);
   assert.match(kitchens, /kitchenImagePreloads/);
   assert.match(kitchens, /priority=\{index < 4\}/);
   assert.match(kitchens, /fetchPriority=\{priority && index === 0 \? "high" : "auto"\}/);
-  assert.match(kitchens, /transition-\[opacity,transform\]/);
+  assert.match(kitchens, /transition-\[opacity,scale\]/);
+  assert.doesNotMatch(kitchens, /transition-all|w-4 bg-white/);
   assert.doesNotMatch(kitchens, /View chef/);
   assert.match(dishes, /priorityImage=\{index < 4\}/);
   assert.match(progressiveImage, /unoptimized = true/);

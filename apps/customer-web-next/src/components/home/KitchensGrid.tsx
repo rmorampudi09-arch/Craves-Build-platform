@@ -84,65 +84,27 @@ function KitchenDishPreview({
     () => Array.from(new Set(images.filter(Boolean))).slice(0, 5),
     [images],
   );
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const swipeStartXRef = useRef<number | null>(null);
-  const suppressClickRef = useRef(false);
+  const stripRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [loadedSources, setLoadedSources] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const [isVisible, setIsVisible] = useState(false);
-  const imageKey = usable.join("|");
 
+  // Warm the cache for the other photos once the card nears the viewport, so
+  // a swipe never reveals an empty slide. No autoplay (WCAG 2.2.2).
   useEffect(() => {
-    setActiveIndex(0);
-    setLoadedSources(new Set(usable[0] ? [usable[0]] : []));
-  }, [imageKey, usable]);
-
-  useEffect(() => {
-    const target = viewportRef.current;
-    if (!target || typeof IntersectionObserver === "undefined") {
-      setIsVisible(true);
+    const strip = stripRef.current;
+    if (!strip || usable.length <= 1 || typeof IntersectionObserver === "undefined") {
       return;
     }
-
     const observer = new IntersectionObserver(
-      ([entry]) => setIsVisible(Boolean(entry?.isIntersecting)),
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        observer.disconnect();
+        for (const src of usable.slice(1)) void preloadKitchenImage(src);
+      },
       { rootMargin: "520px 0px" },
     );
-    observer.observe(target);
+    observer.observe(strip);
     return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!isVisible || usable.length <= 1) return;
-
-    let active = true;
-
-    // Preload the full small carousel once the card approaches the viewport.
-    // Slides then cross-fade from memory instead of starting a new image request
-    // at the exact moment the customer sees the next photo.
-    void Promise.all(
-      usable.map(async (src) => ({
-        src,
-        loaded: await preloadKitchenImage(src),
-      })),
-    ).then((results) => {
-      if (!active) return;
-      const loaded = results.filter((result) => result.loaded).map((result) => result.src);
-      if (!loaded.length) return;
-      setLoadedSources((current) => {
-        const next = new Set(current);
-        for (const src of loaded) next.add(src);
-        return next;
-      });
-    });
-
-    // No autoplay (WCAG 2.2.2): photos change only when the customer swipes or taps.
-    return () => {
-      active = false;
-    };
-  }, [isVisible, usable]);
+  }, [usable]);
 
   if (!usable.length) {
     return (
@@ -152,103 +114,48 @@ function KitchenDishPreview({
     );
   }
 
-  const safeIndex = activeIndex % usable.length;
-
-  const showIndex = (index: number) => {
-    const normalizedIndex = (index + usable.length) % usable.length;
-    const src = usable[normalizedIndex];
-    void preloadKitchenImage(src).then((loaded) => {
-      if (!loaded) return;
-      setLoadedSources((current) => {
-        if (current.has(src)) return current;
-        const next = new Set(current);
-        next.add(src);
-        return next;
-      });
-      setActiveIndex(normalizedIndex);
-    });
-  };
-
-  const beginSwipe = (clientX: number) => {
-    swipeStartXRef.current = clientX;
-    suppressClickRef.current = false;
-  };
-
-  const finishSwipe = (clientX: number) => {
-    const startX = swipeStartXRef.current;
-    swipeStartXRef.current = null;
-    if (startX === null) return;
-
-    const delta = clientX - startX;
-    if (Math.abs(delta) < 34) return;
-
-    suppressClickRef.current = true;
-    showIndex(delta < 0 ? safeIndex + 1 : safeIndex - 1);
-  };
-
   return (
-    <div
-      ref={viewportRef}
-      className={styles.kitchenPreviewViewport}
-      onPointerDown={(event) => {
-        if (event.pointerType === "mouse" && event.button !== 0) return;
-        event.currentTarget.setPointerCapture?.(event.pointerId);
-        beginSwipe(event.clientX);
-      }}
-      onPointerUp={(event) => {
-        finishSwipe(event.clientX);
-        event.currentTarget.releasePointerCapture?.(event.pointerId);
-      }}
-      onPointerCancel={() => {
-        swipeStartXRef.current = null;
-      }}
-      onClickCapture={(event) => {
-        if (!suppressClickRef.current) return;
-        suppressClickRef.current = false;
-        event.preventDefault();
-        event.stopPropagation();
-      }}
-    >
-      {usable.map((src, index) => {
-        const loaded = index === safeIndex || loadedSources.has(src);
-        if (!loaded) return null;
-
-        return (
+    <div className="relative aspect-[16/9] overflow-hidden bg-[#F1F3F5]">
+      {/* A native snap strip: the photo follows the finger and settles on release. */}
+      <div
+        ref={stripRef}
+        onScroll={(event) => {
+          const strip = event.currentTarget;
+          if (strip.clientWidth > 0) {
+            setActiveIndex(Math.round(strip.scrollLeft / strip.clientWidth));
+          }
+        }}
+        className="flex h-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {usable.map((src, index) => (
           <img
             key={src}
             src={src}
             alt={
-              index === safeIndex
+              index === activeIndex
                 ? `${name} dish preview ${index + 1} of ${usable.length}`
                 : ""
             }
-            aria-hidden={index === safeIndex ? undefined : true}
-            loading={index === 0 ? "eager" : "lazy"}
+            aria-hidden={index === activeIndex ? undefined : true}
+            loading={index === 0 && priority ? "eager" : "lazy"}
             decoding="async"
             fetchPriority={priority && index === 0 ? "high" : "auto"}
             draggable={false}
-            className={[
-              styles.kitchenPreviewImage,
-              "transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
-              index === safeIndex
-                ? "z-[1] scale-100 opacity-100"
-                : "z-0 scale-[1.015] opacity-0",
-            ].join(" ")}
+            className="h-full w-full shrink-0 snap-center snap-always object-cover"
           />
-        );
-      })}
-
+        ))}
+      </div>
 
       {usable.length > 1 ? (
         <div
-          className="pointer-events-none absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-full bg-black/24 px-2 py-1 backdrop-blur-sm"
+          className="pointer-events-none absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-[#1A1A1A]/35 px-2 py-1.5"
           aria-hidden="true"
         >
           {usable.map((src, index) => (
             <span
               key={src}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                index === safeIndex ? "w-4 bg-white" : "w-1.5 bg-white/60"
+              className={`h-1.5 w-1.5 rounded-full bg-white transition-[opacity,scale] duration-(--dur-component) ease-out ${
+                index === activeIndex ? "scale-125 opacity-100" : "opacity-55"
               }`}
             />
           ))}

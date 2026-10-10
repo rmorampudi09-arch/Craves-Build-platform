@@ -1,5 +1,6 @@
 "use client";
 
+import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -56,18 +57,9 @@ export function ChefEarningsLedger() {
         credentials: "same-origin",
       });
       const raw = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message =
-          raw &&
-          typeof raw === "object" &&
-          "message" in raw &&
-          typeof raw.message === "string"
-            ? raw.message
-            : "Chef earnings are temporarily unavailable.";
-        throw new Error(message);
-      }
+      if (!response.ok) throw chefApiError(response, raw, "Chef earnings are temporarily unavailable.");
       const parsed = parseChefEarnings(raw);
-      if (!parsed) throw new Error("Craves returned an invalid chef earnings response.");
+      if (!parsed) throw new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, "INVALID_CHEF_EARNINGS_RESPONSE", response.status);
       setEntries(
         [...parsed].sort(
           (left, right) =>
@@ -77,9 +69,7 @@ export function ChefEarningsLedger() {
       setLastUpdatedAt(new Date());
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : "Chef earnings are temporarily unavailable.",
+        chefErrorText(caught, "Chef earnings are temporarily unavailable."),
       );
     } finally {
       setLoading(false);

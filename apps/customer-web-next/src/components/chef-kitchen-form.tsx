@@ -1,5 +1,6 @@
 "use client";
 
+import { ChefError, chefApiError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
 import { AddressMapPicker } from "@/components/location/AddressMapPicker";
 import { useEffect, useRef, useState } from "react";
@@ -188,11 +189,9 @@ export function ChefKitchenForm() {
           : null;
         if (!active || !isSessionContextCurrent(sessionContext)) return;
         if (!kitchenResponse.ok) {
-          throw new Error(
-            kitchenResponse.status === 403
-              ? "Your chef approval needs to finish before you can set up a kitchen."
-              : "We couldn’t load your kitchen right now.",
-          );
+          throw kitchenResponse.status === 403
+            ? new ChefError("Your chef approval needs to finish before you can set up a kitchen.", "CHEF_ACCESS_REQUIRED", 403)
+            : chefApiError(kitchenResponse, kitchenBody, "We couldn’t load your kitchen right now.");
         }
         const onboardingBody = onboardingResponse?.ok ? parseOnboardingState(await onboardingResponse.json().catch(() => null)) : null;
         if (!active || !isSessionContextCurrent(sessionContext)) return;
@@ -219,7 +218,7 @@ export function ChefKitchenForm() {
       })
       .catch((error) => {
         if (active && isSessionContextCurrent(sessionContext)) {
-          setMessage(error instanceof Error ? error.message : "We couldn’t load your kitchen right now.");
+          setMessage(chefErrorText(error, "We couldn’t load your kitchen right now."));
           setLoaded(true);
         }
       });
@@ -357,22 +356,15 @@ export function ChefKitchenForm() {
         body: JSON.stringify(body),
       });
       const result = (await response.json().catch(() => null)) as { message?: unknown } | null;
-      if (!response.ok || !result) {
-        throw new Error(
-          typeof result?.message === "string"
-            ? result.message
-            : response.status === 400
-              ? "Please check the kitchen details and try again."
-              : "We couldn’t save your kitchen. Please try again.",
-        );
-      }
+      if (!response.ok) throw chefApiError(response, result, "Please check the kitchen details and try again.");
+      if (!result) throw new ChefError("We couldn’t confirm your kitchen was saved. Reload to check it.", "INVALID_KITCHEN_RESPONSE", response.status);
       const nextKitchen = result as unknown as ChefKitchen;
       setKitchen(nextKitchen);
       setForm(fromKitchen(nextKitchen));
       setMessage("");
       setStep("summary");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "We couldn’t save your kitchen. Please try again.");
+      setMessage(chefErrorText(error, "We couldn’t save your kitchen. Please try again."));
     } finally {
       setBusy(false);
     }

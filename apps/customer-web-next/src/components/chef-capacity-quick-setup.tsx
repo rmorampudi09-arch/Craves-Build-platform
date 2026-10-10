@@ -1,5 +1,6 @@
 "use client";
 
+import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   parseChefCapacitySummary,
@@ -35,17 +36,6 @@ function positiveWholeNumber(value: string): number | null {
   return Number.isInteger(parsed) && parsed > 0 && parsed <= 100000 ? parsed : null;
 }
 
-function errorMessage(body: unknown, fallback: string): string {
-  if (!body || typeof body !== "object") return fallback;
-  const raw = body as Record<string, unknown>;
-  if (typeof raw.message === "string" && raw.message.trim()) return raw.message;
-  if (raw.details && typeof raw.details === "object") {
-    const details = raw.details as Record<string, unknown>;
-    if (typeof details.message === "string" && details.message.trim()) return details.message;
-  }
-  return fallback;
-}
-
 export function ChefCapacityQuickSetup() {
   const [summary, setSummary] = useState<ChefCapacitySummary | null>(null);
   const [menu, setMenu] = useState<ChefMenuItem[]>([]);
@@ -76,16 +66,16 @@ export function ChefCapacityQuickSetup() {
     ]);
 
     if (!capacityResponse.ok) {
-      throw new Error(errorMessage(capacityRaw, "Subscription availability could not be loaded."));
+      throw chefApiError(capacityResponse, capacityRaw, "Subscription availability could not be loaded.");
     }
     if (!menuResponse.ok) {
-      throw new Error(errorMessage(menuRaw, "Your menu could not be loaded."));
+      throw chefApiError(menuResponse, menuRaw, "Your menu could not be loaded.");
     }
 
     const parsedCapacity = parseChefCapacitySummary(capacityRaw);
     const parsedMenu = parseChefMenuItems(menuRaw);
-    if (!parsedCapacity) throw new Error("Craves returned an invalid capacity response.");
-    if (!parsedMenu) throw new Error("Craves returned an invalid menu response.");
+    if (!parsedCapacity) throw new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, "INVALID_CAPACITY_RESPONSE", capacityResponse.status);
+    if (!parsedMenu) throw new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, "INVALID_MENU_RESPONSE", menuResponse.status);
 
     const available = parsedMenu.filter(item => item.status === "ACTIVE" && item.available);
     setSummary(parsedCapacity);
@@ -99,7 +89,7 @@ export function ChefCapacityQuickSetup() {
 
   useEffect(() => {
     void load().catch(error => {
-      setMessage(error instanceof Error ? error.message : "Subscription availability is unavailable.");
+      setMessage(chefErrorText(error, "Subscription availability is unavailable."));
     });
   }, [load]);
 
@@ -144,7 +134,7 @@ export function ChefCapacityQuickSetup() {
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) {
-      throw new Error(errorMessage(body, "Subscription availability could not be saved."));
+      throw chefApiError(response, body, "Subscription availability could not be saved.");
     }
   }
 
@@ -223,7 +213,7 @@ export function ChefCapacityQuickSetup() {
         `Each selected dish allows up to ${itemLimit} subscription unit(s).`,
       );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Subscription availability could not be saved.");
+      setMessage(chefErrorText(error, "Subscription availability could not be saved."));
     } finally {
       setBusy(false);
     }

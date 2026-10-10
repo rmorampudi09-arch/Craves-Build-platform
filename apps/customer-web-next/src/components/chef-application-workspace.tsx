@@ -1,5 +1,6 @@
 "use client";
 
+import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
 import { Button } from "@/components/ui/buttons/button";
 import { AddressMapPicker } from "@/components/location/AddressMapPicker";
@@ -131,13 +132,6 @@ function hasRequiredEvidence(application: ChefApplication): boolean {
   return modernEvidence;
 }
 
-function applicationError(body: unknown, fallback: string): string {
-  if (body && typeof body === "object" && "message" in body && typeof body.message === "string") {
-    return body.message.slice(0, 500);
-  }
-  return fallback;
-}
-
 function addressSummary(form: FormState): string {
   return [
     form.addressLine1,
@@ -256,16 +250,16 @@ export function ChefApplicationWorkspace() {
       fetch("/api/customer/profile", { cache: "no-store", signal }),
       fetch("/api/customer/addresses", { cache: "no-store", signal }),
     ]);
-    if (applicationResult.status === "rejected") throw new Error("We couldn’t load your application right now. Please try again.");
+    if (applicationResult.status === "rejected") throw applicationResult.reason;
     const applicationResponse = applicationResult.value;
     const rawApplication = await applicationResponse.json().catch(() => null);
     const applicationBody = parseChefApplication(rawApplication);
     if (!applicationResponse.ok || !applicationBody) {
-      throw new Error(
-        applicationResponse.status === 401
-          ? "Sign in to continue your chef application."
-          : applicationError(rawApplication, "We couldn’t load your application right now."),
-      );
+      throw applicationResponse.status === 401
+        ? new ChefError("Sign in to continue your chef application.", "SESSION_EXPIRED", 401)
+        : applicationResponse.ok
+          ? new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, "INVALID_CHEF_APPLICATION_RESPONSE", applicationResponse.status)
+          : chefApiError(applicationResponse, rawApplication, "We couldn’t load your application right now.");
     }
 
     const nextProfile = profileResult.status === "fulfilled" && profileResult.value.ok
@@ -295,9 +289,7 @@ export function ChefApplicationWorkspace() {
     void load().catch((error) => {
       setLoadFailed(true);
       setMessage(
-        error instanceof Error
-          ? error.message
-          : "We couldn’t load your application right now.",
+        chefErrorText(error, "We couldn’t load your application right now."),
       );
     });
   }, []);
@@ -421,11 +413,9 @@ export function ChefApplicationWorkspace() {
       const raw = await response.json().catch(() => null);
       const body = parseChefApplication(raw);
       if (!response.ok || !body) {
-        throw new Error(
-          applicationError(raw, response.status === 400
-            ? "Please check your details and try again."
-            : "We couldn’t save your details. Please try again."),
-        );
+        throw response.ok
+          ? new ChefError("We couldn’t confirm your details were saved. Check your application status before trying again.", "INVALID_CHEF_APPLICATION_RESPONSE", response.status)
+          : chefApiError(response, raw, "We couldn’t save your details. Please try again.");
       }
       setApplication(body);
       setForm(fromApplication(body));
@@ -435,8 +425,8 @@ export function ChefApplicationWorkspace() {
       else setStep("documents-intro");
     } catch (error) {
       setMessage(error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")
-        ? "Saving took too long. Check your application status before trying again."
-        : error instanceof Error ? error.message : "We couldn’t save your details. Please try again.");
+        ? chefErrorText(new ChefError("Saving took too long. Check your application status before trying again.", "TIMEOUT", 0), "")
+        : chefErrorText(error, "We couldn’t save your details. Please try again."));
     } finally {
       setBusy(false);
     }
@@ -448,7 +438,7 @@ export function ChefApplicationWorkspace() {
     try {
       await load();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "We couldn’t check your status right now.");
+      setMessage(chefErrorText(error, "We couldn’t check your status right now."));
     } finally {
       setBusy(false);
     }

@@ -1,5 +1,6 @@
 "use client";
 
+import { chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -287,11 +288,9 @@ export function ChefApplicationStatus({ draftsEnabled }: { draftsEnabled: boolea
       });
       if (!response.ok) {
         if (response.status === 401) setSignedOut(true);
-        throw new Error(
-          response.status === 401
-            ? "Your session ended. Sign in to check your application."
-            : "We couldn’t refresh your application. Please try again.",
-        );
+        throw response.status === 401
+          ? new ChefError("Your session ended. Sign in to check your application.", "SESSION_EXPIRED", 401)
+          : chefApiError(response, await response.json().catch(() => null), "We couldn’t refresh your application. Please try again.");
       }
       const next = parseChefApplication(await response.json());
       if (!next) throw new Error("Your application status could not be verified.");
@@ -303,8 +302,10 @@ export function ChefApplicationStatus({ draftsEnabled }: { draftsEnabled: boolea
           signal: AbortSignal.timeout(15000),
         });
         if (!draft.ok)
-          throw new Error(
+          throw new ChefError(
             "We couldn’t confirm whether this application was submitted. Please try again.",
+            chefApiError(draft, await draft.json().catch(() => null), "").ref,
+            draft.status,
           );
         saved = parseOnboardingState(await draft.json());
         if (!saved) throw new Error("Your saved application status could not be verified.");
@@ -316,7 +317,7 @@ export function ChefApplicationStatus({ draftsEnabled }: { draftsEnabled: boolea
       }
     } catch (failure) {
       if (generation.current === request && isSessionContextCurrent(owner.current))
-        setError(failure instanceof Error ? failure.message : "Application status is unavailable.");
+        setError(chefErrorText(failure, "Application status is unavailable."));
     } finally {
       if (generation.current === request && isSessionContextCurrent(owner.current)) setBusy(false);
     }

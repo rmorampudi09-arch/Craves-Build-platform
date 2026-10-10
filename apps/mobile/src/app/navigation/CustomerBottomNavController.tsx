@@ -184,7 +184,7 @@ export function CustomerBottomNavScene({routeKey, children}: PropsWithChildren<{
 }
 
 export function CustomerBottomTabButton(props: BottomTabBarButtonProps) {
-  return <LiquidTabButton {...props} />;
+  return <LiquidTabButton {...props} glow />;
 }
 
 export function CustomerBottomTabBar(props: BottomTabBarProps) {
@@ -285,15 +285,17 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
                 styles.cartAction,
                 pressed && styles.cartActionPressed,
               ]}>
-              <Icon name="cart" color={colors.black} size={20} />
-              <View style={styles.cartCopy}>
-                <Text numberOfLines={1} style={styles.cartTitle}>
-                  Cart · {itemCount}
-                </Text>
-                <Text numberOfLines={1} style={styles.cartTotal}>
-                  {totalLabel}
-                </Text>
+              <View style={styles.cartIcon}>
+                <Icon name="cart" color={colors.white} size={20} surface={false} />
+                <View style={styles.cartBadge}>
+                  <Text numberOfLines={1} style={styles.cartBadgeText}>
+                    {itemCount}
+                  </Text>
+                </View>
               </View>
+              <Text numberOfLines={1} style={styles.cartTotal}>
+                {totalLabel}
+              </Text>
             </Pressable>
           ) : null}
         </LiquidGlassSurface>
@@ -335,17 +337,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 1,
   },
+  // A content-sized capsule, inset evenly inside the 80 dp bar.
   cartAction: {
-    width: 120,
     zIndex: 1,
-    minHeight: touchTarget.minimum,
-    height: 52,
+    minWidth: touchTarget.minimum,
+    height: 60,
     flexShrink: 0,
     alignSelf: 'center',
     marginLeft: spacing.xxs,
-    marginRight: spacing.xs,
+    marginRight: spacing.sm,
     paddingHorizontal: spacing.sm,
-    borderRadius: radius.lg,
+    borderRadius: radius.pill,
     backgroundColor: colors.flameRedAccessible,
     flexDirection: 'row',
     alignItems: 'center',
@@ -356,20 +358,33 @@ const styles = StyleSheet.create({
     opacity: 0.86,
     transform: [{scale: 0.98}],
   },
-  cartCopy: {
-    flex: 1,
-    minWidth: 0,
+  cartIcon: {
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  cartTitle: {
-    color: colors.black,
-    fontSize: typography.small,
+  cartBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 3,
+    borderRadius: radius.pill,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartBadgeText: {
+    color: colors.flameRedAccessible,
+    fontSize: typography.tiny,
     fontWeight: fontWeight.bold,
   },
   cartTotal: {
-    marginTop: spacing.xxs,
-    color: colors.black,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.semibold,
+    color: colors.white,
+    fontSize: typography.small,
+    fontWeight: fontWeight.bold,
   },
 });
 

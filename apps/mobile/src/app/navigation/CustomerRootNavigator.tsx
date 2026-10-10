@@ -1,4 +1,5 @@
 import React from 'react';
+import {StyleSheet, Text} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {BottomMenuIcon} from '../../shared/components/BottomMenuIcon';
@@ -7,7 +8,7 @@ import * as Location from 'expo-location';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
 import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
-import {fontWeight, typography} from '../../design/tokens';
+import {bottomMenu, fontWeight, typography} from '../../design/tokens';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
 import {refreshCartSnapshot} from '../../features/cart/state/cartRefresh';
 import {CartBillPreviewSync} from '../../features/cart/query/useCartBillPreview';
@@ -95,47 +96,79 @@ const SAVED_ADDRESS_MATCH_RADIUS_METERS = 100;
 
 interface TabIconProps {
   color: string;
+  focused: boolean;
   size: number;
 }
 
 const CUSTOMER_TAB_ICON_SIZE = 30;
 
-function HomeTabIcon({color}: TabIconProps) {
+function HomeTabIcon({color, focused}: TabIconProps) {
   return (
     <BottomMenuIcon
       color={color}
+      glow={focused}
       name="home"
       size={CUSTOMER_TAB_ICON_SIZE}
     />
   );
 }
-function ChefsTabIcon({color}: TabIconProps) {
+function ChefsTabIcon({color, focused}: TabIconProps) {
   return (
     <BottomMenuIcon
       color={color}
+      glow={focused}
       name="chef"
       size={CUSTOMER_TAB_ICON_SIZE}
     />
   );
 }
-function OrdersTabIcon({color}: TabIconProps) {
+function OrdersTabIcon({color, focused}: TabIconProps) {
   return (
     <BottomMenuIcon
       color={color}
+      glow={focused}
       name="orders"
       size={CUSTOMER_TAB_ICON_SIZE}
     />
   );
 }
-function ProfileTabIcon({color}: TabIconProps) {
+function ProfileTabIcon({color, focused}: TabIconProps) {
   return (
     <BottomMenuIcon
       color={color}
+      glow={focused}
       name="account"
       size={CUSTOMER_TAB_ICON_SIZE}
     />
   );
 }
+
+// A function label lets the active tab's text glow like its icon.
+function glowingTabLabel(label: string) {
+  return function TabLabel({focused, color}: {focused: boolean; color: string}) {
+    return (
+      <Text
+        numberOfLines={1}
+        style={[tabLabelStyles.label, {color}, focused && tabLabelStyles.glow]}>
+        {label}
+      </Text>
+    );
+  };
+}
+
+const tabLabelStyles = StyleSheet.create({
+  label: {
+    fontSize: typography.small,
+    fontWeight: fontWeight.regular,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  glow: {
+    textShadowColor: bottomMenu.glowTextShadow,
+    textShadowOffset: {width: 0, height: 0},
+    textShadowRadius: bottomMenu.glowTextRadius,
+  },
+});
 
 const tabScreenOptions = {
   headerShown: false,
@@ -147,12 +180,6 @@ const tabScreenOptions = {
   tabBarLabelPosition: 'below-icon',
   tabBarIconStyle: {
     marginTop: 0,
-    marginBottom: 0,
-  },
-  tabBarLabelStyle: {
-    fontSize: typography.small,
-    fontWeight: fontWeight.regular,
-    marginTop: 2,
     marginBottom: 0,
   },
   tabBarItemStyle: {
@@ -176,23 +203,23 @@ const tabScreenOptions = {
 
 const homeTabOptions = {
   tabBarAccessibilityLabel: `${homeTab.label} tab`,
-  tabBarLabel: homeTab.label,
+  tabBarLabel: glowingTabLabel(homeTab.label),
   tabBarIcon: HomeTabIcon,
 };
 const chefsTabOptions = {
   tabBarAccessibilityLabel: `${chefsTab.label} tab`,
-  tabBarLabel: chefsTab.label,
+  tabBarLabel: glowingTabLabel(chefsTab.label),
   tabBarIcon: ChefsTabIcon,
 };
 const ordersTabOptions = {
   tabBarAccessibilityLabel: `${ordersTab.label} tab`,
-  tabBarLabel: ordersTab.label,
+  tabBarLabel: glowingTabLabel(ordersTab.label),
   tabBarIcon: OrdersTabIcon,
 };
 const profileTabOptions = {
   ...CUSTOMER_PROFILE_TAB_STATE_OPTIONS,
   tabBarAccessibilityLabel: `${profileTab.label} tab`,
-  tabBarLabel: profileTab.label,
+  tabBarLabel: glowingTabLabel(profileTab.label),
   tabBarIcon: ProfileTabIcon,
 };
 

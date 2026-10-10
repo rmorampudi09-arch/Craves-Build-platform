@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.24.2 Chef Application Location
+# KUSHIRAVI App Build - Version 1.24.3 Android System Bars
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,15 +9,40 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `37`
-- Installed Android versionName: `1.24.2`
+- Installed Android versionCode: `38`
+- Installed Android versionName: `1.24.3`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed release: `KUSHIRAVI-app-v1.24.2`, source/tag checkpoint `983a24898a5f7ff3535ce64b8162e70b2d081f7c`. Chef sign-in, verified email, current-location address fill, submission and matching Admin pending request are verified. Subsequent document upload fails and is under investigation; no approval is claimed.
-- Last installation: `2026-10-02 13:06:00` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed release: `1.24.3` local build from the Downloads export (no git repository there, so no commit or tag yet); APK checkpoint `C:\cm\artifacts\KUSHIRAVI-app-v1.24.3.apk`. Previous release: `KUSHIRAVI-app-v1.24.2`, source/tag checkpoint `983a24898a5f7ff3535ce64b8162e70b2d081f7c`. Chef sign-in, verified email, current-location address fill, submission and matching Admin pending request are verified. Subsequent document upload fails and is under investigation; no approval is claimed.
+- Last installation: `2026-10-10 14:01:47` Asia/Calcutta, device `GURKT4DYYPUW7DX8` / Xiaomi 22041216I (Android 14); replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.24.3 - Android System Bars, 2026-10-10
+
+- User reported a white bar at the top while the red splash showed, and a thick
+  red strip at the bottom on every screen. Remove both; no other UI change.
+- Cause: the theme hard-coded `navigationBarColor` to `#ff1707` and nothing reset
+  it. The JS splash sets a red status bar, but the home screen's `ScreenShell`
+  `StatusBar` (white) mounts behind the still-visible splash and wins the
+  React Native StatusBar stack, so the status bar turned white mid-splash.
+- Fix: `android/gradle.properties` `edgeToEdgeEnabled=true`. Both system bars are
+  transparent; the full-screen splash covers them, and screens draw behind the
+  gesture bar using their existing safe-area insets. Android 15+ already forces
+  edge-to-edge for targetSdk 35+, so Android 14 now matches newer phones.
+- Android target 1.24.3 / code 38. Release ARM64 build via
+  `scripts\build-kushiravi-release-apk.ps1 -PhoneOnly` from the short build copy
+  `C:\cm\mobile` (the Downloads path exceeds ninja 1.10.2's 260-character limit).
+  2m 19s, 38 of 823 tasks executed. Existing signer verifies with APK v2/v3.
+- APK SHA256 `5198696D5C758FFB973547DC5A2DAFB7531BE8FCD0D6214065E7B89797C3DA4E`.
+- Phone verification: replace-install kept the session. A launch burst
+  (screenshot about every 0.45s) shows a red status bar with light icons
+  throughout the splash (before: white from 2.0s to 4.1s) and no red strip under
+  the tab bar. Home, Chefs, Orders and Profile headers sit below the status bar,
+  and the tab bar sits above the gesture bar. No crash.
+- Not re-verified: login, checkout/Razorpay, chef screens, modals and keyboard
+  screens under edge-to-edge on Android 14.
 
 ### Version 1.24.2 - Chef Application Current Location, 2026-10-02
 

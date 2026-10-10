@@ -43,8 +43,18 @@ export const colors = {
 /** Foreground colors shared only by the bottom menus. */
 export const bottomMenu = {
   activeColor: colors.flameRedAccessible,
-  inactiveColor: '#666666',
+  // Warm espresso reads over food photos through the glass, where neutral grey turns muddy.
+  inactiveColor: '#3A2C25',
   iconStrokeWidth: 1.8,
+  /** Soft halo on the active customer tab: faint, wider strokes behind the icon and a matching text glow. */
+  glowColor: colors.flameRed,
+  glowLayers: [
+    { strokeWidth: 8, opacity: 0.08 },
+    { strokeWidth: 6, opacity: 0.18 },
+    { strokeWidth: 4.2, opacity: 0.32 },
+  ],
+  glowTextShadow: 'rgba(246,46,24,0.85)',
+  glowTextRadius: 12,
 } as const;
 
 /**
@@ -80,6 +90,35 @@ export const homeLiquidGlass = {
   edgeShadowOpacity: 0.24,
   topLightOpacity: 0.18,
   bottomLightOpacity: 0.08,
+  /**
+   * Clear Apple-style glass on Android 13+. Sources: kube.io (convex squircle bezel,
+   * index 1.5, rim light 0.4-0.5), liquidGL presets (bezel 0.15-0.27, frost 0-2 px),
+   * liquid-glass-react defaults (saturation 140%, aberration 2). Refraction runs 0-1,
+   * where 0.5 is physical glass and 1 (used here) is the strongest bend at the borders.
+   */
+  capsuleOptics: {
+    refraction: 1,
+    blurRadius: 3,
+    bezel: 0.22,
+    thickness: 1.5,
+    aberration: 2,
+    saturation: 1.4,
+    tint: [1, 1, 1, 0.05],
+    specular: 0.45,
+    edgeGlow: 0,
+  },
+  /** The menu carries labels, so it starts from kube.io's searchbox (refraction 0.7, some blur), tuned on device. */
+  navigationOptics: {
+    refraction: 1,
+    blurRadius: 4,
+    bezel: 0.18,
+    thickness: 1,
+    aberration: 2,
+    saturation: 1.4,
+    tint: [1, 1, 1, 0.1],
+    specular: 0.3,
+    edgeGlow: 0,
+  },
 } as const;
 
 export const borderWidth = {

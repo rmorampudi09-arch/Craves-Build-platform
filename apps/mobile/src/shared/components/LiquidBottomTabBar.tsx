@@ -8,7 +8,8 @@ import {colors, radius, spacing} from '../../design/tokens';
 import {customerHaptics} from '../haptics/customerHaptics';
 import {LiquidGlassSurface} from './LiquidGlassSurface';
 
-export function LiquidTabButton(props: BottomTabBarButtonProps) {
+export function LiquidTabButton({glow = false, ...props}: BottomTabBarButtonProps & {glow?: boolean}) {
+  const selected = props['aria-selected'] === true || props.accessibilityState?.selected === true;
   return (
     <PlatformPressable
       {...props}
@@ -18,7 +19,7 @@ export function LiquidTabButton(props: BottomTabBarButtonProps) {
         void customerHaptics.selection();
         props.onPress?.(event);
       }}
-      style={[props.style, styles.button]}
+      style={[props.style, styles.button, glow && selected && styles.selectedGlow]}
     />
   );
 }
@@ -79,6 +80,8 @@ export function renderLiquidBottomTabBar(props: BottomTabBarProps) {
 const styles = StyleSheet.create({
   scene: {flex: 1},
   button: {justifyContent: 'center', paddingVertical: 8},
+  // Lifts the active tab's red; the halo itself is drawn by its icon and label.
+  selectedGlow: {filter: [{brightness: 1.12}]},
   slot: {paddingHorizontal: spacing.md, paddingTop: spacing.xs},
   shadow: {
     height: 80,

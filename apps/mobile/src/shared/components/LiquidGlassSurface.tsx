@@ -7,6 +7,10 @@ import {
   isLiquidGlassAvailable,
 } from 'expo-glass-effect';
 import Svg, { Defs, LinearGradient, Mask, Rect, Stop } from 'react-native-svg';
+import {
+  LiquidGlassBackdrop,
+  liquidGlassRefractionAvailable,
+} from '../../../modules/craves-liquid-glass';
 import { homeLiquidGlass, radius } from '../../design/tokens';
 
 interface LiquidGlassSurfaceProps extends ViewProps {
@@ -47,6 +51,9 @@ export function LiquidGlassSurface({
   const home = appearance === 'home';
   const rimWidth = navigation ? 1.5 : 1.8;
   const hasAndroidBlur = Boolean(blurTarget) && Number(Platform.Version) >= 31;
+  // The shader draws its own tint, rim and sheen, so the wash and SVG layers step aside.
+  const refracting =
+    home && !nativeGlassAvailable && liquidGlassRefractionAvailable && Boolean(blurTarget);
   const roundedCorner = Math.min(cornerRadius, size.width / 2, size.height / 2);
   const edgeDepth = Math.min(
     homeLiquidGlass.edgeDepth,
@@ -83,6 +90,18 @@ export function LiquidGlassSurface({
           }
           style={[StyleSheet.absoluteFill, home && { borderRadius: cornerRadius }]}
         />
+      ) : refracting && blurTarget ? (
+        <LiquidGlassBackdrop
+          pointerEvents="none"
+          target={blurTarget}
+          cornerRadius={cornerRadius}
+          optics={
+            navigation
+              ? homeLiquidGlass.navigationOptics
+              : homeLiquidGlass.capsuleOptics
+          }
+          style={StyleSheet.absoluteFill}
+        />
       ) : (
         <BlurView
           pointerEvents="none"
@@ -100,7 +119,7 @@ export function LiquidGlassSurface({
           style={StyleSheet.absoluteFill}
         />
       )}
-      {!(home && nativeGlassAvailable) ? (
+      {!(home && nativeGlassAvailable) && !refracting ? (
         <View
           pointerEvents="none"
           style={[
@@ -118,7 +137,10 @@ export function LiquidGlassSurface({
           ]}
         />
       ) : null}
-      {size.width > 0 && size.height > 0 && !(home && nativeGlassAvailable) ? (
+      {size.width > 0 &&
+      size.height > 0 &&
+      !(home && nativeGlassAvailable) &&
+      !refracting ? (
         <Svg
           pointerEvents="none"
           width={size.width}

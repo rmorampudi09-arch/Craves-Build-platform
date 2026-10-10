@@ -20,10 +20,11 @@ import {
   type ChefFormSection,
 } from "./chef-onboarding-flow";
 import { setSessionIdentity } from "../services/auth/cravesAuth";
+import { markChefModeVerified } from "./chef-mode";
 import type { BankStatus } from "./bank-onboarding-contract";
 
 const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
+vi.mock("next/navigation", () => ({ useRouter: () => navigation, usePathname: () => "/chef/application", useSearchParams: () => new URLSearchParams() }));
 vi.mock("../components/location/AddressMapPicker", () => ({
   AddressMapPicker: ({ onCenterChange }: { onCenterChange: (value: unknown) => void }) =>
     createElement(
@@ -401,6 +402,9 @@ describe("Chef onboarding navigation and persistence", () => {
     expect(screen.getByRole("link", { name: "View application status" }).getAttribute("href")).toBe(
       "/chef/application/status",
     );
+    // Replace, so Back from the status page cannot reopen the submitted form.
+    expect(navigation.replace).toHaveBeenCalledWith("/chef/application/status");
+    expect(navigation.push).not.toHaveBeenCalledWith("/home");
     expect(screen.queryByRole("link", { name: "Go to dashboard" })).toBeNull();
   });
 });
@@ -412,6 +416,7 @@ describe("Authoritative status and bank verification", () => {
       const chef = { ...identity, roles: ["CHEF"] };
       saved.application = { ...saved.application, status: "APPROVED" };
       setSessionIdentity(chef);
+      markChefModeVerified(chef.id);
       let checks = 0;
       fetcher.mockImplementation((url, init) => {
         if (String(url) === "/api/auth/me") return Promise.resolve(Response.json(chef));
@@ -424,10 +429,12 @@ describe("Authoritative status and bank verification", () => {
         return normal(url, init);
       });
       render(createElement(ChefAccessBoundary, null, createElement("p", null, "Private operations")));
-      await screen.findByRole("button", { name: "Retry access check" });
+      await screen.findByRole("button", { name: "Try again" });
+      expect(screen.getByRole("heading", { name: "We couldn’t reach Craves" })).toBeTruthy();
+      expect(screen.queryByText(/Sign in again/)).toBeNull();
       expect(screen.queryByText("Private operations")).toBeNull();
       expect(navigation.replace).not.toHaveBeenCalled();
-      fireEvent.click(screen.getByRole("button", { name: "Retry access check" }));
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
       await screen.findByText("Private operations");
       expect(checks).toBeGreaterThanOrEqual(2);
     },
@@ -435,6 +442,7 @@ describe("Authoritative status and bank verification", () => {
   it("blocks direct operational access with a stale CHEF role when the application is pending", async () => {
     const chef = { ...identity, roles: ["CHEF"] };
     setSessionIdentity(chef);
+    markChefModeVerified(chef.id);
     fetcher.mockImplementation((url, init) =>
       String(url) === "/api/auth/me" ? Promise.resolve(Response.json(chef)) : normal(url, init),
     );

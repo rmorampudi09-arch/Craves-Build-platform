@@ -1,7 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import type { KeyboardEvent, MouseEvent } from "react";
+import { useContext, type KeyboardEvent, type MouseEvent } from "react";
+// The router context itself (not useRouter) so a logo rendered outside the App Router never throws.
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
 type LogoSize = "sm" | "md" | "lg";
 
@@ -21,8 +23,8 @@ const dimensions: Record<LogoSize, number> = {
 /**
  * Single canonical Craves logo for customer and chef web experiences.
  *
- * Every rendered logo is a home affordance. Existing wrappers may still link
- * to /home; direct clicks on an unwrapped logo use the same client-side route.
+ * An enclosing link decides where the logo goes (Chef Mode links it to /chef);
+ * an unwrapped logo opens the customer home through the App Router.
  */
 export function CravesLogo({
   size = "md",
@@ -30,14 +32,17 @@ export function CravesLogo({
   className = "",
   priority = false,
 }: CravesLogoProps) {
+  const router = useContext(AppRouterContext);
   const dimension = dimensions[size];
   const openHome = () => {
     if (window.location.pathname === "/home") return;
-    window.history.pushState(window.history.state, "", "/home");
-    window.dispatchEvent(new PopStateEvent("popstate"));
+    if (router) router.push("/home");
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- no App Router is mounted here
+    else window.location.assign("/home");
   };
 
   const goHome = (event: MouseEvent<HTMLImageElement>) => {
+    if (event.currentTarget.closest("a")) return;
     event.preventDefault();
     event.stopPropagation();
     openHome();
@@ -48,7 +53,9 @@ export function CravesLogo({
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-    openHome();
+    const link = event.currentTarget.closest("a");
+    if (link) link.click();
+    else openHome();
   };
 
   return (

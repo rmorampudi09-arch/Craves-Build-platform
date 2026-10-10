@@ -4,6 +4,7 @@ import { chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { captureSessionContext, isSessionContextCurrent } from "@/services/auth/cravesAuth";
+import { useStepHistory } from "@/components/use-step-history";
 import { bankStatusSchema, type BankStatus } from "@/lib/bank-onboarding-contract";
 import { chefEmailEligible, type EmailVerificationState } from "@/lib/email-verification-contract";
 import { parseCustomerProfile } from "@/lib/profile-contract";
@@ -70,6 +71,24 @@ function verifiedState(raw: unknown): OnboardingState {
   if (!next) throw new Error("We could not verify your saved application. Please retry.");
   return next;
 }
+/** The applicant's home inside Chef Mode; leaving the form always lands here, never on customer screens. */
+const APPLICATION_HUB = "/chef/application/status";
+/** The applicant may change the saved application, so a ?step= in the URL can open a section. */
+function editable(state: OnboardingState): boolean {
+  return (
+    state.enabled &&
+    !state.submitted &&
+    !state.legacy &&
+    state.application.status !== "APPROVED" &&
+    !(state.application.status === "REJECTED" && state.progress?.nextAction !== "EDIT_APPLICATION")
+  );
+}
+/** A URL step this application can show; anything else opens the first incomplete step. */
+function stepFor(state: OnboardingState, bank: BankStatus | null, step: string): ChefFormScreen {
+  return step === "review" || (activeChefSections(state) as readonly string[]).includes(step)
+    ? (step as ChefFormScreen)
+    : firstIncompleteSection(state, bank);
+}
 
 export function useChefOnboarding() {
   const router = useRouter();
@@ -101,6 +120,13 @@ export function useChefOnboarding() {
     upload = useRef<XMLHttpRequest | null>(null),
     helpKey = useRef<string | null>(null);
   const current = useCallback(() => mounted.current && isSessionContextCurrent(owner.current), []);
+  // The screen behind the bare /chef/application URL, chosen from the saved draft on load.
+  const entry = useRef<ChefFormScreen>("personal");
+  const { urlStep, showStep } = useStepHistory(browserStep);
+  const requestedStep = useRef(urlStep);
+  useEffect(() => {
+    requestedStep.current = urlStep;
+  }, [urlStep]);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -108,6 +134,16 @@ export function useChefOnboarding() {
       upload.current?.abort();
     };
   }, []);
+  useEffect(() => {
+    // Only a form the hook knows is unsaved warns before the page unloads.
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   function accept(next: OnboardingState, preserveDetails = false) {
     if (!current()) return;
     currentState.current = next;
@@ -194,6 +230,16 @@ export function useChefOnboarding() {
           : next.details
             ? "resume"
             : "personal";
+      entry.current = destination;
+      const requested = requestedStep.current;
+      if (requested && editable(next)) {
+        const step = stepFor(next, nextBank, requested);
+        setScreen(step);
+        if (step !== requested) showStep(step, true);
+        return;
+      }
+      // A step that can no longer be edited (for example after submission) falls back to the bare URL.
+      if (requested) showStep(null, true);
       setScreen(destination);
       if (destination === "resume" && firstIncompleteSection(next, nextBank) === "review")
         setNotice("Your saved details are ready to review.");
@@ -203,7 +249,7 @@ export function useChefOnboarding() {
     } finally {
       if (current()) setLoading(false);
     }
-  }, [current, refreshBank]);
+  }, [current, refreshBank, showStep]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -281,13 +327,28 @@ export function useChefOnboarding() {
       element?.scrollIntoView({ block: "center", behavior: "instant" });
     });
   }
-  /** Moves between screens and clears transient messages from the previous one. */
-  function go(next: ChefFormScreen) {
+  /** Shows a screen and clears transient messages from the previous one. */
+  function show(next: ChefFormScreen) {
     setScreen(next);
     setFssaiGuideState(false);
     setFieldError(null);
     setError("");
     setNotice("");
+  }
+  /** Moves between screens; each form step gets its own history entry (?step=<id>). */
+  function go(next: ChefFormScreen) {
+    show(next);
+    if (next !== "submitted" && next !== "status") showStep(next === entry.current ? null : next);
+  }
+  /** Browser Back/Forward changed ?step=: follow it without adding another history entry. */
+  function browserStep(step: string | null) {
+    const saved = currentState.current;
+    if (!saved || busy) return;
+    if (step === null) show(entry.current);
+    else if (editable(saved)) show(stepFor(saved, bank, step));
+  }
+  function toHub() {
+    router.push(APPLICATION_HUB);
   }
   async function saveSection(section: ChefFormSection) {
     const existing = currentState.current;
@@ -362,7 +423,7 @@ export function useChefOnboarding() {
     if (index > 0) go(sections[index - 1]!);
     else if (screen === "review") go(sections[sections.length - 1]!);
     else if (index === 0 && currentState.current?.details) go("resume");
-    else router.push("/home");
+    else if (!dirty || window.confirm("Leave without saving? Your latest changes are not saved yet.")) toHub();
   }
   function cancelUpload() {
     upload.current?.abort();
@@ -370,12 +431,12 @@ export function useChefOnboarding() {
   function exit() {
     if (busy) return;
     if (screen === "status" || screen === "submitted" || !dirty) {
-      router.push("/home");
+      toHub();
       return;
     }
     void work(async () => {
       await persist(true);
-      router.push("/home");
+      toHub();
     });
   }
   async function removeFile(id:string) {
@@ -522,6 +583,8 @@ export function useChefOnboarding() {
       if (current()) {
         accept(next);
         go("submitted");
+        // Replace, so Back from the status page can never reopen the submitted form.
+        router.replace(APPLICATION_HUB);
       }
     });
   }

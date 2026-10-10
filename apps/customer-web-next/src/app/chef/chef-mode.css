@@ -44,10 +44,9 @@
 .chef-desktop-nav{display:flex;align-items:center;gap:6px;min-width:0;overflow-x:auto;scrollbar-width:none;border-top:1px solid var(--chef-border);padding:8px 0 2px}
 .chef-desktop-nav::-webkit-scrollbar{display:none}
 .chef-desktop-nav-primary{display:flex;gap:6px;min-width:max-content}
-.chef-desktop-nav-link,.chef-context-link{min-height:44px;display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:0 15px;color:var(--chef-text);font-size:14px;font-weight:700;text-decoration:none;white-space:nowrap}
-.chef-desktop-nav-link:hover,.chef-context-link:hover{background:var(--chef-input)}
-.chef-desktop-nav-link.is-active,.chef-context-link{background:color-mix(in srgb,var(--color-flame-red) 8%,white);color:var(--chef-action)}
-.chef-context-link{margin-left:auto}
+.chef-desktop-nav-link{min-height:44px;display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:0 15px;color:var(--chef-text);font-size:14px;font-weight:700;text-decoration:none;white-space:nowrap}
+.chef-desktop-nav-link:hover{background:var(--chef-input)}
+.chef-desktop-nav-link.is-active{background:var(--chef-input);color:var(--chef-action)}
 .chef-mobile-nav{display:none}
 @media (max-width:1023px){
  .chef-panel-theme{padding-bottom:calc(4.7rem + env(safe-area-inset-bottom))}
@@ -57,7 +56,7 @@
  .chef-mobile-nav-link.is-active{color:var(--chef-action)}
  .chef-mobile-nav-icon{display:grid;place-items:center;min-height:1.12rem}
 }
-.chef-mobile-nav-link:focus-visible,.chef-desktop-nav-link:focus-visible,.chef-context-link:focus-visible{outline:2px solid var(--chef-action);outline-offset:2px}
+.chef-mobile-nav-link:focus-visible,.chef-desktop-nav-link:focus-visible{outline:2px solid var(--chef-action);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){
  .chef-panel-theme *, .chef-panel-theme *::before, .chef-panel-theme *::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
@@ -87,3 +86,8 @@
 @keyframes chefFieldShake { 0%,100% { transform: translateX(0); } 30% { transform: translateX(-3px); } 65% { transform: translateX(3px); } }
 
 .chef-panel-theme :is(input,textarea,select)[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--chef-error) 14%, transparent); }
+
+/* The shared notifications screen scrolls under the Chef Mode header instead of sticking over it. */
+.chef-notifications [data-craves-auto-hide-header] { position: static; translate: none; transform: none; }
+/* The sign-in page has no bottom navigation to make room for. */
+.chef-panel-theme:has(.chef-sign-in) { padding-bottom: 0; }

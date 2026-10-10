@@ -210,7 +210,7 @@ export function ChefBasicDetails({ flow }: Props) {
             <div className="cob-field" id="chef-phoneNumber" tabIndex={-1}>
               <span className="cob-label">Mobile number</span>
               <FieldError>{phoneError ?? "Sign in again to verify your mobile number."}</FieldError>
-              <Link href="/sign-in?returnTo=/chef/application" className="cob-link">
+              <Link href="/chef/sign-in?returnTo=%2Fchef%2Fapplication" className="cob-link">
                 Verify mobile number
               </Link>
             </div>

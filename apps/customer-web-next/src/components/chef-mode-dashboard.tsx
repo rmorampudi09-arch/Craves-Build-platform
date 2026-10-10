@@ -3,14 +3,13 @@
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
 import { Button } from "@/components/ui/buttons/button";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   AlertTriangle,
   BadgeIndianRupee,
   ChefHat,
   CheckCircle2,
   ChevronRight,
-  ClipboardCheck,
   ClipboardList,
   Bell,
   RefreshCw,
@@ -33,19 +32,9 @@ import {
   parseChefEarnings,
   type ChefEarning,
 } from "@/lib/chef-earnings-contract";
-import {
-  loadSession,
-  synchronizeSessionRoles,
-  type CravesUser,
-} from "@/services/auth/cravesAuth";
+import { getSession, subscribeSession } from "@/services/auth/cravesAuth";
 
-type DashboardState =
-  | "loading"
-  | "signed-out"
-  | "applicant"
-  | "verification"
-  | "approved"
-  | "error";
+type DashboardState = "loading" | "approved" | "error";
 
 type Snapshot = {
   application: ChefApplication | null;
@@ -78,24 +67,6 @@ const EMPTY: Snapshot = {
   details: [],
 };
 
-function hasChefRole(user: CravesUser | null): boolean {
-  return Boolean(user?.roles.some((role) => role.toUpperCase() === "CHEF"));
-}
-
-function hasRequiredEvidence(application: ChefApplication): boolean {
-  const types = new Set(application.documents.filter(document => document.status === "UPLOADED" || document.status === "APPROVED").map((document) => document.documentType));
-  const modernEvidence =
-    types.has("APPLICANT_PHOTO") &&
-    types.has("GOVERNMENT_ID_FRONT") &&
-    types.has("GOVERNMENT_ID_BACK") &&
-    types.has("TAX_ID_CARD");
-  return modernEvidence;
-}
-
-async function responseBody(response: Response): Promise<unknown> {
-  return response.json().catch(() => null);
-}
-
 function money(value: number, currency: string): string {
   try {
     return new Intl.NumberFormat("en-IN", {
@@ -122,55 +93,10 @@ function isThisWeek(value: string): boolean {
   return date >= start && date < end;
 }
 
-function applicantCopy(application: ChefApplication | null) {
-  if (!application || application.status === "NOT_SUBMITTED") {
-    return {
-      eyebrow: "Become a Craves chef",
-      title: "Cook from home with Craves",
-      description:
-        "Tell us who you are, where you cook, and share a few clear photos. We’ll guide you one thing at a time.",
-      action: "Apply to become a chef",
-    };
-  }
-  if (application.status === "PENDING" && !hasRequiredEvidence(application)) {
-    return {
-      eyebrow: "Application in progress",
-      title: "Finish your chef application",
-      description:
-        "Your details are saved. Add the remaining photos so Craves can review your application.",
-      action: "Continue application",
-    };
-  }
-  if (application.status === "PENDING") {
-    return {
-      eyebrow: "Application status",
-      title: "Application under review",
-      description:
-        "Your details and photos are with Craves. There’s nothing else you need to do unless we ask for an update.",
-      action: "View application status",
-    };
-  }
-  if (application.status === "REJECTED") {
-    return {
-      eyebrow: "Application update",
-      title: "We need one more thing",
-      description:
-        application.rejectionReason?.trim() ||
-        "One part of your application needs another look. Everything else is still saved.",
-      action: "Fix this now",
-    };
-  }
-  return {
-    eyebrow: "Chef Mode",
-    title: "You’re approved",
-    description: "Your chef access is ready. Continue to Chef Mode.",
-    action: "Continue",
-  };
-}
-
 export function ChefModeDashboard() {
   const [state, setState] = useState<DashboardState>("loading");
-  const [user, setUser] = useState<CravesUser | null>(null);
+  // ChefAccessBoundary only renders the dashboard for a confirmed, approved chef session.
+  const user = useSyncExternalStore(subscribeSession, getSession, () => null);
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY);
   const [message, setMessage] = useState("Loading your kitchen…");
   const [refreshTick, setRefreshTick] = useState(0);
@@ -180,7 +106,7 @@ export function ChefModeDashboard() {
   useEffect(() => {
     let active = true;
 
-    async function loadApprovedSnapshot(current: CravesUser) {
+    async function loadApprovedSnapshot() {
       const kitchenRequest = fetch("/api/chef/kitchen", {
         cache: "no-store",
         credentials: "same-origin",
@@ -258,10 +184,9 @@ export function ChefModeDashboard() {
       }
 
       if (!active) return;
-      setUser(current);
       setSnapshot({ application, kitchen, menu, orders, earnings, unavailable, details });
       if (application?.status === "APPROVED" && !unavailable.includes("kitchen")) {
-        const noticeKey = `craves-chef-approved:${application.id ?? current.id}:${application.reviewedAt ?? "approved"}`;
+        const noticeKey = `craves-chef-approved:${application.id ?? getSession()?.id}:${application.reviewedAt ?? "approved"}`;
         setApprovalNoticeKey(noticeKey);
         try {
           if (!window.localStorage.getItem(noticeKey)) setShowApprovalNotice(true);
@@ -273,67 +198,7 @@ export function ChefModeDashboard() {
       setMessage("");
     }
 
-    void (async () => {
-      const current = await loadSession();
-      if (!active) return;
-      setUser(current);
-      if (!current) {
-        setState("signed-out");
-        setMessage("Sign in to continue to Chef Mode.");
-        return;
-      }
-
-      if (!hasChefRole(current)) {
-        const response = await fetch("/api/chef/application", {
-          cache: "no-store",
-          credentials: "same-origin",
-        });
-        if (!active) return;
-        if (!response.ok) {
-          if (response.status === 401) {
-            setState("signed-out");
-            setMessage("Your session expired. Sign in to continue to Chef Mode.");
-          } else {
-            setState("error");
-            setMessage("We couldn’t check your chef application right now.");
-          }
-          return;
-        }
-        const application = parseChefApplication(await responseBody(response));
-        if (!application) {
-          setState("error");
-          setMessage("Craves returned an invalid chef application response.");
-          return;
-        }
-        setSnapshot({ ...EMPTY, application });
-
-        if (application.status !== "APPROVED") {
-          setState("applicant");
-          setMessage("");
-          return;
-        }
-
-        setMessage("Activating your approved Chef access…");
-        const synchronized = await synchronizeSessionRoles();
-        if (!active) return;
-        if (!hasChefRole(synchronized)) {
-          setState("verification");
-          setMessage("Your chef application is approved. Verify your mobile number once so your secure Chef session can be refreshed.");
-          return;
-        }
-        await loadApprovedSnapshot(synchronized!);
-        return;
-      }
-
-      const synchronized = await synchronizeSessionRoles();
-      if (!active) return;
-      if (!hasChefRole(synchronized)) {
-        setState("verification");
-        setMessage("Verify your mobile number once to refresh secure Chef access.");
-        return;
-      }
-      await loadApprovedSnapshot(synchronized!);
-    })().catch(() => {
+    loadApprovedSnapshot().catch(() => {
       if (!active) return;
       setState("error");
       setMessage("We couldn’t load Chef Mode right now. Please try again.");
@@ -390,75 +255,6 @@ export function ChefModeDashboard() {
         </div>
         <p className="sr-only" role="status">Loading Chef Mode</p>
       </div>
-    );
-  }
-
-  if (state === "signed-out") {
-    return <div className="chef-step mx-auto max-w-6xl space-y-6 md:space-y-10">
-      <section className="relative isolate overflow-hidden rounded-3xl bg-[#F1F3F5]">
-        <div className="grid md:min-h-[480px] md:grid-cols-2">
-          <div className="order-2 flex flex-col justify-center p-6 md:order-1 md:p-10 lg:p-12">
-            <p className="text-sm font-semibold uppercase tracking-wider text-[var(--color-flame-red)]">Your kitchen. Your story.</p>
-            <h1 className="mt-3 text-3xl font-bold leading-tight tracking-tight md:text-4xl lg:text-5xl">Share your homemade food with thousands of customers</h1>
-            <p className="mt-5 text-base leading-7 text-[#6B6B6B]">Build your kitchen on Craves, serve nearby customers, and manage orders in one place. Turn the food you love making into an income of your own.</p>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row md:flex-col lg:flex-row">
-              <Button asChild><Link href="/sign-in?returnTo=/chef/application">Become a Chef <ChevronRight aria-hidden="true" /></Link></Button>
-              <Button asChild variant="outline"><Link href="/sign-in?returnTo=/chef">Already a Chef? Login</Link></Button>
-            </div>
-          </div>
-          <div className="relative order-1 overflow-hidden md:order-2"><img src="/home/cravings/craves-home-banner.webp" alt="A home chef preparing fresh homemade food" className="aspect-[16/10] h-full w-full origin-right scale-[1.12] object-cover object-right md:absolute md:inset-0" fetchPriority="high" /></div>
-        </div>
-      </section>
-      <section aria-label="Why cook with Craves" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[{icon:BadgeIndianRupee,title:"Earn from your cooking",text:"Bring your signature dishes to a local audience."},{icon:Store,title:"Reach nearby customers",text:"Connect your home kitchen with your neighbourhood."},{icon:Utensils,title:"Manage your kitchen easily",text:"Keep dishes, availability and orders together."},{icon:ShieldCheck,title:"Build a trusted Chef profile",text:"Share your story and complete your verification."}].map(({icon:Icon,title,text}) => <article key={title} className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)]"><span className="inline-flex rounded-xl bg-[var(--color-flame-red)]/10 p-3 text-[var(--color-flame-red)]"><Icon className="h-5 w-5" aria-hidden="true" /></span><h2 className="mt-4 text-base font-bold">{title}</h2><p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{text}</p></article>)}
-      </section>
-    </div>;
-  }
-
-  if (state === "verification") {
-    return (
-      <section className="mx-auto max-w-2xl rounded-3xl border border-[#E5E7EB] bg-white p-7 shadow-[0_6px_24px_rgba(0,0,0,0.08)] md:p-10">
-        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]">
-          <ShieldCheck className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
-        </span>
-        <p className="mt-5 text-sm font-semibold text-[#F62E18]">Chef Mode</p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A]">One quick verification</h1>
-        <p className="mt-3 max-w-xl text-base leading-7 text-[#6B6B6B]">{message}</p>
-        <Link href="/sign-in?returnTo=/chef" className="mt-7 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto">
-          Verify and continue
-        </Link>
-        <div className="mt-3">
-          <Link href="/home" className="inline-flex min-h-11 items-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">Switch to Customer Mode</Link>
-        </div>
-      </section>
-    );
-  }
-
-  if (state === "applicant") {
-    const copy = applicantCopy(snapshot.application);
-    return (
-      <section className="mx-auto max-w-2xl rounded-3xl border border-[#E5E7EB] bg-white p-6 shadow-[0_2px_10px_rgba(0,0,0,0.06)] md:p-9">
-        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]">
-          <ClipboardCheck className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
-        </span>
-        <p className="mt-5 text-sm font-semibold text-[#F62E18]">{copy.eyebrow}</p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A]">{copy.title}</h1>
-        <p className="mt-3 text-base leading-7 text-[#6B6B6B]">{copy.description}</p>
-        {message ? (
-          <p role="status" className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">{message}</p>
-        ) : null}
-        <Link
-          href="/chef/application"
-          aria-label="Open chef application"
-          className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white"
-        >
-          {copy.action}
-          <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        </Link>
-        <div className="mt-3 text-center">
-          <Link href="/home" className="inline-flex min-h-11 items-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">Switch to Customer Mode</Link>
-        </div>
-      </section>
     );
   }
 
@@ -590,7 +386,7 @@ export function ChefModeDashboard() {
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A] md:text-4xl">
             Hello, {user?.firstName || user?.username || "Chef"}
           </h1>
-          <div className="mt-3 flex flex-wrap items-center gap-3"><span className="rounded-full bg-[#F1F3F5] px-3 py-2 text-sm font-semibold">{snapshot.kitchen?.kitchenName || "Your Craves kitchen"}</span><span className="inline-flex items-center gap-1 text-sm text-primary"><ShieldCheck className="h-4 w-4" />Approved Chef</span><Button asChild variant="ghost" size="icon"><Link href="/notifications" aria-label="Chef notifications"><Bell className="h-5 w-5" /></Link></Button></div>
+          <div className="mt-3 flex flex-wrap items-center gap-3"><span className="rounded-full bg-[#F1F3F5] px-3 py-2 text-sm font-semibold">{snapshot.kitchen?.kitchenName || "Your Craves kitchen"}</span><span className="inline-flex items-center gap-1 text-sm text-primary"><ShieldCheck className="h-4 w-4" />Approved Chef</span><Button asChild variant="ghost" size="icon"><Link href="/chef/notifications" aria-label="Chef notifications"><Bell className="h-5 w-5" /></Link></Button></div>
         </div>
 
         {snapshot.unavailable.length > 0 ? (

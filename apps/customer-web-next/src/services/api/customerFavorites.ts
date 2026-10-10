@@ -121,3 +121,46 @@ export async function removeCustomerFavorite(menuItemId: string): Promise<void> 
     notify();
   }
 }
+
+const LEGACY_WISHLIST_KEY = "craves.wishlist";
+const MENU_ITEM_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+let legacyMigration: Promise<void> | null = null;
+
+/**
+ * Moves dishes saved by the old on-device wishlist to the account, once per
+ * page load. Anything that can't be saved yet stays on the device for the next try.
+ */
+export function migrateLegacyWishlist(): Promise<void> {
+  legacyMigration ??= (async () => {
+    let stored: unknown = null;
+    try {
+      stored = JSON.parse(window.localStorage.getItem(LEGACY_WISHLIST_KEY) ?? "null");
+    } catch {
+      // Unreadable legacy data has nothing to migrate.
+    }
+    const ids = Array.isArray(stored)
+      ? [...new Set(stored.map((item) => (item as { id?: unknown } | null)?.id))].filter(
+          (id): id is string => typeof id === "string" && MENU_ITEM_ID.test(id),
+        )
+      : [];
+    if (ids.length === 0) {
+      window.localStorage.removeItem(LEGACY_WISHLIST_KEY);
+      return;
+    }
+
+    const saved = await loadCustomerFavoriteIds(); // Throws while signed out: keep the device list.
+    const remaining: string[] = [];
+    for (const id of ids) {
+      if (saved.has(id)) continue;
+      await saveCustomerFavorite(id).catch(() => remaining.push(id));
+    }
+    if (remaining.length) {
+      window.localStorage.setItem(LEGACY_WISHLIST_KEY, JSON.stringify(remaining.map((id) => ({ id }))));
+    } else {
+      window.localStorage.removeItem(LEGACY_WISHLIST_KEY);
+    }
+  })().catch(() => {
+    legacyMigration = null;
+  });
+  return legacyMigration;
+}

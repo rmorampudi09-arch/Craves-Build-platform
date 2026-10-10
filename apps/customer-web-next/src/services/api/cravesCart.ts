@@ -40,6 +40,9 @@ type KitchenReference = {
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** The customer chose "Keep current cart": a neutral outcome, not a failure. */
+export class CartKeptError extends Error {}
 const PLACEHOLDER_IMAGE = "/brand/craves-logo.svg";
 let cart: CustomerCart | null = null;
 let visualItems: CartItem[] = [];
@@ -220,7 +223,7 @@ export async function addToCart(
       targetKitchen.name,
     );
     if (!replaceCart) {
-      throw new Error("Your current cart is unchanged.");
+      throw new CartKeptError(`No change: your cart from ${currentKitchen} is still saved.`);
     }
     await cartRequest("/api/cart", { method: "DELETE" });
   }

@@ -197,7 +197,7 @@ export function HomeCategoryRail({
         </h2>
       </section>
 
-      <div className="sticky top-0 z-30 translate-y-[var(--craves-mobile-search-offset,0px)] border-b border-[#F1F3F5] bg-white/97 shadow-[0_5px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl will-change-transform motion-reduce:transition-none transition-[transform,top,box-shadow] duration-[260ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] md:top-[var(--craves-desktop-header-offset-md,4.25rem)] md:translate-y-0 md:duration-[260ms] lg:top-[var(--craves-desktop-header-offset-lg,4.65rem)]">
+      <div className="sticky top-0 z-30 translate-y-[var(--craves-mobile-search-offset,0px)] border-b border-[#F1F3F5] bg-white/97 shadow-[0_5px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl will-change-[translate] motion-reduce:transition-none transition-[translate,top,box-shadow] duration-[260ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] md:top-[var(--craves-desktop-header-offset-md,4.25rem)] md:translate-y-0 md:duration-[260ms] lg:top-[var(--craves-desktop-header-offset-lg,4.65rem)]">
         <div className="relative mx-auto max-w-[88rem] bg-white/96 px-3 pb-0 pt-1.5 md:bg-white md:px-7 md:pt-2 lg:px-10">
           <div
             ref={scrollerRef}

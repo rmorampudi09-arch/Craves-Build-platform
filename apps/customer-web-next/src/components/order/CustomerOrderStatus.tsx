@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, MapPin, RefreshCw } from "lucide-react";
 import {
@@ -224,7 +225,7 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
     <div className="min-h-screen bg-white pb-28 text-[#1A1A1A]">
       <main className="mx-auto max-w-md px-4 pb-8 pt-8">
         <div className="text-center">
-          <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-[#FFF8EC] text-5xl shadow-[0_8px_28px_rgba(246,46,24,0.08)]">
+          <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-[#F1F3F5] text-5xl">
             👩‍🍳
           </div>
           <h1 className="mt-5 text-[24px] font-semibold leading-8 tracking-[-0.025em]">
@@ -240,11 +241,11 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
         </div>
 
         {rejected ? (
-          <section className="mt-6 rounded-[14px] border border-[#F62E18]/20 bg-[#FFF2F0] p-4">
-            <p className="text-sm font-semibold text-[#9F2114]">
+          <section className="mt-6 rounded-[14px] border border-[#E5E7EB] bg-white p-4">
+            <p className="text-sm font-semibold text-[#C4200F]">
               {formatOrderStatus(order.status)}
             </p>
-            <p className="mt-1 text-xs leading-5 text-[#7A2C22]">
+            <p className="mt-1 text-xs leading-5 text-[#1A1A1A]">
               Check your order history for the latest payment or refund status.
             </p>
           </section>
@@ -252,7 +253,7 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
 
         <section className="mt-6 rounded-[14px] border border-[#E5E7EB] bg-white p-4 shadow-[0_4px_18px_rgba(26,26,26,0.05)]">
           <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F62E18]/10 text-[#F62E18]">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
               <MapPin className="h-5 w-5" aria-hidden="true" />
             </span>
             <div className="min-w-0">
@@ -326,14 +327,15 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
         </p>
       </main>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white">
-        <div className="mx-auto max-w-md px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-          <a
+      {/* Sits above the mobile tab bar (4.7rem incl. safe area) instead of under it. */}
+      <div className="fixed inset-x-0 bottom-[calc(4.7rem+env(safe-area-inset-bottom))] z-30 border-t border-[#E5E7EB] bg-white md:bottom-0">
+        <div className="mx-auto max-w-md px-4 py-3 md:pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          <Link
             href={"/orders/" + order.id + "/tracking"}
-            className="flex min-h-[48px] w-full items-center justify-center rounded-[11px] border border-[#F62E18] px-5 py-[13px] text-[15px] font-semibold text-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+            className="craves-primary-action w-full"
           >
             Track order
-          </a>
+          </Link>
         </div>
       </div>
     </div>

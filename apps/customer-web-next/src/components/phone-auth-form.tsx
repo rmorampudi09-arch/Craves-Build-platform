@@ -7,7 +7,7 @@ import {
   signInWithPhoneNumber,
 } from "firebase/auth";
 import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from "@/lib/msg91-browser";
-import { phoneCodeRequestError } from "@/lib/phone-auth-errors";
+import { phoneCodeRequestError, phoneCodeVerifyError } from "@/lib/phone-auth-errors";
 import { getFirebaseBrowserClient } from "@/lib/firebase-client";
 import { safeReturnPath } from "@/lib/auth-contract";
 
@@ -157,11 +157,7 @@ export function PhoneAuthForm({ returnTo, centralOtp = true }: { returnTo?: stri
       window.location.assign(destination);
     } catch (error) {
       setStage("otp");
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "The OTP could not be verified.",
-      );
+      setMessage(phoneCodeVerifyError(error));
     } finally {
       setBusy(false);
     }

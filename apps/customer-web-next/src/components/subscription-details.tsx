@@ -54,9 +54,10 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
   useEffect(() => { void load().catch(error => setMessage(error instanceof Error ? error.message : "Subscription is unavailable.")); }, [load]);
 
   async function stateAction(action: "pause" | "cancel") {
-    const promptLabel = action === "pause" ? "Optional pause reason" : "Optional cancellation reason";
-    const reason = window.prompt(promptLabel) ?? "";
+    // Ask intent first; Cancel (or Back) on either dialog must abort the action.
     if (action === "cancel" && !window.confirm("Cancel this meal subscription? Future undispatched meals will be stopped. Any refund or unused-meal treatment follows the administrator-approved policy, not this screen.")) return;
+    const reason = window.prompt(action === "pause" ? "Optional pause reason" : "Optional cancellation reason");
+    if (reason === null) return;
     setBusy(true); setMessage("");
     try {
       const response = await fetch(`/api/subscriptions/${subscriptionId}/${action}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: reason.trim() || null }) });
@@ -69,7 +70,8 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
 
   async function resume() {
     if (!resumeDate) { setMessage("Choose a resume date."); return; }
-    const reason = window.prompt("Optional resume reason") ?? "";
+    const reason = window.prompt("Optional resume reason");
+    if (reason === null) return;
     setBusy(true); setMessage("");
     try {
       const response = await fetch(`/api/subscriptions/${subscriptionId}/resume`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resumeDate, reason: reason.trim() || null }) });
@@ -81,7 +83,8 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
 
   async function skip() {
     if (!skipDate) { setMessage("Choose a scheduled meal date to skip."); return; }
-    const reason = window.prompt("Optional skip reason") ?? "";
+    const reason = window.prompt("Optional skip reason");
+    if (reason === null) return;
     setBusy(true); setMessage("");
     try {
       const response = await fetch(`/api/subscriptions/${subscriptionId}/skips`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ serviceDate: skipDate, reason: reason.trim() || null }) });

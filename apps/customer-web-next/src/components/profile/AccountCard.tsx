@@ -45,7 +45,7 @@ export function AccountCard({
       className="overflow-hidden rounded-[1.6rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_12px_34px_rgba(26,26,26,0.07)] sm:p-5 md:rounded-[1.8rem] md:p-6"
     >
       <div className="flex items-start gap-3.5 sm:gap-4">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#FFF1EF] text-xl font-black text-[#F62E18] sm:h-20 sm:w-20 sm:text-2xl">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-xl font-black text-[#1A1A1A] sm:h-20 sm:w-20 sm:text-2xl">
           {initials(displayName)}
         </div>
 

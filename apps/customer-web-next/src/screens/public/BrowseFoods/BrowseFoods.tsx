@@ -121,6 +121,8 @@ export const routeMeta = {
   }),
 };
 
+const CART_AVAILABILITY_DISMISSED_KEY = "craves-cart-availability-dismissed";
+
 function isCravingCategory(value: string | null): value is CravingCategory {
   return value !== null && CRAVING_CATEGORIES.has(value as CravingCategory);
 }
@@ -159,7 +161,14 @@ function BrowseFoodsPage() {
   const [cartItemCount, setCartItemCount] = useState(() => cartCount());
   const [cartItems, setCartItems] = useState<CartItem[]>(() => getCart());
   const [unavailableCartItems, setUnavailableCartItems] = useState<CartItem[]>([]);
-  const [dismissedCartAvailabilityKey, setDismissedCartAvailabilityKey] = useState<string | null>(null);
+  // Remembered for the browser session so the dialog doesn't reopen on every visit to /home.
+  const [dismissedCartAvailabilityKey, setDismissedCartAvailabilityKey] = useState<string | null>(() => {
+    try {
+      return typeof window === "undefined" ? null : window.sessionStorage.getItem(CART_AVAILABILITY_DISMISSED_KEY);
+    } catch {
+      return null;
+    }
+  });
   const [cartRepairBusy, setCartRepairBusy] = useState(false);
   const [cartRepairError, setCartRepairError] = useState<string | null>(null);
   const [kitchens, setKitchens] = useState<NearbyKitchen[]>(initialCache.kitchens);
@@ -876,6 +885,11 @@ function BrowseFoodsPage() {
         onClose={() => {
           if (cartAvailabilityKey) {
             setDismissedCartAvailabilityKey(cartAvailabilityKey);
+            try {
+              window.sessionStorage.setItem(CART_AVAILABILITY_DISMISSED_KEY, cartAvailabilityKey);
+            } catch {
+              // Private mode: the dismissal still holds for this page view.
+            }
           }
         }}
       />

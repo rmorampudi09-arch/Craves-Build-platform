@@ -33,12 +33,15 @@ function formatTime(value: string | null): string {
   }).format(new Date(value));
 }
 
+const TRACKING_UNAVAILABLE = 'Tracking is taking a break. Your order is still on its way, so please try again in a minute.';
+
 async function readError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { message?: unknown };
-    return typeof body.message === 'string' ? body.message : `Request failed with HTTP ${response.status}`;
+    return typeof body.message === 'string' ? body.message : TRACKING_UNAVAILABLE;
   } catch {
-    return `Request failed with HTTP ${response.status}`;
+    // Gateway pages (502/504) aren't JSON; the status code stays out of the UI.
+    return TRACKING_UNAVAILABLE;
   }
 }
 
@@ -113,7 +116,7 @@ export function DeliveryTracking({ orderId }: DeliveryTrackingProps) {
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#F6B545]">Chef-specific order</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">{current.label}</h1>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">{current.label}</h1>
               <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">{current.description}</p>
             </div>
             <StatusBadge attention={current.attention} terminal={current.terminal} label={value.status ?? 'WAITING'} />

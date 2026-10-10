@@ -53,7 +53,7 @@ body :is(
 }
 
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--color-grey-400) !important;
+  outline: 2px solid #1a1a1a !important;
   outline-offset: 2px !important;
   --tw-ring-color: transparent !important;
   --tw-ring-offset-color: transparent !important;
@@ -64,7 +64,7 @@ body :is(
 body .chef-panel-theme
   :is(button, a, [role="button"], [role="tab"]):focus-visible {
   border-color: var(--color-grey-400) !important;
-  outline: 2px solid var(--color-grey-400) !important;
+  outline: 2px solid #1a1a1a !important;
   outline-offset: 2px !important;
   --tw-ring-color: transparent !important;
   --tw-ring-offset-color: transparent !important;
@@ -73,10 +73,15 @@ body .chef-panel-theme
 }
 
 input.craves-otp-field,
-input.craves-otp-field:hover,
+input.craves-otp-field:hover {
+  border-color: var(--color-grey-200) !important;
+}
+
+/* The code field is the only control on its step, so focus must be visible. */
 input.craves-otp-field:focus,
 input.craves-otp-field:focus-visible {
-  border-color: var(--color-grey-200) !important;
+  border-color: #1a1a1a !important;
+  box-shadow: 0 0 0 1px #1a1a1a !important;
 }
 
 .craves-otp-slot[data-active="true"] {

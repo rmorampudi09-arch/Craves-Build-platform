@@ -22,8 +22,9 @@ test("cart validates with the backend before address selection", () => {
   assert.match(page, /await validateCart\(\)/);
   assert.match(page, /navigate\(\{ to: "\/checkout" \}\)/);
   assert.match(page, /cartCurrency\(\)/);
-  assert.match(bar, /bg-\[#6B6B6B\]/);
-  assert.match(bar, /hover:bg-\[#555555\]/);
+  // Continue is the screen's one brand primary (hover and disabled live in craves-theme.css).
+  assert.match(bar, /craves-primary-action/);
+  assert.match(bar, /aria-busy=\{disabled\}/);
   assert.match(cartService, /await cartRequest\("\/api\/cart", \{ method: "DELETE" \}\)/);
   assert.match(cartService, /return cartMatchesCheckout\(expected\)/);
 });
@@ -86,7 +87,7 @@ test("Razorpay payment is contract validated and backend verified", () => {
   assert.match(payment, /const session = await loadSession\(\)/);
   assert.match(payment, /if \(!checkout\) \{[\s\S]*await ensureCheckout\(\);[\s\S]*return;/);
   assert.match(payment, /Preparing total/);
-  assert.match(payment, /bg-\[#16A34A\]/);
+  assert.match(payment, /craves-primary-action/);
   assert.doesNotMatch(payment, /"Review total"/);
   assert.match(payment, /\/verify/);
   assert.doesNotMatch(

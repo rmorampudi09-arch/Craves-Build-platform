@@ -25,7 +25,7 @@ export function CartHeader({ onBack }: { onBack: () => void }) {
               Your cart
             </span>
             <span className="block truncate text-xs text-[#6B6B6B]">
-              Live items and backend totals
+              Check your order before you pay
             </span>
           </span>
         </Link>

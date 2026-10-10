@@ -382,13 +382,14 @@ export function CheckoutPaymentButton({
         <button
           type="button"
           disabled={busy || disabled || Boolean(failure && !failure.retryAllowed)}
+          aria-busy={busy}
           onClick={() => void openPayment()}
-          className="ml-auto inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-[11px] border border-[#138A3D] bg-[#16A34A] px-5 py-[13px] text-[15px] font-semibold text-white shadow-[0_4px_12px_rgba(22,163,74,0.22)] transition-[background-color,box-shadow,transform] hover:-translate-y-px hover:bg-[#15803D] hover:shadow-[0_7px_18px_rgba(22,163,74,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A]/35 focus-visible:ring-offset-2 sm:flex-none sm:min-w-52 lg:ml-0 lg:w-full lg:min-w-0 lg:flex-none disabled:pointer-events-none disabled:opacity-45"
+          className="craves-primary-action ml-auto flex-1 sm:flex-none sm:min-w-52 lg:ml-0 lg:w-full lg:min-w-0 lg:flex-none"
         >
           {busy ? (
-            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+            <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
           ) : (
-            <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+            <LockKeyhole className="h-5 w-5" aria-hidden="true" />
           )}
           {busy
             ? checkout

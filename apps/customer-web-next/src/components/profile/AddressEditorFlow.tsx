@@ -1036,18 +1036,15 @@ export function AddressEditorFlow({
                 type="button"
                 onClick={() => void save()}
                 disabled={busy || mapResolving}
-                className={
-                  "inline-flex min-h-12 items-center justify-center gap-2 rounded-xl !border !border-[#E5E7EB] !bg-[#F1F3F5] px-3 text-sm font-black !text-[#1A1A1A] " +
-                  actionClass +
-                  " disabled:cursor-not-allowed disabled:opacity-50"
-                }
+                aria-busy={busy}
+                className="craves-primary-action px-3"
               >
                 {busy ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-[#F62E18]" />
+                  <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
-                  <Save className="h-4 w-4 text-[#F62E18]" />
+                  <Save className="h-5 w-5" />
                 )}
-                {busy ? "Saving…" : "Save and use this address"}
+                {busy ? "Saving…" : "Save address"}
               </button>
             </div>
           ) : null}

@@ -25,7 +25,7 @@ it('renders ready-for-pickup as the headline for a valid empty delivery projecti
     ? { orderId: fixture.id, deliveryJobId: null, providerId: null, status: null, trackingUrl: null, observedAt: null, history: [] }
     : order), { status: 200, headers: { 'Content-Type': 'application/json' } })));
   render(createElement(TrackingPage));
-  expect(await screen.findByRole('heading', { name: 'Ready For Pickup' })).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'Ready for pickup' })).toBeTruthy();
   expect(screen.queryByRole('heading', { name: 'Waiting for delivery updates' })).toBeNull();
   expect(screen.getByText('Total')).toBeTruthy();
   expect(screen.queryByText('Backend total')).toBeNull();

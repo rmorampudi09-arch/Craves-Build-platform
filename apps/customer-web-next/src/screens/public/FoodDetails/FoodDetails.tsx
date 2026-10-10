@@ -12,7 +12,7 @@ import {
   loadDish,
   type Dish,
 } from "@/services/api/dishes";
-import { addToCart } from "@/services/api/cravesCart";
+import { addToCart, CartKeptError } from "@/services/api/cravesCart";
 import { loadKitchenReviewSummary } from "@/services/api/reviews";
 import { DetailBrowseHeader } from "@/components/navigation/DetailBrowseHeader";
 import { DishImageHeader } from "@/components/order/DishImageHeader";
@@ -240,7 +240,8 @@ function DishDetailPage() {
         feedbackTimerRef.current = null;
       }, 1800);
     } catch (error) {
-      setMessageKind("error");
+      // "success" is the neutral status style; keeping the current cart is not a failure.
+      setMessageKind(error instanceof CartKeptError ? "success" : "error");
       setMessage(
         error instanceof Error
           ? error.message

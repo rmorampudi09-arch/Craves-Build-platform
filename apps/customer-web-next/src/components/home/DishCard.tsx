@@ -13,6 +13,7 @@ import {
 
 import {
   addToCart,
+  CartKeptError,
   getCart,
   setQty,
   subscribeCart,
@@ -159,7 +160,8 @@ export function DishCard({
       setMessage(`${dish.name} was added to the cart.`);
       window.setTimeout(() => setMessage(null), 1600);
     } catch (error) {
-      setState("error");
+      // Keeping the current cart is the customer's own choice: a status, not an error.
+      setState(error instanceof CartKeptError ? "idle" : "error");
       setMessage(
         error instanceof Error
           ? error.message

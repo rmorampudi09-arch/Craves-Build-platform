@@ -42,17 +42,14 @@ export function CartCheckoutBar({
           type="button"
           onClick={onContinue}
           disabled={disabled}
-          className="group/shiny relative isolate ml-auto inline-flex min-h-14 flex-1 items-center justify-center gap-2 overflow-hidden rounded-[8px] border border-[#5C5C5C] bg-[#6B6B6B] px-6 py-[13px] text-base font-semibold text-white shadow-[0_6px_18px_rgba(26,26,26,0.15)] transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:bg-[#555555] hover:shadow-[0_9px_24px_rgba(26,26,26,0.20)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6B6B6B]/35 focus-visible:ring-offset-2 motion-reduce:transform-none sm:flex-none sm:min-w-52 disabled:pointer-events-none disabled:opacity-45"
+          aria-busy={disabled}
+          className="craves-primary-action ml-auto flex-1 sm:flex-none sm:min-w-52"
         >
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 -left-1/2 z-0 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/55 to-transparent opacity-0 transition-[left,opacity] duration-700 ease-out group-hover/shiny:left-[120%] group-hover/shiny:opacity-100 motion-reduce:hidden"
-          />
           {disabled ? (
-            <LoaderCircle className="relative z-10 h-4 w-4 animate-spin" aria-hidden="true" />
+            <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
           ) : null}
-          <span className="relative z-10">{disabled ? "Checking cart…" : "Continue"}</span>
-          {!disabled ? <FaArrowRight className="relative z-10 text-sm" aria-hidden="true" /> : null}
+          <span>{disabled ? "Checking cart…" : "Continue"}</span>
+          {!disabled ? <FaArrowRight className="text-base" aria-hidden="true" /> : null}
         </button>
       </div>
     </div>

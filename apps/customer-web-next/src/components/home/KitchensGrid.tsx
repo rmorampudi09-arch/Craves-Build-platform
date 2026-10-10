@@ -138,32 +138,11 @@ function KitchenDishPreview({
       });
     });
 
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return () => {
-        active = false;
-      };
-    }
-
-    const timer = window.setTimeout(() => {
-      const nextIndex = (activeIndex + 1) % usable.length;
-      const src = usable[nextIndex];
-      void preloadKitchenImage(src).then((loaded) => {
-        if (!active || !loaded) return;
-        setLoadedSources((current) => {
-          if (current.has(src)) return current;
-          const next = new Set(current);
-          next.add(src);
-          return next;
-        });
-        setActiveIndex(nextIndex);
-      });
-    }, 3000);
-
+    // No autoplay (WCAG 2.2.2): photos change only when the customer swipes or taps.
     return () => {
       active = false;
-      window.clearTimeout(timer);
     };
-  }, [activeIndex, isVisible, usable]);
+  }, [isVisible, usable]);
 
   if (!usable.length) {
     return (

@@ -5,7 +5,7 @@ import { DeliveryTracking } from '@/components/delivery-tracking';
 import { isUuid } from '@/lib/delivery-status';
 
 export const metadata: Metadata = {
-  title: 'Delivery tracking',
+  title: 'Delivery tracking | Craves',
   robots: { index: false, follow: false },
 };
 

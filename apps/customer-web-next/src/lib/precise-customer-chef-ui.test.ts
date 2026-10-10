@@ -176,7 +176,7 @@ test("address manager owns default selection and the shared location-first edito
   assert.match(addressEditor, /Please complete the highlighted fields/);
   assert.match(addressEditor, /Flat \/ house \/ floor/);
   assert.match(addressEditor, /Receiver&apos;s phone/);
-  assert.match(addressEditor, /Save and use this address/);
+  assert.match(addressEditor, /Save address/);
   assert.doesNotMatch(addressEditor, /Skip/);
   assert.doesNotMatch(addressEditor, /Add later/);
 });
@@ -236,7 +236,7 @@ test("checkout is one page with saved addresses, ASAP delivery and the shared ad
 
   assert.match(addressEditor, /sessionFetch\(\s*targetAddressId/);
   assert.match(addressEditor, /method:\s*targetAddressId \? "PUT" : "POST"/);
-  assert.match(addressEditor, /Save and use this address/);
+  assert.match(addressEditor, /Save address/);
 });
 
 test("customer orders page uses a white page surface", () => {

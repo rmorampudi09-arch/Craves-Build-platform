@@ -43,7 +43,7 @@ test("mouse and keyboard focus rings cannot restore a logo colour", () => {
   );
   assert.match(
     overrides,
-    /outline:\s*2px solid var\(--color-grey-400\)\s*!important/,
+    /outline:\s*2px solid #1a1a1a\s*!important/,
   );
   assert.doesNotMatch(overrides, /outline:[^;]*(?:#f62e18|#c92716|#6930ca)/i);
 });

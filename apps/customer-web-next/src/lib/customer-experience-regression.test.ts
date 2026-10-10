@@ -32,11 +32,12 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(chefs, /discoverDishes\(/);
   assert.match(chefs, /dishImagesByKitchen=\{dishImagesByKitchen\}/);
   assert.match(kitchens, /KitchenDishPreview/);
-  assert.match(kitchens, /window\.setTimeout/);
+  // Kitchen photos never autoplay (WCAG 2.2.2); they change on swipe only.
+  assert.doesNotMatch(kitchens, /window\.setTimeout/);
   assert.doesNotMatch(kitchens, /ChevronLeft/);
   assert.doesNotMatch(kitchens, /ChevronRight/);
   assert.doesNotMatch(kitchens, /kitchenPreviewTrack/);
-  assert.match(kitchens, /3000/);
+  assert.doesNotMatch(kitchens, /\b3000\b/);
   assert.match(kitchens, /onPointerDown/);
   assert.match(kitchens, /new window\.Image\(\)/);
   assert.match(kitchens, /kitchenImagePreloads/);

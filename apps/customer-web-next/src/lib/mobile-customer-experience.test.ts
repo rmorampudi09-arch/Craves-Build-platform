@@ -14,7 +14,7 @@ test("mobile customer nav morphs the Cart tab right-to-left while browsing down"
   assert.match(nav, /ChefHat/);
   assert.match(nav, /FaUser/);
   assert.match(nav, /CravesCartIcon/);
-  assert.match(nav, /label: "Meal Subscription"/);
+  assert.match(nav, /label: "Meal plans"/);
   assert.match(nav, /href: "\/chefs"/);
   assert.doesNotMatch(nav, /home#nearby-kitchens-heading/);
   assert.match(nav, /cartExpanded/);
@@ -86,7 +86,7 @@ test("profile treats meal subscription as its own destination", () => {
   const profile = source("../screens/Profile/Profile.tsx");
 
   assert.match(profile, /id="profile-meal-subscription"/);
-  assert.match(profile, /title="Meal Subscription"/);
+  assert.match(profile, /title="Meal plans"/);
   assert.match(profile, /Payments, referrals & chef tools/);
   assert.doesNotMatch(profile, /title="Membership"/);
 });

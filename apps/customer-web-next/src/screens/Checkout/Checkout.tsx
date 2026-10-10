@@ -96,7 +96,32 @@ function checkoutMessage(error: unknown): string {
     return "We’re reconnecting your Craves session. Please try again in a moment.";
   }
 
-  return message || "We couldn’t prepare checkout right now. Your cart is safe — please try again.";
+  // Known backend sentences become customer copy; anything else falls back so engineer text never shows.
+  if (normalized.includes("outside") && normalized.includes("service area")) {
+    return "We don’t deliver to this address yet. Choose another address above or add a new one.";
+  }
+  if (normalized.includes("minimum order")) {
+    return "This order is below the minimum order value. Add a little more from this kitchen to continue.";
+  }
+  if (normalized.includes("coordinates are required")) {
+    return "We couldn’t check delivery for this address. Edit it and re-pin it on the map, or choose another address.";
+  }
+  if (normalized.includes("inactive or does not belong")) {
+    return "This address is no longer available. Choose another address above or add a new one.";
+  }
+  if (normalized.includes("pickup profile is incomplete")) {
+    return "This home chef can’t take orders right now. Your cart is saved, so please try again later.";
+  }
+  if (
+    normalized.includes("launch policy") ||
+    normalized.includes("temporarily unavailable") ||
+    normalized.includes("not configured correctly") ||
+    normalized.includes("incomplete response")
+  ) {
+    return "Ordering is paused for a short while. Your cart is saved, so please try again soon.";
+  }
+
+  return "We couldn’t prepare checkout right now. Your cart is safe — please try again.";
 }
 
 function responseMessage(body: unknown, fallback: string): string {
@@ -647,10 +672,11 @@ export default function CheckoutPage() {
                           <label
                             key={address.id}
                             className={[
-                              "relative flex min-h-[116px] cursor-pointer items-start gap-3 rounded-[1rem] border p-3.5 transition-[border-color,background-color,box-shadow] focus-within:ring-2 focus-within:ring-[#F62E18]/20",
+                              "relative flex min-h-[116px] cursor-pointer items-start gap-3 rounded-[1rem] border p-3.5 transition-[border-color,background-color,box-shadow]",
+                              // Selected: a 2px Flame Red edge (inset, so nothing shifts), no red tint.
                               checked
-                                ? "border-[#F62E18]/40 bg-[#FFF8F6] shadow-[0_5px_16px_rgba(246,46,24,0.08)]"
-                                : "border-[#E5E7EB] bg-white hover:border-[#C8CDD2] hover:bg-[#FAFAFA]",
+                                ? "border-[#F62E18] bg-white shadow-[inset_0_0_0_1px_#F62E18]"
+                                : "border-[#E5E7EB] bg-white hover:border-[#6B6B6B]",
                             ].join(" ")}
                           >
                             <input
@@ -668,7 +694,7 @@ export default function CheckoutPage() {
                                   {displayAddressLabel(address.addressLabel)}
                                 </span>
                                 {address.isDefault ? (
-                                  <span className="rounded-full bg-[#F62E18]/10 px-2 py-0.5 text-[10px] font-bold text-[#F62E18]">
+                                  <span className="rounded-full bg-[#F1F3F5] px-2 py-0.5 text-[11px] font-bold text-[#1A1A1A]">
                                     Default
                                   </span>
                                 ) : null}

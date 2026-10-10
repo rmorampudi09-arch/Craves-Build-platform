@@ -19,6 +19,7 @@
   color-scheme: light;
 
   --color-flame-red: #f62e18;
+  --color-flame-red-strong: #c4200f;
   --color-contrast-red: #c92716;
   --color-black: #000000;
   --color-cream: #fff4e8;
@@ -94,15 +95,19 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  color: var(--color-black);
-  font-family: var(--font-display-family);
-  letter-spacing: -0.02em;
+/* Layered so a heading's own colour and tracking utilities win
+   (e.g. white titles on dark heroes were rendering black-on-navy). */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: var(--color-black);
+    font-family: var(--font-display-family);
+    letter-spacing: -0.02em;
+  }
 }
 
 ::selection {
@@ -168,6 +173,53 @@ body :is(button, [role="tab"], .btn-primary, .craves-button-link, .chef-panel-na
 :where(button, [role="tab"], .btn-primary):disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+/* The one customer primary action per screen (Continue, Pay, Save, Track).
+   White on Flame Red is 3.95:1, so the label stays large and bold (19px/700). */
+.craves-primary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3.25rem;
+  padding: 0 1.5rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-flame-red);
+  color: var(--color-white);
+  box-shadow: none;
+  font-family: var(--font-sans-family);
+  font-size: 1.1875rem;
+  font-weight: 700;
+  line-height: 1.5rem;
+  text-decoration: none;
+  transition: background-color var(--motion-fast), color var(--motion-fast);
+}
+
+.craves-primary-action:not(:disabled):hover,
+.craves-primary-action:not(:disabled):active {
+  background: var(--color-flame-red-strong);
+  color: var(--color-white);
+  box-shadow: none;
+}
+
+.craves-primary-action:disabled {
+  opacity: 1;
+  background: #f1f3f5;
+  color: #6b6b6b;
+}
+
+/* Busy keeps the brand fill so a loading primary doesn't look disabled. */
+.craves-primary-action[aria-busy="true"]:disabled {
+  cursor: progress;
+  background: var(--color-flame-red);
+  color: var(--color-white);
+}
+
+/* A page that owns a bottom action bar hides the tab bar instead of hiding under it. */
+body:has([data-craves-action-bar]) [data-craves-bottom-nav] {
+  display: none;
 }
 
 .btn-primary {

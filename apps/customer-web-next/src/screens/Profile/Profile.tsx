@@ -116,7 +116,7 @@ function ProfileSignOutAction({
       className="group flex min-h-[76px] w-full items-center justify-between gap-3 rounded-2xl border border-[#F62E18]/20 bg-white p-3.5 text-left transition-[box-shadow,background-color] hover:bg-[#FFF8F7] hover:shadow-[0_8px_22px_rgba(246,46,24,0.07)] disabled:opacity-50 sm:p-4"
     >
       <span className="flex min-w-0 items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFF1EF] text-[#F62E18]">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
           <FaRightFromBracket className="text-[18px]" aria-hidden="true" />
         </span>
         <span>
@@ -368,7 +368,7 @@ function ProfileContent({
           {logoutError ? (
             <p
               role="alert"
-              className="rounded-xl bg-[#FFF1EF] p-3 text-xs font-semibold text-[#C92716]"
+              className="rounded-xl bg-[#F1F3F5] p-3 text-xs font-semibold text-[#C4200F]"
             >
               {logoutError}
             </p>
@@ -426,7 +426,7 @@ function ProfileContent({
 
         <section className="mt-5 rounded-[1.55rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_8px_24px_rgba(26,26,26,0.05)] sm:p-5">
           <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFF1EF] text-[#F62E18]">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
               <FaGift className="text-lg" aria-hidden="true" />
             </span>
             <div>
@@ -496,7 +496,7 @@ function ProfileContent({
         <section aria-labelledby="profile-meal-subscription" className="mt-7">
           <div className="mb-3 px-1">
             <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#F62E18]">
-              Meal Subscription
+              Meal plans
             </p>
             <h2
               id="profile-meal-subscription"
@@ -509,7 +509,7 @@ function ProfileContent({
           <ProfileLinkCard
             to="/subscriptions"
             icon={FaCalendarDays}
-            title="Meal Subscription"
+            title="Meal plans"
             subtitle="Browse, start and manage recurring home-cooked meal plans"
           />
         </section>
@@ -586,7 +586,7 @@ function ProfileContent({
           {logoutError ? (
             <p
               role="alert"
-              className="mt-3 rounded-xl bg-[#FFF1EF] p-3 text-xs font-semibold text-[#C92716]"
+              className="mt-3 rounded-xl bg-[#F1F3F5] p-3 text-xs font-semibold text-[#C4200F]"
             >
               {logoutError}
             </p>

@@ -43,7 +43,7 @@ const NAV_ITEMS = [
   {
     key: "subscriptions" as const,
     href: "/subscriptions",
-    label: "Meal Subscription",
+    label: "Meal plans",
     icon: CalendarDays,
   },
   {
@@ -184,10 +184,12 @@ export function BottomNav() {
     <>
       <div
         aria-hidden="true"
+        data-craves-bottom-nav
         className="h-[calc(4.7rem+env(safe-area-inset-bottom))] md:hidden"
       />
 
       <nav
+        data-craves-bottom-nav
         className="fixed inset-x-0 bottom-0 z-40 md:hidden"
         aria-label="Customer navigation"
       >

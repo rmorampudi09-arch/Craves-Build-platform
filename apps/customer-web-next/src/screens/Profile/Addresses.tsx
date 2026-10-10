@@ -247,7 +247,7 @@ export default function AddressesPage() {
                 key={address.id}
                 className={`rounded-[24px] border bg-white px-5 py-5 shadow-[0_4px_18px_rgba(26,26,26,0.06)] transition-shadow md:px-6 md:py-6 ${
                   address.isDefault
-                    ? "border-[#F62E18]/35 shadow-[0_8px_28px_rgba(246,46,24,0.08)]"
+                    ? "border-[#F62E18] shadow-[inset_0_0_0_1px_#F62E18]"
                     : "border-[#E5E7EB] hover:shadow-[0_10px_30px_rgba(26,26,26,0.09)]"
                 }`}
               >
@@ -263,7 +263,7 @@ export default function AddressesPage() {
                         {addressDisplayName(address)}
                       </h2>
                       {address.isDefault ? (
-                        <span className="inline-flex items-center rounded-full bg-[#F62E18]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#F62E18] md:text-[11px]">
+                        <span className="inline-flex items-center rounded-full bg-[#F1F3F5] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#1A1A1A] md:text-[11px]">
                           <Check className="mr-1 h-3.5 w-3.5" strokeWidth={2.7} />
                           Default
                         </span>
@@ -355,7 +355,7 @@ export default function AddressesPage() {
         {initialLoadState === "error" ? (
           <div
             role="alert"
-            className="rounded-[24px] border border-[#F62E18]/20 bg-[#FFF8F7] px-6 py-8 text-center"
+            className="rounded-[24px] border border-[#E5E7EB] bg-white px-6 py-8 text-center"
           >
             <AlertTriangle className="mx-auto h-8 w-8 text-[#F62E18]" />
             <h2 className="mt-3 font-display text-xl font-black">
@@ -431,7 +431,7 @@ export default function AddressesPage() {
               </button>
             </AlertDialog.Cancel>
 
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F62E18]/10 text-[#F62E18]">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
               <Trash2 className="h-8 w-8" strokeWidth={2} />
             </div>
 

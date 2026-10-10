@@ -83,7 +83,7 @@ export default function ConfirmationPage() {
       </AutoHideCustomerHeader>
       <main className="flex min-h-[calc(100vh-5rem)] items-center justify-center px-4 py-12">
         <div className="w-full max-w-md rounded-3xl border border-border bg-card p-8 text-center shadow-lg">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[#F1F3F5]">
             <CheckCircle2 className="h-12 w-12 text-primary" />
           </div>
           <p className="mt-4 font-script text-primary">Order update</p>
@@ -104,7 +104,7 @@ export default function ConfirmationPage() {
             </div>
             <div className="mt-3 flex justify-between">
               <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                Backend total
+                Total paid
               </span>
               <span className="font-display text-xl font-bold text-primary">
                 {money(order.grandTotal, order.currency)}
@@ -122,7 +122,7 @@ export default function ConfirmationPage() {
             onClick={() =>
               navigate({ to: "/tracking", search: { id: order.id } })
             }
-            className="btn-primary mt-6 flex w-full justify-center"
+            className="craves-primary-action mt-6 w-full"
           >
             <ClipboardList className="h-4 w-4" /> Track your order
           </button>

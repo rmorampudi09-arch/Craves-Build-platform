@@ -1,5 +1,16 @@
 import { expect, it } from "vitest";
-import { phoneCodeRequestError } from "./phone-auth-errors";
+import { phoneCodeRequestError, phoneCodeVerifyError } from "./phone-auth-errors";
+
+it("shows reviewed copy, never a code, when a verification code is rejected", () => {
+  expect(phoneCodeVerifyError(new Error("OTP_INVALID"))).toBe("That code didn’t match. Check the latest SMS and try again.");
+  expect(phoneCodeVerifyError(new Error("OTP_RESTART"))).toContain("expired");
+  expect(phoneCodeVerifyError({ code: "auth/invalid-verification-code" })).toContain("didn’t match");
+  expect(phoneCodeVerifyError(new Error("OTP_SOMETHING_NEW"))).toBe("We couldn’t verify this code. Please try again.");
+  expect(phoneCodeVerifyError(new Error("Firebase: Error (auth/internal-error)."))).not.toMatch(/Firebase|auth\//);
+  expect(phoneCodeVerifyError(new Error("Invalid sign-in origin."))).not.toMatch(/origin/);
+  // Human copy written by our own flow passes through.
+  expect(phoneCodeVerifyError(new Error("Request a verification code for this number first."))).toBe("Request a verification code for this number first.");
+});
 
 it("does not blame an invisible security check for provider configuration or delivery failures", () => {
   expect(phoneCodeRequestError(new Error("OTP_WEB_UNAVAILABLE"))).toBe("Phone sign-in is temporarily unavailable. Please try again later.");

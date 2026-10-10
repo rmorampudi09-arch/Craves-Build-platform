@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { boundedFetch } from "@/lib/bounded-fetch";
 import { boundBffRequest } from "@/lib/bff-request-limits";
 import { isSameOrigin } from "@/lib/request-security";
@@ -26,8 +27,9 @@ async function forward(request: NextRequest, context: Context, method: "DELETE" 
   try {
     const upstream = await boundedFetch(`${apiBaseUrl()}${path}`, { method, headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, cache: "no-store", signal: controller.signal }, 40_000);
     if (!upstream.ok) {
-      const failure = chefMenuFailure(upstream.status, await upstream.json().catch(() => null));
-      const response = NextResponse.json(failure ?? { code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 404 ? "MENU_IMAGE_NOT_FOUND" : "MENU_IMAGE_UPDATE_FAILED" }, { status: upstream.status, headers: { "Cache-Control": "no-store" } });
+      const raw: unknown = await upstream.json().catch(() => null);
+      const failure = chefMenuFailure(upstream.status, raw);
+      const response = NextResponse.json(failure ?? { code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 404 ? "MENU_IMAGE_NOT_FOUND" : "MENU_IMAGE_UPDATE_FAILED", ...chefUpstream(raw) }, { status: upstream.status, headers: { "Cache-Control": "no-store" } });
       if (upstream.status === 401) response.cookies.delete("craves_access_token");
       return response;
     }

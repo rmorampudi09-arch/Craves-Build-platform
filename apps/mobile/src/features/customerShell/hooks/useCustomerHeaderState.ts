@@ -13,6 +13,12 @@ import {
 } from '../state/customerShellSlice';
 
 const CUSTOMER_ROLE = 'CUSTOMER' as const;
+const LABEL_TEXT: Record<string, string> = {HOME: 'Home', WORK: 'Work', OTHER: 'Other'};
+
+/** Saved-location labels arrive as HOME/WORK/OTHER; show them in sentence case. */
+export function browsingLocationLabel(label: string): string {
+  return LABEL_TEXT[label.trim().toUpperCase()] ?? label;
+}
 
 export function useCustomerHeaderState() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();

@@ -21,6 +21,8 @@ export class AppApiError extends Error {
     readonly retriable = false,
     readonly cancelled = false,
     readonly details: readonly string[] = [],
+    /** Seconds from a 429 Retry-After header; never retry before it elapses. */
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = 'AppApiError';
@@ -53,6 +55,16 @@ function correlationIdFrom(error: AxiosError<BackendErrorPayload>): string | und
     readHeader(error.response?.headers, 'x-correlation-id') ??
     readHeader(error.config?.headers, 'x-correlation-id')
   );
+}
+
+function retryAfterSecondsFrom(
+  error: AxiosError<BackendErrorPayload>,
+): number | undefined {
+  const value = readHeader(error.response?.headers, 'retry-after');
+  if (!value || !/^\d{1,4}$/.test(value)) {
+    return undefined;
+  }
+  return Math.min(3600, Math.max(1, Number(value)));
 }
 
 function normalizedBackendCode(
@@ -168,6 +180,7 @@ export function toAppApiError(error: unknown): AppApiError {
       isRetriableFailure(status, error.code),
       false,
       details,
+      status === 429 ? retryAfterSecondsFrom(error) : undefined,
     );
   }
 

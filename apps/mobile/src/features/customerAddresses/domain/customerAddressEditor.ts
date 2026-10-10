@@ -4,9 +4,6 @@ import type {
   CustomerAddressUpdateRequest,
 } from './customerAddressContract';
 
-export const CUSTOMER_ADDRESS_PINCODE_FALLBACK_COPY =
-  'Confirm the pincode before saving. Current location can fill the available postal address automatically.';
-
 export interface CustomerAddressDraft {
   addressLabel: CustomerAddressLabel | null;
   recipientName: string;
@@ -115,10 +112,14 @@ export function updateCustomerAddressDraftText(
   return {...draft, [field]: value};
 }
 
+/**
+ * Fills the location-derived fields from the map pin. The flat/house line is filled only
+ * from a precise house number (Craves never invents one); the street line follows the pin
+ * unless the customer typed their own text there.
+ */
 export function applyDetectedCustomerAddress(
   draft: CustomerAddressDraft,
   detected: {
-    formattedAddress: string;
     houseNumber: string | null;
     street: string | null;
     area: string | null;
@@ -126,20 +127,22 @@ export function applyDetectedCustomerAddress(
     city: string | null;
     state: string | null;
     postalCode: string | null;
+    preciseHouseNumber: boolean;
     latitude: number;
     longitude: number;
   },
+  previousPinStreet: string | null = null,
 ): CustomerAddressDraft {
-  const line1 =
-    detected.houseNumber && detected.street
-      ? `${detected.houseNumber}, ${detected.street}`
-      : detected.houseNumber || detected.street || detected.formattedAddress;
+  const typedLine2 = draft.addressLine2.trim();
+  const line2FromPin = !typedLine2 || typedLine2 === previousPinStreet;
 
   return {
     ...draft,
-    addressLine1: line1,
-    addressLine2:
-      detected.houseNumber && detected.street ? draft.addressLine2 : detected.street || draft.addressLine2,
+    addressLine1:
+      detected.preciseHouseNumber && detected.houseNumber
+        ? detected.houseNumber
+        : draft.addressLine1,
+    addressLine2: line2FromPin ? detected.street ?? '' : draft.addressLine2,
     areaName: detected.area || detected.city || draft.areaName,
     districtName: detected.district || detected.city || draft.districtName,
     city: detected.city || draft.city,
@@ -270,7 +273,7 @@ export function createCustomerAddressSavePlan(
       status: 'invalid',
       fieldErrors: {},
       formError:
-        'Use current location before saving so Craves can map the delivery point accurately.',
+        'Set the delivery pin on the map before saving so Craves can deliver to the right place.',
     };
   }
 

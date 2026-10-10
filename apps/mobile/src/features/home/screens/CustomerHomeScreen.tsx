@@ -53,7 +53,11 @@ import {
 import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
 import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmptyStateAdapters';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
-import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
+import {
+  CustomerLocationSelector,
+  DeliveryAddressEditor,
+  type DeliveryAddressEditorTarget,
+} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
 import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
 import {
@@ -335,6 +339,7 @@ export function CustomerHomeScreen() {
     insets.bottom + touchTarget.comfortable + spacing.xxxl,
   );
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
+  const [addressEditor, setAddressEditor] = useState<DeliveryAddressEditorTarget | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const listRef = useRef<FlatList<HomeFeedListItem>>(null);
@@ -580,12 +585,36 @@ export function CustomerHomeScreen() {
   const emptyState = (() => {
     if (feed.locationRequired) {
       return (
-        <TerminalState
-          title="Choose where to deliver"
-          description="Select a saved address to see available home-cooked meals nearby."
-          actionLabel="Choose location"
-          onAction={() => setLocationSelectorVisible(true)}
-        />
+        <View style={styles.noLocationCard}>
+          <View style={styles.noLocationIcon}>
+            <Icon color={colors.flameRed} name="location" size={36} surface={false} />
+          </View>
+          <Text accessibilityRole="header" style={styles.noLocationTitle}>
+            Where should Craves deliver?
+          </Text>
+          <Text style={styles.noLocationBody}>
+            Home kitchens, dishes and delivery depend on your address.
+          </Text>
+          <View style={styles.noLocationActions}>
+            <Button
+              label="Use current location"
+              leftIcon="gps"
+              onPress={() => setAddressEditor({mode: 'add', start: 'current-location'})}
+            />
+            <Button
+              label="Search area or street"
+              leftIcon="search"
+              onPress={() => setAddressEditor({mode: 'add', start: 'search'})}
+              variant="outline"
+            />
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setLocationSelectorVisible(true)}
+            style={({pressed}) => [styles.noLocationLink, pressed && styles.noLocationPressed]}>
+            <Text style={styles.noLocationLinkText}>Choose a saved address</Text>
+          </Pressable>
+        </View>
       );
     }
     if (initialLoading) {
@@ -852,11 +881,59 @@ export function CustomerHomeScreen() {
         visible={locationSelectorVisible}
         onClose={() => setLocationSelectorVisible(false)}
       />
+      {addressEditor ? (
+        <DeliveryAddressEditor
+          onClose={() => setAddressEditor(null)}
+          target={addressEditor}
+        />
+      ) : null}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
+  noLocationCard: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    ...elevation.card,
+  },
+  noLocationIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.iconSurface,
+  },
+  noLocationTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.hero - 2,
+    fontWeight: fontWeight.bold,
+    textAlign: 'center',
+  },
+  noLocationBody: {
+    color: colors.textSecondary,
+    fontSize: typography.body,
+    textAlign: 'center',
+  },
+  noLocationActions: {alignSelf: 'stretch', gap: spacing.sm, marginTop: spacing.xs},
+  noLocationLink: {minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.sm},
+  noLocationPressed: {opacity: 0.84},
+  noLocationLinkText: {
+    color: colors.flameRedAccessible,
+    fontSize: typography.small + 1,
+    fontWeight: fontWeight.semibold,
+  },
   fixedHeader: {
     backgroundColor: colors.white,
   },

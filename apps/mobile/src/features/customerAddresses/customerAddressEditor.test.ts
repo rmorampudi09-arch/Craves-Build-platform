@@ -63,22 +63,25 @@ describe('customer address editor domain', () => {
     ).toBeNull();
   });
 
-  it('maps a resolved current location into editable written fields', () => {
-    const draft = applyDetectedCustomerAddress(createCustomerAddressDraft(), {
-      formattedAddress: '12 Lake Road, Indiranagar, Bengaluru',
-      houseNumber: '12',
-      street: 'Lake Road',
-      area: 'Indiranagar',
-      district: 'Bengaluru Urban',
-      city: 'Bengaluru',
-      state: 'Karnataka',
-      postalCode: '560038',
-      latitude: 12.9784,
-      longitude: 77.6408,
-    });
+  const pin = {
+    houseNumber: '12',
+    street: 'Lake Road',
+    area: 'Indiranagar',
+    district: 'Bengaluru Urban',
+    city: 'Bengaluru',
+    state: 'Karnataka',
+    postalCode: '560038',
+    preciseHouseNumber: true,
+    latitude: 12.9784,
+    longitude: 77.6408,
+  };
+
+  it('maps a resolved pin into editable written fields', () => {
+    const draft = applyDetectedCustomerAddress(createCustomerAddressDraft(), pin);
 
     expect(draft).toMatchObject({
-      addressLine1: '12, Lake Road',
+      addressLine1: '12',
+      addressLine2: 'Lake Road',
       areaName: 'Indiranagar',
       districtName: 'Bengaluru Urban',
       city: 'Bengaluru',
@@ -87,6 +90,36 @@ describe('customer address editor domain', () => {
       latitude: 12.9784,
       longitude: 77.6408,
     });
+  });
+
+  it('never fills the flat or house line from an imprecise pin', () => {
+    const fresh = applyDetectedCustomerAddress(createCustomerAddressDraft(), {
+      ...pin,
+      preciseHouseNumber: false,
+    });
+    expect(fresh.addressLine1).toBe('');
+
+    const typed = applyDetectedCustomerAddress(
+      {...createCustomerAddressDraft(), addressLine1: 'Flat 302'},
+      {...pin, preciseHouseNumber: false},
+    );
+    expect(typed.addressLine1).toBe('Flat 302');
+  });
+
+  it('moves the street with the pin but keeps a street line the customer typed', () => {
+    const moved = applyDetectedCustomerAddress(
+      {...createCustomerAddressDraft(), addressLine2: 'Lake Road'},
+      {...pin, street: null},
+      'Lake Road',
+    );
+    expect(moved.addressLine2).toBe('');
+
+    const typed = applyDetectedCustomerAddress(
+      {...createCustomerAddressDraft(), addressLine2: 'Floor 2'},
+      {...pin, street: 'MG Road'},
+      'Lake Road',
+    );
+    expect(typed.addressLine2).toBe('Floor 2');
   });
 
   it('builds the approved full PUT request for a valid edit', () => {
@@ -129,7 +162,7 @@ describe('customer address editor domain', () => {
     );
     expect(plan.status).toBe('invalid');
     if (plan.status !== 'invalid') return;
-    expect(plan.formError).toContain('Use current location');
+    expect(plan.formError).toContain('Set the delivery pin');
   });
 
   it('blocks a duplicate before saving', () => {

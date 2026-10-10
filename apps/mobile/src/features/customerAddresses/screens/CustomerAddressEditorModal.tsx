@@ -1,28 +1,25 @@
-import React, {useCallback, useState} from 'react';
-import {Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
+import {Alert, Linking, Modal} from 'react-native';
 import * as Location from 'expo-location';
+import {useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
 import {resolveReducedMotionAnimation} from '../../../design/motion';
 import {useReducedMotionPreference} from '../../../design/reducedMotion';
-import {
-  borderWidth,
-  colors,
-  elevation,
-  fontWeight,
-  iconSize,
-  radius,
-  spacing,
-  touchTarget,
-  typography,
-} from '../../../design/tokens';
-import {Button} from '../../../shared/components/Button';
-import {Icon} from '../../../shared/components/Icon';
-import {InputField} from '../../../shared/components/InputField';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
-import {customerAddressesApi} from '../api/customerAddressesApi';
-import type {CustomerAddress, CustomerAddressLabel} from '../domain/customerAddressContract';
+import type {MapPoint} from '../../maps/OlaMapPicker';
 import {
-  CUSTOMER_ADDRESS_PINCODE_FALLBACK_COPY,
+  customerAddressesApi,
+  type CustomerLocationSuggestion,
+} from '../api/customerAddressesApi';
+import {AddressDetailsStep} from '../components/AddressDetailsStep';
+import {AddressMapStep, type PinLookupState} from '../components/AddressMapStep';
+import {AddressSearchStep} from '../components/AddressSearchStep';
+import {
+  isCustomerAddressDeliveryReady,
+  type CustomerAddress,
+  type CustomerAddressLabel,
+} from '../domain/customerAddressContract';
+import {
   applyDetectedCustomerAddress,
   createCustomerAddressDraft,
   createCustomerAddressSavePlan,
@@ -32,47 +29,129 @@ import {
   type CustomerAddressFieldErrors,
   type CustomerAddressTextField,
 } from '../domain/customerAddressEditor';
+import {classifyLocationLookupError} from '../domain/locationLookup';
+import {useLocationSearch} from '../hooks/useLocationSearch';
+import {useSecondsUntil} from '../hooks/useSecondsUntil';
 import {
   useCreateCustomerAddressMutation,
   useUpdateCustomerAddressMutation,
 } from '../query/customerAddressQueries';
 
+type Step = 'search' | 'map' | 'details';
+type LocateOrigin = 'start' | 'search' | 'map';
+
 interface Props {
   mode: 'add' | 'edit';
   address?: CustomerAddress;
   addresses: CustomerAddress[];
+  /** Where a new address starts: place search (default) or straight to GPS. */
+  start?: 'search' | 'current-location';
+  /** Lets delivery pickers offer saved addresses in the search step. */
+  onPickSavedAddress?: (address: CustomerAddress) => void;
+  onSaved?: (address: CustomerAddress) => void;
   onClose: () => void;
 }
 
-const LABELS: Array<{value: CustomerAddressLabel; label: string}> = [
-  {value: 'HOME', label: 'Home'},
-  {value: 'WORK', label: 'Work'},
-  {value: 'OTHER', label: 'Other'},
-];
+/** Same as the server's CRAVES_LOCATION_SEARCH_CENTER (Hyderabad); used before any pin exists. */
+const DEFAULT_CENTER: MapPoint = {latitude: 17.385, longitude: 78.4867};
+const GPS_FAILED_COPY =
+  'Could not get your current location. Check that location is on, then try again.';
 
-export function CustomerAddressEditorModal({mode, address, addresses, onClose}: Props) {
+function initialSteps(
+  mode: Props['mode'],
+  address: CustomerAddress | undefined,
+  start: NonNullable<Props['start']>,
+): Step[] {
+  if (mode === 'edit') {
+    return address?.latitude != null && address.longitude != null
+      ? ['details']
+      : ['details', 'map'];
+  }
+  return start === 'current-location' ? ['search', 'map'] : ['search'];
+}
+
+function isValidPoint(point: MapPoint): boolean {
+  return (
+    Number.isFinite(point.latitude) &&
+    Number.isFinite(point.longitude) &&
+    Math.abs(point.latitude) <= 90 &&
+    Math.abs(point.longitude) <= 180
+  );
+}
+
+export function CustomerAddressEditorModal({
+  mode,
+  address,
+  addresses,
+  start = 'search',
+  onPickSavedAddress,
+  onSaved,
+  onClose,
+}: Props) {
   const editingAddressId = mode === 'edit' ? address?.id ?? null : null;
-  const initialDraft = createCustomerAddressDraft(address);
-  const [original] = useState<CustomerAddressDraft>(initialDraft);
-  const [draft, setDraft] = useState<CustomerAddressDraft>(initialDraft);
+  const selectedLocation = useAppSelector(state => state.customerShell.selectedLocation);
+  const [original] = useState<CustomerAddressDraft>(() => createCustomerAddressDraft(address));
+  const [draft, setDraft] = useState<CustomerAddressDraft>(original);
   const [fieldErrors, setFieldErrors] = useState<CustomerAddressFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [locationMessage, setLocationMessage] = useState<string | null>(null);
+  const [steps, setSteps] = useState<Step[]>(() => initialSteps(mode, address, start));
+  const [pin, setPin] = useState<MapPoint>(() =>
+    original.latitude !== null && original.longitude !== null
+      ? {latitude: original.latitude, longitude: original.longitude}
+      : selectedLocation
+        ? {latitude: selectedLocation.latitude, longitude: selectedLocation.longitude}
+        : DEFAULT_CENTER,
+  );
+  const [lookup, setLookup] = useState<PinLookupState>({status: 'idle'});
+  const [gpsFix, setGpsFix] = useState<MapPoint | null>(null);
   const [locating, setLocating] = useState(false);
+  const [locationDenied, setLocationDenied] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [mapNotice, setMapNotice] = useState<string | null>(null);
+  const [pinStreet, setPinStreet] = useState<string | null>(null);
+  const [houseNeedsInput, setHouseNeedsInput] = useState(false);
+  const mounted = useRef(true);
+  const locatingRef = useRef(false);
+  const pinRef = useRef(pin);
+  const lookupAbort = useRef<AbortController | null>(null);
+  const lookupBlockedUntil = useRef(0);
+  const lookupAutoRetried = useRef(false);
+  const startedLocating = useRef(false);
   const createMutation = useCreateCustomerAddressMutation();
   const updateMutation = useUpdateCustomerAddressMutation();
   const reducedMotion = useReducedMotionPreference();
   const saving = createMutation.isPending || updateMutation.isPending;
+  const step = steps[steps.length - 1];
 
-  const updateText = useCallback((field: CustomerAddressTextField, value: string) => {
-    setDraft(current => updateCustomerAddressDraftText(current, field, value));
-    setFieldErrors(current => {
-      if (!current[field]) return current;
-      const next = {...current};
-      delete next[field];
-      return next;
+  const search = useLocationSearch(
+    gpsFix ??
+      (draft.latitude !== null && draft.longitude !== null
+        ? {latitude: draft.latitude, longitude: draft.longitude}
+        : selectedLocation
+          ? {latitude: selectedLocation.latitude, longitude: selectedLocation.longitude}
+          : null),
+  );
+
+  useEffect(() => {
+    pinRef.current = pin;
+  }, [pin]);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      lookupAbort.current?.abort();
+    };
+  }, []);
+
+  /** Moves forward, or back when the target is the step before this one. */
+  const advance = useCallback((next: Step) => {
+    setSteps(current => {
+      if (current[current.length - 1] === next) return current;
+      return current.length > 1 && current[current.length - 2] === next
+        ? current.slice(0, -1)
+        : [...current, next];
     });
-    setFormError(null);
   }, []);
 
   const requestClose = useCallback(() => {
@@ -86,41 +165,195 @@ export function CustomerAddressEditorModal({mode, address, addresses, onClose}: 
     ]);
   }, [draft, onClose, original]);
 
-  const handleUseCurrentLocation = useCallback(async () => {
-    if (locating) return;
-    setLocating(true);
-    setFormError(null);
-    setLocationMessage(null);
+  const back = useCallback(() => {
+    if (steps.length > 1) {
+      setSteps(current => current.slice(0, -1));
+      return;
+    }
+    requestClose();
+  }, [requestClose, steps.length]);
+
+  const lookUpPin = useCallback(async (point: MapPoint) => {
+    lookupAbort.current?.abort();
+    if (Date.now() < lookupBlockedUntil.current) {
+      setLookup({status: 'limited', retryAt: lookupBlockedUntil.current});
+      return;
+    }
+    const controller = new AbortController();
+    lookupAbort.current = controller;
+    setLookup({status: 'resolving'});
     try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== Location.PermissionStatus.GRANTED) {
-        setLocationMessage('Allow location access to fill and map this delivery address.');
+      const result = await customerAddressesApi.reverseGeocode(
+        point.latitude,
+        point.longitude,
+        controller.signal,
+      );
+      if (!controller.signal.aborted && mounted.current) {
+        setLookup({status: 'resolved', result, point});
+      }
+    } catch (caught) {
+      if (controller.signal.aborted || !mounted.current) return;
+      const failure = classifyLocationLookupError(caught);
+      if (failure.kind === 'cancelled') return;
+      if (failure.kind === 'limited') {
+        lookupBlockedUntil.current = failure.retryAt;
+        setLookup({status: 'limited', retryAt: failure.retryAt});
         return;
       }
-      const current = await Location.getCurrentPositionAsync({accuracy: Location.Accuracy.High});
-      const resolved = await customerAddressesApi.reverseGeocode(
-        current.coords.latitude,
-        current.coords.longitude,
+      setLookup(
+        failure.kind === 'unavailable'
+          ? {status: 'unavailable'}
+          : {status: 'failed', message: failure.message},
       );
-      setDraft(existing =>
-        applyDetectedCustomerAddress(existing, {
-          ...resolved,
+    }
+  }, []);
+
+  const lookupSeconds = useSecondsUntil(lookup.status === 'limited' ? lookup.retryAt : null);
+
+  // After Retry-After has passed the current pin is looked up once more, never in a loop.
+  useEffect(() => {
+    if (lookup.status === 'limited' && lookupSeconds === 0 && !lookupAutoRetried.current) {
+      lookupAutoRetried.current = true;
+      lookUpPin(pinRef.current).catch(() => undefined);
+    }
+  }, [lookUpPin, lookup.status, lookupSeconds]);
+
+  const placePin = useCallback(
+    (point: MapPoint) => {
+      setPin(point);
+      setMapNotice(null);
+      lookupAutoRetried.current = false;
+      lookUpPin(point).catch(() => undefined);
+    },
+    [lookUpPin],
+  );
+
+  const locate = useCallback(
+    async (origin: LocateOrigin) => {
+      if (locatingRef.current) return;
+      locatingRef.current = true;
+      setLocating(true);
+      setLocationDenied(false);
+      setLocationError(null);
+      setMapNotice(null);
+      try {
+        // Permission is asked only now, when the customer chose current location.
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (!mounted.current) return;
+        if (permission.status !== Location.PermissionStatus.GRANTED) {
+          if (origin === 'map') {
+            setMapNotice(
+              'Location access is off. Move the map to your building, or allow location in Settings.',
+            );
+          } else {
+            setLocationDenied(true);
+            if (origin === 'start') setSteps(['search']);
+          }
+          return;
+        }
+        const current = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        if (!mounted.current) return;
+        const point = {
           latitude: current.coords.latitude,
           longitude: current.coords.longitude,
-        }),
-      );
-      setFieldErrors({});
-      setLocationMessage(
-        resolved.preciseHouseNumber
-          ? 'Current location found. Review the filled address before saving.'
-          : 'Current location found. Confirm your exact flat, house or building before saving.',
-      );
-    } catch (caught) {
-      setLocationMessage(toAppApiError(caught).message);
-    } finally {
-      setLocating(false);
+        };
+        if (!isValidPoint(point)) {
+          throw new Error('Invalid coordinates');
+        }
+        setGpsFix(point);
+        advance('map');
+        placePin(point);
+      } catch {
+        if (!mounted.current) return;
+        if (origin === 'map') {
+          setMapNotice(GPS_FAILED_COPY);
+        } else {
+          setLocationError(GPS_FAILED_COPY);
+          if (origin === 'start') setSteps(['search']);
+        }
+      } finally {
+        locatingRef.current = false;
+        if (mounted.current) setLocating(false);
+      }
+    },
+    [advance, placePin],
+  );
+
+  useEffect(() => {
+    if (mode === 'add' && start === 'current-location' && !startedLocating.current) {
+      startedLocating.current = true;
+      locate('start').catch(() => undefined);
     }
-  }, [locating]);
+  }, [locate, mode, start]);
+
+  const pickResult = useCallback(
+    (result: CustomerLocationSuggestion) => {
+      advance('map');
+      placePin({latitude: result.latitude, longitude: result.longitude});
+    },
+    [advance, placePin],
+  );
+
+  const confirmPin = useCallback(() => {
+    if (lookup.status !== 'resolved') return;
+    const {result, point} = lookup;
+    setDraft(current =>
+      applyDetectedCustomerAddress(current, {...result, ...point}, pinStreet),
+    );
+    setPinStreet(result.street);
+    setHouseNeedsInput(!result.preciseHouseNumber);
+    setFieldErrors({});
+    setFormError(null);
+    advance('details');
+  }, [advance, lookup, pinStreet]);
+
+  const enterManually = useCallback(() => {
+    // The pin the customer placed is kept; only the written address is typed by hand.
+    setDraft(current => ({...current, latitude: pin.latitude, longitude: pin.longitude}));
+    setHouseNeedsInput(false);
+    setFormError(null);
+    advance('details');
+  }, [advance, pin]);
+
+  const changePin = useCallback(() => {
+    if (draft.latitude !== null && draft.longitude !== null) {
+      const point = {latitude: draft.latitude, longitude: draft.longitude};
+      setPin(point);
+      if (
+        lookup.status === 'resolved' &&
+        (lookup.point.latitude !== point.latitude ||
+          lookup.point.longitude !== point.longitude)
+      ) {
+        setLookup({status: 'idle'});
+      }
+    }
+    advance('map');
+  }, [advance, draft.latitude, draft.longitude, lookup]);
+
+  const updateText = useCallback((field: CustomerAddressTextField, value: string) => {
+    setDraft(current => updateCustomerAddressDraftText(current, field, value));
+    setFieldErrors(current => {
+      if (!current[field]) return current;
+      const next = {...current};
+      delete next[field];
+      return next;
+    });
+    setFormError(null);
+  }, []);
+
+  const changeLabel = useCallback((label: CustomerAddressLabel) => {
+    setDraft(current => ({...current, addressLabel: label}));
+  }, []);
+
+  const pickSaved = useCallback(
+    (saved: CustomerAddress) => {
+      onPickSavedAddress?.(saved);
+      onClose();
+    },
+    [onClose, onPickSavedAddress],
+  );
 
   const save = useCallback(async () => {
     if (saving) return;
@@ -133,141 +366,90 @@ export function CustomerAddressEditorModal({mode, address, addresses, onClose}: 
     setFieldErrors({});
     setFormError(null);
     try {
-      if (editingAddressId) {
-        await updateMutation.mutateAsync({addressId: editingAddressId, request: plan.request});
-        Alert.alert('Address updated', 'Your saved address has been updated.', [
-          {text: 'Done', onPress: onClose},
-        ]);
-      } else {
-        await createMutation.mutateAsync(plan.request);
-        Alert.alert('Address saved', 'Your delivery address has been saved.', [
-          {text: 'Done', onPress: onClose},
-        ]);
-      }
+      const saved = editingAddressId
+        ? await updateMutation.mutateAsync({addressId: editingAddressId, request: plan.request})
+        : await createMutation.mutateAsync(plan.request);
+      onSaved?.(saved);
+      Alert.alert(
+        editingAddressId ? 'Address updated' : 'Address saved',
+        editingAddressId
+          ? 'Your saved address has been updated.'
+          : 'Your delivery address has been saved.',
+        [{text: 'Done', onPress: onClose}],
+      );
     } catch (caught) {
       setFormError(toAppApiError(caught).message);
     }
-  }, [addresses, createMutation, draft, editingAddressId, onClose, saving, updateMutation]);
+  }, [addresses, createMutation, draft, editingAddressId, onClose, onSaved, saving, updateMutation]);
 
   return (
     <Modal
       animationType={resolveReducedMotionAnimation('slide' as const, reducedMotion)}
-      onRequestClose={requestClose}
+      onRequestClose={back}
       presentationStyle="fullScreen"
       visible>
       <ScreenShell edges={['top', 'bottom']} keyboardAvoiding testID="customer-address-editor">
-        <View style={styles.root}>
-          <View style={styles.header}>
-            <Pressable
-              accessibilityLabel="Close address editor"
-              accessibilityRole="button"
-              hitSlop={spacing.sm}
-              onPress={requestClose}
-              style={({pressed}) => [styles.headerButton, pressed && styles.pressed]}>
-              <Icon name="arrow-left" color={colors.espressoBrown} size={iconSize.md} />
-            </Pressable>
-            <Text accessibilityRole="header" style={styles.title}>
-              {mode === 'add' ? 'Add Address' : 'Edit Address'}
-            </Text>
-            <View style={styles.headerSpacer} />
-          </View>
-
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Address type</Text>
-              <View style={styles.labelOptions}>
-                {LABELS.map(option => {
-                  const selected = draft.addressLabel === option.value;
-                  return (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityState={{selected}}
-                      key={option.value}
-                      onPress={() => setDraft(current => ({...current, addressLabel: option.value}))}
-                      style={({pressed}) => [
-                        styles.labelOption,
-                        selected && styles.labelOptionSelected,
-                        pressed && styles.pressed,
-                      ]}>
-                      <Text style={[styles.labelOptionText, selected && styles.labelOptionTextSelected]}>
-                        {option.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <Button
-                accessibilityHint="Uses foreground location to fill the delivery address."
-                label="Use current location"
-                leftIcon="location"
-                loading={locating}
-                onPress={() => handleUseCurrentLocation().catch(() => undefined)}
-                style={styles.locationButton}
-                variant="outline"
-              />
-              {locationMessage ? (
-                <View accessibilityRole="alert" style={styles.notice}>
-                  <Text style={styles.noticeText}>{locationMessage}</Text>
-                </View>
-              ) : null}
-
-              <View style={styles.fields}>
-                <InputField autoCapitalize="words" autoComplete="name" error={fieldErrors.recipientName} label="Recipient name" maxLength={160} onChangeText={value => updateText('recipientName', value)} value={draft.recipientName} />
-                <InputField autoComplete="tel" error={fieldErrors.contactPhoneNumber} keyboardType="phone-pad" label="Phone number" maxLength={32} onChangeText={value => updateText('contactPhoneNumber', value)} value={draft.contactPhoneNumber} />
-                <InputField autoCapitalize="words" error={fieldErrors.addressLine1} label="House / building / street" maxLength={250} onChangeText={value => updateText('addressLine1', value)} value={draft.addressLine1} />
-                <InputField autoCapitalize="words" error={fieldErrors.addressLine2} label="Address line 2 (optional)" maxLength={250} onChangeText={value => updateText('addressLine2', value)} value={draft.addressLine2} />
-                <InputField autoCapitalize="words" error={fieldErrors.landmark} label="Landmark (optional)" maxLength={240} onChangeText={value => updateText('landmark', value)} value={draft.landmark} />
-                <InputField autoCapitalize="words" error={fieldErrors.areaName} label="Area / locality" maxLength={160} onChangeText={value => updateText('areaName', value)} value={draft.areaName} />
-                <InputField autoCapitalize="words" error={fieldErrors.districtName} label="District" maxLength={160} onChangeText={value => updateText('districtName', value)} value={draft.districtName} />
-                <InputField error={fieldErrors.postalCode} helperText={CUSTOMER_ADDRESS_PINCODE_FALLBACK_COPY} keyboardType="number-pad" label="Pincode" maxLength={6} onChangeText={value => updateText('postalCode', value.replace(/[^0-9]/g, '').slice(0, 6))} value={draft.postalCode} />
-                <InputField autoCapitalize="words" error={fieldErrors.city} label="City" maxLength={120} onChangeText={value => updateText('city', value)} value={draft.city} />
-                <InputField autoCapitalize="words" error={fieldErrors.state} label="State" maxLength={120} onChangeText={value => updateText('state', value)} value={draft.state} />
-              </View>
-
-              {formError ? (
-                <View accessibilityRole="alert" style={styles.errorBox}>
-                  <Text style={styles.errorText}>{formError}</Text>
-                </View>
-              ) : null}
-
-              <Button
-                label={mode === 'add' ? 'Save address' : 'Save changes'}
-                loading={saving}
-                onPress={() => save().catch(() => undefined)}
-                style={styles.saveButton}
-              />
-            </View>
-          </ScrollView>
-        </View>
+        {step === 'search' ? (
+          <AddressSearchStep
+            limitedSeconds={search.limitedSeconds}
+            locating={locating}
+            locationDenied={locationDenied}
+            locationError={locationError}
+            onBack={back}
+            onChangeQuery={search.setQuery}
+            onOpenSettings={() => {
+              Linking.openSettings().catch(() => undefined);
+            }}
+            onPickResult={pickResult}
+            onPickSavedAddress={onPickSavedAddress ? pickSaved : undefined}
+            onRetrySearch={search.retry}
+            onSetOnMap={() => advance('map')}
+            onUseCurrentLocation={() => {
+              locate('search').catch(() => undefined);
+            }}
+            query={search.query}
+            savedAddresses={
+              onPickSavedAddress ? addresses.filter(isCustomerAddressDeliveryReady) : []
+            }
+            state={search.state}
+          />
+        ) : step === 'map' ? (
+          <AddressMapStep
+            limitedSeconds={lookupSeconds}
+            locating={locating}
+            locationNotice={mapNotice}
+            lookup={lookup}
+            onBack={back}
+            onCenterChange={placePin}
+            onConfirm={confirmPin}
+            onEnterManually={enterManually}
+            onOpenSearch={() => advance('search')}
+            onRetryLookup={() => {
+              lookUpPin(pin).catch(() => undefined);
+            }}
+            onUseCurrentLocation={() => {
+              locate('map').catch(() => undefined);
+            }}
+            pin={pin}
+          />
+        ) : (
+          <AddressDetailsStep
+            draft={draft}
+            fieldErrors={fieldErrors}
+            formError={formError}
+            houseNeedsInput={houseNeedsInput}
+            mode={mode}
+            onBack={back}
+            onChangeLabel={changeLabel}
+            onChangePin={changePin}
+            onChangeText={updateText}
+            onSave={() => {
+              save().catch(() => undefined);
+            }}
+            saving={saving}
+          />
+        )}
       </ScreenShell>
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  root: {flex: 1, backgroundColor: colors.white},
-  header: {minHeight: 60, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, borderBottomWidth: borderWidth.standard, borderBottomColor: colors.border, backgroundColor: colors.white},
-  headerButton: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill},
-  pressed: {opacity: 0.72},
-  title: {flex: 1, textAlign: 'center', color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
-  headerSpacer: {width: touchTarget.minimum},
-  scrollContent: {flexGrow: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.lg},
-  card: {width: '100%', maxWidth: 640, alignSelf: 'center', borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white, padding: spacing.lg, ...elevation.card},
-  sectionTitle: {color: colors.espressoBrown, fontSize: typography.small, fontWeight: fontWeight.semibold, marginBottom: spacing.xs},
-  labelOptions: {flexDirection: 'row', gap: spacing.xs, marginBottom: spacing.md},
-  labelOption: {flex: 1, minHeight: touchTarget.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: borderWidth.standard, borderColor: colors.borderStrong, backgroundColor: colors.white},
-  labelOptionSelected: {borderColor: colors.flameRed, backgroundColor: colors.white},
-  labelOptionText: {color: colors.textSecondary, fontSize: typography.small, fontWeight: fontWeight.semibold},
-  labelOptionTextSelected: {color: colors.flameRed},
-  locationButton: {marginBottom: spacing.md},
-  notice: {padding: spacing.md, marginBottom: spacing.md, borderRadius: radius.md, backgroundColor: colors.white},
-  noticeText: {color: colors.textPrimary, fontSize: typography.small},
-  fields: {gap: spacing.md},
-  errorBox: {padding: spacing.md, marginTop: spacing.md, borderRadius: radius.md, backgroundColor: colors.white, borderWidth: borderWidth.standard, borderColor: colors.error},
-  errorText: {color: colors.error, fontSize: typography.small},
-  saveButton: {marginTop: spacing.lg},
-});

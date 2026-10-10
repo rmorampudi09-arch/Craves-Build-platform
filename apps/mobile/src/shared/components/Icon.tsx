@@ -39,7 +39,17 @@ export type IconName =
   | 'translate'
   | 'theme'
   | 'document'
-  | 'info';
+  | 'info'
+  | 'gps'
+  | 'plus'
+  | 'close'
+  | 'work'
+  | 'edit'
+  | 'location-off'
+  | 'cloud-off'
+  | 'search-off'
+  | 'alert'
+  | 'chevron-down';
 
 interface Props {
   name: IconName;
@@ -86,6 +96,16 @@ const GLYPHS: Record<IconName, string> = {
   theme: 'theme-light-dark',
   document: 'file-document-outline',
   info: 'information-outline',
+  gps: 'crosshairs-gps',
+  plus: 'plus',
+  close: 'close',
+  work: 'briefcase-outline',
+  edit: 'pencil-outline',
+  'location-off': 'map-marker-off-outline',
+  'cloud-off': 'cloud-off-outline',
+  'search-off': 'magnify-close',
+  alert: 'alert-circle-outline',
+  'chevron-down': 'chevron-down',
 };
 
 export function Icon({

@@ -91,7 +91,7 @@ export function ProfileLinkCard({
       onClick={() => rememberReturnRoute(to, "/profile")}
       className={
         className +
-        " hover:border-[#F62E18]/25 hover:shadow-[0_8px_22px_rgba(26,26,26,0.07)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/25"
+        " hover:border-[#D7DADF] hover:shadow-[0_8px_22px_rgba(26,26,26,0.07)]"
       }
     >
       <CardBody

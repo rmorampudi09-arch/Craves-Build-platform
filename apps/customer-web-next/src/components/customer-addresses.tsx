@@ -79,7 +79,7 @@ export function CustomerAddresses() {
       credentials: "same-origin",
     });
     const body = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(body?.message || "Addresses could not be loaded.");
+    if (!response.ok) throw new Error(body?.message || "Your saved addresses didn’t load. Check your connection and try again.");
     setAddresses(body);
     const incomplete = body.filter(
       (address: CustomerAddress) => !isDeliveryReadyAddress(address),
@@ -95,7 +95,7 @@ export function CustomerAddresses() {
 
   useEffect(() => {
     load().catch((error) => setMessage(
-      error instanceof Error ? error.message : "Addresses could not be loaded.",
+      error instanceof Error ? error.message : "Your saved addresses didn’t load. Check your connection and try again.",
     ));
   }, [load]);
 
@@ -203,13 +203,13 @@ export function CustomerAddresses() {
         },
       );
       const body = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(body?.message || "Address could not be saved.");
+      if (!response.ok) throw new Error(body?.message || "This address wasn’t saved. Check the fields marked * and try again.");
       setForm(empty);
       setEditingId(null);
       await load();
       setMessage("Address saved.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Address could not be saved.");
+      setMessage(error instanceof Error ? error.message : "This address wasn’t saved. Check the fields marked * and try again.");
     } finally {
       setBusy(false);
     }
@@ -231,12 +231,12 @@ export function CustomerAddresses() {
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body?.message || "Address could not be deleted.");
+        throw new Error(body?.message || "This address wasn’t deleted. Try again.");
       }
       await load();
       setMessage("Address deleted.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Address could not be deleted.");
+      setMessage(error instanceof Error ? error.message : "This address wasn’t deleted. Try again.");
     } finally {
       setBusy(false);
     }

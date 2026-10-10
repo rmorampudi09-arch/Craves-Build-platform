@@ -286,7 +286,7 @@ function DishDetailPage() {
       setMessage(
         error instanceof Error
           ? error.message
-          : "The cart quantity could not be updated.",
+          : "The quantity didn’t change. Check your connection and try again.",
       );
     });
   };

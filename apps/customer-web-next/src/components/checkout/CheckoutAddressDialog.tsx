@@ -24,6 +24,7 @@ import {
   type CustomerAddressInput,
 } from "@/lib/address-contract";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
+import { RequiredMark, RequiredLegend } from "@/components/ui/forms/required-mark";
 
 type AddressDraft = Omit<CustomerAddressInput, "latitude" | "longitude" | "addressLabel"> &
   AddressLabelDraft & {
@@ -104,7 +105,7 @@ export function CheckoutAddressDialog({
         throw new Error(
           body && typeof body === "object" && "message" in body && typeof body.message === "string"
             ? body.message
-            : "Saved addresses could not be loaded.",
+            : "Your saved addresses didn’t load. Check your connection and try again.",
         );
       }
       const parsed = parseCustomerAddresses(body);
@@ -127,7 +128,7 @@ export function CheckoutAddressDialog({
       );
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "Saved addresses could not be loaded.",
+        error instanceof Error ? error.message : "Your saved addresses didn’t load. Check your connection and try again.",
       );
     } finally {
       setLoading(false);
@@ -213,8 +214,25 @@ export function CheckoutAddressDialog({
       longitude: draft.longitude.trim(),
     });
     if (!input) {
+      const missing = (
+        [
+          [draft.recipientName, "receiver’s name"],
+          [/^\d{10}$/.test(draft.contactPhoneNumber) ? "ok" : "", "10-digit phone number"],
+          [draft.addressLine1, "flat or house number"],
+          [draft.areaName, "area"],
+          [draft.districtName, "district"],
+          [draft.city, "city"],
+          [draft.state, "state"],
+          [/^\d{6}$/.test(draft.postalCode.trim()) ? "ok" : "", "6-digit pincode"],
+          [draft.landmark ?? "", "landmark"],
+        ] as const
+      )
+        .filter(([value]) => !value.trim())
+        .map(([, label]) => label);
       setMessage(
-        "Confirm the recipient, phone and complete delivery address, then use current location so Craves can map the drop-off point.",
+        missing.length
+          ? `Add the ${new Intl.ListFormat("en-IN", { type: "conjunction" }).format(missing)} to save this address.`
+          : "Tap Use my current location so Craves can place the delivery pin, then save.",
       );
       return;
     }
@@ -233,7 +251,7 @@ export function CheckoutAddressDialog({
         throw new Error(
           body && typeof body === "object" && "message" in body && typeof body.message === "string"
             ? body.message
-            : "Address could not be saved.",
+            : "This address wasn’t saved. Check the fields marked * and try again.",
         );
       }
       const created = parseCustomerAddress(body);
@@ -244,7 +262,7 @@ export function CheckoutAddressDialog({
       if (isDeliveryReadyAddress(created)) onSelect(created.id);
       setMessage("Address saved and selected for this checkout.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Address could not be saved.");
+      setMessage(error instanceof Error ? error.message : "This address wasn’t saved. Check the fields marked * and try again.");
     } finally {
       setBusy(false);
     }
@@ -346,25 +364,26 @@ export function CheckoutAddressDialog({
               type="button"
               onClick={captureLocation}
               disabled={locating || busy}
-              className="mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F1F3F5] p-3 text-sm font-bold text-[#F62E18] disabled:opacity-50"
+              className="mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F1F3F5] p-3 text-sm font-bold text-[#C4200F] disabled:opacity-50"
             >
               {locating ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Crosshair className="h-4 w-4" aria-hidden="true" />}
               {locating ? "Detecting your address…" : "Use my current location"}
             </button>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <RequiredLegend className="mt-4" />
+            <div className="mt-2 grid gap-3 sm:grid-cols-2">
               <label className="text-xs font-semibold text-ink">Label<select value={draft.addressCategory} onChange={(event) => setDraft((current) => ({ ...current, addressCategory: event.target.value as AddressCategory }))} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]"><option value="HOME">Home</option><option value="WORK">Work</option><option value="OTHER">Other</option></select></label>
-              {draft.addressCategory === "OTHER" ? <label className="text-xs font-semibold text-ink">Name this address<input required maxLength={80} value={draft.customLabel} onChange={(event) => update("customLabel", event.target.value)} placeholder="e.g. Mom's home" className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label> : null}
-              <label className="text-xs font-semibold text-ink">Recipient<input value={draft.recipientName} onChange={(event) => update("recipientName", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
-              <label className="text-xs font-semibold text-ink">Phone<input value={draft.contactPhoneNumber} onChange={(event) => update("contactPhoneNumber", localPhone(event.target.value))} placeholder="+919876543210" className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
-              <label className="text-xs font-semibold text-ink">Pincode<input value={draft.postalCode} onChange={(event) => update("postalCode", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
-              <label className="text-xs font-semibold text-ink sm:col-span-2">Flat / House / Building<input value={draft.addressLine1} onChange={(event) => update("addressLine1", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
+              {draft.addressCategory === "OTHER" ? <label className="text-xs font-semibold text-ink">Name this address<RequiredMark /><input aria-required="true" required maxLength={80} value={draft.customLabel} onChange={(event) => update("customLabel", event.target.value)} placeholder="e.g. Mom's home" className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label> : null}
+              <label className="text-xs font-semibold text-ink">Recipient<RequiredMark /><input aria-required="true" value={draft.recipientName} onChange={(event) => update("recipientName", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
+              <label className="text-xs font-semibold text-ink">Phone<RequiredMark /><input aria-required="true" value={draft.contactPhoneNumber} onChange={(event) => update("contactPhoneNumber", localPhone(event.target.value))} placeholder="+919876543210" className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
+              <label className="text-xs font-semibold text-ink">Pincode<RequiredMark /><input aria-required="true" value={draft.postalCode} onChange={(event) => update("postalCode", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
+              <label className="text-xs font-semibold text-ink sm:col-span-2">Flat / House / Building<RequiredMark /><input aria-required="true" value={draft.addressLine1} onChange={(event) => update("addressLine1", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
               <label className="text-xs font-semibold text-ink sm:col-span-2">Street / Road<input value={draft.addressLine2 ?? ""} onChange={(event) => update("addressLine2", event.target.value || null)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
-              <label className="text-xs font-semibold text-ink">Area<input value={draft.areaName} onChange={(event) => update("areaName", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
-              <label className="text-xs font-semibold text-ink">District<input value={draft.districtName} onChange={(event) => update("districtName", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
-              <label className="text-xs font-semibold text-ink">City<input value={draft.city} onChange={(event) => update("city", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
-              <label className="text-xs font-semibold text-ink">State<input value={draft.state} onChange={(event) => update("state", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
-              <label className="text-xs font-semibold text-ink sm:col-span-2">Landmark<input required value={draft.landmark ?? ""} onChange={(event) => update("landmark", event.target.value || null)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
+              <label className="text-xs font-semibold text-ink">Area<RequiredMark /><input aria-required="true" value={draft.areaName} onChange={(event) => update("areaName", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
+              <label className="text-xs font-semibold text-ink">District<RequiredMark /><input aria-required="true" value={draft.districtName} onChange={(event) => update("districtName", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
+              <label className="text-xs font-semibold text-ink">City<RequiredMark /><input aria-required="true" value={draft.city} onChange={(event) => update("city", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
+              <label className="text-xs font-semibold text-ink">State<RequiredMark /><input aria-required="true" value={draft.state} onChange={(event) => update("state", event.target.value)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
+              <label className="text-xs font-semibold text-ink sm:col-span-2">Landmark<RequiredMark /><input aria-required="true" required value={draft.landmark ?? ""} onChange={(event) => update("landmark", event.target.value || null)} className="mt-1 w-full rounded-xl border border-border bg-white p-3 text-sm text-ink outline-none focus:border-[#F62E18]" /></label>
               <label className="flex items-center gap-2 text-sm font-semibold text-ink sm:col-span-2"><input type="checkbox" checked={draft.isDefault} onChange={(event) => update("isDefault", event.target.checked)} />Make this my default address</label>
             </div>
 

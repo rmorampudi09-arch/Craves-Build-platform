@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       : NextResponse.json(
           {
             error: "INVALID_UPSTREAM_RESPONSE",
-            message: "Cart response validation failed.",
+            message: "Craves sent an unexpected reply. Refresh the page and try again.",
           },
           { status: 502 },
         );

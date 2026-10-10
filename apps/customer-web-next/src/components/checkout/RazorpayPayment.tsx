@@ -81,7 +81,7 @@ function loadRazorpay(): Promise<void> {
       existing.addEventListener("load", () => resolve(), { once: true });
       existing.addEventListener(
         "error",
-        () => reject(new Error("Razorpay checkout could not be loaded.")),
+        () => reject(new Error("Razorpay checkout didn’t load. Check your connection and tap Pay again. You haven’t been charged.")),
         { once: true },
       );
       return;
@@ -93,7 +93,7 @@ function loadRazorpay(): Promise<void> {
     script.referrerPolicy = "strict-origin";
     script.onload = () => resolve();
     script.onerror = () =>
-      reject(new Error("Razorpay checkout could not be loaded."));
+      reject(new Error("Razorpay checkout didn’t load. Check your connection and tap Pay again. You haven’t been charged."));
     document.head.appendChild(script);
   });
 }
@@ -142,7 +142,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
       );
       const raw = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(responseMessage(raw, "Checkout could not be loaded."));
+        throw new Error(responseMessage(raw, "Checkout didn’t load. Go back to your cart and try again."));
       }
       const parsed = parseCheckout(raw);
       if (!parsed) {
@@ -168,7 +168,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Checkout could not be loaded.",
+          : "Checkout didn’t load. Go back to your cart and try again.",
       );
     } finally {
       setLoading(false);
@@ -200,7 +200,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
     const raw = await response.json().catch(() => null);
     if (!response.ok) {
       throw new Error(
-        responseMessage(raw, "Payment order could not be created."),
+        responseMessage(raw, "We couldn’t start the payment. You haven’t been charged. Try again."),
       );
     }
     const parsed = parsePaymentSession(raw);
@@ -239,7 +239,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
       );
       const raw = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(responseMessage(raw, "Payment verification failed."));
+        throw new Error(responseMessage(raw, "We couldn’t confirm this payment yet. Don’t pay again: check Your orders in a minute."));
       }
       const verification = parsePaymentVerification(raw);
       if (!verification) {
@@ -260,7 +260,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Payment verification failed.",
+          : "We couldn’t confirm this payment yet. Don’t pay again: check Your orders in a minute.",
       );
     } finally {
       setBusy(false);
@@ -344,7 +344,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
       const raw = await response.json().catch(() => null);
       if (!response.ok) {
         throw new Error(
-          responseMessage(raw, "Payment status could not be loaded."),
+          responseMessage(raw, "We couldn’t check the payment status. Don’t pay again; check again in a moment."),
         );
       }
       const parsed = parsePaymentStatus(raw);
@@ -360,7 +360,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Payment status could not be loaded.",
+          : "We couldn’t check the payment status. Don’t pay again; check again in a moment.",
       );
     } finally {
       setBusy(false);

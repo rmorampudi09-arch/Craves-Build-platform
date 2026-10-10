@@ -300,7 +300,7 @@ export function AuthModal({
       } | null;
       if (!currentAttempt()) return;
       if (!response.ok || !body?.identity)
-        throw new Error(body?.message ?? "Sign-in failed.");
+        throw new Error(body?.message ?? "We couldn’t sign you in. Check the code and try again, or request a new code.");
 
       let user: CravesUser;
       ownIdentityInstall.current = true;

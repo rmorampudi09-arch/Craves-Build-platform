@@ -8,6 +8,7 @@ import {
   parseCustomerSubscription,
   type PublicSubscriptionPlan,
 } from "@/lib/subscription-contract";
+import { RequiredMark } from "@/components/ui/forms/required-mark";
 
 function newIdempotencyKey(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -120,6 +121,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
       {plan.description ? <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{plan.description}</p> : null}
       <label className="mt-6 block text-sm font-semibold text-[#1A1A1A]">
         Deliver to
+        <RequiredMark />
         <select
           value={addressId}
           onChange={event => setAddressId(event.target.value)}
@@ -144,6 +146,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
       ) : null}
       <label className="mt-5 block text-sm font-semibold text-[#1A1A1A]">
         Start date
+        <RequiredMark />
         <input
           type="date"
           min={today}

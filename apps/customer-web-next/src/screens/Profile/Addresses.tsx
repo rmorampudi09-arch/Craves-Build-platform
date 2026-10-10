@@ -89,7 +89,7 @@ export default function AddressesPage() {
     });
     const body = await response.json().catch(() => null);
     if (!response.ok)
-      throw new Error(body?.message || "Addresses could not be loaded.");
+      throw new Error(body?.message || "Your saved addresses didn’t load. Check your connection and try again.");
     setAddresses(body);
     setInitialLoadState("ready");
     const incomplete = body.filter(
@@ -124,7 +124,7 @@ export default function AddressesPage() {
       setMessage(
         error instanceof Error
           ? error.message
-          : "Addresses could not be loaded.",
+          : "Your saved addresses didn’t load. Check your connection and try again.",
       );
     });
   }, [load, navigate]);
@@ -153,7 +153,7 @@ export default function AddressesPage() {
       );
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(body?.message || "Default address could not be updated.");
+        throw new Error(body?.message || "Your default address didn’t change. Try again.");
       }
       invalidateHomeDeliveryContext();
       await load();
@@ -164,7 +164,7 @@ export default function AddressesPage() {
       setMessage(
         error instanceof Error
           ? error.message
-          : "Default address could not be updated.",
+          : "Your default address didn’t change. Try again.",
       );
     } finally {
       setBusy(false);
@@ -181,7 +181,7 @@ export default function AddressesPage() {
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        throw new Error(body?.message || "Address could not be deleted.");
+        throw new Error(body?.message || "This address wasn’t deleted. Try again.");
       }
       invalidateHomeDeliveryContext();
       await load();

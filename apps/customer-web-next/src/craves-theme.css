@@ -536,3 +536,13 @@ nav[aria-label="Customer services"] a:focus-visible {
     animation-iteration-count: infinite !important;
   }
 }
+
+/* Required field mark (components/ui/forms/required-mark.tsx): a red "*" that is never read
+   aloud or matched as label text; the field's own required state is announced instead. */
+.craves-required-mark::after {
+  content: "*";
+  content: "*" / "";
+  margin-left: 0.15em;
+  color: #c4200f;
+  font-weight: 800;
+}

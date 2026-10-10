@@ -79,7 +79,8 @@ export function FieldShell({
 }) {
   return (
     <div className="cob-field">
-      <label className="cob-label" htmlFor={id}>
+      {/* Required fields carry a red * (drawn by CSS, so it never joins the field's name). */}
+      <label className="cob-label" htmlFor={id} data-required={optional ? undefined : ""}>
         {label}
         {optional ? <span className="cob-optional"> (optional)</span> : null}
       </label>

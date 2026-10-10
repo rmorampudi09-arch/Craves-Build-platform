@@ -96,7 +96,7 @@ function CartPage() {
       setMessage(
         error instanceof Error
           ? error.message
-          : "Your cart could not be loaded from Craves.",
+          : "Your cart didn’t load. Check your connection and try again.",
       );
     } finally {
       setLoading(false);
@@ -197,7 +197,7 @@ function CartPage() {
       setMessage(
         error instanceof Error
           ? error.message
-          : "The cart quantity could not be updated.",
+          : "The quantity didn’t change. Check your connection and try again.",
       );
     });
   }

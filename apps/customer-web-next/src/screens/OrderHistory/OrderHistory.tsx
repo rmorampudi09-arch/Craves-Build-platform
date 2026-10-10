@@ -176,7 +176,7 @@ export default function OrdersPage() {
           "message" in raw &&
           typeof raw.message === "string"
             ? raw.message
-            : "Your orders could not be loaded.";
+            : "Your orders didn’t load. Check your connection and try again.";
         throw new Error(message);
       }
       const parsed = parseCustomerOrders(raw);
@@ -192,7 +192,7 @@ export default function OrdersPage() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Your orders could not be loaded.",
+          : "Your orders didn’t load. Check your connection and try again.",
       );
     } finally {
       setLoading(false);

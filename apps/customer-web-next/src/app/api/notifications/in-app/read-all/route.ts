@@ -31,7 +31,7 @@ export async function PATCH(request: NextRequest) {
           message:
             upstream.status === 401
               ? "Please sign in again."
-              : "Notifications could not be updated.",
+              : "Notifications didn’t update. Try again.",
         },
         { status: upstream.status },
       );
@@ -51,7 +51,7 @@ export async function PATCH(request: NextRequest) {
         message:
           error instanceof SessionRequiredError
             ? "Please sign in again."
-            : "Notifications could not be updated.",
+            : "Notifications didn’t update. Try again.",
       },
       { status: error instanceof SessionRequiredError ? 401 : 503 },
     );

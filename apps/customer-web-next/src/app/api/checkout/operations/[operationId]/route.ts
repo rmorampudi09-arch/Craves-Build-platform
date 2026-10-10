@@ -43,7 +43,7 @@ function upstreamFailure(
     message:
       status === 503
         ? "Checkout is temporarily unavailable. Please try again."
-        : "Checkout could not be created.",
+        : "We couldn’t start checkout. Check your cart for items that are no longer available, then try again.",
   };
 }
 

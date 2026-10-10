@@ -8,6 +8,7 @@ import {
 import { captureSessionContext, isSessionContextCurrent, setSessionProfile } from "@/services/auth/cravesAuth";
 import { EmailVerificationPanel } from "@/components/auth/EmailVerificationPanel";
 import { Sheet, secondaryActionClass } from "@/components/ui/overlays/overlay";
+import { RequiredMark } from "@/components/ui/forms/required-mark";
 
 interface EditProfileModalProps {
   open: boolean;
@@ -143,6 +144,7 @@ export function EditProfileModal({
             className="text-sm font-semibold text-[#1A1A1A]"
           >
             First name
+            <RequiredMark />
             <input
               id={`${fieldPrefix}-first-name`}
               value={firstName}
@@ -159,6 +161,7 @@ export function EditProfileModal({
             className="text-sm font-semibold text-[#1A1A1A]"
           >
             Last name
+            <RequiredMark />
             <input
               id={`${fieldPrefix}-last-name`}
               value={lastName}
@@ -177,6 +180,7 @@ export function EditProfileModal({
           className="mt-4 block text-sm font-semibold text-[#1A1A1A]"
         >
           Phone number
+          <span className="ml-1.5 text-xs font-medium text-[#6B6B6B]">(your sign-in number, can’t be changed here)</span>
           <input
             id={`${fieldPrefix}-phone`}
             value={(profile?.registeredPhoneNumber ?? "").replace(/^\+91[\s-]?/, "")}

@@ -134,7 +134,7 @@ export default function NotificationsPage() {
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(body?.message || "Notifications could not be loaded.");
+        throw new Error(body?.message || "Notifications didn’t load. Check your connection and try again.");
       }
       if (!active) return;
 
@@ -148,7 +148,7 @@ export default function NotificationsPage() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Notifications could not be loaded.",
+          : "Notifications didn’t load. Check your connection and try again.",
       );
       setLoading(false);
     });

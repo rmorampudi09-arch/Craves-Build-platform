@@ -329,7 +329,7 @@ async function send(
     throw new CartRequestError(
       body && "message" in body && typeof body.message === "string"
         ? body.message
-        : "Your cart could not be loaded from Craves.",
+        : "Your cart didn’t load. Check your connection and try again.",
       response.status,
     );
   }

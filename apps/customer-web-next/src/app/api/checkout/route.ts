@@ -65,7 +65,7 @@ function checkoutFailure(
 
   return {
     error: "CHECKOUT_FAILED",
-    message: "Checkout could not be created.",
+    message: "We couldn’t start checkout. Check your cart for items that are no longer available, then try again.",
   };
 }
 

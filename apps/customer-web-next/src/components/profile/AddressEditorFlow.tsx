@@ -36,6 +36,7 @@ import {
 import { getAddress } from "@/services/auth/cravesAuth";
 import { sessionFetch } from "@/services/auth/sessionFetch";
 import { duration, ease } from "@/lib/motion";
+import { RequiredMark } from "@/components/ui/forms/required-mark";
 
 type Step = "locate" | "details";
 
@@ -506,14 +507,14 @@ export function AddressEditorFlow({
       );
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(body?.message || "Address could not be saved.");
+        throw new Error(body?.message || "This address wasn’t saved. Check the fields marked * and try again.");
       }
       await onSaved(
         body && typeof body === "object" ? (body as CustomerAddress) : null,
       );
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "Address could not be saved.",
+        error instanceof Error ? error.message : "This address wasn’t saved. Check the fields marked * and try again.",
       );
     } finally {
       setBusy(false);
@@ -599,7 +600,7 @@ export function AddressEditorFlow({
               >
                 {step === "locate"
                   ? "Search for your area or use your current location to place the delivery pin."
-                  : "Confirm the pin and complete the required address details."}
+                  : "Confirm the pin, then fill in the fields marked *."}
               </Dialog.Description>
             </div>
 
@@ -802,6 +803,7 @@ export function AddressEditorFlow({
                       className="text-xs font-bold text-[#1A1A1A]"
                     >
                       Flat / house / floor
+                      <RequiredMark />
                       <input
                         value={draft.addressLine1}
                         onChange={(event) =>
@@ -811,9 +813,10 @@ export function AddressEditorFlow({
                         maxLength={250}
                         className={inputClass("addressLine1")}
                         aria-invalid={Boolean(fieldErrors.addressLine1)}
+                        aria-required="true"
                       />
                       {fieldErrors.addressLine1 ? (
-                        <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                        <span className="mt-1.5 block text-[11px] font-semibold text-[#C4200F]">
                           {fieldErrors.addressLine1}
                         </span>
                       ) : null}
@@ -824,6 +827,7 @@ export function AddressEditorFlow({
                       className="text-xs font-bold text-[#1A1A1A]"
                     >
                       Area
+                      <RequiredMark />
                       <input
                         value={draft.areaName}
                         onChange={(event) =>
@@ -833,9 +837,10 @@ export function AddressEditorFlow({
                         maxLength={120}
                         className={inputClass("areaName")}
                         aria-invalid={Boolean(fieldErrors.areaName)}
+                        aria-required="true"
                       />
                       {fieldErrors.areaName ? (
-                        <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                        <span className="mt-1.5 block text-[11px] font-semibold text-[#C4200F]">
                           {fieldErrors.areaName}
                         </span>
                       ) : null}
@@ -846,6 +851,7 @@ export function AddressEditorFlow({
                       className="text-xs font-bold text-[#1A1A1A]"
                     >
                       Landmark
+                      <RequiredMark />
                       <input
                         value={draft.landmark ?? ""}
                         onChange={(event) =>
@@ -855,9 +861,10 @@ export function AddressEditorFlow({
                         maxLength={160}
                         className={inputClass("landmark")}
                         aria-invalid={Boolean(fieldErrors.landmark)}
+                        aria-required="true"
                       />
                       {fieldErrors.landmark ? (
-                        <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                        <span className="mt-1.5 block text-[11px] font-semibold text-[#C4200F]">
                           {fieldErrors.landmark}
                         </span>
                       ) : null}
@@ -872,15 +879,17 @@ export function AddressEditorFlow({
                             className="text-xs font-bold text-[#1A1A1A]"
                           >
                             {label}
+                            <RequiredMark />
                             <input
                               value={draft[key]}
                               onChange={(event) => update(key, event.target.value)}
                               inputMode={key === "postalCode" ? "numeric" : "text"}
                               className={inputClass(key)}
                               aria-invalid={Boolean(fieldErrors[key])}
+                              aria-required="true"
                             />
                             {fieldErrors[key] ? (
-                              <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                              <span className="mt-1.5 block text-[11px] font-semibold text-[#C4200F]">
                                 {fieldErrors[key]}
                               </span>
                             ) : null}
@@ -891,9 +900,7 @@ export function AddressEditorFlow({
                   </div>
 
                   <div className="mt-7">
-                    <p className="text-xs font-black uppercase tracking-[0.1em] text-[#6B6B6B]">
-                      Address type
-                    </p>
+                    <p className="text-xs font-bold text-[#1A1A1A]">Address type</p>
                     <div className="mt-2 grid grid-cols-3 gap-2 rounded-2xl bg-[#F1F3F5] p-1.5">
                       {LABELS.map((option) => {
                         const Icon = option.icon;
@@ -933,6 +940,7 @@ export function AddressEditorFlow({
                         className="mt-3 block text-xs font-bold text-[#1A1A1A]"
                       >
                         Name this address
+                        <RequiredMark />
                         <input
                           autoFocus
                           value={draft.customLabel}
@@ -943,9 +951,10 @@ export function AddressEditorFlow({
                           maxLength={80}
                           className={inputClass("customLabel")}
                           aria-invalid={Boolean(fieldErrors.customLabel)}
+                          aria-required="true"
                         />
                         {fieldErrors.customLabel ? (
-                          <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                          <span className="mt-1.5 block text-[11px] font-semibold text-[#C4200F]">
                             {fieldErrors.customLabel}
                           </span>
                         ) : null}
@@ -959,6 +968,7 @@ export function AddressEditorFlow({
                       className="text-xs font-bold text-[#1A1A1A]"
                     >
                       Receiver name
+                      <RequiredMark />
                       <input
                         value={draft.recipientName}
                         onChange={(event) =>
@@ -968,9 +978,10 @@ export function AddressEditorFlow({
                         maxLength={160}
                         className={inputClass("recipientName")}
                         aria-invalid={Boolean(fieldErrors.recipientName)}
+                        aria-required="true"
                       />
                       {fieldErrors.recipientName ? (
-                        <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                        <span className="mt-1.5 block text-[11px] font-semibold text-[#C4200F]">
                           {fieldErrors.recipientName}
                         </span>
                       ) : null}
@@ -981,6 +992,7 @@ export function AddressEditorFlow({
                       className="text-xs font-bold text-[#1A1A1A]"
                     >
                       Receiver&apos;s phone
+                      <RequiredMark />
                       <input
                         value={draft.contactPhoneNumber}
                         onChange={(event) =>
@@ -991,9 +1003,10 @@ export function AddressEditorFlow({
                         maxLength={10}
                         className={inputClass("contactPhoneNumber")}
                         aria-invalid={Boolean(fieldErrors.contactPhoneNumber)}
+                        aria-required="true"
                       />
                       {fieldErrors.contactPhoneNumber ? (
-                        <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                        <span className="mt-1.5 block text-[11px] font-semibold text-[#C4200F]">
                           {fieldErrors.contactPhoneNumber}
                         </span>
                       ) : null}

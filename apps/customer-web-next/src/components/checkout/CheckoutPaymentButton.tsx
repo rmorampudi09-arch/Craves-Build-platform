@@ -140,7 +140,7 @@ function loadRazorpay(): Promise<void> {
       existing.addEventListener("load", () => resolve(), { once: true });
       existing.addEventListener(
         "error",
-        () => reject(new Error("Razorpay checkout could not be loaded.")),
+        () => reject(new Error("Razorpay checkout didn’t load. Check your connection and tap Pay again. You haven’t been charged.")),
         { once: true },
       );
       return;
@@ -153,7 +153,7 @@ function loadRazorpay(): Promise<void> {
     script.referrerPolicy = "strict-origin";
     script.onload = () => resolve();
     script.onerror = () =>
-      reject(new Error("Razorpay checkout could not be loaded."));
+      reject(new Error("Razorpay checkout didn’t load. Check your connection and tap Pay again. You haven’t been charged."));
     document.head.appendChild(script);
   });
 }
@@ -256,7 +256,7 @@ export function CheckoutPaymentButton({
     const raw = await response.json().catch(() => null);
     if (!response.ok) {
       throw new Error(
-        responseMessage(raw, "Payment order could not be created."),
+        responseMessage(raw, "We couldn’t start the payment. You haven’t been charged. Try again."),
       );
     }
 

@@ -6,12 +6,23 @@ import { useState } from "react";
 export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   const [copied, setCopied] = useState(false);
   const reference = error.digest;
+  // Read once on mount (the page is client-only), so the copy matches the likely cause.
+  const [offline] = useState(() => typeof navigator !== "undefined" && navigator.onLine === false);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-white px-4">
       <div className="max-w-md text-center">
-        <h1 className="font-display text-2xl font-bold text-[#1A1A1A]">This page didn&apos;t load</h1>
-        <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">Please try again. No payment or order action was repeated automatically.</p>
+        <h1 className="font-display text-2xl font-bold text-[#1A1A1A]">
+          {offline ? "You’re offline" : "This page didn’t load"}
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">
+          {offline
+            ? "Craves can’t reach the internet from this device. Check your Wi‑Fi or mobile data, then try again."
+            : "Something went wrong on our side while loading it. Try again; if it keeps happening, chat with support and share the reference below."}
+        </p>
+        <p className="mt-1 text-sm leading-6 text-[#6B6B6B]">
+          Your cart, orders and payments are safe. Nothing was repeated or charged again.
+        </p>
         {reference ? (
           <p className="mt-4 inline-flex max-w-full items-center gap-2 rounded-full bg-[#F1F3F5] py-1 pl-4 pr-1 text-sm text-[#1A1A1A]">
             <span className="min-w-0 truncate">
@@ -30,9 +41,14 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
         ) : null}
         <div className="mt-6 flex flex-col items-center gap-3">
           <button type="button" onClick={reset} className="craves-primary-action">Try again</button>
-          <Link href="/contact" className="inline-flex min-h-11 items-center text-sm font-bold text-[#1A1A1A] underline underline-offset-4">
-            Contact support
-          </Link>
+          <div className="flex flex-wrap justify-center gap-x-5">
+            <Link href="/home" className="inline-flex min-h-11 items-center text-sm font-bold text-[#1A1A1A] underline underline-offset-4">
+              Go to home
+            </Link>
+            <Link href="/support" className="inline-flex min-h-11 items-center text-sm font-bold text-[#1A1A1A] underline underline-offset-4">
+              Chat with support
+            </Link>
+          </div>
         </div>
       </div>
     </main>

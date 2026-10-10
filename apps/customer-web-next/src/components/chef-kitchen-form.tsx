@@ -22,6 +22,7 @@ import type {
 } from "@/lib/chef-kitchen-types";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
 import { captureSessionContext, getSession, isSessionContextCurrent } from "@/services/auth/cravesAuth";
+import { RequiredMark } from "@/components/ui/forms/required-mark";
 
 type FormState = Record<
   keyof Omit<ChefKitchenInput, "latitude" | "longitude" | "status">,
@@ -250,8 +251,16 @@ export function ChefKitchenForm() {
   }
 
   function continueAddress() {
-    if (!form.addressLine1.trim() || !form.city.trim() || !form.state.trim()) {
-      invalidate(!form.addressLine1.trim() ? "addressLine1" : !form.city.trim() ? "city" : "state", "Please check your house or building, city, and state before continuing.");
+    const missing = (
+      [
+        ["addressLine1", "flat, house or building"],
+        ["city", "city"],
+        ["state", "state"],
+      ] as const
+    ).filter(([field]) => !form[field].trim());
+    if (missing.length) {
+      // Name what is missing and go to the first one.
+      invalidate(missing[0][0], `Add your ${new Intl.ListFormat("en-IN", { type: "conjunction" }).format(missing.map(([, label]) => label))} to continue.`);
       return;
     }
     if (!checkFieldLengths(["city", "state", "postalCode"])) return;
@@ -421,7 +430,7 @@ export function ChefKitchenForm() {
         <span className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]"><Store className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">What should customers call your kitchen?</h1>
         <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">Choose a simple name you’ll be happy to see next to your food.</p>
-        <label className="mt-6 block text-sm font-semibold text-[#1A1A1A]">Kitchen name<input {...inputProps("kitchenName")} value={form.kitchenName} onChange={(event) => setField("kitchenName", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.kitchenName} /></label>
+        <label className="mt-6 block text-sm font-semibold text-[#1A1A1A]">Kitchen name<RequiredMark /><input {...inputProps("kitchenName")} aria-required="true" value={form.kitchenName} onChange={(event) => setField("kitchenName", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.kitchenName} /></label>
         <label className="mt-4 block text-sm font-semibold text-[#1A1A1A]">Tell customers what you cook <span className="font-normal text-[#6B6B6B]">(optional)</span><textarea value={form.description} onChange={(event) => setField("description", event.target.value)} className={`${INPUT_CLASS} min-h-28`} maxLength={1000} /></label>
         <details className="mt-5 rounded-2xl bg-[#F1F3F5] p-4">
           <summary className="cursor-pointer text-sm font-semibold text-[#1A1A1A]">More kitchen details</summary>
@@ -448,12 +457,12 @@ export function ChefKitchenForm() {
         {message ? <p id="kitchen-field-error" role={invalidField ? "alert" : "status"} className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">{message}</p> : null}
         {form.latitude !== "" && form.longitude !== "" ? <div className="mt-5"><AddressMapPicker latitude={Number(form.latitude)} longitude={Number(form.longitude)} onCenterChange={next => void moveKitchenPin(next)} onUseCurrentLocation={useCurrentLocation} locating={locating} disabled={locating} /></div> : null}
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Flat / House / Building<input {...inputProps("addressLine1")} value={form.addressLine1} onChange={(event) => setField("addressLine1", event.target.value)} className={INPUT_CLASS} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Flat / House / Building<RequiredMark /><input {...inputProps("addressLine1")} aria-required="true" value={form.addressLine1} onChange={(event) => setField("addressLine1", event.target.value)} className={INPUT_CLASS} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Street / Road <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.addressLine2} onChange={(event) => setField("addressLine2", event.target.value)} className={INPUT_CLASS} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A]">Area <span className="font-normal text-[#6B6B6B]">(required to accept orders)</span><input {...inputProps("areaName")} value={form.areaName} onChange={(event) => setField("areaName", event.target.value)} className={INPUT_CLASS} maxLength={120} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A]">Landmark <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.landmark} onChange={(event) => setField("landmark", event.target.value)} className={INPUT_CLASS} /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A]">City<input {...inputProps("city")} value={form.city} onChange={(event) => setField("city", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.city} /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A]">State<input {...inputProps("state")} value={form.state} onChange={(event) => setField("state", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.state} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">City<RequiredMark /><input {...inputProps("city")} aria-required="true" value={form.city} onChange={(event) => setField("city", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.city} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">State<RequiredMark /><input {...inputProps("state")} aria-required="true" value={form.state} onChange={(event) => setField("state", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.state} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A]">Pincode <span className="font-normal text-[#6B6B6B]">(required to accept orders)</span><input {...inputProps("postalCode")} value={form.postalCode} onChange={(event) => setField("postalCode", event.target.value)} className={INPUT_CLASS} inputMode="numeric" maxLength={CHEF_KITCHEN_FIELD_LIMITS.postalCode} /></label>
         </div>
         <button type="button" onClick={continueAddress} disabled={locating} className="chef-btn is-primary is-block mt-7">Yes, this is right</button>

@@ -131,7 +131,7 @@ export const DishCard = memo(function DishCard({
       setFavoriteError(
         error instanceof Error
           ? error.message
-          : "Saved dishes could not be updated.",
+          : "Saved dishes didn’t update. Try again.",
       );
     } finally {
       setFavoriteBusy(false);

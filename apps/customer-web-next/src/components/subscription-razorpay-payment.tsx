@@ -58,7 +58,7 @@ function loadRazorpay(): Promise<void> {
     const existing = document.querySelector<HTMLScriptElement>('script[data-craves-subscription-razorpay="v1"]');
     if (existing) {
       existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error("Razorpay checkout could not be loaded.")), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Razorpay checkout didn’t load. Check your connection and tap Pay again. You haven’t been charged.")), { once: true });
       return;
     }
     const script = document.createElement("script");
@@ -67,7 +67,7 @@ function loadRazorpay(): Promise<void> {
     script.dataset.cravesSubscriptionRazorpay = "v1";
     script.referrerPolicy = "strict-origin";
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Razorpay checkout could not be loaded."));
+    script.onerror = () => reject(new Error("Razorpay checkout didn’t load. Check your connection and tap Pay again. You haven’t been charged."));
     document.head.appendChild(script);
   });
 }

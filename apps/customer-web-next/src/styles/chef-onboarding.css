@@ -1614,3 +1614,12 @@ a.cob-thumb:focus-visible {
     background: rgb(24 18 15 / 0.7);
   }
 }
+
+/* The required mark: "*" with empty alternative text (aria-required on the field says it). */
+.cob .cob-label[data-required]::after {
+  content: "*";
+  content: "*" / "";
+  margin-left: 3px;
+  color: var(--cob-red-text);
+  font-weight: 800;
+}

@@ -175,7 +175,7 @@ export function PhoneAuthForm({
         identity?: CravesIdentity;
         message?: string;
       };
-      if (!response.ok) throw new Error(body.message ?? "Sign-in failed.");
+      if (!response.ok) throw new Error(body.message ?? "We couldn’t sign you in. Check the code and try again, or request a new code.");
       setStage("done");
       setMessage(chefJourney ? "Verified. Opening Chef Mode…" : "Signed in successfully.");
       if (onSignedIn) {

@@ -181,7 +181,7 @@ async function fetchAddresses(): Promise<CustomerAddress[]> {
   });
   const raw = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(responseMessage(raw, "Saved addresses could not be loaded."));
+    throw new Error(responseMessage(raw, "Your saved addresses didn’t load. Check your connection and try again."));
   }
   const parsed = parseCustomerAddresses(raw);
   if (!parsed) throw new Error("Craves returned an invalid address response.");
@@ -253,7 +253,7 @@ async function createAuthoritativeCheckout(
   );
   const raw = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(responseMessage(raw, "Checkout could not be created."));
+    throw new Error(responseMessage(raw, "We couldn’t start checkout. Check your cart for items that are no longer available, then try again."));
   }
 
   const operation = parseCheckoutOperationResponse(raw);

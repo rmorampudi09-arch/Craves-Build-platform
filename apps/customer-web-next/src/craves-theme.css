@@ -183,6 +183,13 @@ body :is(button, [role="tab"], .btn-primary, .craves-button-link, .chef-panel-na
   background: var(--color-contrast-red);
   color: var(--color-white);
   box-shadow: 0 3px 10px rgba(201, 39, 22, 0.18);
+  /* Keeps its fade now that the generic button transition is layered (styles.css's utility would win). */
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    color var(--motion-fast),
+    scale var(--motion-fast);
 }
 
 @media (hover: hover) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, LoaderCircle, Minus, Plus } from "lucide-react";
+import { Check, Minus, Plus } from "lucide-react";
 
 import { CravesCartIcon } from "@/components/home/CravesCartIcon";
 import { duration, ease } from "@/lib/motion";
@@ -99,7 +99,7 @@ export function DishBottomBar({
           aria-busy={mode === "add" && disabled}
           aria-label={
             mode === "add"
-              ? disabled ? undefined : "Add to cart"
+              ? "Add to cart"
               : mode === "added"
                 ? "Added to cart"
                 : `View cart, ${cartTotalLabel}`
@@ -107,28 +107,22 @@ export function DishBottomBar({
           className="craves-primary-action relative ml-auto flex-1 overflow-hidden !px-4 sm:min-w-52 sm:flex-none sm:!px-8"
         >
           <AnimatePresence mode="popLayout" initial={false}>
+            {/* The new cart line shows at once, so there is no "Adding" label to flash. */}
             <motion.span
-              key={mode === "add" && disabled ? "adding" : mode}
+              key={mode}
               className="inline-flex items-center justify-center gap-2"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1, transition: { duration: 0.15, ease: ease.out } }}
               exit={{ opacity: 0, transition: { duration: duration.micro, ease: ease.in } }}
             >
               {mode === "add" ? (
-                disabled ? (
-                  <>
-                    <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
-                    Adding…
-                  </>
-                ) : (
-                  <>
-                    <CravesCartIcon className="hidden h-5 w-5 min-[400px]:block" />
-                    {/* One line on 360px phones: "Add", growing to "Add to cart" when there's room. */}
-                    <span>
-                      Add<span className="hidden min-[460px]:inline"> to cart</span>
-                    </span>
-                  </>
-                )
+                <>
+                  <CravesCartIcon className="hidden h-5 w-5 min-[400px]:block" />
+                  {/* One line on 360px phones: "Add", growing to "Add to cart" when there's room. */}
+                  <span>
+                    Add<span className="hidden min-[460px]:inline"> to cart</span>
+                  </span>
+                </>
               ) : mode === "added" ? (
                 <>
                   <Check className="h-5 w-5" strokeWidth={3} aria-hidden="true" />

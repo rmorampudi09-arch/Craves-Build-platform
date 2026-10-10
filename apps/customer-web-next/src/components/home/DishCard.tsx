@@ -7,7 +7,6 @@ import {
   MapPin,
   Minus,
   Plus,
-  ShoppingBag,
   UsersRound,
 } from "lucide-react";
 
@@ -334,12 +333,9 @@ export function DishCard({
               className="inline-flex min-h-12 shrink-0 items-center justify-center gap-1.5 rounded-full !border !border-transparent !bg-[#F1F3F5] px-5 text-sm font-black !text-[#1A1A1A] !shadow-[0_5px_14px_rgba(26,26,26,0.06)] transition-[background-color,box-shadow,scale] duration-(--dur-micro) hover:!bg-white hover:!shadow-[0_8px_18px_rgba(26,26,26,0.10)] active:scale-[0.96] aria-busy:cursor-wait"
               aria-label={`Add ${dish.name} to cart`}
             >
-              {adding ? (
-                <ShoppingBag className="h-4 w-4 animate-pulse" aria-hidden="true" />
-              ) : (
-                <Plus className="h-4 w-4" aria-hidden="true" />
-              )}
-              {adding ? "Adding" : "Add"}
+              {/* The stepper replaces this at once (optimistic), so no "Adding" label to flash. */}
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Add
             </button>
           )}
         </div>

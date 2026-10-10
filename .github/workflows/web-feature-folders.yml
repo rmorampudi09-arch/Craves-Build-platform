@@ -1,0 +1,120 @@
+name: Web feature folders
+# Moves apps/customer-web-next onto src/features/<feature>/ and keeps open branches working.
+#  - push to claude/web-feature-folders: the one-time move (removed once that branch is merged).
+#  - a pull request, or a manual run with its number: if the branch started before the folders, bring it over with
+#    apps/customer-web-next/scripts/features/update-branch.sh, then push only if lint, types and every web test pass.
+#    Otherwise nothing is pushed and the author gets a comment saying what to do.
+on:
+  push:
+    branches: [claude/web-feature-folders]
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths: ['apps/customer-web-next/**']
+  workflow_dispatch:
+    inputs:
+      pull:
+        description: Pull request number to move onto the feature folders
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: web-feature-folders-${{ github.event.pull_request.number || inputs.pull || github.ref }}
+
+jobs:
+  move:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Move files and record today's links between features
+        run: |
+          if [ -d apps/customer-web-next/src/lib ]; then node apps/customer-web-next/scripts/features/move-to-features.mjs; fi
+          (cd apps/customer-web-next && node scripts/features/check-boundaries.mjs --update)
+          (cd apps/mobile && node scripts/check-feature-boundaries.mjs --update)
+      - name: Check web lint, types and every test
+        working-directory: apps/customer-web-next
+        run: npm ci && npm run lint && npm run typecheck && npm test
+      - name: Check mobile boundaries
+        working-directory: apps/mobile
+        run: node scripts/check-feature-boundaries.mjs
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || { git commit -m "Move web files into feature folders (apps/customer-web-next/scripts/features/move-to-features.mjs)"; git push; }
+
+  migrate:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.user.login != 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NUMBER: ${{ github.event.pull_request.number || inputs.pull }}
+    steps:
+      - name: Find the branch
+        id: pr
+        run: |
+          gh api "repos/${{ github.repository }}/pulls/$NUMBER" --jq '"head=\(.head.ref)\nbase=\(.base.ref)\nready=\(.state == "open" and .head.repo.full_name == .base.repo.full_name)"' >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        if: steps.pr.outputs.ready == 'true'
+        with:
+          ref: ${{ steps.pr.outputs.head }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        if: steps.pr.outputs.ready == 'true'
+        with:
+          node-version: 24
+      - name: Bring the branch onto the feature folders
+        id: move
+        if: steps.pr.outputs.ready == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BASE="origin/${{ steps.pr.outputs.base }}"
+          git cat-file -e "$BASE:apps/customer-web-next/scripts/features/update-branch.sh" 2>/dev/null || { echo "result=skip" >> "$GITHUB_OUTPUT"; exit 0; }
+          # Only branches that started before the move; anything newer is left alone.
+          MOVE=$(git log --format=%H --diff-filter=D -1 "$BASE" -- apps/customer-web-next/src/lib/utils.ts)
+          if [ -z "$MOVE" ] || git merge-base --is-ancestor "$MOVE" HEAD; then echo "result=skip" >> "$GITHUB_OUTPUT"; exit 0; fi
+          git show "$BASE:apps/customer-web-next/scripts/features/update-branch.sh" > "$RUNNER_TEMP/update-branch.sh"
+          START=$(git rev-parse HEAD)
+          if bash "$RUNNER_TEMP/update-branch.sh" "$BASE" > "$RUNNER_TEMP/update.log" 2>&1; then
+            if [ "$(git rev-parse HEAD)" = "$START" ]; then echo "result=skip" >> "$GITHUB_OUTPUT"; else echo "result=moved" >> "$GITHUB_OUTPUT"; fi
+          else
+            git merge --abort 2>/dev/null || true
+            git reset -q --hard "$START"
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+          fi
+          cat "$RUNNER_TEMP/update.log"
+      - name: Check web lint, types and every test
+        if: steps.move.outputs.result == 'moved'
+        working-directory: apps/customer-web-next
+        run: npm ci && npm run lint && npm run typecheck && npm test
+      - name: Push
+        if: steps.move.outputs.result == 'moved'
+        run: git push origin "HEAD:${{ steps.pr.outputs.head }}"
+      - name: Tell the author
+        if: always() && (steps.move.outputs.result == 'moved' || steps.move.outputs.result == 'conflict')
+        run: |
+          RUN="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          HOW="On your machine: \`bash apps/customer-web-next/scripts/features/update-branch.sh\` from the repository root. It stops at each set of conflicts; fix them, commit and run it again."
+          if [ "${{ steps.move.outputs.result }}" = conflict ]; then
+            BODY="The web app now keeps each feature in its own folder (\`src/features/<feature>/\`). I couldn't bring this branch over automatically: $(tail -n 2 "$RUNNER_TEMP/update.log" | tr '\n' ' ') Nothing was pushed. $HOW"
+          elif [ "${{ job.status }}" = success ]; then
+            BODY="The web app now keeps each feature in its own folder (\`src/features/<feature>/\`). I moved this branch over: merged main, moved this branch's files and rewrote old paths. Lint, types and every web test pass. Run \`git pull\` before your next commit; the PR checks run again on your next push."
+          else
+            LEFT=$(grep '^  src/' "$RUNNER_TEMP/update.log" | sort -u | tr -s ' \n' ' ')
+            BODY="The web app now keeps each feature in its own folder (\`src/features/<feature>/\`). I moved this branch over, but lint, types or tests did not pass, so I pushed nothing: $RUN. ${LEFT:+New files that need a home in src/features/<feature>/ or src/shared/ first:$LEFT. }$HOW"
+          fi
+          gh pr comment "$NUMBER" --body "$BODY"

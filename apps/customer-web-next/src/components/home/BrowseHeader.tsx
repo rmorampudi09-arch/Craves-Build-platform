@@ -66,7 +66,6 @@ function FoodPreferenceQuickToggles({
         onCheckedChange={(checked) => onChange(checked ? "veg" : "all")}
         label="Veg"
         size="sm"
-        tone="neutral"
         aria-label="Show only vegetarian dishes"
       />
     </div>

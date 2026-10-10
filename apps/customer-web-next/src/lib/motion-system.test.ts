@@ -96,3 +96,21 @@ test("reduced motion keeps busy spinners alive as a slow pulse", () => {
   );
   assert.doesNotMatch(homeStyles, /will-change/);
 });
+
+test("counts roll quickly without blur and the Veg switch slides without overshoot", () => {
+  const count = source("../components/ui/AnimateCount.tsx");
+  const toggle = source("../components/ui/AppleSwitch.tsx");
+  const checkoutBar = source("../components/cart/CartCheckoutBar.tsx");
+
+  assert.match(count, /<AnimatePresence mode="popLayout" initial=\{false\}/);
+  assert.match(count, /duration: 0\.18/);
+  assert.match(count, /y: 6 \* direction/);
+  assert.doesNotMatch(count, /blur|ANIMATE_COUNT_DURATION_MS = 450/);
+  assert.match(checkoutBar, /<AnimateCount format=\{\(value\) => money\(value, currency\)\}>\{total\}<\/AnimateCount>/);
+
+  assert.match(toggle, /useReducedMotion\(\)/);
+  assert.match(toggle, /transition=\{reduceMotion \? \{ duration: 0 \} : spring\.ui\}/);
+  assert.match(toggle, /animate=\{\{ x: on \? thumbTravel : 0 \}\}/);
+  assert.match(toggle, /"!bg-\[#F62E18\]" : "!bg-\[#D9DDE2\]"/);
+  assert.doesNotMatch(toggle, /useSpring|grabSpring|backdropFilter|blur\(|width: thumbWidth/);
+});

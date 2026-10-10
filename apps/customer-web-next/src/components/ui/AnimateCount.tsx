@@ -1,76 +1,58 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 
-export const ANIMATE_COUNT_DURATION_MS = 450;
-
-const EASING = [0.23, 0.88, 0.26, 0.92] as const;
+import { duration, ease } from "@/lib/motion";
 
 export interface AnimateCountProps
   extends Omit<React.HTMLAttributes<HTMLSpanElement>, "children"> {
   children: number;
   animate?: boolean;
+  /** Renders the value, e.g. as money; defaults to the plain number. */
+  format?: (value: number) => string;
 }
+
+/** Digits roll 6 px in the direction of change: in over 180 ms, out over 120 ms. */
+const roll = {
+  enter: (direction: number) => ({ opacity: 0, y: 6 * direction }),
+  center: { opacity: 1, y: 0, transition: { duration: 0.18, ease: ease.out } },
+  exit: (direction: number) => ({
+    opacity: 0,
+    y: -6 * direction,
+    transition: { duration: duration.micro, ease: ease.in },
+  }),
+};
 
 export function AnimateCount({
   children: count,
   animate = true,
+  format = String,
   className = "",
   ...props
 }: AnimateCountProps) {
-  const reduceMotion = useReducedMotion();
-  const shouldAnimate = animate && !reduceMotion;
-  const [prev, setPrev] = useState<number | null>(null);
-  const [displayCount, setDisplayCount] = useState(count);
-
-  useEffect(() => {
-    if (shouldAnimate) setPrev(displayCount);
-    else setPrev(null);
-    setDisplayCount(count);
-    // displayCount intentionally captures the previous rendered value.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [count, shouldAnimate]);
+  const [shown, setShown] = useState({ value: count, direction: 1 });
+  if (shown.value !== count) {
+    setShown({ value: count, direction: count > shown.value ? 1 : -1 });
+  }
 
   return (
     <span
-      className={`grid min-w-[2ch] place-items-center tabular-nums tracking-tight [&>*]:col-start-1 [&>*]:row-start-1 ${className}`}
+      className={`relative inline-grid min-w-[2ch] place-items-center tabular-nums tracking-tight ${className}`}
       {...props}
     >
-      <AnimatePresence initial={false}>
-        {shouldAnimate && prev !== null && prev !== displayCount ? (
-          <motion.span
-            key={`exit-${prev}-${displayCount}`}
-            aria-hidden
-            initial={{ opacity: 1, filter: "blur(0px)", y: 0 }}
-            animate={{ opacity: 0, filter: "blur(2px)", y: -12 }}
-            transition={{
-              duration: ANIMATE_COUNT_DURATION_MS / 1000,
-              ease: EASING,
-            }}
-            onAnimationComplete={() => setPrev(null)}
-          >
-            {prev}
-          </motion.span>
-        ) : null}
+      <AnimatePresence mode="popLayout" initial={false} custom={shown.direction}>
+        <motion.span
+          key={count}
+          custom={shown.direction}
+          variants={roll}
+          initial={animate ? "enter" : false}
+          animate="center"
+          exit={animate ? "exit" : undefined}
+        >
+          {format(count)}
+        </motion.span>
       </AnimatePresence>
-      <motion.span
-        key={`enter-${displayCount}`}
-        initial={
-          shouldAnimate ? { opacity: 0, filter: "blur(2px)", y: 8 } : false
-        }
-        animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
-        transition={
-          shouldAnimate
-            ? {
-                duration: ANIMATE_COUNT_DURATION_MS / 1000,
-                ease: EASING,
-              }
-            : { duration: 0 }
-        }
-      >
-        {displayCount}
-      </motion.span>
     </span>
   );
 }

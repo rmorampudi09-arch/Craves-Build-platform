@@ -319,7 +319,7 @@ export function DishesGrid({
             <button
               type="button"
               onClick={() => onFoodPreferenceChange("all")}
-              className="mt-5 min-h-10 rounded-full !bg-[#F1F3F5] px-4 text-xs font-black !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
+              className="mt-5 min-h-10 rounded-full !bg-[#F1F3F5] px-4 text-xs font-black !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,translate,scale] duration-200 hover:-translate-y-0.5 active:scale-[0.96] hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
             >
               Turn off Veg filter
             </button>

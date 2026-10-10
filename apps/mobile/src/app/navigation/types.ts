@@ -122,6 +122,7 @@ export type CustomerProfileStackParamList = {
   CustomerFavorites: undefined;
   CustomerNotifications: undefined;
   CustomerSettings: undefined;
+  CustomerSupportChat: {orderId?: string} | undefined;
 } & CustomerSettingsChildStackParamList &
   CustomerDishDetailStackParamList &
   CustomerOrderDetailStackParamList &
@@ -158,6 +159,7 @@ export type ChefProfileStackParamList = {
   ChefSubscriptionPlan: undefined;
   ChefAppPreferences: undefined;
   ChefEditProfile: undefined;
+  ChefSupportChat: undefined;
 };
 
 /** P80 establishes Chef product ownership without pre-implementing later Chef surfaces. */

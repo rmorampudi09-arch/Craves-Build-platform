@@ -1,5 +1,5 @@
 import React from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {
   colors,
   elevation,
@@ -112,91 +112,97 @@ export function AddressMapStep({
       </View>
 
       <View style={styles.sheet}>
-        {locationNotice ? (
-          <Text accessibilityRole="alert" style={styles.locationNotice}>
-            {locationNotice}
-          </Text>
-        ) : null}
+        {/* In landscape the sheet is capped so the map stays usable; its copy scrolls. */}
+        <ScrollView
+          contentContainerStyle={styles.sheetContent}
+          style={styles.sheetScroll}>
+          {locationNotice ? (
+            <Text accessibilityRole="alert" style={styles.locationNotice}>
+              {locationNotice}
+            </Text>
+          ) : null}
 
-        {lookup.status === 'idle' ? (
-          <View style={styles.statusRow}>
-            <StatusTile icon="location" tone="pin" />
-            <View style={styles.statusCopy}>
-              <Text accessibilityRole="header" style={styles.title}>
-                Set your delivery pin
-              </Text>
-              <Text style={styles.body}>Move the map to place the pin on your building.</Text>
-            </View>
-          </View>
-        ) : null}
-
-        {lookup.status === 'resolving' ? (
-          <View accessibilityLabel="Finding the address for this pin" accessibilityRole="progressbar">
-            <Text style={styles.overline}>Delivering to</Text>
-            <View style={styles.statusRow}>
-              <StatusTile icon="location" tone="pin" />
-              <View style={styles.statusCopy}>
-                <View style={[styles.skeleton, styles.skeletonTitle]} />
-                <View style={[styles.skeleton, styles.skeletonLine]} />
-              </View>
-            </View>
-          </View>
-        ) : null}
-
-        {resolved ? (
-          <View>
-            <Text style={styles.overline}>Delivering to</Text>
+          {lookup.status === 'idle' ? (
             <View style={styles.statusRow}>
               <StatusTile icon="location" tone="pin" />
               <View style={styles.statusCopy}>
                 <Text accessibilityRole="header" style={styles.title}>
-                  {resolved.area || resolved.city || resolved.district || 'Selected location'}
+                  Set your delivery pin
                 </Text>
-                <Text style={styles.body}>{resolved.formattedAddress}</Text>
+                <Text style={styles.body}>Move the map to place the pin on your building.</Text>
               </View>
             </View>
-            {approximate ? (
-              <View accessibilityRole="alert" style={styles.approximate}>
-                <Icon color={colors.warningText} name="alert" size={18} surface={false} />
-                <Text style={styles.approximateText}>
-                  This pin is approximate. Move the map so the pin sits on your building.
+          ) : null}
+
+          {lookup.status === 'resolving' ? (
+            <View accessibilityLabel="Finding the address for this pin" accessibilityRole="progressbar">
+              <Text style={styles.overline}>Delivering to</Text>
+              <View style={styles.statusRow}>
+                <StatusTile icon="location" tone="pin" />
+                <View style={styles.statusCopy}>
+                  <View style={[styles.skeleton, styles.skeletonTitle]} />
+                  <View style={[styles.skeleton, styles.skeletonLine]} />
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {resolved ? (
+            <View>
+              <Text style={styles.overline}>Delivering to</Text>
+              <View style={styles.statusRow}>
+                <StatusTile icon="location" tone="pin" />
+                <View style={styles.statusCopy}>
+                  <Text accessibilityRole="header" style={styles.title}>
+                    {resolved.area || resolved.city || resolved.district || 'Selected location'}
+                  </Text>
+                  <Text style={styles.body}>{resolved.formattedAddress}</Text>
+                </View>
+              </View>
+              {approximate ? (
+                <View accessibilityRole="alert" style={styles.approximate}>
+                  <Icon color={colors.warningText} name="alert" size={18} surface={false} />
+                  <Text style={styles.approximateText}>
+                    This pin is approximate. Move the map so the pin sits on your building.
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {lookup.status === 'unavailable' || lookup.status === 'failed' ? (
+            <View accessibilityRole="alert" style={styles.statusRow}>
+              <StatusTile icon="alert" tone="error" />
+              <View style={styles.statusCopy}>
+                <Text style={styles.title}>
+                  {lookup.status === 'unavailable'
+                    ? 'Craves could not identify this address right now'
+                    : 'The address could not be found'}
+                </Text>
+                <Text style={styles.body}>
+                  {lookup.status === 'failed'
+                    ? lookup.message
+                    : 'Your pin is kept. Type the address to continue, or try again.'}
                 </Text>
               </View>
-            ) : null}
-          </View>
-        ) : null}
-
-        {lookup.status === 'unavailable' || lookup.status === 'failed' ? (
-          <View accessibilityRole="alert" style={styles.statusRow}>
-            <StatusTile icon="alert" tone="error" />
-            <View style={styles.statusCopy}>
-              <Text style={styles.title}>
-                {lookup.status === 'unavailable'
-                  ? 'Craves could not identify this address right now'
-                  : 'The address could not be found'}
-              </Text>
-              <Text style={styles.body}>
-                {lookup.status === 'failed'
-                  ? lookup.message
-                  : 'Your pin is kept. Type the address to continue, or try again.'}
-              </Text>
             </View>
-          </View>
-        ) : null}
+          ) : null}
 
-        {lookup.status === 'limited' ? (
-          <View accessibilityRole="alert" style={styles.statusRow}>
-            <StatusTile icon="clock" tone="warning" />
-            <View style={styles.statusCopy}>
-              <Text style={styles.title}>Too many location lookups</Text>
-              <Text style={styles.body}>
-                {limitedSeconds > 0
-                  ? `Please try again shortly. Address lookup resumes in ${limitedSeconds} s.`
-                  : 'Address lookup is available again.'}
-              </Text>
+          {lookup.status === 'limited' ? (
+            <View accessibilityRole="alert" style={styles.statusRow}>
+              <StatusTile icon="clock" tone="warning" />
+              <View style={styles.statusCopy}>
+                <Text style={styles.title}>Too many location lookups</Text>
+                <Text style={styles.body}>
+                  {limitedSeconds > 0
+                    ? `Please try again shortly. Address lookup resumes in ${limitedSeconds} s.`
+                    : 'Address lookup is available again.'}
+                </Text>
+              </View>
             </View>
-          </View>
-        ) : null}
+          ) : null}
+
+        </ScrollView>
 
         <View style={styles.actions}>
           {lookup.status === 'unavailable' || lookup.status === 'failed' ? (
@@ -262,6 +268,7 @@ const styles = StyleSheet.create({
   },
   searchPillText: {flex: 1, color: colors.placeholder, fontSize: typography.body},
   sheet: {
+    maxHeight: '50%',
     marginTop: -SHEET_OVERLAP,
     gap: spacing.md,
     paddingHorizontal: spacing.md,
@@ -272,6 +279,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     ...elevation.card,
   },
+  sheetScroll: {flexShrink: 1},
+  sheetContent: {gap: spacing.md},
   locationNotice: {color: colors.error, fontSize: typography.small},
   overline: {
     marginBottom: spacing.sm,

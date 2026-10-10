@@ -85,12 +85,12 @@ export function CustomerHeader({
           </View>
         ) : (
           <View style={styles.locationCopy}>
-            <View style={styles.locationValueRow}>
-              <Text numberOfLines={1} style={[styles.locationText, styles.locationTitle]}>
-                {locationTitle}
-              </Text>
+            {/* The title fills the row and carries the chevron inline: some Android fonts
+                under-measure bold text, so a shrink-to-fit label gets cut to "Ho…". */}
+            <Text numberOfLines={1} style={[styles.locationText, styles.locationTitle]}>
+              {locationTitle}{' '}
               <Icon name="chevron-down" size={18} color={colors.textPrimary} surface={false} />
-            </View>
+            </Text>
             <Text numberOfLines={1} style={styles.locationLine}>
               {locationLine}
             </Text>
@@ -194,6 +194,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   locationTitle: {
+    alignSelf: 'stretch',
     fontSize: typography.body + 1,
     fontWeight: fontWeight.bold,
   },

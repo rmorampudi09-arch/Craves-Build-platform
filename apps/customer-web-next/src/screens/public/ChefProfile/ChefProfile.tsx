@@ -190,10 +190,7 @@ function ChefProfilePage() {
         <section className="rounded-[1.75rem] border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(26,26,26,0.045)] sm:p-6 md:rounded-[2rem] md:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
-              <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#F62E18]">
-                Craves home kitchen
-              </p>
-              <h1 className="mt-2 font-display text-3xl font-black tracking-[-0.045em] text-[#261A15] md:text-4xl">
+              <h1 className="font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-4xl">
                 {chef.name}
               </h1>
               {chef.location ? (

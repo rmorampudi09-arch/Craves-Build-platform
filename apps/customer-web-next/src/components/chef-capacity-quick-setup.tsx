@@ -233,7 +233,7 @@ export function ChefCapacityQuickSetup() {
           </p>
         </div>
         <span className="rounded-full bg-success/10 px-3 py-2 text-xs font-bold text-success">
-          Automatic defaults ON ✓
+          Automatic defaults are on
         </span>
       </div>
 

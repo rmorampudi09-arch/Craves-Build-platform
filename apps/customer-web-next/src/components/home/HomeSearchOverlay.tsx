@@ -136,10 +136,7 @@ export function HomeSearchOverlay({
 
       <main className="mx-auto max-w-5xl px-4 pb-16 pt-7 md:px-7 md:pt-9">
         <div className="mb-7">
-          <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">
-            {normalized ? "Search results" : "Explore nearby"}
-          </p>
-          <h2 className="mt-1.5 font-display text-3xl font-black tracking-[-0.04em] text-[#1A1A1A]">
+          <h2 className="font-display text-3xl font-black tracking-[-0.04em] text-[#1A1A1A]">
             {normalized ? `Results for “${searchTerm.trim()}”` : "What would you like to eat?"}
           </h2>
           <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">

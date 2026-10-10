@@ -98,3 +98,43 @@ test("Razorpay payment is contract validated and backend verified", () => {
   assert.match(payment, /router\.replace\(\`\/orders\/\$\{orderId\}\`\)/);
   assert.doesNotMatch(payment, /amount\s*:\s*Math\.round\(/);
 });
+
+test("cart quantities are optimistic: steppers never dim and Continue waits only for validation", () => {
+  const cartService = source("../services/api/cravesCart.ts");
+  const page = source("../screens/Cart/Cart.tsx");
+  const row = source("../components/cart/CartItemRow.tsx");
+  const card = source("../components/home/DishCard.tsx");
+
+  // Behaviour is exercised in optimistic-cart.vitest.ts; these pin the wiring.
+  assert.match(cartService, /QUANTITY_WRITE_DELAY_MS = 250/);
+  assert.match(cartService, /function serialized</);
+  assert.match(cartService, /if \(intents\.get\(menuItemId\)\?\.seq === seq\) settle\(menuItemId, error\)/);
+  assert.match(cartService, /await settleIntents\(\);\s*return cartRequest\("\/api\/cart\/validate"/);
+  assert.match(cartService, /await cartRequest\("\/api\/cart", \{ method: "DELETE" \}, true\)/);
+
+  assert.match(page, /disabled=\{validating\}/);
+  assert.doesNotMatch(page, /busyItemId/);
+  assert.doesNotMatch(row, /disabled=\{disabled|disabled:opacity/);
+  assert.doesNotMatch(card, /disabled=\{state === "busy"|disabled:opacity-50/);
+  // "Added" is announced, not shown as a line that pushes every card below it down.
+  assert.match(card, /<p className="sr-only" role="status" aria-live="polite">/);
+});
+
+test("cart rows leave smoothly and the undo snackbar can actually be reached", () => {
+  const page = source("../screens/Cart/Cart.tsx");
+  const list = source("../components/cart/CartItemList.tsx");
+
+  // Rows: fade out of the flow while the rows below glide up (transform-based layout animation).
+  assert.match(list, /<AnimatePresence mode="popLayout" initial=\{false\}>/);
+  assert.match(list, /layout="position"/);
+  assert.match(list, /key=\{item\.menuItemId\}/);
+
+  // Undo: 8 s, announced, pauses while hovered or focused.
+  assert.match(page, /UNDO_VISIBLE_MS = 8_000/);
+  assert.match(page, /role="status"\s*aria-live="polite"/);
+  assert.match(page, /onPointerEnter=\{pauseUndoTimer\}/);
+  assert.match(page, /onFocus=\{pauseUndoTimer\}/);
+  assert.match(page, /<Link\s+to="\/kitchen\/\$id"/);
+  assert.doesNotMatch(page, /<a\s+href=\{`\/kitchen/);
+  assert.doesNotMatch(page, /bg-\[#F62E18\]\/5|bg-\[#FFF8EC\]|#F6B545/);
+});

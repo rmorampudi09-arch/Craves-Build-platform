@@ -4,7 +4,6 @@ import type { CartItem } from "@/services/api/cravesCart";
 
 interface CartItemRowProps {
   item: CartItem;
-  disabled?: boolean;
   priorityImage?: boolean;
   onDecrease: () => void;
   onIncrease: () => void;
@@ -21,14 +20,13 @@ function money(amount: number, currency: string): string {
 
 export function CartItemRow({
   item,
-  disabled = false,
   priorityImage = false,
   onDecrease,
   onIncrease,
   onRemove,
 }: CartItemRowProps) {
   return (
-    <article className="grid grid-cols-[4.75rem_minmax(0,1fr)] gap-3 border-b border-[#F1F3F5] bg-white py-4 last:border-b-0 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-center">
+    <article className="grid grid-cols-[4.75rem_minmax(0,1fr)] gap-3 bg-white py-4 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-center">
       <div className="relative flex aspect-square w-[4.75rem] items-center justify-center overflow-hidden rounded-[8px] bg-[#F1F3F5] sm:w-[5.5rem]">
         <img
           src={item.img}
@@ -69,8 +67,7 @@ export function CartItemRow({
             type="button"
             data-craves-borderless="true"
             onClick={onDecrease}
-            disabled={disabled}
-            className="flex h-12 w-12 items-center justify-center border-0 bg-transparent text-[#1A1A1A] shadow-none transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BFC4C9] disabled:pointer-events-none disabled:opacity-45"
+            className="flex h-12 w-12 items-center justify-center !border-0 !bg-transparent text-[#1A1A1A] !shadow-none transition-[background-color] duration-(--dur-micro) hover:!bg-white/70 active:!bg-[#E5E7EB] active:duration-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BFC4C9]"
             aria-label={`Decrease quantity of ${item.name}`}
           >
             <FaMinus className="text-xs" aria-hidden="true" />
@@ -85,8 +82,8 @@ export function CartItemRow({
             type="button"
             data-craves-borderless="true"
             onClick={onIncrease}
-            disabled={disabled || item.qty >= 50}
-            className="flex h-12 w-12 items-center justify-center border-0 bg-transparent text-[#1A1A1A] shadow-none transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BFC4C9] disabled:pointer-events-none disabled:opacity-45"
+            disabled={item.qty >= 50}
+            className="flex h-12 w-12 items-center justify-center !border-0 !bg-transparent text-[#1A1A1A] !shadow-none transition-[background-color] duration-(--dur-micro) hover:!bg-white/70 active:!bg-[#E5E7EB] active:duration-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BFC4C9] disabled:pointer-events-none"
             aria-label={`Increase quantity of ${item.name}`}
           >
             <FaPlus className="text-xs" aria-hidden="true" />
@@ -95,8 +92,7 @@ export function CartItemRow({
         <button
           type="button"
           onClick={onRemove}
-          disabled={disabled}
-          className="inline-flex min-h-12 items-center gap-2 rounded-[8px] px-3 text-sm font-semibold text-[#6B6B6B] transition-colors hover:bg-[#F1F3F5] hover:text-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 disabled:pointer-events-none disabled:opacity-45"
+          className="inline-flex min-h-12 items-center gap-2 rounded-[8px] px-3 text-sm font-semibold text-[#6B6B6B] transition-[background-color,color,scale] duration-(--dur-micro) hover:bg-[#F1F3F5] hover:text-[#C4200F] active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
         >
           <FaTrashCan className="text-xs" aria-hidden="true" />
           Remove

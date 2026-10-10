@@ -73,9 +73,22 @@
   --gradient-primary: var(--color-contrast-red);
   --gradient-hero: none;
 
-  --motion-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
-  --motion-medium: 220ms cubic-bezier(0.4, 0, 0.2, 1);
-  --motion-slow: 360ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* Motion tokens, mirrored for framer-motion in src/lib/motion.ts. Enters ease
+     out, exits ease in and run faster; chrome (header, rail, tab bar) moves on
+     the standard curve. Redefining --ease-out also tunes Tailwind's ease-out. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --dur-micro: 120ms;
+  --dur-component: 200ms;
+  --dur-sheet-in: 320ms;
+  --dur-sheet-out: 220ms;
+  --dur-nav: 240ms;
+  --dur-chrome: 220ms;
+
+  --motion-fast: var(--dur-micro) var(--ease-standard);
+  --motion-medium: 220ms var(--ease-standard);
+  --motion-slow: 360ms var(--ease-out);
 }
 
 html {
@@ -83,6 +96,8 @@ html {
   background: var(--color-white);
   color: var(--color-black);
   scroll-behavior: smooth;
+  /* Controls show their own :active press state instead of the grey flash. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -126,17 +141,25 @@ body {
   color: var(--color-black);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   font-weight: 600;
-  transition:
-    background-color var(--motion-fast),
-    border-color var(--motion-fast),
-    box-shadow var(--motion-fast),
-    color var(--motion-fast);
 }
 
-:where(button, [role="tab"], .craves-button-link, .chef-panel-nav-link):not(:disabled):hover {
-  border-color: #d7dadf;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transform: none !important;
+/* Layered so a control's own transition/duration/ease utilities win. Tailwind v4
+   moves controls with the translate/scale properties, so they are named here. */
+@layer base {
+  :where(button, [role="tab"], .craves-button-link, .chef-panel-nav-link) {
+    transition-property: background-color, border-color, box-shadow, color, opacity, scale;
+    transition-duration: var(--dur-micro);
+    transition-timing-function: var(--ease-standard);
+  }
+}
+
+/* Hover only where a pointer can hover, so a tap never leaves a stuck hover state. */
+@media (hover: hover) {
+  :where(button, [role="tab"], .craves-button-link, .chef-panel-nav-link):not(:disabled):hover {
+    border-color: #d7dadf;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: none !important;
+  }
 }
 
 /* Give customer and chef actions a generous tap area without stretching
@@ -160,14 +183,23 @@ body :is(button, [role="tab"], .btn-primary, .craves-button-link, .chef-panel-na
   background: var(--color-contrast-red);
   color: var(--color-white);
   box-shadow: 0 3px 10px rgba(201, 39, 22, 0.18);
+  /* Keeps its fade now that the generic button transition is layered (styles.css's utility would win). */
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    color var(--motion-fast),
+    scale var(--motion-fast);
 }
 
-.btn-primary:not(:disabled):hover {
-  border-color: #b92314;
-  background: #b92314;
-  color: var(--color-white);
-  box-shadow: 0 5px 14px rgba(201, 39, 22, 0.22);
-  transform: none !important;
+@media (hover: hover) {
+  .btn-primary:not(:disabled):hover {
+    border-color: #b92314;
+    background: #b92314;
+    color: var(--color-white);
+    box-shadow: 0 5px 14px rgba(201, 39, 22, 0.22);
+    transform: none !important;
+  }
 }
 
 :where(button, [role="tab"], .btn-primary):disabled {
@@ -198,11 +230,20 @@ body :is(button, [role="tab"], .btn-primary, .craves-button-link, .chef-panel-na
   transition: background-color var(--motion-fast), color var(--motion-fast);
 }
 
-.craves-primary-action:not(:disabled):hover,
+/* Press is instant; release eases back over --dur-micro. */
 .craves-primary-action:not(:disabled):active {
   background: var(--color-flame-red-strong);
   color: var(--color-white);
   box-shadow: none;
+  transition-duration: 0ms;
+}
+
+@media (hover: hover) {
+  .craves-primary-action:not(:disabled):hover {
+    background: var(--color-flame-red-strong);
+    color: var(--color-white);
+    box-shadow: none;
+  }
 }
 
 .craves-primary-action:disabled {
@@ -243,12 +284,20 @@ nav[aria-label="Filter orders"] button {
   padding-inline: 0.75rem !important;
 }
 
-nav[aria-label="Filter orders"] button:not(:disabled):hover,
 nav[aria-label="Filter orders"] button:not(:disabled):focus-visible {
   background: var(--color-grey-50) !important;
   border-color: var(--color-grey-200) !important;
   color: var(--color-black) !important;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07) !important;
+}
+
+@media (hover: hover) {
+  nav[aria-label="Filter orders"] button:not(:disabled):hover {
+    background: var(--color-grey-50) !important;
+    border-color: var(--color-grey-200) !important;
+    color: var(--color-black) !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07) !important;
+  }
 }
 
 [aria-label="Notification filters"] {
@@ -272,7 +321,6 @@ nav[aria-label="Filter orders"] button:not(:disabled):focus-visible {
   font-weight: 700 !important;
 }
 
-[aria-label="Notification filters"] button:not([aria-pressed="true"]):not(:disabled):hover,
 [aria-label="Notification filters"] button:not([aria-pressed="true"]):not(:disabled):focus-visible {
   background: var(--color-white) !important;
   border-color: var(--color-grey-400) !important;
@@ -280,12 +328,27 @@ nav[aria-label="Filter orders"] button:not(:disabled):focus-visible {
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07) !important;
 }
 
-nav[aria-label="Customer services"] a:hover,
 nav[aria-label="Customer services"] a:focus-visible {
   background: var(--color-grey-50) !important;
   color: var(--color-black) !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
   transform: translateY(-1px);
+}
+
+@media (hover: hover) {
+  [aria-label="Notification filters"] button:not([aria-pressed="true"]):not(:disabled):hover {
+    background: var(--color-white) !important;
+    border-color: var(--color-grey-400) !important;
+    color: var(--color-black) !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07) !important;
+  }
+
+  nav[aria-label="Customer services"] a:hover {
+    background: var(--color-grey-50) !important;
+    color: var(--color-black) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+    transform: translateY(-1px);
+  }
 }
 
 :where(input, textarea, select):focus,
@@ -365,12 +428,20 @@ nav[aria-label="Customer services"] a:focus-visible {
   color: var(--color-black) !important;
 }
 
-.chef-panel-customer-link:hover,
 .chef-panel-customer-link:focus-visible {
   border: 1px solid transparent !important;
   background: var(--color-flame-red) !important;
   color: var(--color-white) !important;
   font-weight: 700 !important;
+}
+
+@media (hover: hover) {
+  .chef-panel-customer-link:hover {
+    border: 1px solid transparent !important;
+    background: var(--color-flame-red) !important;
+    color: var(--color-white) !important;
+    font-weight: 700 !important;
+  }
 }
 
 .chef-panel-theme :is(button, a)[class*="bg-[#6930CA]"],
@@ -382,12 +453,14 @@ nav[aria-label="Customer services"] a:focus-visible {
   transform: none !important;
 }
 
-.chef-panel-theme :is(button, a)[class*="bg-[#6930CA]"]:not(:disabled):hover,
-.chef-panel-theme :is(button, a)[class*="bg-[#F6B545]"]:not(:disabled):hover {
-  border: 1px solid transparent !important;
-  background: var(--color-flame-red) !important;
-  color: var(--color-white) !important;
-  font-weight: 700 !important;
+@media (hover: hover) {
+  .chef-panel-theme :is(button, a)[class*="bg-[#6930CA]"]:not(:disabled):hover,
+  .chef-panel-theme :is(button, a)[class*="bg-[#F6B545]"]:not(:disabled):hover {
+    border: 1px solid transparent !important;
+    background: var(--color-flame-red) !important;
+    color: var(--color-white) !important;
+    font-weight: 700 !important;
+  }
 }
 
 .chef-panel-theme :is(input, textarea, select) {
@@ -405,6 +478,12 @@ nav[aria-label="Customer services"] a:focus-visible {
   outline: none !important;
 }
 
+@keyframes craves-busy-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -413,5 +492,13 @@ nav[aria-label="Customer services"] a:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* A frozen spinner reads as a hang: busy indicators pulse slowly instead of rotating. */
+  .animate-spin {
+    animation-name: craves-busy-pulse !important;
+    animation-duration: 1.6s !important;
+    animation-timing-function: ease-in-out !important;
+    animation-iteration-count: infinite !important;
   }
 }

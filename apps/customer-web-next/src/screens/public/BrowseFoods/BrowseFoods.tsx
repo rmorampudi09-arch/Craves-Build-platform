@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import {
   useCallback,
@@ -21,6 +22,7 @@ import {
 } from "@/components/home/HomeCategoryRail";
 import { KitchensGrid } from "@/components/home/KitchensGrid";
 import { WelcomeBanner } from "@/components/home/WelcomeBanner";
+import { holdScrollChrome } from "@/components/navigation/AutoHideCustomerHeader";
 import { ALL_DISHES_CATEGORY } from "@/constants/dishCategories";
 import {
   DEFAULT_DISCOVERY_RADIUS_METERS,
@@ -80,13 +82,17 @@ const HomeBottomSections = dynamic(
   { ssr: false, loading: () => null },
 );
 
+const loadHomeSearchOverlay = () => import("@/components/home/HomeSearchOverlay");
+
 const HomeSearchOverlay = dynamic(
-  () =>
-    import("@/components/home/HomeSearchOverlay").then(
-      (module) => module.HomeSearchOverlay,
-    ),
+  () => loadHomeSearchOverlay().then((module) => module.HomeSearchOverlay),
   { ssr: false, loading: () => null },
 );
+
+/** Fetches the overlay as the finger lands, so it opens together with the keyboard. */
+function preloadHomeSearchOverlay() {
+  void loadHomeSearchOverlay();
+}
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
@@ -125,6 +131,10 @@ const CART_AVAILABILITY_DISMISSED_KEY = "craves-cart-availability-dismissed";
 
 function isCravingCategory(value: string | null): value is CravingCategory {
   return value !== null && CRAVING_CATEGORIES.has(value as CravingCategory);
+}
+
+function prefersReducedMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function forceInstantWindowScroll(top: number): void {
@@ -344,18 +354,41 @@ function BrowseFoodsPage() {
     });
   }, [dishSort, foodPreference, homeCategory]);
 
-  const scrollToDishes = useCallback(() => {
-    const heading = document.getElementById("available-dishes-heading");
-    const section = heading?.closest("section");
-    if (!section) return;
+  // One way to bring the dish list into view after a category, Veg or sort
+  // change: land the section just below the stuck rail, jump when it is more
+  // than a screen away (a long smooth scroll would toggle all the chrome), and
+  // keep the chrome still while the page moves.
+  const revealDishes = useCallback((onlyIfPast = false) => {
+    window.requestAnimationFrame(() => {
+      const section = document
+        .getElementById("available-dishes-heading")
+        ?.closest("section");
+      if (!section) return;
+      const rail = document.querySelector<HTMLElement>("[data-craves-category-rail]");
+      const chromeBottom = rail
+        ? (parseFloat(getComputedStyle(rail).top) || 0) + rail.offsetHeight
+        : 0;
+      const target = Math.max(
+        0,
+        Math.round(section.getBoundingClientRect().top + window.scrollY - chromeBottom),
+      );
+      const distance = Math.abs(target - window.scrollY);
+      if (distance < 2 || (onlyIfPast && window.scrollY <= target)) return;
 
-    section.scrollIntoView({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
-      block: "start",
+      holdScrollChrome();
+      if (distance > window.innerHeight || prefersReducedMotion()) {
+        forceInstantWindowScroll(target);
+      } else {
+        window.scrollTo({ top: target, behavior: "smooth" });
+      }
     });
   }, []);
+
+  const changeFoodPreference = useCallback((next: HomeFoodPreference) => {
+    setFoodPreference(next);
+    // Veg lives in the header: only move the page when the list it changes is above.
+    revealDishes(true);
+  }, [revealDishes]);
 
   const handleDetailNavigationCapture = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const target = event.target;
@@ -389,6 +422,7 @@ function BrowseFoodsPage() {
     let secondFrame = 0;
     firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
+        holdScrollChrome();
         forceInstantWindowScroll(targetScrollY);
         pendingHomeScrollYRef.current = null;
         clearHomeReturnState();
@@ -764,7 +798,7 @@ function BrowseFoodsPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-white px-5 text-[#1A1A1A]">
         <section className="w-full max-w-md rounded-[1.5rem] border border-[#E5E7EB] bg-white p-6 text-center shadow-[0_14px_42px_rgba(26,26,26,0.08)]">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FFF1EF] text-xl font-black text-[#F62E18]">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-xl font-black text-[#F62E18]">
             C
           </div>
           <h1 className="mt-4 text-xl font-black tracking-[-0.02em]">
@@ -780,7 +814,7 @@ function BrowseFoodsPage() {
               setDefaultAddressResolved(false);
               setSessionRetryNonce((current) => current + 1);
             }}
-            className="mt-5 min-h-11 rounded-xl bg-[#F62E18] px-5 text-sm font-bold text-white shadow-[0_6px_18px_rgba(246,46,24,0.18)]"
+            className="mt-5 min-h-11 rounded-xl !border-transparent !bg-[#F62E18] px-5 text-sm font-bold !text-white shadow-[0_6px_18px_rgba(246,46,24,0.18)] active:!bg-[#C4200F]"
           >
             Try again
           </button>
@@ -809,8 +843,9 @@ function BrowseFoodsPage() {
         searchTerm={searchTerm}
         onSearchTermChange={setSearchTerm}
         onSearchFocus={() => setSearchOpen(true)}
+        onSearchIntent={preloadHomeSearchOverlay}
         foodPreference={foodPreference}
-        onFoodPreferenceChange={setFoodPreference}
+        onFoodPreferenceChange={changeFoodPreference}
       />
 
       <main>
@@ -829,7 +864,7 @@ function BrowseFoodsPage() {
           onSelect={(nextCategory) => {
             setHomeCategory(nextCategory);
             setSearchTerm("");
-            window.requestAnimationFrame(scrollToDishes);
+            revealDishes();
           }}
         />
 
@@ -855,11 +890,15 @@ function BrowseFoodsPage() {
           message={catalogMessage}
           sort={dishSort}
           foodPreference={foodPreference}
-          onSortChange={setDishSort}
-          onFoodPreferenceChange={setFoodPreference}
+          onSortChange={(nextSort) => {
+            setDishSort(nextSort);
+            revealDishes();
+          }}
+          onFoodPreferenceChange={changeFoodPreference}
           onRemoveFilters={() => {
             setHomeCategory(null);
             setDishSort("recommended");
+            revealDishes();
           }}
           onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}
@@ -894,20 +933,23 @@ function BrowseFoodsPage() {
         }}
       />
 
-      {searchOpen ? (
-        <HomeSearchOverlay
-          dishes={searchDishes}
-          kitchens={kitchens}
-          searchTerm={searchTerm}
-          vegOnly={foodPreference === "veg"}
-          onSearchTermChange={setSearchTerm}
-          onDisableVeg={() => setFoodPreference("all")}
-          onClose={() => {
-            setSearchTerm("");
-            setSearchOpen(false);
-          }}
-        />
-      ) : null}
+      <AnimatePresence>
+        {searchOpen ? (
+          <HomeSearchOverlay
+            key="home-search"
+            dishes={searchDishes}
+            kitchens={kitchens}
+            searchTerm={searchTerm}
+            vegOnly={foodPreference === "veg"}
+            onSearchTermChange={setSearchTerm}
+            onDisableVeg={() => setFoodPreference("all")}
+            onClose={() => {
+              setSearchTerm("");
+              setSearchOpen(false);
+            }}
+          />
+        ) : null}
+      </AnimatePresence>
 
       <CustomerSignOutDialog
         open={signOutOpen}

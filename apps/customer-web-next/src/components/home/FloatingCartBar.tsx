@@ -76,7 +76,7 @@ export function FloatingCartBar({
           <span className="hidden sm:inline">View Cart</span>
           <span className="sm:hidden">Cart</span>
           <ArrowRight
-            className="h-[1.05rem] w-[1.05rem] transition-transform duration-300 ease-out group-hover:translate-x-0.5 motion-reduce:transform-none"
+            className="h-[1.05rem] w-[1.05rem] transition-[translate] duration-(--dur-component) ease-out group-hover:translate-x-0.5"
             aria-hidden="true"
           />
         </span>

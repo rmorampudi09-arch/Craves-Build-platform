@@ -26,7 +26,7 @@ export function WelcomeBanner({
       aria-label={`Hello ${greetingName} home food banner`}
       data-live-dish-count={dishCount}
     >
-      <div className="relative overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-[#FFF8EF] shadow-[0_18px_54px_rgba(26,26,26,0.075)] sm:rounded-[1.65rem] md:rounded-[1.7rem] lg:rounded-[2rem]">
+      <div className="relative overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-[#F1F3F5] shadow-[0_18px_54px_rgba(26,26,26,0.075)] sm:rounded-[1.65rem] md:rounded-[1.7rem] lg:rounded-[2rem]">
         <Image
           src="/home/cravings/craves-home-banner.webp"
           alt={`Hello ${greetingName}. Eat for Health. Taste the Comfort of Home. A home chef cooks with her child nearby in a warm family kitchen.`}

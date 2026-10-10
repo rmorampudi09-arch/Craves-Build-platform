@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef } from "react";
 import {
   ArrowLeft,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { ProgressiveImage } from "@/components/media/ProgressiveImage";
+import { ease } from "@/lib/motion";
 import type { NearbyKitchen } from "@/lib/discovery-contract";
 import type { Dish } from "@/services/api/dishes";
 import styles from "@/screens/public/BrowseFoods/HomeReference.module.css";
@@ -93,8 +95,16 @@ export function HomeSearchOverlay({
   const showVegEmptyState = vegOnly && dishResults.length === 0;
 
   return (
-    <div className={`${styles.searchOverlay} fixed inset-0 z-[70] overflow-y-auto bg-white text-[#1A1A1A]`} role="dialog" aria-modal="true" aria-label="Search Craves">
-      <div className="sticky top-0 z-10 border-b border-[#E5E7EB] bg-white/95 backdrop-blur-xl">
+    <motion.div
+      className="fixed inset-0 z-[70] origin-top overflow-y-auto overscroll-contain bg-white text-[#1A1A1A]"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Search Craves"
+      initial={{ opacity: 0, scale: 0.997 }}
+      animate={{ opacity: 1, scale: 1, transition: { duration: 0.17, ease: ease.out } }}
+      exit={{ opacity: 0, transition: { duration: 0.15, ease: ease.in } }}
+    >
+      <div className="sticky top-0 z-10 border-b border-[#E5E7EB] bg-white">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-4 md:px-7">
           <button
             type="button"
@@ -105,7 +115,7 @@ export function HomeSearchOverlay({
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </button>
 
-          <label className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-[1.35rem] bg-[#F1F3F5] px-5 transition-all duration-200 hover:ring-2 hover:ring-[#F62E18]/40 hover:shadow-[0_10px_30px_rgba(246,46,24,0.16)] focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_12px_34px_rgba(246,46,24,0.18)]">
+          <label className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-[1.35rem] bg-[#F1F3F5] px-5 transition-[box-shadow] duration-200 hover:ring-2 hover:ring-[#F62E18]/40 hover:shadow-[0_10px_30px_rgba(246,46,24,0.16)] focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_12px_34px_rgba(246,46,24,0.18)]">
             <Search className="h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" />
             <span className="sr-only">Search dishes or home chefs</span>
             <input
@@ -149,7 +159,7 @@ export function HomeSearchOverlay({
             <button
               type="button"
               onClick={onDisableVeg}
-              className="mt-5 min-h-10 rounded-full !bg-[#F1F3F5] px-4 text-xs font-black !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
+              className="mt-5 min-h-10 rounded-full !bg-[#F1F3F5] px-4 text-xs font-black !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,translate] duration-200 hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
             >
               Turn off Veg filter
             </button>
@@ -214,7 +224,7 @@ export function HomeSearchOverlay({
                     key={kitchen.id}
                     to="/kitchen/$id"
                     params={{ id: kitchen.id }}
-                    className="group flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 transition hover:border-[#F62E18] hover:shadow-[0_8px_24px_rgba(246,46,24,0.09)]"
+                    className="group flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 transition-[border-color,box-shadow] hover:border-[#F62E18] hover:shadow-[0_8px_24px_rgba(246,46,24,0.09)]"
                   >
                     <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
                       <ChefHat className="h-6 w-6" aria-hidden="true" />
@@ -236,7 +246,7 @@ export function HomeSearchOverlay({
           </section>
         ) : null}
       </main>
-    </div>
+    </motion.div>
   );
 }
 

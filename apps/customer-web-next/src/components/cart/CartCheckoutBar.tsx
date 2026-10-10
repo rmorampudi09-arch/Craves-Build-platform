@@ -34,7 +34,7 @@ export function CartCheckoutBar({
             <span>{itemCount === 1 ? "item" : "items"}</span>
           </p>
           <p className="text-xl font-bold tabular-nums text-[#1A1A1A]">
-            {money(total, currency)}
+            <AnimateCount format={(value) => money(value, currency)}>{total}</AnimateCount>
           </p>
           <p className="text-[10px] text-[#6B6B6B]">Food subtotal</p>
         </div>

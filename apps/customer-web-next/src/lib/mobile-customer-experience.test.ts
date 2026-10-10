@@ -6,7 +6,7 @@ function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
-test("mobile customer nav morphs the Cart tab right-to-left while browsing down", () => {
+test("mobile customer nav morphs into a View cart pill while browsing down", () => {
   const nav = source("../components/layout/BottomNav.tsx");
 
   assert.match(nav, /FaHome/);
@@ -18,10 +18,16 @@ test("mobile customer nav morphs the Cart tab right-to-left while browsing down"
   assert.match(nav, /href: "\/chefs"/);
   assert.doesNotMatch(nav, /home#nearby-kitchens-heading/);
   assert.match(nav, /cartExpanded/);
-  assert.match(nav, /direction === "down" && travel >= 18/);
-  assert.match(nav, /direction === "up" && travel >= 18/);
-  assert.match(nav, /left: "79%"/);
-  assert.match(nav, /left: "0\.4rem"/);
+  // Driven by the shared chrome controller, not its own scroll listener.
+  assert.match(nav, /useScrollChrome\(\)/);
+  assert.match(nav, /const cartExpanded = hidden && itemCount > 0/);
+  assert.doesNotMatch(nav, /addEventListener\("scroll"/);
+  // Transform and opacity only: the pill slides in on x, never animates left/width.
+  assert.match(nav, /initial=\{\{ opacity: 0, x: 24, scale: 0\.96 \}\}/);
+  assert.doesNotMatch(nav, /left: "/);
+  assert.match(nav, /transition=\{spring\.ui\}/);
+  assert.match(nav, /key=\{itemCount\}/);
+  assert.match(nav, /scale: \[1, 1\.18, 1\]/);
   assert.match(nav, /AnimatePresence/);
   assert.doesNotMatch(nav, /hiddenByScroll/);
   assert.doesNotMatch(nav, /#2563EB|ShoppingCart|UserRound/);
@@ -44,20 +50,22 @@ test("mobile discovery keeps search, veg and cravings accessible while scrolling
   assert.match(autoHide, /static md:sticky md:top-0/);
   assert.match(header, /mobileCompact/);
   assert.match(header, /fixed inset-x-0 top-0 z-50/);
-  assert.match(cravings, /translate-y-\[var\(--craves-mobile-search-offset,0px\)\]/);
-  assert.match(cravings, /md:top-\[var\(--craves-desktop-header-offset-md,4\.25rem\)\]/);
-  assert.match(cravings, /lg:top-\[var\(--craves-desktop-header-offset-lg,4\.65rem\)\]/);
-  assert.match(header, /--craves-mobile-search-offset/);
-  assert.match(header, /mobileDirectionAnchorRef/);
-  assert.match(header, /direction === "up" && travel >= 20/);
-  assert.match(header, /direction === "down" && travel >= 16/);
-  assert.match(header, /mobileCompact \? "3\.75rem" : "0px"/);
-  assert.match(header, /duration-\[260ms\]/);
-  assert.match(cravings, /duration-\[260ms\]/);
-  assert.match(autoHide, /--craves-desktop-header-offset-md/);
-  assert.match(autoHide, /duration-\[260ms\]/);
-  assert.match(cravings, /md:duration-\[260ms\]/);
-  assert.match(cravings, /lg:top-\[var\(--craves-desktop-header-offset-lg,4\.65rem\)\]/);
+  // The rail sticks below the compact bar via its sticky top (never slides over content).
+  assert.match(cravings, /compact \? "top-\[3\.75rem\]" : "top-0"/);
+  assert.match(cravings, /hidden \? "md:top-0" : "md:top-\[4\.25rem\] lg:top-\[4\.65rem\]"/);
+  assert.doesNotMatch(cravings, /translate-y-\[var\(--craves-mobile-search-offset/);
+  assert.doesNotMatch(cravings, /will-change/);
+  // One controller drives header, compact bar, rail and tab bar with the same timing.
+  for (const surface of [header, cravings]) {
+    assert.match(surface, /useScrollChrome\(\)/);
+    assert.doesNotMatch(surface, /window\.addEventListener\("scroll"/);
+  }
+  assert.match(autoHide, /COMPACT_AFTER_PX = 76/);
+  assert.match(autoHide, /Math\.abs\(delta\) > window\.innerHeight/);
+  assert.match(header, /duration-\(--dur-chrome\) ease-\(--ease-standard\)/);
+  assert.match(autoHide, /duration-\(--dur-chrome\) ease-\(--ease-standard\)/);
+  assert.match(cravings, /duration: duration\.chrome \* 1000/);
+  assert.match(cravings, /translate: \[`0 \$\{shift\}px`, "0 0"\]/);
   assert.doesNotMatch(cravings, /md:static/);
 });
 
@@ -73,9 +81,9 @@ test("mobile browse keeps dish proportions and cart glass with larger craving im
   assert.match(grid, /aspect-\[16\/9\] sm:aspect-\[16\/10\]/);
   assert.doesNotMatch(grid, /aspect-\[4\/3\]/);
   assert.match(cravings, /h-\[5\.75rem\] w-\[5\.75rem\]/);
-  assert.match(nav, /bg-white\/50/);
-  assert.match(nav, /backdrop-blur-\[8px\]/);
-  assert.match(nav, /backdrop-saturate-\[145%\]/);
+  // Near-opaque chrome is solid: no backdrop blur on the tab bar or its cart pill.
+  assert.match(nav, /bg-\[#1A1A1A\]/);
+  assert.doesNotMatch(nav, /backdrop-blur/);
   assert.match(homeStyles, /backdrop-filter: blur\(8px\) saturate\(145%\)/);
   assert.match(homeStyles, /\.floatingCartGlass::before/);
   assert.match(homeStyles, /\.floatingCartGlass::after/);
@@ -121,4 +129,76 @@ test("review totals are optional and never block dish or kitchen rendering", () 
   assert.match(reviewRoute, /status: 204/);
   assert.match(dish, /\.catch\(\(\) =>/);
   assert.match(kitchen, /\.catch\(\(\) =>/);
+});
+
+test("category, Veg and sort changes reveal dishes calmly instead of a long chrome-toggling scroll", () => {
+  const home = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
+  const grid = source("../components/home/DishesGrid.tsx");
+
+  // One helper for every view change; far targets jump, near ones glide, chrome holds still.
+  assert.match(home, /const revealDishes = useCallback\(\(onlyIfPast = false\)/);
+  assert.match(home, /distance > window\.innerHeight \|\| prefersReducedMotion\(\)[\s\S]{0,60}forceInstantWindowScroll\(target\)/);
+  assert.match(home, /holdScrollChrome\(\);\s*if \(distance > window\.innerHeight/);
+  assert.match(home, /data-craves-category-rail/);
+  assert.match(home, /setHomeCategory\(nextCategory\);[\s\S]{0,60}revealDishes\(\);/);
+  assert.match(home, /setDishSort\(nextSort\);\s*revealDishes\(\);/);
+  assert.match(home, /revealDishes\(true\)/);
+  assert.doesNotMatch(home, /scrollIntoView/);
+
+  // The list cross-fades per view and never shrinks before the scroll lands.
+  assert.match(grid, /<AnimatePresence mode="wait" initial=\{false\}>\s*<motion\.div\s*key=\{dishViewKey\}/);
+  assert.match(grid, /listItem\(index\)/);
+  assert.match(grid, /min-h-svh/);
+  assert.match(grid, /paging\.key === dishViewKey \? paging\.count : INITIAL_DISH_COUNT/);
+  assert.doesNotMatch(grid, /setVisibleCount|scrollIntoView|@radix-ui\/react-popover/);
+  assert.match(grid, /aria-label="Sort dishes"/);
+  assert.match(grid, /"!bg-\[#1A1A1A\] !text-white"/);
+});
+
+test("dish bottom bar confirms an add in place and keeps the action bar mounted", () => {
+  const bar = source("../components/order/DishBottomBar.tsx");
+
+  assert.match(bar, /data-craves-action-bar/);
+  assert.match(bar, /const mode = inCart \? \(justAdded \? "added" : "view"\) : "add"/);
+  assert.match(bar, /<AnimatePresence mode="popLayout" initial=\{false\}>/);
+  assert.match(bar, /duration: 0\.15/);
+  assert.match(bar, /Add<span className="hidden min-\[460px\]:inline"> to cart<\/span>/);
+  assert.match(bar, /View cart<span className="hidden min-\[400px\]:inline"> · \{cartTotalLabel\}<\/span>/);
+});
+
+test("overlays enter and leave smoothly and hand focus back", () => {
+  const home = source("../screens/public/BrowseFoods/BrowseFoods.tsx");
+  const header = source("../components/home/BrowseHeader.tsx");
+  const search = source("../components/home/HomeSearchOverlay.tsx");
+  const replacement = source("../components/cart/CartKitchenReplacementDialogHost.tsx");
+  const availability = source("../components/home/CartAddressAvailabilityDialog.tsx");
+  const addressEditor = source("../components/profile/AddressEditorFlow.tsx");
+
+  // Search: the lazy chunk starts loading as the finger lands, and the overlay fades out.
+  assert.match(home, /onSearchIntent=\{preloadHomeSearchOverlay\}/);
+  assert.match(header, /onPointerDown=\{onSearchIntent\}/);
+  assert.match(home, /<AnimatePresence>\s*\{searchOpen \? \(/);
+  assert.match(search, /exit=\{\{ opacity: 0, transition: \{ duration: 0\.15/);
+
+  // Kitchen replacement: bottom sheet on phones, scrim fade, focus in and back, closes on navigation.
+  assert.match(replacement, /initial: \{ y: "100%" \}/);
+  assert.match(replacement, /duration: duration\.sheetIn, ease: ease\.out/);
+  assert.match(replacement, /duration: duration\.sheetOut, ease: ease\.in/);
+  assert.match(replacement, /bg-\[#1A1A1A\]\/48/);
+  assert.match(replacement, /returnFocusRef\.current\?\.focus/);
+  assert.match(replacement, /settle\(false\);\s*\}, \[pathname, settle\]\)/);
+  assert.match(replacement, /event\.key === "Escape"/);
+
+  assert.match(availability, /<AnimatePresence>/);
+  assert.match(availability, /exit=\{\{ opacity: 0, y: 12/);
+  assert.doesNotMatch(availability, /bg-\[#F62E18\]\/10|backdrop-blur/);
+
+  // Address sheet: animates in and out, steps overlap instead of leaving a blank gap.
+  assert.doesNotMatch(addressEditor, /if \(!open\) return null/);
+  assert.match(addressEditor, /data-\[state=open\]:slide-in-from-bottom data-\[state=open\]:duration-\(--dur-sheet-in\)/);
+  assert.match(addressEditor, /data-\[state=closed\]:slide-out-to-bottom data-\[state=closed\]:duration-\(--dur-sheet-out\)/);
+  assert.match(addressEditor, /<AnimatePresence mode="popLayout" initial=\{false\}>/);
+  assert.match(addressEditor, /overscroll-contain/);
+  assert.doesNotMatch(addressEditor, /h-1 w-10 shrink-0 rounded-full bg-\[#D7DADF\]/);
+  assert.doesNotMatch(addressEditor, /bg-\[#F62E18\]\/10/);
 });

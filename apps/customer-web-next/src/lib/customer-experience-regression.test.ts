@@ -38,12 +38,15 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.doesNotMatch(kitchens, /ChevronRight/);
   assert.doesNotMatch(kitchens, /kitchenPreviewTrack/);
   assert.doesNotMatch(kitchens, /\b3000\b/);
-  assert.match(kitchens, /onPointerDown/);
+  // A native snap strip follows the finger; dots track the scroll with opacity/scale only.
+  assert.match(kitchens, /snap-x snap-mandatory overflow-x-auto/);
+  assert.doesNotMatch(kitchens, /onPointerDown|setPointerCapture|duration-500/);
   assert.match(kitchens, /new window\.Image\(\)/);
   assert.match(kitchens, /kitchenImagePreloads/);
   assert.match(kitchens, /priority=\{index < 4\}/);
   assert.match(kitchens, /fetchPriority=\{priority && index === 0 \? "high" : "auto"\}/);
-  assert.match(kitchens, /transition-\[opacity,transform\]/);
+  assert.match(kitchens, /transition-\[opacity,scale\]/);
+  assert.doesNotMatch(kitchens, /transition-all|w-4 bg-white/);
   assert.doesNotMatch(kitchens, /View chef/);
   assert.match(dishes, /priorityImage=\{index < 4\}/);
   assert.match(progressiveImage, /unoptimized = true/);
@@ -52,20 +55,22 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(wishlist, /fetchPriority=\{index < 4 \? "high" : "auto"\}/);
   assert.match(dishHeader, /fetchPriority=\{index === safeIndex \? "high" : "low"\}/);
   assert.match(similarDishes, /fetchPriority=\{index === 0 \? "high" : "auto"\}/);
-  assert.match(cravings, /translate-y-\[var\(--craves-mobile-search-offset,0px\)\]/);
+  assert.match(cravings, /compact \? "top-\[3\.75rem\]" : "top-0"/);
   assert.match(cravings, /fetchPriority=\{priorityImage \? "high" : "auto"\}/);
-  assert.match(cravings, /md:top-\[var\(--craves-desktop-header-offset-md,4\.25rem\)\]/);
-  assert.match(cravings, /lg:top-\[var\(--craves-desktop-header-offset-lg,4\.65rem\)\]/);
+  assert.match(cravings, /md:top-\[4\.25rem\] lg:top-\[4\.65rem\]/);
   assert.match(cravings, /shadow-\[0_3px_10px_rgba\(26,26,26,0\.09\)\]/);
-  assert.match(cravings, /lg:top-\[var\(--craves-desktop-header-offset-lg,4\.65rem\)\]/);
   assert.doesNotMatch(cravings, /md:static/);
-  assert.match(cravings, /duration-\[240ms\]/);
+  // Chips: a real press state, scroll arrows only for pointers, selection without a tint.
+  assert.match(cravings, /group-active:scale-\[0\.96\]/);
+  assert.match(cravings, /duration-\(--dur-component\)/);
+  assert.match(cravings, /ring-2 ring-\[#F62E18\] ring-offset-2/);
+  assert.match(cravings, /md:left-4 md:top-\[3\.75rem\] md:flex/);
+  assert.doesNotMatch(cravings, /rgba\(246,46,24,0\.12\)|backdrop-blur/);
   assert.match(header, /hover:-translate-y-0\.5/);
   assert.match(header, /focus-within:bg-white/);
   assert.match(header, /mobileCompact/);
   assert.match(header, /<CravesLogo size="md" \/>/);
   assert.doesNotMatch(header, /Food From Home/);
-  assert.match(cravings, /md:duration-\[260ms\]/);
   assert.match(header, /fixed inset-x-0 top-0 z-50/);
   assert.match(skeleton, /CustomerPageSkeleton\.module\.css/);
   assert.match(skeleton, /SkeletonBlock/);
@@ -155,4 +160,47 @@ test("favorites hydrate the shared cart and notifications expose only supported 
   assert.match(notifications, /craves\.notifications\.cleared:/);
   assert.match(readAll, /\/notifications\/in-app\/read-all/);
   assert.match(readAll, /isSameOrigin\(request\)/);
+});
+
+test("navigation shows page-shaped skeletons the moment a dish, kitchen or cart opens", () => {
+  const skeleton = source("../components/loading/CustomerPageSkeleton.tsx");
+  const kitchens = source("../components/home/KitchensGrid.tsx");
+
+  for (const [route, variant] of [
+    ["../app/dish/[id]/loading.tsx", "dish"],
+    ["../app/kitchen/[id]/loading.tsx", "kitchen"],
+    ["../app/kitchens/[id]/loading.tsx", "kitchen"],
+    ["../app/cart/loading.tsx", "cart"],
+  ] as const) {
+    assert.match(source(route), new RegExp(`<CustomerPageSkeleton variant="${variant}"`), route);
+  }
+  for (const [screen, variant] of [
+    ["../screens/public/FoodDetails/FoodDetails.tsx", "dish"],
+    ["../screens/public/ChefProfile/ChefProfile.tsx", "kitchen"],
+    ["../screens/public/AllChefs/AllChefs.tsx", "chefs"],
+    ["../screens/Cart/Cart.tsx", "cart"],
+  ] as const) {
+    assert.match(source(screen), new RegExp(`<CustomerPageSkeleton variant="${variant}"`), screen);
+  }
+  assert.match(skeleton, /export type CustomerPageSkeletonVariant = "home" \| "dish" \| "kitchen" \| "cart" \| "chefs"/);
+  // The dish skeleton reserves the action bar so the tab bar does not flash in and out.
+  assert.match(skeleton, /data-craves-action-bar/);
+  assert.match(kitchens, /\$\{skeletonStyles\.block\} aspect-\[16\/9\]/);
+});
+
+test("photos show instantly from cache and dish photos swipe natively", () => {
+  const progressiveImage = source("../components/media/ProgressiveImage.tsx");
+  const dishHeader = source("../components/order/DishImageHeader.tsx");
+  const card = source("../components/home/DishCard.tsx");
+
+  assert.match(progressiveImage, /image\?\.complete && image\.naturalWidth > 0/);
+  assert.match(progressiveImage, /instant \? "transition-\[scale\]" : "transition-\[opacity,scale\]"/);
+  assert.doesNotMatch(card, /transition-transform/);
+  assert.match(card, /className="object-cover group-hover:scale-\[1\.03\]"/);
+
+  // No remount per photo: a snap strip follows the finger; arrows and thumbnails scroll it.
+  assert.doesNotMatch(dishHeader, /key=\{activeImage\}/);
+  assert.match(dishHeader, /snap-x snap-mandatory overflow-x-auto/);
+  assert.match(dishHeader, /onClick=\{\(\) => showIndex\(index\)\}/);
+  assert.doesNotMatch(dishHeader, /backdrop-blur/);
 });

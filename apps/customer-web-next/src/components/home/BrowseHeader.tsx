@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeftRight, Bell, CalendarDays, ChevronDown } from "lucide-react";
 import {
@@ -10,7 +9,10 @@ import {
 } from "react-icons/fa";
 
 import { CravesLogo } from "@/components/brand/CravesLogo";
-import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
+import {
+  AutoHideCustomerHeader,
+  useScrollChrome,
+} from "@/components/navigation/AutoHideCustomerHeader";
 import { AppleSwitch } from "@/components/ui/AppleSwitch";
 import { rememberReturnRoute, toCustomerReturnRoute } from "@/lib/return-navigation";
 import type { HomeFoodPreference } from "@/lib/home-return-state";
@@ -27,6 +29,8 @@ interface BrowseHeaderProps {
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
   onSearchFocus: () => void;
+  /** Pointer down on a search field: a chance to fetch the search UI before focus. */
+  onSearchIntent?: () => void;
   foodPreference?: HomeFoodPreference;
   onFoodPreferenceChange?: (preference: HomeFoodPreference) => void;
   returnPath?: string;
@@ -64,7 +68,6 @@ function FoodPreferenceQuickToggles({
         onCheckedChange={(checked) => onChange(checked ? "veg" : "all")}
         label="Veg"
         size="sm"
-        tone="neutral"
         aria-label="Show only vegetarian dishes"
       />
     </div>
@@ -80,6 +83,7 @@ export function BrowseHeader({
   searchTerm,
   onSearchTermChange,
   onSearchFocus,
+  onSearchIntent,
   foodPreference,
   onFoodPreferenceChange,
   returnPath = "/home",
@@ -96,75 +100,12 @@ export function BrowseHeader({
   );
   const chefDestination = isChef ? "/chef" : "/chef/application";
   const chefActionLabel = isChef ? "Switch to chef mode" : "Open chef application";
-  const lastMobileScrollYRef = useRef(0);
-  const mobileDirectionAnchorRef = useRef(0);
-  const mobileDirectionRef = useRef<"up" | "down" | null>(null);
-  const [mobileCompact, setMobileCompact] = useState(false);
-
-  useEffect(() => {
-    let frame = 0;
-    const initialY = Math.max(window.scrollY, 0);
-    lastMobileScrollYRef.current = initialY;
-    mobileDirectionAnchorRef.current = initialY;
-    mobileDirectionRef.current = null;
-
-    const update = () => {
-      const currentY = Math.max(window.scrollY, 0);
-      const delta = currentY - lastMobileScrollYRef.current;
-      const direction: "up" | "down" | null =
-        delta > 1 ? "down" : delta < -1 ? "up" : null;
-
-      if (currentY <= 76) {
-        setMobileCompact(false);
-        mobileDirectionAnchorRef.current = currentY;
-        mobileDirectionRef.current = direction;
-      } else if (direction) {
-        if (mobileDirectionRef.current !== direction) {
-          mobileDirectionRef.current = direction;
-          mobileDirectionAnchorRef.current = currentY;
-        }
-
-        const travel = Math.abs(currentY - mobileDirectionAnchorRef.current);
-
-        // Require meaningful travel before toggling. This prevents the compact
-        // search/filter row from fluttering on tiny touch/trackpad movements.
-        if (direction === "up" && travel >= 20) {
-          setMobileCompact(true);
-        } else if (direction === "down" && travel >= 16) {
-          setMobileCompact(false);
-        }
-      }
-
-      lastMobileScrollYRef.current = currentY;
-      frame = 0;
-    };
-
-    const onScroll = () => {
-      if (frame) return;
-      frame = window.requestAnimationFrame(update);
-    };
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      if (frame) window.cancelAnimationFrame(frame);
-    };
-  }, []);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty(
-      "--craves-mobile-search-offset",
-      mobileCompact ? "3.75rem" : "0px",
-    );
-    return () => {
-      root.style.removeProperty("--craves-mobile-search-offset");
-    };
-  }, [mobileCompact]);
+  // Compact search bar slides in while scrolling back up (shared chrome controller).
+  const { compact: mobileCompact } = useScrollChrome();
 
   return (
     <>
-    <AutoHideCustomerHeader mobileStatic className="border-b border-[#E5E7EB] bg-white/95 backdrop-blur-xl">
+    <AutoHideCustomerHeader mobileStatic className="border-b border-[#E5E7EB] bg-white">
       <div className="mx-auto max-w-[88rem] px-4 md:px-7 lg:px-10">
         <div className="hidden min-h-[4.25rem] items-center gap-2 py-2 md:flex lg:min-h-[4.65rem] lg:gap-2.5 lg:py-2.5 xl:gap-3">
           {onBack ? (
@@ -191,7 +132,7 @@ export function BrowseHeader({
             type="button"
             onClick={openLocation}
             data-craves-location-button="desktop"
-            className="flex min-h-10 min-w-0 max-w-[11.5rem] items-center gap-2 rounded-[1.1rem] border border-[#E5E7EB] !bg-white px-2.5 text-left !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.06)] transition-[border-color,box-shadow,transform] duration-200 ease-out hover:border-[#F62E18]/30 hover:shadow-[0_8px_20px_rgba(26,26,26,0.10)] active:scale-[0.99] lg:min-h-11 lg:max-w-[14rem] lg:gap-2.5 lg:px-3 xl:max-w-[16rem]"
+            className="flex min-h-10 min-w-0 max-w-[11.5rem] items-center gap-2 rounded-[1.1rem] border border-[#E5E7EB] !bg-white px-2.5 text-left !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.06)] transition-[border-color,box-shadow,scale] duration-200 ease-out hover:border-[#F62E18]/30 hover:shadow-[0_8px_20px_rgba(26,26,26,0.10)] active:scale-[0.98] lg:min-h-11 lg:max-w-[14rem] lg:gap-2.5 lg:px-3 xl:max-w-[16rem]"
             aria-label={locationTypeLabel + " delivery address: " + locationLabel + ". Manage address"}
           >
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18] lg:h-8 lg:w-8">
@@ -207,11 +148,12 @@ export function BrowseHeader({
             </span>
           </button>
 
-          <label className="ml-auto flex min-h-10 min-w-[8rem] flex-1 items-center gap-2 rounded-[1.05rem] border border-white/80 bg-[#F1F3F5]/90 px-3 backdrop-blur-xl transition-[transform,background-color,box-shadow,border-color] duration-200 ease-out hover:-translate-y-0.5 hover:border-[#F62E18]/20 hover:bg-white/80 hover:shadow-[0_14px_34px_rgba(246,46,24,0.18),inset_0_1px_0_rgba(255,255,255,0.95)] focus-within:-translate-y-0.5 focus-within:border-[#F62E18]/30 focus-within:bg-white/90 focus-within:shadow-[0_14px_34px_rgba(246,46,24,0.18),inset_0_1px_0_rgba(255,255,255,0.95)] focus-within:ring-2 focus-within:ring-[#F62E18]/25 motion-reduce:transform-none lg:min-h-12 lg:min-w-[12rem] lg:gap-3 lg:px-4 xl:min-h-14 xl:max-w-[34rem] xl:px-5">
+          <label className="ml-auto flex min-h-10 min-w-[8rem] flex-1 items-center gap-2 rounded-[1.05rem] border border-white/80 bg-[#F1F3F5] px-3 transition-[translate,background-color,box-shadow,border-color] duration-200 ease-out hover:-translate-y-0.5 hover:border-[#F62E18]/20 hover:bg-white/80 hover:shadow-[0_14px_34px_rgba(246,46,24,0.18),inset_0_1px_0_rgba(255,255,255,0.95)] focus-within:-translate-y-0.5 focus-within:border-[#F62E18]/30 focus-within:bg-white/90 focus-within:shadow-[0_14px_34px_rgba(246,46,24,0.18),inset_0_1px_0_rgba(255,255,255,0.95)] focus-within:ring-2 focus-within:ring-[#F62E18]/25 motion-reduce:transform-none lg:min-h-12 lg:min-w-[12rem] lg:gap-3 lg:px-4 xl:min-h-14 xl:max-w-[34rem] xl:px-5">
             <FaSearch className="h-4 w-4 shrink-0 text-[#F62E18] lg:h-5 lg:w-5" aria-hidden="true" />
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
               value={searchTerm}
+              onPointerDown={onSearchIntent}
               onFocus={onSearchFocus}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search homemade dishes or kitchens"
@@ -261,7 +203,7 @@ export function BrowseHeader({
 
           <Link
             to={chefDestination}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F62E18] lg:h-10 lg:w-10 text-white shadow-[0_8px_18px_rgba(246,46,24,0.22)] transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(246,46,24,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 motion-reduce:transform-none"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F62E18] lg:h-10 lg:w-10 text-white shadow-[0_8px_18px_rgba(246,46,24,0.22)] transition-[translate,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(246,46,24,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 motion-reduce:transform-none"
             aria-label={chefActionLabel}
             title={chefActionLabel}
           >
@@ -297,10 +239,10 @@ export function BrowseHeader({
               type="button"
               onClick={openLocation}
               data-craves-location-button="mobile"
-              className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-[1.1rem] border border-[#E5E7EB] !bg-white px-2.5 py-2 text-left !text-[#1A1A1A] shadow-[0_4px_16px_rgba(26,26,26,0.07)] transition-[border-color,box-shadow,transform] duration-200 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+              className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-[1.1rem] border border-[#E5E7EB] !bg-white px-2.5 py-2 text-left !text-[#1A1A1A] shadow-[0_4px_16px_rgba(26,26,26,0.07)] transition-[scale] duration-(--dur-micro) active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
               aria-label={locationTypeLabel + " delivery address: " + locationLabel + ". Manage address"}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFF1EF] text-[#F62E18]">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
                 <FaMapMarkerAlt className="h-4 w-4" aria-hidden="true" />
               </span>
               <span className="min-w-0 flex-1">
@@ -339,6 +281,7 @@ export function BrowseHeader({
               <span className="sr-only">Search dishes or home kitchens</span>
               <input
                 value={searchTerm}
+                onPointerDown={onSearchIntent}
                 onFocus={onSearchFocus}
                 onChange={(event) => onSearchTermChange(event.target.value)}
                 placeholder="Search dishes, kitchens"
@@ -365,11 +308,12 @@ export function BrowseHeader({
 
       <div
         aria-hidden={!mobileCompact}
+        inert={!mobileCompact}
         className={[
-          "fixed inset-x-0 top-0 z-50 border-b border-[#ECEEF0] bg-white/96 px-3 py-2 shadow-[0_7px_22px_rgba(26,26,26,0.065)] backdrop-blur-xl will-change-[translate,opacity] transition-[translate,opacity,box-shadow] duration-[260ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] motion-reduce:transition-none md:hidden",
+          "fixed inset-x-0 top-0 z-50 border-b border-[#ECEEF0] bg-white px-3 py-2 shadow-[0_7px_22px_rgba(26,26,26,0.065)] transition-[translate,opacity] duration-(--dur-chrome) ease-(--ease-standard) motion-reduce:transition-none md:hidden",
           mobileCompact
             ? "translate-y-0 opacity-100"
-            : "pointer-events-none -translate-y-[115%] opacity-0 shadow-none",
+            : "pointer-events-none -translate-y-[115%] opacity-0",
         ].join(" ")}
       >
         <div className="mx-auto flex max-w-xl items-center gap-2">
@@ -378,6 +322,7 @@ export function BrowseHeader({
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
               value={searchTerm}
+              onPointerDown={onSearchIntent}
               onFocus={onSearchFocus}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search dishes or kitchens"

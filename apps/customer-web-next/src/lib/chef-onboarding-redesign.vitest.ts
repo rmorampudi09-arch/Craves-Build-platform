@@ -124,6 +124,7 @@ beforeEach(() => {
   saved = fixture();
   setSessionIdentity(identity);
   navigation.push.mockReset();
+  navigation.replace.mockReset();
   fetcher = vi.fn<typeof fetch>(normal);
   vi.stubGlobal("fetch", fetcher);
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
@@ -390,7 +391,7 @@ describe("Backend gap fixes", () => {
 });
 
 describe("Become a chef entry", () => {
-  it("opens the phone-first Home Chef popup for a signed-out visitor without mounting the application", async () => {
+  it("sends a signed-out visitor to the Chef Mode sign-in without mounting the application", async () => {
     invalidateSession(captureSessionContext());
     fetcher.mockImplementation((input) =>
       String(input) === "/api/auth/me"
@@ -404,10 +405,10 @@ describe("Become a chef entry", () => {
         createElement("p", null, "Private application"),
       ),
     );
-    expect(await screen.findByText("Join Craves as a Home Chef")).toBeTruthy();
-    expect(screen.getByText("Home Chef")).toBeTruthy();
-    expect(screen.getByLabelText(/Mobile number/)).toBeTruthy();
-    expect(screen.queryByLabelText(/First name/)).toBeNull();
+    await waitFor(() =>
+      expect(navigation.replace).toHaveBeenCalledWith(expect.stringMatching(/^\/chef\/sign-in\?returnTo=/)),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByText("Private application")).toBeNull();
   });
 });

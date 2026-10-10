@@ -234,12 +234,12 @@ test("pending chef applications remain editable exactly as the backend permits",
   );
 });
 
-test("chef dashboard reuses the working Craves session for applicants and chefs", () => {
+test("chef dashboard reuses the session its access boundary confirmed", () => {
   const dashboard = source("../components/chef-mode-dashboard.tsx");
   const phoneAuth = source("../components/phone-auth-form.tsx");
-  assert.match(dashboard, /loadSession\(\)/);
-  assert.match(dashboard, /state === "applicant"/);
-  assert.match(dashboard, /Open chef application/);
+  assert.match(dashboard, /useSyncExternalStore\(subscribeSession, getSession/);
+  // The boundary already loaded the session and refreshed roles once; the dashboard never repeats it.
+  assert.doesNotMatch(dashboard, /loadSession|synchronizeSessionRoles/);
   assert.doesNotMatch(dashboard, /fetch\("\/api\/chef\/me"/);
   assert.match(phoneAuth, /Secure Craves access/);
   assert.doesNotMatch(phoneAuth, /Secure customer access/);
@@ -256,8 +256,9 @@ test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   const boundary = source("../components/chef-access-boundary.tsx");
   assert.match(auth, /synchronizeSessionRoles/);
   assert.match(auth, /fetch\("\/api\/auth\/refresh"/);
-  assert.match(boundary, /loadSession\(\)/);
+  assert.match(boundary, /loadSession\(/);
   assert.match(boundary, /synchronizeSessionRoles\(\)/);
+  assert.match(boundary, /isChefModeVerified\(current\.id\)/);
   // Role denial and session races are exercised by rendered components in chef-profile-session.vitest.ts.
 
   for (const page of [

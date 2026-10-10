@@ -6,6 +6,10 @@ import { ChefApplicationSessionBoundary } from "../components/chef-application-s
 import { ChefApplicationWorkspace } from "../components/chef-application-workspace";
 import { captureSessionContext, getSession, invalidateSession, isSessionReady, setSessionIdentity, setSessionEmailVerification } from "../services/auth/cravesAuth";
 import type { CravesIdentity } from "./auth-contract";
+import { markChefModeVerified } from "./chef-mode";
+
+const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
 
 let verifiedEmail = false;
 vi.mock("../components/auth/EmailVerificationPanel", () => ({ EmailVerificationPanel: ({ onStateChange }: { onStateChange: (state: unknown) => void }) => {
@@ -29,8 +33,13 @@ function normal(input: RequestInfo | URL) {
   if (String(input) === "/api/auth/refresh") return Promise.resolve(Response.json({ identity: current }, { status: current ? 200 : 401 }));
   return Promise.resolve(Response.json({}, { status: 404 }));
 }
-beforeEach(() => { verifiedEmail = false; current = owner; invalidateSession(captureSessionContext()); fetcher.mockReset().mockImplementation(normal); vi.stubGlobal("fetch", fetcher); });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+beforeEach(() => {
+  verifiedEmail = false; current = owner; invalidateSession(captureSessionContext()); fetcher.mockReset().mockImplementation(normal); vi.stubGlobal("fetch", fetcher);
+  markChefModeVerified(owner.id); navigation.replace.mockReset();
+});
+// Chef error reports only fire on /chef pages, so only the return-path tests move there.
+function onApplicationStep() { window.history.replaceState(null, "", "/chef/application?step=kitchen"); }
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); window.history.replaceState(null, "", "/"); });
 
 it("waits for expired-session recovery before mounting private sections", async () => {
   const refresh = deferred<Response>(); let renewed = false;
@@ -97,6 +106,7 @@ it("discards the prior owner's private form when its pending profile fails durin
   boundary();
   fireEvent.change(await screen.findByLabelText("Private chef draft"), { target: { value: "private draft A" } });
   current = { ...owner, id: "22222222-2222-4222-8222-222222222222", displayName: "Fixture B" };
+  markChefModeVerified(current.id);
   act(() => { setSessionIdentity(current!); });
   expect(screen.queryByLabelText("Private chef draft")).toBeNull();
   await act(async () => { priorProfile.resolve(Response.json({}, { status: 503 })); });
@@ -206,10 +216,18 @@ it("provides retry for a failed check and never mounts the private form prematur
   await screen.findByLabelText("Private chef draft");
 });
 
-it("offers sign-in with an application return path when the session has ended", async () => {
-  current = null; boundary();
-  expect((await screen.findByRole("link", { name: "Sign in" })).getAttribute("href")).toBe("/sign-in?returnTo=/chef/application");
+it("sends a signed-out applicant to the Chef Mode sign-in with the current step as return path", async () => {
+  current = null; onApplicationStep(); boundary();
+  await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/chef/sign-in?returnTo=%2Fchef%2Fapplication%3Fstep%3Dkitchen"));
   expect(screen.queryByLabelText("Private chef draft")).toBeNull();
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("asks a signed-in customer to sign in to Chef Mode before opening the application", async () => {
+  sessionStorage.clear(); onApplicationStep(); boundary();
+  await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/chef/sign-in?returnTo=%2Fchef%2Fapplication%3Fstep%3Dkitchen"));
+  expect(screen.queryByLabelText("Private chef draft")).toBeNull();
+  expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/application")).toBe(false);
 });
 
 it("clears private drafts on account switch and keeps same-owner email updates", async () => {
@@ -217,6 +235,7 @@ it("clears private drafts on account switch and keeps same-owner email updates",
   act(() => setSessionEmailVerification(owner.id, { email: "replacement@example.invalid", emailVerified: true, emailRevision: 2, pending: null, serverTime: "2026-09-17T00:00:00Z" }));
   expect((screen.getByLabelText("Private chef draft") as HTMLInputElement).value).toBe("private draft A");
   current = { ...owner, id: "22222222-2222-4222-8222-222222222222" };
+  markChefModeVerified(current.id);
   act(() => { setSessionIdentity(current!); });
   expect(screen.queryByLabelText("Private chef draft")).toBeNull();
   expect((await screen.findByLabelText("Private chef draft") as HTMLInputElement).value).toBe("");

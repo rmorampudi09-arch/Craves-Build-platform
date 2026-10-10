@@ -48,5 +48,5 @@ function ProfileContent(){
 }
 
 export default function ChefProfilePage(){
- return <main className="mx-auto min-h-screen max-w-4xl px-4 py-6 md:px-6 md:py-8"><ChefPageHeader eyebrow="Your account" title="Profile" description="Keep your personal details, kitchen information, documents and payout links easy to find."/><div className="mt-6"><ChefAccessBoundary><ProfileContent/></ChefAccessBoundary></div></main>;
+ return <main className="mx-auto min-h-screen max-w-4xl px-4 py-6 md:px-6 md:py-8"><ChefAccessBoundary><ChefPageHeader eyebrow="Your account" title="Profile" description="Keep your personal details, kitchen information, documents and payout links easy to find."/><div className="mt-6"><ProfileContent/></div></ChefAccessBoundary></main>;
 }

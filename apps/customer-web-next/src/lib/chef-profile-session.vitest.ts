@@ -19,6 +19,7 @@ import ChefFinancePage from "../app/chef/finance/page";
 import ProfilePage from "../screens/Profile/Profile";
 import { captureSessionContext, clearSession, getSession, invalidateSession, setSessionEmailVerification, setSessionIdentity } from "../services/auth/cravesAuth";
 import type { CravesIdentity } from "./auth-contract";
+import { markChefModeVerified } from "./chef-mode";
 
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate, Link: ({ children }: { children: unknown }) => children }));
@@ -48,9 +49,10 @@ async function normal(input: RequestInfo | URL): Promise<Response> {
   if (url === "/api/chef-onboarding/bank") return Response.json({ id: null, state: "NOT_SUBMITTED", lastFour: null, ifsc: null, bankValidated: false, applicationApproved: true, automaticActivation: true, message: "Fixture enrollment", updatedAt: null });
   throw new Error(`Unexpected fixture route ${url}`);
 }
-beforeEach(() => { identity = a; setSessionIdentity(a); navigate.mockReset(); vi.mocked(usePathname).mockReturnValue("/profile"); fetcher = vi.fn<typeof fetch>(normal); vi.stubGlobal("fetch", fetcher); });
+beforeEach(() => { identity = a; setSessionIdentity(a); markChefModeVerified(a.id); navigate.mockReset(); vi.mocked(usePathname).mockReturnValue("/profile"); fetcher = vi.fn<typeof fetch>(normal); vi.stubGlobal("fetch", fetcher); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
-function change(owner: CravesIdentity) { identity = owner; act(() => { setSessionIdentity(owner); }); }
+function change(owner: CravesIdentity) { identity = owner; markChefModeVerified(owner.id); act(() => { setSessionIdentity(owner); }); }
+const toChefSignIn = expect.stringMatching(/^\/chef\/sign-in\?returnTo=/);
 
 describe("Chef navigation placement", () => {
   it("keeps fixed bottom navigation outside the filtered sticky header", () => {
@@ -119,7 +121,9 @@ describe("chef finance owner boundaries", () => {
     fireEvent.change(await screen.findByLabelText("Private form"), { target: { value: "private draft" } });
     change({ ...a, roles: ["CUSTOMER"] });
     expect(screen.queryByLabelText("Private form")).toBeNull();
-    await screen.findByText("Chef approval is still required");
+    // Still no CHEF after a token refresh: a fresh Chef Mode sign-in, never a /chef ↔ status loop.
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(toChefSignIn));
+    expect(navigate).not.toHaveBeenCalledWith("/chef/application/status");
     change(a);
     expect((await screen.findByLabelText("Private form") as HTMLInputElement).value).toBe("");
   });
@@ -130,7 +134,7 @@ describe("chef finance owner boundaries", () => {
     render(createElement(ChefAccessBoundary, null, createElement("p", null, "Private chef data")));
     await waitFor(() => expect(fetcher.mock.calls.some(([url]) => url === "/api/auth/refresh")).toBe(true));
     change({ ...b, roles: ["CUSTOMER"] });
-    await screen.findByText("Chef approval is still required");
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(toChefSignIn));
     await act(async () => { late.resolve(Response.json({ identity: a })); });
     expect(screen.queryByText("Private chef data")).toBeNull();
     expect(getSession()?.id).toBe(b.id);
@@ -141,7 +145,7 @@ describe("chef finance owner boundaries", () => {
     await screen.findByRole("button", { name: "Request ₹11.00 available balance" });
     change({ ...a, status: "SUSPENDED" });
     expect(screen.queryByRole("button", { name: "Request ₹11.00 available balance" })).toBeNull();
-    await screen.findByText("Sign in again to continue");
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(toChefSignIn));
   });
 
   it("hides private finance immediately while sign-out is pending and after completion", async () => {
@@ -153,8 +157,9 @@ describe("chef finance owner boundaries", () => {
     act(() => { signingOut = clearSession(); });
     expect(screen.queryByRole("button", { name: "Request ₹11.00 available balance" })).toBeNull();
     identity = null;
+    expect(navigate).not.toHaveBeenCalled();
     await act(async () => { late.resolve(Response.json({ signedOut: true })); await signingOut; });
-    await screen.findByText("Sign in again to continue");
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(toChefSignIn));
     expect(screen.queryByText("Verified email: a@example.invalid")).toBeNull();
   });
 

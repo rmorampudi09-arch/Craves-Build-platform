@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { NextRequest, NextResponse } from "next/server";
 import {
   isCanonicalUuid,
@@ -10,8 +11,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
-function failure(status: number, code: string, message: string) {
-  return NextResponse.json({ code, message }, { status });
+function failure(status: number, code: string, message: string, raw: unknown = null) {
+  return NextResponse.json({ code, message, ...chefUpstream(raw) }, { status });
 }
 
 export async function GET(
@@ -40,6 +41,7 @@ export async function GET(
         upstream.status === 403 || upstream.status === 404
           ? "This order is not available for your approved chef identity."
           : "Chef order is temporarily unavailable.",
+        raw
       );
     }
     const order = parseChefOrderResponse(raw);

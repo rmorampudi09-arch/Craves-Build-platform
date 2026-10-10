@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefMealPlan } from "@/lib/chef-subscription-plan-contract";
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest, context: Context) {
       body: JSON.stringify({ note }),
     });
     const body = await upstream.json().catch(() => null);
-    if (!upstream.ok) return NextResponse.json({ code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "CHEF_ACCESS_REQUIRED" : upstream.status === 409 ? "MEAL_PLAN_NOT_READY" : "MEAL_PLAN_SUBMIT_FAILED", details: body }, { status: upstream.status });
+    if (!upstream.ok) return NextResponse.json({ code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "CHEF_ACCESS_REQUIRED" : upstream.status === 409 ? "MEAL_PLAN_NOT_READY" : "MEAL_PLAN_SUBMIT_FAILED", details: body, ...chefUpstream(body) }, { status: upstream.status });
     const plan = parseChefMealPlan(body);
     return plan ? NextResponse.json(plan, { headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ code: "INVALID_CHEF_MEAL_PLAN_RESPONSE" }, { status: 502 });
   } catch (error) {

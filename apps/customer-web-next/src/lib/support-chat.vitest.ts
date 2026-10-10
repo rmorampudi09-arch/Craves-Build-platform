@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { chatHistory, richText, SupportChat } from "@/components/support/SupportChat";
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); delete (Element.prototype as Partial<Element>).scrollIntoView; });
 
 function type(text: string) {
   const input = screen.getByLabelText("Message Craves support");
@@ -32,7 +32,9 @@ it("sends the conversation without the greeting, shows typing, the reply, Sent a
   });
 });
 
-it("asks a suggested question in one tap", async () => {
+it("asks a suggested question in one tap, in browsers whose scrollIntoView returns a Promise", async () => {
+  // Current Chrome returns a Promise here; returning it from an effect crashed the page on send.
+  Element.prototype.scrollIntoView = () => Promise.resolve() as never;
   const fetch = vi.fn().mockResolvedValue(Response.json({ reply: "Profile › Delivery addresses.", supportCase: null }));
   vi.stubGlobal("fetch", fetch);
   render(createElement(SupportChat, { contextRole: "CUSTOMER" }));

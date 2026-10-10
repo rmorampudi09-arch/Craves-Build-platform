@@ -2,7 +2,7 @@
 // Disposable identities and responses; no production API is called.
 import { createElement } from "react";
 import { usePathname } from "next/navigation";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChefModeGuard, isOpenInChefMode } from "../components/layout/ChefModeGuard";
 import ChefLayout from "../app/chef/layout";
@@ -63,6 +63,15 @@ describe("Chef Mode guard", () => {
   it("treats only the chef app and the listed public pages as open", () => {
     for (const pathname of ["/home", "/chefs", "/kitchen/abc", "/cart", "/profile", "/notifications", "/chefsomething"])
       expect(isOpenInChefMode(pathname), pathname).toBe(false);
+  });
+
+  it("checks a customer page again when Back restores it from the page cache", async () => {
+    sessionStorage.clear();
+    render(createElement(ChefModeGuard));
+    expect(mocks.replace).not.toHaveBeenCalled();
+    markChefModeVerified(chef.id);
+    act(() => { window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted: true })); });
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/chef"));
   });
 
   it("leaves customers, and other accounts in this tab, on customer screens", () => {

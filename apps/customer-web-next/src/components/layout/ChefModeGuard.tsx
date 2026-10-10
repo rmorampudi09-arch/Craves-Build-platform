@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { isChefModeVerified } from "@/lib/chef-mode";
 import { getSession, subscribeSession } from "@/services/auth/cravesAuth";
 
@@ -31,11 +31,20 @@ export function ChefModeGuard() {
   const pathname = usePathname();
   const router = useRouter();
   const user = useSyncExternalStore(subscribeSession, getSession, () => null);
+  const [, setRestored] = useState(0);
   const leave = Boolean(user && !isOpenInChefMode(pathname) && isChefModeVerified(user.id));
 
   useEffect(() => {
     if (leave) router.replace("/chef");
   }, [leave, router]);
+  useEffect(() => {
+    // Back can restore a customer page from the browser's page cache; check it again when it shows.
+    const restored = (event: PageTransitionEvent) => {
+      if (event.persisted) setRestored((value) => value + 1);
+    };
+    window.addEventListener("pageshow", restored);
+    return () => window.removeEventListener("pageshow", restored);
+  }, []);
 
   // Cover the customer screen for the moment it takes to return to the chef app.
   return leave ? <div className="fixed inset-0 z-[200] bg-white" aria-hidden="true" /> : null;

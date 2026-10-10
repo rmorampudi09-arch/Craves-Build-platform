@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefCapacitySummary } from "@/lib/chef-subscription-capacity-contract";
 import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
@@ -13,6 +14,7 @@ export async function GET(request: NextRequest) {
         {
           code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "CHEF_ACCESS_REQUIRED" : "CAPACITY_REQUEST_FAILED",
           message: upstream.status === 403 ? "An approved chef account is required to manage capacity." : "Subscription capacity is temporarily unavailable.",
+          ...chefUpstream(body),
         },
         { status: upstream.status },
       );

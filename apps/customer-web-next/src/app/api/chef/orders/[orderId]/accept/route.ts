@@ -1,3 +1,4 @@
+import { chefUpstream } from "@/lib/chef-errors";
 import { boundedFetch } from "@/lib/bounded-fetch";
 import { boundBffRequest } from "@/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
@@ -96,6 +97,7 @@ export async function POST(
             upstream.status === 409
               ? "The order state changed or the acceptance window is no longer valid."
               : "The order could not be accepted.",
+          ...chefUpstream(await upstream.json().catch(() => null)),
         },
         { status: upstream.status },
       );

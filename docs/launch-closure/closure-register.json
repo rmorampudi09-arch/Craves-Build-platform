@@ -29,7 +29,7 @@
       "title": "Enforce release governance",
       "package": "P0",
       "status": "Verifying",
-      "evidence": ["REPOSITORY_PROTECTION.md", "Main rule83269016 uses explicitly confirmed sole-owner approval, with all other protections preserved; PR361 failed-check block observed; PR362 old-green/new-head merge block observed and recorded in comment5699595967", "CUSTOMER_WEB_RELEASE.md: merged guarded wrapper; live deployment verification pending"],
+      "evidence": ["REPOSITORY_PROTECTION.md", "Main rule83269016 uses explicitly confirmed sole-owner approval, with all other protections preserved; PR361 failed-check block observed; PR362 old-green/new-head merge block observed and recorded in comment5699595967", "CUSTOMER_WEB_RELEASE.md and evidence/web-release-39124.json: guarded exact-source web release succeeded with matching regression, immutable image, preserved runtime and retained rollback; full owner journey remains separate"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -38,8 +38,8 @@
       "id": "F04",
       "title": "Complete web email verification",
       "package": "P1",
-      "status": "CI passed",
-      "evidence": ["2026-09-16-progress.md", "evidence/regression-35096170879.json", "CUSTOMER_WEB_RELEASE.md: exact-main web and complete backend regression35112960978 passed; live rollout started; mailbox acceptance still open"],
+      "status": "Verifying",
+      "evidence": ["2026-09-16-progress.md", "evidence/regression-35096170879.json", "2026-09-17-checkpoint.md: owner confirmed real email received and successfully verified; signed-in chef page displayed verified state; replacement/revocation and cross-account acceptance remain open"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -49,7 +49,7 @@
       "title": "Verify canonical email authority",
       "package": "P1",
       "status": "Verifying",
-      "evidence": [],
+      "evidence": ["2026-09-17-checkpoint.md: Azure39125 observed two verified canonical rows and two projections, zero missing/orphaned/version/customer/chef mismatches across two stable read-only observations; not a distributed atomic snapshot or replacement/revocation acceptance"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -58,8 +58,8 @@
       "id": "F06",
       "title": "Activate bounded Auth protection",
       "package": "P1",
-      "status": "Not started",
-      "evidence": [],
+      "status": "Verifying",
+      "evidence": ["2026-09-17-checkpoint.md", "evidence/auth-protection-39122.json: live revision46 passed thirteen bounded probes with exact settings and unrelated configuration preserved", "Owner separately confirmed post-update normal sign-in and Profile work; gateway enforcement, abnormal-path and capacity acceptance remain distinct"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -248,8 +248,8 @@
       "id": "F25",
       "title": "Chef referral integration and UI",
       "package": "P6",
-      "status": "Not started",
-      "evidence": ["OWNER_DECISIONS_20260916.md: INR1500 monthly chef reward cap and food-subtotal qualification confirmed; not financial activation evidence"],
+      "status": "In progress",
+      "evidence": ["2026-09-17-checkpoint.md: draft PR369 calculation tests and integration CI pass; policy is not yet connected to chef earnings or activated; monthly-cap excess treatment awaits owner choice"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -258,8 +258,8 @@
       "id": "F26",
       "title": "Chef-only referral policy",
       "package": "P6",
-      "status": "Not started",
-      "evidence": [],
+      "status": "In progress",
+      "evidence": ["2026-09-17-checkpoint.md: threshold, tier rates, commission funding, hold, daily posting, India month and refund month confirmed; pure policy tests pass; authoritative chef eligibility and worker integration remain open"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false
@@ -338,8 +338,8 @@
       "id": "F34",
       "title": "Authoritative chef onboarding",
       "package": "P1",
-      "status": "Not started",
-      "evidence": [],
+      "status": "In progress",
+      "evidence": ["CHEF_DOCUMENT_STATES.md and CHEF_APPLICATION_SESSION.md: PR368/PR374 are live; Azure39132 direct browser reload loaded approved details, verified email and truthful document history without new sign-in; genuine pending-chef uploads and bank enrollment acceptance remain open", "2026-09-17-checkpoint.md", "evidence/web-release-39132.json"],
       "reviewer": null,
       "acceptedAt": null,
       "closureGate": false

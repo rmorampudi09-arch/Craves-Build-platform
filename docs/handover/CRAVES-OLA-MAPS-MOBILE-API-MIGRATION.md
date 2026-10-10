@@ -13,6 +13,7 @@ Scope: location/address APIs only. Live order tracking is not part of this chang
 | What is new? | An optional endpoint for Swiggy/Zomato-style typeahead: `POST /api/v1/customer/addresses/location-search`. |
 | Any keys for the APK? | **No.** The Ola key exists only on the CRAVES servers. Never call `api.olamaps.io` from the app and never embed an Ola key. |
 | Saved addresses created with Azure Maps? | Unchanged and valid. Latitude/longitude are provider-neutral WGS84 decimal degrees; nothing is re-geocoded. |
+| Limits? | Per signed-in customer: 60 `location-search` and 30 `reverse-geocode` calls per minute. Beyond that the API answers `429 LOCATION_RATE_LIMITED` with `Retry-After`. |
 
 ## 2. Architecture change
 
@@ -94,6 +95,10 @@ Errors (body shape is the existing User/Chef error envelope):
 // 401 (from APIM): no or malformed Bearer token
 {"error": "AUTHENTICATION_REQUIRED", "message": "A Bearer access token is required."}
 
+// 429: this customer's budget is spent (30 reverse geocodes per minute); wait Retry-After seconds
+{"code": "LOCATION_RATE_LIMITED", "message": "Too many location lookups. Please try again shortly.",
+ "timestamp": "2026-10-10T10:00:00Z", "details": []}
+
 // 503: Ola timeout, 4xx, 429 rate limit, 5xx, zero results, or key not configured
 {"code": "REVERSE_GEOCODING_UNAVAILABLE",
  "message": "Craves could not identify this address right now. Please try again.",
@@ -153,12 +158,16 @@ Errors:
 // 401 (from APIM)
 {"error": "AUTHENTICATION_REQUIRED", "message": "A Bearer access token is required."}
 
+// 429: this customer's budget is spent (60 searches per minute); wait Retry-After seconds
+{"code": "LOCATION_RATE_LIMITED", "message": "Too many location lookups. Please try again shortly.",
+ "timestamp": "2026-10-10T10:00:00Z", "details": []}
+
 // 503: Ola timeout, 4xx, 429 rate limit, 5xx, invalid response, or key not configured
 {"code": "LOCATION_SEARCH_UNAVAILABLE", "message": "Address search is unavailable right now. Please try again.",
  "timestamp": "2026-10-09T10:00:00Z", "details": []}
 ```
 
-Availability: this route exists once the User/Chef release containing it is deployed **and** the APIM operation `search-customer-address-location` is added (`azure-pipelines-customer-location-ola-maps.yml`, operation `apim`). Before that APIM answers `404` for this path, so feature-flag the UI on a successful call.
+Availability: live in production since 2026-10-10 (User/Chef release `0cb1095`; APIM operation `search-customer-address-location`, added by `azure-pipelines-customer-location-ola-maps.yml` operation `apim`). An environment without that APIM operation answers `404` for this path, so keep the UI tolerant of a failed call.
 
 ## 5. Deprecated APIs
 
@@ -194,7 +203,7 @@ Recommended, to match the web experience (`Search -> map -> pin -> address -> co
 2. Render each suggestion as `title` (bold) and `subtitle` (muted).
 3. On selection, move the pin to the suggestion's `latitude`/`longitude`, then call `reverse-geocode` for that point to prefill the form. After the customer drags the map, reverse geocode the settled pin again (debounce; the reverse geocode is metered).
 4. Ask for location permission only when the customer taps "Use current location". If it is denied, search must still work.
-5. Error handling: `503` -> "Address search is unavailable right now", keep manual entry and current location available; empty `results` -> "No matching places found. Try a nearby landmark or area name."; `401` -> existing session refresh.
+5. Error handling: `503` -> "Address search is unavailable right now", keep manual entry and current location available; empty `results` -> "No matching places found. Try a nearby landmark or area name."; `401` -> existing session refresh; `429` -> wait the `Retry-After` seconds before the next lookup (never retry in a loop) and keep manual entry available.
 6. Do not log or persist raw queries/coordinates outside the address the customer saves.
 7. Parse leniently: new optional fields may be added to both responses.
 
@@ -212,6 +221,7 @@ Must not:
 4. No token -> `401`.
 5. Existing saved address (created before the migration) opens, edits and saves unchanged.
 6. Location permission denied -> search still usable.
+7. More than 60 searches (or 30 reverse geocodes) by one customer within a minute -> `429 LOCATION_RATE_LIMITED` with a `Retry-After` header; the app waits and recovers.
 
 ## 9. Server configuration (for reference)
 
@@ -219,6 +229,6 @@ Must not:
 |---|---|---|---|
 | `OLA_MAPS_API_KEY` | `ca-craves-user-chef-service-prod`, `ca-craves-web-prodlow` | Yes | `secretref:ola-maps-api-key` -> Key Vault secret `ola-maps-api-key` |
 | `CRAVES_LOCATION_SEARCH_CENTER` | same apps | No | `17.3850,78.4867` |
-| `AZURE_MAPS_CLIENT_ID`, `AZURE_MAPS_ENDPOINT` | same apps | No | Retired; removed after the live Ola flows are verified (`operation=remove-azure-maps`) |
+| `AZURE_MAPS_CLIENT_ID`, `AZURE_MAPS_ENDPOINT` | same apps | No | Removed on 2026-10-10 after the live Ola flows were verified (`operation=remove-azure-maps`, pipeline 15 run 341) |
 
 No mobile configuration is required.

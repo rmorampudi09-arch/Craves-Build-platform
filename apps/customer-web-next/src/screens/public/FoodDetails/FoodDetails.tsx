@@ -91,7 +91,10 @@ function DishDetailPage() {
     awaitingCartLineRef.current = false;
     setJustAdded(true);
     const timer = window.setTimeout(() => setJustAdded(false), 900);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      setJustAdded(false);
+    };
   }, [hasCartLine]);
 
   useEffect(() => {

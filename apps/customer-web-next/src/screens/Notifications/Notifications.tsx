@@ -1,18 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   FaArrowLeft,
   FaBagShopping,
   FaBell,
   FaCalendarDays,
+  FaCheck,
   FaTrashCan,
 } from "react-icons/fa6";
 import { GiChefToque } from "react-icons/gi";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
+import { UndoToast } from "@/components/ui/overlays/undo-toast";
 import type { CustomerNotification } from "@/lib/notification-contract";
 import { loadSession } from "@/services/auth/cravesAuth";
 
@@ -48,6 +50,27 @@ function notificationTimestamp(createdAt: string) {
   });
 }
 
+function clearedKey(identityId: string): string {
+  return "craves.notifications.cleared:" + identityId;
+}
+
+function persistCleared(identityId: string, ids: string[]) {
+  if (!identityId || ids.length === 0) return;
+  let current: string[] = [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(clearedKey(identityId)) || "[]");
+    current = Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string")
+      : [];
+  } catch {
+    current = [];
+  }
+  window.localStorage.setItem(
+    clearedKey(identityId),
+    JSON.stringify(Array.from(new Set([...current, ...ids])).slice(-250)),
+  );
+}
+
 function NotificationTypeIcon({ notice }: { notice: CustomerNotification }) {
   const classification = `${notice.noticeType} ${notice.targetType ?? ""}`.toLowerCase();
   const Icon = classification.includes("chef") || classification.includes("kitchen")
@@ -68,6 +91,17 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [identityId, setIdentityId] = useState("");
+  const [pendingClear, setPendingClear] = useState<{ id: number; ids: string[] } | null>(null);
+  const [markingRead, setMarkingRead] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const clearCount = useRef(0);
+  const unmountCommit = useRef({ identityId: "", ids: [] as string[] });
+
+  // Leaving the page while Undo is still offered keeps the clear.
+  useEffect(() => {
+    unmountCommit.current = { identityId, ids: pendingClear?.ids ?? [] };
+  });
+  useEffect(() => () => persistCleared(unmountCommit.current.identityId, unmountCommit.current.ids), []);
 
   useEffect(() => {
     let active = true;
@@ -81,7 +115,7 @@ export default function NotificationsPage() {
       if (!active) return;
       setIdentityId(session.id);
 
-      const dismissedKey = "craves.notifications.cleared:" + session.id;
+      const dismissedKey = clearedKey(session.id);
       let dismissed = new Set<string>();
       try {
         const saved = JSON.parse(window.localStorage.getItem(dismissedKey) || "[]");
@@ -122,44 +156,53 @@ export default function NotificationsPage() {
     };
   }, [navigate]);
 
-  function persistCleared(ids: string[]) {
-    if (!identityId || ids.length === 0) return;
-    const key = "craves.notifications.cleared:" + identityId;
-    let current: string[] = [];
-    try {
-      const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
-      current = Array.isArray(parsed)
-        ? parsed.filter((value): value is string => typeof value === "string")
-        : [];
-    } catch {
-      current = [];
-    }
-    window.localStorage.setItem(
-      key,
-      JSON.stringify(Array.from(new Set([...current, ...ids])).slice(-250)),
-    );
+  function commitClear(ids: string[]) {
+    persistCleared(identityId, ids);
+    setNotices((current) => current.filter((notice) => !ids.includes(notice.id)));
   }
 
+  // Clearing hides at once but only saves once the Undo toast has expired.
   function clearNotices(ids: string[]) {
     if (ids.length === 0) return;
-    persistCleared(ids);
-    setNotices((current) =>
-      current.filter((notice) => !ids.includes(notice.id)),
-    );
+    if (pendingClear) commitClear(pendingClear.ids);
+    clearCount.current += 1;
+    setPendingClear({ id: clearCount.current, ids });
   }
 
-  const unreadCount = notices.filter((notice) => !notice.readAt).length;
-  const readCount = notices.length - unreadCount;
+  async function markAllRead() {
+    setMarkingRead(true);
+    setActionError("");
+    try {
+      const response = await fetch("/api/notifications/in-app/read-all", {
+        method: "PATCH",
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error("read-all failed");
+      const readAt = new Date().toISOString();
+      setNotices((current) => current.map((notice) => notice.readAt ? notice : { ...notice, readAt }));
+    } catch {
+      setActionError("We couldn’t mark your notifications as read. Please try again.");
+    } finally {
+      setMarkingRead(false);
+    }
+  }
+
+  const visibleNotices = useMemo(
+    () => (pendingClear ? notices.filter((notice) => !pendingClear.ids.includes(notice.id)) : notices),
+    [notices, pendingClear],
+  );
+  const unreadCount = visibleNotices.filter((notice) => !notice.readAt).length;
+  const readCount = visibleNotices.length - unreadCount;
 
   const filteredNotices = useMemo(() => {
     if (filter === "unread") {
-      return notices.filter((notice) => !notice.readAt);
+      return visibleNotices.filter((notice) => !notice.readAt);
     }
     if (filter === "read") {
-      return notices.filter((notice) => Boolean(notice.readAt));
+      return visibleNotices.filter((notice) => Boolean(notice.readAt));
     }
-    return notices;
-  }, [filter, notices]);
+    return visibleNotices;
+  }, [filter, visibleNotices]);
 
   const groupedNotices = useMemo(() => {
     const groups = new Map<NotificationGroup, CustomerNotification[]>();
@@ -178,46 +221,50 @@ export default function NotificationsPage() {
   return (
     <div className="min-h-screen bg-white pb-12 text-[#1A1A1A]">
       <AutoHideCustomerHeader className="border-b border-border bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
-        <div className="relative mx-auto flex max-w-4xl items-start justify-center px-4 pb-5 pt-6 md:px-6 md:pb-6 md:pt-8">
+        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-4 md:px-6 md:py-5">
           <Link
             to="/home"
-            className="absolute left-4 top-6 flex h-11 w-11 items-center justify-center rounded-full !bg-white !text-[#1A1A1A] transition-colors hover:!bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 md:left-6 md:top-8"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full !bg-white !text-[#1A1A1A] transition-colors hover:!bg-[#F1F3F5]"
             aria-label="Back to home"
           >
             <FaArrowLeft className="text-lg" aria-hidden="true" />
           </Link>
-
-          <Link
-            to="/home"
-            className="flex flex-col items-center rounded-xl text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
-            aria-label="Craves home"
-          >
+          <Link to="/home" className="shrink-0 rounded-lg" aria-label="Craves home">
             <CravesLogo size="sm" decorative />
-            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#F62E18]">
-              Stay updated
-            </p>
-            <span className="mt-1 block text-3xl font-semibold leading-tight text-[#1A1A1A]">
-              Notifications
-            </span>
           </Link>
+          <h1 className="text-xl font-semibold leading-tight text-[#1A1A1A]">
+            Notifications
+          </h1>
         </div>
       </AutoHideCustomerHeader>
 
       <main className="mx-auto max-w-4xl px-4 pb-8 pt-3 md:px-6 md:pb-10 md:pt-4">
-        {!loading && notices.length > 0 ? (
+        {!loading && visibleNotices.length > 0 ? (
           <div className="mb-6">
             <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+              {unreadCount > 0 ? (
+                <button
+                  type="button"
+                  disabled={markingRead}
+                  aria-busy={markingRead}
+                  onClick={() => void markAllRead()}
+                  className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#1A1A1A]"
+                >
+                  <FaCheck aria-hidden="true" />
+                  {markingRead ? "Marking as read…" : "Mark all as read"}
+                </button>
+              ) : null}
               {readCount > 0 ? (
                 <button
                   type="button"
                   onClick={() =>
                     clearNotices(
-                      notices
+                      visibleNotices
                         .filter((notice) => Boolean(notice.readAt))
                         .map((notice) => notice.id),
                     )
                   }
-                  className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#1A1A1A] transition hover:border-[#F62E18]/25 hover:text-[#F62E18]"
+                  className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#1A1A1A]"
                 >
                   <FaTrashCan aria-hidden="true" />
                   Clear read
@@ -225,8 +272,8 @@ export default function NotificationsPage() {
               ) : null}
               <button
                 type="button"
-                onClick={() => clearNotices(notices.map((notice) => notice.id))}
-                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#6B6B6B] transition hover:border-[#F62E18]/25 hover:text-[#F62E18]"
+                onClick={() => clearNotices(visibleNotices.map((notice) => notice.id))}
+                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#1A1A1A]"
               >
                 <FaTrashCan aria-hidden="true" />
                 Clear all
@@ -238,7 +285,7 @@ export default function NotificationsPage() {
             >
               {(
                 [
-                  ["all", "All", notices.length],
+                  ["all", "All", visibleNotices.length],
                   ["unread", "Unread", unreadCount],
                   ["read", "Read", readCount],
                 ] as const
@@ -263,6 +310,11 @@ export default function NotificationsPage() {
                 );
               })}
             </div>
+            {actionError ? (
+              <p role="alert" className="mt-3 rounded-xl bg-[#F1F3F5] p-3 text-sm font-medium text-[#C4200F]">
+                {actionError}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -279,11 +331,11 @@ export default function NotificationsPage() {
         ) : error ? (
           <div
             role="alert"
-            className="rounded-2xl border border-[#F62E18]/20 bg-white p-5 text-sm text-[#C92716] shadow-sm"
+            className="rounded-2xl bg-[#F1F3F5] p-5 text-sm font-medium text-[#C4200F]"
           >
             {error}
           </div>
-        ) : notices.length === 0 ? (
+        ) : visibleNotices.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-[#E5E7EB] bg-white p-10 text-center">
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
               <FaBell className="text-xl" aria-hidden="true" />
@@ -382,6 +434,22 @@ export default function NotificationsPage() {
           </div>
         )}
       </main>
+
+      <UndoToast
+        toast={
+          pendingClear
+            ? {
+                id: pendingClear.id,
+                message: `${pendingClear.ids.length} notification${pendingClear.ids.length === 1 ? "" : "s"} cleared`,
+              }
+            : null
+        }
+        onUndo={() => setPendingClear(null)}
+        onExpire={() => {
+          if (pendingClear) commitClear(pendingClear.ids);
+          setPendingClear(null);
+        }}
+      />
     </div>
   );
 }

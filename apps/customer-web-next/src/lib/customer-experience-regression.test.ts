@@ -142,7 +142,7 @@ test("profile destinations preserve contextual back navigation", () => {
   assert.match(policy, /data-contextual-back="true"/);
 });
 
-test("favorites hydrate the shared cart and notifications expose only supported clear actions", () => {
+test("favorites hydrate the shared cart and notifications offer read-all and undoable clears", () => {
   const wishlist = source("../screens/Wishlist/Wishlist.tsx");
   const notifications = source("../screens/Notifications/Notifications.tsx");
   const readAll = source("../app/api/notifications/in-app/read-all/route.ts");
@@ -150,8 +150,9 @@ test("favorites hydrate the shared cart and notifications expose only supported 
   assert.match(wishlist, /loadCart\(\)/);
   assert.match(wishlist, /CustomerFloatingCart/);
   assert.match(wishlist, /CustomerPageSkeleton/);
-  assert.doesNotMatch(notifications, /Mark all read/);
-  assert.doesNotMatch(notifications, /\/read/);
+  assert.match(notifications, /Mark all as read/);
+  assert.match(notifications, /fetch\("\/api\/notifications\/in-app\/read-all"/);
+  assert.match(notifications, /<UndoToast/);
   assert.match(notifications, /CustomerPageSkeleton/);
   assert.match(notifications, /Clear read/);
   assert.match(notifications, /Clear all/);

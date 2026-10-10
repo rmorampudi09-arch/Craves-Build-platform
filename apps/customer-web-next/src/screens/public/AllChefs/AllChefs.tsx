@@ -215,7 +215,7 @@ export function AllChefsPage() {
   };
 
   if (!user) {
-    return <CustomerPageSkeleton label="Loading nearby home chefs" />;
+    return <CustomerPageSkeleton variant="chefs" label="Loading nearby home chefs" />;
   }
 
   return (

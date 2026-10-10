@@ -61,7 +61,7 @@ function KitchenSkeleton() {
       className="overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white"
       aria-hidden="true"
     >
-      <div className={`${skeletonStyles.block} aspect-[16/10]`} />
+      <div className={`${skeletonStyles.block} aspect-[16/9]`} />
       <div className="p-4">
         <div className={`${skeletonStyles.block} h-5 w-2/3 rounded-full`} />
         <div className={`${skeletonStyles.block} ${skeletonStyles.soft} mt-3 h-3.5 w-1/2 rounded-full`} />

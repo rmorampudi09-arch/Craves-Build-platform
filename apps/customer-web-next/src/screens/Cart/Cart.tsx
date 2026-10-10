@@ -37,15 +37,6 @@ export const routeMeta = {
   }),
 };
 
-function CartSkeleton() {
-  return (
-    <div className="space-y-4" aria-hidden="true">
-      <div className="h-72 animate-pulse rounded-[8px] bg-[#F1F3F5]" />
-      <div className="h-28 animate-pulse rounded-[8px] bg-[#F1F3F5]" />
-    </div>
-  );
-}
-
 async function resolveLeadMinutes(items: CartItem[]): Promise<number | null> {
   const dishResults = await Promise.allSettled(
     items.map((item) => loadDish(item.menuItemId)),
@@ -225,21 +216,14 @@ function CartPage() {
   const kitchenId = items[0]?.kitchenId;
 
   if (loading) {
-    return <CustomerPageSkeleton label="Loading your Craves cart" />;
+    return <CustomerPageSkeleton variant="cart" label="Loading your Craves cart" />;
   }
 
   return (
     <div className="min-h-screen bg-white pb-36 text-[#1A1A1A]">
       <CartHeader onBack={() => navigate({ to: "/home" })} />
       <main className="mx-auto max-w-2xl px-4 pb-8 pt-5 md:px-6 md:pt-7">
-        {loading ? (
-          <>
-            <CartSkeleton />
-            <p className="sr-only" role="status">
-              Loading your Craves cart
-            </p>
-          </>
-        ) : message && items.length === 0 ? (
+        {message && items.length === 0 ? (
           <div className="rounded-[8px] border border-[#F62E18]/20 bg-white p-8 text-center shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
             <AlertTriangle className="mx-auto h-9 w-9 text-[#F62E18]" aria-hidden="true" />
             <h2 className="mt-4 text-xl font-semibold">Cart unavailable</h2>

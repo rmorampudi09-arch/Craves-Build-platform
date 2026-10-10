@@ -149,7 +149,7 @@ function ChefProfilePage() {
   };
 
   if (loading) {
-    return <CustomerPageSkeleton label="Loading this home kitchen" />;
+    return <CustomerPageSkeleton variant="kitchen" label="Loading this home kitchen" />;
   }
 
   if (!chef) {

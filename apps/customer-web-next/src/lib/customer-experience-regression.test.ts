@@ -158,3 +158,29 @@ test("favorites hydrate the shared cart and notifications expose only supported 
   assert.match(readAll, /\/notifications\/in-app\/read-all/);
   assert.match(readAll, /isSameOrigin\(request\)/);
 });
+
+test("navigation shows page-shaped skeletons the moment a dish, kitchen or cart opens", () => {
+  const skeleton = source("../components/loading/CustomerPageSkeleton.tsx");
+  const kitchens = source("../components/home/KitchensGrid.tsx");
+
+  for (const [route, variant] of [
+    ["../app/dish/[id]/loading.tsx", "dish"],
+    ["../app/kitchen/[id]/loading.tsx", "kitchen"],
+    ["../app/kitchens/[id]/loading.tsx", "kitchen"],
+    ["../app/cart/loading.tsx", "cart"],
+  ] as const) {
+    assert.match(source(route), new RegExp(`<CustomerPageSkeleton variant="${variant}"`), route);
+  }
+  for (const [screen, variant] of [
+    ["../screens/public/FoodDetails/FoodDetails.tsx", "dish"],
+    ["../screens/public/ChefProfile/ChefProfile.tsx", "kitchen"],
+    ["../screens/public/AllChefs/AllChefs.tsx", "chefs"],
+    ["../screens/Cart/Cart.tsx", "cart"],
+  ] as const) {
+    assert.match(source(screen), new RegExp(`<CustomerPageSkeleton variant="${variant}"`), screen);
+  }
+  assert.match(skeleton, /export type CustomerPageSkeletonVariant = "home" \| "dish" \| "kitchen" \| "cart" \| "chefs"/);
+  // The dish skeleton reserves the action bar so the tab bar does not flash in and out.
+  assert.match(skeleton, /data-craves-action-bar/);
+  assert.match(kitchens, /\$\{skeletonStyles\.block\} aspect-\[16\/9\]/);
+});

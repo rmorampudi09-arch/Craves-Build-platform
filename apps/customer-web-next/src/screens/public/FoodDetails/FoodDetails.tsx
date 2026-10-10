@@ -198,7 +198,7 @@ function DishDetailPage() {
   };
 
   if (loading) {
-    return <CustomerPageSkeleton label="Loading live dish details" />;
+    return <CustomerPageSkeleton variant="dish" label="Loading live dish details" />;
   }
 
   if (!dish) {

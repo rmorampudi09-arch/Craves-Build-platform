@@ -14,6 +14,8 @@ export const duration = {
   sheetIn: 0.32,
   sheetOut: 0.22,
   nav: 0.24,
+  /** Header, compact search bar, category rail and tab bar hide/show together. */
+  chrome: 0.22,
 } as const;
 
 /** Critically damped (no overshoot on UI chrome); `ui` settles in ~230 ms. */

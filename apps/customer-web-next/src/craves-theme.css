@@ -84,6 +84,7 @@
   --dur-sheet-in: 320ms;
   --dur-sheet-out: 220ms;
   --dur-nav: 240ms;
+  --dur-chrome: 220ms;
 
   --motion-fast: var(--dur-micro) var(--ease-standard);
   --motion-medium: 220ms var(--ease-standard);

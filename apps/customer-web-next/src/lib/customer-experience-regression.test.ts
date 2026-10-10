@@ -52,20 +52,22 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(wishlist, /fetchPriority=\{index < 4 \? "high" : "auto"\}/);
   assert.match(dishHeader, /fetchPriority=\{index === safeIndex \? "high" : "low"\}/);
   assert.match(similarDishes, /fetchPriority=\{index === 0 \? "high" : "auto"\}/);
-  assert.match(cravings, /translate-y-\[var\(--craves-mobile-search-offset,0px\)\]/);
+  assert.match(cravings, /compact \? "top-\[3\.75rem\]" : "top-0"/);
   assert.match(cravings, /fetchPriority=\{priorityImage \? "high" : "auto"\}/);
-  assert.match(cravings, /md:top-\[var\(--craves-desktop-header-offset-md,4\.25rem\)\]/);
-  assert.match(cravings, /lg:top-\[var\(--craves-desktop-header-offset-lg,4\.65rem\)\]/);
+  assert.match(cravings, /md:top-\[4\.25rem\] lg:top-\[4\.65rem\]/);
   assert.match(cravings, /shadow-\[0_3px_10px_rgba\(26,26,26,0\.09\)\]/);
-  assert.match(cravings, /lg:top-\[var\(--craves-desktop-header-offset-lg,4\.65rem\)\]/);
   assert.doesNotMatch(cravings, /md:static/);
-  assert.match(cravings, /duration-\[240ms\]/);
+  // Chips: a real press state, scroll arrows only for pointers, selection without a tint.
+  assert.match(cravings, /group-active:scale-\[0\.96\]/);
+  assert.match(cravings, /duration-\(--dur-component\)/);
+  assert.match(cravings, /ring-2 ring-\[#F62E18\] ring-offset-2/);
+  assert.match(cravings, /md:left-4 md:top-\[3\.75rem\] md:flex/);
+  assert.doesNotMatch(cravings, /rgba\(246,46,24,0\.12\)|backdrop-blur/);
   assert.match(header, /hover:-translate-y-0\.5/);
   assert.match(header, /focus-within:bg-white/);
   assert.match(header, /mobileCompact/);
   assert.match(header, /<CravesLogo size="md" \/>/);
   assert.doesNotMatch(header, /Food From Home/);
-  assert.match(cravings, /md:duration-\[260ms\]/);
   assert.match(header, /fixed inset-x-0 top-0 z-50/);
   assert.match(skeleton, /CustomerPageSkeleton\.module\.css/);
   assert.match(skeleton, /SkeletonBlock/);

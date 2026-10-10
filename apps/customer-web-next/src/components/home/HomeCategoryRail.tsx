@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { IconType } from "react-icons";
 import {
   FaBirthdayCake,
@@ -9,6 +9,9 @@ import {
   FaPepperHot,
   FaUtensils,
 } from "react-icons/fa";
+
+import { useScrollChrome } from "@/components/navigation/AutoHideCustomerHeader";
+import { duration, ease } from "@/lib/motion";
 
 export type CravingCategory =
   | "Biryani"
@@ -111,8 +114,41 @@ export function HomeCategoryRail({
   onSelect,
 }: HomeCategoryRailProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLElement>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+  const railTopRef = useRef<number | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  // Stuck below the compact search bar (phones) or the sticky header (md+).
+  const { compact, hidden } = useScrollChrome();
+
+  useLayoutEffect(() => {
+    const rail = railRef.current;
+    const heading = headingRef.current;
+    if (!rail || !heading) return;
+    const top = parseFloat(getComputedStyle(rail).top) || 0;
+    const previous = railTopRef.current;
+    railTopRef.current = top;
+    if (
+      previous === null ||
+      previous === top ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    // The sticky top just changed. If the rail is stuck it would snap, so it
+    // glides from where it was with the header/search bar (transform only).
+    const flowTop = heading.getBoundingClientRect().bottom;
+    const shift = Math.max(flowTop, previous) - Math.max(flowTop, top);
+    if (Math.abs(shift) < 1) return;
+    rail.animate?.(
+      { translate: [`0 ${shift}px`, "0 0"] },
+      {
+        duration: duration.chrome * 1000,
+        easing: `cubic-bezier(${ease.standard.join(",")})`,
+      },
+    );
+  }, [compact, hidden]);
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -183,6 +219,7 @@ export function HomeCategoryRail({
   return (
     <>
       <section
+        ref={headingRef}
         className="mx-auto max-w-[88rem] bg-white px-4 pt-3 md:px-7 md:pt-4 lg:px-10 lg:pt-5"
         aria-labelledby="craving-categories-heading"
       >
@@ -197,8 +234,16 @@ export function HomeCategoryRail({
         </h2>
       </section>
 
-      <div className="sticky top-0 z-30 translate-y-[var(--craves-mobile-search-offset,0px)] border-b border-[#F1F3F5] bg-white/97 shadow-[0_5px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl will-change-[translate] motion-reduce:transition-none transition-[translate,top,box-shadow] duration-[260ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] md:top-[var(--craves-desktop-header-offset-md,4.25rem)] md:translate-y-0 md:duration-[260ms] lg:top-[var(--craves-desktop-header-offset-lg,4.65rem)]">
-        <div className="relative mx-auto max-w-[88rem] bg-white/96 px-3 pb-0 pt-1.5 md:bg-white md:px-7 md:pt-2 lg:px-10">
+      <div
+        ref={railRef}
+        data-craves-category-rail
+        className={[
+          "sticky z-30 border-b border-[#F1F3F5] bg-white shadow-[0_5px_18px_rgba(26,26,26,0.04)]",
+          compact ? "top-[3.75rem]" : "top-0",
+          hidden ? "md:top-0" : "md:top-[4.25rem] lg:top-[4.65rem]",
+        ].join(" ")}
+      >
+        <div className="relative mx-auto max-w-[88rem] bg-white px-3 pb-0 pt-1.5 md:px-7 md:pt-2 lg:px-10">
           <div
             ref={scrollerRef}
             className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto bg-transparent px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-3 md:gap-3.5 md:pb-2.5 lg:gap-4"
@@ -215,14 +260,14 @@ export function HomeCategoryRail({
                   type="button"
                   onClick={() => onSelect(value)}
                   aria-pressed={active}
-                  className="group flex w-[5.5rem] shrink-0 snap-start flex-col items-center gap-1.5 !border-0 !bg-transparent p-0 text-center text-[#1A1A1A] !shadow-none outline-none hover:!bg-transparent hover:!shadow-none hover:!transform-none active:!transform-none sm:w-[5.75rem] md:w-[6.25rem] lg:w-[6.75rem] lg:gap-1.5"
+                  className="group flex w-[5.5rem] shrink-0 snap-start flex-col items-center gap-1.5 !border-0 !bg-transparent p-0 text-center text-[#1A1A1A] !shadow-none outline-none hover:!bg-transparent hover:!shadow-none sm:w-[5.75rem] md:w-[6.25rem] lg:w-[6.75rem] lg:gap-1.5"
                 >
                   <span
                     className={[
-                      "flex h-[5.75rem] w-[5.75rem] items-center justify-center rounded-full bg-white shadow-[0_3px_10px_rgba(26,26,26,0.09)] ring-1 ring-black/[0.025] transition-[box-shadow,border-color,transform] duration-[240ms] group-hover:-translate-y-0.5 group-hover:shadow-[0_7px_17px_rgba(26,26,26,0.13)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--color-flame-red)]/20 motion-reduce:transform-none sm:h-[6.25rem] sm:w-[6.25rem] md:h-[6.75rem] md:w-[6.75rem] lg:h-[7.25rem] lg:w-[7.25rem]",
+                      "flex h-[5.75rem] w-[5.75rem] items-center justify-center rounded-full border border-[#E9EBEE] bg-white shadow-[0_3px_10px_rgba(26,26,26,0.09)] transition-[box-shadow,translate,scale] duration-(--dur-component) ease-out group-hover:-translate-y-0.5 group-hover:shadow-[0_7px_17px_rgba(26,26,26,0.13)] group-active:scale-[0.96] group-active:duration-(--dur-micro) motion-reduce:transform-none sm:h-[6.25rem] sm:w-[6.25rem] md:h-[6.75rem] md:w-[6.75rem] lg:h-[7.25rem] lg:w-[7.25rem]",
                       active
-                        ? "border border-[var(--color-flame-red)]/35 shadow-[0_5px_16px_rgba(246,46,24,0.12)]"
-                        : "border border-[#E9EBEE]",
+                        ? "ring-2 ring-[#F62E18] ring-offset-2"
+                        : "ring-1 ring-black/[0.025] group-focus-visible:ring-2 group-focus-visible:ring-[#1A1A1A]",
                     ].join(" ")}
                   >
                     {image ? (
@@ -232,7 +277,7 @@ export function HomeCategoryRail({
                         loading={priorityImage ? "eager" : "lazy"}
                         decoding="async"
                         fetchPriority={priorityImage ? "high" : "auto"}
-                        className="pointer-events-none h-full w-full select-none rounded-full object-contain transition-transform duration-[240ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] group-hover:scale-[1.025] group-focus-visible:scale-[1.025] motion-reduce:transform-none motion-reduce:transition-none"
+                        className="pointer-events-none h-full w-full select-none rounded-full object-contain transition-[scale] duration-(--dur-component) ease-out group-hover:scale-[1.025] motion-reduce:transition-none"
                       />
                     ) : (
                       <span className="flex h-[72%] w-[72%] items-center justify-center rounded-full bg-[#F1F3F5] text-[var(--color-flame-red)]">
@@ -242,8 +287,8 @@ export function HomeCategoryRail({
                   </span>
                   <span
                     className={[
-                      "text-sm font-extrabold leading-5 transition-colors duration-200 lg:text-base",
-                      active ? "text-[var(--color-flame-red)]" : "text-[#1A1A1A]",
+                      "text-sm font-extrabold leading-5 transition-colors duration-(--dur-component) lg:text-base",
+                      active ? "text-[#C4200F]" : "text-[#1A1A1A]",
                     ].join(" ")}
                   >
                     {label}
@@ -265,7 +310,7 @@ export function HomeCategoryRail({
               type="button"
               onClick={() => scrollCategories(-1)}
               aria-label="Show previous craving categories"
-              className="absolute left-1.5 top-[3.25rem] z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white/94 !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] backdrop-blur transition-[box-shadow,background-color,transform] duration-200 hover:!bg-white hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-flame-red)]/30 md:left-4 md:top-[3.75rem] lg:left-7 lg:top-[4rem]"
+              className="absolute left-1.5 top-[3.25rem] z-20 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] transition-[box-shadow,scale] duration-200 hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] active:scale-[0.94] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-flame-red)]/30 md:left-4 md:top-[3.75rem] md:flex lg:left-7 lg:top-[4rem]"
             >
               <FaChevronLeft
                 className="h-4 w-4 lg:h-5 lg:w-5"
@@ -286,7 +331,7 @@ export function HomeCategoryRail({
               type="button"
               onClick={() => scrollCategories(1)}
               aria-label="Show more craving categories"
-              className="absolute right-1.5 top-[3.25rem] z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white/94 !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] backdrop-blur transition-[box-shadow,background-color,transform] duration-200 hover:!bg-white hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-flame-red)]/30 md:right-4 md:top-[3.75rem] lg:right-7 lg:top-[4rem]"
+              className="absolute right-1.5 top-[3.25rem] z-20 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-[#E9EBEE] !bg-white !text-[#1A1A1A] shadow-[0_4px_12px_rgba(26,26,26,0.12)] transition-[box-shadow,scale] duration-200 hover:shadow-[0_8px_18px_rgba(26,26,26,0.16)] active:scale-[0.94] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-flame-red)]/30 md:right-4 md:top-[3.75rem] md:flex lg:right-7 lg:top-[4rem]"
             >
               <FaChevronRight
                 className="h-4 w-4 lg:h-5 lg:w-5"

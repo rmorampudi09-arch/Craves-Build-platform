@@ -308,10 +308,11 @@ test("customer headers stay lean and share the same responsive scroll behavior",
   assert.match(autoHide, /travel >= HIDE_DELTA_PX/);
   assert.match(autoHide, /travel >= SHOW_DELTA_PX/);
   assert.match(autoHide, /requestAnimationFrame/);
-  assert.match(autoHide, /duration-\[260ms\]/);
-  assert.match(autoHide, /--craves-desktop-header-offset-md/);
-  assert.match(autoHide, /--craves-desktop-header-offset-lg/);
+  assert.match(autoHide, /\{ passive: true \}/);
+  assert.match(autoHide, /duration-\(--dur-chrome\)/);
+  assert.match(autoHide, /export function useScrollChrome\(\)/);
+  assert.match(autoHide, /export function holdScrollChrome\(/);
   assert.match(autoHide, /motion-reduce:transition-none/);
-  assert.match(autoHide, /onFocusCapture=\{\(\) => setHidden\(false\)\}/);
+  assert.match(autoHide, /onFocusCapture=\{revealScrollChrome\}/);
   assert.match(homeHeader, /<AutoHideCustomerHeader mobileStatic/);
 });

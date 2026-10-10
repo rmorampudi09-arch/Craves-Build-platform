@@ -34,6 +34,12 @@ public class AdminHomeBannerController {
         return service.update(principal, id, request.label(), request.sortOrder(), request.published(), request.expectedUpdatedAt());
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID id) {
+        service.delete(principal, id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{id}/image")
     public ResponseEntity<byte[]> image(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID id) {
         var image = service.image(id, principal, true);

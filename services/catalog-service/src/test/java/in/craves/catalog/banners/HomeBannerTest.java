@@ -80,4 +80,12 @@ class HomeBannerTest {
             .build().perform(get("/api/v1/catalog/admin/banners"))
             .andExpect(status().isUnauthorized());
     }
+    @Test void deleteNeedsPlatformAdminAndAnExistingBanner() {
+        var jdbc = mock(JdbcTemplate.class); var service = new HomeBannerService(jdbc); var id = UUID.randomUUID();
+        var audit = new CravesPrincipal(UUID.randomUUID(), null, Set.of("AUDIT_ADMIN"));
+        assertEquals(HttpStatus.FORBIDDEN, assertThrows(ResponseStatusException.class, () -> service.delete(audit, id)).getStatusCode());
+        verifyNoInteractions(jdbc);
+        var admin = new CravesPrincipal(UUID.randomUUID(), null, Set.of("PLATFORM_ADMIN"));
+        assertEquals(HttpStatus.NOT_FOUND, assertThrows(ResponseStatusException.class, () -> service.delete(admin, id)).getStatusCode());
+    }
 }

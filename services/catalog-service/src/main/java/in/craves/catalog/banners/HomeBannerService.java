@@ -6,6 +6,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class HomeBannerService {
+    private static final Logger log = LoggerFactory.getLogger(HomeBannerService.class);
     private final JdbcTemplate jdbc;
     private volatile CachedFeed feed;
     private final ConcurrentHashMap<UUID, CachedImage> imageCache = new ConcurrentHashMap<>();
@@ -87,6 +90,18 @@ public class HomeBannerService {
         feed = null;
         imageCache.remove(id);
         return select("WHERE id=?", id).getFirst();
+    }
+
+    @Transactional
+    public void delete(CravesPrincipal principal, UUID id) {
+        requireAdmin(principal, true);
+        jdbc.execute("SELECT pg_advisory_xact_lock(812042001)");
+        // The audit rows reference the banner without a cascade, so they go with it; the log keeps who deleted it.
+        jdbc.update("DELETE FROM catalog_schema.home_banner_audit WHERE banner_id=?", id);
+        if (jdbc.update("DELETE FROM catalog_schema.home_banners WHERE id=?", id) != 1) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        log.info("Home banner {} deleted by {}", id, principal.identityId());
+        feed = null;
+        imageCache.remove(id);
     }
 
     private void audit(UUID id, UUID actor, String action) {

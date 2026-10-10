@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, ExternalLink, RefreshCw } from "lucide-react";
 import { FaArrowLeft, FaArrowsRotate } from "react-icons/fa6";
 import {
@@ -17,14 +17,28 @@ import {
 } from "@/lib/delivery-status";
 import { loadSession } from "@/services/auth/cravesAuth";
 import { trackingPresentation } from "@/lib/tracking-presentation";
+import { shortOrderNumber } from "@/lib/order-number";
 import { TrackingHeader } from "@/components/tracking/TrackingHeader";
 import { CurrentStatusCard } from "@/components/tracking/CurrentStatusCard";
 import { OrderTimeline } from "@/components/tracking/OrderTimeline";
 import { DeliveryAddressCard } from "@/components/tracking/DeliveryAddressCard";
 import { TrackingOrderSummaryCard } from "@/components/tracking/TrackingOrderSummaryCard";
 
-const routeApi = getRouteApi("/tracking");
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UNAVAILABLE = "We couldn’t load tracking for this order. Please try again.";
+const clockTime = new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" });
+const dayAndTime = new Intl.DateTimeFormat("en-IN", {
+  day: "numeric",
+  month: "short",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+/** "9:41 pm" today, "8 Oct, 9:41 pm" otherwise. */
+function updateTime(value: string): string {
+  const date = new Date(value);
+  return (date.toDateString() === new Date().toDateString() ? clockTime : dayAndTime).format(date);
+}
 
 function responseMessage(value: unknown, fallback: string): string {
   return value &&
@@ -35,9 +49,8 @@ function responseMessage(value: unknown, fallback: string): string {
     : fallback;
 }
 
-export default function TrackingPage() {
+export default function TrackingPage({ orderId: id }: { orderId: string }) {
   const navigate = useNavigate();
-  const { id } = routeApi.useSearch();
   const [order, setOrder] = useState<CustomerOrder | null>(null);
   const [delivery, setDelivery] = useState<DeliveryStatusResponse | null>(null);
   const deliveryRef = useRef<DeliveryStatusResponse | null>(null);
@@ -69,11 +82,11 @@ export default function TrackingPage() {
 
         const orderRaw = await orderResponse.json().catch(() => null);
         if (!orderResponse.ok) {
-          throw new Error(responseMessage(orderRaw, "Order could not be loaded."));
+          throw new Error(responseMessage(orderRaw, UNAVAILABLE));
         }
         const parsedOrder = parseCustomerOrder(orderRaw);
         if (!parsedOrder || parsedOrder.id.toLowerCase() !== orderId.toLowerCase()) {
-          throw new Error("Craves returned an invalid order response.");
+          throw new Error(UNAVAILABLE);
         }
         setOrder(parsedOrder);
 
@@ -81,14 +94,14 @@ export default function TrackingPage() {
           const deliveryRaw = await deliveryResponse.json().catch(() => null);
           const parsedDelivery = parseDeliveryStatusResponse(deliveryRaw);
           if (parsedDelivery.orderId.toLowerCase() !== orderId.toLowerCase()) {
-            throw new Error("Craves returned delivery tracking for another order.");
+            throw new Error(UNAVAILABLE);
           }
           deliveryRef.current = parsedDelivery;
           setDelivery(parsedDelivery);
           setMessage(
             parsedDelivery.status
               ? "Your delivery status is up to date."
-              : "Your latest order progress is shown above. Delivery updates will appear here when available.",
+              : "Delivery updates will appear here once a delivery partner picks up your order.",
           );
         } else {
           const deliveryRaw = await deliveryResponse.json().catch(() => null);
@@ -96,20 +109,16 @@ export default function TrackingPage() {
           setDelivery(null);
           setMessage(
             deliveryResponse.status === 404
-              ? "Your latest order progress is shown above. Delivery updates will appear here when available."
+              ? "Delivery updates will appear here once a delivery partner picks up your order."
               : responseMessage(
                   deliveryRaw,
-                  "Delivery tracking is temporarily unavailable; the order status is still current.",
+                  "Delivery updates are taking a break. Your order status above is still current.",
                 ),
           );
         }
         setLastUpdatedAt(new Date());
       } catch (caught) {
-        setError(
-          caught instanceof Error
-            ? caught.message
-            : "Order tracking is unavailable.",
-        );
+        setError(caught instanceof Error ? caught.message : UNAVAILABLE);
       } finally {
         refreshingRef.current = false;
         setLoading(false);
@@ -173,7 +182,7 @@ export default function TrackingPage() {
         return {
           key: `${entry.newStatus}-${entry.recordedAt}`,
           label: item.label,
-          desc: new Date(entry.observedAt).toLocaleString("en-IN"),
+          desc: updateTime(entry.observedAt),
         };
       })
     : [
@@ -181,7 +190,7 @@ export default function TrackingPage() {
           key: order?.status ?? "waiting",
           label: order ? formatOrderStatus(order.status) : "Loading order",
           desc: order
-            ? "Latest order update"
+            ? `Updated ${updateTime(order.updatedAt)}`
             : "Getting your latest order update",
         },
       ];
@@ -189,7 +198,8 @@ export default function TrackingPage() {
   return (
     <div className="min-h-screen bg-white pb-16 text-[#1A1A1A]">
       <TrackingHeader
-        orderId={id}
+        // The header only displays this: pass the short number customers see everywhere.
+        orderId={shortOrderNumber(id)}
         onBack={() => navigate({ to: "/orders" })}
         onRefresh={() => void refresh(id, true)}
         refreshing={busy}
@@ -212,29 +222,29 @@ export default function TrackingPage() {
             </div>
           </div>
         ) : !order ? (
-          <section className="rounded-2xl border border-[#F62E18]/25 bg-white p-8 text-center shadow-[0_3px_10px_rgba(0,0,0,0.05)] md:p-12">
+          <section className="rounded-2xl border border-[#E5E7EB] bg-white p-8 text-center shadow-[0_3px_10px_rgba(0,0,0,0.05)] md:p-12">
             <AlertTriangle
-              className="mx-auto h-10 w-10 text-[#F62E18]"
+              className="mx-auto h-10 w-10 text-[#C4200F]"
               aria-hidden="true"
             />
-            <h1 className="mt-4 text-2xl font-semibold text-[#1A1A1A]">
+            <h2 className="mt-4 text-2xl font-semibold text-[#1A1A1A]">
               Tracking unavailable
-            </h1>
+            </h2>
             <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
-              {error || "The order could not be loaded."}
+              {error || UNAVAILABLE}
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <button
                 type="button"
                 onClick={() => void refresh(id)}
-                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#F62E18] px-4 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                className="craves-primary-action"
               >
-                <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                Retry
+                <RefreshCw className="h-5 w-5" aria-hidden="true" />
+                Try again
               </button>
               <Link
                 to="/orders"
-                className="inline-flex min-h-11 items-center rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold !text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]"
+                className="inline-flex min-h-12 items-center rounded-full bg-[#F1F3F5] px-6 text-base font-bold !text-[#1A1A1A]"
               >
                 Back to orders
               </Link>
@@ -251,14 +261,9 @@ export default function TrackingPage() {
 
                 <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_3px_10px_rgba(0,0,0,0.05)] md:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#F62E18]">
-                        Live progress
-                      </p>
-                      <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[#1A1A1A]">
-                        Order and delivery timeline
-                      </h2>
-                    </div>
+                    <h2 className="text-xl font-semibold tracking-[-0.02em] text-[#1A1A1A]">
+                      Order and delivery updates
+                    </h2>
                     <button
                       type="button"
                       disabled={busy}
@@ -282,9 +287,9 @@ export default function TrackingPage() {
                     href={delivery.trackingUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#F62E18] shadow-[0_3px_10px_rgba(0,0,0,0.05)] transition-colors hover:bg-[#F1F3F5]"
+                    className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold !text-[#C4200F] shadow-[0_3px_10px_rgba(0,0,0,0.05)] transition-colors hover:bg-[#F1F3F5]"
                   >
-                    Open delivery-provider tracking
+                    Track with the delivery partner
                     <ExternalLink className="h-4 w-4" aria-hidden="true" />
                   </a>
                 )}
@@ -297,21 +302,21 @@ export default function TrackingPage() {
 
                 <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_3px_10px_rgba(0,0,0,0.05)]">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
                       <FaArrowsRotate className="text-base" aria-hidden="true" />
                     </span>
                     <p className="text-sm font-semibold text-[#1A1A1A]">
-                      Tracking refresh
+                      Live updates
                     </p>
                   </div>
                   <p role="status" className="mt-3 text-xs leading-5 text-[#6B6B6B]">
                     {message}
                     {lastUpdatedAt
-                      ? ` Last checked ${lastUpdatedAt.toLocaleTimeString("en-IN")}.`
+                      ? ` Last checked at ${clockTime.format(lastUpdatedAt)}.`
                       : ""}
                   </p>
                   <p className="mt-2 text-xs leading-5 text-[#6B6B6B]">
-                    Active delivery states refresh every 30 seconds while this tab is visible. Terminal states stop polling.
+                    This page checks for updates every 30 seconds while it’s open.
                   </p>
                 </section>
               </aside>
@@ -322,7 +327,7 @@ export default function TrackingPage() {
               className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold !text-[#1A1A1A] shadow-[0_3px_10px_rgba(0,0,0,0.04)] transition-colors hover:bg-[#F1F3F5]"
             >
               <FaArrowLeft className="text-sm" aria-hidden="true" />
-              Back to discovery
+              Back to home
             </Link>
           </div>
         )}
@@ -330,7 +335,7 @@ export default function TrackingPage() {
         {error && order && (
           <p
             role="alert"
-            className="mt-5 rounded-xl border border-[#F62E18]/25 bg-white p-3 text-sm font-medium text-[#C92716]"
+            className="mt-5 rounded-xl bg-[#F1F3F5] p-3 text-sm font-medium text-[#C4200F]"
           >
             {error}
           </p>

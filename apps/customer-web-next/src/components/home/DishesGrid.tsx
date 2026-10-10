@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   MapPin,
@@ -15,6 +15,7 @@ import type {
   HomeDishSort,
   HomeFoodPreference,
 } from "@/lib/home-return-state";
+import { AnimateCount } from "@/components/ui/AnimateCount";
 import { listItem } from "@/lib/motion";
 import type { Dish } from "@/services/api/dishes";
 
@@ -26,6 +27,145 @@ const SORT_OPTIONS: readonly { value: HomeDishSort; label: string }[] = [
   { value: "price-low-high", label: "Cost: Low to High" },
   { value: "price-high-low", label: "Cost: High to Low" },
 ];
+
+type ThumbBox = { x: number; y: number; width: number; height: number; radius: number };
+
+const sameBox = (a: ThumbBox | null, b: ThumbBox | null) =>
+  a === b ||
+  (!!a &&
+    !!b &&
+    a.x === b.x &&
+    a.y === b.y &&
+    a.width === b.width &&
+    a.height === b.height &&
+    a.radius === b.radius);
+
+// Every thumb part moves on the same curve and clock, so the pill keeps its shape mid-slide.
+const THUMB_PART =
+  "pointer-events-none absolute left-0 top-0 bg-[#1A1A1A] transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none";
+
+/**
+ * Sort is one choice, so one ink thumb slides to it (the iOS segmented-control move). It is
+ * drawn as two round caps and a 1px bar scaled between them, so position and width animate
+ * as transforms on the compositor: the slide stays smooth while the new list is rendering.
+ * Labels use difference blending: dark on the chips, light on the thumb, inverting exactly
+ * where the thumb passes.
+ */
+function SortChoices({
+  sort,
+  onSortChange,
+}: {
+  sort: HomeDishSort;
+  onSortChange: (sort: HomeDishSort) => void;
+}) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const placedRef = useRef(false);
+  const [thumb, setThumb] = useState<ThumbBox | null>(null);
+
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    if (!row) return;
+    const chosen = () => row.querySelector<HTMLElement>('button[aria-pressed="true"]');
+    const measure = () => {
+      const button = chosen();
+      const next = button
+        ? {
+            x: button.offsetLeft,
+            y: button.offsetTop,
+            width: button.offsetWidth,
+            height: button.offsetHeight,
+            // rounded-full computes to an enormous radius: a pill's is half its height.
+            radius: Math.min(
+              parseFloat(getComputedStyle(button).borderTopLeftRadius) || 0,
+              button.offsetHeight / 2,
+            ),
+          }
+        : null;
+      setThumb((current) => (sameBox(current, next) ? current : next));
+    };
+    measure();
+    // Keep the chosen chip fully visible in the swipeable phone row (the row only, never the page).
+    const button = chosen();
+    if (button && row.scrollWidth > row.clientWidth) {
+      const gutter = 16;
+      const start = button.offsetLeft - gutter;
+      const end = button.offsetLeft + button.offsetWidth + gutter - row.clientWidth;
+      const left = row.scrollLeft > start ? start : row.scrollLeft < end ? end : null;
+      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      if (left !== null) {
+        row.scrollTo({ left, behavior: placedRef.current && !reduce ? "smooth" : "auto" });
+      }
+    }
+    placedRef.current = true;
+    const observer = new ResizeObserver(measure);
+    row.querySelectorAll("button").forEach((item) => observer.observe(item));
+    return () => observer.disconnect();
+  }, [sort]);
+
+  const cap = thumb ? thumb.radius * 2 : 0;
+  return (
+    <div
+      ref={rowRef}
+      className="relative isolate -mx-4 flex w-[calc(100%+2rem)] items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:w-auto md:flex-wrap md:overflow-visible md:rounded-[1.15rem] md:border md:border-[#E8EAED] md:bg-white md:p-1.5 md:shadow-[0_7px_22px_rgba(26,26,26,0.055)] [&::-webkit-scrollbar]:hidden"
+      role="group"
+      aria-label="Sort dishes"
+    >
+      {thumb ? (
+        <span aria-hidden="true" data-sort-thumb>
+          <span
+            className={THUMB_PART}
+            style={{
+              width: cap,
+              height: thumb.height,
+              borderRadius: thumb.radius,
+              transform: `translate(${thumb.x}px, ${thumb.y}px)`,
+            }}
+          />
+          <span
+            className={`${THUMB_PART} origin-top-left`}
+            style={{
+              width: 1,
+              height: thumb.height,
+              transform: `translate(${thumb.x + thumb.radius}px, ${thumb.y}px) scaleX(${Math.max(0, thumb.width - cap)})`,
+            }}
+          />
+          <span
+            className={THUMB_PART}
+            style={{
+              width: cap,
+              height: thumb.height,
+              borderRadius: thumb.radius,
+              transform: `translate(${thumb.x + thumb.width - cap}px, ${thumb.y}px)`,
+            }}
+          />
+        </span>
+      ) : null}
+      <span className="hidden shrink-0 px-2.5 text-sm font-bold text-[#6B6B6B] md:inline">
+        Sort by
+      </span>
+      {SORT_OPTIONS.map((option) => {
+        const selected = sort === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onSortChange(option.value)}
+            className={[
+              "min-h-11 shrink-0 rounded-full !border !border-transparent !bg-[#F1F3F5] px-4 text-sm font-black !shadow-none md:min-h-12 md:rounded-[0.9rem] md:!bg-transparent",
+              // A transform would lift the chosen chip above the thumb, so only the others press in.
+              selected
+                ? ""
+                : "transition-[scale] duration-(--dur-micro) active:scale-[0.96] md:hover:!bg-[#F1F3F5]",
+            ].join(" ")}
+            aria-pressed={selected}
+          >
+            <span className="relative text-white mix-blend-difference">{option.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 const INITIAL_DISH_COUNT = 12;
 const DISH_BATCH_SIZE = 8;
@@ -181,11 +321,15 @@ export function DishesGrid({
         </div>
         {state === "ready" ? (
           <div className="flex items-center gap-2">
-            <span
-              className="rounded-full bg-[#F1F3F5] px-3.5 py-2 text-xs font-black text-[#6B6B6B]"
-              aria-live="polite"
-            >
-              {countLabel}
+            {/* The number rolls up or down with the change; the full count is announced once. */}
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#F1F3F5] px-3.5 py-2 text-xs font-black text-[#6B6B6B]">
+              <AnimateCount className="min-w-[1ch]" aria-hidden="true">
+                {dishes.length}
+              </AnimateCount>
+              <span aria-hidden="true">{dishes.length === 1 ? "dish" : "dishes"}</span>
+              <span className="sr-only" aria-live="polite">
+                {countLabel}
+              </span>
             </span>
             {/* Beside the count, so turning a filter on never pushes the list down. */}
             {hasFilters ? (
@@ -209,35 +353,7 @@ export function DishesGrid({
           aria-label="Dish filters"
         >
           {/* Sort applies on tap: a swipeable chip row on phones, a segmented control on md+. */}
-          <div
-            className="-mx-4 flex w-[calc(100%+2rem)] items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:w-auto md:flex-wrap md:overflow-visible md:rounded-[1.15rem] md:border md:border-[#E8EAED] md:bg-white md:p-1.5 md:shadow-[0_7px_22px_rgba(26,26,26,0.055)] [&::-webkit-scrollbar]:hidden"
-            role="group"
-            aria-label="Sort dishes"
-          >
-            <span className="hidden px-2.5 text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B] md:inline">
-              Sort
-            </span>
-            {SORT_OPTIONS.map((option) => {
-              const selected = sort === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => onSortChange(option.value)}
-                  className={[
-                    // The selected fill swaps at once (a fade leaves two half-selected chips); only the press scales.
-                    "min-h-11 shrink-0 rounded-full !border !border-transparent px-4 text-sm font-black !shadow-none transition-[scale] duration-(--dur-micro) active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/10 md:min-h-12 md:rounded-[0.9rem]",
-                    selected
-                      ? "!bg-[#1A1A1A] !text-white"
-                      : "!bg-[#F1F3F5] !text-[#1A1A1A] md:!bg-transparent md:!text-[#6B6B6B] md:hover:!bg-[#F1F3F5] md:hover:!text-[#1A1A1A]",
-                  ].join(" ")}
-                  aria-pressed={selected}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
+          <SortChoices sort={sort} onSortChange={onSortChange} />
         </div>
       ) : null}
 
@@ -272,7 +388,7 @@ export function DishesGrid({
           <button
             type="button"
             onClick={onManageAddress}
-            className="mt-6 min-h-11 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white transition-shadow hover:shadow-[0_7px_18px_rgba(246,46,24,0.16)]"
+            className="mt-6 min-h-11 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white transition-shadow hover:shadow-[0_7px_18px_rgba(26,26,26,0.14)]"
           >
             Choose location
           </button>
@@ -280,7 +396,7 @@ export function DishesGrid({
       ) : null}
 
       {state === "error" ? (
-        <div className="rounded-[2rem] border border-[#F62E18]/25 bg-white p-8 text-center md:p-12">
+        <div className="rounded-[2rem] border border-[#E5E7EB] bg-white p-8 text-center md:p-12">
           <AlertTriangle
             className="mx-auto h-9 w-9 text-[#F62E18]"
             aria-hidden="true"

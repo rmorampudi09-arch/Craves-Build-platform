@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { motion } from "framer-motion";
 import {
   FaArrowLeft,
   FaBagShopping,
@@ -15,6 +16,7 @@ import { CravesLogo } from "@/components/brand/CravesLogo";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
 import { UndoToast } from "@/components/ui/overlays/undo-toast";
+import { spring } from "@/lib/motion";
 import type { CustomerNotification } from "@/lib/notification-contract";
 import { loadSession } from "@/services/auth/cravesAuth";
 
@@ -281,6 +283,7 @@ export default function NotificationsPage() {
             </div>
             <div
               className="flex gap-7 border-b border-[#E5E7EB] sm:gap-9"
+              role="group"
               aria-label="Notification filters"
             >
               {(
@@ -297,13 +300,18 @@ export default function NotificationsPage() {
                     type="button"
                     onClick={() => setFilter(value)}
                     aria-pressed={active}
-                    className={`group relative min-h-11 appearance-none border-0 !bg-transparent px-3 pb-2 pt-2 text-sm font-semibold shadow-none outline-none transition-colors duration-200 hover:!bg-transparent focus:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent ${
-                      active
-                        ? "after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:rounded-full after:bg-[#F62E18]"
-                        : "after:absolute after:inset-x-2 after:bottom-[-1px] after:h-0.5 after:origin-center after:scale-x-0 after:rounded-full after:bg-[#F62E18]"
-                    }`}
+                    className="group relative min-h-11 appearance-none border-0 !bg-transparent px-3 pb-2 pt-2 text-sm font-semibold shadow-none outline-none transition-colors duration-200 hover:!bg-transparent focus:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent"
                   >
-                    <span className="text-[#1A1A1A] transition-colors duration-200 group-hover:text-[#F62E18] group-focus-visible:text-[#F62E18]">
+                    {/* One underline glides to the chosen filter (Material tabs); reduced motion jumps. */}
+                    {active ? (
+                      <motion.span
+                        layoutId="notification-filter-indicator"
+                        aria-hidden="true"
+                        className="absolute inset-x-0 bottom-[-1px] h-0.5 rounded-full bg-[#F62E18]"
+                        transition={spring.ui}
+                      />
+                    ) : null}
+                    <span className="text-[#1A1A1A] transition-colors duration-200 group-hover:text-[#C4200F] group-focus-visible:text-[#C4200F]">
                       {label} ({count})
                     </span>
                   </button>

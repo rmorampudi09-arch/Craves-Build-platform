@@ -86,12 +86,16 @@ test("mobile browse keeps dish proportions and cart glass with larger craving im
   assert.match(grid, /aspect-\[16\/9\] sm:aspect-\[16\/10\]/);
   assert.doesNotMatch(grid, /aspect-\[4\/3\]/);
   assert.match(cravings, /h-\[5\.75rem\] w-\[5\.75rem\]/);
-  // The cart bar is frosted glass over the page; only View cart is coloured (leaf green, AA).
-  assert.match(nav, /bg-white\/72[^"]*backdrop-blur-\[14px\]/);
+  // Tabs and the cart bar share one floating glass bar (the desktop cart bar's glass);
+  // only View cart is coloured (leaf green, AA).
+  assert.match(nav, /\$\{glass\.glassDock\} pointer-events-auto relative isolate/);
+  assert.match(nav, /className=\{glass\.floatingCartGlass\}/);
+  assert.match(homeStyles, /\.glassDock \{[\s\S]*?backdrop-filter: blur\(8px\) saturate\(145%\)/);
   assert.match(nav, /bg-\[#17803D\][^"]*text-white/);
   assert.doesNotMatch(nav, /bg-\[#1A1A1A\]/);
   // The selected tab is marked by a pill, not by colour alone, and the badge passes AA.
-  assert.match(nav, /active \? "bg-\[#F1F3F5\] text-\[#F62E18\]"/);
+  assert.match(nav, /const TAB_PILL = "bg-white\/85 text-\[#F62E18\]/);
+  assert.match(nav, /active \? TAB_PILL : ""/);
   assert.match(nav, /bg-\[#C4200F\][^"]*text-white/);
   // Keyboard users keep the tabs: the bar never makes them inert while navigating by keys.
   assert.match(nav, /const cartExpanded = hidden && itemCount > 0 && !keyboardNavigation;/);
@@ -171,7 +175,13 @@ test("category, Veg and sort changes reveal dishes calmly instead of a long chro
   assert.match(grid, /paging\.key === dishViewKey \? paging\.count : INITIAL_DISH_COUNT/);
   assert.doesNotMatch(grid, /setVisibleCount|scrollIntoView|@radix-ui\/react-popover/);
   assert.match(grid, /aria-label="Sort dishes"/);
-  assert.match(grid, /"!bg-\[#1A1A1A\] !text-white"/);
+  // One ink thumb slides to the chosen sort; labels invert where it passes (difference blend).
+  assert.match(grid, /data-sort-thumb/);
+  // Caps and a scaled bar: the slide is transform-only, so it runs on the compositor.
+  assert.match(grid, /const THUMB_PART =\s*"pointer-events-none absolute left-0 top-0 bg-\[#1A1A1A\] transition-transform/);
+  assert.match(grid, /scaleX\(\$\{Math\.max\(0, thumb\.width - cap\)\}\)/);
+  assert.match(grid, /text-white mix-blend-difference/);
+  assert.match(grid, /relative isolate/);
 });
 
 test("dish bottom bar confirms an add in place and keeps the action bar mounted", () => {

@@ -478,6 +478,13 @@ nav[aria-label="Customer services"] a:focus-visible {
   outline: none !important;
 }
 
+/* A control that replaces another in place (Add ↔ stepper) fades in over the shared pill. */
+@keyframes craves-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
 @keyframes craves-busy-pulse {
   50% {
     opacity: 0.4;

@@ -73,9 +73,9 @@ export function FloatingCartBar({
           </span>
         </span>
 
-        <span className="relative z-10 inline-flex shrink-0 items-center gap-2 rounded-[8px] border border-white bg-white/90 px-4 py-3 text-sm font-black text-[#1A1A1A] shadow-[inset_0_1px_0_rgba(255,255,255,1)] backdrop-blur-md sm:px-5 sm:text-base">
-          <span className="hidden sm:inline">View Cart</span>
-          <span className="sm:hidden">Cart</span>
+        {/* Only the action is coloured: the same leaf green as the phone cart bar (AA with white). */}
+        <span className="relative z-10 inline-flex shrink-0 items-center gap-2 rounded-[0.9rem] bg-[#17803D] px-5 py-3 text-base font-black text-white shadow-[0_6px_16px_rgba(23,128,61,0.28)] transition-[background-color] duration-(--dur-micro) group-hover:bg-[#12692F] group-active:bg-[#12692F]">
+          View cart
           <ArrowRight
             className="h-[1.05rem] w-[1.05rem] transition-[translate] duration-(--dur-component) ease-out group-hover:translate-x-0.5"
             aria-hidden="true"

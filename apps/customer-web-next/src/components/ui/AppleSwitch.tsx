@@ -23,6 +23,8 @@ export interface AppleSwitchProps
   description?: React.ReactNode;
   size?: keyof typeof switchSizes;
   labelSide?: "left" | "right";
+  /** "veg" uses the green of the Indian veg mark when on. */
+  tone?: "flame" | "veg";
 }
 
 /** A tap toggles; the thumb slides on x only, with no overshoot (and jumps under reduced motion). */
@@ -35,6 +37,7 @@ export const AppleSwitch = forwardRef<HTMLButtonElement, AppleSwitchProps>(
       description,
       size = "sm",
       labelSide = "right",
+      tone = "flame",
       className = "",
       style,
       disabled,
@@ -71,8 +74,8 @@ export const AppleSwitch = forwardRef<HTMLButtonElement, AppleSwitchProps>(
           onCheckedChange?.(!on);
         }}
         aria-label={typeof label === "string" ? label : props["aria-label"]}
-        className={`relative inline-flex shrink-0 cursor-pointer items-center rounded-full !border-0 !shadow-none outline-none transition-[background-color] duration-(--dur-component) focus-visible:ring-2 focus-visible:ring-[#F62E18]/35 disabled:cursor-not-allowed disabled:opacity-45 ${
-          on ? "!bg-[#F62E18]" : "!bg-[#D9DDE2]"
+        className={`relative inline-flex shrink-0 cursor-pointer items-center rounded-full !border-0 !shadow-none outline-none transition-[background-color] duration-(--dur-component) disabled:cursor-not-allowed disabled:opacity-45 ${
+          on ? (tone === "veg" ? "!bg-[#2E7D32]" : "!bg-[#F62E18]") : "!bg-[#D9DDE2]"
         } ${className}`}
         style={{
           width: metrics.trackX,

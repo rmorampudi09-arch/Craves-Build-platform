@@ -14,6 +14,7 @@ import {
 } from "@/components/navigation/AutoHideCustomerHeader";
 import { AnimateCount } from "@/components/ui/AnimateCount";
 import { ease } from "@/lib/motion";
+import glass from "@/screens/public/BrowseFoods/HomeReference.module.css";
 import {
   cartCount,
   cartCurrency,
@@ -29,6 +30,9 @@ const NAV_SWAP = {
   pillIn: { opacity: 1, transform: "translateX(0px)", transition: { duration: 0.18, ease: ease.out, delay: 0.08 } },
   pillLeave: { opacity: 0, transform: "translateX(16px)", transition: { duration: 0.1, ease: ease.in } },
 };
+
+// The chosen tab's icon sits in a raised white pill on the glass.
+const TAB_PILL = "bg-white/85 text-[#F62E18] shadow-[0_1px_4px_rgba(26,26,26,0.12)]";
 
 type NavKey =
   | "home"
@@ -168,26 +172,25 @@ export function BottomNav() {
         className="h-[calc(4.7rem+env(safe-area-inset-bottom))] md:hidden"
       />
 
+      {/* One floating glass bar (the desktop cart bar's glass: see-through blur, saturated colour
+          and light edge highlights) holds both the tabs and the View cart bar. */}
       <nav
         data-craves-bottom-nav
-        className="fixed inset-x-0 bottom-0 z-40 md:hidden"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden"
         aria-label="Customer navigation"
       >
         <div
-          className={[
-            "relative mx-auto max-w-lg rounded-t-[1.15rem] border-t transition-[background-color,border-color,box-shadow] duration-200 ease-out",
-            cartExpanded
-              ? "border-transparent bg-transparent shadow-none"
-              : "border-[#ECEEF0] bg-white shadow-[0_-8px_24px_rgba(26,26,26,0.065)]",
-          ].join(" ")}
+          className={`${glass.glassDock} pointer-events-auto relative isolate mx-auto max-w-lg overflow-hidden rounded-[1.6rem]`}
         >
-          {/* Tabs and the cart pill trade places as a fade-through: the leaving layer is gone
-              before the arriving one shows, so icons and the total are never drawn over each other. */}
+          <span aria-hidden="true" className={glass.floatingCartGlass} />
+          <span aria-hidden="true" className={glass.floatingCartShine} />
+          {/* Tabs and the cart bar trade places as a fade-through inside the same glass: the leaving
+              layer is gone before the arriving one shows, so icons and the total never overlap. */}
           <motion.ul
             initial={false}
             animate={cartExpanded ? NAV_SWAP.hide : NAV_SWAP.show}
             className={[
-              "grid grid-cols-5 items-stretch px-1.5 pb-[max(0.38rem,env(safe-area-inset-bottom))] pt-1.5",
+              "relative z-10 grid grid-cols-5 items-stretch px-1 py-1.5",
               cartExpanded ? "pointer-events-none" : "",
             ].join(" ")}
             aria-hidden={cartExpanded || undefined}
@@ -200,18 +203,16 @@ export function BottomNav() {
                   <Link
                     href={href}
                     className={[
-                      "flex min-h-[3.45rem] flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 text-center text-[0.61rem] leading-[0.72rem] transition-[color,scale] duration-(--dur-micro) active:scale-[0.94]",
-                      active
-                        ? "font-black text-[#1A1A1A]"
-                        : "font-bold text-[#6B6B6B] hover:text-[#1A1A1A]",
+                      "flex min-h-[3.3rem] flex-col items-center justify-center gap-0.5 rounded-[1.1rem] px-0.5 text-center text-[0.61rem] leading-[0.72rem] transition-[color,scale] duration-(--dur-micro) active:scale-[0.94]",
+                      active ? "font-black text-[#1A1A1A]" : "font-bold text-[#3A3A3A]",
                     ].join(" ")}
                     aria-current={active ? "page" : undefined}
                   >
-                    {/* The selected tab is marked by shape, not colour alone: its icon sits in a pill. */}
+                    {/* The selected tab is marked by shape, not colour alone: its icon sits in a raised pill. */}
                     <span
                       className={[
-                        "flex h-7 w-12 items-center justify-center rounded-full transition-[background-color] duration-(--dur-component)",
-                        active ? "bg-[#F1F3F5] text-[#F62E18]" : "",
+                        "flex h-7 w-12 items-center justify-center rounded-full transition-[background-color,box-shadow] duration-(--dur-component)",
+                        active ? TAB_PILL : "",
                       ].join(" ")}
                     >
                       <Icon className="h-[1.12rem] w-[1.12rem] shrink-0" aria-hidden="true" />
@@ -226,10 +227,8 @@ export function BottomNav() {
               <Link
                 href="/cart"
                 className={[
-                  "flex min-h-[3.45rem] flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 text-center text-[0.61rem] leading-[0.72rem] transition-[color,scale] duration-(--dur-micro) active:scale-[0.94]",
-                  activeKey === "cart"
-                    ? "font-black text-[#1A1A1A]"
-                    : "font-bold text-[#6B6B6B] hover:text-[#1A1A1A]",
+                  "flex min-h-[3.3rem] flex-col items-center justify-center gap-0.5 rounded-[1.1rem] px-0.5 text-center text-[0.61rem] leading-[0.72rem] transition-[color,scale] duration-(--dur-micro) active:scale-[0.94]",
+                  activeKey === "cart" ? "font-black text-[#1A1A1A]" : "font-bold text-[#3A3A3A]",
                 ].join(" ")}
                 aria-current={activeKey === "cart" ? "page" : undefined}
                 aria-label={
@@ -240,8 +239,8 @@ export function BottomNav() {
               >
                 <span
                   className={[
-                    "relative flex h-7 w-12 items-center justify-center rounded-full transition-[background-color] duration-(--dur-component)",
-                    activeKey === "cart" ? "bg-[#F1F3F5] text-[#F62E18]" : "",
+                    "relative flex h-7 w-12 items-center justify-center rounded-full transition-[background-color,box-shadow] duration-(--dur-component)",
+                    activeKey === "cart" ? TAB_PILL : "",
                   ].join(" ")}
                 >
                   <CravesCartIcon className="h-[1.12rem] w-[1.12rem]" />
@@ -271,15 +270,15 @@ export function BottomNav() {
                 initial={NAV_SWAP.pillOut}
                 animate={NAV_SWAP.pillIn}
                 exit={NAV_SWAP.pillLeave}
-                className="absolute inset-x-1.5 bottom-[max(0.38rem,env(safe-area-inset-bottom))] top-1.5 z-10"
+                className="absolute inset-0 z-10 p-1.5"
               >
-                {/* Frosted glass over the page; only "View cart" is coloured (leaf green, AA with white). */}
+                {/* The glass is the bar; only "View cart" is coloured (leaf green, AA with white). */}
                 <Link
                   href="/cart"
-                  className="group flex h-full min-h-[3.45rem] items-center gap-3 rounded-[1.15rem] border border-white/80 bg-white/72 py-1.5 pl-2 pr-1.5 text-[#1A1A1A] shadow-[0_14px_34px_rgba(26,26,26,0.16),0_1px_3px_rgba(26,26,26,0.08),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-[14px] backdrop-saturate-[160%] transition-[scale] duration-(--dur-micro) active:scale-[0.98]"
+                  className="group flex h-full items-center gap-3 rounded-[1.25rem] pl-1.5 pr-0.5 text-[#1A1A1A] transition-[scale] duration-(--dur-micro) active:scale-[0.98]"
                   aria-label={`View cart with ${itemCount} ${itemCount === 1 ? "item" : "items"}, ${formatMoney(total, currency)}`}
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18] shadow-[0_2px_8px_rgba(26,26,26,0.08)]">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/85 text-[#F62E18] shadow-[0_2px_8px_rgba(26,26,26,0.1)]">
                     <CravesCartIcon className="h-4.5 w-4.5" />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -292,11 +291,11 @@ export function BottomNav() {
                         {formatMoney(total, currency)}
                       </span>
                     </span>
-                    <span className="mt-0.5 block truncate text-[0.7rem] font-semibold text-[#4A4A4A]">
+                    <span className="mt-0.5 block truncate text-[0.7rem] font-semibold text-[#3A3A3A]">
                       Your Craves cart is ready
                     </span>
                   </span>
-                  <span className="flex h-11 shrink-0 items-center gap-1.5 rounded-[0.9rem] bg-[#17803D] px-4 text-sm font-black text-white shadow-[0_6px_16px_rgba(23,128,61,0.28)] transition-[background-color] duration-(--dur-micro) group-active:bg-[#12692F]">
+                  <span className="flex h-11 shrink-0 items-center gap-1.5 rounded-[1rem] bg-[#17803D] px-4 text-sm font-black text-white shadow-[0_6px_16px_rgba(23,128,61,0.28)] transition-[background-color] duration-(--dur-micro) group-active:bg-[#12692F]">
                     View cart
                     <ArrowRight className="h-4 w-4" aria-hidden="true" />
                   </span>

@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import {
   ChefHat,
   Clock3,
@@ -138,9 +138,28 @@ export const DishCard = memo(function DishCard({
     }
   };
 
+  // Add and the stepper replace each other: keep focus on the control that is there now.
+  const controlRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef(false);
+  const inCart = quantity > 0;
+  useEffect(() => {
+    if (!restoreFocusRef.current) return;
+    restoreFocusRef.current = false;
+    controlRef.current
+      ?.querySelector<HTMLButtonElement>(inCart ? "[data-step='up']" : "[data-step='add']")
+      ?.focus();
+  }, [inCart]);
+  // Fade only controls the customer just swapped, never the list's first paint.
+  const [morph, setMorph] = useState(false);
+  const keepFocus = () => {
+    restoreFocusRef.current = Boolean(controlRef.current?.contains(document.activeElement));
+    setMorph(true);
+  };
+
   // The cart shows the change at once and reconciles with Craves in the background.
   const handleAdd = () => {
     if (adding) return;
+    keepFocus();
     setAdding(true);
     setError(null);
     addToCart(
@@ -171,6 +190,7 @@ export const DishCard = memo(function DishCard({
     if (!cartLine) return;
     const nextQuantity = cartLine.qty + change;
     if (nextQuantity > 50) return;
+    if (nextQuantity === 0) keepFocus();
     setError(null);
     setQty(cartLine.id, nextQuantity).catch((quantityError: unknown) => {
       setError(
@@ -298,48 +318,58 @@ export const DishCard = memo(function DishCard({
             ) : null}
           </div>
 
-          {quantity > 0 ? (
-            <div
-              className="inline-flex min-h-10 shrink-0 items-center overflow-hidden rounded-full bg-[#F1F3F5] text-[#1A1A1A] shadow-[0_5px_14px_rgba(26,26,26,0.06)]"
-              aria-label={`${dish.name} quantity ${quantity}`}
-            >
+          {/* One footprint for both states (as on Blinkit and Instamart): Add turns into the
+              stepper in place, so the card never changes height. Only the current control is
+              mounted (no motion components in every card); after a tap the new one fades in over
+              the shared pill with a CSS keyframe on the compositor. The count rolls. */}
+          <div
+            ref={controlRef}
+            className="relative h-12 w-[7.5rem] shrink-0 rounded-full bg-[#F1F3F5] text-[#1A1A1A] shadow-[0_5px_14px_rgba(26,26,26,0.06)]"
+          >
+            {inCart ? (
+              <div
+                role="group"
+                aria-label={`${dish.name} in cart`}
+                className={`absolute inset-0 flex items-center ${morph ? "animate-[craves-fade-in_150ms_ease-out]" : ""}`}
+              >
+                <button
+                  type="button"
+                  onClick={() => handleQuantityChange(-1)}
+                  className="flex h-12 min-h-12 w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-transparent !text-[#1A1A1A] !shadow-none transition-[background-color] duration-(--dur-micro) hover:!bg-white active:!bg-[#E5E7EB] active:duration-0"
+                  aria-label={quantity <= 1 ? `Remove ${dish.name} from cart` : `Decrease ${dish.name} quantity`}
+                >
+                  <Minus className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+                <span className="flex-1 text-center text-sm font-black" aria-live="polite" aria-atomic="true">
+                  <span className="sr-only">Quantity </span>
+                  <AnimateCount className="min-w-[1ch]">{quantity}</AnimateCount>
+                </span>
+                <button
+                  type="button"
+                  data-step="up"
+                  onClick={() => handleQuantityChange(1)}
+                  disabled={quantity >= 50}
+                  className="flex h-12 min-h-12 w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-transparent !text-[#1A1A1A] !shadow-none transition-[background-color] duration-(--dur-micro) hover:!bg-white active:!bg-[#E5E7EB] active:duration-0"
+                  aria-label={`Increase ${dish.name} quantity`}
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
-                onClick={() => handleQuantityChange(-1)}
-                className="flex h-10 w-10 items-center justify-center !border-0 !bg-[#F1F3F5] !text-[#1A1A1A] !shadow-none transition-[background-color] duration-(--dur-micro) hover:!bg-white active:!bg-[#E5E7EB] active:duration-0"
-                aria-label={`Decrease ${dish.name} quantity`}
+                data-step="add"
+                onClick={handleAdd}
+                aria-busy={adding}
+                className={`absolute inset-0 inline-flex min-h-12 items-center justify-center gap-1.5 rounded-full !border !border-transparent !bg-transparent text-sm font-black !text-[#1A1A1A] !shadow-none transition-[background-color,scale] duration-(--dur-micro) hover:!bg-white active:scale-[0.96] aria-busy:cursor-wait ${morph ? "animate-[craves-fade-in_150ms_ease-out]" : ""}`}
+                aria-label={`Add ${dish.name} to cart`}
               >
-                <Minus className="h-3.5 w-3.5" aria-hidden="true" />
+                {/* The stepper replaces this at once (optimistic), so no "Adding" label to flash. */}
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add
               </button>
-              <AnimateCount
-                className="min-w-7 text-center text-sm font-black"
-                aria-live="polite"
-              >
-                {quantity}
-              </AnimateCount>
-              <button
-                type="button"
-                onClick={() => handleQuantityChange(1)}
-                disabled={quantity >= 50}
-                className="flex h-10 w-10 items-center justify-center !border-0 !bg-[#F1F3F5] !text-[#1A1A1A] !shadow-none transition-[background-color] duration-(--dur-micro) hover:!bg-white active:!bg-[#E5E7EB] active:duration-0"
-                aria-label={`Increase ${dish.name} quantity`}
-              >
-                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={handleAdd}
-              aria-busy={adding}
-              className="inline-flex min-h-12 shrink-0 items-center justify-center gap-1.5 rounded-full !border !border-transparent !bg-[#F1F3F5] px-5 text-sm font-black !text-[#1A1A1A] !shadow-[0_5px_14px_rgba(26,26,26,0.06)] transition-[background-color,box-shadow,scale] duration-(--dur-micro) hover:!bg-white hover:!shadow-[0_8px_18px_rgba(26,26,26,0.10)] active:scale-[0.96] aria-busy:cursor-wait"
-              aria-label={`Add ${dish.name} to cart`}
-            >
-              {/* The stepper replaces this at once (optimistic), so no "Adding" label to flash. */}
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Add
-            </button>
-          )}
+            )}
+          </div>
         </div>
 
         {favoriteError ? (

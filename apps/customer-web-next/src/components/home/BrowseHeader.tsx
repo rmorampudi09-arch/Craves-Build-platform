@@ -61,14 +61,25 @@ function FoodPreferenceQuickToggles({
           : "rounded-[1.15rem] px-3 py-2",
         className,
       ].join(" ")}
-      aria-label="Vegetarian filter"
     >
       <AppleSwitch
         checked={value === "veg"}
         onCheckedChange={(checked) => onChange(checked ? "veg" : "all")}
-        label="Veg"
+        label={
+          <span className="inline-flex items-center gap-1.5">
+            {/* The veg mark Indian menus use: a green square with a dot. */}
+            <span
+              aria-hidden="true"
+              className="flex h-3 w-3 items-center justify-center rounded-[3px] border-[1.5px] border-[#2E7D32]"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-[#2E7D32]" />
+            </span>
+            Veg
+          </span>
+        }
         size="sm"
-        aria-label="Show only vegetarian dishes"
+        tone="veg"
+        aria-label="Veg only"
       />
     </div>
   );

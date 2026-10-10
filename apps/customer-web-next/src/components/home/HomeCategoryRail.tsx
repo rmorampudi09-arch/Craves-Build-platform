@@ -9,6 +9,7 @@ import {
   FaPepperHot,
   FaUtensils,
 } from "react-icons/fa";
+import { X } from "lucide-react";
 
 import { useScrollChrome } from "@/components/navigation/AutoHideCustomerHeader";
 import { duration, ease } from "@/lib/motion";
@@ -262,7 +263,7 @@ export function HomeCategoryRail({
                 >
                   <span
                     className={[
-                      "flex h-[5.75rem] w-[5.75rem] items-center justify-center rounded-full border border-[#E9EBEE] bg-white shadow-[0_3px_10px_rgba(26,26,26,0.09)] transition-[box-shadow,translate,scale] duration-(--dur-component) ease-out group-hover:-translate-y-0.5 group-hover:shadow-[0_7px_17px_rgba(26,26,26,0.13)] group-active:scale-[0.96] group-active:duration-(--dur-micro) motion-reduce:transform-none sm:h-[6.25rem] sm:w-[6.25rem] md:h-[6.75rem] md:w-[6.75rem] lg:h-[7.25rem] lg:w-[7.25rem]",
+                      "relative flex h-[5.75rem] w-[5.75rem] items-center justify-center rounded-full border border-[#E9EBEE] bg-white shadow-[0_3px_10px_rgba(26,26,26,0.09)] transition-[box-shadow,translate,scale] duration-(--dur-component) ease-out group-hover:-translate-y-0.5 group-hover:shadow-[0_7px_17px_rgba(26,26,26,0.13)] group-active:scale-[0.96] group-active:duration-(--dur-micro) motion-reduce:transform-none sm:h-[6.25rem] sm:w-[6.25rem] md:h-[6.75rem] md:w-[6.75rem] lg:h-[7.25rem] lg:w-[7.25rem]",
                       active
                         ? "ring-2 ring-[#F62E18] ring-offset-2"
                         : "ring-1 ring-black/[0.025] group-focus-visible:ring-2 group-focus-visible:ring-[#1A1A1A]",
@@ -282,6 +283,19 @@ export function HomeCategoryRail({
                         <Icon className="h-9 w-9" aria-hidden="true" />
                       </span>
                     )}
+                    {/* The applied filter wears an × (as on Swiggy and Zomato chips): tap again to clear.
+                        It pops in on the compositor; reduced motion just shows it. */}
+                    <span
+                      aria-hidden="true"
+                      className={[
+                        "pointer-events-none absolute right-0.5 top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-[#F62E18] text-white ring-2 ring-white transition-[opacity,scale] motion-reduce:transition-none md:right-1 md:top-1",
+                        active
+                          ? "scale-100 opacity-100 duration-(--dur-component) ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+                          : "scale-50 opacity-0 duration-(--dur-micro) ease-in",
+                      ].join(" ")}
+                    >
+                      <X className="h-3.5 w-3.5" strokeWidth={3} />
+                    </span>
                   </span>
                   <span
                     className={[

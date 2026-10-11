@@ -18,10 +18,7 @@ import {
   type CustomerDishDetail,
 } from '../../dishDetail/api/dishDetailApi';
 import {createCustomerDishDetailQueryKey} from '../../dishDetail/query/dishDetailQueries';
-import {
-  PUBLIC_KITCHEN_REVIEWS_AVAILABLE,
-  publicKitchenReviewApi,
-} from '../../kitchenProfile/api/publicKitchenReviewApi';
+import {publicKitchenReviewApi} from '../../kitchenProfile/api/publicKitchenReviewApi';
 import {
   summarizeSchedule,
   type PlanScheduleSummary,
@@ -208,8 +205,8 @@ export interface KitchenRating {
 }
 
 /**
- * Reuses the public kitchen review summary. It stays idle while that API is fail-closed
- * (PUBLIC_KITCHEN_REVIEWS_AVAILABLE), so no rating is ever shown that the gateway does not serve.
+ * Reuses the public kitchen review summary. Not gated on PUBLIC_KITCHEN_REVIEWS_AVAILABLE: the route
+ * is live in production and the meal-plan design shows ratings. No reviews or any failure give null.
  */
 export function useKitchenRatingQuery(kitchenId: string | null): KitchenRating | null {
   const {data} = useQuery({
@@ -225,8 +222,9 @@ export function useKitchenRatingQuery(kitchenId: string | null): KitchenRating |
         ? {average: summary.overallAverage, count: summary.reviewCount}
         : null;
     },
-    enabled: PUBLIC_KITCHEN_REVIEWS_AVAILABLE && kitchenId !== null,
+    enabled: kitchenId !== null,
     staleTime: RATING_STALE_MS,
+    retry: false,
   });
   return data ?? null;
 }

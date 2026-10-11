@@ -29,7 +29,7 @@ jest.mock('../../dishDetail/api/dishDetailApi', () => ({
   dishDetailApi: {getCustomerDishDetail: jest.fn()},
 }));
 jest.mock('../../kitchenProfile/api/publicKitchenReviewApi', () => ({
-  PUBLIC_KITCHEN_REVIEWS_AVAILABLE: true,
+  PUBLIC_KITCHEN_REVIEWS_AVAILABLE: false,
   publicKitchenReviewApi: {getSummary: jest.fn()},
 }));
 
@@ -114,6 +114,24 @@ describe('usePlanCover', () => {
     );
   });
 
+  it('requests the kitchen rating even while the global review flag is off', async () => {
+    await renderHook(() => usePlanCover(PLAN_ID));
+
+    expect(publicKitchenReviewApi.getSummary).toHaveBeenCalledWith(
+      KITCHEN_ID,
+      expect.anything(),
+    );
+  });
+
+  it('yields rating null when the rating request fails, without retrying', async () => {
+    get(publicKitchenReviewApi.getSummary).mockRejectedValue(new Error('500'));
+    const {result} = await renderHook(() => usePlanCover(PLAN_ID));
+
+    expect(result.current.rating).toBeNull();
+    expect(result.current.kitchenName).toBe("Lakshmi's Kitchen");
+    expect(publicKitchenReviewApi.getSummary).toHaveBeenCalledTimes(1);
+  });
+
   it('prefers the plan photo, resolved against the API base URL', async () => {
     get(customerSubscriptionApi.listPlans).mockResolvedValue([
       {...plan, imageUrl: `/api/v1/subscriptions/plans/${PLAN_ID}/image`},
@@ -168,6 +186,7 @@ describe('usePlanCover', () => {
 
     expect(result.current.summary).toBeNull();
     expect(customerSubscriptionApi.getPlanSchedule).not.toHaveBeenCalled();
+    expect(publicKitchenReviewApi.getSummary).not.toHaveBeenCalled();
   });
 });
 

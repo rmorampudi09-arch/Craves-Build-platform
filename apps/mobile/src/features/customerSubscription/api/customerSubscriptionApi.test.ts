@@ -164,12 +164,26 @@ describe('customerSubscriptionApi optional presentation fields', () => {
     expect(subscription).toMatchObject({
       planName: 'Weekly Lunch',
       billingPeriod: 'WEEKLY',
-      amount: 1499,
+      amount: '1499',
       currency: 'INR',
       nextBillingDate: '2026-10-19',
       planImageUrl: planImage,
     });
     expect(occurrence.orderId).toBe(ORDER_ID);
+  });
+
+  it('reads the subscription amount as money, whether sent as a number or a string', async () => {
+    (httpClient.get as jest.Mock).mockResolvedValueOnce([
+      {...subscriptionBase, amount: 1499.5},
+      {...subscriptionBase, amount: '1499.50'},
+    ]);
+
+    const subscriptions = await customerSubscriptionApi.listMine();
+
+    expect(subscriptions.map(subscription => subscription.amount)).toEqual([
+      '1499.5',
+      '1499.50',
+    ]);
   });
 
   it('still rejects malformed values for the new fields', async () => {

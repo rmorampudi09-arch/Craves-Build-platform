@@ -76,13 +76,13 @@ export const customerSubscriptionSchema = z.object({
   // Added by the backend later; each may be absent (older production) or null. Never assume a value.
   planName: z.string().min(1).max(160).nullable().optional(),
   billingPeriod: z.string().min(1).max(80).nullable().optional(),
-  amount: z.number().nullable().optional(),
+  amount: moneyValue.nullable().optional(),
   currency: z.string().length(3).nullable().optional(),
   nextBillingDate: localDate.nullable().optional(),
   planImageUrl: z.string().min(1).nullable().optional(),
 });
 
-export type CustomerSubscription =z.infer<typeof customerSubscriptionSchema>;
+export type CustomerSubscription = z.infer<typeof customerSubscriptionSchema>;
 
 const occurrenceItemSchema = z.object({
   menuItemId: uuid,

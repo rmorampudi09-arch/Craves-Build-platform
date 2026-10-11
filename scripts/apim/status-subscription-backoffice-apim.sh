@@ -65,7 +65,6 @@ check_operation "$SUB_API" GET "/plans" false
 check_operation "$SUB_API" GET "/plans/{planId}" false
 check_operation "$SUB_API" GET "/plans/{planId}/schedule" false
 check_operation "$SUB_API" GET "/plans/{planId}/policy" false
-check_operation "$SUB_API" GET "/plans/{planId}/image" false
 check_operation "$SUB_API" POST "/" true
 check_operation "$SUB_API" GET "/" true
 check_operation "$SUB_API" GET "/{subscriptionId}" true
@@ -82,8 +81,6 @@ check_operation "$CHEF_PLAN_API" PUT "/{planId}" true
 check_operation "$CHEF_PLAN_API" GET "/{planId}/schedule" true
 check_operation "$CHEF_PLAN_API" PUT "/{planId}/schedule" true
 check_operation "$CHEF_PLAN_API" POST "/{planId}/submit" true
-check_operation "$CHEF_PLAN_API" PUT "/{planId}/image" true
-check_operation "$CHEF_PLAN_API" PATCH "/{planId}/accepting-subscribers" true
 
 check_operation "$ADMIN_PLAN_API" GET "/" true
 check_operation "$ADMIN_PLAN_API" PATCH "/{planId}/status" true

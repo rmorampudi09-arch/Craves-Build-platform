@@ -14,16 +14,21 @@ Public operations:
 ```text
 GET /api/v1/subscriptions/plans
 GET /api/v1/subscriptions/plans/{planId}
+GET /api/v1/subscriptions/plans/{planId}/image
 ```
 
 Every customer/admin/backoffice operation requires a Bearer header at APIM and is cryptographically authorized again by the owning service.
+
+The plan image operation is configured only by `scripts/apim/configure-meal-plan-image-apim.sh` (add `--rollback` with `CONFIRM_APIM_ROLLBACK=true` to remove just that operation). It uses `public-image-policy.xml`, which does not override `Cache-Control`, so the backend's one-day cache and `?v=` cache-buster reach clients; `configure-subscription-backoffice-apim.sh` leaves it alone.
 
 ## Files
 
 ```text
 authenticated-policy.xml
 public-policy.xml
+public-image-policy.xml
 scripts/apim/configure-subscription-backoffice-apim.sh
+scripts/apim/configure-meal-plan-image-apim.sh
 scripts/apim/status-subscription-backoffice-apim.sh
 scripts/apim/rollback-subscription-backoffice-apim.sh
 ```

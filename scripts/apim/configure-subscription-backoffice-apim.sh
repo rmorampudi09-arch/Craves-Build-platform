@@ -155,7 +155,6 @@ put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$PUBLIC_POLICY" "li
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$PUBLIC_POLICY" "get-subscription-plan" "GET" "/plans/{planId}" "Get active subscription plan" "$PLAN_PARAM"
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$PUBLIC_POLICY" "get-subscription-plan-schedule" "GET" "/plans/{planId}/schedule" "Get active meal schedule" "$PLAN_PARAM"
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$PUBLIC_POLICY" "get-subscription-plan-policy" "GET" "/plans/{planId}/policy" "Get active subscription policy" "$PLAN_PARAM"
-put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$PUBLIC_POLICY" "get-public-meal-plan-image" "GET" "/plans/{planId}/image" "Get meal plan photo" "$PLAN_PARAM"
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "create-customer-subscription" "POST" "/" "Create customer subscription" '[]'
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "list-customer-subscriptions" "GET" "/" "List customer subscriptions" '[]'
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "get-customer-subscription" "GET" "/{subscriptionId}" "Get customer subscription" "$UUID_PARAM"
@@ -197,7 +196,7 @@ put_operation "$CHEF_REVIEW_API" "${USER_BASE}/api/v1/backoffice/chef-reviews" "
 put_operation "$CHEF_REVIEW_API" "${USER_BASE}/api/v1/backoffice/chef-reviews" "$AUTH_POLICY" "reject-chef-review" "POST" "/{applicationId}/reject" "Reject chef review" "$APP_PARAM"
 put_operation "$CHEF_REVIEW_API" "${USER_BASE}/api/v1/backoffice/chef-reviews" "$AUTH_POLICY" "get-chef-proof-content" "GET" "/{applicationId}/documents/{documentId}/content" "Get chef proof content" "$APP_DOC_PARAMS"
 
-for ID in list-subscription-plans get-subscription-plan get-subscription-plan-schedule get-subscription-plan-policy get-public-meal-plan-image; do verify_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$ID" false; done
+for ID in list-subscription-plans get-subscription-plan get-subscription-plan-schedule get-subscription-plan-policy; do verify_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$ID" false; done
 for ID in create-customer-subscription list-customer-subscriptions get-customer-subscription list-subscription-occurrences pause-customer-subscription resume-customer-subscription cancel-customer-subscription skip-subscription-meal; do verify_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$ID" true; done
 for ID in list-admin-subscription-plans create-admin-subscription-plan update-admin-subscription-plan-status get-admin-plan-schedule put-admin-plan-schedule activate-admin-plan-schedule get-admin-plan-policy put-admin-plan-policy activate-admin-plan-policy get-admin-plan-readiness; do verify_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$ID" true; done
 for ID in list-admin-subscriptions get-admin-subscription-history update-admin-subscription-status; do verify_operation "$ADMIN_SUB_API" "${SUB_BASE}/api/v1/admin/subscriptions" "$ID" true; done

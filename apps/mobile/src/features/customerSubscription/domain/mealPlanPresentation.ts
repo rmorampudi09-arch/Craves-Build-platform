@@ -5,6 +5,7 @@ import {
   type ScheduleItemLike,
 } from '../../mealPlans/domain/mealPlanSchedule';
 import type {IconName} from '../../../shared/components/Icon';
+import type {CustomerAddress} from '../../customerAddresses/domain/customerAddressContract';
 import type {
   CustomerSubscriptionOccurrence,
   PublicSubscriptionPolicy,
@@ -218,6 +219,12 @@ export function occurrenceDishNames(
 ): string[] {
   const names = new Map(scheduleItems.map(i => [i.menuItemId, i.menuItemName]));
   return occ.items.map(i => names.get(i.menuItemId) || 'Meal');
+}
+
+/** Locality and city, e.g. "Madhapur, Hyderabad"; the city alone when no area is known. */
+export function addressAreaLine(address: CustomerAddress): string {
+  const parts = [address.areaName ?? address.districtName, address.city];
+  return [...new Set(parts.filter((part): part is string => Boolean(part)))].join(', ');
 }
 
 export function shortSubscriptionId(id: string): string {

@@ -2,7 +2,9 @@ import type {
   CustomerSubscriptionOccurrence,
   PublicSubscriptionPolicy,
 } from '../api/customerSubscriptionApi';
+import type {CustomerAddress} from '../../customerAddresses/domain/customerAddressContract';
 import {
+  addressAreaLine,
   formatCutoff,
   formatMealPlanDate,
   formatPlanPrice,
@@ -316,5 +318,17 @@ describe('shortSubscriptionId', () => {
       'CRV-3F2A9C1E',
     );
     expect(shortSubscriptionId('3f2a9c1e-…')).toBe('CRV-3F2A9C1E');
+  });
+});
+
+describe('addressAreaLine', () => {
+  const at = (areaName: string | null, districtName: string | null, city: string) =>
+    addressAreaLine({areaName, districtName, city} as CustomerAddress);
+
+  it('joins the locality and city, falling back to the district, without repeats', () => {
+    expect(at('Madhapur', 'Serilingampally', 'Hyderabad')).toBe('Madhapur, Hyderabad');
+    expect(at(null, 'Serilingampally', 'Hyderabad')).toBe('Serilingampally, Hyderabad');
+    expect(at('Hyderabad', null, 'Hyderabad')).toBe('Hyderabad');
+    expect(at(null, null, 'Hyderabad')).toBe('Hyderabad');
   });
 });

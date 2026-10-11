@@ -51,7 +51,10 @@ export type IconName =
   | 'alert'
   | 'chevron-down'
   | 'pause'
-  | 'calendar';
+  | 'calendar'
+  | 'calendar-check'
+  | 'location-outline'
+  | 'meal';
 
 interface Props {
   name: IconName;
@@ -110,6 +113,9 @@ const GLYPHS: Record<IconName, string> = {
   'chevron-down': 'chevron-down',
   pause: 'pause',
   calendar: 'calendar-blank-outline',
+  'calendar-check': 'calendar-check-outline',
+  'location-outline': 'map-marker-outline',
+  meal: 'silverware-fork-knife',
 };
 
 export function Icon({

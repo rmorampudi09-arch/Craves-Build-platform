@@ -13,9 +13,17 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
-import {Button, Icon, type IconName} from '../../../shared/components';
+import {
+  Button,
+  Icon,
+  ListSkeleton,
+  RecoverableErrorBanner,
+  TerminalState,
+  type IconName,
+} from '../../../shared/components';
 import type {MealPlanFoodType} from '../../mealPlans/domain/mealPlanSchedule';
 import type {PlanRule} from '../domain/mealPlanPresentation';
+import type {KitchenRating} from '../query/mealPlanQueries';
 
 export interface MealPlanHeaderProps {
   title: string;
@@ -240,7 +248,91 @@ export function PlanRulesList({rules}: {rules: PlanRule[]}) {
   );
 }
 
+/** "★ 4.8 (320)"; nothing when the kitchen has no reviews. */
+export function PlanRating({rating}: {rating: KitchenRating | null}) {
+  if (!rating) {
+    return null;
+  }
+  const average = rating.average.toFixed(1);
+  return (
+    <View
+      accessible
+      accessibilityLabel={`Rated ${average} from ${rating.count} reviews`}
+      style={styles.rating}>
+      <Icon name="star" size={iconSize.xs} color={colors.warning} surface={false} />
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.ratingValue}>
+        {average}
+        <Text style={styles.ratingCount}> ({rating.count})</Text>
+      </Text>
+    </View>
+  );
+}
+
+/** The visual radio circle; the caller's Pressable carries the radio role and checked state. */
+export function RadioMark({checked}: {checked: boolean}) {
+  return (
+    <View style={[styles.radio, checked && styles.radioChecked]}>
+      {checked ? (
+        <Icon name="check" size={iconSize.xs} color={colors.white} surface={false} />
+      ) : null}
+    </View>
+  );
+}
+
+/** Body for a plan screen while its plan is not in the public list: skeleton, retry, or gone. */
+export function PlanUnavailable({
+  loading,
+  onRetry,
+  onBack,
+}: {
+  loading: boolean;
+  /** Set when the plan list failed to load. */
+  onRetry?: () => void;
+  onBack: () => void;
+}) {
+  if (loading) {
+    return <ListSkeleton count={3} style={styles.fallback} />;
+  }
+  if (onRetry) {
+    return (
+      <RecoverableErrorBanner
+        message="This meal plan could not be loaded. Check your connection and try again."
+        onRetry={onRetry}
+        style={styles.fallback}
+      />
+    );
+  }
+  return (
+    <TerminalState
+      title="This meal plan is no longer available"
+      actionLabel="Back to meal plans"
+      onAction={onBack}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
+  rating: {flexDirection: 'row', alignItems: 'center', gap: 2},
+  ratingValue: {
+    color: colors.textPrimary,
+    fontSize: typography.small,
+    fontWeight: fontWeight.semibold,
+  },
+  ratingCount: {color: colors.textSecondary, fontWeight: fontWeight.regular},
+  radio: {
+    width: iconSize.lg,
+    height: iconSize.lg,
+    borderRadius: radius.pill,
+    borderWidth: borderWidth.strong,
+    borderColor: colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioChecked: {
+    borderColor: colors.flameRedAccessible,
+    backgroundColor: colors.flameRedAccessible,
+  },
+  fallback: {margin: spacing.md},
   header: {
     minHeight: 64,
     flexDirection: 'row',

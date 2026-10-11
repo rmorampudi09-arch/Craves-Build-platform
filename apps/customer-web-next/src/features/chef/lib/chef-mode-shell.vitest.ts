@@ -9,7 +9,7 @@ import ChefLayout from "../../../app/chef/layout";
 import ChefMorePage from "../../../app/chef/profile/page";
 import ChefNotificationsPage from "../../../app/chef/notifications/page";
 import LegacyChefProfilePage from "../../../app/chef/[id]/page";
-import { clearCustomerMode, isChefModeVerified, markChefModeVerified, markCustomerModeVerified } from "./chef-mode";
+import { clearCustomerMode, isChefModeVerified, markChefModeVerified, markCustomerModeVerified, rememberChefAccount } from "./chef-mode";
 import { captureSessionContext, getSession, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
@@ -104,6 +104,32 @@ describe("Chef Mode guard", () => {
     vi.mocked(usePathname).mockReturnValue("/cart");
     render(createElement(ChefModeGuard));
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?from=chef"));
+  });
+
+  it("shows an applicant who used Chef Mode on this device the launching-soon note in a new tab", async () => {
+    launch.soon = true;
+    vi.mocked(usePathname).mockReturnValue("/chef/application");
+    render(createElement(ChefModeGuard));
+    cleanup();
+    sessionStorage.clear();
+    clearCustomerMode();
+    setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
+    vi.mocked(usePathname).mockReturnValue("/home");
+    render(createElement(ChefModeGuard));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?from=chef"));
+  });
+
+  it("leaves customers alone while customers wait: no Chef Mode on this device, or the private link", () => {
+    launch.soon = true;
+    sessionStorage.clear();
+    localStorage.clear();
+    setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
+    render(createElement(ChefModeGuard));
+    cleanup();
+    rememberChefAccount(chef.id);
+    markCustomerModeVerified(chef.id);
+    render(createElement(ChefModeGuard));
+    expect(mocks.replace).not.toHaveBeenCalled();
   });
 
   it("never asks a customer without the chef role", () => {

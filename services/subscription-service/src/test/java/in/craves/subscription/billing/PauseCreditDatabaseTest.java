@@ -1,0 +1,82 @@
+package in.craves.subscription.billing;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionTemplate;
+
+/** Resume carries paused paid days forward and voids unpaid cycles that started during the pause. */
+@EnabledIfEnvironmentVariable(named="SUBSCRIPTION_TEST_JDBC_URL",matches=".+")
+@ResourceLock("disposable-subscription-migration-schema")
+class PauseCreditDatabaseTest {
+    JdbcTemplate db;TransactionTemplate tx;SubscriptionBillingRepository repository;
+    UUID plan=UUID.randomUUID(),subscription=UUID.randomUUID(),customer=UUID.randomUUID(),chef=UUID.randomUUID();
+    UUID paid=UUID.randomUUID(),open=UUID.randomUUID();
+    static LocalDate d(String monthDay){return LocalDate.parse("2026-"+monthDay);}
+
+    @BeforeEach void setup() {
+        assertEquals("true",System.getenv("CRAVES_DISPOSABLE_TEST_DATABASE"));
+        String url=System.getenv("SUBSCRIPTION_TEST_JDBC_URL");assertTrue(url.matches("jdbc:postgresql://localhost:[0-9]+/subscription_schema_test"));
+        var ds=new DriverManagerDataSource(url,System.getenv("SUBSCRIPTION_TEST_DB_USER"),System.getenv("SUBSCRIPTION_TEST_DB_PASSWORD"));
+        db=new JdbcTemplate(ds);tx=new TransactionTemplate(new DataSourceTransactionManager(ds));
+        assertEquals("subscription_schema_test",db.queryForObject("SELECT current_database()",String.class));
+        db.execute("DROP SCHEMA IF EXISTS subscription_schema CASCADE");db.execute("DROP TABLE IF EXISTS public.subscription_service_flyway_schema_history");
+        Flyway.configure().dataSource(ds).defaultSchema("public").table("subscription_service_flyway_schema_history").locations("classpath:db/migration").load().migrate();
+        db.update("INSERT INTO subscription_schema.subscription_plan(id,plan_code,chef_identity_id,name,billing_period,amount) VALUES (?,?,?,'TEST plan','WEEKLY',300)",plan,"TEST-"+plan,chef);
+        db.update("INSERT INTO subscription_schema.customer_subscription(id,customer_identity_id,plan_id,chef_identity_id,status,start_date,next_billing_date) VALUES (?,?,?,?,'ACTIVE',?,?)",subscription,customer,plan,chef,d("10-05"),d("10-19"));
+        invoice(paid,d("10-05"),d("10-12"),"PAID");
+        invoice(open,d("10-12"),d("10-19"),"PAYMENT_REQUESTED");
+        // Paused at 09:30 IST on 7 October.
+        db.update("INSERT INTO subscription_schema.subscription_status_history(subscription_id,old_status,new_status,reason,created_at) VALUES (?,'ACTIVE','PAUSED','Travelling',CAST('2026-10-07T04:00:00Z' AS timestamptz))",subscription);
+        repository=new SubscriptionBillingRepository(db);
+    }
+    void invoice(UUID id,LocalDate start,LocalDate end,String state) {
+        db.update("INSERT INTO subscription_schema.subscription_invoice(id,subscription_id,plan_id,customer_identity_id,chef_identity_id,cycle_start,cycle_end,amount,currency,status) VALUES (?,?,?,?,?,?,?,300,'INR',?)",id,subscription,plan,customer,chef,start,end,state);
+    }
+    PauseCredit resume(LocalDate on){return tx.execute(s->repository.applyPauseCredit(subscription,on));}
+    Map<String,Object> invoiceRow(UUID id){return db.queryForMap("SELECT status,failure_code FROM subscription_schema.subscription_invoice WHERE id=?",id);}
+    List<Map<String,Object>> creditRows(){return db.queryForList("SELECT amount,status,cycle_start,cycle_end,paid_at IS NOT NULL AS paid FROM subscription_schema.subscription_invoice WHERE provider_reference='PAUSE_CREDIT'");}
+    LocalDate nextBilling(){return db.queryForObject("SELECT next_billing_date FROM subscription_schema.customer_subscription WHERE id=?",LocalDate.class,subscription);}
+
+    @Test void voidsUnpaidCycleInsidePauseAndCarriesPaidDaysForward() {
+        assertEquals(new PauseCredit(d("10-25"),5,d("10-30")),resume(d("10-25")));
+
+        assertEquals(Map.of("status","CANCELLED","failure_code","PAUSED_CYCLE_VOIDED"),invoiceRow(open));
+        assertEquals(List.of("PAYMENT_REQUESTED>CANCELLED"),db.queryForList(
+            "SELECT old_status||'>'||new_status FROM subscription_schema.subscription_invoice_history WHERE invoice_id=?",String.class,open));
+        List<Map<String,Object>> credit=creditRows();
+        assertEquals(1,credit.size());
+        assertEquals(0,new BigDecimal("0").compareTo((BigDecimal)credit.get(0).get("amount")));
+        assertEquals("PAID",credit.get(0).get("status"));
+        assertEquals(java.sql.Date.valueOf(d("10-25")),credit.get(0).get("cycle_start"));
+        assertEquals(java.sql.Date.valueOf(d("10-30")),credit.get(0).get("cycle_end"));
+        assertEquals(true,credit.get(0).get("paid"));
+        assertEquals(d("10-30"),nextBilling());
+        assertEquals("PAID",invoiceRow(paid).get("status"));
+    }
+
+    @Test void keepsOpenInvoiceThatStartsAfterResume() {
+        assertEquals(new PauseCredit(d("10-19"),2,d("10-21")),resume(d("10-09")));
+
+        Map<String,Object> stillOpen=invoiceRow(open);
+        assertEquals("PAYMENT_REQUESTED",stillOpen.get("status"));
+        assertNull(stillOpen.get("failure_code"));
+        List<Map<String,Object>> credit=creditRows();
+        assertEquals(1,credit.size());
+        assertEquals(java.sql.Date.valueOf(d("10-19")),credit.get(0).get("cycle_start"));
+        assertEquals(java.sql.Date.valueOf(d("10-21")),credit.get(0).get("cycle_end"));
+        assertEquals(d("10-21"),nextBilling());
+    }
+}

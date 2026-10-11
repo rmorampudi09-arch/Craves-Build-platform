@@ -11,6 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class SubscriptionBillingRepository {
+    /** failure_code of an unpaid invoice whose cycle started during a pause; read by the payment-status consumer. */
+    public static final String PAUSE_VOIDED = "PAUSED_CYCLE_VOIDED";
+
     private final JdbcTemplate jdbcTemplate;
 
     public SubscriptionBillingRepository(JdbcTemplate jdbcTemplate) {
@@ -115,6 +118,81 @@ public class SubscriptionBillingRepository {
         }
     }
 
+    /**
+     * On resume, inside the caller's transaction: voids unpaid cycles that started before the resume, carries the
+     * paid days lost to the pause forward as a zero-amount PAID invoice, and moves next_billing_date past both.
+     * Surviving invoices end at or before the credit start and voided ones start before the resume, so neither the
+     * credit nor later billing cycles can collide on (subscription_id, cycle_start).
+     */
+    public PauseCredit applyPauseCredit(UUID subscriptionId, LocalDate resumeOn) {
+        LocalDate pausedOn = jdbcTemplate.query(
+            "SELECT (created_at AT TIME ZONE 'Asia/Kolkata')::date FROM subscription_schema.subscription_status_history " +
+                "WHERE subscription_id = ? AND new_status = 'PAUSED' ORDER BY created_at DESC LIMIT 1",
+            (rs, rowNum) -> rs.getObject(1, LocalDate.class), subscriptionId
+        ).stream().findFirst().orElse(resumeOn);
+
+        List<InvoiceState> unpaid = jdbcTemplate.query(
+            "SELECT id, status FROM subscription_schema.subscription_invoice WHERE subscription_id = ? AND status <> 'PAID' " +
+                "AND cycle_start < ? AND failure_code IS DISTINCT FROM ? FOR UPDATE",
+            (rs, rowNum) -> new InvoiceState(rs.getObject("id", UUID.class), rs.getString("status")),
+            subscriptionId, resumeOn, PAUSE_VOIDED
+        );
+        for (InvoiceState invoice : unpaid) {
+            jdbcTemplate.update(
+                "UPDATE subscription_schema.subscription_invoice SET status = 'CANCELLED', failure_code = ?, " +
+                    "failure_message = 'Unpaid billing cycle started during a pause', updated_at = now() WHERE id = ?",
+                PAUSE_VOIDED, invoice.id()
+            );
+            jdbcTemplate.update(
+                "INSERT INTO subscription_schema.subscription_invoice_history " +
+                    "(id, invoice_id, old_status, new_status, reason, created_at) " +
+                    "VALUES (?, ?, ?, 'CANCELLED', 'Unpaid billing cycle started during a pause', now())",
+                UUID.randomUUID(), invoice.id(), invoice.status()
+            );
+        }
+
+        LocalDate paidThrough = jdbcTemplate.queryForObject(
+            "SELECT max(cycle_end) FROM subscription_schema.subscription_invoice WHERE subscription_id = ? AND status = 'PAID'",
+            LocalDate.class, subscriptionId
+        );
+        // A plan never billed keeps its own next_billing_date, so a future start date is not billed early.
+        LocalDate keptThrough = jdbcTemplate.queryForObject(
+            "SELECT CASE WHEN EXISTS (SELECT 1 FROM subscription_schema.subscription_invoice i WHERE i.subscription_id = cs.id) " +
+                "THEN (SELECT max(i.cycle_end) FROM subscription_schema.subscription_invoice i " +
+                "WHERE i.subscription_id = cs.id AND i.failure_code IS DISTINCT FROM ?) " +
+                "ELSE cs.next_billing_date END FROM subscription_schema.customer_subscription cs WHERE cs.id = ?",
+            LocalDate.class, PAUSE_VOIDED, subscriptionId
+        );
+        PauseCredit credit = PauseCredit.plan(pausedOn, resumeOn, paidThrough, keptThrough);
+
+        if (credit.creditDays() > 0) {
+            UUID invoiceId = UUID.randomUUID();
+            int inserted = jdbcTemplate.update(
+                "INSERT INTO subscription_schema.subscription_invoice " +
+                    "(id, subscription_id, plan_id, customer_identity_id, chef_identity_id, cycle_start, cycle_end, amount, currency, " +
+                    "status, provider_reference, paid_at, created_at, updated_at) " +
+                    "SELECT ?, cs.id, cs.plan_id, cs.customer_identity_id, cs.chef_identity_id, ?, ?, 0, sp.currency, " +
+                    "'PAID', 'PAUSE_CREDIT', now(), now(), now() " +
+                    "FROM subscription_schema.customer_subscription cs " +
+                    "JOIN subscription_schema.subscription_plan sp ON sp.id = cs.plan_id WHERE cs.id = ?",
+                invoiceId, credit.creditStart(), credit.creditStart().plusDays(credit.creditDays()), subscriptionId
+            );
+            if (inserted != 1) {
+                throw new IllegalStateException("Pause credit could not be recorded");
+            }
+            jdbcTemplate.update(
+                "INSERT INTO subscription_schema.subscription_invoice_history " +
+                    "(id, invoice_id, old_status, new_status, reason, created_at) VALUES (?, ?, NULL, 'PAID', ?, now())",
+                UUID.randomUUID(), invoiceId, "Pause credit: " + credit.creditDays() + " paid days carried forward"
+            );
+        }
+        jdbcTemplate.update(
+            "UPDATE subscription_schema.customer_subscription SET next_billing_date = ?, updated_at = now() WHERE id = ?",
+            credit.nextBillingDate(), subscriptionId
+        );
+        return credit;
+    }
+
     public void releaseAfterFailure(BillingClaim claim) {
         jdbcTemplate.update(
             "UPDATE subscription_schema.customer_subscription SET billing_lock_token = NULL, billing_locked_at = NULL " +
@@ -184,6 +262,9 @@ public class SubscriptionBillingRepository {
     private static String safe(String value) {
         String normalized = value == null ? "Unknown publish failure" : value.replace('\n', ' ').replace('\r', ' ').trim();
         return normalized.length() > 1000 ? normalized.substring(0, 1000) : normalized;
+    }
+
+    private record InvoiceState(UUID id, String status) {
     }
 
     public record BillingClaim(

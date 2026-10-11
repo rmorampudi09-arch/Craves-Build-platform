@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import in.craves.subscription.billing.SubscriptionBillingProperties;
+import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.plan.PlanImageRepository;
@@ -36,9 +37,15 @@ class SubscriptionServiceOwnershipTest {
     private final SubscriptionRepository repository = mock(SubscriptionRepository.class);
     private final CapacityService capacityService = mock(CapacityService.class);
     private final PlanImageRepository planImages = mock(PlanImageRepository.class);
+    private final SubscriptionBillingRepository billingRepository = mock(SubscriptionBillingRepository.class);
 
     private final SubscriptionService service =
-        new SubscriptionService(repository, capacityService, planImages, billing(true, 7));
+        new SubscriptionService(repository, capacityService, planImages, billing(true, 7), billingRepository);
+
+    private static final UUID SUBSCRIPTION_ID = UUID.fromString("55555555-5555-4555-8555-555555555555");
+    private static final CurrentUser ADMIN = new CurrentUser(
+        UUID.fromString("22222222-2222-4222-8222-222222222222"), "firebase-admin", "+917777777777", List.of("SUBSCRIPTION_ADMIN")
+    );
 
     @Test
     void chefCannotUseAdministratorPlanListing() {
@@ -174,6 +181,34 @@ class SubscriptionServiceOwnershipTest {
         assertThat(SubscriptionService.nextChargeDate(null, billing(true, 7), today)).isNull();
         // With automatic billing off nothing renews, so no date is promised.
         assertThat(SubscriptionService.nextChargeDate(LocalDate.parse("2026-10-25"), billing(false, 7), today)).isNull();
+    }
+
+    @Test
+    void adminResumeCarriesPausedPaidDaysForward() {
+        when(repository.findSubscriptionById(SUBSCRIPTION_ID)).thenReturn(Optional.of(subscription("PAUSED", null)));
+
+        service.adminChangeStatus(SUBSCRIPTION_ID, "ACTIVE", "Customer asked by phone", ADMIN);
+
+        // With no next service date the admin resume starts today.
+        verify(billingRepository).applyPauseCredit(SUBSCRIPTION_ID, TODAY);
+    }
+
+    @Test
+    void adminActivationOfAnUnpaidSignUpAppliesNoCredit() {
+        when(repository.findSubscriptionById(SUBSCRIPTION_ID)).thenReturn(Optional.of(subscription("PENDING_PAYMENT", null)));
+
+        service.adminChangeStatus(SUBSCRIPTION_ID, "ACTIVE", "Paid by bank transfer", ADMIN);
+
+        verify(billingRepository, never()).applyPauseCredit(any(), any());
+    }
+
+    private static SubscriptionResponse subscription(String status, LocalDate nextServiceDate) {
+        return new SubscriptionResponse(
+            SUBSCRIPTION_ID, CUSTOMER_ID, UUID.fromString("44444444-4444-4444-8444-444444444444"), CHEF_ID, status,
+            TODAY.minusDays(14), null, nextServiceDate, UUID.fromString("66666666-6666-4666-8666-666666666666"), null,
+            Instant.parse("2026-07-30T00:00:00Z"), Instant.parse("2026-07-30T00:00:00Z"),
+            "Weekly meals", "WEEKLY", new BigDecimal("1200.00"), "INR", TODAY, null
+        );
     }
 
     private static SubscriptionBillingProperties billing(boolean generatorEnabled, int horizonDays) {

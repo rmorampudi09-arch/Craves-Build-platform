@@ -1,6 +1,7 @@
 package in.craves.subscription.service;
 
 import in.craves.subscription.billing.SubscriptionBillingProperties;
+import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.plan.PlanImageRepository;
@@ -35,17 +36,20 @@ public class SubscriptionService {
     private final CapacityService capacityService;
     private final PlanImageRepository planImages;
     private final SubscriptionBillingProperties billing;
+    private final SubscriptionBillingRepository billingRepository;
 
     public SubscriptionService(
         SubscriptionRepository repository,
         CapacityService capacityService,
         PlanImageRepository planImages,
-        SubscriptionBillingProperties billing
+        SubscriptionBillingProperties billing,
+        SubscriptionBillingRepository billingRepository
     ) {
         this.repository = repository;
         this.capacityService = capacityService;
         this.planImages = planImages;
         this.billing = billing;
+        this.billingRepository = billingRepository;
     }
 
     public List<PublicPlanResponse> listActivePlans() {
@@ -170,6 +174,8 @@ public class SubscriptionService {
                     ? LocalDate.now(BUSINESS_ZONE)
                     : subscription.nextServiceDate().isBefore(LocalDate.now(BUSINESS_ZONE)) ? LocalDate.now(BUSINESS_ZONE) : subscription.nextServiceDate();
                 capacityService.reacquireForResume(subscription, resumeDate);
+                // Before the status update so the returned subscription already shows the moved billing date.
+                billingRepository.applyPauseCredit(subscription.id(), resumeDate);
             } else {
                 capacityService.commitForActivation(subscription);
             }

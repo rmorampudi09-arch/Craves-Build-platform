@@ -81,6 +81,31 @@ class SubscriptionPaymentRecoveryDatabaseTest {
     @Test void initialFailedPaymentStillReleasesEnrollmentHold() {
         accept(event(invoice,"FAILED"));assertEquals("PAYMENT_FAILED",state());verify(capacity).releaseForPauseOrTerminal(any(),eq(today),anyString());
     }
+    /** A resume voided this unpaid cycle (it started during a pause); the subscription is active again. */
+    void voidedByPause(){state("ACTIVE");db.update("UPDATE subscription_schema.subscription_invoice SET status='CANCELLED',failure_code='PAUSED_CYCLE_VOIDED' WHERE id=?",invoice);}
+    String invoiceField(String column){return db.queryForObject("SELECT "+column+" FROM subscription_schema.subscription_invoice WHERE id=?",String.class,invoice);}
+    @Test void paymentForVoidedCycleIsFlaggedForRefundNotActivated() {
+        voidedByPause();assertTrue(accept(event(invoice,"PAID")));
+        assertEquals("CANCELLED",invoiceField("status"));
+        assertEquals("PAYMENT_RECEIVED_FOR_VOIDED_CYCLE",invoiceField("failure_code"));
+        assertNotNull(invoiceField("paid_at"));
+        assertEquals("FAILED",db.queryForObject("SELECT processing_status FROM subscription_schema.subscription_payment_status_inbox",String.class));
+        assertEquals("ACTIVE",state());verifyNoInteractions(capacity);
+    }
+    @Test void secondPaymentForVoidedCycleIsNotActivatedEither() {
+        voidedByPause();accept(event(invoice,"PAID"));
+        assertFalse(accept(event(invoice,"PAID")));
+        assertEquals("CANCELLED",invoiceField("status"));
+        assertEquals("PAYMENT_RECEIVED_FOR_VOIDED_CYCLE",invoiceField("failure_code"));
+        assertEquals("ACTIVE",state());verifyNoInteractions(capacity);
+    }
+    @Test void failedEventForVoidedCycleChangesNothing() {
+        voidedByPause();assertFalse(accept(event(invoice,"FAILED")));
+        assertEquals("CANCELLED",invoiceField("status"));
+        assertEquals("PAUSED_CYCLE_VOIDED",invoiceField("failure_code"));
+        assertEquals("PROCESSED",db.queryForObject("SELECT processing_status FROM subscription_schema.subscription_payment_status_inbox",String.class));
+        assertEquals("ACTIVE",state());verifyNoInteractions(capacity);
+    }
     @Test void failureAfterSuccessCannotRegressInvoiceOrPlan() {
         accept(event(invoice,"PAID"));clearInvocations(capacity);assertFalse(accept(event(invoice,"FAILED")));assertEquals("ACTIVE",state());verifyNoInteractions(capacity);
     }

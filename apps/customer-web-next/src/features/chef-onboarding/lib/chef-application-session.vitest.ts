@@ -6,7 +6,7 @@ import { ChefApplicationSessionBoundary } from "../components/chef-application-s
 import { ChefApplicationWorkspace } from "../components/chef-application-workspace";
 import { captureSessionContext, clearSession, getSession, invalidateSession, isSessionReady, setSessionIdentity, setSessionEmailVerification } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
-import { markChefModeVerified } from "../../../lib/chef-mode";
+import { markChefModeVerified } from "../../chef/lib/chef-mode";
 
 const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => navigation, usePathname: () => "/chef/application", useSearchParams: () => new URLSearchParams() }));

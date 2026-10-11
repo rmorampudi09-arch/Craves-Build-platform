@@ -8,7 +8,7 @@ import {
   type SubscriptionPayment,
   type SubscriptionPaymentStatus,
 } from "@/features/meal-plans/lib/subscription-payment-contract";
-import { MEAL_PLAN_STATUS, planDay } from "@/lib/meal-plan-copy";
+import { MEAL_PLAN_STATUS, planDay } from "@/features/meal-plans/lib/meal-plan-copy";
 
 const PAYMENT_STATUS: Record<SubscriptionPaymentStatus, string> = {
   PAYMENT_REQUESTED: "Waiting for payment",

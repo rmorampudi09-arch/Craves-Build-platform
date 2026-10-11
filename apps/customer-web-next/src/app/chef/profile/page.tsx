@@ -20,9 +20,9 @@ import {
   UserRound,
 } from "lucide-react";
 import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
-import { switchToCustomerApp, useChefSignOut } from "@/components/chef-account-menu";
+import { switchToCustomerApp, useChefSignOut } from "@/features/chef/components/chef-account-menu";
 import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
-import { ChefPill, ChefSkeleton } from "@/components/chef-ui";
+import { ChefPill, ChefSkeleton } from "@/features/chef/components/chef-ui";
 
 type Application = { firstName:string|null; lastName:string|null; status:string };
 type Kitchen = { kitchenName:string };

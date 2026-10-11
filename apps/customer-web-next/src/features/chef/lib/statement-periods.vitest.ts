@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { documentRequestSchema } from "../features/chef-onboarding/lib/document-contract";
-import { statementPeriodSchema } from "../features/admin/finance/lib/finance-source-contract";
+import { documentRequestSchema } from "../../chef-onboarding/lib/document-contract";
+import { statementPeriodSchema } from "../../admin/finance/lib/finance-source-contract";
 import { STATEMENT_PRESETS, dayAfter, indiaDate, periodLabel, presetPeriod, referencePeriodLabel } from "./statement-periods";
 
 describe("statement periods", () => {

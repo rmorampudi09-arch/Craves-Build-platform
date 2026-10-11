@@ -9,7 +9,7 @@ import {
   unlockOrderSound,
   useAlertPrefs,
   writeAlertPrefs,
-} from "@/lib/chef-order-alert";
+} from "@/features/chef/lib/chef-order-alert";
 
 const noSubscribe = () => () => {};
 

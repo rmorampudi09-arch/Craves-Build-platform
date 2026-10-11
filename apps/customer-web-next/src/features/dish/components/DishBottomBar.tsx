@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Minus, Plus } from "lucide-react";
 
 import { CravesCartIcon } from "@/features/home/components/CravesCartIcon";
-import { swap } from "@/lib/motion";
+import { swap } from "@/shared/lib/motion";
 
 interface DishBottomBarProps {
   /** Item total: unit price × the quantity in the stepper. */

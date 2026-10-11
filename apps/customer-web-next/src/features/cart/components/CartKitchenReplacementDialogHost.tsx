@@ -9,7 +9,7 @@ import {
   CART_KITCHEN_REPLACEMENT_EVENT,
   type CartKitchenReplacementRequest,
 } from "@/features/cart/lib/cart-kitchen-replacement";
-import { duration, ease } from "@/lib/motion";
+import { duration, ease } from "@/shared/lib/motion";
 
 /** A bottom sheet on phones, a centered dialog from `sm` up. */
 const panel = {

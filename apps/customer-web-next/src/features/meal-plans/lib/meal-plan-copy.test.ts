@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { changeDeadline, noticeLength, planDay } from "./meal-plan-copy.ts";
-import type { SubscriptionOccurrence } from "../features/meal-plans/lib/subscription-lifecycle-contract.ts";
+import type { SubscriptionOccurrence } from "./subscription-lifecycle-contract.ts";
 
 const meal = (serviceDate: string, serviceAt: string, status: SubscriptionOccurrence["status"] = "READY_FOR_ORDER") =>
   ({ id: serviceAt, serviceDate, mealSlotCode: "LUNCH", serviceAt, status, items: [] }) as SubscriptionOccurrence;

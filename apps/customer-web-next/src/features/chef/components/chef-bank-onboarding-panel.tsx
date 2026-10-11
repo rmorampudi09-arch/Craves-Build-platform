@@ -6,8 +6,8 @@ import { z } from "zod";
 import { bankConsentVersion, bankStatusSchema, bankSubmissionSchema, type BankStatus } from "@/features/admin/finance/lib/bank-onboarding-contract";
 import { captureSessionContext, isSessionReady, loadSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 import { ChevronDown, Info, Landmark, RefreshCw } from "lucide-react";
-import { ChefNotice, ChefPill, ChefSection, ChefSkeleton, type ChefTone } from "@/components/chef-ui";
-import { RequiredMark } from "@/components/ui/forms/required-mark";
+import { ChefNotice, ChefPill, ChefSection, ChefSkeleton, type ChefTone } from "@/features/chef/components/chef-ui";
+import { RequiredMark } from "@/shared/ui/forms/required-mark";
 
 const applicantSchema = z.object({firstName: z.string().nullable().optional(), lastName: z.string().nullable().optional(), status: z.string()});
 const inputClass = "mt-2 block min-h-12 w-full rounded-xl border bg-white px-4 text-base text-[#1A1A1A]";

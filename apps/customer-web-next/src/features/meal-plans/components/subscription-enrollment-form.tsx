@@ -8,7 +8,7 @@ import {
   parseCustomerSubscription,
   type PublicSubscriptionPlan,
 } from "@/features/meal-plans/lib/subscription-contract";
-import { RequiredMark } from "@/components/ui/forms/required-mark";
+import { RequiredMark } from "@/shared/ui/forms/required-mark";
 
 function newIdempotencyKey(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {

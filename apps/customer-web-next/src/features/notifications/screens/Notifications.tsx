@@ -16,8 +16,8 @@ import { GiChefToque } from "react-icons/gi";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
-import { UndoToast } from "@/components/ui/overlays/undo-toast";
-import { spring } from "@/lib/motion";
+import { UndoToast } from "@/shared/ui/overlays/undo-toast";
+import { spring } from "@/shared/lib/motion";
 import type { CustomerNotification } from "@/features/notifications/lib/notification-contract";
 import { loadSession } from "@/features/auth/api/cravesAuth";
 

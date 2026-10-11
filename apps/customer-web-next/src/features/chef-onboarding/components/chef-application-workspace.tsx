@@ -23,8 +23,8 @@ import { parseChefApplication, type ChefApplication } from "@/features/chef-onbo
 import type { CustomerProfile } from "@/features/profile/lib/profile-contract";
 import { reverseGeocodeCurrentLocation } from "@/features/addresses/api/reverseGeocode";
 import { EmailVerificationPanel } from "@/features/sign-in/components/EmailVerificationPanel";
-import { switchToCustomerApp } from "@/components/chef-account-menu";
-import { useStepHistory } from "@/components/use-step-history";
+import { switchToCustomerApp } from "@/features/chef/components/chef-account-menu";
+import { useStepHistory } from "@/features/chef-onboarding/lib/use-step-history";
 import { chefEmailEligible, type EmailVerificationState } from "@/features/sign-in/lib/email-verification-contract";
 
 type FormState = {

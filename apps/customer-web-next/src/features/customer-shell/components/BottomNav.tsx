@@ -13,7 +13,7 @@ import {
   useScrollChrome,
 } from "@/shared/components/navigation/AutoHideCustomerHeader";
 import { AnimateCount } from "@/shared/ui/AnimateCount";
-import { ease } from "@/lib/motion";
+import { ease } from "@/shared/lib/motion";
 import glass from "@/features/home/screens/HomeReference.module.css";
 import {
   cartCount,

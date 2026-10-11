@@ -1,4 +1,4 @@
-import { formatInr } from "@/components/chef-ui";
+import { formatInr } from "@/features/chef/components/chef-ui";
 import type { ChefAccounting } from "@/features/admin/finance/lib/finance-contract";
 
 export function ChefAccountingBreakdown({accounting}: {accounting: ChefAccounting | undefined}) {

@@ -11,8 +11,8 @@ import {
 } from "lucide-react";
 
 import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
-import { useOverlayHistory } from "@/components/ui/overlays/overlay";
-import { ease } from "@/lib/motion";
+import { useOverlayHistory } from "@/shared/ui/overlays/overlay";
+import { ease } from "@/shared/lib/motion";
 import type { NearbyKitchen } from "@/features/home/lib/discovery-contract";
 import type { Dish } from "@/features/dish/api/dishes";
 import styles from "@/features/home/screens/HomeReference.module.css";

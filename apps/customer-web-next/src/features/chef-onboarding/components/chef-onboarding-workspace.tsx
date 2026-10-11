@@ -14,7 +14,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { ChefOnboardingShell, type ChefSaveState } from "@/features/chef-onboarding/components/chef-onboarding-shell";
-import { switchToCustomerApp } from "@/components/chef-account-menu";
+import { switchToCustomerApp } from "@/features/chef/components/chef-account-menu";
 import { ChefOnboardingBank, type BankFormMode } from "@/features/chef-onboarding/components/chef-onboarding-bank";
 import {
   ChefBasicDetails,

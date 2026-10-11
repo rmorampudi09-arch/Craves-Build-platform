@@ -4,7 +4,7 @@ import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, ImagePlus, Plus, Store, UtensilsCrossed } from "lucide-react";
-import { ChefEmpty, ChefPageHead, ChefSection, ChefSkeleton } from "@/components/chef-ui";
+import { ChefEmpty, ChefPageHead, ChefSection, ChefSkeleton } from "@/features/chef/components/chef-ui";
 import { FaPepperHot } from "react-icons/fa";
 import { Button } from "@/shared/ui/buttons/button";
 import { Input } from "@/shared/ui/forms/input";

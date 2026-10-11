@@ -1,4 +1,4 @@
-import { Dialog, secondaryActionClass } from "@/components/ui/overlays/overlay";
+import { Dialog, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 
 interface CustomerSignOutDialogProps {
   open: boolean;

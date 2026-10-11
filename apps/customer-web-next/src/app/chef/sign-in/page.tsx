@@ -1,5 +1,5 @@
-import { ChefSignIn } from "@/components/chef-sign-in";
-import { safeChefReturnTo } from "@/lib/chef-mode";
+import { ChefSignIn } from "@/features/chef/components/chef-sign-in";
+import { safeChefReturnTo } from "@/features/chef/lib/chef-mode";
 
 export const dynamic = "force-dynamic";
 

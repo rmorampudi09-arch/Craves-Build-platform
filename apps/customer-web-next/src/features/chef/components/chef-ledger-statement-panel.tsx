@@ -3,11 +3,11 @@
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";
 import { Info } from "lucide-react";
-import { ChefChoiceChips, ChefNotice, ChefSection } from "@/components/chef-ui";
+import { ChefChoiceChips, ChefNotice, ChefSection } from "@/features/chef/components/chef-ui";
 import { useState } from "react";
 import { z } from "zod";
 import { chefStatementSchema, statementPeriodSchema } from "@/features/admin/finance/lib/finance-source-contract";
-import { STATEMENT_PRESETS, dayAfter, indiaDate, periodLabel, presetPeriod, type StatementPreset } from "@/lib/statement-periods";
+import { STATEMENT_PRESETS, dayAfter, indiaDate, periodLabel, presetPeriod, type StatementPreset } from "@/features/chef/lib/statement-periods";
 
 const KINDS = [{ value: "earnings", label: "Earnings and fees" }, { value: "settlements", label: "Money sent to bank" }] as const;
 const DAY_CHOICES: { value: StatementPreset | "custom"; label: string }[] = [...STATEMENT_PRESETS, { value: "custom", label: "Choose dates" }];

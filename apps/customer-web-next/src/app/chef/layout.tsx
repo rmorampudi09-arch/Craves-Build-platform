@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { ChefAppHeader } from "@/components/chef-app-header";
+import { ChefAppHeader } from "@/features/chef/components/chef-app-header";
 import { ChefWorkspaceNavigation } from "@/features/chef/components/chef-workspace-navigation";
-import { ChefOrderWatcher } from "@/components/chef-order-watcher";
+import { ChefOrderWatcher } from "@/features/chef/components/chef-order-watcher";
 import "../../features/chef/styles/chef-mode.css";
 
 export default function ChefLayout({children}:{children:ReactNode}) {

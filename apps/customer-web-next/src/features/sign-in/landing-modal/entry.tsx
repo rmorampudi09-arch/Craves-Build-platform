@@ -5,7 +5,7 @@ import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from 
 import { phoneCodeRequestError } from "@/features/sign-in/lib/phone-auth-errors";
 import type { CravesIdentity } from "@/features/auth/lib/auth-contract";
 import { parseCustomerProfile } from "@/features/profile/lib/profile-contract";
-import { markChefModeVerified } from "@/lib/chef-mode";
+import { markChefModeVerified } from "@/features/chef/lib/chef-mode";
 import {
   captureSessionContext,
   isSessionContextCurrent,

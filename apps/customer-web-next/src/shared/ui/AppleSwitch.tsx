@@ -3,7 +3,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { forwardRef, useId, useState } from "react";
 
-import { spring } from "@/lib/motion";
+import { spring } from "@/shared/lib/motion";
 
 const switchSizes = {
   sm: { trackX: 46, trackY: 24, thumbX: 22, thumbY: 18, padding: 3 },

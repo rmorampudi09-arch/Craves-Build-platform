@@ -14,13 +14,13 @@ import {
   parseCustomerOrders,
   type CustomerOrder,
 } from "@/features/orders/lib/order-contract";
-import { shortOrderNumber } from "@/lib/order-number";
+import { shortOrderNumber } from "@/shared/lib/order-number";
 import { loadSession } from "@/features/auth/api/cravesAuth";
 import { addToCart, CartKeptError, loadCart } from "@/features/cart/api/cravesCart";
 import { loadKitchenMenu } from "@/features/dish/api/dishes";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
-import { useReturnScroll } from "@/lib/return-scroll";
+import { useReturnScroll } from "@/shared/lib/return-scroll";
 
 // Read and cleared by the cart page, which shows it once (same key as checkout uses).
 const CART_NOTICE_KEY = "craves.cart.notice";

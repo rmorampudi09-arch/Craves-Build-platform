@@ -4,10 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import { BellRing, ChevronRight } from "lucide-react";
-import { isChefModeVerified } from "@/lib/chef-mode";
-import { orderWords, useChefOrderPolling } from "@/lib/chef-order-alert";
+import { isChefModeVerified } from "@/features/chef/lib/chef-mode";
+import { orderWords, useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
 import type { ChefOrder } from "@/features/chef/lib/chef-order-contract";
-import { shortOrderNumber } from "@/lib/order-number";
+import { shortOrderNumber } from "@/shared/lib/order-number";
 import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 
 const waitingOrders = (orders: ChefOrder[]) => orders.filter((order) => order.status === "CHEF_ACCEPTANCE_PENDING");

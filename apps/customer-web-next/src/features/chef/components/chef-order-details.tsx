@@ -21,11 +21,11 @@ import {
   chefOrderStatus,
   dateTime,
   formatInr,
-} from "@/components/chef-ui";
-import { shortOrderNumber } from "@/lib/order-number";
+} from "@/features/chef/components/chef-ui";
+import { shortOrderNumber } from "@/shared/lib/order-number";
 import { ChefOrderActions } from "@/features/chef/components/chef-order-actions";
-import { ChefOrderProgress, HearOrderButton, chefStatusIcon } from "@/components/chef-order-card";
-import { useChefOrderPolling } from "@/lib/chef-order-alert";
+import { ChefOrderProgress, HearOrderButton, chefStatusIcon } from "@/features/chef/components/chef-order-card";
+import { useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import {
   parseChefOrderResponse,

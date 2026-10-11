@@ -20,7 +20,7 @@ import {
   type ChefFormSection,
 } from "./chef-onboarding-flow";
 import { setSessionIdentity } from "../../auth/api/cravesAuth";
-import { markChefModeVerified } from "../../../lib/chef-mode";
+import { markChefModeVerified } from "../../chef/lib/chef-mode";
 import type { BankStatus } from "../../admin/finance/lib/bank-onboarding-contract";
 
 const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));

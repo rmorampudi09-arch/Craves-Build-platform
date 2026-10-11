@@ -25,7 +25,7 @@ import {
 } from "@/features/auth/api/cravesAuth";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
 import { AddressEditorFlow } from "@/features/addresses/components/AddressEditorFlow";
-import { Dialog, secondaryActionClass } from "@/components/ui/overlays/overlay";
+import { Dialog, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 
 
 function displayPhone(value: string): string {

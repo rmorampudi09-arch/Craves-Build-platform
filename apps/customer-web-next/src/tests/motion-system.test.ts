@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { duration, ease, fadeUp, listItem, spring, swap } from "./motion.ts";
+import { duration, ease, fadeUp, listItem, spring, swap } from "../shared/lib/motion.ts";
 
 function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");

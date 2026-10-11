@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 import { BadgeIndianRupee, ClipboardList, House, LayoutGrid, Utensils } from "lucide-react";
-import { isChefModeVerified } from "@/lib/chef-mode";
+import { isChefModeVerified } from "@/features/chef/lib/chef-mode";
 import { getSession, subscribeSession, type CravesUser } from "@/features/auth/api/cravesAuth";
 
 // The same five tabs on phones and desktop; every other chef page is listed in More (/chef/profile).

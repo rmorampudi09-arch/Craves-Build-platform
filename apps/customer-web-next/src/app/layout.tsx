@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 
 import { CartKitchenReplacementDialogHost } from "@/features/cart/components/CartKitchenReplacementDialogHost";
 import { BottomNav } from "@/features/customer-shell/components/BottomNav";
-import { ChefModeGuard } from "@/components/layout/ChefModeGuard";
-import { MotionPreferences } from "@/components/layout/MotionPreferences";
+import { ChefModeGuard } from "@/features/chef/components/ChefModeGuard";
+import { MotionPreferences } from "@/shared/components/layout/MotionPreferences";
 import { StructuredData } from "@/features/seo/components/StructuredData";
 import { cravesLogoUrl, cravesSiteGraph, seoKeywords, siteUrl } from "@/features/seo/lib/seo-craves";
 

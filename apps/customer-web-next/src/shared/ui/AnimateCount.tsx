@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
-import { ease } from "@/lib/motion";
+import { ease } from "@/shared/lib/motion";
 
 export interface AnimateCountProps
   extends Omit<React.HTMLAttributes<HTMLSpanElement>, "children"> {

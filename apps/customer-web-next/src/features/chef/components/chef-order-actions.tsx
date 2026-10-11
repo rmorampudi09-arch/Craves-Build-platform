@@ -12,7 +12,7 @@ import {
   PackageCheck,
   XCircle,
 } from "lucide-react";
-import { ChefNotice, ChefSection } from "@/components/chef-ui";
+import { ChefNotice, ChefSection } from "@/features/chef/components/chef-ui";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import {
   parseChefOrderResponse,

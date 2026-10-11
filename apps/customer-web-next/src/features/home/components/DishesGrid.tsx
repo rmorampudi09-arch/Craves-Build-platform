@@ -16,7 +16,7 @@ import type {
   HomeFoodPreference,
 } from "@/features/home/lib/home-return-state";
 import { AnimateCount } from "@/shared/ui/AnimateCount";
-import { listItem } from "@/lib/motion";
+import { listItem } from "@/shared/lib/motion";
 import type { Dish } from "@/features/dish/api/dishes";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";

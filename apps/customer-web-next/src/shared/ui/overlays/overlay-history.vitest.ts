@@ -3,7 +3,7 @@ import { createElement, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MotionGlobalConfig } from "framer-motion";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { Dialog, Sheet, useOverlayHistory } from "@/components/ui/overlays/overlay";
+import { Dialog, Sheet, useOverlayHistory } from "@/shared/ui/overlays/overlay";
 
 beforeAll(() => {
   MotionGlobalConfig.skipAnimations = true;

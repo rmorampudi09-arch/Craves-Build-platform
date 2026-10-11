@@ -22,8 +22,8 @@ import {
   dateTime,
   formatInr,
   type ChefTone,
-} from "@/components/chef-ui";
-import { shortOrderNumber } from "@/lib/order-number";
+} from "@/features/chef/components/chef-ui";
+import { shortOrderNumber } from "@/shared/lib/order-number";
 
 type LedgerView = "ALL" | ChefEarningStatus;
 

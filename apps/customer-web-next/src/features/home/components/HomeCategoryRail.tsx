@@ -12,7 +12,7 @@ import {
 import { X } from "lucide-react";
 
 import { useScrollChrome } from "@/shared/components/navigation/AutoHideCustomerHeader";
-import { duration, ease } from "@/lib/motion";
+import { duration, ease } from "@/shared/lib/motion";
 
 export type CravingCategory =
   | "Biryani"

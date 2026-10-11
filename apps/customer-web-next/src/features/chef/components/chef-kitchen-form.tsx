@@ -1,7 +1,7 @@
 "use client";
 
 import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
-import { ChefNotice, ChefPageHead, ChefPill, ChefSection } from "@/components/chef-ui";
+import { ChefNotice, ChefPageHead, ChefPill, ChefSection } from "@/features/chef/components/chef-ui";
 import Link from "next/link";
 import { AddressMapPicker } from "@/features/addresses/components/AddressMapPicker";
 import { useEffect, useRef, useState } from "react";
@@ -22,7 +22,7 @@ import type {
 } from "@/features/chef/lib/chef-kitchen-types";
 import { reverseGeocodeCurrentLocation } from "@/features/addresses/api/reverseGeocode";
 import { captureSessionContext, getSession, isSessionContextCurrent } from "@/features/auth/api/cravesAuth";
-import { RequiredMark } from "@/components/ui/forms/required-mark";
+import { RequiredMark } from "@/shared/ui/forms/required-mark";
 
 type FormState = Record<
   keyof Omit<ChefKitchenInput, "latitude" | "longitude" | "status">,

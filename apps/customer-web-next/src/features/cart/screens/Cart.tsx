@@ -23,7 +23,7 @@ import { EmptyCartState } from "@/features/cart/components/EmptyCartState";
 import { CartItemList } from "@/features/cart/components/CartItemList";
 import { CartCheckoutBar } from "@/features/cart/components/CartCheckoutBar";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
-import { ease } from "@/lib/motion";
+import { ease } from "@/shared/lib/motion";
 
 const CHECKOUT_ID_KEY = "craves.checkout.id";
 const CHECKOUT_OPERATION_ID_KEY = "craves.checkout.operationId";

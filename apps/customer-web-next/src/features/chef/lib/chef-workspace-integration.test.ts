@@ -103,7 +103,7 @@ test("chef order actions use unique idempotency keys and strict responses", () =
 
 test("chef pages render their headers only after the access check", () => {
   for (const page of ["capacity", "meal-plans", "operations", "finance", "statements", "profile", "earnings"]) {
-    const contents = source(`../app/chef/${page}/page.tsx`);
+    const contents = source(`../../../app/chef/${page}/page.tsx`);
     const boundary = contents.indexOf("<ChefAccessBoundary>");
     assert.ok(boundary >= 0 && boundary < contents.indexOf("<ChefPageHeader"), page);
   }

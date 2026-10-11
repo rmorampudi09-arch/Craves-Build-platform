@@ -3,7 +3,7 @@
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { useRouter } from "next/navigation";
 import { parseChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
-import { clearChefMode, isChefModeVerified } from "@/lib/chef-mode";
+import { clearChefMode, isChefModeVerified } from "@/features/chef/lib/chef-mode";
 import { Fragment, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   AuthenticationRequiredError,

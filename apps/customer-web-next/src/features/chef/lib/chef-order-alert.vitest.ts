@@ -5,12 +5,12 @@ import { usePathname } from "next/navigation";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChefOrderWatcher } from "../components/chef-order-watcher";
-import { ChefOrderInbox } from "../features/chef/components/chef-order-inbox";
+import { ChefOrderInbox } from "../components/chef-order-inbox";
 import { fetchChefOrders, mergeOrders, noticeNewOrders, orderWords, resetOrderAlertsForTests, writeAlertPrefs } from "./chef-order-alert";
-import type { ChefOrder } from "../features/chef/lib/chef-order-contract";
+import type { ChefOrder } from "./chef-order-contract";
 import { markChefModeVerified } from "./chef-mode";
-import { captureSessionContext, invalidateSession, setSessionIdentity } from "../features/auth/api/cravesAuth";
-import type { CravesIdentity } from "../features/auth/lib/auth-contract";
+import { captureSessionContext, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
+import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
 vi.mock("next/navigation", () => ({ usePathname: vi.fn(() => "/chef/menu"), useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
 

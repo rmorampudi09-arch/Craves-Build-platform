@@ -7,7 +7,7 @@ import type {
   DeliveryReadyAddress,
 } from "@/features/addresses/lib/address-contract";
 import { selectDefaultDeliveryAddress } from "@/features/addresses/lib/address-selection";
-import { clearChefMode } from "@/lib/chef-mode";
+import { clearChefMode } from "@/features/chef/lib/chef-mode";
 import {
   parseCustomerProfile,
   type CustomerProfile,

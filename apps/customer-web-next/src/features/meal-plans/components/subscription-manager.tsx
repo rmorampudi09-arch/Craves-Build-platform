@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { CalendarDays } from "lucide-react";
 import { parsePublicSubscriptionPlans, type CustomerSubscription } from "@/features/meal-plans/lib/subscription-contract";
-import { MEAL_PLAN_STATUS, planDay } from "@/lib/meal-plan-copy";
+import { MEAL_PLAN_STATUS, planDay } from "@/features/meal-plans/lib/meal-plan-copy";
 
 const secondaryLink =
   "inline-flex min-h-11 items-center justify-center rounded-full bg-[#F1F3F5] px-5 text-sm font-bold text-[#1A1A1A]";

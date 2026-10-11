@@ -7,8 +7,8 @@ function source(relativePath: string): string {
 }
 
 test("the landing splash plays once per browser session and repeat visits fade in quickly", () => {
-  const index = source("../../public/landing-v20/index.html");
-  const app = source("../../../landing-v20/src/App.tsx");
+  const index = source("../../../../public/landing-v20/index.html");
+  const app = source("../../../../../landing-v20/src/App.tsx");
 
   // The first-paint cover is plain white once the splash has been seen this session.
   assert.match(index, /sessionStorage\.getItem\('craves\.landing\.splashSeen'\) === '1'/);
@@ -22,5 +22,5 @@ test("the landing splash plays once per browser session and repeat visits fade i
   // The published bundle is the one built from this source.
   const bundle = /src="\/landing-v20\/assets\/(index-[\w-]+\.js)"/.exec(index)?.[1];
   assert.ok(bundle, "landing bundle script must be referenced");
-  assert.match(source(`../../public/landing-v20/assets/${bundle}`), /craves\.landing\.splashSeen/);
+  assert.match(source(`../../../../public/landing-v20/assets/${bundle}`), /craves\.landing\.splashSeen/);
 });

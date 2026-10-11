@@ -2,7 +2,7 @@
 import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { ChefAccountingBreakdown } from "@/features/chef/components/chef-accounting-breakdown";
 import { AlertTriangle, ChevronDown, Info, RefreshCw } from "lucide-react";
-import { ChefNotice, ChefPill, ChefSection, ChefSkeleton, dateTime, formatInr, type ChefTone } from "@/components/chef-ui";
+import { ChefNotice, ChefPill, ChefSection, ChefSkeleton, dateTime, formatInr, type ChefTone } from "@/features/chef/components/chef-ui";
 
 import { useEffect, useRef, useState } from "react";
 import { chefBalanceSchema, payoutSchema, type ChefBalance } from "@/features/admin/finance/lib/finance-contract";

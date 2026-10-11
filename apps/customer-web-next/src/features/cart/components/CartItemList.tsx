@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 
 import { CartItemRow } from "@/features/cart/components/CartItemRow";
-import { duration, ease } from "@/lib/motion";
+import { duration, ease } from "@/shared/lib/motion";
 import type { CartItem } from "@/features/cart/api/cravesCart";
 
 interface CartItemListProps {

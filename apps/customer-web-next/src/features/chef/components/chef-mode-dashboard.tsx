@@ -16,11 +16,11 @@ import {
   ChefSection,
   ChefSkeleton,
   formatInr,
-} from "@/components/chef-ui";
-import { ChefOrderCard, OrderUpdateNotice, focusOrderAfterUpdate, orderUpdateText } from "@/components/chef-order-card";
-import { ChefKitchenSwitch } from "@/components/chef-kitchen-switch";
-import { ChefOrderAlerts } from "@/components/chef-order-alerts";
-import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/lib/chef-order-alert";
+} from "@/features/chef/components/chef-ui";
+import { ChefOrderCard, OrderUpdateNotice, focusOrderAfterUpdate, orderUpdateText } from "@/features/chef/components/chef-order-card";
+import { ChefKitchenSwitch } from "@/features/chef/components/chef-kitchen-switch";
+import { ChefOrderAlerts } from "@/features/chef/components/chef-order-alerts";
+import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
 import {
   parseChefApplication,
   type ChefApplication,
@@ -38,7 +38,7 @@ import {
 } from "@/features/chef/lib/chef-earnings-contract";
 import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
-import { Sheet, secondaryActionClass } from "@/components/ui/overlays/overlay";
+import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 
 type DashboardState = "loading" | "approved" | "error";
 

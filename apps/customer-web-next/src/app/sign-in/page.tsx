@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { PhoneAuthForm } from "@/features/sign-in/components/phone-auth-form";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import { safeReturnPath } from "@/features/auth/lib/auth-contract";
-import { safeChefReturnTo } from "@/lib/chef-mode";
+import { safeChefReturnTo } from "@/features/chef/lib/chef-mode";
 import { isAdminDestination } from "@/features/admin/shell/lib/admin-navigation";
 import "@/features/admin/styles/admin-control.css";
 

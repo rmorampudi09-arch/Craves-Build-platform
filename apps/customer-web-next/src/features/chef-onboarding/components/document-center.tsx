@@ -5,8 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Download, FileText, Info, Mail, RefreshCw } from "lucide-react";
 import { documentCapabilitiesSchema, documentEmailSchema, documentError, documentLabels, documentPageSchema, documentRequestSchema, documentSummarySchema, type DocumentCapabilities, type DocumentSummary, type DocumentType } from "@/features/chef-onboarding/lib/document-contract";
 import { readDocumentBytes } from "@/shared/lib/document-transport";
-import { ChefChoiceChips, ChefEmpty, ChefNotice, ChefPill, ChefSection, dateTime, type ChefTone } from "@/components/chef-ui";
-import { STATEMENT_PRESETS, dayAfter, indiaDate, periodLabel, presetPeriod, referencePeriodLabel, type StatementPreset } from "@/lib/statement-periods";
+import { ChefChoiceChips, ChefEmpty, ChefNotice, ChefPill, ChefSection, dateTime, type ChefTone } from "@/features/chef/components/chef-ui";
+import { STATEMENT_PRESETS, dayAfter, indiaDate, periodLabel, presetPeriod, referencePeriodLabel, type StatementPreset } from "@/features/chef/lib/statement-periods";
 
 type OrderOption = { id: string; kitchenName: string; currency: string };
 type Props = { mode: "customer" | "chef"; orders?: OrderOption[] };

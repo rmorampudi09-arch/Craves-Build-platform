@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChefOnboardingWorkspace } from "@/features/chef-onboarding/components/chef-onboarding-workspace";
 import { ChefApplicationStatus } from "@/features/chef-onboarding/components/chef-application-status";
 import { ChefApplicationWorkspace } from "@/features/chef-onboarding/components/chef-application-workspace";
-import { EMPTY_ONBOARDING } from "../features/chef-onboarding/lib/chef-onboarding-v2-contract";
-import { setSessionIdentity } from "../features/auth/api/cravesAuth";
+import { EMPTY_ONBOARDING } from "./chef-onboarding-v2-contract";
+import { setSessionIdentity } from "../../auth/api/cravesAuth";
 
 const url = vi.hoisted(() => {
   const entries = [""];

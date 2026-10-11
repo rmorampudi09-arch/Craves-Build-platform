@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 import { Bell } from "lucide-react";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
-import { ChefAccountMenu } from "@/components/chef-account-menu";
+import { ChefAccountMenu } from "@/features/chef/components/chef-account-menu";
 import { ChefWorkspaceNavigation } from "@/features/chef/components/chef-workspace-navigation";
-import { isChefModeVerified } from "@/lib/chef-mode";
+import { isChefModeVerified } from "@/features/chef/lib/chef-mode";
 import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 
 /** Chef Mode header: the logo stays in the chef app; leaving it is an explicit account action. */

@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Clock3, MapPin, Minus, Plus } from "lucide-react";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 import { hasHomeReturnState } from "@/features/home/lib/home-return-state";
-import { returnToListPath } from "@/lib/return-scroll";
+import { returnToListPath } from "@/shared/lib/return-scroll";
 import type { KitchenReviewSummary } from "@/features/dish/lib/review-summary-contract";
 import { loadSelectedAddress, loadSession } from "@/features/auth/api/cravesAuth";
 import {

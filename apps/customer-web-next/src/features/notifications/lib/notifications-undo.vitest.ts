@@ -3,7 +3,7 @@
 import { createElement, type ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UndoToast } from "@/components/ui/overlays/undo-toast";
+import { UndoToast } from "@/shared/ui/overlays/undo-toast";
 import NotificationsPage from "@/features/notifications/screens/Notifications";
 
 const ACCOUNT = "11111111-1111-4111-8111-111111111111";

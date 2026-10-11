@@ -25,7 +25,7 @@ import {
   type CustomerAddressInput,
 } from "@/features/addresses/lib/address-contract";
 import { reverseGeocodeCurrentLocation } from "@/features/addresses/api/reverseGeocode";
-import { RequiredMark, RequiredLegend } from "@/components/ui/forms/required-mark";
+import { RequiredMark, RequiredLegend } from "@/shared/ui/forms/required-mark";
 
 type AddressDraft = Omit<CustomerAddressInput, "latitude" | "longitude" | "addressLabel"> &
   AddressLabelDraft & {

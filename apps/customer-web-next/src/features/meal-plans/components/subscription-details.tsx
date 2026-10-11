@@ -5,8 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CustomerSubscription } from "@/features/meal-plans/lib/subscription-contract";
 import type { SubscriptionOccurrence, SubscriptionPlanPolicy } from "@/features/meal-plans/lib/subscription-lifecycle-contract";
 import type { PublicSubscriptionSchedule } from "@/features/meal-plans/lib/subscription-schedule-contract";
-import { changeDeadline, MEAL_PLAN_STATUS, MEAL_STATUS, noticeLength, planDay } from "@/lib/meal-plan-copy";
-import { Sheet, secondaryActionClass } from "@/components/ui/overlays/overlay";
+import { changeDeadline, MEAL_PLAN_STATUS, MEAL_STATUS, noticeLength, planDay } from "@/features/meal-plans/lib/meal-plan-copy";
+import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 
 type Action = "pause" | "resume" | "skip" | "cancel";
 

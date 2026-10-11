@@ -19,8 +19,8 @@ import {
   parseCustomerOrder,
   type CustomerOrder,
 } from "@/features/orders/lib/order-contract";
-import { shortOrderNumber } from "@/lib/order-number";
-import { returnToListPath } from "@/lib/return-scroll";
+import { shortOrderNumber } from "@/shared/lib/order-number";
+import { returnToListPath } from "@/shared/lib/return-scroll";
 
 interface TimelineStep {
   key: string;

@@ -17,7 +17,7 @@ import {
 } from "@/features/orders/lib/delivery-status";
 import { loadSession } from "@/features/auth/api/cravesAuth";
 import { trackingPresentation } from "@/features/orders/lib/tracking-presentation";
-import { shortOrderNumber } from "@/lib/order-number";
+import { shortOrderNumber } from "@/shared/lib/order-number";
 import { TrackingHeader } from "@/features/orders/components/TrackingHeader";
 import { CurrentStatusCard } from "@/features/orders/components/CurrentStatusCard";
 import { OrderTimeline } from "@/features/orders/components/OrderTimeline";

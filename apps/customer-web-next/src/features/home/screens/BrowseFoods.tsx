@@ -26,7 +26,7 @@ import {
 import { KitchensGrid } from "@/features/home/components/KitchensGrid";
 import { WelcomeBanner } from "@/features/home/components/WelcomeBanner";
 import { holdScrollChrome } from "@/shared/components/navigation/AutoHideCustomerHeader";
-import { returnedToOverlayEntry } from "@/components/ui/overlays/overlay";
+import { returnedToOverlayEntry } from "@/shared/ui/overlays/overlay";
 import { ALL_DISHES_CATEGORY } from "@/features/home/lib/dishCategories";
 import {
   DEFAULT_DISCOVERY_RADIUS_METERS,

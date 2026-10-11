@@ -6,7 +6,7 @@ import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import { PhoneAuthForm } from "@/features/sign-in/components/phone-auth-form";
 import type { CravesIdentity } from "@/features/auth/lib/auth-contract";
 import { parseChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
-import { isChefModeVerified, markChefModeVerified, resolveChefDestination } from "@/lib/chef-mode";
+import { isChefModeVerified, markChefModeVerified, resolveChefDestination } from "@/features/chef/lib/chef-mode";
 import {
   isSessionReady,
   loadSession,

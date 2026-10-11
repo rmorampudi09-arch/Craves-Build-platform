@@ -21,14 +21,14 @@ import {
   chefOrderStatus,
   formatInr,
   timeAgo,
-} from "@/components/chef-ui";
-import { shortOrderNumber } from "@/lib/order-number";
+} from "@/features/chef/components/chef-ui";
+import { shortOrderNumber } from "@/shared/lib/order-number";
 import {
   parseChefOrdersResponse,
   type ChefOrder,
 } from "@/features/chef/lib/chef-order-contract";
-import { ChefOrderCard, OrderUpdateNotice, chefStatusIcon, focusOrderAfterUpdate, orderUpdateText } from "@/components/chef-order-card";
-import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/lib/chef-order-alert";
+import { ChefOrderCard, OrderUpdateNotice, chefStatusIcon, focusOrderAfterUpdate, orderUpdateText } from "@/features/chef/components/chef-order-card";
+import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 const newestFirst = (orders: ChefOrder[]) =>

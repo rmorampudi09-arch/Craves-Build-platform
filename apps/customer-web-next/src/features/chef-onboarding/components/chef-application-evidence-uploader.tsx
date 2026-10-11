@@ -2,7 +2,7 @@
 
 import { CheckCircle2, CircleAlert, FileUp, ShieldCheck, XCircle } from "lucide-react";
 import { Button } from "@/shared/ui/buttons/button";
-import { dateTime } from "@/components/chef-ui";
+import { dateTime } from "@/features/chef/components/chef-ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {

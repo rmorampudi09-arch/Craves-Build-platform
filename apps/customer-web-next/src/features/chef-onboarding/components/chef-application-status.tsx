@@ -16,7 +16,7 @@ import {
   ChefHat,
   XCircle,
 } from "lucide-react";
-import { switchToCustomerApp } from "@/components/chef-account-menu";
+import { switchToCustomerApp } from "@/features/chef/components/chef-account-menu";
 import {
   Card,
   Note,

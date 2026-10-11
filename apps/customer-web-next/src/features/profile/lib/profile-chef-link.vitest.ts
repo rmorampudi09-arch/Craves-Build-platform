@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { chefLink } from "@/features/profile/screens/Profile";
-import type { ChefApplication } from "../features/chef-onboarding/lib/chef-application-contract";
+import type { ChefApplication } from "../../chef-onboarding/lib/chef-application-contract";
 import type { CravesUser } from "@/features/auth/api/cravesAuth";
 
 const customer = { roles: ["CUSTOMER"] } as CravesUser;

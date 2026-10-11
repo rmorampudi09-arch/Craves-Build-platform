@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ChefPageHead } from "@/components/chef-ui";
+import { ChefPageHead } from "@/features/chef/components/chef-ui";
 
 /**
  * Title block for Chef Mode pages. `eyebrow` is accepted for older callers but not shown:

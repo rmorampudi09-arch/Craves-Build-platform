@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ChefHat, RefreshCw } from "lucide-react";
 import { Spinner } from "@/features/chef-onboarding/components/chef-onboarding-ui";
-import { isChefModeVerified } from "@/lib/chef-mode";
+import { isChefModeVerified } from "@/features/chef/lib/chef-mode";
 import {
   AuthenticationRequiredError,
   captureSessionContext,

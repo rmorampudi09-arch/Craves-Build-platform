@@ -19,7 +19,7 @@ import ChefFinancePage from "../../../app/chef/finance/page";
 import ProfilePage from "../../profile/screens/Profile";
 import { captureSessionContext, clearSession, getSession, invalidateSession, setSessionEmailVerification, setSessionIdentity } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
-import { markChefModeVerified } from "../../../lib/chef-mode";
+import { markChefModeVerified } from "./chef-mode";
 
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate, Link: ({ children }: { children: unknown }) => children }));

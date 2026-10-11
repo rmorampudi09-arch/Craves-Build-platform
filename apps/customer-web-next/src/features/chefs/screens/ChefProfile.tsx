@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 import { hasHomeReturnState } from "@/features/home/lib/home-return-state";
-import { useReturnScroll } from "@/lib/return-scroll";
+import { useReturnScroll } from "@/shared/lib/return-scroll";
 import type { KitchenReviewSummary } from "@/features/dish/lib/review-summary-contract";
 import {
   getChef,

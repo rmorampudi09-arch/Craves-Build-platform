@@ -7,8 +7,8 @@ import {
 } from "@/features/profile/lib/profile-contract";
 import { captureSessionContext, isSessionContextCurrent, setSessionProfile } from "@/features/auth/api/cravesAuth";
 import { EmailVerificationPanel } from "@/features/sign-in/components/EmailVerificationPanel";
-import { Sheet, secondaryActionClass } from "@/components/ui/overlays/overlay";
-import { RequiredMark } from "@/components/ui/forms/required-mark";
+import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
+import { RequiredMark } from "@/shared/ui/forms/required-mark";
 
 interface EditProfileModalProps {
   open: boolean;

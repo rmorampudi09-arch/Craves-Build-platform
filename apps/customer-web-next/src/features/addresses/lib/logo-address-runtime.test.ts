@@ -19,7 +19,7 @@ test("customer and chef surfaces use the single shared Craves logo component", (
     "../../profile/components/ProfileHeader.tsx",
     "../../orders/components/TrackingHeader.tsx",
     "../../orders/screens/OrderHistory.tsx",
-    "../../../components/chef-app-header.tsx",
+    "../../chef/components/chef-app-header.tsx",
   ];
 
   for (const path of sharedLogoSurfaces) {

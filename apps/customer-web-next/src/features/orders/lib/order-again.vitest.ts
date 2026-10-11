@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CustomerOrder } from "../features/orders/lib/order-contract";
+import type { CustomerOrder } from "./order-contract";
 
 const cart = vi.hoisted(() => ({ addToCart: vi.fn(async () => undefined), loadCart: vi.fn(async () => []) }));
 const menu = vi.hoisted(() => ({ loadKitchenMenu: vi.fn() }));

@@ -8,7 +8,7 @@ const layout = readFileSync(
   "utf8",
 );
 const header = readFileSync(
-  new URL("../../../components/chef-app-header.tsx", import.meta.url),
+  new URL("../components/chef-app-header.tsx", import.meta.url),
   "utf8",
 );
 const navigation = readFileSync(

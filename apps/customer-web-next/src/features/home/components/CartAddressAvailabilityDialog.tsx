@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, MapPin, ShoppingBag, X } from "lucide-react";
 
-import { duration, ease } from "@/lib/motion";
+import { duration, ease } from "@/shared/lib/motion";
 import type { CartItem } from "@/features/cart/api/cravesCart";
 
 interface CartAddressAvailabilityDialogProps {

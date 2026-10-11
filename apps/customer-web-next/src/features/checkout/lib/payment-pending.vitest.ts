@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CheckoutPaymentButton } from "@/features/checkout/components/CheckoutPaymentButton";
-import type { CustomerCheckout } from "../features/checkout/lib/checkout-contract";
+import type { CustomerCheckout } from "./checkout-contract";
 
 const router = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));

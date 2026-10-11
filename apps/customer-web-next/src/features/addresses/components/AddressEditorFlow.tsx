@@ -36,8 +36,8 @@ import {
 } from "@/features/addresses/api/searchLocation";
 import { getAddress } from "@/features/auth/api/cravesAuth";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
-import { duration, ease } from "@/lib/motion";
-import { RequiredMark } from "@/components/ui/forms/required-mark";
+import { duration, ease } from "@/shared/lib/motion";
+import { RequiredMark } from "@/shared/ui/forms/required-mark";
 
 type Step = "locate" | "details";
 

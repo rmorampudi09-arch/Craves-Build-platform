@@ -1,8 +1,8 @@
 "use client";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
-import { ChefEmpty, ChefSection, ChefSkeleton, clockTime, dateTime } from "@/components/chef-ui";
-import { ChefKitchenSwitch } from "@/components/chef-kitchen-switch";
+import { ChefEmpty, ChefSection, ChefSkeleton, clockTime, dateTime } from "@/features/chef/components/chef-ui";
+import { ChefKitchenSwitch } from "@/features/chef/components/chef-kitchen-switch";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AlertTriangle, Check, CheckCircle2, Clock3, RefreshCw, X } from "lucide-react";

@@ -1,5 +1,5 @@
 import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
-import { ChefPageHead } from "@/components/chef-ui";
+import { ChefPageHead } from "@/features/chef/components/chef-ui";
 import { ContextualBackBoundary } from "@/shared/components/navigation/ContextualBackBoundary";
 import NotificationsPage from "@/features/notifications/screens/Notifications";
 

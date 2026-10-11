@@ -19,7 +19,7 @@ import { loadSession } from "@/features/auth/api/cravesAuth";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
 import { CustomerFloatingCart } from "@/features/cart/components/CustomerFloatingCart";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
-import { useReturnScroll } from "@/lib/return-scroll";
+import { useReturnScroll } from "@/shared/lib/return-scroll";
 
 function money(amount: number, currency = "INR"): string {
   return new Intl.NumberFormat("en-IN", {

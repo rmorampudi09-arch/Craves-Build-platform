@@ -49,7 +49,9 @@ export type IconName =
   | 'cloud-off'
   | 'search-off'
   | 'alert'
-  | 'chevron-down';
+  | 'chevron-down'
+  | 'pause'
+  | 'calendar';
 
 interface Props {
   name: IconName;
@@ -106,6 +108,8 @@ const GLYPHS: Record<IconName, string> = {
   'search-off': 'magnify-close',
   alert: 'alert-circle-outline',
   'chevron-down': 'chevron-down',
+  pause: 'pause',
+  calendar: 'calendar-blank-outline',
 };
 
 export function Icon({

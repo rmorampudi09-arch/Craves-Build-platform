@@ -130,6 +130,18 @@ export type CustomerProfileStackParamList = {
   CustomerCartStackParamList &
   CustomerPaymentMethodsStackParamList;
 
+/** Nested stack mounted under the existing `CustomerSettingsSubscription` route (Home and Profile stacks). */
+export type CustomerMealPlanStackParamList = {
+  MealPlans: undefined;
+  MealPlanDetail: {planId: string};
+  MealPlanReview: {planId: string};
+  MealPlanAddress: undefined;
+  MealPlanPayment: {planId: string; subscriptionId?: string};
+  MealPlanActivated: {subscriptionId: string};
+  MyMealPlan: {subscriptionId: string};
+  MealPlanMeal: {subscriptionId: string; occurrenceId: string};
+};
+
 export type CustomerTabParamList = {
   Home: NavigatorScreenParams<CustomerHomeStackParamList> | undefined;
   Chefs: NavigatorScreenParams<CustomerChefsStackParamList> | undefined;

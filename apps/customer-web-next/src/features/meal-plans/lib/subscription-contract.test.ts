@@ -41,3 +41,17 @@ test("customer subscription excludes identity ids", () => {
   assert.equal("customerIdentityId" in (parsed ?? {}), false);
   assert.equal("chefIdentityId" in (parsed ?? {}), false);
 });
+
+test("customer subscription keeps its own plan name for plans no longer listed", () => {
+  const parsed = parseCustomerSubscription({
+    id: "33333333-3333-4333-8333-333333333333",
+    planId: plan.id,
+    status: "ACTIVE",
+    startDate: "2026-08-01",
+    createdAt: "2026-07-30T00:00:00Z",
+    updatedAt: "2026-07-30T00:00:00Z",
+    planName: "Weekly thali"
+  });
+  assert.equal(parsed?.planName, "Weekly thali");
+  assert.equal(parseCustomerSubscription({ ...parsed, planName: undefined })?.planName, null);
+});

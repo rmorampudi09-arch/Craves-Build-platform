@@ -8,6 +8,7 @@ import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.SkipRequestR
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.SkipSubscriptionDateRequest;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.SubscriptionStatusHistoryResponse;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleService;
+import in.craves.subscription.plan.PlanImageRepository.PlanImage;
 import in.craves.subscription.security.CurrentUser;
 import in.craves.subscription.service.SubscriptionService;
 import in.craves.subscription.web.ApiDtos.CreateSubscriptionRequest;
@@ -22,6 +23,8 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -56,6 +59,15 @@ public class SubscriptionController {
     @GetMapping("/subscriptions/plans/{planId}")
     public PublicPlanResponse getPlan(@PathVariable UUID planId) {
         return service.getPlan(planId);
+    }
+
+    @GetMapping("/subscriptions/plans/{planId}/image")
+    public ResponseEntity<byte[]> getPlanImage(@PathVariable UUID planId) {
+        PlanImage image = service.getPlanImage(planId);
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(image.contentType()))
+            .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400")
+            .body(image.bytes());
     }
 
     @GetMapping("/admin/subscription-plans")

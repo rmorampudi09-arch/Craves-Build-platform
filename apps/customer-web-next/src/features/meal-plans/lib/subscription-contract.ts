@@ -27,6 +27,8 @@ export type CustomerSubscription = {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  /** The subscription's own plan name, so a plan closed to new subscribers keeps its name. */
+  planName: string | null;
 };
 
 export type CreateSubscriptionInput = {
@@ -82,7 +84,7 @@ export function parseCustomerSubscription(value: unknown): CustomerSubscription 
   const startDate = dateOnly(raw.startDate); const createdAt = instant(raw.createdAt); const updatedAt = instant(raw.updatedAt);
   const deliveryAddressId = optionalText(raw.deliveryAddressId, 64);
   if (!id || !UUID.test(id) || !planId || !UUID.test(planId) || !status || !SUBSCRIPTION_STATUSES.has(status) || !startDate || !createdAt || !updatedAt || (deliveryAddressId && !UUID.test(deliveryAddressId))) return null;
-  return { id, planId, status: status as CustomerSubscriptionStatus, startDate, endDate: raw.endDate == null ? null : dateOnly(raw.endDate), nextServiceDate: raw.nextServiceDate == null ? null : dateOnly(raw.nextServiceDate), deliveryAddressId, notes: optionalText(raw.notes, 2000), createdAt, updatedAt };
+  return { id, planId, status: status as CustomerSubscriptionStatus, startDate, endDate: raw.endDate == null ? null : dateOnly(raw.endDate), nextServiceDate: raw.nextServiceDate == null ? null : dateOnly(raw.nextServiceDate), deliveryAddressId, notes: optionalText(raw.notes, 2000), createdAt, updatedAt, planName: optionalText(raw.planName, 160) };
 }
 export function parseCustomerSubscriptions(value: unknown): CustomerSubscription[] | null {
   if (!Array.isArray(value) || value.length > 500) return null;

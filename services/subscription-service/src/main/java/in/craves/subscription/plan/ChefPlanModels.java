@@ -45,7 +45,15 @@ public final class ChefPlanModels {
         Instant submittedAt,
         Instant reviewedAt,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        /** Relative public path with a ?v= cache-buster, or null while the plan has no photo. */
+        String imageUrl,
+        boolean acceptingSubscribers
+    ) {
+    }
+
+    public record AcceptingSubscribersRequest(
+        @NotNull Boolean acceptingSubscribers
     ) {
     }
 }

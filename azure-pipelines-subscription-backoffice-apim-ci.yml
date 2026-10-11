@@ -11,6 +11,7 @@ steps:
       bash -n scripts/apim/configure-subscription-backoffice-apim.sh
       bash -n scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
       bash -n scripts/apim/configure-chef-subscription-admin-read-apim.sh
+      bash -n scripts/apim/configure-meal-plan-image-apim.sh
       bash -n scripts/apim/status-subscription-backoffice-apim.sh
       bash -n scripts/apim/rollback-subscription-backoffice-apim.sh
       bash -n scripts/release/validate-chef-owned-subscription-plans.sh
@@ -20,6 +21,7 @@ steps:
       for path in (
           'infra/apim/subscription-backoffice/authenticated-policy.xml',
           'infra/apim/subscription-backoffice/public-policy.xml',
+          'infra/apim/subscription-backoffice/public-image-policy.xml',
       ):
           ET.parse(path)
           print(f'Valid XML: {path}')
@@ -30,6 +32,11 @@ steps:
       grep -q 'CONFIRM_APIM_WRITE' scripts/apim/configure-subscription-backoffice-apim.sh
       grep -q 'CONFIRM_APIM_WRITE' scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
       grep -q 'CONFIRM_APIM_WRITE' scripts/apim/configure-chef-subscription-admin-read-apim.sh
+      grep -q 'CONFIRM_APIM_WRITE' scripts/apim/configure-meal-plan-image-apim.sh
+      if grep -Eq 'no-store|Cache-Control' infra/apim/subscription-backoffice/public-image-policy.xml; then
+        echo 'ERROR: Public plan image policy must not override Cache-Control.' >&2
+        exit 1
+      fi
       grep -q 'CONFIRM_APIM_ROLLBACK' scripts/apim/rollback-subscription-backoffice-apim.sh
       grep -q 'Multiple APIM APIs own' scripts/apim/configure-subscription-backoffice-apim.sh
       grep -q 'Multiple APIM APIs own' scripts/apim/configure-chef-subscription-plan-workflow-apim.sh
@@ -49,6 +56,7 @@ steps:
         scripts/apim/configure-subscription-backoffice-apim.sh \
         scripts/apim/configure-chef-subscription-plan-workflow-apim.sh \
         scripts/apim/configure-chef-subscription-admin-read-apim.sh \
+        scripts/apim/configure-meal-plan-image-apim.sh \
         scripts/apim/status-subscription-backoffice-apim.sh \
         scripts/apim/rollback-subscription-backoffice-apim.sh; then
         echo 'ERROR: Potential credential material found in APIM assets.' >&2

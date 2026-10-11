@@ -1,0 +1,12 @@
+<policies>
+  <inbound>
+    <base />
+    <set-backend-service base-url="__BACKEND_URL__" />
+  </inbound>
+  <backend><base /></backend>
+  <outbound>
+    <base />
+    <set-header name="X-Content-Type-Options" exists-action="override"><value>nosniff</value></set-header>
+  </outbound>
+  <on-error><base /></on-error>
+</policies>

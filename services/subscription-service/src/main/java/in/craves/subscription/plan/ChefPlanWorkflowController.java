@@ -1,5 +1,6 @@
 package in.craves.subscription.plan;
 
+import in.craves.subscription.plan.ChefPlanModels.AcceptingSubscribersRequest;
 import in.craves.subscription.plan.ChefPlanModels.ChefPlanInput;
 import in.craves.subscription.plan.ChefPlanModels.ChefPlanResponse;
 import in.craves.subscription.plan.ChefPlanModels.ReviewChefPlanRequest;
@@ -14,12 +15,15 @@ import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -61,6 +65,25 @@ public class ChefPlanWorkflowController {
         @AuthenticationPrincipal CurrentUser user
     ) {
         return workflow.update(planId, request, user);
+    }
+
+    /** The file is handed over unread; a missing part arrives as null and is rejected as an empty image after the role, owner and status gates. */
+    @PutMapping("/chef/subscription-plans/{planId}/image")
+    public ChefPlanResponse putImage(
+        @PathVariable UUID planId,
+        @RequestPart(value = "file", required = false) MultipartFile file,
+        @AuthenticationPrincipal CurrentUser user
+    ) {
+        return workflow.putImage(planId, file, user);
+    }
+
+    @PatchMapping("/chef/subscription-plans/{planId}/accepting-subscribers")
+    public ChefPlanResponse setAcceptingSubscribers(
+        @PathVariable UUID planId,
+        @Valid @RequestBody AcceptingSubscribersRequest request,
+        @AuthenticationPrincipal CurrentUser user
+    ) {
+        return workflow.setAcceptingSubscribers(planId, request.acceptingSubscribers(), user);
     }
 
     @GetMapping("/chef/subscription-plans/{planId}/schedule")

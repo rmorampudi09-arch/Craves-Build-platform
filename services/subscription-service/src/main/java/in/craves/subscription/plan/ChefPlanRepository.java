@@ -84,6 +84,22 @@ public class ChefPlanRepository {
         return requireOwned(planId, chefIdentityId);
     }
 
+    /** Flips whether new customers can subscribe; touches nothing but the flag and updated_at, never status, billing or subscriptions. */
+    @Transactional
+    public ChefPlanResponse setAcceptingSubscribers(UUID planId, UUID chefIdentityId, boolean accepting) {
+        int updated = jdbcTemplate.update(
+            "UPDATE subscription_schema.subscription_plan SET accepting_subscribers = ?, updated_at = now() " +
+                "WHERE id = ? AND chef_identity_id = ? AND status = 'ACTIVE'",
+            accepting, planId, chefIdentityId
+        );
+        if (updated != 1) {
+            throw ApiException.conflict("PLAN_NOT_ACTIVE", "Only active meal plans can change whether they accept new subscribers");
+        }
+        audit(planId, chefIdentityId, accepting ? "CHEF_ACCEPTING_ON" : "CHEF_ACCEPTING_OFF", "ACTIVE", "ACTIVE",
+            accepting ? "Chef reopened the plan to new subscribers" : "Chef closed the plan to new subscribers");
+        return requireOwned(planId, chefIdentityId);
+    }
+
     @Transactional
     public ChefPlanResponse submit(UUID planId, UUID chefIdentityId, String note) {
         ChefPlanResponse existing = requireOwned(planId, chefIdentityId);
@@ -154,7 +170,9 @@ public class ChefPlanRepository {
             instant(rs, "submitted_at"),
             instant(rs, "reviewed_at"),
             instant(rs, "created_at"),
-            instant(rs, "updated_at")
+            instant(rs, "updated_at"),
+            PlanImageRepository.imagePath(rs.getObject("id", UUID.class), instant(rs, "image_updated_at")),
+            rs.getBoolean("accepting_subscribers")
         );
     }
 
@@ -175,6 +193,7 @@ public class ChefPlanRepository {
 
     private static final String SELECT =
         "SELECT id, plan_code, chef_identity_id, name, description, billing_period, amount, currency, status, " +
-        "submitted_at, reviewed_at, reviewed_by_identity_id, review_reason, created_at, updated_at " +
-        "FROM subscription_schema.subscription_plan";
+        "submitted_at, reviewed_at, reviewed_by_identity_id, review_reason, created_at, updated_at, accepting_subscribers, " +
+        "(SELECT i.updated_at FROM subscription_schema.subscription_plan_image i WHERE i.plan_id = p.id) AS image_updated_at " +
+        "FROM subscription_schema.subscription_plan p";
 }

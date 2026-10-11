@@ -1,5 +1,6 @@
 package in.craves.subscription.lifecycle;
 
+import in.craves.subscription.billing.SubscriptionBillingProperties;
 import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.AdminSubscriptionPage;
@@ -14,6 +15,7 @@ import in.craves.subscription.policy.SubscriptionPolicyModels.SubscriptionPolicy
 import in.craves.subscription.policy.SubscriptionPolicyRepository;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
+import in.craves.subscription.service.SubscriptionService;
 import in.craves.subscription.web.ApiDtos.CustomerSubscriptionResponse;
 import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
 import java.time.Clock;
@@ -40,6 +42,7 @@ public class SubscriptionLifecycleService {
     private final SubscriptionPolicyRepository policyRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final CapacityService capacityService;
+    private final SubscriptionBillingProperties billing;
     private final Clock clock;
 
     @Autowired
@@ -47,9 +50,10 @@ public class SubscriptionLifecycleService {
         SubscriptionLifecycleRepository lifecycleRepository,
         SubscriptionPolicyRepository policyRepository,
         SubscriptionRepository subscriptionRepository,
-        CapacityService capacityService
+        CapacityService capacityService,
+        SubscriptionBillingProperties billing
     ) {
-        this(lifecycleRepository, policyRepository, subscriptionRepository, capacityService, Clock.systemUTC());
+        this(lifecycleRepository, policyRepository, subscriptionRepository, capacityService, billing, Clock.systemUTC());
     }
 
     SubscriptionLifecycleService(
@@ -57,12 +61,14 @@ public class SubscriptionLifecycleService {
         SubscriptionPolicyRepository policyRepository,
         SubscriptionRepository subscriptionRepository,
         CapacityService capacityService,
+        SubscriptionBillingProperties billing,
         Clock clock
     ) {
         this.lifecycleRepository = lifecycleRepository;
         this.policyRepository = policyRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.capacityService = capacityService;
+        this.billing = billing;
         this.clock = clock;
     }
 
@@ -269,8 +275,15 @@ public class SubscriptionLifecycleService {
             throw ApiException.conflict("NEXT_SERVICE_DATE_MISSING", "Subscription does not have a next service date");
         }
         ScheduleClock schedule = activeSchedule(subscription.planId());
-        Instant serviceAt = lifecycleRepository.findOccurrenceServiceAt(subscription.id(), subscription.nextServiceDate())
-            .orElseGet(() -> serviceAt(subscription.nextServiceDate(), schedule));
+        Instant now = clock.instant();
+        // Protect the earliest meal still ahead. next_service_date only moves while the occurrence generator runs,
+        // so a date in the past means no meal is pending and there is nothing for the cutoff to protect.
+        Instant serviceAt = lifecycleRepository.findNextUpcomingServiceAt(subscription.id(), now)
+            .orElseGet(() -> lifecycleRepository.findOccurrenceServiceAt(subscription.id(), subscription.nextServiceDate())
+                .orElseGet(() -> serviceAt(subscription.nextServiceDate(), schedule)));
+        if (minutes != null && !serviceAt.isAfter(now)) {
+            return;
+        }
         enforceCutoff(serviceAt, minutes, code);
     }
 
@@ -299,7 +312,12 @@ public class SubscriptionLifecycleService {
         SubscriptionResponse value = requireSubscription(subscriptionId);
         return new CustomerSubscriptionResponse(
             value.id(), value.planId(), value.status(), value.startDate(), value.endDate(),
-            value.nextServiceDate(), value.deliveryAddressId(), value.notes(), value.createdAt(), value.updatedAt()
+            value.nextServiceDate(), value.deliveryAddressId(), value.notes(), value.createdAt(), value.updatedAt(),
+            value.planName(), value.billingPeriod(), value.amount(), value.currency(),
+            SubscriptionService.nextChargeDate(
+                value.nextBillingDate(), billing, LocalDate.ofInstant(clock.instant(), ZoneId.of("Asia/Kolkata"))
+            ),
+            value.planImageUrl()
         );
     }
 

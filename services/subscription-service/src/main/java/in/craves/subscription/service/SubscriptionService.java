@@ -1,7 +1,10 @@
 package in.craves.subscription.service;
 
+import in.craves.subscription.billing.SubscriptionBillingProperties;
 import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
+import in.craves.subscription.plan.PlanImageRepository;
+import in.craves.subscription.plan.PlanImageRepository.PlanImage;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
 import in.craves.subscription.web.ApiDtos.CreateSubscriptionRequest;
@@ -30,16 +33,26 @@ public class SubscriptionService {
 
     private final SubscriptionRepository repository;
     private final CapacityService capacityService;
+    private final PlanImageRepository planImages;
+    private final SubscriptionBillingProperties billing;
 
-    public SubscriptionService(SubscriptionRepository repository, CapacityService capacityService) {
+    public SubscriptionService(
+        SubscriptionRepository repository,
+        CapacityService capacityService,
+        PlanImageRepository planImages,
+        SubscriptionBillingProperties billing
+    ) {
         this.repository = repository;
         this.capacityService = capacityService;
+        this.planImages = planImages;
+        this.billing = billing;
     }
 
     public List<PublicPlanResponse> listActivePlans() {
         return repository.listPlans(true).stream()
             .filter(capacityService::isPlanBookable)
-            .map(SubscriptionService::toPublicPlan)
+            // shortcut: one image lookup per listed plan, batch it if the public catalogue grows past a few dozen plans
+            .map(this::toPublicPlan)
             .toList();
     }
 
@@ -55,6 +68,11 @@ public class SubscriptionService {
             throw ApiException.notFound("PLAN_NOT_BOOKABLE", "Subscription plan is not currently accepting new enrollments");
         }
         return toPublicPlan(plan);
+    }
+
+    public PlanImage getPlanImage(UUID planId) {
+        return planImages.findImage(planId)
+            .orElseThrow(() -> ApiException.notFound("PLAN_IMAGE_NOT_FOUND", "Subscription plan image was not found"));
     }
 
     public PlanResponse updatePlanStatus(UUID planId, String status, CurrentUser user) {
@@ -92,6 +110,9 @@ public class SubscriptionService {
 
         PlanResponse plan = repository.findActivePlanById(request.planId())
             .orElseThrow(() -> ApiException.conflict("PLAN_NOT_ACTIVE", "Subscription plan is not active or not fully configured"));
+        if (!repository.isPlanAcceptingSubscribers(plan.id())) {
+            throw ApiException.conflict("PLAN_NOT_ACCEPTING_SUBSCRIBERS", "This meal plan is not accepting new subscribers");
+        }
         if (!capacityService.isPlanBookable(plan)) {
             throw ApiException.conflict("SUBSCRIPTION_CAPACITY_UNAVAILABLE", "Subscription capacity is no longer available");
         }
@@ -117,7 +138,7 @@ public class SubscriptionService {
     public List<CustomerSubscriptionResponse> listMine(CurrentUser user) {
         requireRole(user, "CUSTOMER");
         return repository.listCustomerSubscriptions(user.identityId()).stream()
-            .map(SubscriptionService::toCustomerSubscription)
+            .map(this::toCustomerSubscription)
             .toList();
     }
 
@@ -196,19 +217,35 @@ public class SubscriptionService {
         return normalized;
     }
 
-    private static PublicPlanResponse toPublicPlan(PlanResponse plan) {
+    private PublicPlanResponse toPublicPlan(PlanResponse plan) {
         return new PublicPlanResponse(
             plan.id(), plan.planCode(), plan.name(), plan.description(),
-            plan.billingPeriod(), plan.amount(), plan.currency()
+            plan.billingPeriod(), plan.amount(), plan.currency(), planImages.findImagePath(plan.id())
         );
     }
 
-    private static CustomerSubscriptionResponse toCustomerSubscription(SubscriptionResponse subscription) {
+    private CustomerSubscriptionResponse toCustomerSubscription(SubscriptionResponse subscription) {
         return new CustomerSubscriptionResponse(
             subscription.id(), subscription.planId(), subscription.status(), subscription.startDate(),
             subscription.endDate(), subscription.nextServiceDate(), subscription.deliveryAddressId(),
-            subscription.notes(), subscription.createdAt(), subscription.updatedAt()
+            subscription.notes(), subscription.createdAt(), subscription.updatedAt(),
+            subscription.planName(), subscription.billingPeriod(), subscription.amount(), subscription.currency(),
+            nextChargeDate(subscription.nextBillingDate(), billing, LocalDate.now(BUSINESS_ZONE)),
+            subscription.planImageUrl()
         );
+    }
+
+    /**
+     * next_billing_date is the start of the next unbilled cycle, and the billing job charges it
+     * horizonDays early, so that is when the customer is next charged (never in the past).
+     * Null while automatic billing is off, because then nothing renews on its own.
+     */
+    public static LocalDate nextChargeDate(LocalDate nextBillingDate, SubscriptionBillingProperties billing, LocalDate today) {
+        if (nextBillingDate == null || !billing.isGeneratorEnabled()) {
+            return null;
+        }
+        LocalDate charge = nextBillingDate.minusDays(billing.getHorizonDays());
+        return charge.isBefore(today) ? today : charge;
     }
 
     private static String normalize(String value, String fieldName) {

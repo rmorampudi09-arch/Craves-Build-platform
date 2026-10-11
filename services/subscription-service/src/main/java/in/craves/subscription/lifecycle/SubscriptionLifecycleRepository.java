@@ -8,6 +8,7 @@ import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.SkipRequestR
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.SubscriptionStatusHistoryResponse;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -75,12 +76,22 @@ public class SubscriptionLifecycleRepository {
         ).stream().findFirst();
     }
 
+    /** The earliest meal still ahead that will be prepared (skipped, cancelled and failed meals are not). */
+    public Optional<Instant> findNextUpcomingServiceAt(UUID subscriptionId, Instant after) {
+        return jdbcTemplate.query(
+            "SELECT service_at FROM subscription_schema.subscription_occurrence " +
+                "WHERE subscription_id = ? AND service_at > ? AND status NOT IN ('SKIPPED', 'CANCELLED', 'FAILED') " +
+                "ORDER BY service_at LIMIT 1",
+            (rs, rowNum) -> rs.getTimestamp("service_at").toInstant(), subscriptionId, Timestamp.from(after)
+        ).stream().findFirst();
+    }
+
     public List<CustomerOccurrenceResponse> listOccurrences(UUID subscriptionId, UUID customerIdentityId, int limit) {
         if (findOwned(subscriptionId, customerIdentityId).isEmpty()) {
             return List.of();
         }
         return jdbcTemplate.query(
-            "SELECT id, service_date, meal_slot_code, service_at, status " +
+            "SELECT id, service_date, meal_slot_code, service_at, status, order_id " +
                 "FROM subscription_schema.subscription_occurrence WHERE subscription_id = ? " +
                 "ORDER BY service_at DESC, meal_slot_code, id DESC LIMIT ?",
             (rs, rowNum) -> {
@@ -91,7 +102,8 @@ public class SubscriptionLifecycleRepository {
                     rs.getString("meal_slot_code"),
                     rs.getTimestamp("service_at").toInstant(),
                     rs.getString("status"),
-                    listOccurrenceItems(occurrenceId)
+                    listOccurrenceItems(occurrenceId),
+                    rs.getObject("order_id", UUID.class)
                 );
             }, subscriptionId, limit
         );

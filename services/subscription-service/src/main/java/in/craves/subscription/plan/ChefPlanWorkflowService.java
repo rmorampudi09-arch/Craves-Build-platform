@@ -13,6 +13,7 @@ import in.craves.subscription.schedule.PlanScheduleModels.ScheduleItemResponse;
 import in.craves.subscription.schedule.PlanScheduleRepository;
 import in.craves.subscription.security.CurrentUser;
 import in.craves.subscription.web.ApiDtos.PlanResponse;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -25,10 +26,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class ChefPlanWorkflowService {
     private static final Set<String> BILLING_PERIODS = Set.of("WEEKLY", "MONTHLY");
+    private static final Set<String> EDITABLE_STATUSES = Set.of("DRAFT", "REJECTED");
     private static final Set<String> REVIEW_DECISIONS = Set.of("APPROVE", "REJECT");
     private static final int DEFAULT_DISH_SUBSCRIPTION_UNITS = 5;
 
@@ -37,6 +40,7 @@ public class ChefPlanWorkflowService {
     private final DefaultSubscriptionPolicyService defaultPolicyService;
     private final SubscriptionRepository subscriptionRepository;
     private final CapacityService capacityService;
+    private final PlanImageRepository images;
 
     private CapacityRepository capacityRepository;
     private PlanScheduleRepository planScheduleRepository;
@@ -46,13 +50,15 @@ public class ChefPlanWorkflowService {
         ChefPlanScheduleService scheduleService,
         DefaultSubscriptionPolicyService defaultPolicyService,
         SubscriptionRepository subscriptionRepository,
-        CapacityService capacityService
+        CapacityService capacityService,
+        PlanImageRepository images
     ) {
         this.repository = repository;
         this.scheduleService = scheduleService;
         this.defaultPolicyService = defaultPolicyService;
         this.subscriptionRepository = subscriptionRepository;
         this.capacityService = capacityService;
+        this.images = images;
     }
 
     @Autowired
@@ -87,6 +93,38 @@ public class ChefPlanWorkflowService {
     public ChefPlanResponse update(UUID planId, ChefPlanInput input, CurrentUser user) {
         requireChef(user);
         return repository.update(planId, user.identityId(), normalize(input));
+    }
+
+    /** The upload is only read after the role, ownership and status gates pass, so a refused request never buffers the file. A null file counts as empty. */
+    public ChefPlanResponse putImage(UUID planId, MultipartFile file, CurrentUser user) {
+        requireChef(user);
+        ChefPlanResponse plan = repository.requireOwned(planId, user.identityId());
+        if (!EDITABLE_STATUSES.contains(plan.status())) {
+            throw ApiException.conflict("PLAN_NOT_EDITABLE", "Only draft or rejected plans can change their photo");
+        }
+        byte[] bytes = readBytes(file);
+        images.upsert(planId, user.identityId(), PlanImageValidator.contentType(bytes), bytes);
+        return repository.requireOwned(planId, user.identityId());
+    }
+
+    private static byte[] readBytes(MultipartFile file) {
+        if (file == null) {
+            return null;
+        }
+        try {
+            return file.getBytes();
+        } catch (IOException error) {
+            throw ApiException.badRequest("PLAN_IMAGE_SIZE_INVALID", "Plan photo could not be read");
+        }
+    }
+
+    public ChefPlanResponse setAcceptingSubscribers(UUID planId, boolean accepting, CurrentUser user) {
+        requireChef(user);
+        ChefPlanResponse plan = repository.requireOwned(planId, user.identityId());
+        if (!"ACTIVE".equals(plan.status())) {
+            throw ApiException.conflict("PLAN_NOT_ACTIVE", "Only active meal plans can change whether they accept new subscribers");
+        }
+        return repository.setAcceptingSubscribers(planId, user.identityId(), accepting);
     }
 
     @Transactional

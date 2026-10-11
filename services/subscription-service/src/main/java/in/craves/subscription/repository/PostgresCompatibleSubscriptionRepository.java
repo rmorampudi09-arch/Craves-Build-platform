@@ -1,5 +1,6 @@
 package in.craves.subscription.repository;
 
+import in.craves.subscription.plan.PlanImageRepository;
 import in.craves.subscription.web.ApiDtos.PlanResponse;
 import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
 import java.sql.ResultSet;
@@ -39,7 +40,7 @@ public class PostgresCompatibleSubscriptionRepository extends SubscriptionReposi
             "p.amount, p.currency, p.status, p.created_at, p.updated_at " +
             "FROM subscription_schema.subscription_plan p ";
         if (activeOnly) {
-            sql += "WHERE p.status = 'ACTIVE' AND p.chef_identity_id IS NOT NULL " +
+            sql += "WHERE p.status = 'ACTIVE' AND p.chef_identity_id IS NOT NULL AND p.accepting_subscribers = TRUE " +
                 "AND EXISTS (SELECT 1 FROM subscription_schema.subscription_plan_schedule s " +
                 "WHERE s.plan_id = p.id AND s.status = 'ACTIVE') " +
                 "AND EXISTS (SELECT 1 FROM subscription_schema.subscription_plan_policy pp " +
@@ -90,9 +91,7 @@ public class PostgresCompatibleSubscriptionRepository extends SubscriptionReposi
             return Optional.empty();
         }
         return jdbcTemplate.query(
-            "SELECT id, customer_identity_id, plan_id, chef_identity_id, status, start_date, end_date, " +
-                "next_service_date, delivery_address_id, notes, created_at, updated_at " +
-                "FROM subscription_schema.customer_subscription WHERE customer_identity_id = ? AND enrollment_idempotency_key = ?",
+            SUBSCRIPTION_SELECT + "WHERE s.customer_identity_id = ? AND s.enrollment_idempotency_key = ?",
             this::mapSubscription,
             customerIdentityId,
             key
@@ -102,8 +101,7 @@ public class PostgresCompatibleSubscriptionRepository extends SubscriptionReposi
     @Override
     public List<SubscriptionResponse> listCustomerSubscriptions(UUID customerIdentityId) {
         return jdbcTemplate.query(
-            "SELECT id, customer_identity_id, plan_id, chef_identity_id, status, start_date, end_date, next_service_date, delivery_address_id, notes, created_at, updated_at " +
-                "FROM subscription_schema.customer_subscription WHERE customer_identity_id = ? ORDER BY created_at DESC LIMIT 200",
+            SUBSCRIPTION_SELECT + "WHERE s.customer_identity_id = ? ORDER BY s.created_at DESC LIMIT 200",
             this::mapSubscription,
             customerIdentityId
         );
@@ -112,8 +110,7 @@ public class PostgresCompatibleSubscriptionRepository extends SubscriptionReposi
     @Override
     public Optional<SubscriptionResponse> findSubscriptionById(UUID id) {
         return jdbcTemplate.query(
-            "SELECT id, customer_identity_id, plan_id, chef_identity_id, status, start_date, end_date, next_service_date, delivery_address_id, notes, created_at, updated_at " +
-                "FROM subscription_schema.customer_subscription WHERE id = ?",
+            SUBSCRIPTION_SELECT + "WHERE s.id = ?",
             this::mapSubscription,
             id
         ).stream().findFirst();
@@ -148,7 +145,13 @@ public class PostgresCompatibleSubscriptionRepository extends SubscriptionReposi
             rs.getObject("delivery_address_id", UUID.class),
             rs.getString("notes"),
             instant(rs, "created_at"),
-            instant(rs, "updated_at")
+            instant(rs, "updated_at"),
+            rs.getString("plan_name"),
+            rs.getString("billing_period"),
+            rs.getBigDecimal("amount"),
+            rs.getString("currency"),
+            rs.getObject("next_billing_date", LocalDate.class),
+            PlanImageRepository.imagePath(rs.getObject("plan_id", UUID.class), instant(rs, "plan_image_updated_at"))
         );
     }
 

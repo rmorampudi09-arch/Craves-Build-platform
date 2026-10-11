@@ -1,6 +1,7 @@
 package in.craves.subscription.repository;
 
 import in.craves.subscription.exception.ApiException;
+import in.craves.subscription.plan.PlanImageRepository;
 import in.craves.subscription.web.ApiDtos.PlanResponse;
 import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
 import java.math.BigDecimal;
@@ -17,6 +18,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class SubscriptionRepository {
+    /** Subscription row with its plan summary and plan image version; callers append WHERE/ORDER BY on the s alias. */
+    protected static final String SUBSCRIPTION_SELECT =
+        "SELECT s.id, s.customer_identity_id, s.plan_id, s.chef_identity_id, s.status, s.start_date, s.end_date, " +
+            "s.next_service_date, s.delivery_address_id, s.notes, s.created_at, s.updated_at, " +
+            "p.name AS plan_name, p.billing_period, p.amount, p.currency, s.next_billing_date, " +
+            "i.updated_at AS plan_image_updated_at " +
+            "FROM subscription_schema.customer_subscription s " +
+            "JOIN subscription_schema.subscription_plan p ON p.id = s.plan_id " +
+            "LEFT JOIN subscription_schema.subscription_plan_image i ON i.plan_id = s.plan_id ";
+
     private final JdbcTemplate jdbcTemplate;
 
     public SubscriptionRepository(JdbcTemplate jdbcTemplate) {
@@ -58,7 +69,7 @@ public class SubscriptionRepository {
             "p.amount, p.currency, p.status, p.created_at, p.updated_at " +
             "FROM subscription_schema.subscription_plan p ";
         if (activeOnly) {
-            sql += "WHERE p.status = 'ACTIVE' AND p.chef_identity_id IS NOT NULL " +
+            sql += "WHERE p.status = 'ACTIVE' AND p.chef_identity_id IS NOT NULL AND p.accepting_subscribers = TRUE " +
                 "AND EXISTS (SELECT 1 FROM subscription_schema.subscription_plan_schedule s " +
                 "WHERE s.plan_id = p.id AND s.status = 'ACTIVE') " +
                 "AND EXISTS (SELECT 1 FROM subscription_schema.subscription_plan_policy pp " +
@@ -100,6 +111,14 @@ public class SubscriptionRepository {
             id
         );
         return rows.stream().findFirst();
+    }
+
+    public boolean isPlanAcceptingSubscribers(UUID planId) {
+        return jdbcTemplate.query(
+            "SELECT accepting_subscribers FROM subscription_schema.subscription_plan WHERE id = ?",
+            (rs, rowNum) -> rs.getBoolean("accepting_subscribers"),
+            planId
+        ).stream().findFirst().orElse(false);
     }
 
     @Transactional
@@ -199,9 +218,7 @@ public class SubscriptionRepository {
             return Optional.empty();
         }
         return jdbcTemplate.query(
-            "SELECT id, customer_identity_id, plan_id, chef_identity_id, status, start_date, end_date, " +
-                "next_service_date, delivery_address_id, notes, created_at, updated_at " +
-                "FROM subscription_schema.customer_subscription WHERE customer_identity_id = ? AND enrollment_idempotency_key = ?",
+            SUBSCRIPTION_SELECT + "WHERE s.customer_identity_id = ? AND s.enrollment_idempotency_key = ?",
             this::mapSubscription,
             customerIdentityId,
             key
@@ -210,8 +227,7 @@ public class SubscriptionRepository {
 
     public List<SubscriptionResponse> listCustomerSubscriptions(UUID customerIdentityId) {
         return jdbcTemplate.query(
-            "SELECT id, customer_identity_id, plan_id, chef_identity_id, status, start_date, end_date, next_service_date, delivery_address_id, notes, created_at, updated_at " +
-                "FROM subscription_schema.customer_subscription WHERE customer_identity_id = ? ORDER BY created_at DESC LIMIT 200",
+            SUBSCRIPTION_SELECT + "WHERE s.customer_identity_id = ? ORDER BY s.created_at DESC LIMIT 200",
             this::mapSubscription,
             customerIdentityId
         );
@@ -219,8 +235,7 @@ public class SubscriptionRepository {
 
     public Optional<SubscriptionResponse> findSubscriptionById(UUID id) {
         List<SubscriptionResponse> rows = jdbcTemplate.query(
-            "SELECT id, customer_identity_id, plan_id, chef_identity_id, status, start_date, end_date, next_service_date, delivery_address_id, notes, created_at, updated_at " +
-                "FROM subscription_schema.customer_subscription WHERE id = ?",
+            SUBSCRIPTION_SELECT + "WHERE s.id = ?",
             this::mapSubscription,
             id
         );
@@ -319,7 +334,16 @@ public class SubscriptionRepository {
             rs.getObject("delivery_address_id", UUID.class),
             rs.getString("notes"),
             in.craves.subscription.config.JdbcTimes.instant(rs, "created_at"),
-            in.craves.subscription.config.JdbcTimes.instant(rs, "updated_at")
+            in.craves.subscription.config.JdbcTimes.instant(rs, "updated_at"),
+            rs.getString("plan_name"),
+            rs.getString("billing_period"),
+            rs.getBigDecimal("amount"),
+            rs.getString("currency"),
+            rs.getObject("next_billing_date", LocalDate.class),
+            PlanImageRepository.imagePath(
+                rs.getObject("plan_id", UUID.class),
+                in.craves.subscription.config.JdbcTimes.instant(rs, "plan_image_updated_at")
+            )
         );
     }
 }

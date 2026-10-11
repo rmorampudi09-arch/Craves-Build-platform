@@ -8,6 +8,11 @@ const mocks = vi.hoisted(() => ({
   fetch: vi.fn(), navigate: vi.fn(), park: vi.fn(), install: vi.fn(), profile: vi.fn(),
   generation: 0, user: null as { id: string; roles: string[]; status: string } | null,
   listeners: new Set<() => void>(),
+  launchingSoon: false,
+}));
+vi.mock("./customer-launch", async (original) => ({
+  ...await original<typeof import("./customer-launch")>(),
+  get CUSTOMERS_LAUNCHING_SOON() { return mocks.launchingSoon; },
 }));
 vi.mock("./msg91-browser", () => ({ beginMsg91PhoneSignIn: mocks.begin, parkMsg91Captcha: mocks.park }));
 vi.mock("../../auth/api/cravesAuth", () => ({
@@ -28,7 +33,7 @@ const response = (body: unknown, status = 200) => new Response(JSON.stringify(bo
 
 beforeEach(() => {
   vi.useRealTimers();
-  mocks.generation = 0; mocks.user = null; mocks.listeners.clear();
+  mocks.generation = 0; mocks.user = null; mocks.listeners.clear(); mocks.launchingSoon = false;
   mocks.load.mockReset().mockResolvedValue(null);
   mocks.resend.mockReset().mockResolvedValue(undefined);
   mocks.token.mockReset().mockResolvedValue("verified-token");
@@ -93,6 +98,23 @@ it("opens the exact ZIP popup and switches registration roles without requesting
   fireEvent.click(screen.getByRole("button", { name: /^Sign in$/ }));
   expect(screen.getByRole("dialog", { name: "Home Chef sign in" })).toBeTruthy();
   expect(mocks.begin).not.toHaveBeenCalled();
+});
+
+it("shows customers the launching-soon note while Home Chef sign-in keeps working", async () => {
+  mocks.launchingSoon = true;
+  await act(async () => openLandingAuth());
+  expect(screen.getByRole("status").textContent).toContain("Craves is launching soon for customers");
+  expect(screen.queryByLabelText(/Mobile number/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Send verification code" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Create a customer account" })).toBeNull();
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Join as a Home Chef" })); await new Promise((resolve) => setTimeout(resolve, 0)); });
+  expect(screen.getByRole("dialog", { name: "Home Chef sign in" })).toBeTruthy();
+  expect(document.activeElement).toBe(screen.getByLabelText(/Mobile number/));
+  expect(screen.queryByText("Enter a valid 10-digit mobile number.")).toBeNull();
+  await requestCode();
+  expect(mocks.begin).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("radio", { name: /Customer/ }));
+  expect(screen.queryByLabelText(/Mobile number/)).toBeNull();
 });
 
 it("deduplicates opening and restores scrolling, focus and fields after close", async () => {

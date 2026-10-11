@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { FormEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { phoneCodeVerifyError } from '@/features/sign-in/lib/phone-auth-errors';
+import { CUSTOMERS_LAUNCHING_SOON_COPY } from '@/features/sign-in/lib/customer-launch';
 import './AuthModal.css';
 
 export type AuthRole = 'customer' | 'chef';
@@ -25,6 +26,8 @@ type AuthModalProps = {
   onRequestCode: (request: VerificationRequest, signal: AbortSignal) => Promise<void>;
   /** Resolve only after server verification. The host owns authenticated routing. */
   onVerifyCode: (request: VerifyCodeRequest, signal: AbortSignal) => Promise<void>;
+  /** Customer launch lock: customers see a "launching soon" note instead of the phone form. */
+  customersLaunchingSoon?: boolean;
 };
 
 type Fields = { firstName: string; lastName: string; mobile: string };
@@ -67,9 +70,10 @@ function validate(fields: Fields, mode: AuthMode, role: AuthRole): FieldErrors {
 }
 
 /** In-page authentication UI. Form values live in memory only, never storage. */
-const AuthModal = ({ onClose, onRequestCode, onVerifyCode }: AuthModalProps) => {
+const AuthModal = ({ onClose, onRequestCode, onVerifyCode, customersLaunchingSoon = false }: AuthModalProps) => {
   const [mode, setMode] = useState<AuthMode>('sign-in');
   const [role, setRole] = useState<AuthRole>('customer');
+  const launchingSoon = customersLaunchingSoon && role === 'customer';
   const [fields, setFields] = useState<Fields>({ ...EMPTY_FIELDS });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [notice, setNotice] = useState('');
@@ -309,7 +313,7 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode }: AuthModalProps) => 
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (pendingRequest.current || isClosing.current) return;
+    if (launchingSoon || pendingRequest.current || isClosing.current) return;
     setNotice('');
     setOtpError('');
     if (!validateFields()) return;
@@ -431,6 +435,21 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode }: AuthModalProps) => 
                   </div>
                 </fieldset>
 
+                {launchingSoon ? <>
+                  <p className="auth-modal__notice" role="status">
+                    <strong>{CUSTOMERS_LAUNCHING_SOON_COPY.title}</strong><br />
+                    {CUSTOMERS_LAUNCHING_SOON_COPY.body}
+                  </p>
+                  <button
+                    // Own key: React must not reuse this node as the submit button, or the click submits the chef form.
+                    key="join-as-chef"
+                    type="button"
+                    className="auth-modal__submit"
+                    onClick={() => { changeRole('chef'); setTimeout(() => mobileRef.current?.focus(), 0); }}
+                  >
+                    {CUSTOMERS_LAUNCHING_SOON_COPY.chef}
+                  </button>
+                </> : <>
                 <div className="auth-modal__fields">
                   {isSignUp && role === 'customer' && <>
                     <div className="auth-modal__name-grid">
@@ -531,16 +550,17 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode }: AuthModalProps) => 
                   </div>
                 )}
                 {notice && <p className="auth-modal__notice" role="status" aria-live="polite">{notice}</p>}
+                </>}
               </form>
 
-              <div className="auth-modal__footer">
+              {!launchingSoon && <div className="auth-modal__footer">
                 <p>
                   {isSignUp ? `Already have a ${accountName} account?` : 'New to Craves?'}{' '}
                   <button type="button" className="auth-modal__switch" onClick={changeMode} disabled={submitting}>
                     {isSignUp ? 'Sign in' : `Create a ${accountName} account`}
                   </button>
                 </p>
-              </div>
+              </div>}
             </div>
           </div>
         </div>

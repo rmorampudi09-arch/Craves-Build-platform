@@ -301,7 +301,8 @@ function DishDetailPage() {
   const itemTotal = dish.price * qty;
 
   return (
-    <div className="min-h-screen bg-white pb-32 text-[#1A1A1A] lg:pb-14">
+    // Room at the end for the bottom bar (phones) or the floating cart (wide screens, when it shows).
+    <div className={`min-h-screen bg-white pb-32 text-[#1A1A1A] ${cartSummary.itemCount > 0 ? "" : "lg:pb-14"}`}>
       <DetailBrowseHeader returnPath={`/dish/${id}`} onBack={handleBack} />
 
       <main className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">

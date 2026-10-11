@@ -14,6 +14,11 @@ import { captureSessionContext, getSession, invalidateSession, setSessionIdentit
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
 const mocks = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn(), assign: vi.fn(), locationReplace: vi.fn() }));
+const launch = vi.hoisted(() => ({ soon: false }));
+vi.mock("@/features/sign-in/lib/customer-launch", async (original) => ({
+  ...await original<typeof import("@/features/sign-in/lib/customer-launch")>(),
+  get CUSTOMERS_LAUNCHING_SOON() { return launch.soon; },
+}));
 vi.mock("next/navigation", () => ({
   usePathname: vi.fn(() => "/home"),
   useRouter: () => ({ replace: mocks.replace, push: mocks.push }),
@@ -26,6 +31,7 @@ let me: CravesIdentity | null;
 
 beforeEach(() => {
   me = chef;
+  launch.soon = false;
   sessionStorage.clear();
   setSessionIdentity(chef);
   markChefModeVerified(chef.id);
@@ -91,6 +97,15 @@ describe("Chef Mode guard", () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?confirm=customer&returnTo=%2Fcart"));
   });
 
+  it("shows that chef the launching-soon note instead while customers wait", async () => {
+    launch.soon = true;
+    sessionStorage.clear();
+    clearCustomerMode();
+    vi.mocked(usePathname).mockReturnValue("/cart");
+    render(createElement(ChefModeGuard));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?from=chef"));
+  });
+
   it("never asks a customer without the chef role", () => {
     sessionStorage.clear();
     clearCustomerMode();
@@ -154,6 +169,15 @@ describe("More hub", () => {
     fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
     expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/sign-in?returnTo=%2Fhome&confirm=customer");
     expect(isChefModeVerified(chef.id)).toBe(true);
+  });
+
+  it("keeps the chef in Chef Mode and shows the launching-soon note while customers wait", async () => {
+    launch.soon = true;
+    render(createElement(ChefMorePage));
+    fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
+    expect(isChefModeVerified(chef.id)).toBe(true);
+    expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/sign-in?from=chef");
+    expect(isOpenInChefMode("/sign-in")).toBe(true);
   });
 
   it("signs out of Craves and Chef Mode and leaves no chef page behind", async () => {

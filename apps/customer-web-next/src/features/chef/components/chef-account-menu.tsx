@@ -10,14 +10,19 @@ import {
 } from "@/shared/ui/overlays/dropdown-menu";
 import { clearChefMode, isCustomerModeVerified } from "@/features/chef/lib/chef-mode";
 import { getChefName, subscribeChefName, type ChefName } from "@/features/chef/lib/chef-name";
+import { CUSTOMERS_LAUNCHING_SOON } from "@/features/sign-in/lib/customer-launch";
 import { clearSession, getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 
 /**
  * The only way from Chef Mode to customer screens; the full load leaves no chef state behind.
- * The customer app opens straight away only if this device signed in on the customer side during
- * this sign-in; otherwise an OTP confirms it first (Chef Mode stays on until that succeeds).
+ * Until the customer launch, chefs stay in Chef Mode and see the launching-soon note. After it, the
+ * customer app opens straight away only if this device signed in on the customer side during this
+ * sign-in; otherwise an OTP confirms it first (Chef Mode stays on until that succeeds).
  */
 export function switchToCustomerApp() {
+  // Customer launch lock: chefs stay in Chef Mode and see the launching-soon note (see customer-launch.ts).
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full load drops every chef screen
+  if (CUSTOMERS_LAUNCHING_SOON) return window.location.assign("/sign-in?from=chef");
   if (!isCustomerModeVerified(getSession()?.id)) {
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the sign-in page starts clean
     window.location.assign("/sign-in?returnTo=%2Fhome&confirm=customer");

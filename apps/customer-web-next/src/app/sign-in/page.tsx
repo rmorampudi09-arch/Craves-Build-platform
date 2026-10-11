@@ -16,7 +16,7 @@ export const metadata = {
 };
 
 export default async function SignInPage({ searchParams }: {
-  searchParams: Promise<{ returnTo?: string; access?: string; confirm?: string }>;
+  searchParams: Promise<{ returnTo?: string; access?: string; confirm?: string; from?: string }>;
 }) {
   const query = await searchParams;
   const destination = safeReturnPath(query.returnTo);
@@ -36,10 +36,12 @@ export default async function SignInPage({ searchParams }: {
       <Link href="/" aria-label="Craves home"><CravesLogo size="lg" priority/></Link>
       <h1 className="mt-6 text-3xl font-bold tracking-tight">{CUSTOMERS_LAUNCHING_SOON_COPY.title}</h1>
       <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">{CUSTOMERS_LAUNCHING_SOON_COPY.body}</p>
-      <div className="mt-6 flex flex-wrap gap-3">
+      <div className="mt-6 flex flex-wrap gap-3">{query.from === "chef"
+        ? <Link href="/chef" className="inline-flex min-h-12 items-center rounded-full bg-[#F62E18] px-6 text-sm font-semibold text-white">{CUSTOMERS_LAUNCHING_SOON_COPY.backToKitchen}</Link>
+        : <>
         <Link href="/chef/sign-in" className="inline-flex min-h-12 items-center rounded-full bg-[#F62E18] px-6 text-sm font-semibold text-white">{CUSTOMERS_LAUNCHING_SOON_COPY.chef}</Link>
         <Link href="/" className="inline-flex min-h-12 items-center rounded-full border border-[#E5E7EB] px-6 text-sm font-semibold">Back to Craves</Link>
-      </div>
+      </>}</div>
     </section>
   </div></main>;
   // confirm=customer: a chef switching to the customer app confirms with an OTP first.

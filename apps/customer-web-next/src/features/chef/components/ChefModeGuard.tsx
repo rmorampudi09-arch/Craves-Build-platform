@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { isChefModeVerified, isCustomerModeVerified } from "@/features/chef/lib/chef-mode";
+import { CUSTOMERS_LAUNCHING_SOON } from "@/features/sign-in/lib/customer-launch";
 import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 
 // Reachable from Chef Mode: the chef app, legal and help pages, sign-in, and the separate admin portal.
@@ -45,6 +46,8 @@ export function ChefModeGuard() {
 
   useEffect(() => {
     if (leave) router.replace("/chef");
+    // Until the customer launch, the same launching-soon note as "Switch to customer app" (customer-launch.ts).
+    else if (confirm && CUSTOMERS_LAUNCHING_SOON) router.replace("/sign-in?from=chef");
     else if (confirm)
       router.replace(`/sign-in?confirm=customer&returnTo=${encodeURIComponent(`${pathname}${window.location.search}`)}`);
   }, [leave, confirm, pathname, router]);

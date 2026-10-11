@@ -122,6 +122,7 @@
     "chef -> src/features/chef-onboarding/lib/document-contract.ts",
     "chef -> src/features/profile/screens/Profile.tsx",
     "chef -> src/features/sign-in/components/phone-auth-form.tsx",
+    "chef -> src/features/sign-in/lib/customer-launch.ts",
     "chef -> src/features/sign-in/lib/msg91-browser.ts",
     "chef-onboarding -> src/features/addresses/api/reverseGeocode.ts",
     "chef-onboarding -> src/features/addresses/api/searchLocation.ts",

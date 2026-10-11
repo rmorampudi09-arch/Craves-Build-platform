@@ -1,0 +1,261 @@
+"use client";
+
+import { useEffect, useId, useRef, useState } from "react";
+import { FaXmark } from "react-icons/fa6";
+import {
+  parseCustomerProfile,
+  type CustomerProfile,
+} from "@/features/profile/lib/profile-contract";
+import { captureSessionContext, isSessionContextCurrent, setSessionProfile } from "@/features/auth/api/cravesAuth";
+import { EmailVerificationPanel } from "@/features/sign-in/components/EmailVerificationPanel";
+
+interface EditProfileModalProps {
+  open: boolean;
+  profile: CustomerProfile | null;
+  initialEmail?: string;
+  onClose: () => void;
+  onSaved: (profile: CustomerProfile) => void;
+}
+
+export function EditProfileModal({
+  open,
+  profile,
+  initialEmail = "",
+  onClose,
+  onSaved,
+}: EditProfileModalProps) {
+  const fieldPrefix = useId();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const saveGeneration = useRef(0);
+  useEffect(() => { saveGeneration.current += 1; setBusy(false); }, [open]);
+  useEffect(() => () => { saveGeneration.current += 1; }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setFirstName(profile?.firstName ?? "");
+    setLastName(profile?.lastName ?? "");
+    setError("");
+  }, [open, profile]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const body = document.body;
+    const root = document.documentElement;
+    const previousBodyOverflow = body.style.overflow;
+    const previousBodyPaddingRight = body.style.paddingRight;
+    const previousOverscroll = root.style.overscrollBehavior;
+    const scrollbarGap = Math.max(0, window.innerWidth - root.clientWidth);
+
+    body.style.overflow = "hidden";
+    if (scrollbarGap > 0) {
+      body.style.paddingRight = `${scrollbarGap}px`;
+    }
+    root.style.overscrollBehavior = "none";
+
+    return () => {
+      body.style.overflow = previousBodyOverflow;
+      body.style.paddingRight = previousBodyPaddingRight;
+      root.style.overscrollBehavior = previousOverscroll;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [busy, onClose, open]);
+
+  if (!open) return null;
+
+  async function save() {
+    const cleanFirstName = firstName.trim();
+    const cleanLastName = lastName.trim();
+
+    if (cleanFirstName.length < 2) {
+      setError("Enter your first name using at least two characters.");
+      return;
+    }
+    if (!cleanLastName) {
+      setError("Enter your last name.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    const context = captureSessionContext();
+    const attempt = ++saveGeneration.current;
+    const current = () => attempt === saveGeneration.current && isSessionContextCurrent(context);
+    try {
+      const response = await fetch("/api/customer/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          firstName: cleanFirstName,
+          lastName: cleanLastName,
+        }),
+      });
+      const raw = await response.json().catch(() => null);
+      if (!current()) return;
+      if (!response.ok) {
+        const message =
+          raw &&
+          typeof raw === "object" &&
+          "message" in raw &&
+          typeof raw.message === "string"
+            ? raw.message
+            : "Profile could not be saved.";
+        throw new Error(message);
+      }
+      const savedProfile = parseCustomerProfile(raw);
+      if (!savedProfile)
+        throw new Error("Craves returned an invalid profile response.");
+      setSessionProfile(savedProfile, context);
+      onSaved(savedProfile);
+      onClose();
+    } catch (caught) {
+      if (!current()) return;
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Profile could not be saved.",
+      );
+    } finally {
+      if (current()) setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center overscroll-contain bg-black/55 md:items-center md:px-4"
+      onClick={() => !busy && onClose()}
+      role="presentation"
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`${fieldPrefix}-title`}
+        className="max-h-[95vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-2xl border border-border bg-white p-6 shadow-[var(--shadow-pop)] md:rounded-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6B6B6B]">
+              Account details
+            </p>
+            <h2
+              id={`${fieldPrefix}-title`}
+              className="mt-1.5 text-2xl font-semibold text-[#1A1A1A]"
+            >
+              Edit profile
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#F62E18]"
+            aria-label="Close profile editor"
+          >
+            <FaXmark className="text-lg" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="mt-6">
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-[#6B6B6B]">
+            Name
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+          <label
+            htmlFor={`${fieldPrefix}-first-name`}
+            className="text-sm font-semibold text-[#1A1A1A]"
+          >
+            First name <span className="text-[#F62E18]">*</span>
+            <input
+              id={`${fieldPrefix}-first-name`}
+              value={firstName}
+              maxLength={100}
+              autoComplete="given-name"
+              onChange={(event) => setFirstName(event.target.value)}
+              className="mt-2 min-h-12 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-base text-[#1A1A1A] placeholder:text-[#9CA3AF] focus:!border-[#F62E18]"
+              disabled={busy}
+              required
+            />
+          </label>
+          <label
+            htmlFor={`${fieldPrefix}-last-name`}
+            className="text-sm font-semibold text-[#1A1A1A]"
+          >
+            Last name <span className="text-[#F62E18]">*</span>
+            <input
+              id={`${fieldPrefix}-last-name`}
+              value={lastName}
+              maxLength={100}
+              autoComplete="family-name"
+              onChange={(event) => setLastName(event.target.value)}
+              className="mt-2 min-h-12 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-base text-[#1A1A1A] placeholder:text-[#9CA3AF] focus:!border-[#F62E18]"
+              disabled={busy}
+              required
+            />
+          </label>
+          </div>
+        </div>
+
+        <label
+          htmlFor={`${fieldPrefix}-phone`}
+          className="mt-5 block text-sm font-semibold text-[#1A1A1A]"
+        >
+          Phone number
+          <input
+            id={`${fieldPrefix}-phone`}
+            value={(profile?.registeredPhoneNumber ?? "").replace(/^\+91[\s-]?/, "")}
+            readOnly
+            autoComplete="tel"
+            className="mt-2 min-h-12 w-full rounded-xl border border-[#E5E7EB] bg-[#F8F9FA] px-3 text-base text-[#1A1A1A] outline-none"
+          />
+        </label>
+
+        <div className="mt-5">
+          <EmailVerificationPanel initialEmail={initialEmail} compact />
+        </div>
+
+        {error && (
+          <p
+            role="alert"
+            className="mt-4 rounded-xl border border-[#F62E18]/20 bg-[#F62E18]/5 p-3 text-sm font-medium text-[#C92716]"
+          >
+            {error}
+          </p>
+        )}
+
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="min-h-11 rounded-xl !border-[#E5E7EB] !bg-white px-5 text-sm font-semibold !text-[#1A1A1A] disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void save()}
+            className="min-h-11 min-w-36 rounded-xl !bg-[#F62E18] px-5 text-sm font-semibold !text-white disabled:opacity-50"
+          >
+            {busy ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export default EditProfileModal;

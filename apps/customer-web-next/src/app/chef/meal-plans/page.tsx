@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { Gauge, UtensilsCrossed } from "lucide-react";
-import { ChefAccessBoundary } from "@/components/chef-access-boundary";
-import { ChefPageHeader } from "@/components/chef-page-header";
-import { ChefSubscriptionPlanManager } from "@/components/chef-subscription-plan-manager";
+import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
+import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
+import { ChefSubscriptionPlanManager } from "@/features/chef/components/chef-subscription-plan-manager";
 
 export const metadata = {
   title: "Meal plans | Craves Chef",

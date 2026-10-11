@@ -1,7 +1,7 @@
-import { ChefOnboardingWorkspace } from "@/components/chef-onboarding-workspace";
-import { ChefApplicationWorkspace } from "@/components/chef-application-workspace";
-import { ChefReadinessPanel } from "@/components/chef-readiness-panel";
-import { ChefApplicationSessionBoundary } from "@/components/chef-application-session-boundary";
+import { ChefOnboardingWorkspace } from "@/features/chef-onboarding/components/chef-onboarding-workspace";
+import { ChefApplicationWorkspace } from "@/features/chef-onboarding/components/chef-application-workspace";
+import { ChefReadinessPanel } from "@/features/chef/components/chef-readiness-panel";
+import { ChefApplicationSessionBoundary } from "@/features/chef-onboarding/components/chef-application-session-boundary";
 
 export const dynamic = "force-dynamic";
 

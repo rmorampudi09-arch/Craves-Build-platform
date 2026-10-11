@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import TrackingPage from "@/screens/OrderTracking/OrderTracking";
+import TrackingPage from "@/features/orders/screens/OrderTracking";
 
 function TrackingFallback() {
   return (

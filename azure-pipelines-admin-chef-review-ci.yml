@@ -41,7 +41,7 @@ steps:
       grep -q 'isSameOrigin' apps/customer-web-next/src/app/api/admin/chef-reviews/\[applicationId\]/documents/\[documentId\]/reject/route.ts
       bash -n scripts/apim/configure-chef-review-document-list-apim.sh
       if grep -REn '(blobContainer|blobName|identityId|reviewedByIdentityId|localStorage|sessionStorage|console\.(log|debug))' \
-        apps/customer-web-next/src/components/admin-chef-review-* \
+        apps/customer-web-next/src/features/admin/chef-review/components/admin-chef-review-* \
         apps/customer-web-next/src/app/admin/chef-reviews \
         apps/customer-web-next/src/app/api/admin/chef-reviews --exclude='*.test.ts'; then
         echo 'ERROR: Admin chef review runtime exposes private storage/identity fields or insecure browser behavior.' >&2

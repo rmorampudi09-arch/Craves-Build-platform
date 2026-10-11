@@ -1,5 +1,5 @@
-import { launchBlobUrl, webLaunchStore } from "@/lib/web-launch-state";
-import { WEB_LAUNCH_HEADERS } from "@/lib/web-launch-security";
+import { launchBlobUrl, webLaunchStore } from "@/features/pilot-launch/lib/web-launch-state";
+import { WEB_LAUNCH_HEADERS } from "@/features/pilot-launch/lib/web-launch-security";
 export const dynamic = "force-dynamic";
 export async function GET() {
   try {

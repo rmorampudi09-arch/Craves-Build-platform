@@ -25,27 +25,27 @@ steps:
   - script: |
       set -euo pipefail
       grep -q 'redirect("/home")' apps/customer-web-next/src/app/discover/page.tsx
-      grep -q 'navigator.geolocation' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
-      grep -q 'discoverKitchens(activeAddress.lat, activeAddress.lng, 5_000)' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
-      grep -q 'loadKitchenMenu(kitchen.id)' apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx
-      grep -q 'loadCustomerFavoriteIds' apps/customer-web-next/src/components/home/DishesGrid.tsx
-      grep -q 'href={`/dish/${encodeURIComponent(dish.id)}`}' apps/customer-web-next/src/components/home/DishCard.tsx
-      grep -q 'url.protocol === "https:"' apps/customer-web-next/src/lib/discovery-contract.ts
+      grep -q 'navigator.geolocation' apps/customer-web-next/src/features/home/screens/BrowseFoods.tsx
+      grep -q 'discoverKitchens(activeAddress.lat, activeAddress.lng, 5_000)' apps/customer-web-next/src/features/home/screens/BrowseFoods.tsx
+      grep -q 'loadKitchenMenu(kitchen.id)' apps/customer-web-next/src/features/home/screens/BrowseFoods.tsx
+      grep -q 'loadCustomerFavoriteIds' apps/customer-web-next/src/features/home/components/DishesGrid.tsx
+      grep -q 'href={`/dish/${encodeURIComponent(dish.id)}`}' apps/customer-web-next/src/features/home/components/DishCard.tsx
+      grep -q 'url.protocol === "https:"' apps/customer-web-next/src/features/home/lib/discovery-contract.ts
       grep -q 'Cache-Control.*no-store' apps/customer-web-next/src/app/api/discovery/kitchens/route.ts
       if grep -REn '(phoneNumber|email|identityId|kitchenLatitude|kitchenLongitude)' \
-        apps/customer-web-next/src/screens/public/BrowseFoods/BrowseFoods.tsx \
-        apps/customer-web-next/src/components/home/KitchensGrid.tsx \
-        apps/customer-web-next/src/components/home/DishesGrid.tsx \
-        apps/customer-web-next/src/components/home/DishCard.tsx; then
+        apps/customer-web-next/src/features/home/screens/BrowseFoods.tsx \
+        apps/customer-web-next/src/features/home/components/KitchensGrid.tsx \
+        apps/customer-web-next/src/features/home/components/DishesGrid.tsx \
+        apps/customer-web-next/src/features/home/components/DishCard.tsx; then
         echo 'ERROR: Discovery UI references private catalog fields.' >&2
         exit 1
       fi
       if grep -REn '@tanstack/react-router|to="/dish/\$id"|to="/chef/\$id"' \
-        apps/customer-web-next/src/screens/public/BrowseFoods \
-        apps/customer-web-next/src/screens/public/FoodDetails \
-        apps/customer-web-next/src/screens/public/ChefProfile \
-        apps/customer-web-next/src/components/home \
-        apps/customer-web-next/src/components/order; then
+        apps/customer-web-next/src/features/home/screens \
+        apps/customer-web-next/src/features/dish/screens \
+        apps/customer-web-next/src/features/chefs/screens/ChefProfile.tsx \
+        apps/customer-web-next/src/features/home/components \
+        apps/customer-web-next/src/features/dish/components; then
         echo 'ERROR: Catalog discovery still contains legacy router links.' >&2
         exit 1
       fi

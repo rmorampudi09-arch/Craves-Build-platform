@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { SubscriptionEnrollmentForm } from "@/components/subscription-enrollment-form";
-import { isUuid } from "@/lib/server-api";
+import { SubscriptionEnrollmentForm } from "@/features/meal-plans/components/subscription-enrollment-form";
+import { isUuid } from "@/shared/lib/server-api";
 
 export const metadata = { title: "Start a subscription | Craves", robots: { index: false, follow: false } };
 

@@ -2,15 +2,15 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 
-import { CartKitchenReplacementDialogHost } from "@/components/cart/CartKitchenReplacementDialogHost";
-import { BottomNav } from "@/components/layout/BottomNav";
-import { StructuredData } from "@/components/seo/StructuredData";
-import { cravesLogoUrl, cravesSiteGraph, seoKeywords, siteUrl } from "@/lib/seo-craves";
+import { CartKitchenReplacementDialogHost } from "@/features/cart/components/CartKitchenReplacementDialogHost";
+import { BottomNav } from "@/features/customer-shell/components/BottomNav";
+import { StructuredData } from "@/features/seo/components/StructuredData";
+import { cravesLogoUrl, cravesSiteGraph, seoKeywords, siteUrl } from "@/features/seo/lib/seo-craves";
 
-import "../styles.css";
-import "../craves-theme.css";
-import "../otp-overrides.css";
-import "../control-border-overrides.css";
+import "../shared/styles/styles.css";
+import "../shared/styles/craves-theme.css";
+import "../features/sign-in/styles/otp-overrides.css";
+import "../shared/styles/control-border-overrides.css";
 
 const displayFont = Plus_Jakarta_Sans({
   subsets: ["latin"],

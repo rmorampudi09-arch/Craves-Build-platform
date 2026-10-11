@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { CravesLogo } from "@/components/brand/CravesLogo";
-import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
-import { SubscriptionPlanBrowser } from "@/components/subscription-plan-browser";
+import { CravesLogo } from "@/shared/components/brand/CravesLogo";
+import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
+import { SubscriptionPlanBrowser } from "@/features/meal-plans/components/subscription-plan-browser";
 
 export const metadata = {
   title: "Meal subscriptions | Craves",

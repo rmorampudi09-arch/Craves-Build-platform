@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { SubscriptionDetails } from "@/components/subscription-details";
-import { isUuid } from "@/lib/server-api";
+import { SubscriptionDetails } from "@/features/meal-plans/components/subscription-details";
+import { isUuid } from "@/shared/lib/server-api";
 
 export const metadata = { title: "Subscription details | Craves", robots: { index: false, follow: false } };
 

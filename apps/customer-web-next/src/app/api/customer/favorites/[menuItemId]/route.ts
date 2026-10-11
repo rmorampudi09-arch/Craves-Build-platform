@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseCustomerFavorite } from "@/lib/customer-favorites-contract";
-import { isSameOrigin } from "@/lib/request-security";
+import { parseCustomerFavorite } from "@/features/favorites/lib/customer-favorites-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
 import {
   authenticatedApiFetch,
   isUuid,
   SessionRequiredError,
-} from "@/lib/server-api";
+} from "@/shared/lib/server-api";
 
 function failure(status: number, upstreamMessage?: string) {
   const message = upstreamMessage?.trim()

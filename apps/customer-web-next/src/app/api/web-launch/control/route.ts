@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { boundBffRequest } from "@/lib/bff-request-limits";
-import { hasLaunchKey, isLaunchMutationOrigin, WEB_LAUNCH_HEADERS } from "@/lib/web-launch-security";
-import { launchBlobUrl, webLaunchStore } from "@/lib/web-launch-state";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
+import { hasLaunchKey, isLaunchMutationOrigin, WEB_LAUNCH_HEADERS } from "@/features/pilot-launch/lib/web-launch-security";
+import { launchBlobUrl, webLaunchStore } from "@/features/pilot-launch/lib/web-launch-state";
 export const dynamic = "force-dynamic";
 function response(value: unknown, status = 200) { return NextResponse.json(value, { status, headers: WEB_LAUNCH_HEADERS }); }
 function authorized(request: NextRequest) { return process.env.CRAVES_ADMIN_PORTAL !== "true" && hasLaunchKey(request) && Boolean(launchBlobUrl()); }

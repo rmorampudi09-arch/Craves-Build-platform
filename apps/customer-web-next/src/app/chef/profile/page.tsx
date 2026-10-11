@@ -1,11 +1,11 @@
 "use client";
 
-import { chefApiError, chefErrorText } from "@/lib/chef-errors";
+import { chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BadgeIndianRupee, Bell, CalendarDays, ChevronRight, FileCheck2, LifeBuoy, MapPin, Store, UserRound } from "lucide-react";
-import { ChefAccessBoundary } from "@/components/chef-access-boundary";
-import { ChefPageHeader } from "@/components/chef-page-header";
+import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
+import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
 
 type Application = { firstName:string|null; lastName:string|null; email:string|null; phoneNumber:string|null; status:string };
 type Kitchen = { kitchenName:string; description:string|null; addressLine1:string; addressLine2:string|null; areaName:string|null; city:string; state:string; postalCode:string|null; status:string };

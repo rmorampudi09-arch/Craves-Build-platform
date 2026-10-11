@@ -1,8 +1,8 @@
-import { boundBffRequest } from "@/lib/bff-request-limits";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
-import { parseCustomerProfile, parseProfileInput } from "@/lib/profile-contract";
-import { isSameOrigin } from "@/lib/request-security";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
+import { parseCustomerProfile, parseProfileInput } from "@/features/profile/lib/profile-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 
 function failure(status: number, message = "Customer profile is unavailable.") {
   return NextResponse.json({ error: status === 401 ? "SESSION_REQUIRED" : "PROFILE_REQUEST_FAILED", message: status === 401 ? "Please sign in again." : message }, { status });

@@ -1,6 +1,6 @@
-import { ChefAccessBoundary } from "@/components/chef-access-boundary";
-import { ChefMenuManager } from "@/components/chef-menu-manager";
-import { ChefPageHeader } from "@/components/chef-page-header";
+import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
+import { ChefMenuManager } from "@/features/chef/components/chef-menu-manager";
+import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
 
 export const metadata = {
   title: "Chef menu | Craves",

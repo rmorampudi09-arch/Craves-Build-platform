@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseCart } from "@/lib/cart-contract";
-import { isSameOrigin } from "@/lib/request-security";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
+import { parseCart } from "@/features/cart/lib/cart-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 
 function errorResponse(status: number) { return NextResponse.json({ error: status === 401 ? "SESSION_REQUIRED" : "CART_REQUEST_FAILED", message: status === 401 ? "Please sign in to use your cart." : "Cart request could not be completed." }, { status }); }
 async function forward(request: NextRequest, method: "GET" | "DELETE") {

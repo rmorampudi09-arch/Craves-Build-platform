@@ -1,6 +1,6 @@
-import { ChefAccessBoundary } from "@/components/chef-access-boundary";
-import { ChefCapacityQuickSetup } from "@/components/chef-capacity-quick-setup";
-import { ChefPageHeader } from "@/components/chef-page-header";
+import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
+import { ChefCapacityQuickSetup } from "@/features/chef/components/chef-capacity-quick-setup";
+import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
 
 export const metadata = {
   title: "Subscription availability | Craves",

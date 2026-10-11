@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isSameOrigin } from "@/lib/request-security";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
-import { bannerTarget, bannerUpdateSchema } from "@/lib/home-banner-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
+import { bannerTarget, bannerUpdateSchema } from "@/features/admin/banners/lib/home-banner-contract";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

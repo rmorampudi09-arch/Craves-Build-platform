@@ -1,7 +1,7 @@
-import { chefUpstream } from "@/lib/chef-errors";
-import { boundedFetch } from "@/lib/bounded-fetch";
-import { boundBffRequest } from "@/lib/bff-request-limits";
-import { isSameOrigin } from "@/lib/request-security";
+import { chefUpstream } from "@/features/chef/lib/chef-errors";
+import { boundedFetch } from "@/shared/lib/bounded-fetch";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
+import { isSameOrigin } from "@/shared/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";

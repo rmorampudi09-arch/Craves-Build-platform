@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckoutDetails } from "@/components/customer-checkout";
+import { CheckoutDetails } from "@/features/checkout/components/customer-checkout";
 
 export const metadata: Metadata = { title: "Checkout details | Craves" };
 

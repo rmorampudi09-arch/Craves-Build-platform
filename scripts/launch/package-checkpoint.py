@@ -28,9 +28,9 @@ APPENDIX = [
     'scripts/release/require-launch-p0-evidence.py',
     'services/subscription-service/src/test/java/in/craves/subscription/SubscriptionSchemaSnapshot.java',
     'services/subscription-service/src/test/java/in/craves/subscription/SubscriptionSchemaSnapshotTest.java',
-    'apps/customer-web-next/src/components/auth/EmailVerificationPanel.tsx',
-    'apps/customer-web-next/src/lib/email-verification-bff.ts',
-    'apps/customer-web-next/src/lib/email-verification-client.ts',
+    'apps/customer-web-next/src/features/sign-in/components/EmailVerificationPanel.tsx',
+    'apps/customer-web-next/src/features/sign-in/lib/email-verification-bff.ts',
+    'apps/customer-web-next/src/features/sign-in/lib/email-verification-client.ts',
 ]
 DOCS = ['README.md', '2026-09-16-progress.md', 'OWNER_DECISIONS_20260916.md',
         'REPOSITORY_PROTECTION.md', 'FINANCE_RESPONSE_PRIVACY.md']

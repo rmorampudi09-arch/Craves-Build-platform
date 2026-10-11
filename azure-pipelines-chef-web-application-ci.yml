@@ -24,7 +24,7 @@ steps:
       grep -q '__CHEF_APPLICATION_BACKEND_URL__' infra/apim/chef-application/chef-application-policy.xml
       if grep -REn '(blobContainer|blobName|reviewedByIdentityId|localStorage|sessionStorage|console\.(log|debug))' \
         apps/customer-web-next/src/app/chef/application \
-        apps/customer-web-next/src/components/chef-application-workspace.tsx \
+        apps/customer-web-next/src/features/chef-onboarding/components/chef-application-workspace.tsx \
         apps/customer-web-next/src/app/api/chef/application --exclude='*.test.ts'; then
         echo 'ERROR: Chef application runtime exposes private storage/review fields or insecure browser behavior.' >&2
         exit 1

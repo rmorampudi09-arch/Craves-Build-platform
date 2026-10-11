@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
-import { CustomerOrderStatus } from "@/components/order/CustomerOrderStatus";
-import { isUuid } from "@/lib/server-api";
+import { CustomerOrderStatus } from "@/features/orders/components/CustomerOrderStatus";
+import { isUuid } from "@/shared/lib/server-api";
 
 export const metadata = {
   title: "Order status | Craves",

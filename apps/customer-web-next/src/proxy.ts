@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAdminDestination } from "@/lib/admin-navigation";
-import { safeReturnPath } from "@/lib/auth-contract";
-import { webLaunchGate } from "@/lib/web-launch-gate";
+import { isAdminDestination } from "@/features/admin/shell/lib/admin-navigation";
+import { safeReturnPath } from "@/features/auth/lib/auth-contract";
+import { webLaunchGate } from "@/features/pilot-launch/lib/web-launch-gate";
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;

@@ -1,8 +1,8 @@
-import { boundBffRequest } from "@/lib/bff-request-limits";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
-import { parseAdminChefDocument } from "@/lib/admin-chef-document-contract";
-import { isSameOrigin } from "@/lib/request-security";
-import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
+import { parseAdminChefDocument } from "@/features/admin/chef-review/lib/admin-chef-document-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 
 function rejectionReason(value: unknown): string | null {
   if (typeof value !== "string") return null;

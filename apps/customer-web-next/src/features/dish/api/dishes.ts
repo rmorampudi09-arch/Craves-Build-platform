@@ -1,0 +1,470 @@
+import {
+  parseMenuDiscovery,
+  type NearbyMenuItem,
+} from "@/features/home/lib/discovery-contract";
+import type { PublicMenuItemDetail } from "@/features/dish/lib/public-menu-item-contract";
+import {
+  candidateDiscoveryRadii,
+  DEFAULT_DISCOVERY_RADIUS_METERS,
+  MAX_DISCOVERY_RADIUS_METERS,
+} from "@/features/home/lib/catalog-discovery-policy";
+
+export type Dish = {
+  id: string;
+  name: string;
+  chef: string;
+  category: string;
+  img: string;
+  images?: string[];
+  imageIsPlaceholder?: boolean;
+  detailsLoaded?: boolean;
+  price: number;
+  rating: number;
+  time: string;
+  veg: boolean;
+  foodType?: "VEG" | "NON_VEG" | "EGG";
+  tag?: string;
+  desc: string;
+  kitchenDescription?: string;
+  ingredients?: string[];
+  serves?: string;
+  originalPrice?: number;
+  spiceLevel?: "Mild" | "Medium" | "Hot";
+  reviewCount?: number;
+  reviews?: { name: string; rating: number; daysAgo: number; text: string }[];
+  kitchenId?: string;
+  currency?: string;
+  distanceMeters?: number;
+  areaName?: string;
+  city?: string;
+  state?: string;
+};
+
+const PLACEHOLDER_IMAGE = "/brand/craves-logo.svg";
+const DISCOVERY_PAGE_SIZE = 50;
+const DISCOVERY_SNAPSHOT_KEY = "craves.customer.dish-discovery.snapshot.v1";
+
+type DishDiscoveryCursor = {
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+  nextPage: number;
+  hasNext: boolean;
+};
+
+let discoveredDishes: Dish[] = [];
+let discoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;
+let discoveryCursor: DishDiscoveryCursor | null = null;
+let discoveryGeneration = 0;
+
+function isDishSnapshot(value: unknown): value is {
+  dishes: Dish[];
+  radiusMeters: number;
+  cursor: DishDiscoveryCursor | null;
+} {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as {
+    dishes?: unknown;
+    radiusMeters?: unknown;
+    cursor?: unknown;
+  };
+  return (
+    Array.isArray(candidate.dishes) &&
+    typeof candidate.radiusMeters === "number" &&
+    (candidate.cursor === null ||
+      (typeof candidate.cursor === "object" &&
+        typeof (candidate.cursor as DishDiscoveryCursor).latitude === "number" &&
+        typeof (candidate.cursor as DishDiscoveryCursor).longitude === "number" &&
+        typeof (candidate.cursor as DishDiscoveryCursor).radiusMeters === "number" &&
+        typeof (candidate.cursor as DishDiscoveryCursor).nextPage === "number" &&
+        typeof (candidate.cursor as DishDiscoveryCursor).hasNext === "boolean"))
+  );
+}
+
+function rememberDiscoverySnapshot(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      DISCOVERY_SNAPSHOT_KEY,
+      JSON.stringify({
+        dishes: discoveredDishes.slice(0, DISCOVERY_PAGE_SIZE),
+        radiusMeters: discoveryRadiusMeters,
+        cursor: discoveryCursor,
+      }),
+    );
+  } catch {
+    // Discovery cache is a speed hint only.
+  }
+}
+
+function hydrateDiscoverySnapshot(): void {
+  if (
+    typeof window === "undefined" ||
+    discoveredDishes.length > 0
+  ) {
+    return;
+  }
+  try {
+    const raw = window.sessionStorage.getItem(DISCOVERY_SNAPSHOT_KEY);
+    if (!raw) return;
+    const candidate = JSON.parse(raw);
+    if (!isDishSnapshot(candidate)) return;
+    discoveredDishes = candidate.dishes.filter(
+      (dish) =>
+        typeof dish.id === "string" &&
+        typeof dish.name === "string" &&
+        typeof dish.price === "number",
+    );
+    discoveryRadiusMeters = candidate.radiusMeters;
+    discoveryCursor = candidate.cursor;
+  } catch {
+    // Ignore stale or malformed client cache.
+  }
+}
+
+function spiceLabel(
+  value: NearbyMenuItem["spiceLevel"] | PublicMenuItemDetail["spiceLevel"],
+): Dish["spiceLevel"] {
+  if (value === "SPICY") return "Hot";
+  if (value === "MEDIUM") return "Medium";
+  if (value === "MILD") return "Mild";
+  return undefined;
+}
+
+function servesLabel(value: number | null): string | undefined {
+  return value
+    ? `${value} ${value === 1 ? "person" : "people"}`
+    : undefined;
+}
+
+function prepTimeLabel(value: number | null | undefined): string {
+  if (!value) return "Prepared after ordering";
+  // Long values are usually catalog-entry mistakes and should not dominate the
+  // customer UI. Keep the item orderable while the source data is corrected.
+  if (value > 240) return "Made to order";
+  return `${value} min`;
+}
+
+function descriptionLabel(
+  description: string | null | undefined,
+  name: string,
+  category: string,
+  kitchenName: string,
+): string {
+  const provided = description?.trim();
+  if (provided) return provided;
+
+  const categoryLabel = category.trim().toLowerCase();
+  return `${name} is a ${categoryLabel} dish from ${kitchenName}, available to order on Craves.`;
+}
+
+function mapNearbyItem(item: NearbyMenuItem): Dish {
+  const chef = item.kitchenDisplayName || item.kitchenName;
+  const image = item.primaryImageUrl || PLACEHOLDER_IMAGE;
+  return {
+    id: item.id,
+    kitchenId: item.kitchenId,
+    name: item.itemName,
+    chef,
+    category: item.category,
+    img: image,
+    images: item.primaryImageUrl ? [item.primaryImageUrl] : [],
+    imageIsPlaceholder: !item.primaryImageUrl,
+    detailsLoaded: false,
+    price: item.price,
+    currency: item.currency,
+    rating: 0,
+    time: prepTimeLabel(item.preparationTimeMinutes),
+    veg: item.foodType === "VEG",
+    foodType: item.foodType,
+    desc: descriptionLabel(item.description, item.itemName, item.category, chef),
+    serves: servesLabel(item.servesCount),
+    spiceLevel: spiceLabel(item.spiceLevel),
+    distanceMeters: item.distanceMeters,
+    areaName: item.areaName ?? undefined,
+    city: item.city,
+    state: item.state,
+  };
+}
+
+function isPublicDetail(value: unknown): value is PublicMenuItemDetail {
+  if (!value || typeof value !== "object") return false;
+  const raw = value as Record<string, unknown>;
+  return (
+    typeof raw.id === "string" &&
+    typeof raw.kitchenId === "string" &&
+    typeof raw.kitchenName === "string" &&
+    typeof raw.itemName === "string" &&
+    typeof raw.category === "string" &&
+    typeof raw.foodType === "string" &&
+    typeof raw.price === "number" &&
+    Number.isFinite(raw.price) &&
+    typeof raw.currency === "string" &&
+    Array.isArray(raw.imageUrls)
+  );
+}
+
+function mapDetail(item: PublicMenuItemDetail): Dish {
+  const chef = item.kitchenDisplayName || item.kitchenName;
+  const image = item.primaryImageUrl || PLACEHOLDER_IMAGE;
+  return {
+    id: item.id,
+    kitchenId: item.kitchenId,
+    name: item.itemName,
+    chef,
+    category: item.category,
+    img: image,
+    images: item.imageUrls,
+    imageIsPlaceholder: !item.primaryImageUrl,
+    detailsLoaded: true,
+    price: item.price,
+    currency: item.currency,
+    rating: 0,
+    time: prepTimeLabel(item.preparationTimeMinutes),
+    veg: item.foodType === "VEG",
+    foodType: item.foodType,
+    desc: descriptionLabel(item.description, item.itemName, item.category, chef),
+    kitchenDescription: item.kitchenDescription ?? undefined,
+    serves: servesLabel(item.servesCount),
+    spiceLevel: spiceLabel(item.spiceLevel),
+    areaName: item.areaName ?? undefined,
+    city: item.city ?? undefined,
+    state: item.state ?? undefined,
+  };
+}
+
+function remember(dish: Dish): Dish {
+  discoveredDishes = [
+    dish,
+    ...discoveredDishes.filter((existing) => existing.id !== dish.id),
+  ];
+  return dish;
+}
+
+export async function discoverDishes(
+  latitude: number,
+  longitude: number,
+  radiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS,
+): Promise<Dish[]> {
+  const generation = ++discoveryGeneration;
+  discoveryCursor = null;
+
+  for (const candidateRadius of candidateDiscoveryRadii(radiusMeters)) {
+    const query = new URLSearchParams({
+      latitude: String(latitude),
+      longitude: String(longitude),
+      radiusMeters: String(candidateRadius),
+      page: "0",
+      size: String(DISCOVERY_PAGE_SIZE),
+    });
+    const response = await fetch(`/api/discovery/menu-items?${query}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message =
+        body &&
+        typeof body === "object" &&
+        "message" in body &&
+        typeof body.message === "string"
+          ? body.message
+          : "Nearby dishes are temporarily unavailable.";
+      throw new Error(message);
+    }
+    const payload = parseMenuDiscovery(body);
+    if (!payload) throw new Error("Craves returned an invalid discovery response.");
+    if (generation !== discoveryGeneration) return [...discoveredDishes];
+
+    discoveredDishes = payload.menuItems
+      .filter((item) => item.distanceMeters <= MAX_DISCOVERY_RADIUS_METERS)
+      .map(mapNearbyItem);
+    discoveryRadiusMeters = candidateRadius;
+
+    if (discoveredDishes.length > 0) {
+      discoveryCursor = {
+        latitude,
+        longitude,
+        radiusMeters: candidateRadius,
+        nextPage: payload.page.page + 1,
+        hasNext: payload.page.hasNext,
+      };
+      rememberDiscoverySnapshot();
+      return [...discoveredDishes];
+    }
+  }
+
+  discoveryCursor = null;
+  rememberDiscoverySnapshot();
+  return [];
+}
+
+export function hasMoreDiscoveredDishes(): boolean {
+  hydrateDiscoverySnapshot();
+  return Boolean(discoveryCursor?.hasNext);
+}
+
+export async function loadMoreDiscoveredDishes(): Promise<Dish[]> {
+  const cursor = discoveryCursor;
+  const generation = discoveryGeneration;
+  if (!cursor?.hasNext) return [...discoveredDishes];
+
+  const query = new URLSearchParams({
+    latitude: String(cursor.latitude),
+    longitude: String(cursor.longitude),
+    radiusMeters: String(cursor.radiusMeters),
+    page: String(cursor.nextPage),
+    size: String(DISCOVERY_PAGE_SIZE),
+  });
+
+  const response = await fetch(`/api/discovery/menu-items?${query}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      body &&
+      typeof body === "object" &&
+      "message" in body &&
+      typeof body.message === "string"
+        ? body.message
+        : "More nearby dishes could not be loaded.";
+    throw new Error(message);
+  }
+
+  const payload = parseMenuDiscovery(body);
+  if (!payload) throw new Error("Craves returned an invalid discovery response.");
+  if (generation !== discoveryGeneration || discoveryCursor !== cursor) {
+    return [...discoveredDishes];
+  }
+
+  const next = payload.menuItems
+    .filter((item) => item.distanceMeters <= MAX_DISCOVERY_RADIUS_METERS)
+    .map(mapNearbyItem);
+  const existingIds = new Set(discoveredDishes.map((dish) => dish.id));
+  discoveredDishes = [
+    ...discoveredDishes,
+    ...next.filter((dish) => !existingIds.has(dish.id)),
+  ];
+  discoveryCursor = {
+    ...cursor,
+    nextPage: payload.page.page + 1,
+    hasNext: payload.page.hasNext,
+  };
+  rememberDiscoverySnapshot();
+
+  return [...discoveredDishes];
+}
+
+export async function loadKitchenMenu(kitchenId: string): Promise<Dish[]> {
+  const response = await fetch(
+    `/api/catalog/kitchens/${encodeURIComponent(kitchenId)}/menu-items`,
+    {
+      cache: "no-store",
+      credentials: "same-origin",
+    },
+  );
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      body &&
+      typeof body === "object" &&
+      "message" in body &&
+      typeof body.message === "string"
+        ? body.message
+        : "This kitchen's menu is temporarily unavailable.";
+    throw new Error(message);
+  }
+
+  if (!Array.isArray(body) || body.length > 500 || !body.every(isPublicDetail)) {
+    throw new Error("Craves returned an invalid kitchen menu response.");
+  }
+
+  const loaded = body.map(mapDetail);
+  const loadedIds = new Set(loaded.map((dish) => dish.id));
+  discoveredDishes = [
+    ...loaded,
+    ...discoveredDishes.filter((existing) => !loadedIds.has(existing.id)),
+  ];
+  rememberDiscoverySnapshot();
+  return loaded;
+}
+
+export async function loadDish(id: string): Promise<Dish> {
+  const cached = getDish(id);
+  if (cached?.detailsLoaded) return cached;
+
+  const response = await fetch(`/api/catalog/menu-items/${encodeURIComponent(id)}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      body &&
+      typeof body === "object" &&
+      "message" in body &&
+      typeof body.message === "string"
+        ? body.message
+        : "This dish could not be loaded.";
+    throw new Error(message);
+  }
+  if (!isPublicDetail(body)) throw new Error("Craves returned an invalid dish response.");
+  return remember(mapDetail(body));
+}
+
+export function getDiscoveryRadiusMeters(): number {
+  return discoveryRadiusMeters;
+}
+
+export function allDishes(): Dish[] {
+  hydrateDiscoverySnapshot();
+  return discoveredDishes.filter(
+    (dish) =>
+      typeof dish.distanceMeters !== "number" ||
+      dish.distanceMeters <= MAX_DISCOVERY_RADIUS_METERS,
+  );
+}
+
+export function clearDishDiscoveryCache(): void {
+  discoveryGeneration += 1;
+  discoveredDishes = [];
+  discoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;
+  discoveryCursor = null;
+  if (typeof window !== "undefined") {
+    try {
+      window.sessionStorage.removeItem(DISCOVERY_SNAPSHOT_KEY);
+    } catch {
+      // Nothing to clear.
+    }
+  }
+}
+
+export function getDish(id: string): Dish | undefined {
+  hydrateDiscoverySnapshot();
+  return discoveredDishes.find((dish) => dish.id === id);
+}
+
+export function getSimilarDishes(dish: Dish, limit = 4): Dish[] {
+  const sameKitchen = discoveredDishes.filter(
+    (candidate) =>
+      candidate.id !== dish.id &&
+      Boolean(dish.kitchenId) &&
+      candidate.kitchenId === dish.kitchenId,
+  );
+  const sameCategory = discoveredDishes.filter(
+    (candidate) =>
+      candidate.id !== dish.id &&
+      candidate.category === dish.category &&
+      candidate.kitchenId !== dish.kitchenId,
+  );
+
+  return [...sameKitchen, ...sameCategory]
+    .filter(
+      (candidate, index, items) =>
+        items.findIndex((item) => item.id === candidate.id) === index,
+    )
+    .slice(0, limit);
+}

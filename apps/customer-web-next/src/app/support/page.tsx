@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { AssistantAvatar, SupportChat } from "@/components/support/SupportChat";
-import { isUuid } from "@/lib/server-api";
+import { AssistantAvatar, SupportChat } from "@/features/support/components/SupportChat";
+import { isUuid } from "@/shared/lib/server-api";
 
 export const metadata = {
   title: "Support | Craves",

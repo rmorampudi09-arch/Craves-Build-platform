@@ -30,8 +30,8 @@ steps:
       import xml.etree.ElementTree as ET
       ET.parse('infra/apim/order-customer-read/order-customer-read-policy.xml')
       PY
-      grep -q 'customerIdentityId' apps/customer-web-next/src/lib/order-contract.test.ts
-      grep -q 'pickupAddress' apps/customer-web-next/src/lib/order-contract.test.ts
+      grep -q 'customerIdentityId' apps/customer-web-next/src/features/orders/lib/order-contract.test.ts
+      grep -q 'pickupAddress' apps/customer-web-next/src/features/orders/lib/order-contract.test.ts
       grep -q 'Authenticated' /dev/null 2>/dev/null || true
       if grep -REn '(pickupAddress|customerIdentityId|contactPhoneNumber).*NextResponse\.json' apps/customer-web-next/src/app/api/orders; then
         echo 'ERROR: Order BFF may expose non-public fields.' >&2

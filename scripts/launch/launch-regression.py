@@ -147,7 +147,7 @@ def web_result(vitest_file, tap_file, required, source_folder=None):
         value = counts["vitest"]
         minima = dict(required.get("requiredVitestFiles", {}))
         if source_folder is not None:
-            for file in Path(source_folder).glob("*.vitest.ts"): minima[file.name] = max(1, minima.get(file.name, 0))
+            for file in Path(source_folder).rglob("*.vitest.ts"): minima[file.name] = max(1, minima.get(file.name, 0))
         files = {}
         for item in report.get("testResults", []):
             name = Path(item.get("name", "")).name
@@ -182,19 +182,19 @@ def run_web(output, expected):
     save(output / "web-summary.json", result)
     # Execute the landing guard and both complete package test groups, without filters.
     test_script = json.loads((app / "package.json").read_text())["scripts"]["test"]
-    if test_script != "node scripts/verify-landing-hero.mjs && vitest run && node --test --experimental-strip-types src/lib/*.test.ts":
+    if test_script != 'node scripts/verify-landing-hero.mjs && vitest run && node --test --experimental-strip-types "src/**/*.test.ts"':
         raise ValueError("Package test script changed; update the full-suite reporting adapter before release")
     commands = [("install", ["npm", "ci"]), ("lint", ["npm", "run", "lint"]),
         ("typecheck", ["npm", "run", "typecheck"]),
         ("landingHero", ["node", "scripts/verify-landing-hero.mjs"]),
         ("vitest", [str(app / "node_modules/.bin/vitest"), "run", "--reporter=json", "--outputFile=" + str(output / "vitest.json")]),
-        ("node", ["node", "--test", "--experimental-strip-types", "--test-reporter=tap", *[str(p.relative_to(app)) for p in sorted((app / "src/lib").glob("*.test.ts"))]]),
+        ("node", ["node", "--test", "--experimental-strip-types", "--test-reporter=tap", *[str(p.relative_to(app)) for p in sorted((app / "src").rglob("*.test.ts"))]]),
         ("build", ["npm", "run", "build"])]
     for name, command in commands:
         result["commands"][name] = run_command(command, app, output / ("node.tap" if name == "node" else name + ".log"), 1200)
         save(output / "web-summary.json", result)
         if name == "install" and result["commands"][name]["exitCode"] != 0: break
-    result["tests"] = web_result(output / "vitest.json", output / "node.tap", json.loads(MANIFEST.read_text())["web"], app / "src/lib")
+    result["tests"] = web_result(output / "vitest.json", output / "node.tap", json.loads(MANIFEST.read_text())["web"], app / "src")
     build_id = app / ".next/BUILD_ID"
     if build_id.is_file(): result["buildId"] = build_id.read_text().strip()
     result["status"] = "GREEN" if len(result["commands"]) == len(commands) and all(x["exitCode"] == 0 for x in result["commands"].values()) and result["tests"]["status"] == "GREEN" and result.get("buildId") else "RED"

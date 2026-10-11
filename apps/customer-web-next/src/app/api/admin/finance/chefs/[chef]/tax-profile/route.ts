@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
-import { isSameOrigin } from "@/lib/request-security";
-import { readDocumentBytes } from "@/lib/document-transport";
-import { canonicalFinanceId, taxProfileRequestSchema, taxProfileVersionSchema } from "@/lib/finance-source-contract";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { readDocumentBytes } from "@/shared/lib/document-transport";
+import { canonicalFinanceId, taxProfileRequestSchema, taxProfileVersionSchema } from "@/features/admin/finance/lib/finance-source-contract";
 export const dynamic = "force-dynamic";
 type Context = {params: Promise<{chef: string}>};
 const headers = {"Cache-Control": "no-store"};

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { LocalDiscoveryPage } from "@/components/seo/LocalDiscoveryPage";
-import { foodBySlug, foodIntents, foodUrl, launchCities, seoKeywords } from "@/lib/seo-craves";
+import { LocalDiscoveryPage } from "@/features/seo/components/LocalDiscoveryPage";
+import { foodBySlug, foodIntents, foodUrl, launchCities, seoKeywords } from "@/features/seo/lib/seo-craves";
 
 type FoodPageProps = {
   params: Promise<{ food: string }>;

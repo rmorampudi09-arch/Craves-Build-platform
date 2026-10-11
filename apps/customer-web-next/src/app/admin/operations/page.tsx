@@ -1,5 +1,5 @@
-import { AdminOperationalInvestigator } from "@/components/admin-operational-investigator";
-import { AdminPageIntro } from "@/components/admin-page-intro";
+import { AdminOperationalInvestigator } from "@/features/admin/investigations/components/admin-operational-investigator";
+import { AdminPageIntro } from "@/features/admin/shell/components/admin-page-intro";
 
 export const metadata = { title: "Operational investigations | Craves administration", robots: { index: false, follow: false } };
 

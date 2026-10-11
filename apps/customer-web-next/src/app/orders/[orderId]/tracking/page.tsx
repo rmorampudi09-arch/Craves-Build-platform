@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { DeliveryTracking } from '@/components/delivery-tracking';
-import { isUuid } from '@/lib/delivery-status';
+import { DeliveryTracking } from '@/features/orders/components/delivery-tracking';
+import { isUuid } from '@/features/orders/lib/delivery-status';
 
 export const metadata: Metadata = {
   title: 'Delivery tracking',

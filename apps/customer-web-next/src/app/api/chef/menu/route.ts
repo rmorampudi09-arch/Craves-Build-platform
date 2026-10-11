@@ -1,10 +1,10 @@
-import { chefUpstream } from "@/lib/chef-errors";
-import { boundedFetch } from "@/lib/bounded-fetch";
-import { boundBffRequest } from "@/lib/bff-request-limits";
-import { isSameOrigin } from "@/lib/request-security";
+import { chefUpstream } from "@/features/chef/lib/chef-errors";
+import { boundedFetch } from "@/shared/lib/bounded-fetch";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
+import { isSameOrigin } from "@/shared/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
-import { parseChefMenuItem, parseChefMenuItemInput, parseChefMenuItems } from "@/lib/chef-menu-contract";
-import { chefMenuFailure } from "@/lib/chef-menu-errors";
+import { parseChefMenuItem, parseChefMenuItemInput, parseChefMenuItems } from "@/features/chef/lib/chef-menu-contract";
+import { chefMenuFailure } from "@/features/chef/lib/chef-menu-errors";
 
 export const dynamic = "force-dynamic";
 function apiBaseUrl(): string { const value = process.env.CRAVES_API_BASE_URL?.trim(); if (!value?.startsWith("https://")) throw new Error("CRAVES_API_BASE_URL must use HTTPS"); return value.replace(/\/$/, ""); }

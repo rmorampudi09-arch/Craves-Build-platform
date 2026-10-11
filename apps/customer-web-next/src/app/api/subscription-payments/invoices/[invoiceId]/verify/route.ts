@@ -1,8 +1,8 @@
-import { boundBffRequest } from "@/lib/bff-request-limits";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
-import { isSameOrigin } from "@/lib/request-security";
-import { parseSubscriptionPayment } from "@/lib/subscription-payment-contract";
-import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { parseSubscriptionPayment } from "@/features/meal-plans/lib/subscription-payment-contract";
+import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 

@@ -29,7 +29,7 @@ steps:
       PY
       grep -q 'isSameOrigin' apps/customer-web-next/src/app/api/customer/addresses/route.ts
       grep -q 'isSameOrigin' 'apps/customer-web-next/src/app/api/customer/addresses/[addressId]/route.ts'
-      if grep -REn '(identityId|localStorage|sessionStorage).*' apps/customer-web-next/src/components/customer-addresses.tsx; then
+      if grep -REn '(identityId|localStorage|sessionStorage).*' apps/customer-web-next/src/features/addresses/components/customer-addresses.tsx; then
         echo 'ERROR: Address UI references forbidden identity or browser storage fields.' >&2
         exit 1
       fi

@@ -1,7 +1,7 @@
-import { chefUpstream } from "@/lib/chef-errors";
+import { chefUpstream } from "@/features/chef/lib/chef-errors";
 import { NextRequest, NextResponse } from "next/server";
-import { parseChefCapacitySummary } from "@/lib/chef-subscription-capacity-contract";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
+import { parseChefCapacitySummary } from "@/features/chef/lib/chef-subscription-capacity-contract";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 

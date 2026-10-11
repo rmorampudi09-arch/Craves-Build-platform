@@ -1,5 +1,5 @@
-import { AdminPageIntro } from "@/components/admin-page-intro";
-import { AdminSupportInbox } from "@/components/admin-support-inbox";
+import { AdminPageIntro } from "@/features/admin/shell/components/admin-page-intro";
+import { AdminSupportInbox } from "@/features/admin/support/components/admin-support-inbox";
 
 export const metadata = { title: "Support inbox | Craves Admin", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";

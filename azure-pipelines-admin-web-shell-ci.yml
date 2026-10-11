@@ -19,11 +19,11 @@ steps:
     displayName: Typecheck and test admin shell
   - script: |
       set -euo pipefail
-      grep -q 'roles.includes("ADMIN")' apps/customer-web-next/src/lib/admin-contract.ts
+      grep -q 'roles.includes("ADMIN")' apps/customer-web-next/src/features/admin/shell/lib/admin-contract.ts
       if grep -REn '(accessToken|identityId|localStorage|sessionStorage|console\.(log|debug)|grantRole|setRole)' \
-        apps/customer-web-next/src/lib/admin-contract.ts \
+        apps/customer-web-next/src/features/admin/shell/lib/admin-contract.ts \
         apps/customer-web-next/src/app/api/admin/me \
-        apps/customer-web-next/src/components/admin-shell.tsx \
+        apps/customer-web-next/src/features/admin/shell/components/admin-shell.tsx \
         apps/customer-web-next/src/app/admin/page.tsx; then
         echo 'ERROR: Admin shell exposes tokens/identity IDs, insecure storage, logging or role mutation.' >&2
         exit 1

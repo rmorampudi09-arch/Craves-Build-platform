@@ -22,7 +22,7 @@ steps:
       grep -q 'Idempotency-Key' apps/customer-web-next/src/app/api/chef/orders/'[orderId]'/accept/route.ts
       grep -q 'X-Correlation-ID' apps/customer-web-next/src/app/api/chef/orders/'[orderId]'/reject/route.ts
       if grep -REn '(refund|cancel|out-for-delivery|provider|localStorage|sessionStorage|console\.(log|debug))' \
-        apps/customer-web-next/src/components/chef-order-actions.tsx \
+        apps/customer-web-next/src/features/chef/components/chef-order-actions.tsx \
         apps/customer-web-next/src/app/api/chef/orders/'[orderId]'/accept \
         apps/customer-web-next/src/app/api/chef/orders/'[orderId]'/reject \
         apps/customer-web-next/src/app/api/chef/orders/'[orderId]'/ready-for-pickup; then

@@ -129,7 +129,7 @@ stages:
           - bash: |
               set -euo pipefail
               COMPONENT='apps/customer-web-next/src/components/subscription-cashfree-payment.tsx'
-              ENROLL='apps/customer-web-next/src/components/subscription-enrollment-form.tsx'
+              ENROLL='apps/customer-web-next/src/features/meal-plans/components/subscription-enrollment-form.tsx'
               BFF='apps/customer-web-next/src/app/api/subscription-payments/invoices/[invoiceId]/orders/route.ts'
               SERVICE='services/integration-service/src/main/java/in/craves/integration/subscription/SubscriptionPaymentService.java'
 

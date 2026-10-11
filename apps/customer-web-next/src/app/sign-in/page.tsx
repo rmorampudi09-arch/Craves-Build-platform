@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { PhoneAuthForm } from "@/components/phone-auth-form";
-import { CravesLogo } from "@/components/brand/CravesLogo";
-import { safeReturnPath } from "@/lib/auth-contract";
-import { isAdminDestination } from "@/lib/admin-navigation";
-import "@/styles/admin-control.css";
+import { PhoneAuthForm } from "@/features/sign-in/components/phone-auth-form";
+import { CravesLogo } from "@/shared/components/brand/CravesLogo";
+import { safeReturnPath } from "@/features/auth/lib/auth-contract";
+import { isAdminDestination } from "@/features/admin/shell/lib/admin-navigation";
+import "@/features/admin/styles/admin-control.css";
 
 export const metadata = {
   title: "Sign in | Craves",

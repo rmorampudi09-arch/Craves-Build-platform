@@ -1,12 +1,12 @@
-import { boundBffRequest } from "@/lib/bff-request-limits";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
   parseAdminInvestigationRequest,
   parseAdminInvestigationResult
-} from "@/lib/admin-investigation-contract";
-import { isSameOrigin } from "@/lib/request-security";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
+} from "@/features/admin/investigations/lib/admin-investigation-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 

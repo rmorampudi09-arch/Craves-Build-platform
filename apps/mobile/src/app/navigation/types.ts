@@ -20,6 +20,7 @@ export type RootStackParamList = {
   AccountRouter: undefined;
   CustomerRegistration: undefined;
   CustomerAccountStatus: undefined;
+  ChefApplication: undefined;
   ChefRegistration: undefined;
   ChefAccountStatus: {status?: ChefApplicationStatus};
   StartupError: undefined;
@@ -44,7 +45,7 @@ export type CustomerAccountStackParamList = Pick<
 
 export type ChefAccountStackParamList = Pick<
   RootStackParamList,
-  'AccountRouter' | 'ChefRegistration' | 'ChefAccountStatus'
+  'AccountRouter' | 'ChefApplication' | 'ChefRegistration' | 'ChefAccountStatus'
 >;
 
 export type CustomerFilterSortRouteParams = {

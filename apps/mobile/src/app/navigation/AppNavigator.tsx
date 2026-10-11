@@ -44,6 +44,7 @@ import {CustomerRegistrationScreen} from '../../features/auth/screens/CustomerRe
 import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerAccountStatusScreen';
 import {ChefRegistrationScreen} from '../../features/auth/screens/ChefRegistrationScreen';
 import {ChefAccountStatusScreen} from '../../features/auth/screens/ChefAccountStatusScreen';
+import {ChefOnboardingScreen} from '../../features/chefOnboarding/screens/ChefOnboardingScreen';
 import {StartupErrorScreen} from '../../features/auth/screens/StartupErrorScreen';
 import {AccountRouterScreen} from '../../features/auth/screens/AccountRouterScreen';
 import {AuthVideoBackground} from '../../features/auth/components/AuthVideoBackground';
@@ -146,11 +147,11 @@ function ChefAccountNavigator({
   }
 
   const status: ChefApplicationStatus = resolution.onboardingStatus;
-  const initialRouteName =
-    status === 'NOT_SUBMITTED' ? 'ChefRegistration' : 'ChefAccountStatus';
 
+  // The step-by-step application decides between its form and status page; the older screens stay as its fallback.
   return (
-    <ChefStack.Navigator screenOptions={screenOptions} initialRouteName={initialRouteName}>
+    <ChefStack.Navigator screenOptions={screenOptions} initialRouteName="ChefApplication">
+      <ChefStack.Screen name="ChefApplication" component={ChefOnboardingScreen} />
       <ChefStack.Screen name="ChefRegistration" component={ChefRegistrationScreen} />
       <ChefStack.Screen
         name="ChefAccountStatus"

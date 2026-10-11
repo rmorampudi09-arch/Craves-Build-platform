@@ -19,6 +19,26 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.29.0 - Step-by-step chef application, same as craves.in, 2026-10-12
+
+- New chefs now get the website's application (craves.in/chef/application, onboarding v2)
+  instead of the one-page form: Basic details (full name, birthday calendar for 18+,
+  verified mobile and email), Your kitchen (name, about, Ola map pin with search and
+  current location, address, two kitchen photos), FSSAI number or "Don't have FSSAI?"
+  (FoSCoS steps, video guide in 23 languages, request a call), Identity verification
+  (Aadhaar/PAN/bank statement/other ID, front and back), Bank details when the server
+  requires them, Review with terms, then the status page.
+- Same server contract as the website: GET/PUT/PATCH /api/v1/chef/onboarding, submit,
+  help, document preview/delete, learning content and playback; uploads go multipart to
+  /api/v1/chef/application/proof-files; IFSC lookup /api/v1/chef-onboarding/bank/ifsc.
+- Draft saved per step ("Save and continue", "Save & exit"), Welcome back list with
+  section progress, and changes requested by Craves walk only the flagged sections.
+- The older registration and status screens stay as the fallback for applications made
+  with the older form, or when the server has no step-by-step application.
+- Bank status responses that name the account holder, bank and branch are accepted
+  (the old strict check rejected them).
+- Known gaps vs the website: photos only (no PDF picker), no upload percentage or cancel.
+
 ### Version 1.28.1 - Glass buttons on the kitchen page, popup closes on Add, 2026-10-11
 
 - Kitchen page: the back arrow and kitchen heart in the top bar, and the heart on every

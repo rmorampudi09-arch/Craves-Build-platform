@@ -58,7 +58,13 @@ export type IconName =
   | 'play'
   | 'renew'
   | 'calendar-remove'
-  | 'receipt';
+  | 'receipt'
+  | 'camera'
+  | 'store'
+  | 'id-card'
+  | 'bank'
+  | 'image'
+  | 'upload';
 
 interface Props {
   name: IconName;
@@ -124,6 +130,12 @@ const GLYPHS: Record<IconName, string> = {
   renew: 'autorenew',
   'calendar-remove': 'calendar-remove-outline',
   receipt: 'receipt-text-outline',
+  camera: 'camera-outline',
+  store: 'storefront-outline',
+  'id-card': 'card-account-details-outline',
+  bank: 'bank-outline',
+  image: 'image-outline',
+  upload: 'tray-arrow-up',
 };
 
 export function Icon({

@@ -9,6 +9,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 
@@ -155,14 +156,22 @@ function forceInstantWindowScroll(top: number): void {
   body.style.scrollBehavior = previousBodyBehavior;
 }
 
+const noSubscribe = () => () => {};
+
 function BrowseFoodsPage() {
   const navigate = useNavigate();
-  const [initialCache] = useState(() => ({
-    user: getSession() ?? recoverSessionSnapshotForNavigation(),
-    address: getAddress(),
-    dishes: allDishes(),
-    kitchens: allKitchens(),
-  }));
+  // Cached dishes, address and cart paint Home instantly when it opens inside the app. A full
+  // page load must first match the server's empty Home (no browser storage there), so it starts
+  // empty and the mount effect fills it in; otherwise React throws the page away (error #418).
+  const hydrating = !useSyncExternalStore(noSubscribe, () => true, () => false);
+  const [initialCache] = useState(() => hydrating
+    ? { user: null, address: null, dishes: [] as Dish[], kitchens: [] as NearbyKitchen[] }
+    : {
+        user: getSession() ?? recoverSessionSnapshotForNavigation(),
+        address: getAddress(),
+        dishes: allDishes(),
+        kitchens: allKitchens(),
+      });
   const hasInitialCatalog =
     initialCache.dishes.length > 0 || initialCache.kitchens.length > 0;
 
@@ -209,8 +218,8 @@ function BrowseFoodsPage() {
     searchOpenerRef.current = null;
     if (opener?.isConnected) window.requestAnimationFrame(() => opener.focus({ preventScroll: true }));
   }, []);
-  const [cartItemCount, setCartItemCount] = useState(() => cartCount());
-  const [cartItems, setCartItems] = useState<CartItem[]>(() => getCart());
+  const [cartItemCount, setCartItemCount] = useState(() => (hydrating ? 0 : cartCount()));
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => (hydrating ? [] : getCart()));
   const [unavailableCartItems, setUnavailableCartItems] = useState<CartItem[]>([]);
   // Remembered for the browser session so the dialog doesn't reopen on every visit to /home.
   const [dismissedCartAvailabilityKey, setDismissedCartAvailabilityKey] = useState<string | null>(() => {

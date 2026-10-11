@@ -6,6 +6,7 @@ import { CartKitchenReplacementDialogHost } from "@/features/cart/components/Car
 import { BottomNav } from "@/features/customer-shell/components/BottomNav";
 import { ChefModeGuard } from "@/features/chef/components/ChefModeGuard";
 import { SessionEndedPrompt } from "@/features/auth/components/session-ended-prompt";
+import { NewCustomerProfileGate } from "@/features/profile/components/new-customer-profile-gate";
 import { MotionPreferences } from "@/shared/components/layout/MotionPreferences";
 import { StructuredData } from "@/features/seo/components/StructuredData";
 import { cravesLogoUrl, cravesSiteGraph, seoKeywords, siteUrl } from "@/features/seo/lib/seo-craves";
@@ -93,6 +94,7 @@ export default function RootLayout({
           <BottomNav />
           <CartKitchenReplacementDialogHost />
           <ChefModeGuard />
+          <NewCustomerProfileGate />
           <SessionEndedPrompt />
         </MotionPreferences>
       </body>

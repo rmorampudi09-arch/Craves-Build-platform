@@ -43,7 +43,7 @@ export function SessionEndedPrompt() {
     <Sheet
       open={open}
       onOpenChange={setOpen}
-      busy
+      dismissible={false}
       title="Please sign in again"
       description={
         chef

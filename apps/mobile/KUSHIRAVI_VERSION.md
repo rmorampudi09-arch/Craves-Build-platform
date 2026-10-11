@@ -19,6 +19,18 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.29.1 - Approved chefs get their kitchen, 2026-10-12
+
+- A newly approved chef had no kitchen, so Chef Profile showed "Kitchen details
+  unavailable" and Edit profile stayed blocked. When GET /api/v1/kitchens/me answers
+  KITCHEN_PROFILE_NOT_FOUND, the app now saves the kitchen from the approved application
+  (name, about, address, pin, contact; status DRAFT), like the website's chef-kitchen-handoff.
+- A sign-in pass signed before approval has no CHEF role, so "Open your kitchen" failed with
+  "We could not verify your Chef access". Account resolution now renews the pass once and
+  retries, like the website.
+- Still open: chefs approved through the old one-page form have no kitchen name to copy; the
+  kitchen editor cannot create a kitchen from scratch yet.
+
 ### Version 1.29.0 - Step-by-step chef application, same as craves.in, 2026-10-12
 
 - New chefs now get the website's application (craves.in/chef/application, onboarding v2)

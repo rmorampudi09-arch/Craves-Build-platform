@@ -1,4 +1,6 @@
+import {toAppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
+import {chefOnboardingApi, type OnboardingDetails} from '../../chefOnboarding/api/chefOnboardingApi';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -186,13 +188,59 @@ function parseKitchenResponse(value: unknown): ChefKitchenProfile {
   return parsed;
 }
 
+const orNull = (value: string) => value.trim() || null;
+
+/**
+ * The kitchen an approved chef already described in the application (website: chef-kitchen-handoff.ts).
+ * Null when something the kitchen needs is missing; the kitchen editor then asks for it.
+ */
+export function kitchenFromApplication(
+  details: OnboardingDetails,
+  phoneNumber: string,
+): ChefKitchenProfileRequest | null {
+  if (![details.kitchenName, details.addressLine1, details.city, details.state].every(value => value.trim())) {
+    return null;
+  }
+  return {
+    kitchenName: details.kitchenName.trim(),
+    displayName: orNull([details.firstName, details.lastName].join(' ')),
+    description: orNull(details.kitchenDescription),
+    phoneNumber: orNull(phoneNumber),
+    email: orNull(details.email),
+    addressLine1: details.addressLine1.trim(),
+    addressLine2: orNull(details.addressLine2),
+    landmark: orNull(details.landmark),
+    // The application's "Street / area" ends with the area, which pickup partners look for.
+    areaName: orNull(details.addressLine2.split(',').pop() ?? ''),
+    city: details.city.trim(),
+    state: details.state.trim(),
+    postalCode: orNull(details.postalCode),
+    latitude: details.latitude,
+    longitude: details.longitude,
+    // Closed to orders until the chef opens it, once there is a dish to sell.
+    status: 'DRAFT',
+  };
+}
+
 export const chefProfileApi = {
   async getKitchen(signal?: AbortSignal): Promise<ChefKitchenProfile> {
-    const response = await httpClient.get<unknown>('/api/v1/kitchens/me', {
-      signal,
-      dedupeKey: 'chef-profile:kitchen',
-    });
-    return parseKitchenResponse(response);
+    try {
+      const response = await httpClient.get<unknown>('/api/v1/kitchens/me', {
+        signal,
+        dedupeKey: 'chef-profile:kitchen',
+      });
+      return parseKitchenResponse(response);
+    } catch (error) {
+      // A newly approved chef has no kitchen yet: save the one from the application, as the website does.
+      if (toAppApiError(error).code !== 'KITCHEN_PROFILE_NOT_FOUND') throw error;
+      const onboarding = await chefOnboardingApi.load().catch(() => null);
+      const request =
+        onboarding?.details && onboarding.application.status === 'APPROVED'
+          ? kitchenFromApplication(onboarding.details, onboarding.phoneNumber)
+          : null;
+      if (!request) throw error;
+      return chefProfileApi.replaceKitchen(request, signal);
+    }
   },
 
   async replaceKitchen(

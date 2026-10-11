@@ -1,6 +1,7 @@
 import {AppApiError} from '../../../core/http/apiError';
 import {authApi} from '../api/authApi';
 import {profileApi} from '../api/profileApi';
+import {sessionManager} from '../api/sessionManager';
 import type {
   ChefApplication,
   ChefApplicationStatus,
@@ -25,6 +26,8 @@ jest.mock('../api/profileApi', () => ({
     submitChefApplication: jest.fn(),
   },
 }));
+
+jest.mock('../api/sessionManager', () => ({sessionManager: {refresh: jest.fn()}}));
 
 const meMock = authApi.me as jest.Mock;
 const customerProfileMock = profileApi.getCustomerProfile as jest.Mock;
@@ -212,6 +215,20 @@ describe('P21 account resolution', () => {
       code: 'CHEF_AUTHORIZATION_STATUS_MISMATCH',
       status: 409,
     });
+  });
+
+  it('renews a sign-in pass signed before approval once, then opens Chef mode', async () => {
+    meMock
+      .mockResolvedValueOnce(identity(['CUSTOMER']))
+      .mockResolvedValueOnce(identity(['CUSTOMER', 'CHEF']));
+    chefApplicationMock.mockResolvedValue(chefApplication('APPROVED'));
+    (sessionManager.refresh as jest.Mock).mockResolvedValue({accessToken: 'fresh'});
+
+    await expect(accountResolutionService.resolve('CHEF')).resolves.toMatchObject({
+      identity: {roles: ['CUSTOMER', 'CHEF']},
+      resolution: {flow: 'CHEF', authorizedRole: 'CHEF'},
+    });
+    expect(sessionManager.refresh).toHaveBeenCalledTimes(1);
   });
 
   it('does not trust the Customer selection when /me lacks the Customer role', async () => {

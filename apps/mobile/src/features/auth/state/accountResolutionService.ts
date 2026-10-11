@@ -1,6 +1,7 @@
 import {AppApiError, toAppApiError} from '../../../core/http/apiError';
 import {authApi} from '../api/authApi';
 import {profileApi} from '../api/profileApi';
+import {sessionManager} from '../api/sessionManager';
 import type {AccountResolution, AuthRole, Identity} from '../domain/types';
 
 export interface AccountResolutionResult {
@@ -93,16 +94,37 @@ async function resolveChef(identity: Identity): Promise<AccountResolution> {
   };
 }
 
+/** True when the sign-in pass was renewed; a failed renewal keeps the original error. */
+async function renewSignInPass(): Promise<boolean> {
+  try {
+    return Boolean(await sessionManager.refresh());
+  } catch {
+    return false;
+  }
+}
+
 export const accountResolutionService = {
-  async resolve(requestedRole: AuthRole): Promise<AccountResolutionResult> {
+  async resolve(requestedRole: AuthRole, renewed = false): Promise<AccountResolutionResult> {
     const identity = await authApi.me();
     requireActiveIdentity(identity);
 
-    const resolution =
-      requestedRole === 'CHEF'
-        ? await resolveChef(identity)
-        : await resolveCustomer(identity);
+    try {
+      const resolution =
+        requestedRole === 'CHEF'
+          ? await resolveChef(identity)
+          : await resolveCustomer(identity);
 
-    return {identity, resolution};
+      return {identity, resolution};
+    } catch (error) {
+      // A pass signed before approval has no CHEF role yet; a renewed one carries it (as on the website).
+      if (
+        renewed ||
+        !(error instanceof AppApiError && error.code === 'CHEF_AUTHORIZATION_STATUS_MISMATCH') ||
+        !(await renewSignInPass())
+      ) {
+        throw error;
+      }
+      return accountResolutionService.resolve(requestedRole, true);
+    }
   },
 };

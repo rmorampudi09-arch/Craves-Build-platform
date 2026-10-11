@@ -41,6 +41,11 @@ async function refreshSession(): Promise<RefreshResult> {
   return pending;
 }
 
+/** A signed-in request failed because the sign-in itself ended (its refresh was refused). */
+export const SESSION_ENDED_EVENT = "craves:session-ended";
+/** Sent just before "Sign in again" leaves the page, so open forms can keep what was typed. */
+export const BEFORE_SIGN_IN_EVENT = "craves:before-sign-in";
+
 export async function refreshSessionCookies(): Promise<boolean> {
   return (await refreshSession()) === "refreshed";
 }
@@ -88,6 +93,9 @@ export async function sessionFetch(
     response = await fetch(input, requestInit);
     return response;
   }
+
+  // Guests get this too; the prompt only shows for someone who was signed in.
+  if (refreshResult === "rejected") window.dispatchEvent(new Event(SESSION_ENDED_EVENT));
 
   if (refreshResult === "unavailable") {
     return new Response(

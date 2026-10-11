@@ -67,7 +67,10 @@ export type ChefDestinationInput = {
 
 export function resolveChefDestination({ roles, applicationStatus, returnTo }: ChefDestinationInput): string {
   const chef = roles.some((role) => role.toUpperCase() === "CHEF");
-  if (chef && applicationStatus === "APPROVED") return safeChefReturnTo(returnTo) ?? "/chef";
+  const back = safeChefReturnTo(returnTo);
+  if (chef && applicationStatus === "APPROVED") return back ?? "/chef";
+  // An applicant who had to sign in again goes back to the application step they were on.
+  if (applicationStatus !== "APPROVED" && back && /^\/chef\/application(?:[/?]|$)/.test(back)) return back;
   // Submitted, under review, changes requested, rejected, or approved before the CHEF role arrives.
   if (applicationStatus === "PENDING" || applicationStatus === "REJECTED" || applicationStatus === "APPROVED")
     return "/chef/application/status";

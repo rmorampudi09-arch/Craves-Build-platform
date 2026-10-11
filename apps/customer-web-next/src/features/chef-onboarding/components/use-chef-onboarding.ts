@@ -4,6 +4,7 @@ import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { captureSessionContext, isSessionContextCurrent } from "@/features/auth/api/cravesAuth";
+import { BEFORE_SIGN_IN_EVENT, sessionFetch } from "@/features/auth/api/sessionFetch";
 import { useStepHistory } from "@/features/chef-onboarding/lib/use-step-history";
 import { bankStatusSchema, type BankStatus } from "@/features/admin/finance/lib/bank-onboarding-contract";
 import { chefEmailEligible, type EmailVerificationState } from "@/features/sign-in/lib/email-verification-contract";
@@ -34,7 +35,9 @@ export async function chefOnboardingApi(
   method = "GET",
   body?: unknown,
 ): Promise<unknown> {
-  const response = await fetch(path, {
+  // sessionFetch renews the 15-minute access pass from the 30-day sign-in, so a long form never
+  // fails with "session expired" while the chef is still signed in.
+  const response = await sessionFetch(path, {
     method,
     cache: "no-store",
     credentials: "same-origin",
@@ -50,7 +53,7 @@ export async function chefOnboardingApi(
         : null;
     throw new ChefError(
       response.status === 401
-        ? "Your session expired. Sign in again to continue."
+        ? "Your sign-in has ended. Sign in again to carry on; your saved details are kept."
         : response.status === 409
           ? (message ?? "Your saved application changed. Reload it before trying again.")
           : (message ?? "We could not complete this request. Your saved progress is preserved."),
@@ -75,6 +78,29 @@ function verifiedState(raw: unknown): OnboardingState {
 }
 /** The applicant's home inside Chef Mode; leaving the form always lands here, never on customer screens. */
 const APPLICATION_HUB = "/chef/application/status";
+/** What the chef typed but had not saved when "Sign in again" left the page (this tab only). */
+const UNSAVED_KEY = "craves.chef-application-unsaved";
+const UNSAVED_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+type Unsaved = { identityId: string | null; version: number; details: OnboardingDetails; savedAt: number };
+/** Returns (and forgets) typed details kept for this chef, if the saved application has not changed since. */
+function takeUnsaved(identityId: string | null, version: number): OnboardingDetails | null {
+  try {
+    const raw = window.sessionStorage.getItem(UNSAVED_KEY);
+    window.sessionStorage.removeItem(UNSAVED_KEY);
+    const kept = raw ? (JSON.parse(raw) as Partial<Unsaved>) : null;
+    if (!kept || kept.identityId !== identityId || kept.version !== version || typeof kept.savedAt !== "number" || Date.now() - kept.savedAt > UNSAVED_MAX_AGE_MS) return null;
+    // Only the known fields, each with the type it should have.
+    const details = { ...EMPTY_ONBOARDING };
+    for (const key of Object.keys(EMPTY_ONBOARDING) as (keyof OnboardingDetails)[]) {
+      const value = (kept.details as Record<string, unknown> | undefined)?.[key];
+      if (value === null || typeof value === typeof EMPTY_ONBOARDING[key] || (EMPTY_ONBOARDING[key] === null && ["number", "string", "boolean"].includes(typeof value)))
+        Object.assign(details, { [key]: value });
+    }
+    return details;
+  } catch {
+    return null;
+  }
+}
 /** The applicant may change the saved application, so a ?step= in the URL can open a section. */
 function editable(state: OnboardingState): boolean {
   return (
@@ -138,15 +164,32 @@ export function useChefOnboarding() {
       upload.current?.abort();
     };
   }, []);
+  const leavingToSignIn = useRef(false);
   useEffect(() => {
     // Only a form the hook knows is unsaved warns before the page unloads.
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => {
+      if (leavingToSignIn.current) return;
       event.preventDefault();
       event.returnValue = "";
     };
+    // "Sign in again" keeps the typed details for this tab; they come back after the OTP.
+    const keep = () => {
+      const saved = currentState.current;
+      if (!saved) return;
+      leavingToSignIn.current = true;
+      try {
+        window.sessionStorage.setItem(UNSAVED_KEY, JSON.stringify({ identityId: owner.current.identityId, version: saved.version, details: currentDetails.current, savedAt: Date.now() } satisfies Unsaved));
+      } catch {
+        // Blocked storage: the saved application is still there after signing in.
+      }
+    };
     window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
+    window.addEventListener(BEFORE_SIGN_IN_EVENT, keep);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      window.removeEventListener(BEFORE_SIGN_IN_EVENT, keep);
+    };
   }, [dirty]);
   function accept(next: OnboardingState, preserveDetails = false) {
     if (!current()) return;
@@ -176,7 +219,7 @@ export function useChefOnboarding() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/chef/onboarding", {
+      const response = await sessionFetch("/api/chef/onboarding", {
         cache: "no-store",
         credentials: "same-origin",
         signal: AbortSignal.timeout(45000),
@@ -219,9 +262,13 @@ export function useChefOnboarding() {
         }
       }
       if (!current()) return;
+      // Back from "Sign in again": what was typed before comes back, still to be saved.
+      const unsaved = editable(next) ? takeUnsaved(owner.current.identityId, next.version) : null;
+      if (unsaved) nextDetails = unsaved;
       currentDetails.current = nextDetails;
       setDetails(nextDetails);
-      setDirty(false);
+      setDirty(Boolean(unsaved));
+      if (unsaved) setNotice("You’re signed in again. What you typed before is still here: save it to keep it.");
       setFromReview(false);
       setFssaiGuideState(false);
       const destination: ChefFormScreen =
@@ -463,6 +510,15 @@ export function useChefOnboarding() {
       setFromReview(false);
       return;
     }
+    // Changes Craves asked for: Back walks only the flagged sections, then returns to the status page.
+    const flagged = currentState.current ? correctionSections(currentState.current) : [];
+    const correcting: ChefFormScreen[] = flagged.length ? [...flagged, "review"] : [];
+    if (correcting.includes(screen)) {
+      const index = correcting.indexOf(screen);
+      if (index > 0) go(correcting[index - 1]!);
+      else if (!dirty || window.confirm("Leave without saving? Your latest changes are not saved yet.")) toHub();
+      return;
+    }
     const sections = activeChefSections(currentState.current);
     const index = sections.indexOf(screen as ChefFormSection);
     if (index > 0) go(sections[index - 1]!);
@@ -602,7 +658,7 @@ export function useChefOnboarding() {
     setBank(next);
     setBankUnavailable(false);
     if (bankCanContinue(next)) {
-      go(afterSectionSave("bank", fromReview));
+      go(afterSectionSave("bank", fromReview, currentState.current));
       setFromReview(false);
     }
   }

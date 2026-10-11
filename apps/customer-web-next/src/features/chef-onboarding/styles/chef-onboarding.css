@@ -1302,36 +1302,29 @@ a.cob-thumb:focus-visible {
   line-height: 1.5;
   text-align: center;
 }
-.cob-select-sm {
-  height: 40px;
-  min-height: 40px;
-  padding: 0 34px 0 12px;
-  border: 0;
-  border-radius: 10px;
-  background-color: var(--cob-neutral);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%231a1a1a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  color: var(--cob-ink);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  appearance: none;
-  -webkit-appearance: none;
-}
-.cob-inline-select {
-  display: inline-flex;
+/* Pickers (date of birth, video language): a field that opens a sheet. `.cob button` resets
+   every button, so the field look is restated here. */
+.cob .cob-date-trigger {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--cob-muted);
+  justify-content: space-between;
+  gap: 12px;
+  border: 1.5px solid transparent;
+  border-radius: var(--cob-radius-control);
+  background: var(--cob-neutral);
+  color: var(--cob-ink);
+  font-size: 16px;
+  font-weight: 500;
+  text-align: left;
 }
-.cob-inline-select .cob-select-sm {
-  height: 34px;
-  min-height: 34px;
-  font-size: 13px;
-}
+.cob .cob-date-trigger > svg { flex-shrink: 0; color: var(--cob-muted); }
+.cob .cob-date-trigger:hover:not(:disabled) { background-color: #eceef1; }
+.cob .cob-date-trigger[aria-expanded="true"] { border-color: var(--cob-ink); background-color: var(--cob-white); }
+.cob .cob-date-trigger[data-invalid] { border-color: var(--cob-red-text); background-color: var(--cob-white); }
+.cob-date-placeholder { color: #8a8d92; font-weight: 400; }
+.cob-language-value { display: inline-flex; min-width: 0; align-items: center; gap: 10px; }
+.cob-language-value > svg { flex-shrink: 0; color: var(--cob-muted); }
+.cob-language-english { color: var(--cob-muted); font-size: 14px; font-weight: 400; }
 .cob-success {
   display: flex;
   align-items: flex-start;

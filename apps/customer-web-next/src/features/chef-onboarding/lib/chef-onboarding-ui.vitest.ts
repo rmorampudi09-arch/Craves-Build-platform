@@ -2,7 +2,8 @@
 // All identities, bank accounts, documents and HTTP responses are isolated fixtures.
 import { createElement, useEffect } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { MotionGlobalConfig } from "framer-motion";
 import { ChefOnboardingWorkspace } from "../components/chef-onboarding-workspace";
 import { ChefApplicationStatus } from "../components/chef-application-status";
 import { ChefAccessBoundary } from "../../chef/components/chef-access-boundary";
@@ -164,6 +165,19 @@ function normal(input: RequestInfo | URL, init?: RequestInit): Promise<Response>
     Response.json({ message: "Fixture service unavailable" }, { status: 503 }),
   );
 }
+// Pickers open sheets; skipped animations let a closed sheet leave the page at once.
+beforeAll(() => { MotionGlobalConfig.skipAnimations = true; });
+afterAll(() => { MotionGlobalConfig.skipAnimations = false; });
+/** Date of birth is a calendar: year, then month, then day, then Done. */
+async function pickDateOfBirth(year: number, month: string, day: number) {
+  fireEvent.click(screen.getByRole("button", { name: /^Date of birth/ }));
+  fireEvent.click(await screen.findByRole("button", { name: String(year) }));
+  fireEvent.click(await screen.findByRole("button", { name: `${month} ${year}` }));
+  fireEvent.click(await screen.findByRole("button", { name: `${day} ${month} ${year}` }));
+  fireEvent.click(screen.getByRole("button", { name: "Done" }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Date of birth" })).toBeNull());
+}
+
 beforeEach(() => {
   saved = complete();
   bank = { ...bankFixture };
@@ -321,7 +335,7 @@ describe("Chef onboarding navigation and persistence", () => {
     open();
     await screen.findByRole("heading", { name: "Basic details" });
     fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Fixture Chef" } });
-    fireEvent.change(screen.getByLabelText("Date of birth"), { target: { value: "1990-01-01" } });
+    await pickDateOfBirth(1990, "January", 1);
     fireEvent.click(primary("Save and continue"));
     await screen.findByText("Verify your email address before saving these details.");
     expect(fetcher.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
@@ -521,6 +535,13 @@ describe("Authoritative status and bank verification", () => {
     const posts=fetcher.mock.calls.filter(([,init])=>init?.method==="POST");
     expect(posts).toHaveLength(2);
     expect(posts[0]![1]?.body).toBe(posts[1]![1]?.body);
+  });
+  it("walks only the sections Craves asked to change, then review", () => {
+    const flagged = { ...complete(), progress: { status: "MORE_INFORMATION_REQUIRED", reason: "Fix these", nextAction: "EDIT_APPLICATION", fssaiVerified: false, termsVersion: "v1", sections: ["personal", "documents"] } };
+    expect(afterSectionSave("personal", false, flagged)).toBe("documents");
+    expect(afterSectionSave("documents", false, flagged)).toBe("review");
+    // Without a reviewer request the usual order applies.
+    expect(afterSectionSave("personal", false, complete())).toBe("kitchen");
   });
   it("accepts no failed or unknown bank state as a completed section", () => {
     for (const state of [

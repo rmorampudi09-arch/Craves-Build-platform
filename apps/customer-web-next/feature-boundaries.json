@@ -130,6 +130,7 @@
     "chef-onboarding -> src/features/addresses/lib/address-selection.ts",
     "chef-onboarding -> src/features/admin/finance/lib/bank-onboarding-contract.ts",
     "chef-onboarding -> src/features/auth/api/cravesAuth.ts",
+    "chef-onboarding -> src/features/auth/api/sessionFetch.ts",
     "chef-onboarding -> src/features/auth/lib/auth-contract.ts",
     "chef-onboarding -> src/features/chef/components/chef-access-boundary.tsx",
     "chef-onboarding -> src/features/chef/components/chef-account-menu.tsx",

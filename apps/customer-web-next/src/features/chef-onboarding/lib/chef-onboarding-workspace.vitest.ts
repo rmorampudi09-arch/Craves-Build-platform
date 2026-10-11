@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // Disposable response fixtures exercise the updated flow; no production APIs are called.
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { MotionGlobalConfig } from "framer-motion";
 import { createElement } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ChefOnboardingWorkspace } from "@/features/chef-onboarding/components/chef-onboarding-workspace";
@@ -46,6 +47,15 @@ const state = {
   supportPhone: "+910000000000",
   supportEmail: "support@example.invalid",
 };
+// The language picker opens a sheet; skipped animations let it leave the page at once.
+beforeAll(() => { MotionGlobalConfig.skipAnimations = true; });
+afterAll(() => { MotionGlobalConfig.skipAnimations = false; });
+async function chooseLanguage(name: RegExp) {
+  fireEvent.click(screen.getByRole("button", { name: /^Video language/ }));
+  fireEvent.click(await screen.findByRole("button", { name }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Video language" })).toBeNull());
+}
+
 beforeEach(() => {
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
     configurable: true,
@@ -92,8 +102,8 @@ it("shows the selected-language empty state without claiming translated content"
   mount();
   await resume();
   fireEvent.click(screen.getByRole("button", { name: "Don’t have FSSAI?" }));
-  await screen.findByText(/No learning content is published/);
-  fireEvent.change(screen.getByLabelText("Preferred language"), { target: { value: "te" } });
+  await screen.findByText(/The video guide is coming soon/);
+  await chooseLanguage(/తెలుగు/);
   await waitFor(() =>
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("language=te"))).toBe(
       true,
@@ -158,11 +168,11 @@ it("preserves an unsaved language choice after a failed save and confirms only a
   mount();
   await resume();
   fireEvent.click(screen.getByRole("button", { name: "Don’t have FSSAI?" }));
-  fireEvent.change(screen.getByLabelText("Preferred language"), { target: { value: "te" } });
+  await chooseLanguage(/తెలుగు/);
   fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
   expect((await screen.findByRole("alert")).textContent).toContain("Save is temporarily unavailable.");
   expect(screen.queryByRole("heading", { name: "Identity verification" })).toBeNull();
-  expect((screen.getByLabelText("Preferred language") as HTMLSelectElement).value).toBe("te");
+  expect(screen.getByRole("button", { name: /^Video language/ }).textContent).toContain("తెలుగు");
   failSave = false;
   fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
   await screen.findByRole("heading", { name: "Identity verification" });
@@ -171,4 +181,21 @@ it("preserves an unsaved language choice after a failed save and confirms only a
     expect.objectContaining({ expectedVersion: 1, details: expect.objectContaining({ language: "te" }) }),
     expect.objectContaining({ expectedVersion: 1, details: expect.objectContaining({ language: "te" }) }),
   ]);
+});
+it("keeps what was typed when the chef has to sign in again, and brings it back afterwards", async () => {
+  const first = mount();
+  await resume();
+  fireEvent.change(screen.getByLabelText("FSSAI registration number"), { target: { value: "12345678901234" } });
+  // "Sign in again" announces itself before leaving for the OTP page.
+  window.dispatchEvent(new Event("craves:before-sign-in"));
+  first.unmount();
+  mount();
+  await screen.findByText(/You’re signed in again/);
+  await resume();
+  expect((screen.getByLabelText("FSSAI registration number") as HTMLInputElement).value.replace(/\D/g, "")).toBe("12345678901234");
+  // Kept once: a later visit opens the saved application as it is.
+  cleanup();
+  mount();
+  await resume();
+  expect((screen.getByLabelText("FSSAI registration number") as HTMLInputElement).value).toBe("");
 });

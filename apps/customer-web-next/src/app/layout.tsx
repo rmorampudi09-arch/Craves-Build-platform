@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { CartKitchenReplacementDialogHost } from "@/features/cart/components/CartKitchenReplacementDialogHost";
 import { BottomNav } from "@/features/customer-shell/components/BottomNav";
 import { ChefModeGuard } from "@/features/chef/components/ChefModeGuard";
+import { SessionEndedPrompt } from "@/features/auth/components/session-ended-prompt";
 import { MotionPreferences } from "@/shared/components/layout/MotionPreferences";
 import { StructuredData } from "@/features/seo/components/StructuredData";
 import { cravesLogoUrl, cravesSiteGraph, seoKeywords, siteUrl } from "@/features/seo/lib/seo-craves";
@@ -91,6 +92,7 @@ export default function RootLayout({
           <BottomNav />
           <CartKitchenReplacementDialogHost />
           <ChefModeGuard />
+          <SessionEndedPrompt />
         </MotionPreferences>
       </body>
     </html>

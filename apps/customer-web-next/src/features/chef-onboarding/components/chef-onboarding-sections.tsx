@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";
@@ -30,7 +31,6 @@ import { AddressMapPicker } from "@/features/addresses/components/AddressMapPick
 import { searchLocations, type LocationSearchResult } from "@/features/addresses/api/searchLocation";
 import { reverseGeocodeCurrentLocation } from "@/features/addresses/api/reverseGeocode";
 import {
-  ONBOARDING_LANGUAGES,
   PROOF_OPTIONS,
   proofNeedsBack,
   type LearningContent,
@@ -65,6 +65,8 @@ import {
   formatPhone,
 } from "@/features/chef-onboarding/components/chef-onboarding-ui";
 import { chefOnboardingApi, type ChefOnboardingFlow } from "@/features/chef-onboarding/components/use-chef-onboarding";
+import { DateOfBirthPicker } from "@/features/chef-onboarding/components/chef-date-of-birth";
+import { LanguagePicker } from "@/features/chef-onboarding/components/chef-language-picker";
 
 type Props = { flow: ChefOnboardingFlow };
 
@@ -162,6 +164,36 @@ function Upload({
 /* Screen 2 - Basic details                                            */
 /* ------------------------------------------------------------------ */
 
+function DateOfBirthField({ flow }: Props) {
+  const id = "chef-dateOfBirth";
+  const error = fieldError(flow, "dateOfBirth");
+  const helper = "You must be at least 18 years old to apply.";
+  return (
+    <div className="cob-field">
+      <label id={`${id}-label`} className="cob-label" htmlFor={id} data-required="">
+        Date of birth
+      </label>
+      <DateOfBirthPicker
+        id={id}
+        labelId={`${id}-label`}
+        value={flow.details.dateOfBirth}
+        max={adultCutoff()}
+        disabled={flow.busy}
+        invalid={Boolean(error)}
+        describedBy={describedBy(id, error, helper)}
+        onChange={(value) => flow.field("dateOfBirth", value)}
+      />
+      {error ? (
+        <FieldError id={`${id}-error`}>{error}</FieldError>
+      ) : (
+        <span id={`${id}-helper`} className="cob-helper">
+          {helper}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function ChefBasicDetails({ flow }: Props) {
   const [name, setName] = useState(() => chefFullName(flow.details));
   const nameError = fieldError(flow, "fullName");
@@ -195,14 +227,7 @@ export function ChefBasicDetails({ flow }: Props) {
               }}
             />
           </FieldShell>
-          <TextField
-            flow={flow}
-            name="dateOfBirth"
-            label="Date of birth"
-            helper="You must be at least 18 years old to apply."
-            type="date"
-            autoComplete="bday"
-          />
+          <DateOfBirthField flow={flow} />
         </div>
       </Card>
       <Card
@@ -743,7 +768,7 @@ function FssaiGuide({ flow }: Props) {
     setContent([]);
     setPlayback({});
     setVideoError("");
-    void fetch("/api/chef/onboarding/content?language=" + encodeURIComponent(language), {
+    void sessionFetch("/api/chef/onboarding/content?language=" + encodeURIComponent(language), {
       cache: "no-store",
       credentials: "same-origin",
       signal: controller.signal,
@@ -793,8 +818,6 @@ function FssaiGuide({ flow }: Props) {
   }
 
   const videos = content.filter((item) => item.kind === "VIDEO");
-  const showingEnglish = language !== "en" && content.length > 0 && content.every((item) => item.language === "en");
-  const languageName = ONBOARDING_LANGUAGES.find(([key]) => key === language)?.[1] ?? language;
   const articles = content.filter((item) => item.kind === "ARTICLE");
   return (
     <div className="cob-stack">
@@ -841,23 +864,18 @@ function FssaiGuide({ flow }: Props) {
           </span>
           <div className="cob-card-title">
             <h2>Watch how to apply</h2>
-            <label className="cob-inline-select">
-              <span>Language</span>
-              <select
-                aria-label="Preferred language"
-                className="cob-select-sm"
-                disabled={flow.busy}
-                value={language}
-                onChange={(event) => flow.field("language", event.target.value)}
-              >
-                {ONBOARDING_LANGUAGES.map(([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
+        </div>
+        <div className="cob-field" style={{ marginBottom: 14 }}>
+          <span id="chef-language-label" className="cob-label">
+            Video language
+          </span>
+          <LanguagePicker
+            labelId="chef-language-label"
+            value={language}
+            disabled={flow.busy}
+            onChange={(next) => flow.field("language", next)}
+          />
         </div>
         {loading ? (
           <div
@@ -868,7 +886,7 @@ function FssaiGuide({ flow }: Props) {
           />
         ) : error ? (
           <div className="cob-video-empty" role="alert">
-            <span>{error} You can still follow the steps above or request a call.</span>
+            <span>{error}</span>
             <button
               type="button"
               className="cob-link"
@@ -880,18 +898,10 @@ function FssaiGuide({ flow }: Props) {
         ) : videos.length === 0 && articles.length === 0 ? (
           <div className="cob-video-empty">
             <PlayCircle size={28} aria-hidden="true" />
-            <span>
-              No learning content is published in this language yet. Follow the steps above or
-              request a call.
-            </span>
+            <span>The video guide is coming soon. Follow the steps above, or ask us to call you.</span>
           </div>
         ) : (
           <div className="cob-fields">
-            {showingEnglish ? (
-              <p className="cob-helper" role="status">
-                Not available in {languageName} yet, so we’re showing the English guide.
-              </p>
-            ) : null}
             {videos.map((item) => (
               <div key={item.id} className="cob-field" lang={item.language}>
                 <div className="cob-video">

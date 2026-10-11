@@ -64,6 +64,10 @@ test("approved chefs open their requested chef page, applicants their applicatio
     assert.equal(resolveChefDestination({ roles: ["CUSTOMER"], applicationStatus: status, returnTo: "/chef/earnings" }), "/chef/application/status");
   // Approved but the CHEF role has not reached this session yet: never loop through /chef.
   assert.equal(resolveChefDestination({ roles: ["CUSTOMER"], applicationStatus: "APPROVED", returnTo: "/chef" }), "/chef/application/status");
+  // Signing in again mid-application returns to that step; other chef pages still go to the status.
+  assert.equal(resolveChefDestination({ roles: ["CUSTOMER"], applicationStatus: "PENDING", returnTo: "/chef/application?step=kitchen" }), "/chef/application?step=kitchen");
+  assert.equal(resolveChefDestination({ roles: ["CUSTOMER"], applicationStatus: null, returnTo: "/chef/application?step=personal" }), "/chef/application?step=personal");
+  assert.equal(resolveChefDestination({ roles: ["CUSTOMER"], applicationStatus: "PENDING", returnTo: "/chef/applications-fake" }), "/chef/application/status");
   for (const status of ["NOT_SUBMITTED", null, undefined])
     assert.equal(resolveChefDestination({ roles: ["CUSTOMER"], applicationStatus: status, returnTo: "/chef/menu" }), "/chef/application");
   // A stale CHEF role does not open the kitchen for a pending application.

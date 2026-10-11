@@ -1,21 +1,10 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  AlertCircle,
-  Bell,
-  CheckCircle2,
-  Clock3,
-  FileText,
-  Mail,
-  Phone,
-  RefreshCw,
-  Search,
-  ChefHat,
-  XCircle,
-} from "lucide-react";
+import { AlertCircle, Bell, CheckCircle2, ChefHat, ChevronRight, Clock3, FileText, Mail, Phone, RefreshCw, Search, XCircle } from "lucide-react";
 import { switchToCustomerApp } from "@/features/chef/components/chef-account-menu";
 import {
   Card,
@@ -190,7 +179,13 @@ export function ChefStatusView({
             {sections.length ? (
               <div className="cob-list">
                 {sections.map((section) => (
-                  <div key={section} className="cob-list-row" style={{ minHeight: 0 }}>
+                  // Each flagged section opens straight on its own step.
+                  <Link
+                    key={section}
+                    href={`/chef/application?step=${section}`}
+                    className="cob-list-row"
+                    style={{ minHeight: 0, color: "inherit", textDecoration: "none" }}
+                  >
                     <span className="cob-list-label">
                       {CHEF_SECTION_LABELS[section]}
                       {needsUpdate
@@ -202,7 +197,8 @@ export function ChefStatusView({
                         ))}
                     </span>
                     <StatusChip tone="attention">Needs attention</StatusChip>
-                  </div>
+                    <ChevronRight size={18} aria-hidden="true" style={{ flexShrink: 0, color: "#6B6B6B" }} />
+                  </Link>
                 ))}
               </div>
             ) : null}
@@ -284,7 +280,7 @@ export function ChefApplicationStatus({ draftsEnabled }: { draftsEnabled: boolea
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/chef/application", {
+      const response = await sessionFetch("/api/chef/application", {
         credentials: "same-origin",
         cache: "no-store",
         signal: AbortSignal.timeout(15000),
@@ -299,7 +295,7 @@ export function ChefApplicationStatus({ draftsEnabled }: { draftsEnabled: boolea
       if (!next) throw new Error("Your application status could not be verified.");
       let saved: OnboardingState | null = null;
       if (draftsEnabled && next.status !== "APPROVED") {
-        const draft = await fetch("/api/chef/onboarding", {
+        const draft = await sessionFetch("/api/chef/onboarding", {
           credentials: "same-origin",
           cache: "no-store",
           signal: AbortSignal.timeout(15000),

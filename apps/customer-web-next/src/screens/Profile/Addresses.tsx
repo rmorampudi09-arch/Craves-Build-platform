@@ -14,6 +14,7 @@ import {
 import {
   displayAddressLabel,
   isDeliveryReadyAddress,
+  addressText,
   type CustomerAddress,
 } from "@/lib/address-contract";
 import { clearDishDiscoveryCache } from "@/services/api/dishes";
@@ -26,20 +27,6 @@ import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomer
 import { AddressEditorFlow } from "@/components/profile/AddressEditorFlow";
 import { Dialog, secondaryActionClass } from "@/components/ui/overlays/overlay";
 
-function addressLine(address: CustomerAddress): string {
-  return [
-    address.addressLine1,
-    address.addressLine2,
-    address.landmark,
-    address.areaName,
-    address.districtName,
-    address.city,
-    address.state,
-    address.postalCode,
-  ]
-    .filter(Boolean)
-    .join(", ");
-}
 
 function displayPhone(value: string): string {
   const digits = value.replace(/\D/g, "");
@@ -281,7 +268,7 @@ export default function AddressesPage() {
                       {recipientLine(address)}
                     </p>
                     <p className="mt-1.5 text-sm leading-6 text-[#6B6B6B]">
-                      {addressLine(address)}
+                      {addressText(address)}
                     </p>
                     {!ready ? (
                       <p className="mt-3 flex items-start gap-2 rounded-xl bg-[#F1F3F5] p-3 text-xs leading-5 text-[#6B6B6B]">

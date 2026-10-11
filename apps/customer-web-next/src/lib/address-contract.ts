@@ -56,6 +56,19 @@ export type CustomerAddress = {
   updatedAt: string;
 };
 
+/** One line for a saved address. A district that repeats the city ("Hyderabad, Hyderabad") is shown once. */
+export function addressText(address: Pick<CustomerAddress, "addressLine1" | "addressLine2" | "landmark" | "areaName" | "districtName" | "city" | "state" | "postalCode">): string {
+  const seen = new Set<string>();
+  return [address.addressLine1, address.addressLine2, address.landmark, address.areaName, address.districtName, address.city, address.state, address.postalCode]
+    .map((part) => part?.trim())
+    .filter((part): part is string => {
+      if (!part || seen.has(part.toLocaleLowerCase("en-IN"))) return false;
+      seen.add(part.toLocaleLowerCase("en-IN"));
+      return true;
+    })
+    .join(", ");
+}
+
 export type DeliveryReadyAddress = CustomerAddress & {
   recipientName: string;
   areaName: string;

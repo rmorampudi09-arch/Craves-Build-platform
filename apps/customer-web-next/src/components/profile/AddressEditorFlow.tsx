@@ -25,6 +25,7 @@ import {
   type AddressCategory,
   type AddressLabelDraft,
   type CustomerAddress,
+  addressText,
   type CustomerAddressInput,
 } from "@/lib/address-contract";
 import type { ReverseGeocodedAddress } from "@/lib/location-contract";
@@ -128,20 +129,6 @@ function draftFrom(address: CustomerAddress): AddressDraft {
   };
 }
 
-function addressLine(address: CustomerAddress): string {
-  return [
-    address.addressLine1,
-    address.addressLine2,
-    address.landmark,
-    address.areaName,
-    address.districtName,
-    address.city,
-    address.state,
-    address.postalCode,
-  ]
-    .filter(Boolean)
-    .join(", ");
-}
 
 function hasCoordinates(draft: AddressDraft): boolean {
   const latitude = Number(draft.latitude);
@@ -293,7 +280,7 @@ export function AddressEditorFlow({
 
     setDraft(nextDraft);
     setTargetAddressId(initialAddress?.id ?? null);
-    setResolvedAddress(initialAddress ? addressLine(initialAddress) : "");
+    setResolvedAddress(initialAddress ? addressText(initialAddress) : "");
     setMessage(null);
     setFieldErrors({});
     setStep(initialAddress && hasCoordinates(nextDraft) ? "details" : "locate");

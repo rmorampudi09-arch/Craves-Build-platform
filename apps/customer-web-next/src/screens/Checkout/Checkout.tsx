@@ -15,6 +15,7 @@ import {
   displayAddressLabel,
   isDeliveryReadyAddress,
   parseCustomerAddresses,
+  addressText,
   type CustomerAddress,
 } from "@/lib/address-contract";
 import {
@@ -160,19 +161,6 @@ function responseMessage(body: unknown, fallback: string): string {
     : fallback;
 }
 
-function fullAddress(address: CustomerAddress): string {
-  return [
-    address.addressLine1,
-    address.addressLine2,
-    address.landmark,
-    address.areaName,
-    address.city,
-    address.state,
-    address.postalCode,
-  ]
-    .filter(Boolean)
-    .join(", ");
-}
 
 async function fetchAddresses(): Promise<CustomerAddress[]> {
   const response = await sessionFetch("/api/customer/addresses", {
@@ -717,7 +705,7 @@ export default function CheckoutPage() {
                                 ) : null}
                               </span>
                               <span className="mt-1.5 block text-xs leading-5 text-[#6B6B6B]">
-                                {fullAddress(address)}
+                                {addressText(address)}
                               </span>
                             </span>
                           </label>

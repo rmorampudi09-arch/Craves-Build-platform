@@ -226,7 +226,7 @@ function WishlistPage() {
 
                   <div className="min-w-0 flex-1">
                     <Link to="/dish/$id" params={{ id: item.id }}>
-                      <h2 className="truncate font-display text-base font-black transition-colors hover:text-[#F62E18]">
+                      <h2 className="line-clamp-2 font-display text-base font-black transition-colors hover:text-[#F62E18]">
                         {item.name}
                       </h2>
                     </Link>

@@ -1,6 +1,6 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { MapPin, Minus, Plus } from "lucide-react";
+import { Clock3, MapPin, Minus, Plus } from "lucide-react";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/lib/catalog-discovery-policy";
 import { hasHomeReturnState } from "@/lib/home-return-state";
 import { returnToListPath } from "@/lib/return-scroll";
@@ -310,15 +310,17 @@ function DishDetailPage() {
           <div className="min-w-0">
             <DishImageHeader dish={dish} />
 
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-xs font-bold text-[#6B6B6B]">
+            {/* Gaps, not dots, separate the facts, so a wrapped line never starts or ends on a stray "·". */}
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-xs font-bold text-[#6B6B6B]">
               <span className="inline-flex items-center gap-2 text-[#1A1A1A]">
                 <span className="h-2.5 w-2.5 rounded-full bg-[#2E7D32]" aria-hidden="true" />
                 Available today
               </span>
-              <span aria-hidden="true">·</span>
               <span>Prepared after you order</span>
-              <span aria-hidden="true">·</span>
-              <span>{dish.time}</span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                {dish.time}
+              </span>
             </div>
 
             <ChefInfoCard

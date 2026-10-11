@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { CalendarDays } from "lucide-react";
-import type { CustomerSubscription } from "@/lib/subscription-contract";
+import { parsePublicSubscriptionPlans, type CustomerSubscription } from "@/lib/subscription-contract";
 import { MEAL_PLAN_STATUS, planDay } from "@/lib/meal-plan-copy";
 
 const secondaryLink =
@@ -12,6 +12,7 @@ const secondaryLink =
 export function SubscriptionManager() {
   const [items, setItems] = useState<CustomerSubscription[] | null>(null);
   const [error, setError] = useState("");
+  const [planNames, setPlanNames] = useState<Map<string, string>>(() => new Map());
 
   const load = useCallback(async () => {
     setError("");
@@ -20,6 +21,17 @@ export function SubscriptionManager() {
     if (response.status === 401) throw new Error("Your session expired. Sign in again.");
     if (!response.ok) throw new Error("We couldn’t load your meal plans. Please try again.");
     setItems(body as CustomerSubscription[]);
+  }, []);
+
+  // Subscriptions carry only a plan id; the plan list gives the name. A plan no longer offered stays "Meal plan".
+  useEffect(() => {
+    void fetch("/api/subscriptions/plans", { cache: "no-store" })
+      .then(response => (response.ok ? response.json() : null))
+      .then((body: unknown) => {
+        const plans = parsePublicSubscriptionPlans(body);
+        if (plans) setPlanNames(new Map(plans.map(plan => [plan.id, plan.name])));
+      })
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -73,7 +85,7 @@ export function SubscriptionManager() {
                     <span className="inline-flex rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-bold text-[#1A1A1A]">
                       {MEAL_PLAN_STATUS[item.status]}
                     </span>
-                    <h2 className="mt-2 text-lg font-bold">Meal plan</h2>
+                    <h2 className="mt-2 text-lg font-bold">{planNames.get(item.planId) ?? "Meal plan"}</h2>
                     <p className="mt-1 text-sm text-[#6B6B6B]">
                       Starts {planDay(item.startDate)}
                       {item.nextServiceDate ? ` · Next meal ${planDay(item.nextServiceDate)}` : ""}

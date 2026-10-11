@@ -21,6 +21,7 @@ import {
   type AddressCategory,
   type AddressLabelDraft,
   type CustomerAddress,
+  addressText,
   type CustomerAddressInput,
 } from "@/lib/address-contract";
 import { reverseGeocodeCurrentLocation } from "@/services/location/reverseGeocode";
@@ -56,20 +57,6 @@ function localPhone(value: string | null | undefined): string {
     : digits.slice(0, 10);
 }
 
-function fullAddress(address: CustomerAddress): string {
-  return [
-    address.addressLine1,
-    address.addressLine2,
-    address.landmark,
-    address.areaName,
-    address.districtName,
-    address.city,
-    address.state,
-    address.postalCode,
-  ]
-    .filter(Boolean)
-    .join(", ");
-}
 
 export function CheckoutAddressDialog({
   open,
@@ -331,7 +318,7 @@ export function CheckoutAddressDialog({
                         <span className="mt-1 block text-sm font-semibold">
                           {[address.recipientName, localPhone(address.contactPhoneNumber)].filter(Boolean).join(" · ")}
                         </span>
-                        <span className="mt-1 block text-sm leading-5">{fullAddress(address)}</span>
+                        <span className="mt-1 block text-sm leading-5">{addressText(address)}</span>
                         {!ready && <span className="mt-2 block text-xs font-bold">This older address needs missing details before checkout.</span>}
                       </span>
                     </button>

@@ -151,7 +151,7 @@ function categoryOrder(name: string) {
 function FoodIndicator({ type }: { type: FoodType }) {
   const food = FOOD_TYPES.find((option) => option.value === type)!;
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
       <span
         aria-hidden="true"
         className={`flex size-4 items-center justify-center rounded-[4px] border-[1.5px] ${food.border}`}
@@ -185,12 +185,13 @@ function QuickPicks({
   unit: (value: number) => string;
 }) {
   return (
-    <div role="group" aria-label={label} className="chef-chips is-wrap mt-2">
+    // Four equal columns keep every pick on one row under the field at phone width.
+    <div role="group" aria-label={label} className="mt-2 grid grid-cols-4 gap-2">
       {options.map((option) => (
         <button
           key={option}
           type="button"
-          className="chef-chip"
+          className="chef-chip justify-center !px-2"
           aria-pressed={value.trim() === String(option)}
           onClick={() => onPick(String(option))}
         >

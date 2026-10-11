@@ -870,8 +870,14 @@ body .chef-notifications [aria-label="Notification filters"] button { border-col
 @media (max-width: 1023px) {
   .chef-panel-theme:has(.chef-dish-editor) { padding-bottom: 0; }
   .chef-panel-theme:has(.chef-dish-editor) .chef-mobile-nav { display: none; }
-  .chef-panel-theme:has(.chef-dish-editor) .chef-order-banner-wrap { bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
 }
+/* The Save bar ends the page, so the new-order bar rides just above it (stuck or at the end)
+   instead of reserving room below it: both stay tappable at every width. */
+.chef-panel-theme:has(.chef-dish-editor) .chef-panel-content { padding-bottom: 0; }
+.chef-panel-theme:has(.chef-dish-editor) .chef-order-banner-wrap { bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+@media (min-width: 768px) { .chef-panel-theme:has(.chef-dish-editor) .chef-order-banner-wrap { bottom: 6.5rem; } }
+/* While that bar shows, the last field can still scroll clear of it. */
+.chef-panel-theme:has(.chef-order-banner) .chef-dish-actions { margin-top: 5rem; }
 .chef-dish-actions {
   position: sticky;
   bottom: 0;
@@ -886,7 +892,8 @@ body .chef-notifications [aria-label="Notification filters"] button { border-col
   -webkit-backdrop-filter: saturate(1.4) blur(12px);
 }
 @media (min-width: 768px) {
-  .chef-dish-actions { margin: 1.5rem 0 0; border: 1px solid var(--chef-line); border-radius: var(--chef-radius); bottom: 1rem; box-shadow: 0 12px 32px rgba(26, 26, 26, 0.1); }
+  /* -2rem: at the end of the page the bar rests 1rem up, where it also sticks while scrolling. */
+  .chef-dish-actions { margin: 1.5rem 0 -2rem; border: 1px solid var(--chef-line); border-radius: var(--chef-radius); bottom: 1rem; box-shadow: 0 12px 32px rgba(26, 26, 26, 0.1); }
 }
 @media (min-width: 1024px) {
   .chef-dish-actions { max-width: calc(100% - 19.5rem); }

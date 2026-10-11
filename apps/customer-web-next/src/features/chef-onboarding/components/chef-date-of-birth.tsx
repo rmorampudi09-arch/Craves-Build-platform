@@ -178,6 +178,12 @@ export function DateOfBirthPicker({
               <div ref={yearList} role="group" aria-label="Year" className="grid max-h-[19rem] grid-cols-4 gap-2 overflow-y-auto overscroll-contain pr-1">
                 {years.map((year) => {
                   const current = year === (draft?.year ?? shown.year);
+                  // Filled only once chosen; the year being browsed (or the starting point) is outlined.
+                  const tone = draft?.year === year
+                    ? "!bg-[#1A1A1A] !text-white"
+                    : current
+                      ? "!bg-white !text-[#1A1A1A] !shadow-[inset_0_0_0_1.5px_#1A1A1A]"
+                      : "!bg-[#F1F3F5] !text-[#1A1A1A] hover:!bg-[#E6E9EC]";
                   return (
                     <button
                       key={year}
@@ -188,9 +194,7 @@ export function DateOfBirthPicker({
                         setShown({ year, month: draft?.year === year ? draft.month : shown.month });
                         setView("month");
                       }}
-                      className={`${PLAIN} min-h-11 rounded-full text-[0.9375rem] font-semibold tabular-nums transition-[background-color,color] duration-150 ${
-                        current ? "!bg-[#1A1A1A] !text-white" : "!bg-[#F1F3F5] !text-[#1A1A1A] hover:!bg-[#E6E9EC]"
-                      }`}
+                      className={`${PLAIN} min-h-11 rounded-full text-[0.9375rem] font-semibold tabular-nums transition-[background-color,color] duration-150 ${tone}`}
                     >
                       {year}
                     </button>

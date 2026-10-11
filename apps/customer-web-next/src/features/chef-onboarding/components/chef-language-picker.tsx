@@ -7,16 +7,15 @@ import { Sheet } from "@/shared/ui/overlays/overlay";
 import { ONBOARDING_LANGUAGES } from "@/features/chef-onboarding/lib/chef-onboarding-v2-contract";
 
 // "हिन्दी · Hindi": each language in its own script, with its English name for anyone helping.
-const english = (() => {
-  try {
-    return new Intl.DisplayNames(["en"], { type: "language" });
-  } catch {
-    return null;
-  }
-})();
+// A fixed list: browsers' own names miss some (Chromium has none for Bodo, Kashmiri or Santali).
+const ENGLISH_NAMES: Record<string, string> = {
+  as: "Assamese", bn: "Bengali", brx: "Bodo", doi: "Dogri", gu: "Gujarati", hi: "Hindi", kn: "Kannada",
+  ks: "Kashmiri", kok: "Konkani", mai: "Maithili", ml: "Malayalam", mni: "Manipuri", mr: "Marathi",
+  ne: "Nepali", or: "Odia", pa: "Punjabi", sa: "Sanskrit", sat: "Santali", sd: "Sindhi", ta: "Tamil",
+  te: "Telugu", ur: "Urdu",
+};
 function englishName(code: string): string {
-  const name = english?.of(code);
-  return name && name !== code ? name : "";
+  return ENGLISH_NAMES[code] ?? "";
 }
 
 /** The language of the FSSAI video guide: a field that opens a sheet of every language. */

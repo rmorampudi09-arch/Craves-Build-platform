@@ -135,9 +135,14 @@ export function ChefModeDashboard() {
       const details: string[] = [];
       let accessProblem = false;
       const fail = (label: string, failure: unknown) => {
-        if (failure instanceof ChefError && /^CHEF_(ACCESS|ROLE)_REQUIRED$/.test(failure.ref)) accessProblem = true;
         unavailable.push(label);
-        details.push(`${label.charAt(0).toUpperCase()}${label.slice(1)}: ${chefErrorText(failure, "It couldn’t be loaded.")}`);
+        const text = chefErrorText(failure, "It couldn’t be loaded."); // also reports the error to Craves
+        // A stale chef sign-in blocks every section at once; the notice explains it once.
+        if (failure instanceof ChefError && /^CHEF_(ACCESS|ROLE)_REQUIRED$/.test(failure.ref)) {
+          accessProblem = true;
+          return;
+        }
+        details.push(`${label.charAt(0).toUpperCase()}${label.slice(1)}: ${text}`);
       };
       const unreadable = (label: string, ref: string) => fail(label, new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, ref, 200));
       let application: ChefApplication | null = null;
@@ -363,7 +368,17 @@ export function ChefModeDashboard() {
 
         {snapshot.unavailable.length > 0 ? (
           <ChefNotice icon={AlertTriangle} role="status">
-            <p>Some information couldn’t refresh. Everything else below is up to date.</p>
+            {snapshot.accessProblem ? (
+              <>
+                <p className="font-semibold">Sign in again to load your orders</p>
+                <p className="mt-1 text-[#6B6B6B]">
+                  Your chef access needs a fresh sign-in. If this message stays after you sign in, call Craves support:
+                  the problem is on our side, not yours.
+                </p>
+              </>
+            ) : (
+              <p>Some information couldn’t refresh. Everything else below is up to date.</p>
+            )}
             {snapshot.details.map((detail) => <p key={detail} className="mt-1 text-[#6B6B6B]">{detail}</p>)}
             {snapshot.accessProblem ? (
               <button type="button" onClick={signInToChefModeAgain} className="chef-btn is-primary mt-3 w-full sm:w-auto">
@@ -438,14 +453,18 @@ export function ChefModeDashboard() {
                   title={ordersUnknown ? "Orders couldn’t load" : "No orders right now"}
                   text={
                     ordersUnknown
-                      ? "We’ll keep trying every few seconds. You can also check now."
+                      ? snapshot.accessProblem
+                        ? "They show here once you sign in again."
+                        : "We’ll keep trying every few seconds. You can also check now."
                       : "Keep Craves open. Your phone rings and the order shows here as soon as a customer orders."
                   }
                   action={
-                    <button type="button" onClick={() => setRefreshTick((value) => value + 1)} className="chef-btn">
-                      <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                      Check now
-                    </button>
+                    snapshot.accessProblem ? undefined : (
+                      <button type="button" onClick={() => setRefreshTick((value) => value + 1)} className="chef-btn">
+                        <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                        Check now
+                      </button>
+                    )
                   }
                 />
               </ChefSection>

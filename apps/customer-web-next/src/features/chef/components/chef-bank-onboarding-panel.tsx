@@ -43,16 +43,17 @@ const BANK_STATE_TONE: Record<string, ChefTone> = {
   SUPERSEDED: "muted",
 };
 
-export function ChefBankOnboardingPanel() {
+/** `titled={false}` on a page whose own heading already says "Bank account". */
+export function ChefBankOnboardingPanel({ titled = true }: { titled?: boolean }) {
   const scope = useSyncExternalStore(subscribeSession, bankOwnerScope, serverBankScope);
   // The application page also hosts this panel before CHEF role approval.
   // Establish Auth ownership without treating business approval as bank approval.
   useEffect(() => { void loadSession().catch(() => null); }, []);
-  if (!isSessionReady()) return <ChefSection title="Bank account"><p role="status" className="text-[0.9375rem] text-[#6B6B6B]">Sign in to view or update your payout bank account.</p></ChefSection>;
-  return <ChefBankOnboardingContent key={scope} />;
+  if (!isSessionReady()) return <ChefSection title={titled ? "Bank account" : undefined}><p role="status" className="text-[0.9375rem] text-[#6B6B6B]">Sign in to view or update your payout bank account.</p></ChefSection>;
+  return <ChefBankOnboardingContent key={scope} titled={titled} />;
 }
 
-function ChefBankOnboardingContent() {
+function ChefBankOnboardingContent({ titled }: { titled: boolean }) {
   const [bank, setBank] = useState<BankStatus | null>(null);
   const [name, setName] = useState("");
   const [registered, setRegistered] = useState(false);
@@ -121,8 +122,9 @@ function ChefBankOnboardingContent() {
     finally {setBusy(false);}
   }
   const intro = bank?.automaticActivation ? "Craves sends your money to this account." : bank ? "Adding a bank account here isn’t available right now. Your balance shows how money is sent." : availabilityError ? "We couldn’t check your bank account." : "Checking your bank account…";
-  return <ChefSection title="Bank account" note={intro} labelledBy="chef-bank">
+  return <ChefSection title={titled ? "Bank account" : undefined} note={intro} labelledBy={titled ? "chef-bank" : undefined}>
     <div className="grid gap-4">
+      {titled ? null : <p className="chef-section-note">{intro}</p>}
       {message ? <ChefNotice icon={Info} role="status">{message}</ChefNotice> : null}
       {bank?.automaticActivation ? <div className="flex items-start gap-3 rounded-xl bg-[#F1F3F5] p-4">
         <span className="chef-row-icon !bg-white"><Landmark className="h-5 w-5" aria-hidden="true" /></span>

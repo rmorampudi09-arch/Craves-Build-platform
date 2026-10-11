@@ -168,10 +168,8 @@ export function NewCustomerProfileGate() {
           </p>
         ) : null}
       </form>
+      {/* The panel labels itself "Email (optional)". */}
       <div className="mt-5 border-t border-[#E3E6EA] pt-4">
-        <p className="text-sm font-semibold text-[#1A1A1A]">
-          Email <span className="font-normal text-[#6B6B6B]">(optional, for receipts)</span>
-        </p>
         <EmailVerificationPanel compact />
       </div>
     </Sheet>

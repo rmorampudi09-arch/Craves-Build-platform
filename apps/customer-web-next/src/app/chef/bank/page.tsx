@@ -8,8 +8,8 @@ export default function ChefBankPage() {
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader title="Bank account" description="Craves sends your earnings to this account." back={{ href: "/chef/profile", label: "More" }} />
-        <ChefBankOnboardingPanel />
+        <ChefPageHeader title="Bank account" back={{ href: "/chef/profile", label: "More" }} />
+        <ChefBankOnboardingPanel titled={false} />
       </ChefAccessBoundary>
     </main>
   );

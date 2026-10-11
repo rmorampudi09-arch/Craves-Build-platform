@@ -38,6 +38,18 @@
   cursor: text;
   -webkit-tap-highlight-color: transparent;
 }
+/* Theme rules such as `.chef-panel-theme input` paint inputs with !important from Tailwind's
+   components layer, and a layered !important beats every unlayered one, so the paint reset is
+   repeated in the earlier base layer (on chef sign-in the slots were hidden behind a white box). */
+@layer base {
+  .code-slots .code-slots-input.code-slots-input {
+    border: 0 !important;
+    outline: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: transparent !important;
+  }
+}
 .code-slots .code-slots-input::selection { background: transparent; }
 .code-slots .code-slots-input:disabled { cursor: not-allowed; }
 

@@ -5,7 +5,8 @@ import { MotionGlobalConfig } from "framer-motion";
 import { createElement } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ChefOnboardingWorkspace } from "@/features/chef-onboarding/components/chef-onboarding-workspace";
-import { EMPTY_ONBOARDING } from "./chef-onboarding-v2-contract";
+import { LanguagePicker } from "@/features/chef-onboarding/components/chef-language-picker";
+import { EMPTY_ONBOARDING, ONBOARDING_LANGUAGES } from "./chef-onboarding-v2-contract";
 import { setSessionIdentity } from "../../auth/api/cravesAuth";
 const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => navigation, usePathname: () => "/chef/application", useSearchParams: () => new URLSearchParams() }));
@@ -90,6 +91,17 @@ async function resume() {
   fireEvent.click(await screen.findByRole("button", { name: "Continue application" }));
   return screen.findByRole("heading", { name: "FSSAI details" });
 }
+it("names every video language in English under its own script", async () => {
+  render(createElement(LanguagePicker, { labelId: "language-label", value: "en", onChange: () => undefined }));
+  fireEvent.click(screen.getByRole("button"));
+  await screen.findByRole("dialog", { name: "Video language" });
+  for (const [code, label] of ONBOARDING_LANGUAGES) {
+    if (code === "en") continue;
+    const option = screen.getByText(label).closest("button");
+    expect(option?.textContent?.length, `${code} needs an English name`).toBeGreaterThan(label.length);
+  }
+});
+
 it("restores the first incomplete FSSAI section on the next mount", async () => {
   const first = mount();
   await resume();

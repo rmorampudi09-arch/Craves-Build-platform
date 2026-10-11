@@ -252,9 +252,10 @@ function Overlay({
       <AnimatePresence>
         {open ? (
           <RadixDialog.Portal forceMount>
+            {/* 62: above the chef application screen (.cob-modal, 61), which opens sheets of its own. */}
             <RadixDialog.Overlay forceMount asChild>
               <motion.div
-                className="fixed inset-0 z-[60] bg-[#1A1A1A]/48"
+                className="fixed inset-0 z-[62] bg-[#1A1A1A]/48"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1, transition: ENTER }}
                 exit={{ opacity: 0, transition: EXIT }}
@@ -263,8 +264,8 @@ function Overlay({
             <div
               className={
                 bottomSheet
-                  ? "pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center"
-                  : "pointer-events-none fixed inset-0 z-[60] flex items-center justify-center p-4"
+                  ? "pointer-events-none fixed inset-x-0 bottom-0 z-[62] flex justify-center"
+                  : "pointer-events-none fixed inset-0 z-[62] flex items-center justify-center p-4"
               }
             >
               <RadixDialog.Content

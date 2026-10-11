@@ -29,7 +29,9 @@ test("customer and chef OTP flows hide visible captcha and enforce one border", 
   for (const motion of [/bounce = 0\.2/, /settle = 0\.3/, /rise = 8/, /cascade = 20/, /outcome = "accept"/])
     assert.match(codeSlots, motion);
   assert.match(codeSlotStyles, /prefers-reduced-motion: reduce/);
-  // A wrong code turns the borders red; it never fills the slots with a red tint.
+  // Theme rules paint inputs with !important from Tailwind's components layer; only a reset in the
+  // earlier base layer keeps the real input invisible over the slots (chef sign-in showed a white box).
+  assert.match(codeSlotStyles, /@layer base \{\s*\.code-slots \.code-slots-input\.code-slots-input \{[^}]*background: transparent !important/);  // A wrong code turns the borders red; it never fills the slots with a red tint.
   assert.doesNotMatch(codeSlotStyles, /is-error[^}]*background: var\(--cs-danger\)/);
   assert.match(source("../landing-modal/AuthModal.tsx"), /<CodeSlots/);
 

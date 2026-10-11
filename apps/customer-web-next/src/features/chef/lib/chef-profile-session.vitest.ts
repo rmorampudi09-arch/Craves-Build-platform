@@ -715,6 +715,21 @@ describe("Approved Chef first step", () => {
     expect(first.getAttribute("href")).toBe(hasKitchen ? "/chef/menu" : "/chef/kitchen");
     expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/menu")).toBe(hasKitchen);
   });
+  it("explains a stale chef sign-in once, with one way forward", async () => {
+    fetcher.mockImplementation(input => {
+      const url = String(input);
+      if (url === "/api/chef/kitchen") return Promise.resolve(Response.json(kitchenFixture));
+      if (url === "/api/chef/menu") return Promise.resolve(Response.json([]));
+      if (["/api/chef/orders", "/api/chef/earnings"].includes(url)) return Promise.resolve(Response.json({ code: "CHEF_ACCESS_REQUIRED" }, { status: 403 }));
+      return normal(input);
+    });
+    render(createElement(ChefModeDashboard));
+    await screen.findByText("Sign in again to load your orders");
+    expect(screen.getByText(/the problem is on our side, not yours/)).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Sign in again", hidden: true })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Check now", hidden: true })).toBeNull();
+    expect(screen.queryByText(/^Orders:/)).toBeNull();
+  });
   it.each(["unavailable", "invalid"])("does not claim kitchen setup is missing after a %s kitchen read", async state => {
     fetcher.mockImplementation(input => {
       const url = String(input);

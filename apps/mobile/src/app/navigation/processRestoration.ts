@@ -46,7 +46,6 @@ const customerResourceScreenSchema = z.discriminatedUnion('screen', [
   z.object({screen: z.literal('CustomerDishDetail'), menuItemId: resourceIdSchema}).strict(),
   z.object({screen: z.literal('CustomerDishIngredients'), menuItemId: resourceIdSchema}).strict(),
   z.object({screen: z.literal('CustomerKitchenProfile'), kitchenId: resourceIdSchema}).strict(),
-  z.object({screen: z.literal('CustomerKitchenDishes'), kitchenId: resourceIdSchema}).strict(),
   z.object({screen: z.literal('CustomerOrderDetail'), orderId: resourceIdSchema}).strict(),
   z.object({screen: z.literal('CustomerOrderTracking'), orderId: resourceIdSchema}).strict(),
 ]);
@@ -165,7 +164,7 @@ function captureCustomer(chain: NavigationRouteLike[]): ProcessRestorationSnapsh
       : customerTabFallback(tab);
   }
 
-  if (leaf.name === 'CustomerKitchenProfile' || leaf.name === 'CustomerKitchenDishes') {
+  if (leaf.name === 'CustomerKitchenProfile') {
     const kitchenId = safeResourceParam(leaf.params, 'kitchenId');
     return kitchenId
       ? {

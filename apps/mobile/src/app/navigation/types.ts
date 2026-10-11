@@ -54,14 +54,12 @@ export type CustomerFilterSortRouteParams = {
 export type CustomerDishDetailRouteParams = {menuItemId: string};
 export type CustomerDishIngredientsRouteParams = {menuItemId: string};
 export type CustomerKitchenProfileRouteParams = {kitchenId: string};
-export type CustomerKitchenDishesRouteParams = {kitchenId: string};
 export type CustomerOrderRouteParams = {orderId: string};
 
 export type CustomerDishDetailStackParamList = {
   CustomerDishDetail: CustomerDishDetailRouteParams;
   CustomerDishIngredients: CustomerDishIngredientsRouteParams;
   CustomerKitchenProfile: CustomerKitchenProfileRouteParams;
-  CustomerKitchenDishes: CustomerKitchenDishesRouteParams;
 };
 
 export type CustomerOrderDetailStackParamList = {

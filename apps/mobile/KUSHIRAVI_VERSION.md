@@ -19,6 +19,23 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.28.0 - Kitchen page with the full menu, 2026-10-11
+
+- The kitchen page now holds the whole menu (design Option A in
+  `design-review/kitchen-profile/`): an empty white space at the top where chef-uploaded
+  kitchen photos will go, a round initials avatar, name, area and "On Craves since",
+  three facts from the menu (dish count, veg/non-veg mix, prep-time range), the
+  kitchen's line, then sticky category tabs and every dish grouped by category.
+  Tabs follow the scroll and jump to a category when tapped.
+- The top bar has back and a kitchen favorite heart (saved kitchens, same as the Chefs
+  tab); the "in cart" counter is gone. The kitchen name shows in the bar after scrolling.
+- Dish rows are compact: veg/non-veg mark, full name, price, prep time and serves, photo
+  on the right with the heart and Add on it; Add turns into − 1 + in place.
+- Removed: "Active kitchen" pill, Menu button, fact boxes, "What Craves can confirm",
+  the made-up "Available - N" count on these rows, and the separate "View all" page
+  (`CustomerKitchenDishes`). "Your usual" and Favorites now open the kitchen page.
+- Still to do: backend for chefs to upload a profile photo and kitchen photos.
+
 ### Version 1.27.3 - White backgrounds and kitchen-switch popup, 2026-10-11
 
 - Cart, Checkout and Discover home chefs page backgrounds are white instead of grey

@@ -6,11 +6,9 @@ import {
   fontWeight,
   radius,
   spacing,
-  touchTarget,
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
-import {getDisplayAvailabilityCount} from '../../../shared/menuAvailability';
 import type {CartLine} from '../../cart/domain/cartTypes';
 import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
 import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
@@ -30,10 +28,29 @@ export interface CustomerKitchenMenuCardProps {
   onDecrease: (line: CartLine) => void;
 }
 
+const PHOTO_SIZE = 116;
+const CART_CONTROL_HEIGHT = 40;
+const CART_CONTROL_HIT_SLOP = {top: 4, bottom: 4, left: 4, right: 4};
+
 function foodTypeLabel(foodType: CustomerKitchenMenuItemSummary['foodType']): string {
   if (foodType === 'NON_VEG') return 'Non-veg';
   if (foodType === 'EGG') return 'Egg';
   return 'Veg';
+}
+
+/** The square veg / non-veg / egg mark used on Indian food packaging. */
+function FoodTypeMark({foodType}: {foodType: CustomerKitchenMenuItemSummary['foodType']}) {
+  const color =
+    foodType === 'VEG' ? colors.success : foodType === 'EGG' ? colors.warning : colors.error;
+  return (
+    <View accessibilityLabel={foodTypeLabel(foodType)} style={[styles.mark, {borderColor: color}]}>
+      {foodType === 'NON_VEG' ? (
+        <View style={[styles.markTriangle, {borderBottomColor: color}]} />
+      ) : (
+        <View style={[styles.markDot, {backgroundColor: color}]} />
+      )}
+    </View>
+  );
 }
 
 export function CustomerKitchenMenuCard({
@@ -49,268 +66,228 @@ export function CustomerKitchenMenuCard({
   onDecrease,
 }: CustomerKitchenMenuCardProps) {
   const image = getCustomerKitchenMenuImage(item);
-  const availableCount = getDisplayAvailabilityCount(item.id);
-  const typeColor =
-    item.foodType === 'VEG'
-      ? colors.success
-      : item.foodType === 'EGG'
-        ? colors.warning
-        : colors.error;
+  const meta = [
+    item.preparationTimeMinutes ? `${item.preparationTimeMinutes} min` : null,
+    item.servesCount ? `Serves ${item.servesCount}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <View style={styles.card}>
+    <View style={styles.row}>
       <Pressable
         accessibilityLabel={`Open ${item.itemName}`}
         accessibilityRole="button"
         onPress={() => onOpen(item.id)}
-        style={({pressed}) => [styles.imagePressable, pressed && styles.pressed]}>
-        {image ? (
-          <Image
-            accessibilityIgnoresInvertColors
-            accessibilityLabel={`${item.itemName} image`}
-            resizeMode="cover"
-            source={{uri: image.url}}
-            style={styles.image}
-          />
-        ) : (
-          <View style={styles.imageFallback}>
-            <Text numberOfLines={2} style={styles.imageFallbackText}>
-              {item.category}
+        style={({pressed}) => [styles.copy, pressed && styles.pressed]}>
+        <FoodTypeMark foodType={item.foodType} />
+        <Text numberOfLines={2} style={styles.title}>
+          {item.itemName}
+        </Text>
+        <Text numberOfLines={1} style={styles.price}>
+          {formatDishDetailPrice(item.price.amount, item.price.currency)}
+        </Text>
+        {meta ? (
+          <View style={styles.metaRow}>
+            {item.preparationTimeMinutes ? (
+              <Icon name="clock" size={15} color={colors.textSecondary} surface={false} />
+            ) : null}
+            <Text numberOfLines={1} style={styles.metaText}>
+              {meta}
             </Text>
           </View>
-        )}
+        ) : null}
       </Pressable>
 
-      <View style={styles.copy}>
+      <View style={styles.media}>
         <Pressable
-          accessibilityLabel={`Open ${item.itemName}`}
-          accessibilityRole="button"
+          accessible={false}
           onPress={() => onOpen(item.id)}
-          style={({pressed}) => [styles.copyPressable, pressed && styles.pressed]}>
-          <Text numberOfLines={1} style={styles.title}>
-            {item.itemName}
-          </Text>
-          <View style={styles.availabilityRow}>
-            <Icon name="check" size={17} color={colors.success} surface={false} />
-            <Text numberOfLines={1} style={styles.availabilityText}>
-              Available - {availableCount}
-            </Text>
-          </View>
-          <View style={styles.metadataRow}>
-            <Text numberOfLines={1} style={styles.metadataText}>
-              {item.category}
-            </Text>
-            {item.preparationTimeMinutes ? (
-              <>
-                <Text style={styles.metadataDivider}>|</Text>
-                <Icon name="clock" size={17} color={colors.textSecondary} surface={false} />
-                <Text numberOfLines={1} style={styles.metadataText}>
-                  {item.preparationTimeMinutes} min
-                </Text>
-              </>
-            ) : null}
-          </View>
-          <View style={styles.foodTypePill}>
-            <View style={[styles.foodTypeDot, {backgroundColor: typeColor}]} />
-            <Text style={styles.foodTypeText}>{foodTypeLabel(item.foodType)}</Text>
-          </View>
+          style={({pressed}) => [styles.photo, pressed && styles.pressed]}>
+          {image ? (
+            <Image
+              accessibilityIgnoresInvertColors
+              resizeMode="cover"
+              source={{uri: image.url}}
+              style={styles.photoImage}
+            />
+          ) : (
+            <View style={styles.photoFallback}>
+              <Icon name="meal" size={28} color={colors.textSecondary} surface={false} />
+            </View>
+          )}
         </Pressable>
 
-        <View style={styles.purchaseRow}>
-          <Text numberOfLines={1} style={styles.price}>
-            {formatDishDetailPrice(item.price.amount, item.price.currency)}
-          </Text>
-          {cartLine ? (
-            <View style={styles.quantityControl}>
-              <Pressable
-                accessibilityLabel={`Decrease ${item.itemName} quantity`}
-                accessibilityRole="button"
-                accessibilityState={{disabled: busy}}
-                disabled={busy}
-                onPress={() => onDecrease(cartLine)}
-                style={({pressed}) => [
-                  styles.quantityButton,
-                  pressed && !busy && styles.pressedControl,
-                  busy && styles.disabled,
-                ]}>
-                <Text style={styles.quantityButtonText}>−</Text>
-              </Pressable>
-              <Text accessibilityLabel={`${cartLine.quantity} in cart`} style={styles.quantityText}>
-                {cartLine.quantity}
-              </Text>
-              <Pressable
-                accessibilityLabel={`Increase ${item.itemName} quantity`}
-                accessibilityRole="button"
-                accessibilityState={{disabled: busy}}
-                disabled={busy}
-                onPress={() => onIncrease(item)}
-                style={({pressed}) => [
-                  styles.quantityButton,
-                  pressed && !busy && styles.pressedControl,
-                  busy && styles.disabled,
-                ]}>
-                <Text style={styles.quantityButtonText}>+</Text>
-              </Pressable>
-            </View>
-          ) : (
+        <CustomerFavoriteHeartButton
+          favorite={favorite}
+          pending={favoritePending}
+          disabled={favoriteDisabled}
+          inactiveColor={colors.white}
+          itemLabel={item.itemName}
+          onToggle={() => onFavoriteToggle(item.id, favorite)}
+          style={[styles.favoriteButton, favorite && styles.favoriteButtonOn]}
+        />
+
+        {cartLine ? (
+          <View style={[styles.cartControl, styles.stepper]}>
             <Pressable
-              accessibilityLabel={`Add ${item.itemName} to cart`}
+              accessibilityLabel={`Decrease ${item.itemName} quantity`}
               accessibilityRole="button"
-              accessibilityState={{busy, disabled: busy}}
+              accessibilityState={{disabled: busy}}
               disabled={busy}
-              onPress={() => onIncrease(item)}
+              hitSlop={CART_CONTROL_HIT_SLOP}
+              onPress={() => onDecrease(cartLine)}
               style={({pressed}) => [
-                styles.addButton,
-                pressed && !busy && styles.addButtonPressed,
+                styles.stepperButton,
+                pressed && !busy && styles.pressedControl,
                 busy && styles.disabled,
               ]}>
-              <Text style={styles.addButtonText}>{busy ? 'Adding…' : 'Add'}</Text>
+              <Text style={styles.stepperSymbol}>−</Text>
             </Pressable>
-          )}
-        </View>
+            <Text accessibilityLabel={`${cartLine.quantity} in cart`} style={styles.stepperCount}>
+              {cartLine.quantity}
+            </Text>
+            <Pressable
+              accessibilityLabel={`Increase ${item.itemName} quantity`}
+              accessibilityRole="button"
+              accessibilityState={{disabled: busy}}
+              disabled={busy}
+              hitSlop={CART_CONTROL_HIT_SLOP}
+              onPress={() => onIncrease(item)}
+              style={({pressed}) => [
+                styles.stepperButton,
+                pressed && !busy && styles.pressedControl,
+                busy && styles.disabled,
+              ]}>
+              <Text style={styles.stepperSymbol}>+</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            accessibilityLabel={`Add ${item.itemName} to cart`}
+            accessibilityRole="button"
+            accessibilityState={{busy, disabled: busy}}
+            disabled={busy}
+            hitSlop={CART_CONTROL_HIT_SLOP}
+            onPress={() => onIncrease(item)}
+            style={({pressed}) => [
+              styles.cartControl,
+              styles.addButton,
+              pressed && !busy && styles.addButtonPressed,
+              busy && styles.disabled,
+            ]}>
+            <Text style={styles.addButtonText}>{busy ? 'Adding…' : 'Add'}</Text>
+          </Pressable>
+        )}
       </View>
-
-      <CustomerFavoriteHeartButton
-        favorite={favorite}
-        pending={favoritePending}
-        disabled={favoriteDisabled}
-        itemLabel={item.itemName}
-        onToggle={() => onFavoriteToggle(item.id, favorite)}
-        style={styles.favoriteButton}
-      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    height: 176,
+  row: {
     flexDirection: 'row',
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    overflow: 'hidden',
-    ...elevation.card,
-  },
-  imagePressable: {
-    width: '40%',
-    height: '100%',
-    backgroundColor: colors.surfaceMuted,
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  imageFallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
-    padding: spacing.sm,
-  },
-  imageFallbackText: {
-    color: colors.espressoBrown,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-    textAlign: 'center',
+    gap: spacing.md,
+    paddingTop: spacing.md,
+    // The cart control hangs half below the photo.
+    paddingBottom: spacing.md + CART_CONTROL_HEIGHT / 2,
   },
   copy: {
     flex: 1,
     minWidth: 0,
-    paddingTop: spacing.sm,
-    paddingRight: spacing.sm,
-    paddingBottom: spacing.sm,
-    paddingLeft: spacing.md,
+    paddingTop: spacing.xxs,
   },
-  copyPressable: {
-    flex: 1,
-    minHeight: 0,
-    paddingRight: touchTarget.minimum,
+  mark: {
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderRadius: 4,
+  },
+  markDot: {
+    width: 7,
+    height: 7,
+    borderRadius: radius.pill,
+  },
+  markTriangle: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 4,
+    borderRightWidth: 4,
+    borderBottomWidth: 7,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
   },
   title: {
+    marginTop: spacing.xs,
     color: colors.espressoBrown,
-    fontSize: typography.body,
+    fontSize: typography.button,
+    fontWeight: fontWeight.bold,
+    lineHeight: 21,
+  },
+  price: {
+    marginTop: spacing.xxs,
+    color: colors.espressoBrown,
+    fontSize: typography.button,
     fontWeight: fontWeight.bold,
   },
-  availabilityRow: {
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xxs,
-    marginTop: spacing.xxs,
-  },
-  availabilityText: {
-    color: colors.success,
-    fontSize: typography.small,
-    fontWeight: fontWeight.medium,
-  },
-  metadataRow: {
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
     marginTop: spacing.xs,
   },
-  metadataText: {
+  metaText: {
+    flexShrink: 1,
     color: colors.textSecondary,
     fontSize: typography.small,
   },
-  metadataDivider: {
-    color: colors.borderStrong,
-    fontSize: typography.small,
+  media: {
+    width: PHOTO_SIZE,
+    height: PHOTO_SIZE,
   },
-  foodTypePill: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
+  photo: {
+    width: PHOTO_SIZE,
+    height: PHOTO_SIZE,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceMuted,
+  },
+  photoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  photoFallback: {
+    flex: 1,
     alignItems: 'center',
-    gap: spacing.xxs,
-    marginTop: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xxs,
-    borderRadius: radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-    backgroundColor: 'transparent',
-  },
-  foodTypeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: radius.pill,
-  },
-  foodTypeText: {
-    color: colors.textPrimary,
-    fontSize: typography.small,
-    fontWeight: fontWeight.medium,
-  },
-  purchaseRow: {
-    minHeight: touchTarget.minimum,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  price: {
-    flexShrink: 1,
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.extrabold,
+    justifyContent: 'center',
   },
   favoriteButton: {
     position: 'absolute',
-    top: spacing.xs,
-    right: spacing.xs,
-    zIndex: 4,
-    backgroundColor: 'transparent',
+    top: spacing.xxs,
+    right: spacing.xxs,
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(24, 24, 24, 0.32)',
+  },
+  favoriteButtonOn: {
+    backgroundColor: colors.white,
+  },
+  cartControl: {
+    position: 'absolute',
+    alignSelf: 'center',
+    bottom: -CART_CONTROL_HEIGHT / 2,
+    height: CART_CONTROL_HEIGHT,
+    borderRadius: radius.sm,
   },
   addButton: {
-    width: 108,
-    height: touchTarget.minimum,
-    flexShrink: 0,
+    width: 92,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.md,
     backgroundColor: colors.flameRedAccessible,
+    ...elevation.primaryAction,
   },
   addButtonPressed: {
     opacity: 0.88,
@@ -318,38 +295,36 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: colors.white,
-    fontSize: typography.button,
+    fontSize: typography.body,
     fontWeight: fontWeight.bold,
   },
-  quantityControl: {
-    width: 116,
-    minHeight: touchTarget.minimum,
-    flexShrink: 0,
+  stepper: {
+    width: 104,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.flameRed,
-    borderRadius: radius.md,
     backgroundColor: colors.white,
     overflow: 'hidden',
+    ...elevation.card,
   },
-  quantityButton: {
-    width: 38,
-    minHeight: touchTarget.minimum,
+  stepperButton: {
+    width: 34,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
   pressedControl: {
     backgroundColor: colors.iconSurface,
   },
-  quantityButtonText: {
+  stepperSymbol: {
     color: colors.flameRedAccessible,
     fontSize: typography.heading,
     fontWeight: fontWeight.bold,
   },
-  quantityText: {
-    minWidth: 24,
+  stepperCount: {
+    minWidth: 20,
     textAlign: 'center',
     color: colors.espressoBrown,
     fontSize: typography.body,

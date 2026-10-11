@@ -542,7 +542,7 @@ export function CustomerFavoritesScreen() {
             {canOpenKitchen ? (
               <Pressable
                 accessibilityRole="button"
-                onPress={() => navigation.navigate('CustomerKitchenDishes', {kitchenId: card.kitchenId!})}
+                onPress={() => navigation.navigate('CustomerKitchenProfile', {kitchenId: card.kitchenId!})}
                 style={({pressed}) => [styles.primarySmallAction, pressed && styles.pressed]}>
                 <Text style={styles.primarySmallActionText}>View today's menu</Text>
               </Pressable>

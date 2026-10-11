@@ -46,7 +46,6 @@ import {CustomerHomeSearchScreen} from '../../features/discoverySearch/screens/C
 import {CustomerFavoritesRouteScreen} from '../../features/favorites/screens/CustomerFavoritesRouteScreen';
 import {CustomerHomeRouteScreen} from '../../features/home/screens/CustomerHomeRouteScreen';
 import {CustomerShareInvitationScreen} from '../../features/referralsV2/screens/CustomerReferralScreens';
-import {CustomerKitchenDishesScreen} from '../../features/kitchenProfile/screens/CustomerKitchenDishesScreen';
 import {CustomerKitchenProfileScreen} from '../../features/kitchenProfile/screens/CustomerKitchenProfileScreen';
 import {CustomerNotificationsRouteScreen} from '../../features/notifications/screens/CustomerNotificationsRouteScreen';
 import {CustomerPaymentMethodsRouteScreen} from '../../features/payment/screens/CustomerPaymentMethodsRouteScreen';
@@ -398,7 +397,6 @@ function CustomerHomeStackNavigator() {
       <HomeStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
       <HomeStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
       <HomeStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
-      <HomeStack.Screen name="CustomerKitchenDishes" component={CustomerKitchenDishesScreen} />
       <HomeStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
       <HomeStack.Screen name="CustomerOrderReview" component={CustomerOrderReviewScreen} />
       <HomeStack.Screen name="CustomerOrderTracking" component={CustomerOrderTrackingScreen} />
@@ -419,7 +417,6 @@ function CustomerChefsStackNavigator() {
       <ChefsStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
       <ChefsStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
       <ChefsStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
-      <ChefsStack.Screen name="CustomerKitchenDishes" component={CustomerKitchenDishesScreen} />
       <ChefsStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
       <ChefsStack.Screen name="CustomerOrderReview" component={CustomerOrderReviewScreen} />
       <ChefsStack.Screen name="CustomerOrderTracking" component={CustomerOrderTrackingScreen} />
@@ -439,7 +436,6 @@ function CustomerOrdersStackNavigator() {
       <OrdersStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
       <OrdersStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
       <OrdersStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
-      <OrdersStack.Screen name="CustomerKitchenDishes" component={CustomerKitchenDishesScreen} />
       <OrdersStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
       <OrdersStack.Screen name="CustomerOrderReview" component={CustomerOrderReviewScreen} />
       <OrdersStack.Screen name="CustomerOrderTracking" component={CustomerOrderTrackingScreen} />
@@ -479,7 +475,6 @@ function CustomerProfileStackNavigator() {
       <ProfileStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
       <ProfileStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
       <ProfileStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
-      <ProfileStack.Screen name="CustomerKitchenDishes" component={CustomerKitchenDishesScreen} />
       <ProfileStack.Screen name="CustomerCart" component={CustomerCartScreen} />
       <ProfileStack.Screen name="CustomerPaymentMethods" component={CustomerPaymentMethodsRouteScreen} />
     </ProfileStack.Navigator>

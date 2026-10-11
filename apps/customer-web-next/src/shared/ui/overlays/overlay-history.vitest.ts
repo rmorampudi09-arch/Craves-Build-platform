@@ -5,12 +5,34 @@ import { MotionGlobalConfig } from "framer-motion";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Dialog, Sheet, useOverlayHistory } from "@/shared/ui/overlays/overlay";
 
+// jsdom lands a history.back() a task or two later, and later still on a busy CI runner. A pop
+// still on its way when a test ends would eat the next test's Back, so Backs are counted until
+// they land and every test waits for its own.
+let popsOnTheirWay = 0;
 beforeAll(() => {
   MotionGlobalConfig.skipAnimations = true;
+  const back = window.history.back.bind(window.history);
+  window.history.back = () => {
+    popsOnTheirWay += 1;
+    back();
+  };
+  // Capture, added before any overlay's listener, so their stopImmediatePropagation can't hide it.
+  window.addEventListener("popstate", () => {
+    popsOnTheirWay = Math.max(0, popsOnTheirWay - 1);
+  }, true);
 });
-afterEach(cleanup);
 
 const nextTick = () => act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+/** After an overlay closes: its 0 ms pop timer runs, then its Back lands. */
+const settled = async () => {
+  await nextTick();
+  await waitFor(() => expect(popsOnTheirWay).toBe(0));
+};
+
+afterEach(async () => {
+  cleanup();
+  await settled();
+});
 
 function Harness({ kind = "dialog", outside = true, unsaved = false }: { kind?: "dialog" | "sheet"; outside?: boolean; unsaved?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -121,7 +143,7 @@ describe("customer overlays", () => {
     tapOutside();
     expect(state()).toBe("open");
     fireEvent.click(screen.getByRole("button", { name: "Keep plan" }));
-    await nextTick();
+    await settled();
     cleanup();
 
     render(createElement(Harness));

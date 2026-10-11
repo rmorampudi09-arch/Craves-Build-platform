@@ -48,7 +48,12 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
   tracker, the chef photo upload and the accepting switch use optional fields from the
   backend branch `feat/meal-plan-backend` (`C:\msub`, not yet merged or deployed) and
   fall back when absent. Ratings use the existing public kitchen review summary.
-- Android 1.26.0 / code 55, tag `KUSHIRAVI-app-v1.26.0`.
+- Android 1.26.0 / code 55, tag `KUSHIRAVI-app-v1.26.0`. ARM64 release via
+  `scripts\build-kushiravi-release-apk.ps1 -PhoneOnly -SkipNpmCi` (3m 9s, 41 of 907
+  tasks executed). Signer SHA-256 `fac61745…3b9c`, same as installed; v2/v3 verify.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.26.0.apk` (61,622,479 bytes) SHA-256
+  `0FD5CF97F847851110D811AF6AB674801DE489AA1F59EBBCAE9E4F33A89B92E1`; aapt2 badging
+  `com.cravesapp` versionCode 55 versionName 1.26.0. Not yet installed.
 - Checks: TypeScript clean, ESLint zero warnings on changed files, Jest 224 suites /
   1,383 tests, APIM contract check unchanged (3 pre-existing failures), every task
   spec + quality reviewed, final whole-branch review with one fix wave.

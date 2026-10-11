@@ -229,7 +229,11 @@ function captureChef(chain: NavigationRouteLike[]): ProcessRestorationSnapshot |
 
   // Add/Edit Menu and other mutable product forms are deliberately collapsed to
   // their safe owner instead of persisting draft fields or provider/session data.
-  if (outer.name === 'ChefAddMenuItem' || outer.name === 'ChefEditMenuItem') {
+  if (
+    outer.name === 'ChefAddMenuItem' ||
+    outer.name === 'ChefEditMenuItem' ||
+    outer.name === 'ChefMealPlanEditor'
+  ) {
     return chefTabFallback('Menu');
   }
 

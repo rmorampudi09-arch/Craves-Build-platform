@@ -79,6 +79,21 @@ export function useChefMealPlanSchedulesQuery(
   });
 }
 
+/** One plan's schedule with its error, for the editor (a 404 means the draft has no schedule yet). */
+export function useChefMealPlanScheduleQuery(planId: string | undefined) {
+  const identityId = useIdentityId();
+  return useQuery({
+    queryKey:
+      identityId && planId
+        ? createChefMealPlanQueryKey(identityId, 'schedule', planId)
+        : ([...chefMealPlansQueryPrefix, 'signed-out', planId ?? 'new'] as const),
+    queryFn: ({signal}) => chefSubscriptionApi.getSchedule(planId as string, signal),
+    enabled: identityId !== null && planId !== undefined,
+    staleTime: STALE_MS,
+    retry: false,
+  });
+}
+
 /** Optimistic-free: callers keep their own pending value and revert it when the promise rejects. */
 export function useSetAcceptingSubscribers() {
   const identityId = useIdentityId();

@@ -120,6 +120,16 @@ describe('P111 process restoration policy', () => {
     });
   });
 
+  it('collapses the chef meal plan editor to the Menu tab', () => {
+    const root = state([{name: 'ChefMealPlanEditor', params: {planId: 'plan-123'}}]);
+
+    expect(captureProcessRestorationSnapshot(root, 'CHEF')).toEqual({
+      version: 1,
+      role: 'CHEF',
+      target: {kind: 'CHEF_TAB', tab: 'Menu'},
+    });
+  });
+
   it('restores a chef nested order tab through the existing navigator hierarchy', () => {
     const snapshot = {
       version: 1 as const,

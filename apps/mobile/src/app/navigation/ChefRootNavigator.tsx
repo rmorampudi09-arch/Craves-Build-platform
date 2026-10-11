@@ -294,6 +294,7 @@ function ChefProductNavigator() {
         <Stack.Screen
           name="ChefMealPlanEditor"
           component={ChefMealPlanEditorScreen}
+          options={{gestureEnabled: false}}
         />
         <Stack.Screen
           name="ChefEditMenuItem"

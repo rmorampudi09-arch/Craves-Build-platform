@@ -14,6 +14,11 @@ import { captureSessionContext, getSession, invalidateSession, setSessionIdentit
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
 const mocks = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn(), assign: vi.fn(), locationReplace: vi.fn() }));
+const launch = vi.hoisted(() => ({ soon: false }));
+vi.mock("@/features/sign-in/lib/customer-launch", async (original) => ({
+  ...await original<typeof import("@/features/sign-in/lib/customer-launch")>(),
+  get CUSTOMERS_LAUNCHING_SOON() { return launch.soon; },
+}));
 vi.mock("next/navigation", () => ({
   usePathname: vi.fn(() => "/home"),
   useRouter: () => ({ replace: mocks.replace, push: mocks.push }),
@@ -26,6 +31,7 @@ let me: CravesIdentity | null;
 
 beforeEach(() => {
   me = chef;
+  launch.soon = false;
   sessionStorage.clear();
   setSessionIdentity(chef);
   markChefModeVerified(chef.id);
@@ -126,6 +132,15 @@ describe("More hub", () => {
     expect(isChefModeVerified(chef.id)).toBe(false);
     expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/home");
     expect(getSession()?.id).toBe(chef.id);
+  });
+
+  it("keeps the chef in Chef Mode and shows the launching-soon note while customers wait", async () => {
+    launch.soon = true;
+    render(createElement(ChefMorePage));
+    fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
+    expect(isChefModeVerified(chef.id)).toBe(true);
+    expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/sign-in?from=chef");
+    expect(isOpenInChefMode("/sign-in")).toBe(true);
   });
 
   it("signs out of Craves and Chef Mode and leaves no chef page behind", async () => {

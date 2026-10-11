@@ -21,6 +21,8 @@ export type Dish = {
   price: number;
   rating: number;
   time: string;
+  /** Minutes the kitchen needs to cook it, when the kitchen gave one. */
+  prepMinutes?: number;
   veg: boolean;
   foodType?: "VEG" | "NON_VEG" | "EGG";
   tag?: string;
@@ -175,6 +177,7 @@ function mapNearbyItem(item: NearbyMenuItem): Dish {
     currency: item.currency,
     rating: 0,
     time: prepTimeLabel(item.preparationTimeMinutes),
+    prepMinutes: item.preparationTimeMinutes ?? undefined,
     veg: item.foodType === "VEG",
     foodType: item.foodType,
     desc: descriptionLabel(item.description, item.itemName, item.category, chef),
@@ -221,6 +224,7 @@ function mapDetail(item: PublicMenuItemDetail): Dish {
     currency: item.currency,
     rating: 0,
     time: prepTimeLabel(item.preparationTimeMinutes),
+    prepMinutes: item.preparationTimeMinutes ?? undefined,
     veg: item.foodType === "VEG",
     foodType: item.foodType,
     desc: descriptionLabel(item.description, item.itemName, item.category, chef),

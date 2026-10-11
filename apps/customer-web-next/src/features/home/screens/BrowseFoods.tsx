@@ -12,6 +12,7 @@ import {
   useSyncExternalStore,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { preconnect } from "react-dom";
 
 import { BrowseHeader } from "@/features/home/components/BrowseHeader";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
@@ -35,11 +36,19 @@ import {
 import { type NearbyKitchen } from "@/features/home/lib/discovery-contract";
 import {
   clearHomeReturnState,
+  DEFAULT_DISH_FILTERS,
   readHomeReturnState,
   saveHomeReturnState,
+  type HomeDishFilters,
   type HomeDishSort,
   type HomeFoodPreference,
 } from "@/features/home/lib/home-return-state";
+import {
+  matchesDishFilters,
+  matchesFoodPreference,
+  sortDishes,
+  type DishView,
+} from "@/features/home/lib/dish-filters";
 import { rememberReturnRoute } from "@/shared/lib/return-navigation";
 import {
   cartCount,
@@ -102,6 +111,13 @@ function loadHomeSearchOverlay(): Promise<SearchOverlay> {
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
+/** A dish belongs to a craving when its name, category or description mentions one of its words. */
+function matchesCraving(dish: Dish, keywords: readonly string[] | null): boolean {
+  if (!keywords) return true;
+  const searchable = `${dish.name} ${dish.category} ${dish.desc}`.toLocaleLowerCase("en-IN");
+  return keywords.some((keyword) => searchable.includes(keyword));
+}
+
 const HOME_CATEGORY_KEYWORDS: Record<CravingCategory, readonly string[]> = {
   Biryani: ["biryani"],
   Tiffins: ["tiffin", "dosa", "idli", "pongal", "upma", "breakfast"],
@@ -134,6 +150,8 @@ export const routeMeta = {
 };
 
 const CART_AVAILABILITY_DISMISSED_KEY = "craves-cart-availability-dismissed";
+/** Where dish photos were served from last time, so the next visit can connect early. */
+const MEDIA_ORIGIN_KEY = "craves.media-origin";
 
 function isCravingCategory(value: string | null): value is CravingCategory {
   return value !== null && CRAVING_CATEGORIES.has(value as CravingCategory);
@@ -180,11 +198,13 @@ function BrowseFoodsPage() {
   const [homeCategory, setHomeCategory] = useState<CravingCategory | null>(null);
   const [dishSort, setDishSort] = useState<HomeDishSort>("recommended");
   const [foodPreference, setFoodPreference] = useState<HomeFoodPreference>("all");
-  // The rail, Veg switch and sort chips answer a tap in the next frame; the dish list
+  const [dishFilters, setDishFilters] = useState<HomeDishFilters>(DEFAULT_DISH_FILTERS);
+  // The rail, Veg switch and filter chips answer a tap in the next frame; the dish list
   // re-renders from these right after, so a slow phone never delays the pressed state.
   const listCategory = useDeferredValue(homeCategory);
   const listSort = useDeferredValue(dishSort);
   const listFoodPreference = useDeferredValue(foodPreference);
+  const listDishFilters = useDeferredValue(dishFilters);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [HomeSearchOverlay, setHomeSearchOverlay] = useState<SearchOverlay | null>(null);
@@ -410,7 +430,8 @@ function BrowseFoodsPage() {
       isCravingCategory(restored.homeCategory) ? restored.homeCategory : null,
     );
     setDishSort(restored.dishSort);
-    setFoodPreference(restored.foodPreference === "veg" ? "veg" : "all");
+    setFoodPreference(restored.foodPreference);
+    setDishFilters(restored.dishFilters);
     // Back from a dish or kitchen opened in search lands on search's history entry and shows the
     // same results; any other way back to Home (tab, logo) starts with search closed.
     const backToSearch = restored.searchOpen && returnedToOverlayEntry();
@@ -428,8 +449,9 @@ function BrowseFoodsPage() {
       homeCategory,
       dishSort,
       foodPreference,
+      dishFilters,
     });
-  }, [dishSort, foodPreference, homeCategory, searchOpen, searchTerm]);
+  }, [dishFilters, dishSort, foodPreference, homeCategory, searchOpen, searchTerm]);
 
   // The search overlay is its own chunk: fetch it once the page is idle, so the first tap
   // on search opens it at once instead of waiting for the download.
@@ -477,7 +499,7 @@ function BrowseFoodsPage() {
     } else {
       window.scrollTo({ top: target, behavior: "smooth" });
     }
-  }, [listCategory, listSort, listFoodPreference]);
+  }, [listCategory, listSort, listFoodPreference, listDishFilters]);
 
   const changeFoodPreference = useCallback((next: HomeFoodPreference) => {
     setFoodPreference(next);
@@ -493,7 +515,8 @@ function BrowseFoodsPage() {
     if (
       href?.startsWith("/dish/") ||
       href?.startsWith("/kitchen/") ||
-      href?.startsWith("/chef/")
+      href?.startsWith("/chef/") ||
+      href === "/chefs"
     ) {
       rememberHomeView();
     }
@@ -772,6 +795,26 @@ function BrowseFoodsPage() {
     return result;
   }, [nearbyDishes]);
 
+  // Dish photos come from one storage host: open that connection while discovery is loading,
+  // instead of after the first card asks for its photo.
+  useEffect(() => {
+    try {
+      const origin = window.localStorage.getItem(MEDIA_ORIGIN_KEY);
+      if (origin?.startsWith("https://") && new URL(origin).origin === origin) preconnect(origin);
+    } catch {
+      // No hint: the first photo opens the connection itself.
+    }
+  }, []);
+  useEffect(() => {
+    const photo = nearbyDishes.find((dish) => !dish.imageIsPlaceholder)?.img;
+    if (!photo?.startsWith("https://")) return;
+    try {
+      window.localStorage.setItem(MEDIA_ORIGIN_KEY, new URL(photo).origin);
+    } catch {
+      // Storage blocked: nothing to remember.
+    }
+  }, [nearbyDishes]);
+
   const kitchenDishImages = useMemo<Record<string, string[]>>(() => {
     const grouped: Record<string, string[]> = {};
     for (const dish of nearbyDishes) {
@@ -788,27 +831,40 @@ function BrowseFoodsPage() {
 
   const filteredDishes = useMemo(() => {
     const homeKeywords = listCategory ? HOME_CATEGORY_KEYWORDS[listCategory] : null;
+    return sortDishes(
+      nearbyDishes.filter(
+        (dish) =>
+          matchesCraving(dish, homeKeywords) &&
+          matchesFoodPreference(dish, listFoodPreference) &&
+          matchesDishFilters(dish, listDishFilters),
+      ),
+      listSort,
+    );
+  }, [listCategory, listDishFilters, listFoodPreference, listSort, nearbyDishes]);
 
-    const matchingDishes = nearbyDishes.filter((dish) => {
-      const searchable = `${dish.name} ${dish.category} ${dish.desc}`.toLocaleLowerCase("en-IN");
-      const categoryMatches =
-        !homeKeywords || homeKeywords.some((keyword) => searchable.includes(keyword));
-      const foodType = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
-      const foodTypeMatches = listFoodPreference !== "veg" || foodType === "VEG";
-      return categoryMatches && foodTypeMatches;
-    });
-
-    if (listSort === "rating") {
-      return [...matchingDishes].sort((left, right) => right.rating - left.rating);
-    }
-    if (listSort === "price-low-high") {
-      return [...matchingDishes].sort((left, right) => left.price - right.price);
-    }
-    if (listSort === "price-high-low") {
-      return [...matchingDishes].sort((left, right) => right.price - left.price);
-    }
-    return matchingDishes;
-  }, [listCategory, listFoodPreference, listSort, nearbyDishes]);
+  // The filter sheet's "Show N dishes": the same rules on the current craving, for a draft view.
+  const countDishes = useCallback(
+    (view: DishView) => {
+      const keywords = homeCategory ? HOME_CATEGORY_KEYWORDS[homeCategory] : null;
+      return nearbyDishes.filter(
+        (dish) =>
+          matchesCraving(dish, keywords) &&
+          matchesFoodPreference(dish, view.foodPreference) &&
+          matchesDishFilters(dish, view.filters),
+      ).length;
+    },
+    [homeCategory, nearbyDishes],
+  );
+  const dishView = useMemo<DishView>(
+    () => ({ sort: dishSort, filters: dishFilters, foodPreference }),
+    [dishFilters, dishSort, foodPreference],
+  );
+  const changeDishView = useCallback((next: DishView) => {
+    setDishSort(next.sort);
+    setDishFilters(next.filters);
+    setFoodPreference(next.foodPreference);
+    revealDishes();
+  }, [revealDishes]);
 
   const locationLabel = address
     ? Array.from(
@@ -832,12 +888,9 @@ function BrowseFoodsPage() {
 
   const searchDishes = useMemo(
     () =>
-      foodPreference === "veg"
-        ? nearbyDishes.filter((dish) => {
-            const foodType = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
-            return foodType === "VEG";
-          })
-        : nearbyDishes,
+      foodPreference === "all"
+        ? nearbyDishes
+        : nearbyDishes.filter((dish) => matchesFoodPreference(dish, foodPreference)),
     [foodPreference, nearbyDishes],
   );
 
@@ -1000,6 +1053,7 @@ function BrowseFoodsPage() {
           onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}
           dishImagesByKitchen={kitchenDishImages}
+          limit={6}
         />
 
         <DishesGrid
@@ -1008,17 +1062,15 @@ function BrowseFoodsPage() {
           searchTerm=""
           state={discoveryState}
           message={catalogMessage}
-          sort={dishSort}
-          foodPreference={foodPreference}
-          onSortChange={(nextSort) => {
-            if (nextSort === dishSort) return;
-            setDishSort(nextSort);
-            revealDishes();
-          }}
-          onFoodPreferenceChange={changeFoodPreference}
+          view={dishView}
+          onViewChange={changeDishView}
+          countFor={countDishes}
           onRemoveFilters={() => {
             setHomeCategory(null);
             setDishSort("recommended");
+            setDishFilters(DEFAULT_DISH_FILTERS);
+            // Veg is the header switch's choice and stays; Egg or Non-veg came from the filters.
+            setFoodPreference((current) => (current === "veg" ? current : "all"));
             revealDishes();
             // The button goes away with the filters: keep keyboard focus on the list it changed.
             window.requestAnimationFrame(() =>

@@ -11,169 +11,13 @@ import {
 import { DishCard } from "@/features/home/components/DishCard";
 import skeletonStyles from "@/shared/components/loading/CustomerPageSkeleton.module.css";
 import type { DishCategory } from "@/features/home/lib/dishCategories";
-import type {
-  HomeDishSort,
-  HomeFoodPreference,
-} from "@/features/home/lib/home-return-state";
+import { DishFilterBar } from "@/features/home/components/DishFilterBar";
+import { activeFilterCount, type DishView } from "@/features/home/lib/dish-filters";
 import { AnimateCount } from "@/shared/ui/AnimateCount";
 import { listItem } from "@/shared/lib/motion";
 import type { Dish } from "@/features/dish/api/dishes";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
-
-const SORT_OPTIONS: readonly { value: HomeDishSort; label: string }[] = [
-  { value: "recommended", label: "Recommended" },
-  { value: "rating", label: "Rating" },
-  { value: "price-low-high", label: "Cost: Low to High" },
-  { value: "price-high-low", label: "Cost: High to Low" },
-];
-
-type ThumbBox = { x: number; y: number; width: number; height: number; radius: number };
-
-// Every thumb part moves on the same curve and clock, so the pill keeps its shape mid-slide.
-const THUMB_PART =
-  "pointer-events-none absolute left-0 top-0 bg-[#1A1A1A] transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none";
-
-/**
- * Sort is one choice, so one ink thumb slides to it (the iOS segmented-control move). It is
- * drawn as two round caps and a 1px bar scaled between them, so position and width animate
- * as transforms on the compositor: the slide stays smooth while the new list is rendering.
- * Labels use difference blending: dark on the chips, light on the thumb, inverting exactly
- * where the thumb passes. Chip boxes are cached by a ResizeObserver (read after layout), so a
- * tap never forces a layout of the page.
- */
-function SortChoices({
-  sort,
-  onSortChange,
-}: {
-  sort: HomeDishSort;
-  onSortChange: (sort: HomeDishSort) => void;
-}) {
-  const rowRef = useRef<HTMLDivElement>(null);
-  const [boxes, setBoxes] = useState<Partial<Record<HomeDishSort, ThumbBox>>>({});
-  const [placed, setPlaced] = useState(false);
-
-  useEffect(() => {
-    const row = rowRef.current;
-    if (!row) return;
-    let frame = 0;
-    const observer = new ResizeObserver(() => {
-      const next: Partial<Record<HomeDishSort, ThumbBox>> = {};
-      row.querySelectorAll<HTMLElement>("button[data-sort]").forEach((button) => {
-        next[button.dataset.sort as HomeDishSort] = {
-          x: button.offsetLeft,
-          y: button.offsetTop,
-          width: button.offsetWidth,
-          height: button.offsetHeight,
-          // rounded-full computes to an enormous radius: a pill's is half its height.
-          radius: Math.min(
-            parseFloat(getComputedStyle(button).borderTopLeftRadius) || 0,
-            button.offsetHeight / 2,
-          ),
-        };
-      });
-      setBoxes(next);
-      // The first placement jumps; only later changes slide.
-      if (!frame) frame = window.requestAnimationFrame(() => setPlaced(true));
-    });
-    observer.observe(row);
-    row.querySelectorAll("button[data-sort]").forEach((button) => observer.observe(button));
-    return () => {
-      observer.disconnect();
-      window.cancelAnimationFrame(frame);
-    };
-  }, []);
-
-  useEffect(() => {
-    // Keep the chosen chip fully visible in the swipeable phone row (the row only, never the
-    // page). Read in the next frame, when the browser lays the page out anyway.
-    const frame = window.requestAnimationFrame(() => {
-      const row = rowRef.current;
-      const button = row?.querySelector<HTMLElement>('button[aria-pressed="true"]');
-      if (!row || !button || row.scrollWidth <= row.clientWidth) return;
-      const gutter = 16;
-      const start = button.offsetLeft - gutter;
-      const end = button.offsetLeft + button.offsetWidth + gutter - row.clientWidth;
-      const left = row.scrollLeft > start ? start : row.scrollLeft < end ? end : null;
-      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-      if (left !== null) row.scrollTo({ left, behavior: placed && !reduce ? "smooth" : "auto" });
-    });
-    return () => window.cancelAnimationFrame(frame);
-    // Only a new choice moves the row; placement just switches the slide on.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort]);
-
-  const thumb = boxes[sort] ?? null;
-  const cap = thumb ? thumb.radius * 2 : 0;
-  return (
-    <div
-      ref={rowRef}
-      className="relative isolate -mx-4 flex w-[calc(100%+2rem)] items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:w-auto md:flex-wrap md:overflow-visible md:rounded-[1.15rem] md:border md:border-[#E8EAED] md:bg-white md:p-1.5 md:shadow-[0_7px_22px_rgba(26,26,26,0.055)] [&::-webkit-scrollbar]:hidden"
-      role="group"
-      aria-label="Sort dishes"
-    >
-      {thumb ? (
-        // Out of the flex flow (no gap before the first chip); the parts are placed from its corner.
-        <span
-          aria-hidden="true"
-          data-sort-thumb
-          className={`pointer-events-none absolute left-0 top-0 ${placed ? "" : "[&>span]:!transition-none"}`}
-        >
-          <span
-            className={THUMB_PART}
-            style={{
-              width: cap,
-              height: thumb.height,
-              borderRadius: thumb.radius,
-              transform: `translate(${thumb.x}px, ${thumb.y}px)`,
-            }}
-          />
-          <span
-            className={`${THUMB_PART} origin-top-left`}
-            style={{
-              width: 1,
-              height: thumb.height,
-              transform: `translate(${thumb.x + thumb.radius}px, ${thumb.y}px) scaleX(${Math.max(0, thumb.width - cap)})`,
-            }}
-          />
-          <span
-            className={THUMB_PART}
-            style={{
-              width: cap,
-              height: thumb.height,
-              borderRadius: thumb.radius,
-              transform: `translate(${thumb.x + thumb.width - cap}px, ${thumb.y}px)`,
-            }}
-          />
-        </span>
-      ) : null}
-      <span className="hidden shrink-0 px-2.5 text-sm font-bold text-[#6B6B6B] md:inline">
-        Sort by
-      </span>
-      {SORT_OPTIONS.map((option) => {
-        const selected = sort === option.value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            data-sort={option.value}
-            onClick={() => onSortChange(option.value)}
-            className={[
-              "min-h-11 shrink-0 rounded-full !border !border-transparent !bg-[#F1F3F5] px-4 text-sm font-black !shadow-none md:min-h-12 md:rounded-[0.9rem] md:!bg-transparent",
-              // A transform would lift the chosen chip above the thumb, so only the others press in.
-              selected
-                ? ""
-                : "transition-[scale] duration-(--dur-micro) active:scale-[0.96] md:hover:!bg-[#F1F3F5]",
-            ].join(" ")}
-            aria-pressed={selected}
-          >
-            <span className="relative text-white mix-blend-difference">{option.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 const INITIAL_DISH_COUNT = 12;
 const DISH_BATCH_SIZE = 8;
@@ -184,10 +28,11 @@ interface DishesGridProps {
   searchTerm: string;
   state: DiscoveryState;
   message: string;
-  sort: HomeDishSort;
-  foodPreference: HomeFoodPreference;
-  onSortChange: (sort: HomeDishSort) => void;
-  onFoodPreferenceChange: (preference: HomeFoodPreference) => void;
+  /** Sort, filters and food type, changed together by the filter bar. */
+  view: DishView;
+  onViewChange: (next: DishView) => void;
+  /** How many loaded dishes a view would show (the filter sheet's "Show N dishes"). */
+  countFor: (view: DishView) => number;
   onRemoveFilters: () => void;
   onRetry: () => void;
   onManageAddress: () => void;
@@ -219,10 +64,9 @@ export function DishesGrid({
   searchTerm,
   state,
   message,
-  sort,
-  foodPreference,
-  onSortChange,
-  onFoodPreferenceChange,
+  view,
+  onViewChange,
+  countFor,
   onRemoveFilters,
   onRetry,
   onManageAddress,
@@ -293,11 +137,17 @@ export function DishesGrid({
     state,
     visibleCount,
   ]);
-  const hasFilters = selectedCategory !== "All" || sort !== "recommended";
+  const { sort, foodPreference } = view;
+  // Veg lives in the header switch; every other narrowing shows in the filter bar.
+  const narrowing =
+    activeFilterCount({ filters: view.filters, foodPreference: foodPreference === "veg" ? "all" : foodPreference }) > 0;
+  const hasFilters = selectedCategory !== "All" || sort !== "recommended" || narrowing;
   const heading = selectedCategory === "All" ? "Dishes near you" : selectedCategory;
-  const countLabel = `${dishes.length} ${dishes.length === 1 ? "dish" : "dishes"}`;
-  const emptyMessage =
-    foodPreference === "veg"
+  const more = hasMoreRemote ? "+" : "";
+  const countLabel = `${dishes.length}${more} ${dishes.length === 1 && !more ? "dish" : "dishes"}`;
+  const emptyMessage = narrowing
+    ? "No dishes match these filters. Clear a filter to see more."
+    : foodPreference === "veg"
       ? normalizedSearch
         ? `No vegetarian dishes match “${normalizedSearch}”. Turn off the Veg filter to see all available dishes.`
         : "No vegetarian dishes are available for this view. Turn off the Veg filter to see all available dishes."
@@ -334,7 +184,7 @@ export function DishesGrid({
               <AnimateCount className="min-w-[1ch]" aria-hidden="true">
                 {dishes.length}
               </AnimateCount>
-              <span aria-hidden="true">{dishes.length === 1 ? "dish" : "dishes"}</span>
+              <span aria-hidden="true">{more}{dishes.length === 1 && !more ? "dish" : "dishes"}</span>
               <span className="sr-only" aria-live="polite">
                 {countLabel}
               </span>
@@ -355,13 +205,9 @@ export function DishesGrid({
       </div>
 
       {state === "ready" ? (
-        <div
-          className="mb-5 flex flex-wrap items-center gap-2.5 md:mb-6"
-          role="group"
-          aria-label="Dish filters"
-        >
-          {/* Sort applies on tap: a swipeable chip row on phones, a segmented control on md+. */}
-          <SortChoices sort={sort} onSortChange={onSortChange} />
+        <div className="mb-5 md:mb-6">
+          {/* Filters, Sort and one-tap chips: a swipeable row on phones, wrapping on md+. */}
+          <DishFilterBar view={view} onViewChange={onViewChange} countFor={countFor} moreToLoad={hasMoreRemote} />
         </div>
       ) : null}
 
@@ -438,10 +284,19 @@ export function DishesGrid({
           {foodPreference === "veg" ? (
             <button
               type="button"
-              onClick={() => onFoodPreferenceChange("all")}
+              onClick={() => onViewChange({ ...view, foodPreference: "all" })}
               className="mt-5 min-h-10 rounded-full !bg-[#F1F3F5] px-4 text-xs font-black !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,translate,scale] duration-200 hover:-translate-y-0.5 active:scale-[0.96] hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
             >
               Turn off Veg filter
+            </button>
+          ) : narrowing ? (
+            <button
+              type="button"
+              onClick={onRemoveFilters}
+              className="mt-5 inline-flex min-h-10 items-center gap-1.5 rounded-full !border !border-[#E5E7EB] !bg-white px-4 text-xs font-black !text-[#1A1A1A] !shadow-none"
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              Clear filters
             </button>
           ) : !normalizedSearch ? (
             <button
@@ -488,13 +343,19 @@ export function DishesGrid({
             )}
           </div>
           {hasMoreDishes || hasMoreRemote || loadingMoreRemote ? (
+            // The next row arrives as shimmer cards in the grid's own shape, not a spinner: one
+            // card per column, so the row is exactly as wide as the grid at every size.
             <div
               ref={loadMoreRef}
-              className="flex min-h-24 items-center justify-center"
+              className="mt-4 grid grid-cols-1 gap-4 sm:mt-5 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4"
               role="status"
               aria-label="Loading more nearby dishes"
             >
-              <span className="h-7 w-7 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-[#F62E18]" />
+              {["", "max-sm:hidden", "max-lg:hidden", "max-xl:hidden"].map((hide, index) => (
+                <div key={index} className={hide}>
+                  <DishSkeleton />
+                </div>
+              ))}
               <span className="sr-only">Loading more dishes</span>
             </div>
           ) : null}

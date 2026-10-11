@@ -157,7 +157,8 @@ test("category, Veg and sort changes reveal dishes calmly instead of a long chro
   assert.match(home, /data-craves-category-rail/);
   // Rail chips are aria-pressed toggles: the selected one turns off on a second tap.
   assert.match(home, /setHomeCategory\(\(current\) => \(current === nextCategory \? null : nextCategory\)\);[\s\S]{0,60}revealDishes\(\);/);
-  assert.match(home, /setDishSort\(nextSort\);\s*revealDishes\(\);/);
+  // Sort, filters and food type change together and move the page once.
+  assert.match(home, /setFoodPreference\(next\.foodPreference\);\s*revealDishes\(\);/);
   assert.match(home, /revealDishes\(true\)/);
   assert.doesNotMatch(home, /scrollIntoView/);
 
@@ -169,19 +170,20 @@ test("category, Veg and sort changes reveal dishes calmly instead of a long chro
   assert.match(grid, /Clear filters/);
   // The scroll waits for the new list: one layout effect runs the reveal after the deferred render.
   assert.match(home, /const listCategory = useDeferredValue\(homeCategory\)/);
-  assert.match(home, /\}, \[listCategory, listSort, listFoodPreference\]\);/);
+  assert.match(home, /\}, \[listCategory, listSort, listFoodPreference, listDishFilters\]\);/);
   assert.match(grid, /listItem\(index\)/);
   assert.match(grid, /min-h-svh/);
   assert.match(grid, /paging\.key === dishViewKey \? paging\.count : INITIAL_DISH_COUNT/);
   assert.doesNotMatch(grid, /setVisibleCount|scrollIntoView|@radix-ui\/react-popover/);
-  assert.match(grid, /aria-label="Sort dishes"/);
-  // One ink thumb slides to the chosen sort; labels invert where it passes (difference blend).
-  assert.match(grid, /data-sort-thumb/);
-  // Caps and a scaled bar: the slide is transform-only, so it runs on the compositor.
-  assert.match(grid, /const THUMB_PART =\s*"pointer-events-none absolute left-0 top-0 bg-\[#1A1A1A\] transition-transform/);
-  assert.match(grid, /scaleX\(\$\{Math\.max\(0, thumb\.width - cap\)\}\)/);
-  assert.match(grid, /text-white mix-blend-difference/);
-  assert.match(grid, /relative isolate/);
+  // Filter bar (Swiggy / Zomato pattern): Filters with a count, Sort, one-tap chips that show
+  // an ✕ while on, and a sheet whose button says how many dishes it will show.
+  const bar = source("../components/DishFilterBar.tsx");
+  assert.match(grid, /<DishFilterBar view=\{view\} onViewChange=\{onViewChange\} countFor=\{countFor\}/);
+  assert.match(bar, /role="group"\s*aria-label="Dish filters"/);
+  assert.match(bar, /title="Filter and sort"/);
+  assert.match(bar, /aria-pressed=\{on\}/);
+  assert.match(bar, /`Show \$\{matches\}/);
+  assert.doesNotMatch(bar, /Rating/);
 });
 
 test("dish bottom bar confirms an add in place and keeps the action bar mounted", () => {

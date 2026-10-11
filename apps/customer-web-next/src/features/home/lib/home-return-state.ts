@@ -1,8 +1,17 @@
 export type HomeDishSort =
   | "recommended"
-  | "rating"
   | "price-low-high"
-  | "price-high-low";
+  | "price-high-low"
+  | "quickest";
+
+/** Narrowing filters on Home's dish list; "any" means off. */
+export type HomeDishFilters = {
+  price: "any" | "under-150" | "150-300" | "over-300";
+  ready: "any" | "30" | "45";
+  distance: "any" | "3" | "5";
+};
+
+export const DEFAULT_DISH_FILTERS: HomeDishFilters = { price: "any", ready: "any", distance: "any" };
 
 export type HomeFoodPreference = "all" | "veg" | "non-veg" | "egg";
 
@@ -13,6 +22,7 @@ export type HomeReturnState = {
   homeCategory: string | null;
   dishSort: HomeDishSort;
   foodPreference: HomeFoodPreference;
+  dishFilters: HomeDishFilters;
   savedAt: number;
 };
 
@@ -20,10 +30,25 @@ const HOME_RETURN_STATE_KEY = "craves:customer-home-return-state";
 const HOME_RETURN_STATE_TTL_MS = 30 * 60 * 1000;
 const HOME_DISH_SORTS = new Set<HomeDishSort>([
   "recommended",
-  "rating",
   "price-low-high",
   "price-high-low",
+  "quickest",
 ]);
+const FILTER_VALUES: { [Key in keyof HomeDishFilters]: readonly HomeDishFilters[Key][] } = {
+  price: ["any", "under-150", "150-300", "over-300"],
+  ready: ["any", "30", "45"],
+  distance: ["any", "3", "5"],
+};
+
+/** Anything unknown (an older saved state, a hand-edited one) falls back to "any". */
+function parseDishFilters(value: unknown): HomeDishFilters {
+  const raw = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  const pick = <Key extends keyof HomeDishFilters>(key: Key): HomeDishFilters[Key] =>
+    (FILTER_VALUES[key] as readonly unknown[]).includes(raw[key])
+      ? (raw[key] as HomeDishFilters[Key])
+      : DEFAULT_DISH_FILTERS[key];
+  return { price: pick("price"), ready: pick("ready"), distance: pick("distance") };
+}
 const HOME_FOOD_PREFERENCES = new Set<HomeFoodPreference>([
   "all",
   "veg",
@@ -90,6 +115,7 @@ export function readHomeReturnState(): HomeReturnState | null {
       foodPreference: isHomeFoodPreference(parsed.foodPreference)
         ? parsed.foodPreference
         : "all",
+      dishFilters: parseDishFilters(parsed.dishFilters),
       savedAt: parsed.savedAt,
     };
   } catch {

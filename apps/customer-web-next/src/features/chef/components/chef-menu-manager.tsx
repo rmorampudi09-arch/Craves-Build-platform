@@ -22,6 +22,7 @@ import {
   type MenuItemStatus,
   type SpiceLevel,
 } from "@/features/chef/lib/chef-menu-contract";
+import { shrinkDishPhoto } from "@/features/chef/lib/shrink-photo";
 
 type FormState = {
   id: string | null;
@@ -302,7 +303,8 @@ export function ChefMenuManager() {
       const pending = [...imageFiles];
       for (const file of pending) {
         const data = new FormData();
-        data.set("file", file);
+        // Customers download photos at upload size: send a 1600 px copy, not the phone original.
+        data.set("file", await shrinkDishPhoto(file));
         data.set("primary", "false");
         const upload = await fetch(`/api/chef/menu/${saved.id}/images`, {
           method: "POST",

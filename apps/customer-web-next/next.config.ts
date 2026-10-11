@@ -42,8 +42,16 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Category photos, the Home banner, chef and brand images: stable names, so a day fresh
+        // and a week served stale while the browser re-checks. They used to match the page rule
+        // below and were downloaded again on every visit.
+        source: "/:asset((?:home|chef|brand)/.+\\.(?:webp|avif|png|jpe?g|svg))",
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
+      },
+      {
+        // Page routes only: a path with a dot is a static file (see the rule above).
         source:
-          "/:path(chef|chefs|home|discover|cart|checkout|orders|payment|profile|subscriptions|tracking|wishlist|sign-in|contact|products-pricing|privacy|terms|refunds-cancellations|security|addresses|confirmation|kitchen|kitchens|dish|support)(.*)",
+          "/:path(chef|chefs|home|discover|cart|checkout|orders|payment|profile|subscriptions|tracking|wishlist|sign-in|contact|products-pricing|privacy|terms|refunds-cancellations|security|addresses|confirmation|kitchen|kitchens|dish|support)([^.]*)",
         headers: [
           {
             key: "Cache-Control",

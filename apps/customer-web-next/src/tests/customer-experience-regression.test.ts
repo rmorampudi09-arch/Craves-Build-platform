@@ -32,8 +32,18 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(chefs, /discoverDishes\(/);
   assert.match(chefs, /dishImagesByKitchen=\{dishImagesByKitchen\}/);
   assert.match(kitchens, /KitchenDishPreview/);
-  // Kitchen photos never autoplay (WCAG 2.2.2); they change on swipe only.
-  assert.doesNotMatch(kitchens, /window\.setTimeout/);
+  // Kitchen photos slide on by themselves (the next one follows from the right) only with a
+  // Pause photos control (WCAG 2.2.2), never for reduced motion, only while the card is on
+  // screen, held on hover or focus; a swipe hands the card to the customer.
+  assert.match(kitchens, /Pause photos/);
+  assert.match(kitchens, /useReducedMotion\(\)/);
+  assert.match(kitchens, /intersectionRatio >= 0\.6/);
+  assert.match(kitchens, /:hover, :focus-within/);
+  assert.match(kitchens, /if \(!moving\.current\) setSwiped\(true\)/);
+  assert.match(kitchens, /behavior: "smooth"/);
+  // Home shows a few kitchens and links to all of them with the count.
+  assert.match(kitchens, /See all \{kitchens\.length\} home chefs/);
+  assert.match(home, /limit=\{6\}/);
   assert.doesNotMatch(kitchens, /ChevronLeft/);
   assert.doesNotMatch(kitchens, /ChevronRight/);
   assert.doesNotMatch(kitchens, /kitchenPreviewTrack/);

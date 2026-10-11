@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 vi.mock("./customer-launch", async (original) => ({
   ...await original<typeof import("./customer-launch")>(),
@@ -15,6 +15,8 @@ vi.mock("@/shared/components/brand/CravesLogo", () => ({ CravesLogo: () => creat
 const { default: SignInPage } = await import("@/app/sign-in/page");
 const page = async (query: Record<string, string>) => renderToStaticMarkup(await SignInPage({ searchParams: Promise.resolve(query) }));
 
+// The admin build runs these tests with CRAVES_ADMIN_PORTAL=true; each test sets the host it means.
+beforeEach(() => vi.stubEnv("CRAVES_ADMIN_PORTAL", ""));
 afterEach(() => vi.unstubAllEnvs());
 
 it("shows customers the launching-soon note unless the private link is used", async () => {

@@ -23,7 +23,7 @@ export function SubscriptionManager() {
     setItems(body as CustomerSubscription[]);
   }, []);
 
-  // Subscriptions carry only a plan id; the plan list gives the name. A plan no longer offered stays "Meal plan".
+  // The plan list gives the name; the subscription's own planName covers plans no longer listed.
   useEffect(() => {
     void fetch("/api/subscriptions/plans", { cache: "no-store" })
       .then(response => (response.ok ? response.json() : null))
@@ -85,7 +85,7 @@ export function SubscriptionManager() {
                     <span className="inline-flex rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-bold text-[#1A1A1A]">
                       {MEAL_PLAN_STATUS[item.status]}
                     </span>
-                    <h2 className="mt-2 text-lg font-bold">{planNames.get(item.planId) ?? "Meal plan"}</h2>
+                    <h2 className="mt-2 text-lg font-bold">{planNames.get(item.planId) ?? item.planName ?? "Meal plan"}</h2>
                     <p className="mt-1 text-sm text-[#6B6B6B]">
                       Starts {planDay(item.startDate)}
                       {item.nextServiceDate ? ` · Next meal ${planDay(item.nextServiceDate)}` : ""}

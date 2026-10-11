@@ -30,7 +30,8 @@ function serviceClock(value: string): string {
 }
 
 function upTo(minutes: number | null): string {
-  return minutes === null ? "" : ` up to ${noticeLength(minutes)} before a meal`;
+  if (minutes === null) return "";
+  return minutes === 0 ? " any time before a meal" : ` up to ${noticeLength(minutes)} before a meal`;
 }
 
 function policyLines(policy: SubscriptionPlanPolicy): string[] {

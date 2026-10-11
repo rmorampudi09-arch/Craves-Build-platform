@@ -104,7 +104,7 @@ export function formatKitchenLocation(kitchen: NearbyKitchen): string {
   return [kitchen.areaName, kitchen.city, kitchen.state].filter(Boolean).join(', ');
 }
 
-export function getKitchenInitials(kitchen: NearbyKitchen): string {
+export function getKitchenInitials(kitchen: Pick<NearbyKitchen, 'kitchenName'>): string {
   const name = kitchen.kitchenName.trim();
   const parts = name.split(/\s+/).filter(Boolean);
 

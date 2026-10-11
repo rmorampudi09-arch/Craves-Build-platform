@@ -125,6 +125,9 @@ function address(id: string, overrides: Partial<CustomerAddress> = {}): Customer
 const navigation = {
   navigate: jest.fn(),
   replace: jest.fn(),
+  reset: jest.fn(),
+  setOptions: jest.fn(),
+  addListener: jest.fn((_event: string, _listener: (event: {preventDefault(): void}) => void) => jest.fn()),
   goBack: jest.fn(),
   popToTop: jest.fn(),
   getParent: jest.fn(() => ({goBack: jest.fn()})),
@@ -134,6 +137,7 @@ const checkoutState = {
   setStartDate: jest.fn(),
   deliveryAddressId: null,
   setDeliveryAddressId: jest.fn(),
+  checkoutAttempt: {current: null},
 };
 
 function given({
@@ -432,7 +436,63 @@ describe('MealPlanPaymentScreen', () => {
     expect(payExisting).toHaveBeenCalledWith('sub-1');
     expect(texts(root)).toContain("Payment is processing. We'll update your plan shortly.");
     act(() => byLabel(root, 'Go to My Meal Plan').props.onPress());
-    expect(navigation.replace).toHaveBeenCalledWith('MyMealPlan', {subscriptionId: 'sub-1'});
+    expect(navigation.reset).toHaveBeenCalledWith({
+      index: 1,
+      routes: [{name: 'MealPlans'}, {name: 'MyMealPlan', params: {subscriptionId: 'sub-1'}}],
+    });
+  });
+
+  it('blocks leaving while checkout is open and releases before its own navigation', async () => {
+    given({addresses: [address('home')]});
+    let finish: (outcome: unknown) => void = () => undefined;
+    payNew.mockReturnValue(new Promise(resolve => (finish = resolve)));
+    const root = renderPayment();
+    const beforeRemove = navigation.addListener.mock.calls.find(([event]) => event === 'beforeRemove')![1];
+    const leave = () => {
+      const event = {preventDefault: jest.fn()};
+      beforeRemove(event);
+      return event.preventDefault;
+    };
+
+    expect(leave()).not.toHaveBeenCalled();
+    let paying: Promise<void> | undefined;
+    act(() => {
+      paying = byLabel(root, 'Pay & Subscribe').props.onPress();
+    });
+    expect(leave()).toHaveBeenCalled();
+    navigation.replace.mockImplementation(() => expect(leave()).not.toHaveBeenCalled());
+    await act(async () => {
+      finish({kind: 'paid', subscriptionId: 'sub-1', payment: {}});
+      await paying;
+    });
+    expect(navigation.replace).toHaveBeenCalledWith('MealPlanActivated', {subscriptionId: 'sub-1'});
+    navigation.replace.mockReset();
+  });
+
+  it('completes payment for a subscription whose plan is no longer listed', () => {
+    given({
+      plans: [],
+      subscriptions: [
+        {
+          id: 'sub-1',
+          planId: weekly.id,
+          startDate: '2026-10-14',
+          deliveryAddressId: 'home',
+          planName: 'Old Lunch Plan',
+          billingPeriod: 'MONTHLY',
+          amount: '999',
+          currency: 'INR',
+        } as never,
+      ],
+      addresses: [address('home')],
+    });
+    jest.mocked(queries.useLatestSubscriptionPaymentQuery).mockReturnValue({
+      data: {amount: {amount: '1250.00', currency: 'INR'}},
+    } as never);
+    const shown = texts(renderPayment({planId: weekly.id, subscriptionId: 'sub-1'}));
+    expect(shown).toEqual(
+      expect.arrayContaining(['Old Lunch Plan', 'Monthly', '₹1,250', ' / month', 'Wed, 14 Oct 2026', 'Every month']),
+    );
   });
 });
 
@@ -476,8 +536,12 @@ describe('MealPlanActivatedScreen', () => {
     );
 
     act(() => byLabel(root, 'View My Plan').props.onPress());
-    expect(navigation.replace).toHaveBeenCalledWith('MyMealPlan', {
-      subscriptionId: '3f2a9c1e-5b6d-4e7f-8a9b-0c1d2e3f4a5b',
+    expect(navigation.reset).toHaveBeenCalledWith({
+      index: 1,
+      routes: [
+        {name: 'MealPlans'},
+        {name: 'MyMealPlan', params: {subscriptionId: '3f2a9c1e-5b6d-4e7f-8a9b-0c1d2e3f4a5b'}},
+      ],
     });
     act(() => byLabel(root, 'Back to Home').props.onPress());
     expect(tabStack.goBack).toHaveBeenCalled();

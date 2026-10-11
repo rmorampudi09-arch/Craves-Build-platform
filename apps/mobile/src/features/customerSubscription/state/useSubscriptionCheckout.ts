@@ -9,6 +9,7 @@ import {customerSubscriptionApi} from '../api/customerSubscriptionApi';
 import {subscriptionPaymentApi} from '../api/subscriptionPaymentApi';
 import type {SubscriptionPayment} from '../domain/subscriptionPaymentTypes';
 import {invalidateMealPlanQueries} from '../query/mealPlanQueries';
+import {useMealPlanCheckout} from './MealPlanCheckoutContext';
 import {
   pendingSubscriptionPaymentStore,
   type PendingSubscriptionPaymentReference,
@@ -72,6 +73,7 @@ async function payForSubscription(
   subscriptionId: string,
   initialPayment: SubscriptionPayment | null,
 ): Promise<CheckoutOutcome> {
+  let razorpayReturnedProof = false;
   try {
     let payment =
       initialPayment ?? (await subscriptionPaymentApi.getLatestForSubscription(subscriptionId));
@@ -123,6 +125,7 @@ async function payForSubscription(
       },
       {name: customerName, email: profile.email, phone: customerPhone},
     );
+    razorpayReturnedProof = true;
 
     const verified = await subscriptionPaymentApi.verifyRazorpay(payment.invoiceId, proof);
     if (verified.status === 'PAID') {
@@ -146,10 +149,17 @@ async function payForSubscription(
     if (recovered?.status === 'PAID') {
       return checkoutOutcome(recovered, subscriptionId);
     }
+    if (razorpayReturnedProof) {
+      // Razorpay took the payment; only our verification failed, so the server will settle it.
+      return {kind: 'processing', subscriptionId};
+    }
+    const error = toAppApiError(paymentError);
     return {
       kind: 'not-completed',
       subscriptionId,
-      message: `Payment not completed. ${toAppApiError(paymentError).message}`,
+      // The gateway's own message already says the checkout did not complete.
+      message:
+        error.code === 'PAYMENT_PROVIDER_FAILED' ? error.message : `Payment not completed. ${error.message}`,
     };
   }
 }
@@ -164,15 +174,11 @@ export function useSubscriptionCheckout(): {
   busy: boolean;
 } {
   const queryClient = useQueryClient();
-  const [busy, setBusy] = React.useState(false);
-  const inFlight = React.useRef<Promise<CheckoutOutcome> | null>(null);
   // The idempotency key lives as long as the details do, so a retry after a lost response replays
   // the same create; once created, later taps pay that subscription instead of creating another.
-  const attempt = React.useRef<{
-    details: string;
-    idempotencyKey: string;
-    subscriptionId: string | null;
-  } | null>(null);
+  const {checkoutAttempt: attempt} = useMealPlanCheckout();
+  const [busy, setBusy] = React.useState(false);
+  const inFlight = React.useRef<Promise<CheckoutOutcome> | null>(null);
 
   const run = React.useCallback(
     (work: () => Promise<CheckoutOutcome>) => {
@@ -180,7 +186,11 @@ export function useSubscriptionCheckout(): {
       inFlight.current ??= (async () => {
         setBusy(true);
         try {
-          return await work();
+          const outcome = await work();
+          if (outcome.kind === 'paid' && attempt.current?.subscriptionId === outcome.subscriptionId) {
+            attempt.current = null;
+          }
+          return outcome;
         } finally {
           inFlight.current = null;
           setBusy(false);
@@ -190,7 +200,7 @@ export function useSubscriptionCheckout(): {
       })();
       return inFlight.current;
     },
-    [queryClient],
+    [attempt, queryClient],
   );
 
   const payNew = React.useCallback(
@@ -209,11 +219,17 @@ export function useSubscriptionCheckout(): {
               current.idempotencyKey,
             );
             current.subscriptionId = created.id;
-          } catch {
+          } catch (createError) {
+            const error = toAppApiError(createError);
+            // A 4xx is a definite no (plan closed, invalid details); anything else may have been created.
+            const rejected =
+              error.status !== undefined && error.status >= 400 && error.status < 500 && !error.retriable;
             return {
               kind: 'not-completed',
               subscriptionId: null,
-              message: 'Your request was not confirmed. Please retry with the same details.',
+              message: rejected
+                ? error.message
+                : 'Your request was not confirmed. Please retry with the same details.',
             };
           }
         }
@@ -228,7 +244,7 @@ export function useSubscriptionCheckout(): {
         }
         return payForSubscription(current.subscriptionId, payment);
       }),
-    [run],
+    [attempt, run],
   );
 
   const payExisting = React.useCallback(
@@ -243,9 +259,10 @@ export function useSubscriptionCheckout(): {
 export function useInterruptedPaymentRecovery(): {
   pending: PendingSubscriptionPaymentReference | null;
   resume(): Promise<CheckoutOutcome | null>;
+  busy: boolean;
 } {
   const queryClient = useQueryClient();
-  const {payExisting} = useSubscriptionCheckout();
+  const {payExisting, busy} = useSubscriptionCheckout();
   const [pending, setPending] = React.useState<PendingSubscriptionPaymentReference | null>(null);
 
   const recover = React.useCallback(async () => {
@@ -298,5 +315,5 @@ export function useInterruptedPaymentRecovery(): {
     return outcome;
   }, [payExisting, pending, recover]);
 
-  return {pending, resume};
+  return {pending, resume, busy};
 }

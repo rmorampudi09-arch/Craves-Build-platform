@@ -5,11 +5,20 @@ import {
   type CustomerAddress,
 } from '../../customerAddresses/domain/customerAddressContract';
 
+/** A subscription create for one set of checkout details; `subscriptionId` once the server accepted it. */
+export interface CheckoutAttempt {
+  details: string;
+  idempotencyKey: string;
+  subscriptionId: string | null;
+}
+
 export interface MealPlanCheckoutValue {
   startDate: string | null;
   setStartDate: (date: string) => void;
   deliveryAddressId: string | null;
   setDeliveryAddressId: (id: string) => void;
+  /** Outlives the Payment screen, so coming back to it pays the created subscription instead of creating another. */
+  checkoutAttempt: React.RefObject<CheckoutAttempt | null>;
 }
 
 const MealPlanCheckoutContext = React.createContext<MealPlanCheckoutValue | null>(null);
@@ -18,8 +27,9 @@ const MealPlanCheckoutContext = React.createContext<MealPlanCheckoutValue | null
 export function MealPlanCheckoutProvider({children}: React.PropsWithChildren) {
   const [startDate, setStartDate] = React.useState<string | null>(null);
   const [deliveryAddressId, setDeliveryAddressId] = React.useState<string | null>(null);
+  const checkoutAttempt = React.useRef<CheckoutAttempt | null>(null);
   const value = React.useMemo(
-    () => ({startDate, setStartDate, deliveryAddressId, setDeliveryAddressId}),
+    () => ({startDate, setStartDate, deliveryAddressId, setDeliveryAddressId, checkoutAttempt}),
     [startDate, deliveryAddressId],
   );
   return (

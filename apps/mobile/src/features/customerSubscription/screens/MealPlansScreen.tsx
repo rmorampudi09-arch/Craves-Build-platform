@@ -207,9 +207,11 @@ export function MealPlansScreen({navigation}: Props) {
       {recovery.pending ? (
         <OfflineNotice
           message="Payment in progress. You have an unfinished meal-plan payment."
-          retryLabel="Resume payment"
+          retryLabel={recovery.busy ? 'Resuming payment…' : 'Resume payment'}
           onRetry={() => {
-            resumePayment();
+            if (!recovery.busy) {
+              resumePayment();
+            }
           }}
         />
       ) : null}

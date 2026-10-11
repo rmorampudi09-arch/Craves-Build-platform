@@ -49,6 +49,7 @@ import {
   upcomingStartDates,
 } from '../domain/mealPlanPresentation';
 import {
+  useLatestSubscriptionPaymentQuery,
   useMySubscriptionsQuery,
   usePlanCover,
   usePlanPolicyQuery,
@@ -76,8 +77,11 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
   const {imageUrl, kitchenName, summary, rating} = usePlanCover(planId);
   const schedule = usePlanScheduleQuery(planId);
   const policy = usePlanPolicyQuery(planId);
-  // Completing payment for an existing subscription shows its own date and address.
-  const existing = useMySubscriptionsQuery().data?.find(item => item.id === subscriptionId);
+  // Completing payment for an existing subscription shows its own date, address and invoice, and
+  // does not need the plan to still be listed.
+  const subscriptionsQuery = useMySubscriptionsQuery();
+  const existing = subscriptionsQuery.data?.find(item => item.id === subscriptionId);
+  const invoiceQuery = useLatestSubscriptionPaymentQuery(subscriptionId ?? null);
   const {startDate, setDeliveryAddressId} = useMealPlanCheckout();
   const {address: selected, addresses, loading: addressLoading, isError: addressError} =
     useSelectedDeliveryAddress();
@@ -85,18 +89,50 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
   const {payNew, payExisting, busy} = useSubscriptionCheckout();
   const [notice, setNotice] = React.useState<Notice | null>(null);
   const [editorOpen, setEditorOpen] = React.useState(false);
+  const checkoutOpen = React.useRef(false);
 
-  if (!plan) {
+  // Leaving mid-checkout would drop a paid result and let a second payment start. `pay` releases
+  // this guard before it navigates on its own, so its `replace` is never blocked.
+  React.useEffect(
+    () =>
+      navigation.addListener('beforeRemove', event => {
+        if (checkoutOpen.current) {
+          event.preventDefault();
+        }
+      }),
+    [navigation],
+  );
+  // The iOS swipe-back is native and does not wait for the guard above.
+  React.useEffect(() => {
+    navigation.setOptions({gestureEnabled: !busy});
+  }, [busy, navigation]);
+
+  const invoice = invoiceQuery.data;
+  const name = plan?.name ?? existing?.planName ?? (subscriptionId ? 'Meal plan' : null);
+  const period = plan?.billingPeriod ?? existing?.billingPeriod;
+  const price =
+    subscriptionId && invoice
+      ? formatPlanPrice(invoice.amount.amount, invoice.amount.currency)
+      : plan
+        ? formatPlanPrice(plan.amount, plan.currency)
+        : existing?.amount && existing.currency
+          ? formatPlanPrice(existing.amount, existing.currency)
+          : null;
+
+  if (!name || !price) {
+    const sources = subscriptionId ? [plansQuery, subscriptionsQuery, invoiceQuery] : [plansQuery];
     return (
       <ScreenShell edges={['top', 'bottom']} keyboardAvoiding={false}>
         <MealPlanHeader title="Payment" onBack={navigation.goBack} />
         <PlanUnavailable
-          loading={plansQuery.isLoading}
+          loading={sources.some(source => source.isLoading)}
           onBack={navigation.popToTop}
           onRetry={
-            plansQuery.isError
+            sources.some(source => source.isError)
               ? () => {
-                  plansQuery.refetch();
+                  sources.forEach(source => {
+                    source.refetch();
+                  });
                 }
               : undefined
           }
@@ -105,8 +141,7 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
     );
   }
 
-  const unit = billingUnit(plan.billingPeriod);
-  const price = formatPlanPrice(plan.amount, plan.currency);
+  const unit = period ? billingUnit(period) : null;
   const tomorrow = upcomingStartDates(new Date())[0];
   // Same rule as Review: a date that has fallen behind tomorrow is never sent.
   const start = subscriptionId
@@ -131,15 +166,19 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
   }
 
   const pay = async () => {
-    setNotice(null);
-    let outcome: CheckoutOutcome;
-    if (subscriptionId) {
-      outcome = await payExisting(subscriptionId);
-    } else if (selected && start) {
-      outcome = await payNew({planId, startDate: start, deliveryAddressId: selected.id});
-    } else {
+    const checkout = subscriptionId
+      ? payExisting(subscriptionId)
+      : selected && start
+        ? payNew({planId, startDate: start, deliveryAddressId: selected.id})
+        : null;
+    if (!checkout) {
       return;
     }
+    checkoutOpen.current = true;
+    setNotice(null);
+    const outcome = await checkout.finally(() => {
+      checkoutOpen.current = false;
+    });
     if (outcome.kind === 'paid') {
       navigation.replace('MealPlanActivated', {subscriptionId: outcome.subscriptionId});
     } else if (outcome.kind === 'profile-incomplete') {
@@ -172,9 +211,9 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
           <View style={styles.planRow}>
             <MealPlanPhoto uri={imageUrl} size={88} />
             <View style={styles.grow}>
-              <Badge label={unit === 'month' ? 'Monthly' : 'Weekly'} tone="error" />
+              {unit ? <Badge label={unit === 'month' ? 'Monthly' : 'Weekly'} tone="error" /> : null}
               <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.planName}>
-                {plan.name}
+                {name}
               </Text>
               {kitchenName || rating ? (
                 <View style={styles.kitchenRow}>
@@ -192,7 +231,9 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
             <InfoRow
               icon="meal"
               label="Meals"
-              value={[formatMealCount(summary, unit), summary.daysLabel].filter(Boolean).join(' · ')}
+              value={[formatMealCount(summary, unit ?? 'week'), summary.daysLabel]
+                .filter(Boolean)
+                .join(' · ')}
             />
           ) : null}
           {summary?.timeLabel ? (
@@ -201,7 +242,7 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
           {start ? (
             <InfoRow icon="calendar" label="Starts" value={formatMealPlanDate(start, 'long')} />
           ) : null}
-          <InfoRow icon="wallet" label="Billing" value={`Every ${unit}`} />
+          {unit ? <InfoRow icon="wallet" label="Billing" value={`Every ${unit}`} /> : null}
         </CardSection>
 
         {menu.length > 0 ? (
@@ -275,18 +316,30 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
           <OfflineNotice
             message="Payment is processing. We'll update your plan shortly."
             retryLabel="Go to My Meal Plan"
-            onRetry={() => navigation.replace('MyMealPlan', {subscriptionId: notice.subscriptionId})}
+            onRetry={() =>
+              // Back from My Meal Plan returns to the list, not to this checkout.
+              navigation.reset({
+                index: 1,
+                routes: [
+                  {name: 'MealPlans'},
+                  {name: 'MyMealPlan', params: {subscriptionId: notice.subscriptionId}},
+                ],
+              })
+            }
           />
         ) : notice ? (
           <RecoverableErrorBanner message={notice.message} />
         ) : null}
-        <View accessible accessibilityLabel={`Total amount ${price} per ${unit}`} style={styles.totalRow}>
+        <View
+          accessible
+          accessibilityLabel={`Total amount ${price}${unit ? ` per ${unit}` : ''}`}
+          style={styles.totalRow}>
           <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
             Total amount
           </Text>
           <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.total}>
             {price}
-            <Text style={styles.per}> / {unit}</Text>
+            {unit ? <Text style={styles.per}> / {unit}</Text> : null}
           </Text>
         </View>
         <Button

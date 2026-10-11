@@ -113,7 +113,13 @@ export function MealPlanActivatedScreen({navigation, route}: Props) {
         <View style={styles.actions}>
           <Button
             label="View My Plan"
-            onPress={() => navigation.replace('MyMealPlan', {subscriptionId})}
+            onPress={() =>
+              // Back from My Meal Plan returns to the list, not to the checkout just finished.
+              navigation.reset({
+                index: 1,
+                routes: [{name: 'MealPlans'}, {name: 'MyMealPlan', params: {subscriptionId}}],
+              })
+            }
           />
           <Button label="Back to Home" variant="outline" onPress={backToHome} />
         </View>

@@ -43,6 +43,46 @@ export function chefStatusIcon(status: string) {
 
 const noSubscribe = () => () => {};
 
+/** What the chef hears and sees after answering: the card itself may move or leave the list. */
+export function orderUpdateText(order: ChefOrder): string {
+  const number = `Order #${shortOrderNumber(order.id)}`;
+  switch (order.status) {
+    case "CHEF_ACCEPTED":
+    case "PREPARING":
+      return `${number} accepted. Start cooking${order.prepTimeMinutes ? `: ready in about ${order.prepTimeMinutes} min` : ""}.`;
+    case "READY_FOR_PICKUP":
+      return `${number} is ready for pickup.`;
+    case "CHEF_REJECTED":
+      return `${number} declined. The customer has been told.`;
+    default:
+      return `${number} updated.`;
+  }
+}
+
+/** Focus follows the order to its new place, or lands on the update notice when it left the list. */
+export function focusOrderAfterUpdate(orderId: string, noticeId: string): void {
+  window.requestAnimationFrame(() => {
+    const target = document.getElementById(`chef-order-${orderId}`) ?? document.getElementById(noticeId);
+    if (!target) return;
+    target.setAttribute("tabindex", "-1");
+    target.focus();
+  });
+}
+
+/** Always in the page, so screen readers announce each answer; shows the latest one. */
+export function OrderUpdateNotice({ id, text }: { id: string; text: string }) {
+  return (
+    <div id={id} role="status" className="outline-none empty:hidden">
+      {text ? (
+        <p className="chef-notice">
+          <CheckCircle2 aria-hidden="true" />
+          <span className="min-w-0">{text}</span>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /** Reads the order out loud, for chefs who'd rather listen than read. Hidden where the phone can't speak. */
 export function HearOrderButton({ order }: { order: ChefOrder }) {
   // Decided after hydration, so the server and the first client render agree.

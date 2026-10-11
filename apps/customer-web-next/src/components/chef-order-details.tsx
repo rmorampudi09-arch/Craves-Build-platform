@@ -26,6 +26,7 @@ import { shortOrderNumber } from "@/lib/order-number";
 import { ChefOrderActions } from "@/components/chef-order-actions";
 import { ChefOrderProgress, HearOrderButton, chefStatusIcon } from "@/components/chef-order-card";
 import { useChefOrderPolling } from "@/lib/chef-order-alert";
+import { sessionFetch } from "@/services/auth/sessionFetch";
 import {
   parseChefOrderResponse,
   type ChefOrder,
@@ -60,10 +61,7 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
     else setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/chef/orders/${encodeURIComponent(orderId)}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
+      const response = await sessionFetch(`/api/chef/orders/${encodeURIComponent(orderId)}`, { cache: "no-store" });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
         throw chefApiError(response, body, response.status === 404 || response.status === 403

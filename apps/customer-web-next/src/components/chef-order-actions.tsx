@@ -7,11 +7,13 @@ import {
   ArrowLeft,
   Check,
   CheckCircle2,
+  ChevronDown,
   LoaderCircle,
   PackageCheck,
   XCircle,
 } from "lucide-react";
 import { ChefNotice, ChefSection } from "@/components/chef-ui";
+import { sessionFetch } from "@/services/auth/sessionFetch";
 import {
   parseChefOrderResponse,
   type ChefOrder,
@@ -113,9 +115,9 @@ export function ChefOrderActions({
     setMessage("Saving your answer…");
     setError("");
     try {
-      const response = await fetch(`/api/chef/orders/${order.id}/${path}`, {
+      // A chef answers long after the page opened: refresh the short sign-in cookie if needed.
+      const response = await sessionFetch(`/api/chef/orders/${order.id}/${path}`, {
         method: "POST",
-        credentials: "same-origin",
         headers: body ? { "Content-Type": "application/json" } : undefined,
         body: body ? JSON.stringify(body) : undefined,
       });
@@ -213,8 +215,8 @@ export function ChefOrderActions({
               })}
             </div>
           </fieldset>
-          <details className="mt-4" open={customOpen}>
-            <summary className="inline-flex min-h-11 cursor-pointer items-center text-[0.9375rem] font-semibold text-[#1A1A1A]">Another cooking time</summary>
+          <details className="group mt-4" open={customOpen}>
+            <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-[0.9375rem] font-semibold text-[#1A1A1A] [&::-webkit-details-marker]:hidden">Another cooking time<ChevronDown className="h-4 w-4 text-[#6B6B6B] transition-transform group-open:rotate-180" aria-hidden="true" /></summary>
             <label className="mt-1 block text-sm font-semibold text-[#1A1A1A]">
               Minutes (1 to 1,440)
               <input
@@ -234,8 +236,8 @@ export function ChefOrderActions({
               />
             </label>
           </details>
-          <details className="mt-1">
-            <summary className="inline-flex min-h-11 cursor-pointer items-center text-[0.9375rem] font-semibold text-[#1A1A1A]">Add a note <span className="ml-1 font-normal text-[#6B6B6B]">(optional)</span></summary>
+          <details className="group mt-1">
+            <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-[0.9375rem] font-semibold text-[#1A1A1A] [&::-webkit-details-marker]:hidden">Add a note <span className="font-normal text-[#6B6B6B]">(optional)</span><ChevronDown className="h-4 w-4 text-[#6B6B6B] transition-transform group-open:rotate-180" aria-hidden="true" /></summary>
             <label className="mt-1 block text-sm font-semibold text-[#1A1A1A]">Note for the order<input value={note} maxLength={500} onChange={(event) => setNote(event.target.value)} className={field} placeholder="Anything useful about cooking or packing" data-craves-single-border="true" /></label>
           </details>
           <p className="mt-4 text-[0.9375rem] text-[#6B6B6B]">The customer will see <strong className="text-[#1A1A1A]">Ready in about {validPrep ? prep : "—"} minutes</strong>.</p>

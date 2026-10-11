@@ -17,8 +17,10 @@ export function indiaDate(at: Date | string = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(at));
 }
 
+/** The day after `date`, or "" for a date the browser let through but isn't real (e.g. a 5-digit year). */
 export function dayAfter(date: string): string {
-  return isoDay(new Date(utcDay(date).getTime() + DAY));
+  const next = new Date(utcDay(date).getTime() + DAY);
+  return Number.isNaN(next.getTime()) ? "" : isoDay(next);
 }
 
 /** Weeks start on Monday; "this" periods run to the end of today. */

@@ -27,7 +27,8 @@ export interface AppleSwitchProps
   tone?: "flame" | "veg" | "go";
 }
 
-/** A tap toggles; the thumb slides on x only, with no overshoot (and jumps under reduced motion). */
+/** A tap toggles; the thumb slides on x only, with no overshoot (and jumps under reduced motion).
+ * The off track is mid grey (3.2:1 on white) so the white thumb and the switch edge stay visible. */
 export const AppleSwitch = forwardRef<HTMLButtonElement, AppleSwitchProps>(
   (
     {
@@ -75,7 +76,7 @@ export const AppleSwitch = forwardRef<HTMLButtonElement, AppleSwitchProps>(
         }}
         aria-label={typeof label === "string" ? label : props["aria-label"]}
         className={`relative inline-flex shrink-0 cursor-pointer items-center rounded-full !border-0 !shadow-none outline-none transition-[background-color] duration-(--dur-component) disabled:cursor-not-allowed disabled:opacity-45 ${
-          on ? (tone === "veg" ? "!bg-[#2E7D32]" : tone === "go" ? "!bg-[#17803D]" : "!bg-[#F62E18]") : "!bg-[#D9DDE2]"
+          on ? (tone === "veg" ? "!bg-[#2E7D32]" : tone === "go" ? "!bg-[#17803D]" : "!bg-[#F62E18]") : "!bg-[#8A8F98]"
         } ${className}`}
         style={{
           width: metrics.trackX,

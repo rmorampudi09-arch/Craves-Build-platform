@@ -386,7 +386,7 @@ body .chef-panel-theme .chef-btn.is-primary { border-color: var(--chef-action) !
 body .chef-panel-theme .chef-btn.is-quiet { border-color: transparent !important; }
 .chef-panel-theme .chef-btn.is-danger { color: var(--chef-accent-text); }
 .chef-panel-theme .chef-btn.is-block { width: 100%; }
-.chef-panel-theme .chef-btn.is-small { min-height: 2.5rem; padding: 0 0.875rem; font-size: 0.9375rem; }
+.chef-panel-theme .chef-btn.is-small { min-height: 2.75rem; padding: 0 0.875rem; font-size: 0.9375rem; }
 
 /* ---------- Filter chips ---------- */
 .chef-chips { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.25rem; scrollbar-width: none; }
@@ -394,9 +394,15 @@ body .chef-panel-theme .chef-btn.is-quiet { border-color: transparent !important
 /* Choices (not filters) wrap so every option stays in view. */
 .chef-chips.is-wrap { flex-wrap: wrap; overflow: visible; padding-bottom: 0; }
 .chef-field-label { display: block; margin: 0; padding: 0; font-size: 0.9375rem; font-weight: 600; color: var(--chef-text); }
+/* Choice chips are radios: the chosen one is filled, the keyboard focus ring sits on the chip. */
+.chef-panel-theme .chef-chip.is-choice { cursor: pointer; }
+.chef-panel-theme .chef-chip.is-choice:has(input:checked) { background: var(--chef-text); color: #fff; }
+body .chef-panel-theme .chef-chip.is-choice:has(input:checked) { border-color: var(--chef-text) !important; }
+.chef-panel-theme .chef-chip.is-choice:has(input:focus-visible) { outline: 2px solid var(--chef-text); outline-offset: 2px; }
+.chef-panel-theme .chef-chip.is-choice:has(input:disabled) { cursor: not-allowed; opacity: 0.6; }
 .chef-panel-theme .chef-chip {
   display: inline-flex;
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   flex-shrink: 0;
   align-items: center;
   gap: 0.375rem;
@@ -692,6 +698,10 @@ body .chef-panel-theme .chef-btn:is(.is-primary, .is-go):disabled:not([aria-busy
 .chef-setting-row { display: flex; min-height: 3.5rem; align-items: center; gap: 0.875rem; padding: 0.375rem 0; }
 .chef-setting-row + .chef-setting-row { border-top: 1px solid var(--chef-line); }
 .chef-setting-title { font-size: 1rem; font-weight: 600; color: var(--chef-text); }
+/* Every chef switch (kitchen, alerts, each dish on Menu) takes a finger-sized tap, at least
+   44 px tall, without looking bigger. */
+.chef-panel-theme [role="switch"] { position: relative; }
+.chef-panel-theme [role="switch"]::after { content: ""; position: absolute; inset: -8px; }
 
 /* ---------- Checklist: a tick for done, an empty ring for to do ---------- */
 .chef-check-hero {
@@ -773,6 +783,9 @@ body .chef-panel-theme .chef-btn:is(.is-primary, .is-go):disabled:not([aria-busy
   pointer-events: none;
 }
 @media (min-width: 1024px) { .chef-order-banner-wrap { bottom: 1.5rem; } }
+/* While the bar shows, pages get room for it, so the last button and a focused field are never under it. */
+.chef-panel-theme:has(.chef-order-banner) .chef-panel-content { padding-bottom: 5.5rem; }
+html:has(.chef-order-banner) { scroll-padding-bottom: 12rem; }
 .chef-order-banner {
   display: flex;
   width: 100%;

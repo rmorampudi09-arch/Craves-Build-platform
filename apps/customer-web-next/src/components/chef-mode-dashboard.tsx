@@ -17,7 +17,7 @@ import {
   ChefSkeleton,
   formatInr,
 } from "@/components/chef-ui";
-import { ChefOrderCard } from "@/components/chef-order-card";
+import { ChefOrderCard, OrderUpdateNotice, focusOrderAfterUpdate, orderUpdateText } from "@/components/chef-order-card";
 import { ChefKitchenSwitch } from "@/components/chef-kitchen-switch";
 import { ChefOrderAlerts } from "@/components/chef-order-alerts";
 import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/lib/chef-order-alert";
@@ -37,6 +37,7 @@ import {
   type ChefEarning,
 } from "@/lib/chef-earnings-contract";
 import { getSession, subscribeSession } from "@/services/auth/cravesAuth";
+import { sessionFetch } from "@/services/auth/sessionFetch";
 import { Sheet, secondaryActionClass } from "@/components/ui/overlays/overlay";
 
 type DashboardState = "loading" | "approved" | "error";
@@ -99,7 +100,7 @@ export function ChefModeDashboard() {
     let active = true;
 
     async function loadApprovedSnapshot() {
-      const kitchenRequest = fetch("/api/chef/kitchen", {
+      const kitchenRequest = sessionFetch("/api/chef/kitchen", {
         cache: "no-store",
         credentials: "same-origin",
       });
@@ -107,20 +108,20 @@ export function ChefModeDashboard() {
         if (!response.ok) return null;
         const raw = await response.clone().json().catch(() => undefined);
         if (raw === null || !parseChefKitchen(raw)) return null;
-        return fetch("/api/chef/menu", { cache: "no-store", credentials: "same-origin" });
+        return sessionFetch("/api/chef/menu", { cache: "no-store", credentials: "same-origin" });
       });
       const requests = await Promise.allSettled([
-        fetch("/api/chef/application", {
+        sessionFetch("/api/chef/application", {
           cache: "no-store",
           credentials: "same-origin",
         }),
         kitchenRequest,
         menuRequest,
-        fetch("/api/chef/orders", {
+        sessionFetch("/api/chef/orders", {
           cache: "no-store",
           credentials: "same-origin",
         }),
-        fetch("/api/chef/earnings", {
+        sessionFetch("/api/chef/earnings", {
           cache: "no-store",
           credentials: "same-origin",
         }),
@@ -213,11 +214,14 @@ export function ChefModeDashboard() {
     })),
   );
 
+  const [orderNotice, setOrderNotice] = useState("");
   function updateOrder(order: ChefOrder) {
     setSnapshot((current) => ({
       ...current,
       orders: current.orders.map((existing) => (existing.id === order.id ? order : existing)),
     }));
+    setOrderNotice(orderUpdateText(order));
+    focusOrderAfterUpdate(order.id, "chef-order-update");
   }
 
   const stats = useMemo(() => {
@@ -392,6 +396,8 @@ export function ChefModeDashboard() {
                 </div>
               </ChefSection>
             ) : null}
+
+            <OrderUpdateNotice id="chef-order-update" text={orderNotice} />
 
             {newOrders.length > 0 ? (
               <section className="chef-stack" aria-labelledby="chef-new-orders">

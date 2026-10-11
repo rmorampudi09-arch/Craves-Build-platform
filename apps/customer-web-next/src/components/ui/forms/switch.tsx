@@ -4,7 +4,8 @@ import * as SwitchPrimitives from "@radix-ui/react-switch";
 import { cn } from "@/lib/utils";
 
 /**
- * Craves toggle: grey track when off, Craves red when on, a plain white knob that slides.
+ * Craves toggle: mid-grey track when off (3.2:1 on white, so "off" is still visibly a switch),
+ * Craves red when on, a plain white knob that slides.
  * Colours are explicit: `bg-input` is not a generated theme colour (the old track was transparent),
  * Chef pages restyle any button whose class contains `bg-primary` or `bg-[#F62E18]`, and the unlayered
  * `:where(button)` theme rule outranks layered utilities, so the track colours are marked important.
@@ -15,7 +16,7 @@ const Switch = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SwitchPrimitives.Root
     className={cn(
-      "peer group inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border border-transparent p-0.5 shadow-inner transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-[var(--color-flame-red)]! data-[state=checked]:bg-[var(--color-flame-red)]! data-[state=unchecked]:border-[#C9CDD2]! data-[state=unchecked]:bg-[#E5E7EB]!",
+      "peer group inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border border-transparent p-0.5 shadow-inner transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-[var(--color-flame-red)]! data-[state=checked]:bg-[var(--color-flame-red)]! data-[state=unchecked]:border-[#8A8F98]! data-[state=unchecked]:bg-[#8A8F98]!",
       className,
     )}
     {...props}

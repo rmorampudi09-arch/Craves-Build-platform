@@ -2,7 +2,7 @@
 
 import { ChefError, chefApiError, chefErrorText } from "@/lib/chef-errors";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -27,8 +27,9 @@ import {
   parseChefOrdersResponse,
   type ChefOrder,
 } from "@/lib/chef-order-contract";
-import { ChefOrderCard, chefStatusIcon } from "@/components/chef-order-card";
+import { ChefOrderCard, OrderUpdateNotice, chefStatusIcon, focusOrderAfterUpdate, orderUpdateText } from "@/components/chef-order-card";
 import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/lib/chef-order-alert";
+import { sessionFetch } from "@/services/auth/sessionFetch";
 
 const newestFirst = (orders: ChefOrder[]) =>
   [...orders].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
@@ -68,10 +69,7 @@ export function ChefOrderInbox() {
     else setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/chef/orders", {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
+      const response = await sessionFetch("/api/chef/orders", { cache: "no-store" });
       const raw = await response.json().catch(() => null);
       if (!response.ok) throw chefApiError(response, raw, "We couldn’t load your orders right now.");
       const parsed = parseChefOrdersResponse(raw);
@@ -94,11 +92,18 @@ export function ChefOrderInbox() {
   // New orders arrive (and ring) on their own; a check never undoes the chef's own tap.
   useChefOrderPolling(!loading, (incoming) => {
     setOrders((current) => newestFirst(mergeOrders(current, incoming)));
+    setError("");
     setLastUpdatedAt(new Date());
   });
 
+  const [orderNotice, setOrderNotice] = useState("");
   function updateOrder(order: ChefOrder) {
     setOrders((current) => current.map((existing) => (existing.id === order.id ? order : existing)));
+    setOrderNotice(orderUpdateText(order));
+    // The chef's own answer takes them to where the order went (Cooking, then Ready).
+    const next = IN_PROGRESS.has(order.status) ? "IN_PROGRESS" : READY.has(order.status) ? "READY" : null;
+    if (next) setView((current) => (current === "ALL" ? current : next));
+    focusOrderAfterUpdate(order.id, "chef-order-update");
   }
 
   const counts = useMemo(
@@ -117,8 +122,11 @@ export function ChefOrderInbox() {
     return statuses ? orders.filter((order) => statuses.has(order.status)) : orders;
   }, [orders, view]);
 
+  // Opens on the most urgent tab once; later checks never move the chef off the tab they chose.
+  const pickedView = useRef(false);
   useEffect(() => {
-    if (loading || orders.length === 0) return;
+    if (loading || orders.length === 0 || pickedView.current) return;
+    pickedView.current = true;
     if (counts.NEEDS_ANSWER > 0) setView("NEEDS_ANSWER");
     else if (counts.IN_PROGRESS > 0) setView("IN_PROGRESS");
     else if (counts.READY > 0) setView("READY");
@@ -182,6 +190,8 @@ export function ChefOrderInbox() {
               );
             })}
           </nav>
+
+          <OrderUpdateNotice id="chef-order-update" text={orderNotice} />
 
           {visibleOrders.length === 0 ? (
             <ChefSection>

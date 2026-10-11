@@ -2,10 +2,11 @@
 // Synthetic orders for a fixture kitchen; no backend is contacted.
 import { createElement } from "react";
 import { usePathname } from "next/navigation";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChefOrderWatcher } from "../components/chef-order-watcher";
-import { mergeOrders, noticeNewOrders, orderWords, resetOrderAlertsForTests, writeAlertPrefs } from "./chef-order-alert";
+import { ChefOrderInbox } from "../components/chef-order-inbox";
+import { fetchChefOrders, mergeOrders, noticeNewOrders, orderWords, resetOrderAlertsForTests, writeAlertPrefs } from "./chef-order-alert";
 import type { ChefOrder } from "./chef-order-contract";
 import { markChefModeVerified } from "./chef-mode";
 import { captureSessionContext, invalidateSession, setSessionIdentity } from "../services/auth/cravesAuth";
@@ -85,8 +86,81 @@ describe("order watcher on pages without an order list", () => {
 
   it("leaves Home and Orders to their own lists", async () => {
     vi.mocked(usePathname).mockReturnValue("/chef/orders");
-    const { container } = render(createElement(ChefOrderWatcher));
-    await waitFor(() => expect(container.innerHTML).toBe(""));
+    render(createElement(ChefOrderWatcher));
+    await waitFor(() => expect(screen.getByRole("status")).toBeTruthy());
+    expect(screen.queryByRole("link", { name: /New order waiting/ })).toBeNull();
     expect(vi.mocked(fetch)).not.toHaveBeenCalledWith("/api/chef/orders", expect.anything());
+  });
+
+  it("on an order's own page, shows only other waiting orders", async () => {
+    vi.mocked(usePathname).mockReturnValue(`/chef/orders/${A}`);
+    render(createElement(ChefOrderWatcher));
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/chef/orders", expect.anything()));
+    await act(async () => {});
+    expect(screen.queryByRole("link", { name: /New order waiting/ })).toBeNull();
+  });
+
+  it("tells screen readers about an order that arrives later, on any chef page", async () => {
+    vi.mocked(usePathname).mockReturnValue("/chef/earnings");
+    render(createElement(ChefOrderWatcher));
+    await screen.findByRole("link", { name: /New order waiting/ });
+    expect(screen.getByRole("status").textContent).toBe("");
+    vi.mocked(fetch).mockImplementation(async (input) => String(input) === "/api/chef/orders"
+      ? Response.json([order(A, "CHEF_ACCEPTANCE_PENDING"), order(B, "CHEF_ACCEPTANCE_PENDING")])
+      : Response.json({}, { status: 404 }));
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/^New order 000102\. 2 Rasmalai 4 pieces\.$/));
+    expect(screen.getByRole("link", { name: /2 new orders waiting/ }).getAttribute("href")).toBe("/chef");
+  });
+});
+
+describe("orders keep working when the sign-in cookie expires", () => {
+  it("refreshes the cookie, and hands a refused refresh to the session", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return Response.json({ code: "SESSION_EXPIRED" }, { status: 401 });
+    }));
+    expect(await fetchChefOrders()).toBeNull();
+    expect(calls.slice(0, 2)).toEqual(["/api/chef/orders", "/api/auth/refresh"]);
+    await waitFor(() => expect(calls).toContain("/api/auth/me"));
+  });
+});
+
+describe("Orders screen", () => {
+  const C = "0bde0000-0000-4000-8000-000000000103";
+  let list: ChefOrder[];
+  beforeEach(() => {
+    list = [order(A, "CHEF_ACCEPTANCE_PENDING"), order(B, "DELIVERED")];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/chef/orders") return Response.json(list);
+      if (url === `/api/chef/orders/${A}/accept` && init?.method === "POST") {
+        const prep = JSON.parse(String(init.body)).prepTimeMinutes;
+        return Response.json({ ...order(A, "CHEF_ACCEPTED", "2026-10-10T08:06:00Z"), prepTimeMinutes: prep });
+      }
+      return Response.json({}, { status: 404 });
+    }));
+  });
+
+  it("never moves the chef off the tab they chose when new orders arrive", async () => {
+    render(createElement(ChefOrderInbox));
+    await screen.findByRole("heading", { name: /Order #000101/ });
+    fireEvent.click(screen.getByRole("button", { name: /^All/ }));
+    list = [order(C, "CHEF_ACCEPTANCE_PENDING"), ...list];
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
+    await waitFor(() => expect(screen.getByRole("button", { name: /^New/ }).textContent).toContain("2"));
+    expect(screen.getByRole("button", { name: /^All/ }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("says what happened after Accept, follows the order to Cooking and keeps focus on it", async () => {
+    render(createElement(ChefOrderInbox));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept order" }));
+    fireEvent.click(screen.getByText("45"));
+    fireEvent.click(screen.getByRole("button", { name: "Start cooking" }));
+    await screen.findByText("Order #000101 accepted. Start cooking: ready in about 45 min.");
+    expect(screen.getByRole("button", { name: /^Cooking/ }).getAttribute("aria-pressed")).toBe("true");
+    await waitFor(() => expect(document.activeElement?.id).toBe(`chef-order-${A}`));
+    expect(screen.getByRole("button", { name: "Food is ready for pickup" })).toBeTruthy();
   });
 });

@@ -120,6 +120,6 @@ test("counts roll quickly without blur and the Veg switch slides without oversho
   assert.match(toggle, /useReducedMotion\(\)/);
   assert.match(toggle, /transition=\{reduceMotion \? \{ duration: 0 \} : spring\.ui\}/);
   assert.match(toggle, /animate=\{\{ x: on \? thumbTravel : 0 \}\}/);
-  assert.match(toggle, /on \? \(tone === "veg" \? "!bg-\[#2E7D32\]" : tone === "go" \? "!bg-\[#17803D\]" : "!bg-\[#F62E18\]"\) : "!bg-\[#D9DDE2\]"/);
+  assert.match(toggle, /on \? \(tone === "veg" \? "!bg-\[#2E7D32\]" : tone === "go" \? "!bg-\[#17803D\]" : "!bg-\[#F62E18\]"\) : "!bg-\[#8A8F98\]"/);
   assert.doesNotMatch(toggle, /useSpring|grabSpring|backdropFilter|blur\(|width: thumbWidth/);
 });

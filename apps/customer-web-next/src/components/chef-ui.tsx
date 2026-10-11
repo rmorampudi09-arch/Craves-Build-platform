@@ -206,6 +206,51 @@ export function ChefNotice({
   );
 }
 
+/**
+ * Pick one of a few choices, shown as chips. Real radio buttons underneath, so a screen
+ * reader says "2 of 5" and arrow keys move between them; extra content (dates) goes below.
+ */
+export function ChefChoiceChips<T extends string>({
+  legend,
+  name,
+  options,
+  value,
+  onChange,
+  disabled = false,
+  children,
+}: {
+  legend: string;
+  name: string;
+  options: readonly { value: NoInfer<T>; label: string }[];
+  value: T;
+  onChange(value: NoInfer<T>): void;
+  disabled?: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <fieldset className="grid gap-2">
+      <legend className="chef-field-label">{legend}</legend>
+      <div className="chef-chips is-wrap">
+        {options.map((option) => (
+          <label key={option.value} className="chef-chip is-choice">
+            <input
+              type="radio"
+              name={name}
+              value={option.value}
+              checked={value === option.value}
+              disabled={disabled}
+              onChange={() => onChange(option.value)}
+              className="sr-only"
+            />
+            {option.label}
+          </label>
+        ))}
+      </div>
+      {children}
+    </fieldset>
+  );
+}
+
 /** Shimmer blocks shaped like the content that is loading. */
 export function ChefSkeleton({ className }: { className: string }) {
   return <div className={`chef-skeleton motion-reduce:animate-none ${className}`} aria-hidden="true" />;

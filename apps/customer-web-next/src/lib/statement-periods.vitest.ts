@@ -15,6 +15,7 @@ describe("statement periods", () => {
     expect(presetPeriod("this-week", "2026-10-11")).toEqual({ from: "2026-10-05", to: "2026-10-12" });
     expect(presetPeriod("last-month", "2026-01-15")).toEqual({ from: "2025-12-01", to: "2026-01-01" });
     expect(dayAfter("2026-02-28")).toBe("2026-03-01");
+    expect(dayAfter("20261-10-11")).toBe("");
   });
 
   it("every preset is a period both statement APIs accept, on any day of the year", () => {

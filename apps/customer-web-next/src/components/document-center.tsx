@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Download, FileText, Info, Mail, RefreshCw } from "lucide-react";
 import { documentCapabilitiesSchema, documentEmailSchema, documentError, documentLabels, documentPageSchema, documentRequestSchema, documentSummarySchema, type DocumentCapabilities, type DocumentSummary, type DocumentType } from "@/lib/document-contract";
 import { readDocumentBytes } from "@/lib/document-transport";
-import { ChefEmpty, ChefNotice, ChefPill, ChefSection, dateTime, type ChefTone } from "@/components/chef-ui";
+import { ChefChoiceChips, ChefEmpty, ChefNotice, ChefPill, ChefSection, dateTime, type ChefTone } from "@/components/chef-ui";
 import { STATEMENT_PRESETS, dayAfter, indiaDate, periodLabel, presetPeriod, referencePeriodLabel, type StatementPreset } from "@/lib/statement-periods";
 
 type OrderOption = { id: string; kitchenName: string; currency: string };
@@ -20,6 +20,7 @@ const CHEF_TYPES: { type: DocumentType; label: string }[] = [
   { type: "CHEF_ORDER_STATEMENT", label: "Orders" },
   { type: "CHEF_SETTLEMENT_STATEMENT", label: "Money sent to bank" },
 ];
+const DAY_CHOICES: { value: StatementPreset | "custom"; label: string }[] = [...STATEMENT_PRESETS, { value: "custom", label: "Choose dates" }];
 const CHEF_STATUS: Record<DocumentSummary["status"], { label: string; tone: ChefTone }> = {
   QUEUED: { label: "Waiting", tone: "muted" },
   RENDERING: { label: "Being made", tone: "active" },
@@ -163,18 +164,15 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
       <div className="chef-stack">
         <ChefSection title="Make a PDF" note="A record of your orders and money for the days you choose. It isn’t a GST tax invoice." labelledBy="chef-pdf-make">
           <form className="grid gap-5" onSubmit={(event) => { event.preventDefault(); void action(generate); }}>
-            <fieldset className="grid gap-2">
-              <legend className="chef-field-label">What should it show?</legend>
-              <div className="chef-chips is-wrap">
-                {CHEF_TYPES.map((option) => <button key={option.type} type="button" className="chef-chip" aria-pressed={type === option.type} disabled={busy} onClick={() => setType(option.type)}>{option.label}</button>)}
-              </div>
-            </fieldset>
-            <fieldset className="grid gap-2">
-              <legend className="chef-field-label">Which days?</legend>
-              <div className="chef-chips is-wrap">
-                {STATEMENT_PRESETS.map((option) => <button key={option.value} type="button" className="chef-chip" aria-pressed={preset === option.value} disabled={busy} onClick={() => setPreset(option.value)}>{option.label}</button>)}
-                <button type="button" className="chef-chip" aria-pressed={preset === "custom"} disabled={busy} onClick={() => setPreset("custom")}>Choose dates</button>
-              </div>
+            <ChefChoiceChips
+              legend="What should it show?"
+              name="chef-pdf-type"
+              options={CHEF_TYPES.map((option) => ({ value: option.type, label: option.label }))}
+              value={type}
+              onChange={setType}
+              disabled={busy}
+            />
+            <ChefChoiceChips legend="Which days?" name="chef-pdf-days" options={DAY_CHOICES} value={preset} onChange={setPreset} disabled={busy}>
               {preset === "custom" ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="chef-field-label">First day<input className={chefDate} type="date" value={from} max={to || undefined} onChange={(event) => setFrom(event.target.value)} required disabled={busy} /></label>
@@ -182,9 +180,9 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
                 </div>
               ) : null}
               <p className="chef-section-note !text-[0.9375rem]">
-                {periodReady ? periodLabel(period.from, period.to) : "Choose a first and last day, up to 31 days apart."}
+                {periodReady ? periodLabel(period.from, period.to) : "Choose a first and last day, 31 days at most."}
               </p>
-            </fieldset>
+            </ChefChoiceChips>
             <button className="chef-btn is-primary is-block sm:w-fit" type="submit" aria-busy={busy} disabled={busy || !capabilities?.enabled || !periodReady}>{busy ? "Working…" : "Make PDF"}</button>
           </form>
           <div aria-live="polite" className="mt-4 grid gap-3 empty:hidden">

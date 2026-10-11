@@ -255,6 +255,29 @@ function BrowseFoodsPage() {
     }
     return null;
   });
+  // After a full page load has hydrated the empty Home, paint the cached Home before the first
+  // frame, so a reload shows your address, cart and dishes at once (the network then refreshes).
+  const startedEmpty = useRef(hydrating);
+  useLayoutEffect(() => {
+    if (!startedEmpty.current) return;
+    startedEmpty.current = false;
+    const cachedAddress = getAddress();
+    const cachedDishes = allDishes();
+    const cachedKitchens = allKitchens();
+    setUser(getSession() ?? recoverSessionSnapshotForNavigation());
+    setAddress(cachedAddress);
+    setDefaultAddressResolved(Boolean(cachedAddress));
+    setCartItemCount(cartCount());
+    setCartItems(getCart());
+    if (cachedDishes.length === 0 && cachedKitchens.length === 0) return;
+    setNearbyDishes(cachedDishes);
+    setKitchens(cachedKitchens);
+    setKitchenDiscoveryVerified(true);
+    setDiscoveryState("ready");
+    setCatalogMessage("Fresh homemade food available near your default delivery address.");
+    setRadiusLabel(formatDiscoveryRadius(cachedKitchens.length > 0 ? getKitchenDiscoveryRadiusMeters() : getDiscoveryRadiusMeters()));
+  }, []);
+
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [sessionUnavailable, setSessionUnavailable] = useState(false);

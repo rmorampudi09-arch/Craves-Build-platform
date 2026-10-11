@@ -7,15 +7,15 @@ import { AppleSwitch } from "@/components/ui/AppleSwitch";
 import { ChefError, chefApiError, chefErrorText } from "@/lib/chef-errors";
 import { parseChefKitchen } from "@/lib/chef-kitchen-contract";
 import type { ChefKitchen, ChefKitchenInput } from "@/lib/chef-kitchen-types";
-import { getSession } from "@/services/auth/cravesAuth";
+import { sessionFetch } from "@/services/auth/sessionFetch";
 
-/** The saved kitchen with only open/closed changed: the same body the kitchen form saves. */
+/** The saved kitchen with only open/closed changed: the same body the kitchen form saves. Nothing else is filled in. */
 export function kitchenWithStatus(kitchen: ChefKitchen, status: "ACTIVE" | "INACTIVE"): ChefKitchenInput {
   return {
     kitchenName: kitchen.kitchenName,
     displayName: kitchen.displayName,
     description: kitchen.description,
-    phoneNumber: kitchen.phoneNumber?.trim() || getSession()?.phoneNumber || null,
+    phoneNumber: kitchen.phoneNumber?.trim() || null,
     email: kitchen.email,
     addressLine1: kitchen.addressLine1,
     addressLine2: kitchen.addressLine2,
@@ -48,11 +48,19 @@ export function ChefKitchenSwitch({
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/chef/kitchen", {
+      // Start from the kitchen as saved now: the page may have been open for hours, and an
+      // edit made elsewhere since then must not be written back over.
+      const latestResponse = await sessionFetch("/api/chef/kitchen", { cache: "no-store" });
+      const latest = latestResponse.ok ? parseChefKitchen(await latestResponse.json().catch(() => null)) : null;
+      if (!latest) throw chefApiError(latestResponse, null, "We couldn’t check your kitchen. Try again.");
+      if (latest.status === "SUSPENDED") {
+        onChange(latest);
+        return;
+      }
+      const response = await sessionFetch("/api/chef/kitchen", {
         method: "PUT",
-        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(kitchenWithStatus(kitchen, next ? "ACTIVE" : "INACTIVE")),
+        body: JSON.stringify(kitchenWithStatus(latest, next ? "ACTIVE" : "INACTIVE")),
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
@@ -94,7 +102,8 @@ export function ChefKitchenSwitch({
         </div>
         <AppleSwitch
           checked={open}
-          disabled={busy || suspended}
+          disabled={suspended}
+          aria-disabled={busy || undefined}
           onCheckedChange={(next) => void setOpen(next)}
           size="lg"
           tone="go"

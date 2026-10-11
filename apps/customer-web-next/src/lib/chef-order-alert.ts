@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { parseChefOrdersResponse, type ChefOrder } from "@/lib/chef-order-contract";
+import { loadSession } from "@/services/auth/cravesAuth";
+import { sessionFetch } from "@/services/auth/sessionFetch";
 
 /**
  * New-order alerts for chefs who are cooking, not watching the screen: the phone rings,
@@ -73,21 +75,25 @@ export function unlockOrderSound(): void {
   }
 }
 
+// Phones only count the end of a tap (and clicks or keys) as permission to play sound.
+const UNLOCK_EVENTS = ["pointerup", "touchend", "click", "keydown"] as const;
+
 export function installSoundUnlock(): void {
   if (unlockInstalled || typeof window === "undefined") return;
   unlockInstalled = true;
   const unlock = () => {
     unlockOrderSound();
-    window.removeEventListener("pointerdown", unlock, true);
-    window.removeEventListener("keydown", unlock, true);
+    // Keep listening until the speaker is really on; a refused resume() leaves it suspended.
+    if (audio?.state !== "running") return;
+    for (const type of UNLOCK_EVENTS) window.removeEventListener(type, unlock, true);
   };
-  window.addEventListener("pointerdown", unlock, true);
-  window.addEventListener("keydown", unlock, true);
+  for (const type of UNLOCK_EVENTS) window.addEventListener(type, unlock, true);
 }
 
 /** Two bright two-note chimes and a double buzz. Returns false when the phone can't play sound yet. */
 export function ringForNewOrder(): boolean {
   if (typeof navigator !== "undefined") navigator.vibrate?.([250, 120, 250]);
+  if (audio?.state === "suspended") void audio.resume().catch(() => undefined);
   if (!audio || audio.state !== "running") return false;
   const start = audio.currentTime + 0.02;
   [0, 0.2, 0.62, 0.82].forEach((offset, index) => {
@@ -197,9 +203,15 @@ export function noticeNewOrders(orders: ChefOrder[]): ChefOrder[] {
 
 // ---------- Keeping orders current ----------
 
+/** The sign-in cookie lasts minutes and Chef Mode stays open all day: refresh it, and hand a real sign-out to the session. */
 export async function fetchChefOrders(): Promise<ChefOrder[] | null> {
   try {
-    const response = await fetch("/api/chef/orders", { cache: "no-store", credentials: "same-origin" });
+    const response = await sessionFetch("/api/chef/orders", { cache: "no-store" });
+    if (response.status === 401) {
+      // Refresh was refused: let the session confirm it, so Chef Mode can ask the chef to sign in again.
+      void loadSession().catch(() => null);
+      return null;
+    }
     if (!response.ok) return null;
     return parseChefOrdersResponse(await response.json().catch(() => null));
   } catch {
@@ -216,8 +228,38 @@ export function mergeOrders(current: ChefOrder[], incoming: ChefOrder[]): ChefOr
   });
 }
 
-/** Checks orders every 20 seconds and when the chef comes back to the app, then hands them over. */
-export function useChefOrderPolling(enabled: boolean, onOrders: (orders: ChefOrder[]) => void): void {
+type OrdersListener = (orders: ChefOrder[], fresh: ChefOrder[]) => void;
+const listeners = new Set<OrdersListener>();
+let pollTimer: number | null = null;
+let checking: Promise<void> | null = null;
+
+/** One check for every screen that listens: Home, Orders, an order and the new-order bar share it. */
+function checkOrders(): Promise<void> {
+  checking ??= (async () => {
+    const orders = await fetchChefOrders();
+    if (!orders) return;
+    const fresh = noticeNewOrders(orders);
+    for (const listener of listeners) listener(orders, fresh);
+  })().finally(() => {
+    checking = null;
+  });
+  return checking;
+}
+
+function onVisible() {
+  if (document.visibilityState === "visible") void checkOrders();
+}
+
+/**
+ * Checks orders every 20 seconds and when the chef comes back to the app, then hands them
+ * over with the ones that are new. `checkNow` also checks at once (a page that didn't just
+ * load the list itself).
+ */
+export function useChefOrderPolling(
+  enabled: boolean,
+  onOrders: OrdersListener,
+  { checkNow = false }: { checkNow?: boolean } = {},
+): void {
   const latest = useRef(onOrders);
   useEffect(() => {
     latest.current = onOrders;
@@ -225,24 +267,22 @@ export function useChefOrderPolling(enabled: boolean, onOrders: (orders: ChefOrd
   useEffect(() => {
     installSoundUnlock();
     if (!enabled) return;
-    let stopped = false;
-    const check = async () => {
-      const orders = await fetchChefOrders();
-      if (stopped || !orders) return;
-      noticeNewOrders(orders);
-      latest.current(orders);
-    };
-    const timer = window.setInterval(() => void check(), CHEF_ORDER_POLL_MS);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void check();
-    };
-    document.addEventListener("visibilitychange", onVisible);
+    const listener: OrdersListener = (orders, fresh) => latest.current(orders, fresh);
+    listeners.add(listener);
+    if (pollTimer === null) {
+      pollTimer = window.setInterval(() => void checkOrders(), CHEF_ORDER_POLL_MS);
+      document.addEventListener("visibilitychange", onVisible);
+    }
+    if (checkNow) void checkOrders();
     return () => {
-      stopped = true;
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
+      listeners.delete(listener);
+      if (listeners.size === 0 && pollTimer !== null) {
+        window.clearInterval(pollTimer);
+        pollTimer = null;
+        document.removeEventListener("visibilitychange", onVisible);
+      }
     };
-  }, [enabled]);
+  }, [enabled, checkNow]);
 }
 
 /** For tests: forget what this tab has seen. */

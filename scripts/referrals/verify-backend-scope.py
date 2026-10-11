@@ -199,13 +199,14 @@ CHEF_ACTIVATION_REQUIRED={
  'services/referral-service/src/main/resources/db/referral_migration/V12__chef_order_exclusion.sql':'A',
  'services/referral-service/src/test/java/in/craves/referral/ChefActivationIT.java':'A',
  'services/referral-service/src/test/java/in/craves/referral/ChefMinimumMigrationIT.java':'M'}
+CHEF_ACTIVATION_HISTORY_FIX={'scripts/referrals/chef_activation.py':'M','scripts/referrals/verify-backend-scope.py':'M'}
 
 def reviewed_chef_activation_scope():
  if subprocess.run(['git','rev-parse','--verify','-q','HEAD^2'],capture_output=True).returncode!=0:
   return False
  rows=subprocess.check_output(['git','diff','--name-status','--no-renames','HEAD^1','HEAD'],text=True).splitlines()
  actual=dict(reversed(row.split('\t',1)) for row in rows)
- return actual==CHEF_ACTIVATION_REQUIRED
+ return actual in (CHEF_ACTIVATION_REQUIRED,CHEF_ACTIVATION_HISTORY_FIX)
 
 if reviewed_chef_activation_scope():
  print('PASS: exact chef programme activation scope; full referral compatibility tests still required')

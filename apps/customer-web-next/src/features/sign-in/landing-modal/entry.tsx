@@ -6,6 +6,7 @@ import { phoneCodeRequestError } from "@/features/sign-in/lib/phone-auth-errors"
 import type { CravesIdentity } from "@/features/auth/lib/auth-contract";
 import { parseCustomerProfile } from "@/features/profile/lib/profile-contract";
 import { markChefModeVerified } from "@/features/chef/lib/chef-mode";
+import { CUSTOMERS_LAUNCHING_SOON } from "@/features/sign-in/lib/customer-launch";
 import {
   captureSessionContext,
   isSessionContextCurrent,
@@ -129,7 +130,7 @@ function CustomerAuth({ onClose }: { onClose: () => void }) {
     window.location.replace(request.role === "chef" ? "/chef/sign-in?returnTo=/chef" : "/home");
   }
 
-  return <AuthModal onClose={onClose} onRequestCode={requestCode} onVerifyCode={verifyCode} />;
+  return <AuthModal onClose={onClose} onRequestCode={requestCode} onVerifyCode={verifyCode} customersLaunchingSoon={CUSTOMERS_LAUNCHING_SOON} />;
 }
 
 /** The supplied landing popup uses the application's existing MSG91/session flow. */

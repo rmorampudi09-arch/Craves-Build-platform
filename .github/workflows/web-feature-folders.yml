@@ -1,6 +1,6 @@
 name: Web feature folders
 # Moves apps/customer-web-next onto src/features/<feature>/ and keeps open branches working.
-#  - push to claude/web-feature-folders: the one-time move (removed once that branch is merged).
+#  - push to claude/web-feature-folders: the one-time move (removed before that branch is merged).
 #  - a pull request, or a manual run with its number: if the branch started before the folders, bring it over with
 #    apps/customer-web-next/scripts/features/update-branch.sh, then push only if lint, types and every web test pass.
 #    Otherwise nothing is pushed and the author gets a comment saying what to do.
@@ -34,23 +34,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Move files and record today's links between features
+      - name: Move files, record today's links between features and commit
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if [ -d apps/customer-web-next/src/lib ]; then node apps/customer-web-next/scripts/features/move-to-features.mjs; fi
           (cd apps/customer-web-next && node scripts/features/check-boundaries.mjs --update)
           (cd apps/mobile && node scripts/check-feature-boundaries.mjs --update)
+          # GitHub won't take workflow edits from this token, so those are committed by a person beforehand.
+          if ! git diff --quiet -- .github; then echo "::error::The move would change these workflow files; commit their updated paths first:"; git diff --stat -- .github; exit 1; fi
+          # Committed before the checks, so their build output stays out.
+          git add -A
+          git diff --cached --quiet || git commit -qm "Move web files into feature folders (apps/customer-web-next/scripts/features/move-to-features.mjs)"
       - name: Check web lint, types and every test
         working-directory: apps/customer-web-next
         run: npm ci && npm run lint && npm run typecheck && npm test
       - name: Check mobile boundaries
         working-directory: apps/mobile
         run: node scripts/check-feature-boundaries.mjs
-      - name: Commit
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet || { git commit -m "Move web files into feature folders (apps/customer-web-next/scripts/features/move-to-features.mjs)"; git push; }
+      - name: Push
+        run: git push
 
   migrate:
     if: >-
@@ -102,8 +105,11 @@ jobs:
         working-directory: apps/customer-web-next
         run: npm ci && npm run lint && npm run typecheck && npm test
       - name: Push
+        id: push
         if: steps.move.outputs.result == 'moved'
-        run: git push origin "HEAD:${{ steps.pr.outputs.head }}"
+        # GitHub refuses this token's pushes when the merged-in main changed workflow files; the author then runs the script.
+        run: |
+          if git push origin "HEAD:${{ steps.pr.outputs.head }}"; then echo "pushed=true" >> "$GITHUB_OUTPUT"; else echo "pushed=false" >> "$GITHUB_OUTPUT"; fi
       - name: Tell the author
         if: always() && (steps.move.outputs.result == 'moved' || steps.move.outputs.result == 'conflict')
         run: |
@@ -111,8 +117,10 @@ jobs:
           HOW="On your machine: \`bash apps/customer-web-next/scripts/features/update-branch.sh\` from the repository root. It stops at each set of conflicts; fix them, commit and run it again."
           if [ "${{ steps.move.outputs.result }}" = conflict ]; then
             BODY="The web app now keeps each feature in its own folder (\`src/features/<feature>/\`). I couldn't bring this branch over automatically: $(tail -n 2 "$RUNNER_TEMP/update.log" | tr '\n' ' ') Nothing was pushed. $HOW"
-          elif [ "${{ job.status }}" = success ]; then
+          elif [ "${{ job.status }}" = success ] && [ "${{ steps.push.outputs.pushed }}" = true ]; then
             BODY="The web app now keeps each feature in its own folder (\`src/features/<feature>/\`). I moved this branch over: merged main, moved this branch's files and rewrote old paths. Lint, types and every web test pass. Run \`git pull\` before your next commit; the PR checks run again on your next push."
+          elif [ "${{ job.status }}" = success ]; then
+            BODY="The web app now keeps each feature in its own folder (\`src/features/<feature>/\`). I moved this branch over and lint, types and every web test pass, but GitHub doesn't let me push it because merging main brings in workflow file changes. Nothing was pushed. $HOW"
           else
             LEFT=$(grep '^  src/' "$RUNNER_TEMP/update.log" | sort -u | tr -s ' \n' ' ')
             BODY="The web app now keeps each feature in its own folder (\`src/features/<feature>/\`). I moved this branch over, but lint, types or tests did not pass, so I pushed nothing: $RUN. ${LEFT:+New files that need a home in src/features/<feature>/ or src/shared/ first:$LEFT. }$HOW"

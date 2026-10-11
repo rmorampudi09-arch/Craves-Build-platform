@@ -169,8 +169,59 @@ describe('MyMealPlanScreen', () => {
       expect.arrayContaining(['Weekly Home Lunch Plan', 'Active', '₹1,499', 'Renews ', 'Mon, 19 Oct', 'Madhapur']),
     );
     expect(shown.find(text => text.startsWith('Today · '))).toBeDefined();
-    act(() => byLabel(root, 'View meal details').props.onPress());
+    act(() => byLabel(root, 'View details').props.onPress());
     expect(navigation.navigate).toHaveBeenCalledWith('MealPlanMeal', {subscriptionId, occurrenceId: 'occ-1'});
+  });
+
+  it('keeps loading while the list refetches without the new plan, then says it is gone', () => {
+    given();
+    const unavailable = 'This meal plan is no longer available';
+    jest.mocked(queries.useMySubscriptionsQuery).mockReturnValue({
+      data: [],
+      isLoading: false,
+      isFetching: true,
+    } as never);
+    expect(texts(renderPlan())).not.toContain(unavailable);
+
+    jest.mocked(queries.useMySubscriptionsQuery).mockReturnValue({
+      data: [],
+      isLoading: false,
+      isFetching: false,
+    } as never);
+    act(() => tree?.update(<MyMealPlanScreen navigation={navigation as never} route={route({subscriptionId})} />));
+    expect(texts(tree!.root)).toContain(unavailable);
+  });
+
+  it('offers a retry when meals fail to load and refreshes everything on pull', async () => {
+    given();
+    const refetch = {
+      subscriptions: jest.fn(async () => undefined),
+      occurrences: jest.fn(async () => undefined),
+      payment: jest.fn(async () => undefined),
+    };
+    jest.mocked(queries.useMySubscriptionsQuery).mockReturnValue({
+      data: [subscription()],
+      refetch: refetch.subscriptions,
+    } as never);
+    jest.mocked(queries.useSubscriptionOccurrencesQuery).mockReturnValue({
+      data: undefined,
+      isError: true,
+      refetch: refetch.occurrences,
+    } as never);
+    jest.mocked(queries.useLatestSubscriptionPaymentQuery).mockReturnValue({
+      data: undefined,
+      refetch: refetch.payment,
+    } as never);
+    const root = renderPlan();
+    expect(texts(root)).not.toContain("Your meals will show here once they're scheduled.");
+    act(() => byLabel(root, 'Try again').props.onPress());
+    expect(refetch.occurrences).toHaveBeenCalledTimes(1);
+
+    const scroll = root.findAll(node => node.props.refreshControl !== undefined)[0];
+    await act(async () => scroll.props.refreshControl.props.onRefresh());
+    expect(refetch.subscriptions).toHaveBeenCalled();
+    expect(refetch.occurrences).toHaveBeenCalledTimes(2);
+    expect(refetch.payment).toHaveBeenCalled();
   });
 
   it('shows Paid until instead of Renews when the plan is not active', () => {

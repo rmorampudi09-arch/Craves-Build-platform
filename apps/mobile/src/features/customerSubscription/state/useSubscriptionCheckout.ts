@@ -157,9 +157,11 @@ async function payForSubscription(
     return {
       kind: 'not-completed',
       subscriptionId,
-      // The gateway's own message already says the checkout did not complete.
+      // Razorpay closed or failed: its own description is not meant for customers.
       message:
-        error.code === 'PAYMENT_PROVIDER_FAILED' ? error.message : `Payment not completed. ${error.message}`,
+        error.code === 'PAYMENT_PROVIDER_FAILED'
+          ? 'Payment not completed. You can try again.'
+          : `Payment not completed. ${error.message}`,
     };
   }
 }
@@ -255,15 +257,23 @@ export function useSubscriptionCheckout(): {
   return {payNew, payExisting, busy};
 }
 
-/** An unfinished Razorpay hand-off from an earlier session, rechecked on focus and when the app returns. */
+export type SettledInterruptedPayment = {kind: 'paid'; subscriptionId: string} | {kind: 'failed'};
+
+/**
+ * An unfinished Razorpay hand-off from an earlier session, rechecked on focus and when the app returns.
+ * `settled` reports a recheck that found it finished, until `dismissSettled`.
+ */
 export function useInterruptedPaymentRecovery(): {
   pending: PendingSubscriptionPaymentReference | null;
   resume(): Promise<CheckoutOutcome | null>;
   busy: boolean;
+  settled: SettledInterruptedPayment | null;
+  dismissSettled(): void;
 } {
   const queryClient = useQueryClient();
   const {payExisting, busy} = useSubscriptionCheckout();
   const [pending, setPending] = React.useState<PendingSubscriptionPaymentReference | null>(null);
+  const [settled, setSettled] = React.useState<SettledInterruptedPayment | null>(null);
 
   const recover = React.useCallback(async () => {
     const reference = await pendingSubscriptionPaymentStore.load();
@@ -282,6 +292,9 @@ export function useInterruptedPaymentRecovery(): {
       if (isTerminal(latest.status)) {
         await pendingSubscriptionPaymentStore.clear();
         setPending(null);
+        setSettled(
+          latest.status === 'PAID' ? {kind: 'paid', subscriptionId: latest.subscriptionId} : {kind: 'failed'},
+        );
         if (latest.status === 'PAID') {
           invalidateMealPlanQueries(queryClient).catch(() => undefined);
         }
@@ -315,5 +328,5 @@ export function useInterruptedPaymentRecovery(): {
     return outcome;
   }, [payExisting, pending, recover]);
 
-  return {pending, resume, busy};
+  return {pending, resume, busy, settled, dismissSettled: () => setSettled(null)};
 }

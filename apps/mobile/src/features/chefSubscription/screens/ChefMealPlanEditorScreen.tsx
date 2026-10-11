@@ -223,10 +223,16 @@ function MealPlanEditor({
   const [sheet, setSheet] = React.useState<Sheet>(null);
   const [submitOpen, setSubmitOpen] = React.useState(false);
   const [note, setNote] = React.useState('');
+  const [hasServerSchedule, setHasServerSchedule] = React.useState(schedule !== null);
+  const [scheduleNote, setScheduleNote] = React.useState(false);
 
   // Errors appear after the first save attempt and then follow the chef's edits.
   const errors = attempt ? validateMealPlanForm(form, slots, attempt) : {};
   const hasErrors = Object.keys(errors).length > 0;
+  const locked = !editable || busy !== null;
+  const hasDishes = slots.some(slot => slot.menuItemId !== null);
+  // Only a schedule with dishes is sent, so a draft without any keeps the server's old schedule.
+  const scheduleKept = hasServerSchedule && !hasDishes;
   const mealDays = daysWithMeals(slots);
   const daySlots = slots.filter(slot => slot.day === day);
   const freeSlots = freeSlotsForDay(slots, day);
@@ -323,29 +329,36 @@ function MealPlanEditor({
     }
   };
 
-  /** False when the photo did not upload; the saved plan is kept either way. */
-  const uploadPhoto = async (id: string, asset: ImagePicker.ImagePickerAsset) => {
+  /** False when the chef has to deal with the photo before going on; the saved plan is kept either way. */
+  const uploadPhoto = async (saved: ChefMealPlan, asset: ImagePicker.ImagePickerAsset) => {
+    const unavailable = () => {
+      setPhoto(null);
+      setPhotoError("Plan photos aren't available yet.");
+      return true;
+    };
+    // Backends without plan photos send no imageUrl key and have no upload endpoint.
+    if (!('imageUrl' in saved)) return unavailable();
     try {
       const body = new FormData();
       body.append('file', {
         uri: asset.uri,
-        name: asset.fileName?.trim() || `craves-plan-${id}.jpg`,
+        name: asset.fileName?.trim() || `craves-plan-${saved.id}.jpg`,
         type: asset.mimeType || 'image/jpeg',
       } as unknown as Blob);
-      await chefSubscriptionApi.uploadPlanImage(id, body);
+      await chefSubscriptionApi.uploadPlanImage(saved.id, body);
       return true;
     } catch (cause) {
       const status = cause instanceof AppApiError ? cause.status : undefined;
-      if (status === 404 || status === 405) {
+      if (status === 404 || status === 405) return unavailable();
+      const reason = status === 400 ? (cause as AppApiError).message : 'Try again.';
+      if (status === 400) {
         setPhoto(null);
-        setPhotoError("Plan photos aren't available yet.");
-      } else if (status === 400) {
-        setPhoto(null);
-        setPhotoError((cause as AppApiError).message);
+        setPhotoError(reason);
       } else {
         setPhotoError("Photo couldn't be uploaded. Try again.");
         setDirty(true); // the plan is saved; only the photo still waits to upload
       }
+      setServerError(`Plan saved, but the photo wasn't uploaded. ${reason}`);
       return false;
     }
   };
@@ -356,6 +369,7 @@ function MealPlanEditor({
     setBusy(mode);
     setServerError(null);
     setPhotoError(null);
+    setScheduleNote(false);
     let id = savedPlanId;
     try {
       const input = {
@@ -365,16 +379,24 @@ function MealPlanEditor({
         amount: Number(form.amount.trim()),
         currency: 'INR' as const,
       };
-      id = (id ? await chefSubscriptionApi.updatePlan(id, input) : await chefSubscriptionApi.createPlan(input)).id;
+      const saved = id ? await chefSubscriptionApi.updatePlan(id, input) : await chefSubscriptionApi.createPlan(input);
+      id = saved.id;
       setSavedPlanId(id);
-      if (slots.some(slot => slot.menuItemId !== null)) {
+      if (hasDishes) {
         await chefSubscriptionApi.putSchedule(id, slotsToScheduleRequest(slots, period, leadHours));
+        setHasServerSchedule(true);
       }
       setDirty(false);
       // Before submit: the server takes photos only while the plan is a draft.
-      if (photo && !(await uploadPhoto(id, photo))) return;
+      if (photo && !(await uploadPhoto(saved, photo))) return;
       if (mode === 'submit') {
         await chefSubscriptionApi.submit(id, submitNote);
+      }
+      if (scheduleKept) {
+        // A schedule cannot be emptied, so the server kept the old one; stay and say so.
+        setScheduleNote(true);
+        setDirty(true);
+        return;
       }
       setLeaving(true);
     } catch (cause) {
@@ -483,7 +505,7 @@ function MealPlanEditor({
               <TextInput
                 accessibilityLabel="Plan name"
                 allowFontScaling={textDefaults.allowFontScaling}
-                editable={editable}
+                editable={!locked}
                 maxLength={160}
                 onChangeText={value => updateForm('name', value)}
                 placeholder="e.g. Weekly Home Lunch Plan"
@@ -499,7 +521,7 @@ function MealPlanEditor({
               <SegmentedControl
                 accessibilityLabel="Frequency"
                 accessibilityOptionRole="radio"
-                disabled={!editable}
+                disabled={locked}
                 onChange={changePeriod}
                 options={[
                   {value: 'WEEKLY', label: 'Weekly'},
@@ -516,7 +538,7 @@ function MealPlanEditor({
                 <TextInput
                   accessibilityLabel={`Price per ${unit}`}
                   allowFontScaling={textDefaults.allowFontScaling}
-                  editable={editable}
+                  editable={!locked}
                   keyboardType="decimal-pad"
                   onChangeText={value => updateForm('amount', value)}
                   placeholder="e.g. 1499"
@@ -535,7 +557,7 @@ function MealPlanEditor({
                 <TextInput
                   accessibilityLabel="Description"
                   allowFontScaling={textDefaults.allowFontScaling}
-                  editable={editable}
+                  editable={!locked}
                   maxLength={500}
                   multiline
                   onChangeText={value => updateForm('description', value)}
@@ -561,7 +583,7 @@ function MealPlanEditor({
                 accessibilityHint="Opens the list of lead times"
                 accessibilityLabel={`Preparation lead time, ${leadHoursLabel(leadHours)}`}
                 accessibilityRole="button"
-                disabled={!editable}
+                disabled={locked}
                 onPress={() => setSheet({kind: 'lead'})}
                 style={[styles.input, styles.inputRow, !editable && styles.inputDisabled]}>
                 <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.inputValue}>
@@ -624,6 +646,9 @@ function MealPlanEditor({
               </ScrollView>
             )}
             <FieldError message={errors.schedule} />
+            <FieldError
+              message={scheduleNote && scheduleKept ? 'Add at least one meal to save schedule changes.' : undefined}
+            />
             {missingDishDays.length > 0 ? (
               <FieldError
                 message={`Select a dish for every meal: ${missingDishDays.map(value => dayName(period, value)).join(', ')}.`}
@@ -642,6 +667,7 @@ function MealPlanEditor({
                   !availableDishes.some(item => item.id === slot.menuItemId)
                 }
                 editable={editable}
+                locked={locked}
                 error={errors[`slot:${slot.key}`]}
                 onDelete={() => updateSlots(current => removeSlot(current, slot.key))}
                 onDish={() => setSheet({kind: 'dish', key: slot.key})}
@@ -654,6 +680,7 @@ function MealPlanEditor({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Add meal slot for ${dayName(period, day)}`}
+                disabled={locked}
                 onPress={() => setSheet({kind: 'add'})}
                 style={({pressed}) => [styles.addSlot, pressed && styles.pressed]}>
                 <Glyph name="plus" size={20} color={colors.flameRedAccessible} />
@@ -739,7 +766,15 @@ function MealPlanEditor({
       ) : null}
       {sheet?.kind === 'dish' ? (
         <BottomSheet title="Select a dish" onClose={() => setSheet(null)}>
-          {availableDishes.length === 0 ? (
+          {availableDishes.length === 0 && menu.status === 'error' ? (
+            <RecoverableErrorBanner
+              message="Your menu could not be loaded. Check your connection and try again."
+              onRetry={() => {
+                menu.refresh().catch(() => undefined);
+              }}
+              style={styles.sheetError}
+            />
+          ) : availableDishes.length === 0 ? (
             <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.sheetEmpty}>
               {menu.status === 'pending'
                 ? 'Loading your menu…'
@@ -842,6 +877,7 @@ function SlotCard({
   dishName,
   dishUnavailable,
   editable,
+  locked,
   error,
   onDelete,
   onDish,
@@ -853,6 +889,8 @@ function SlotCard({
   dishName: string | null;
   dishUnavailable: boolean;
   editable: boolean;
+  /** Not editable, or a save is in flight. */
+  locked: boolean;
   error?: string;
   onDelete: () => void;
   onDish: () => void;
@@ -874,7 +912,7 @@ function SlotCard({
           accessibilityHint="Opens the list of times"
           accessibilityLabel={`${label} time, ${formatServiceTime(slot.time)}`}
           accessibilityRole="button"
-          disabled={!editable}
+          disabled={locked}
           onPress={onTime}
           style={({pressed}) => [styles.timeChip, pressed && styles.pressed]}>
           <Glyph name="clock-outline" size={18} color={colors.textPrimary} />
@@ -887,6 +925,7 @@ function SlotCard({
           <Pressable
             accessibilityLabel={`Remove ${label.toLowerCase()}`}
             accessibilityRole="button"
+            disabled={locked}
             onPress={onDelete}
             style={({pressed}) => [styles.deleteButton, pressed && styles.pressed]}>
             <Glyph name="delete-outline" size={20} color={colors.flameRedAccessible} />
@@ -897,7 +936,7 @@ function SlotCard({
         accessibilityHint="Opens your available dishes"
         accessibilityLabel={`${label} dish, ${dishName ?? 'not selected'}`}
         accessibilityRole="button"
-        disabled={!editable}
+        disabled={locked}
         onPress={onDish}
         style={[styles.input, styles.inputRow, error && styles.inputError]}>
         {dishName ? (
@@ -920,7 +959,7 @@ function SlotCard({
           <Pressable
             accessibilityLabel={`Fewer ${label.toLowerCase()} portions`}
             accessibilityRole="button"
-            disabled={!editable || slot.quantity <= 1}
+            disabled={locked || slot.quantity <= 1}
             onPress={() => onQuantity(slot.quantity - 1)}
             style={({pressed}) => [styles.stepperButton, pressed && styles.pressed]}>
             <Glyph name="minus" size={20} color={editable && slot.quantity > 1 ? colors.textPrimary : colors.borderStrong} />
@@ -931,7 +970,7 @@ function SlotCard({
           <Pressable
             accessibilityLabel={`More ${label.toLowerCase()} portions`}
             accessibilityRole="button"
-            disabled={!editable || slot.quantity >= 100}
+            disabled={locked || slot.quantity >= 100}
             onPress={() => onQuantity(slot.quantity + 1)}
             style={({pressed}) => [styles.stepperButton, pressed && styles.pressed]}>
             <Glyph name="plus" size={20} color={editable && slot.quantity < 100 ? colors.textPrimary : colors.borderStrong} />
@@ -1200,5 +1239,6 @@ const styles = StyleSheet.create({
   sheetRow: {minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xxs},
   sheetRowText: {flex: 1, color: colors.textPrimary, fontSize: typography.body},
   sheetEmpty: {paddingVertical: spacing.md, color: colors.textSecondary, fontSize: typography.body},
+  sheetError: {marginVertical: spacing.sm},
   submitBody: {gap: spacing.sm, paddingTop: spacing.xs},
 });

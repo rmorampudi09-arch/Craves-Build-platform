@@ -216,6 +216,15 @@ const route = (params?: object) => ({key: 'route', name: 'route', params}) as ne
 
 describe('MealPlansScreen', () => {
   const renderList = () => render(<MealPlansScreen navigation={navigation as never} route={route()} />);
+  beforeEach(() => {
+    jest.mocked(subscriptionCheckout.useInterruptedPaymentRecovery).mockReturnValue({
+      pending: null,
+      resume: jest.fn(),
+      busy: false,
+      settled: null,
+      dismissSettled: jest.fn(),
+    });
+  });
 
   it('renders a card per plan and filters by billing period', () => {
     given();
@@ -243,6 +252,48 @@ describe('MealPlansScreen', () => {
     expect(cards(root)).toEqual([monthly.id]);
     act(() => search.props.onChangeText('weekly home'));
     expect(cards(root)).toEqual([weekly.id]);
+    expect(texts(root)).not.toContain('No plans match "weekly home".');
+
+    act(() => search.props.onChangeText(' biryani '));
+    expect(cards(root)).toEqual([]);
+    expect(texts(root)).toContain('No plans match "biryani".');
+    act(() => search.props.onChangeText(''));
+    expect(cards(root)).toEqual([weekly.id, monthly.id]);
+    expect(texts(root).some(text => text.startsWith('No plans match'))).toBe(false);
+  });
+
+  it('reports an interrupted payment that went through and opens the plan', () => {
+    const dismissSettled = jest.fn();
+    jest.mocked(subscriptionCheckout.useInterruptedPaymentRecovery).mockReturnValue({
+      pending: null,
+      resume: jest.fn(),
+      busy: false,
+      settled: {kind: 'paid', subscriptionId: 'sub-9'},
+      dismissSettled,
+    });
+    given();
+    const root = renderList();
+    expect(texts(root)).toContain('Your meal plan payment went through.');
+    act(() => byLabel(root, 'View My Plan').props.onPress());
+    expect(dismissSettled).toHaveBeenCalled();
+    expect(navigation.navigate).toHaveBeenCalledWith('MyMealPlan', {subscriptionId: 'sub-9'});
+  });
+
+  it('reports an interrupted payment that did not complete, dismissibly', () => {
+    const dismissSettled = jest.fn();
+    jest.mocked(subscriptionCheckout.useInterruptedPaymentRecovery).mockReturnValue({
+      pending: null,
+      resume: jest.fn(),
+      busy: false,
+      settled: {kind: 'failed'},
+      dismissSettled,
+    });
+    given();
+    const root = renderList();
+    expect(texts(root)).toContain("Your last meal plan payment didn't complete. You can try again safely.");
+    expect(byLabel(root, 'View My Plan')).toBeUndefined();
+    act(() => byLabel(root, 'Dismiss').props.onPress());
+    expect(dismissSettled).toHaveBeenCalled();
   });
 
   it('keeps a card without a schedule: name and price, no meal meta', () => {
@@ -309,7 +360,7 @@ describe('MealPlanReviewScreen', () => {
     const root = renderReview();
     expect(byLabel(root, 'Proceed to payment').props.disabled).toBe(true);
 
-    act(() => byLabel(root, 'Add an address delivery address').props.onPress());
+    act(() => byLabel(root, 'Add an address for delivery').props.onPress());
     const props = mockEditor.mock.calls.at(-1)?.[0];
     expect(props.mode).toBe('add');
     act(() => props.onSaved(address('new')));
@@ -459,13 +510,19 @@ describe('MealPlanPaymentScreen', () => {
     act(() => {
       paying = byLabel(root, 'Pay & Subscribe').props.onPress();
     });
-    expect(leave()).toHaveBeenCalled();
+    let prevented: jest.Mock | undefined;
+    act(() => {
+      prevented = leave();
+    });
+    expect(prevented).toHaveBeenCalled();
+    expect(texts(root)).toContain('Payment in progress — please wait.');
     navigation.replace.mockImplementation(() => expect(leave()).not.toHaveBeenCalled());
     await act(async () => {
       finish({kind: 'paid', subscriptionId: 'sub-1', payment: {}});
       await paying;
     });
     expect(navigation.replace).toHaveBeenCalledWith('MealPlanActivated', {subscriptionId: 'sub-1'});
+    expect(texts(root)).not.toContain('Payment in progress — please wait.');
     navigation.replace.mockReset();
   });
 

@@ -89,6 +89,7 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
   const {payNew, payExisting, busy} = useSubscriptionCheckout();
   const [notice, setNotice] = React.useState<Notice | null>(null);
   const [editorOpen, setEditorOpen] = React.useState(false);
+  const [leaveBlocked, setLeaveBlocked] = React.useState(false);
   const checkoutOpen = React.useRef(false);
 
   // Leaving mid-checkout would drop a paid result and let a second payment start. `pay` releases
@@ -98,6 +99,7 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
       navigation.addListener('beforeRemove', event => {
         if (checkoutOpen.current) {
           event.preventDefault();
+          setLeaveBlocked(true);
         }
       }),
     [navigation],
@@ -178,6 +180,7 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
     setNotice(null);
     const outcome = await checkout.finally(() => {
       checkoutOpen.current = false;
+      setLeaveBlocked(false);
     });
     if (outcome.kind === 'paid') {
       navigation.replace('MealPlanActivated', {subscriptionId: outcome.subscriptionId});
@@ -312,7 +315,9 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
       </ScrollView>
 
       <View style={[styles.bar, {paddingBottom: Math.max(insets.bottom, spacing.sm) + spacing.xs}]}>
-        {notice?.kind === 'processing' ? (
+        {leaveBlocked ? (
+          <OfflineNotice message="Payment in progress — please wait." />
+        ) : notice?.kind === 'processing' ? (
           <OfflineNotice
             message="Payment is processing. We'll update your plan shortly."
             retryLabel="Go to My Meal Plan"

@@ -128,7 +128,8 @@ export interface InfoRowProps {
   icon?: IconName;
   label: string;
   value: string;
-  action?: {label: string; onPress: () => void};
+  /** `accessibilityLabel` replaces the default "{action} {label}" when that reads badly. */
+  action?: {label: string; onPress: () => void; accessibilityLabel?: string};
   /** The first row of a card has no top divider. */
   first?: boolean;
 }
@@ -145,7 +146,7 @@ export function InfoRow({icon, label, value, action, first = false}: InfoRowProp
       </Text>
       {action ? (
         <Pressable
-          accessibilityLabel={`${action.label} ${label.toLowerCase()}`}
+          accessibilityLabel={action.accessibilityLabel ?? `${action.label} ${label.toLowerCase()}`}
           accessibilityRole="button"
           hitSlop={4}
           onPress={action.onPress}

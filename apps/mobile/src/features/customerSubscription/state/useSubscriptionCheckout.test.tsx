@@ -9,7 +9,11 @@ import {subscriptionPaymentApi} from '../api/subscriptionPaymentApi';
 import type {SubscriptionPayment} from '../domain/subscriptionPaymentTypes';
 import {pendingSubscriptionPaymentStore} from '../storage/pendingSubscriptionPaymentStore';
 import {MealPlanCheckoutProvider} from './MealPlanCheckoutContext';
-import {checkoutOutcome, useSubscriptionCheckout} from './useSubscriptionCheckout';
+import {
+  checkoutOutcome,
+  useInterruptedPaymentRecovery,
+  useSubscriptionCheckout,
+} from './useSubscriptionCheckout';
 
 jest.mock('../../customerAddresses/query/customerAddressQueries', () => ({
   useCustomerAddressesQuery: jest.fn(),
@@ -33,6 +37,9 @@ jest.mock('../../customerProfile/api/customerProfileApi', () => ({
 }));
 jest.mock('../../payment/gateway/razorpayGateway', () => ({
   openRazorpayCheckout: jest.fn(),
+}));
+jest.mock('@react-navigation/native', () => ({
+  useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]),
 }));
 jest.mock('../storage/pendingSubscriptionPaymentStore', () => ({
   pendingSubscriptionPaymentStore: {
@@ -166,7 +173,7 @@ describe('useSubscriptionCheckout', () => {
     expect(await pay(() => checkout.payNew(input))).toEqual({
       kind: 'not-completed',
       subscriptionId: SUBSCRIPTION_ID,
-      message: 'Payment cancelled by user',
+      message: 'Payment not completed. You can try again.',
     });
     expect(await pay(() => checkout.payNew(input))).toMatchObject({kind: 'paid'});
     expect(api.create).toHaveBeenCalledTimes(1);
@@ -221,5 +228,47 @@ describe('useSubscriptionCheckout', () => {
     });
     expect(pendingSubscriptionPaymentStore.save).toHaveBeenCalled();
     expect(pendingSubscriptionPaymentStore.clear).not.toHaveBeenCalled();
+  });
+});
+
+describe('useInterruptedPaymentRecovery', () => {
+  let recovery: ReturnType<typeof useInterruptedPaymentRecovery>;
+  function Probe() {
+    recovery = useInterruptedPaymentRecovery();
+    return null;
+  }
+  let tree: ReturnType<typeof create> | undefined;
+  afterEach(() => act(() => tree?.unmount()));
+
+  it.each([
+    ['PAID', {kind: 'paid', subscriptionId: SUBSCRIPTION_ID}],
+    ['FAILED', {kind: 'failed'}],
+    ['CANCELLED', {kind: 'failed'}],
+  ] as const)('reports a %s interrupted payment until dismissed and clears the store', async (status, expected) => {
+    jest.clearAllMocks();
+    const invoice = payment(status);
+    jest.mocked(pendingSubscriptionPaymentStore.load).mockResolvedValueOnce({
+      invoiceId: invoice.invoiceId,
+      subscriptionId: SUBSCRIPTION_ID,
+      providerOrderId: 'order_abc123',
+      amount: invoice.amount,
+    } as never);
+    jest.mocked(subscriptionPaymentApi.getInvoice).mockResolvedValueOnce(invoice);
+    await act(async () => {
+      tree = create(
+        <QueryClientProvider client={new QueryClient()}>
+          <MealPlanCheckoutProvider>
+            <Probe />
+          </MealPlanCheckoutProvider>
+        </QueryClientProvider>,
+      );
+      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
+    });
+    expect(recovery.settled).toEqual(expected);
+    expect(recovery.pending).toBeNull();
+    expect(pendingSubscriptionPaymentStore.clear).toHaveBeenCalledTimes(1);
+
+    act(() => recovery.dismissSettled());
+    expect(recovery.settled).toBeNull();
   });
 });

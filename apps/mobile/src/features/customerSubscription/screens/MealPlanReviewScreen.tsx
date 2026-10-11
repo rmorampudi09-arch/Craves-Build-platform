@@ -97,7 +97,14 @@ export function MealPlanReviewScreen({navigation, route}: Props) {
               },
             },
           }
-        : {value: '', action: {label: 'Add an address', onPress: () => setEditorOpen(true)}};
+        : {
+            value: '',
+            action: {
+              label: 'Add an address',
+              accessibilityLabel: 'Add an address for delivery',
+              onPress: () => setEditorOpen(true),
+            },
+          };
 
   const proceed = () => {
     if (!address) {

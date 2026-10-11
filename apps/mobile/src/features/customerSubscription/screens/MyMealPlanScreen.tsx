@@ -1,5 +1,5 @@
 import React from 'react';
-import {Alert, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {CustomerMealPlanStackParamList} from '../../../app/navigation/types';
 import {toAppApiError} from '../../../core/http/apiError';
@@ -15,7 +15,14 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
-import {Badge, Button, Icon, ScreenShell, type IconName} from '../../../shared/components';
+import {
+  Badge,
+  Button,
+  Icon,
+  RecoverableErrorBanner,
+  ScreenShell,
+  type IconName,
+} from '../../../shared/components';
 import {useCustomerAddressesQuery} from '../../customerAddresses/query/customerAddressQueries';
 import {billingUnit} from '../../mealPlans/domain/mealPlanSchedule';
 import type {CustomerSubscriptionOccurrence} from '../api/customerSubscriptionApi';
@@ -87,7 +94,7 @@ function NextMealCard({
             {dishes}
           </Text>
           <Pressable
-            accessibilityLabel="View meal details"
+            accessibilityLabel="View details"
             accessibilityRole="button"
             onPress={onOpen}
             style={({pressed}) => [styles.link, pressed && styles.pressed]}>
@@ -164,18 +171,29 @@ export function MyMealPlanScreen({navigation, route}: Props) {
   const cover = usePlanCover(planId);
   const scheduleItems = usePlanScheduleQuery(planId).data?.items ?? [];
   const policy = usePlanPolicyQuery(planId).data;
-  const occurrences = useSubscriptionOccurrencesQuery(subscriptionId).data ?? [];
-  const payment = useLatestSubscriptionPaymentQuery(subscriptionId).data;
+  const occurrencesQuery = useSubscriptionOccurrencesQuery(subscriptionId);
+  const occurrences = occurrencesQuery.data ?? [];
+  const paymentQuery = useLatestSubscriptionPaymentQuery(subscriptionId);
+  const payment = paymentQuery.data;
   const {addresses} = useCustomerAddressesQuery();
   const actions = useSubscriptionActions(subscriptionId);
   const [skipDates, setSkipDates] = React.useState<string[] | null>(null);
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const refresh = () => {
+    setRefreshing(true);
+    Promise.all([subscriptionsQuery.refetch(), occurrencesQuery.refetch(), paymentQuery.refetch()]).finally(() =>
+      setRefreshing(false),
+    );
+  };
 
   if (!subscription) {
     return (
       <ScreenShell edges={['top', 'bottom']} keyboardAvoiding={false}>
         <MealPlanHeader title="My Meal Plan" onBack={navigation.goBack} />
         <PlanUnavailable
-          loading={subscriptionsQuery.isLoading}
+          // Right after paying, the cached list lacks the new plan until the refetch lands.
+          loading={subscriptionsQuery.isLoading || subscriptionsQuery.isFetching}
           onBack={navigation.popToTop}
           onRetry={
             subscriptionsQuery.isError
@@ -266,9 +284,19 @@ export function MyMealPlanScreen({navigation, route}: Props) {
   const cancel = () => confirm('Cancel your plan?', CANCEL_COPY, 'Cancel plan', actions.cancel, true);
 
   return (
-    <ScreenShell edges={['top']} keyboardAvoiding={false} testID="my-meal-plan">
+    <ScreenShell edges={['top', 'bottom']} keyboardAvoiding={false} testID="my-meal-plan">
       <MealPlanHeader title="My Meal Plan" onBack={navigation.goBack} />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            colors={[colors.flameRed]}
+            onRefresh={refresh}
+            refreshing={refreshing}
+            tintColor={colors.flameRed}
+          />
+        }
+        showsVerticalScrollIndicator={false}>
         {status === 'PENDING_PAYMENT' || status === 'PAYMENT_FAILED' ? (
           <View style={styles.banner}>
             <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.bannerText}>
@@ -353,7 +381,14 @@ export function MyMealPlanScreen({navigation, route}: Props) {
         ) : null}
 
         <CardSection title="This week's schedule">
-          {week.length === 0 ? (
+          {week.length === 0 && occurrencesQuery.isError ? (
+            <RecoverableErrorBanner
+              message="Your meals could not be loaded."
+              onRetry={() => {
+                occurrencesQuery.refetch();
+              }}
+            />
+          ) : week.length === 0 ? (
             <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
               Your meals will show here once they're scheduled.
             </Text>

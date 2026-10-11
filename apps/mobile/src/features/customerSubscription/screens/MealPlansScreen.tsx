@@ -3,6 +3,7 @@ import {Alert, FlatList, Image, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {CustomerMealPlanStackParamList} from '../../../app/navigation/types';
 import {
+  borderWidth,
   colors,
   fontWeight,
   iconSize,
@@ -13,6 +14,7 @@ import {
 } from '../../../design/tokens';
 import {
   Badge,
+  Button,
   Chip,
   Icon,
   IconButton,
@@ -71,15 +73,20 @@ function mealMeta(summary: PlanScheduleSummary): string {
 function PlanCard({
   plan,
   search,
+  onMatch,
   onPress,
 }: {
   plan: PublicSubscriptionPlan;
   /** Lower-cased search text; the card hides itself when neither its name nor its kitchen matches. */
   search: string;
+  /** Tells the list whether this card matches the search, so it can say when none do. */
+  onMatch: (planId: string, matches: boolean) => void;
   onPress: () => void;
 }) {
   const {imageUrl, kitchenName, summary, rating} = usePlanCover(plan.id);
-  if (search && !`${plan.name}\n${kitchenName ?? ''}`.toLowerCase().includes(search)) {
+  const matches = !search || `${plan.name}\n${kitchenName ?? ''}`.toLowerCase().includes(search);
+  React.useEffect(() => onMatch(plan.id, matches), [matches, onMatch, plan.id]);
+  if (!matches) {
     return null;
   }
   const unit = billingUnit(plan.billingPeriod);
@@ -173,10 +180,27 @@ export function MealPlansScreen({navigation}: Props) {
   const [searchText, setSearchText] = React.useState('');
   const recovery = useInterruptedPaymentRecovery();
   const search = searchText.trim().toLowerCase();
+  const [unmatched, setUnmatched] = React.useState<ReadonlySet<string>>(() => new Set());
+  const onMatch = React.useCallback((planId: string, matches: boolean) => {
+    setUnmatched(current => {
+      if (current.has(planId) !== matches) {
+        return current;
+      }
+      const next = new Set(current);
+      if (matches) {
+        next.delete(planId);
+      } else {
+        next.add(planId);
+      }
+      return next;
+    });
+  }, []);
 
   const plans = plansQuery.data ?? [];
   const visiblePlans =
     filter === 'all' ? plans : plans.filter(plan => billingUnit(plan.billingPeriod) === filter);
+  const noMatches =
+    search !== '' && visiblePlans.length > 0 && visiblePlans.every(plan => unmatched.has(plan.id));
 
   const subscriptions = subscriptionsQuery.data ?? [];
   const current = subscriptions.filter(subscription => subscription.status !== 'CANCELLED');
@@ -202,6 +226,7 @@ export function MealPlansScreen({navigation}: Props) {
     }
   };
 
+  const settled = recovery.settled;
   const header = (
     <View style={styles.listHeader}>
       {recovery.pending ? (
@@ -214,6 +239,37 @@ export function MealPlansScreen({navigation}: Props) {
             }
           }}
         />
+      ) : null}
+      {settled ? (
+        <View
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
+          style={[styles.recovered, settled.kind === 'paid' && styles.recoveredPaid]}>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.recoveredText}>
+            {settled.kind === 'paid'
+              ? 'Your meal plan payment went through.'
+              : "Your last meal plan payment didn't complete. You can try again safely."}
+          </Text>
+          <View style={styles.recoveredActions}>
+            {settled.kind === 'paid' ? (
+              <Button
+                label="View My Plan"
+                onPress={() => {
+                  recovery.dismissSettled();
+                  navigation.navigate('MyMealPlan', {subscriptionId: settled.subscriptionId});
+                }}
+                style={styles.recoveredAction}
+                variant="ghost"
+              />
+            ) : null}
+            <Button
+              label="Dismiss"
+              onPress={recovery.dismissSettled}
+              style={styles.recoveredAction}
+              variant="ghost"
+            />
+          </View>
+        </View>
       ) : null}
       {current.length > 1 ? (
         <View style={styles.subscriptions}>
@@ -315,11 +371,15 @@ export function MealPlansScreen({navigation}: Props) {
             />
           )
         }
+        ListFooterComponent={
+          noMatches ? <TerminalState title={`No plans match "${searchText.trim()}".`} /> : null
+        }
         ListHeaderComponent={header}
         renderItem={({item}) => (
           <PlanCard
             plan={item}
             search={search}
+            onMatch={onMatch}
             onPress={() => navigation.navigate('MealPlanDetail', {planId: item.id})}
           />
         )}
@@ -335,6 +395,19 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
   },
   listHeader: {gap: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.md},
+  recovered: {
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.warning,
+    backgroundColor: colors.warningSoft,
+  },
+  recoveredPaid: {borderColor: colors.success, backgroundColor: colors.successSoft},
+  recoveredText: {color: colors.textPrimary, fontSize: typography.small},
+  recoveredActions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md},
+  recoveredAction: {paddingHorizontal: spacing.none},
   subscriptions: {gap: spacing.xs},
   sectionTitle: {
     color: colors.textPrimary,

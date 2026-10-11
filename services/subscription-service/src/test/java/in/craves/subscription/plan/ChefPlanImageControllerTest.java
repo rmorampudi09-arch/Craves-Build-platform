@@ -1,7 +1,6 @@
 package in.craves.subscription.plan;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
@@ -30,6 +29,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -38,6 +38,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @WebMvcTest(ChefPlanWorkflowController.class)
@@ -75,9 +76,9 @@ class ChefPlanImageControllerTest {
     }
 
     @Test
-    void multipartUploadHandsTheFileBytesToTheServiceAndReturnsThePlanWithItsImageUrl() throws Exception {
+    void multipartUploadHandsTheUnreadFileToTheServiceAndReturnsThePlanWithItsImageUrl() throws Exception {
         byte[] bytes = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 1, 2, 3};
-        when(workflow.putImage(eq(PLAN_ID), aryEq(bytes), eq(CHEF))).thenReturn(plan(IMAGE_PATH, true));
+        when(workflow.putImage(eq(PLAN_ID), any(MultipartFile.class), eq(CHEF))).thenReturn(plan(IMAGE_PATH, true));
 
         mockMvc.perform(multipart(HttpMethod.PUT, IMAGE_ROUTE, PLAN_ID)
                 .file(new MockMultipartFile("file", "dal.png", MediaType.IMAGE_PNG_VALUE, bytes))
@@ -86,6 +87,10 @@ class ChefPlanImageControllerTest {
             .andExpect(jsonPath("$.id").value(PLAN_ID.toString()))
             .andExpect(jsonPath("$.imageUrl").value(IMAGE_PATH))
             .andExpect(jsonPath("$.acceptingSubscribers").value(true));
+
+        ArgumentCaptor<MultipartFile> file = ArgumentCaptor.forClass(MultipartFile.class);
+        verify(workflow).putImage(eq(PLAN_ID), file.capture(), eq(CHEF));
+        assertThat(file.getValue().getBytes()).isEqualTo(bytes);
     }
 
     @Test
@@ -102,7 +107,7 @@ class ChefPlanImageControllerTest {
 
     @Test
     void uploadAboveTheSpringMultipartLimitIsReportedAsAnInvalidImageSize() throws Exception {
-        when(workflow.putImage(eq(PLAN_ID), any(), eq(CHEF))).thenThrow(new MaxUploadSizeExceededException(6L * 1024 * 1024));
+        when(workflow.putImage(eq(PLAN_ID), any(), eq(CHEF))).thenThrow(new MaxUploadSizeExceededException(3L * 1024 * 1024));
 
         mockMvc.perform(multipart(HttpMethod.PUT, IMAGE_ROUTE, PLAN_ID)
                 .file(new MockMultipartFile("file", "big.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1}))

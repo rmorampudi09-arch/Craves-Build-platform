@@ -9,7 +9,6 @@ import in.craves.subscription.schedule.PlanScheduleModels.PlanScheduleResponse;
 import in.craves.subscription.schedule.PlanScheduleModels.PutScheduleRequest;
 import in.craves.subscription.security.CurrentUser;
 import jakarta.validation.Valid;
-import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
@@ -68,14 +67,14 @@ public class ChefPlanWorkflowController {
         return workflow.update(planId, request, user);
     }
 
-    /** A missing file part reaches the service as null and is rejected there as an empty image. */
+    /** The file is handed over unread; a missing part arrives as null and is rejected as an empty image after the role, owner and status gates. */
     @PutMapping("/chef/subscription-plans/{planId}/image")
     public ChefPlanResponse putImage(
         @PathVariable UUID planId,
         @RequestPart(value = "file", required = false) MultipartFile file,
         @AuthenticationPrincipal CurrentUser user
-    ) throws IOException {
-        return workflow.putImage(planId, file == null ? null : file.getBytes(), user);
+    ) {
+        return workflow.putImage(planId, file, user);
     }
 
     @PatchMapping("/chef/subscription-plans/{planId}/accepting-subscribers")

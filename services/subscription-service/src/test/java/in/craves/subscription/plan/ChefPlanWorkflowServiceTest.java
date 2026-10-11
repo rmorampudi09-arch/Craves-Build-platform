@@ -21,12 +21,15 @@ import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.schedule.PlanScheduleModels.PlanScheduleResponse;
 import in.craves.subscription.security.CurrentUser;
 import in.craves.subscription.web.ApiDtos.PlanResponse;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 class ChefPlanWorkflowServiceTest {
     private static final UUID CHEF_ID = UUID.fromString("11111111-1111-4111-8111-111111111111");
@@ -131,11 +134,12 @@ class ChefPlanWorkflowServiceTest {
     @Test
     void chefReplacesThePhotoOfADraftOrRejectedPlanAndTheContentTypeComesFromTheBytes() {
         CurrentUser chef = chef();
-        byte[] jpeg = new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 1, 2, 3};
+        byte[] jpeg = PlanImageValidatorTest.image("jpg", 32, 32);
         for (String status : List.of("DRAFT", "REJECTED")) {
             when(repository.requireOwned(PLAN_ID, CHEF_ID)).thenReturn(plan(status, "MEAL-ABC"));
 
-            ChefPlanResponse response = service.putImage(PLAN_ID, jpeg, chef);
+            // The part claims image/png, but only the bytes decide the stored type.
+            ChefPlanResponse response = service.putImage(PLAN_ID, upload("image/png", jpeg), chef);
 
             assertThat(response.status()).isEqualTo(status);
         }
@@ -143,40 +147,64 @@ class ChefPlanWorkflowServiceTest {
     }
 
     @Test
-    void photoCannotChangeOnceThePlanIsSubmittedOrLive() {
+    void photoCannotChangeOnceThePlanIsSubmittedOrLiveAndTheFileIsNeverRead() throws Exception {
         CurrentUser chef = chef();
-        byte[] png = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 1, 2, 3};
+        MultipartFile file = mock(MultipartFile.class);
         for (String status : List.of("PENDING_APPROVAL", "ACTIVE", "INACTIVE")) {
             when(repository.requireOwned(PLAN_ID, CHEF_ID)).thenReturn(plan(status, "MEAL-ABC"));
 
-            assertThatThrownBy(() -> service.putImage(PLAN_ID, png, chef))
+            assertThatThrownBy(() -> service.putImage(PLAN_ID, file, chef))
                 .isInstanceOfSatisfying(ApiException.class, error -> {
                     assertThat(error.getCode()).isEqualTo("PLAN_NOT_EDITABLE");
                     assertThat(error.getStatus()).isEqualTo(409);
                 });
         }
+        verify(file, never()).getBytes();
         verify(images, never()).upsert(any(), any(), any(), any());
     }
 
     @Test
-    void photoOfAPlanOwnedByAnotherChefLooksLikeAMissingPlan() {
+    void photoOfAPlanOwnedByAnotherChefLooksLikeAMissingPlanAndTheFileIsNeverRead() throws Exception {
+        MultipartFile file = mock(MultipartFile.class);
         when(repository.requireOwned(PLAN_ID, CHEF_ID))
             .thenThrow(ApiException.notFound("PLAN_NOT_FOUND", "Meal plan was not found in your Chef workspace"));
 
-        assertThatThrownBy(() -> service.putImage(PLAN_ID, new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF}, chef()))
+        assertThatThrownBy(() -> service.putImage(PLAN_ID, file, chef()))
             .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("PLAN_NOT_FOUND"));
+        verify(file, never()).getBytes();
         verify(images, never()).upsert(any(), any(), any(), any());
     }
 
     @Test
-    void unsupportedOrEmptyPhotosAreRejectedBeforeAnythingIsStored() {
+    void unsupportedUndecodableOrEmptyPhotosAreRejectedBeforeAnythingIsStored() {
         when(repository.requireOwned(PLAN_ID, CHEF_ID)).thenReturn(plan("DRAFT", "MEAL-ABC"));
+        byte[] jpegHeaderOnly = new byte[512];
+        jpegHeaderOnly[0] = (byte) 0xFF;
+        jpegHeaderOnly[1] = (byte) 0xD8;
+        jpegHeaderOnly[2] = (byte) 0xFF;
+        byte[] pngSignatureOnly = new byte[512];
+        System.arraycopy(new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}, 0, pngSignatureOnly, 0, 8);
 
-        assertThatThrownBy(() -> service.putImage(PLAN_ID, "GIF89a....".getBytes(), chef()))
-            .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("PLAN_IMAGE_TYPE_UNSUPPORTED"));
-        assertThatThrownBy(() -> service.putImage(PLAN_ID, new byte[0], chef()))
+        for (byte[] unsupported : List.of("GIF89a....".getBytes(), jpegHeaderOnly, pngSignatureOnly)) {
+            assertThatThrownBy(() -> service.putImage(PLAN_ID, upload("image/jpeg", unsupported), chef()))
+                .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("PLAN_IMAGE_TYPE_UNSUPPORTED"));
+        }
+        assertThatThrownBy(() -> service.putImage(PLAN_ID, upload("image/jpeg", new byte[0]), chef()))
+            .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("PLAN_IMAGE_SIZE_INVALID"));
+        assertThatThrownBy(() -> service.putImage(PLAN_ID, upload("image/jpeg", new byte[PlanImageValidator.MAX_BYTES + 1]), chef()))
             .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("PLAN_IMAGE_SIZE_INVALID"));
         assertThatThrownBy(() -> service.putImage(PLAN_ID, null, chef()))
+            .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("PLAN_IMAGE_SIZE_INVALID"));
+        verify(images, never()).upsert(any(), any(), any(), any());
+    }
+
+    @Test
+    void anUploadThatCannotBeReadIsRejectedAsAnInvalidImage() throws Exception {
+        when(repository.requireOwned(PLAN_ID, CHEF_ID)).thenReturn(plan("DRAFT", "MEAL-ABC"));
+        MultipartFile broken = mock(MultipartFile.class);
+        when(broken.getBytes()).thenThrow(new IOException("client went away"));
+
+        assertThatThrownBy(() -> service.putImage(PLAN_ID, broken, chef()))
             .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("PLAN_IMAGE_SIZE_INVALID"));
         verify(images, never()).upsert(any(), any(), any(), any());
     }
@@ -185,7 +213,7 @@ class ChefPlanWorkflowServiceTest {
     void onlyChefsCanUploadAPhotoOrFlipTheSwitch() {
         CurrentUser customer = new CurrentUser(CHEF_ID, "firebase-customer", "+919999999999", List.of("CUSTOMER"));
 
-        assertThatThrownBy(() -> service.putImage(PLAN_ID, new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF}, customer))
+        assertThatThrownBy(() -> service.putImage(PLAN_ID, upload("image/jpeg", PlanImageValidatorTest.image("jpg", 8, 8)), customer))
             .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("ROLE_NOT_ALLOWED"));
         assertThatThrownBy(() -> service.setAcceptingSubscribers(PLAN_ID, false, customer))
             .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("ROLE_NOT_ALLOWED"));
@@ -222,6 +250,10 @@ class ChefPlanWorkflowServiceTest {
 
         assertThatThrownBy(() -> service.setAcceptingSubscribers(PLAN_ID, true, chef()))
             .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("PLAN_NOT_FOUND"));
+    }
+
+    private static MultipartFile upload(String clientContentType, byte[] bytes) {
+        return new MockMultipartFile("file", "photo", clientContentType, bytes);
     }
 
     private static CurrentUser chef() {

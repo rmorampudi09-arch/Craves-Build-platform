@@ -10,8 +10,10 @@ CREATE TABLE subscription_schema.subscription_plan_image (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Turn customer self-service on for plans still carrying the untouched platform default (identified by its exact
--- note and all four flags off, so a policy an admin customised is never overwritten) and audit each change.
+-- Turn customer self-service on for plans still carrying the untouched platform default and audit each change. The
+-- match is exactly the one row ensureActiveDefault ever wrote (version 1, old note, four flags off, all four cutoffs
+-- and all three policy references NULL), so an admin-saved all-off policy that kept the pre-filled note (a later
+-- version, a cutoff or a reference set) is never overwritten.
 WITH updated AS (
     UPDATE subscription_schema.subscription_plan_policy
     SET customer_pause_enabled = TRUE,
@@ -30,6 +32,14 @@ WITH updated AS (
       AND customer_resume_enabled = FALSE
       AND customer_cancel_enabled = FALSE
       AND customer_skip_enabled = FALSE
+      AND version = 1
+      AND pause_cutoff_minutes IS NULL
+      AND resume_lead_minutes IS NULL
+      AND cancel_cutoff_minutes IS NULL
+      AND skip_cutoff_minutes IS NULL
+      AND holiday_policy_reference IS NULL
+      AND unused_meal_policy_reference IS NULL
+      AND refund_policy_reference IS NULL
     RETURNING id, plan_id, version, created_by_identity_id
 )
 INSERT INTO subscription_schema.subscription_plan_policy_audit (

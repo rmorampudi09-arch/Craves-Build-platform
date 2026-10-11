@@ -45,7 +45,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiError(
             Instant.now(),
             "PLAN_IMAGE_SIZE_INVALID",
-            "Plan photo must be between 1 byte and 5 MB",
+            "Plan photo must be 2 MB or smaller",
             request.getRequestURI(),
             List.of()
         ));

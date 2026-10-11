@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import in.craves.subscription.policy.DefaultSubscriptionPolicyService;
 import in.craves.subscription.policy.SubscriptionPolicyRepository;
@@ -242,6 +243,21 @@ class SubscriptionMigrationDatabaseTest {
             UUID.randomUUID(), plan, status, pauseEnabled, notes, actor);
     }
 
+    /**
+     * An ACTIVE, all-flags-off policy still carrying the old default note that differs from the untouched default in exactly
+     * one column (what an admin-saved policy that kept the pre-filled note looks like), so it must never be rewritten.
+     */
+    private void insertAllOffPolicy(UUID plan, int version, String differingColumn, Object differingValue, UUID actor) {
+        jdbc.update("INSERT INTO subscription_schema.subscription_plan_policy (id, plan_id, version, status, "
+                + "customer_pause_enabled, customer_resume_enabled, customer_cancel_enabled, customer_skip_enabled, notes, "
+                + "created_by_identity_id, activated_at, " + differingColumn + ") VALUES (?, ?, ?, 'ACTIVE', FALSE, FALSE, FALSE, FALSE, ?, ?, now(), ?)",
+            UUID.randomUUID(), plan, version, OLD_DEFAULT_NOTE, actor, differingValue);
+    }
+
+    private Map<String, Object> activePolicyRow(UUID plan) {
+        return jdbc.queryForMap("SELECT * FROM subscription_schema.subscription_plan_policy WHERE plan_id=? AND status='ACTIVE'", plan);
+    }
+
     private List<Object> policyShape(UUID plan, String status) {
         var row = jdbc.queryForMap("SELECT customer_pause_enabled, customer_resume_enabled, customer_cancel_enabled, customer_skip_enabled, "
                 + "pause_cutoff_minutes, resume_lead_minutes, cancel_cutoff_minutes, skip_cutoff_minutes, notes "
@@ -267,6 +283,12 @@ class SubscriptionMigrationDatabaseTest {
         insertPolicy(customised, "ACTIVE", "Admin tuned lifecycle policy", admin, true);
         insertPolicy(editedDefault, "ACTIVE", OLD_DEFAULT_NOTE, admin, true);
         insertPolicy(retired, "INACTIVE", OLD_DEFAULT_NOTE, admin, false);
+        // Later version with one cutoff set, and a version 1 row with one reference set: both all-off with the old note.
+        UUID laterVersion = insertPlan(), withReference = insertPlan();
+        insertAllOffPolicy(laterVersion, 2, "resume_lead_minutes", 60, admin);
+        insertAllOffPolicy(withReference, 1, "holiday_policy_reference", "Closed on public holidays", admin);
+        Map<String, Object> laterVersionBefore = activePolicyRow(laterVersion);
+        Map<String, Object> withReferenceBefore = activePolicyRow(withReference);
         List<Object> customisedBefore = policyShape(customised, "ACTIVE");
         List<Object> editedDefaultBefore = policyShape(editedDefault, "ACTIVE");
         List<Object> retiredBefore = policyShape(retired, "INACTIVE");
@@ -285,7 +307,11 @@ class SubscriptionMigrationDatabaseTest {
         assertEquals(customisedBefore, policyShape(customised, "ACTIVE"));
         assertEquals(editedDefaultBefore, policyShape(editedDefault, "ACTIVE"));
         assertEquals(retiredBefore, policyShape(retired, "INACTIVE"));
-        for (UUID plan : List.of(customised, editedDefault, retired)) assertEquals(0, auditCount(plan, "PLATFORM_DEFAULT_UPDATE"));
+        // A later-version policy with a cutoff, and a version 1 policy with a reference, are untouched row for row (even updated_at).
+        assertEquals(laterVersionBefore, activePolicyRow(laterVersion));
+        assertEquals(withReferenceBefore, activePolicyRow(withReference));
+        assertEquals(Arrays.asList(false, false, false, false, null, 60, null, null, OLD_DEFAULT_NOTE), policyShape(laterVersion, "ACTIVE"));
+        for (UUID plan : List.of(customised, editedDefault, retired, laterVersion, withReference)) assertEquals(0, auditCount(plan, "PLATFORM_DEFAULT_UPDATE"));
         // Existing plans accept subscribers after the column is added.
         assertEquals(Boolean.TRUE, jdbc.queryForObject("SELECT accepting_subscribers FROM subscription_schema.subscription_plan WHERE id=?", Boolean.class, untouched));
 

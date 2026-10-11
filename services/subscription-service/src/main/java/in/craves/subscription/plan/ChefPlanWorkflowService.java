@@ -13,6 +13,7 @@ import in.craves.subscription.schedule.PlanScheduleModels.ScheduleItemResponse;
 import in.craves.subscription.schedule.PlanScheduleRepository;
 import in.craves.subscription.security.CurrentUser;
 import in.craves.subscription.web.ApiDtos.PlanResponse;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class ChefPlanWorkflowService {
@@ -93,14 +95,27 @@ public class ChefPlanWorkflowService {
         return repository.update(planId, user.identityId(), normalize(input));
     }
 
-    public ChefPlanResponse putImage(UUID planId, byte[] bytes, CurrentUser user) {
+    /** The upload is only read after the role, ownership and status gates pass, so a refused request never buffers the file. A null file counts as empty. */
+    public ChefPlanResponse putImage(UUID planId, MultipartFile file, CurrentUser user) {
         requireChef(user);
         ChefPlanResponse plan = repository.requireOwned(planId, user.identityId());
         if (!EDITABLE_STATUSES.contains(plan.status())) {
             throw ApiException.conflict("PLAN_NOT_EDITABLE", "Only draft or rejected plans can change their photo");
         }
+        byte[] bytes = readBytes(file);
         images.upsert(planId, user.identityId(), PlanImageValidator.contentType(bytes), bytes);
         return repository.requireOwned(planId, user.identityId());
+    }
+
+    private static byte[] readBytes(MultipartFile file) {
+        if (file == null) {
+            return null;
+        }
+        try {
+            return file.getBytes();
+        } catch (IOException error) {
+            throw ApiException.badRequest("PLAN_IMAGE_SIZE_INVALID", "Plan photo could not be read");
+        }
     }
 
     public ChefPlanResponse setAcceptingSubscribers(UUID planId, boolean accepting, CurrentUser user) {

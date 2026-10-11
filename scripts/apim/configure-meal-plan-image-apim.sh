@@ -6,6 +6,9 @@
 # Nothing else in the subscriptions API is touched, so this is safe to run against production on its own.
 set -euo pipefail
 set +x
+# Without inherit_errexit (bash 4.4+) a failing az call inside $(...) or a function run through $(...) would not stop the
+# script, and a failed operation listing would read as "absent" (a silent no-op rollback or a duplicate create).
+shopt -s inherit_errexit || { echo "ERROR: bash 4.4 or newer is required" >&2; exit 1; }
 
 RG="${RG:-rg-craves-prodlow-centralindia}"
 APIM="${APIM:-apim-craves-prodlow-l3ing6}"
@@ -23,7 +26,7 @@ API_PATH="api/v1/subscriptions"
 OP_ID="get-public-meal-plan-image"
 METHOD="GET"
 TEMPLATE="/plans/{planId}/image"
-DISPLAY="Get meal plan photo"
+OP_DISPLAY="Get meal plan photo"
 PARAMS='[{"name":"planId","type":"string","required":true}]'
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
@@ -50,8 +53,10 @@ SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 
 # The subscriptions API must already exist (it serves the public plans); this script never creates or re-points it.
 resolve_api() {
+  local LISTING
   local -a IDS
-  mapfile -t IDS < <(az apim api list -g "$RG" --service-name "$APIM" --query "[?path=='${API_PATH}'].name" -o tsv --only-show-errors)
+  LISTING=$(az apim api list -g "$RG" --service-name "$APIM" --query "[?path=='${API_PATH}'].name" -o tsv --only-show-errors)
+  IDS=(); [[ -z "$LISTING" ]] || mapfile -t IDS <<<"$LISTING"
   (( ${#IDS[@]} <= 1 )) || fail "Multiple APIM APIs own ${API_PATH}"
   if (( ${#IDS[@]} == 0 )); then
     printf ''
@@ -60,7 +65,8 @@ resolve_api() {
   printf '%s' "${IDS[0]}"
 }
 
-# Lists the management IDs owning the route. The az call is a plain assignment so a failed listing aborts instead of reading as "absent".
+# Lists the management IDs owning the route. The az call is a plain assignment and errexit is inherited by command substitutions
+# (inherit_errexit above), so a failed listing aborts the script instead of reading as "absent".
 matching_operation_ids() {
   local OPS_JSON
   OPS_JSON=$(az apim api operation list -g "$RG" --service-name "$APIM" --api-id "$1" -o json --only-show-errors)
@@ -150,7 +156,7 @@ fi
 
 BODY=$(mktemp); RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
 trap 'rm -f "$BODY" "$RENDERED" "$POLICY_BODY"' EXIT
-jq -n --arg display "$DISPLAY" --arg method "$METHOD" --arg template "$TEMPLATE" --argjson params "$PARAMS" \
+jq -n --arg display "$OP_DISPLAY" --arg method "$METHOD" --arg template "$TEMPLATE" --argjson params "$PARAMS" \
   '{properties:{displayName:$display,method:$method,urlTemplate:$template,templateParameters:$params,responses:[{statusCode:200,description:"Plan image"},{statusCode:404,description:"Not found"}]}}' >"$BODY"
 az rest --method put --url "${MGMT}/operations/${EFFECTIVE_ID}?api-version=${API_VERSION}" --body @"$BODY" -o none
 sed "s|__BACKEND_URL__|${BACKEND}|g" "$IMAGE_POLICY" >"$RENDERED"

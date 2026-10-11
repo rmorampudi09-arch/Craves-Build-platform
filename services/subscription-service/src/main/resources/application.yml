@@ -14,8 +14,8 @@ spring:
       connection-timeout: 30000
   servlet:
     multipart:
-      max-file-size: 6MB
-      max-request-size: 7MB
+      max-file-size: 3MB
+      max-request-size: 4MB
   flyway:
     enabled: true
     baseline-on-migrate: true

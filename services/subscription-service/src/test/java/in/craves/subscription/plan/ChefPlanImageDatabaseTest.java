@@ -101,7 +101,7 @@ class ChefPlanImageDatabaseTest {
         assertEquals(0, imageRows(pending));
         assertEquals(0, imageRows(foreign));
 
-        images.upsert(rejected, chef, "image/webp", new byte[] {1});
+        images.upsert(rejected, chef, "image/png", new byte[] {1});
         assertEquals(1, imageRows(rejected));
         assertEquals("REJECTED", plans.requireOwned(rejected, chef).status());
     }

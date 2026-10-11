@@ -3,8 +3,11 @@ package in.craves.subscription.plan;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,7 +38,8 @@ class ChefPlanWorkflowServiceTest {
     private final DefaultSubscriptionPolicyService defaultPolicy = mock(DefaultSubscriptionPolicyService.class);
     private final SubscriptionRepository subscriptionRepository = mock(SubscriptionRepository.class);
     private final CapacityService capacity = mock(CapacityService.class);
-    private final ChefPlanWorkflowService service = new ChefPlanWorkflowService(repository, schedules, defaultPolicy, subscriptionRepository, capacity);
+    private final PlanImageRepository images = mock(PlanImageRepository.class);
+    private final ChefPlanWorkflowService service = new ChefPlanWorkflowService(repository, schedules, defaultPolicy, subscriptionRepository, capacity, images);
 
     @Test
     void chefCreatesPlanForOwnIdentityAndServerGeneratesCode() {
@@ -124,6 +128,106 @@ class ChefPlanWorkflowServiceTest {
         verify(schedules).activateSubmittedDraft(PLAN_ID, admin);
     }
 
+    @Test
+    void chefReplacesThePhotoOfADraftOrRejectedPlanAndTheContentTypeComesFromTheBytes() {
+        CurrentUser chef = chef();
+        byte[] jpeg = new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 1, 2, 3};
+        for (String status : List.of("DRAFT", "REJECTED")) {
+            when(repository.requireOwned(PLAN_ID, CHEF_ID)).thenReturn(plan(status, "MEAL-ABC"));
+
+            ChefPlanResponse response = service.putImage(PLAN_ID, jpeg, chef);
+
+            assertThat(response.status()).isEqualTo(status);
+        }
+        verify(images, times(2)).upsert(PLAN_ID, CHEF_ID, "image/jpeg", jpeg);
+    }
+
+    @Test
+    void photoCannotChangeOnceThePlanIsSubmittedOrLive() {
+        CurrentUser chef = chef();
+        byte[] png = new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 1, 2, 3};
+        for (String status : List.of("PENDING_APPROVAL", "ACTIVE", "INACTIVE")) {
+            when(repository.requireOwned(PLAN_ID, CHEF_ID)).thenReturn(plan(status, "MEAL-ABC"));
+
+            assertThatThrownBy(() -> service.putImage(PLAN_ID, png, chef))
+                .isInstanceOfSatisfying(ApiException.class, error -> {
+                    assertThat(error.getCode()).isEqualTo("PLAN_NOT_EDITABLE");
+                    assertThat(error.getStatus()).isEqualTo(409);
+                });
+        }
+        verify(images, never()).upsert(any(), any(), any(), any());
+    }
+
+    @Test
+    void photoOfAPlanOwnedByAnotherChefLooksLikeAMissingPlan() {
+        when(repository.requireOwned(PLAN_ID, CHEF_ID))
+            .thenThrow(ApiException.notFound("PLAN_NOT_FOUND", "Meal plan was not found in your Chef workspace"));
+
+        assertThatThrownBy(() -> service.putImage(PLAN_ID, new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF}, chef()))
+            .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("PLAN_NOT_FOUND"));
+        verify(images, never()).upsert(any(), any(), any(), any());
+    }
+
+    @Test
+    void unsupportedOrEmptyPhotosAreRejectedBeforeAnythingIsStored() {
+        when(repository.requireOwned(PLAN_ID, CHEF_ID)).thenReturn(plan("DRAFT", "MEAL-ABC"));
+
+        assertThatThrownBy(() -> service.putImage(PLAN_ID, "GIF89a....".getBytes(), chef()))
+            .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("PLAN_IMAGE_TYPE_UNSUPPORTED"));
+        assertThatThrownBy(() -> service.putImage(PLAN_ID, new byte[0], chef()))
+            .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("PLAN_IMAGE_SIZE_INVALID"));
+        assertThatThrownBy(() -> service.putImage(PLAN_ID, null, chef()))
+            .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("PLAN_IMAGE_SIZE_INVALID"));
+        verify(images, never()).upsert(any(), any(), any(), any());
+    }
+
+    @Test
+    void onlyChefsCanUploadAPhotoOrFlipTheSwitch() {
+        CurrentUser customer = new CurrentUser(CHEF_ID, "firebase-customer", "+919999999999", List.of("CUSTOMER"));
+
+        assertThatThrownBy(() -> service.putImage(PLAN_ID, new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF}, customer))
+            .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("ROLE_NOT_ALLOWED"));
+        assertThatThrownBy(() -> service.setAcceptingSubscribers(PLAN_ID, false, customer))
+            .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("ROLE_NOT_ALLOWED"));
+    }
+
+    @Test
+    void chefTurnsNewSubscriptionsOffAndOnForAnActivePlan() {
+        when(repository.requireOwned(PLAN_ID, CHEF_ID)).thenReturn(plan("ACTIVE", "MEAL-ABC"));
+        when(repository.setAcceptingSubscribers(PLAN_ID, CHEF_ID, false)).thenReturn(plan("ACTIVE", "MEAL-ABC", false));
+        when(repository.setAcceptingSubscribers(PLAN_ID, CHEF_ID, true)).thenReturn(plan("ACTIVE", "MEAL-ABC", true));
+
+        assertThat(service.setAcceptingSubscribers(PLAN_ID, false, chef()).acceptingSubscribers()).isFalse();
+        assertThat(service.setAcceptingSubscribers(PLAN_ID, true, chef()).acceptingSubscribers()).isTrue();
+    }
+
+    @Test
+    void acceptingSubscribersSwitchIsRefusedUnlessThePlanIsActive() {
+        for (String status : List.of("DRAFT", "PENDING_APPROVAL", "REJECTED", "INACTIVE")) {
+            when(repository.requireOwned(PLAN_ID, CHEF_ID)).thenReturn(plan(status, "MEAL-ABC"));
+
+            assertThatThrownBy(() -> service.setAcceptingSubscribers(PLAN_ID, false, chef()))
+                .isInstanceOfSatisfying(ApiException.class, error -> {
+                    assertThat(error.getCode()).isEqualTo("PLAN_NOT_ACTIVE");
+                    assertThat(error.getStatus()).isEqualTo(409);
+                });
+        }
+        verify(repository, never()).setAcceptingSubscribers(any(), any(), anyBoolean());
+    }
+
+    @Test
+    void acceptingSubscribersSwitchOnAnotherChefsPlanLooksLikeAMissingPlan() {
+        when(repository.requireOwned(PLAN_ID, CHEF_ID))
+            .thenThrow(ApiException.notFound("PLAN_NOT_FOUND", "Meal plan was not found in your Chef workspace"));
+
+        assertThatThrownBy(() -> service.setAcceptingSubscribers(PLAN_ID, true, chef()))
+            .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("PLAN_NOT_FOUND"));
+    }
+
+    private static CurrentUser chef() {
+        return new CurrentUser(CHEF_ID, "firebase-chef", "+919999999999", List.of("CHEF"));
+    }
+
     private static PlanResponse activePlan() {
         return new PlanResponse(
             PLAN_ID, "MEAL-ABC", CHEF_ID, "Weekly lunches", null, "WEEKLY",
@@ -132,9 +236,13 @@ class ChefPlanWorkflowServiceTest {
     }
 
     private static ChefPlanResponse plan(String status, String code) {
+        return plan(status, code, true);
+    }
+
+    private static ChefPlanResponse plan(String status, String code, boolean acceptingSubscribers) {
         return new ChefPlanResponse(
             PLAN_ID, code, "Weekly lunches", "Home lunches", "WEEKLY", new BigDecimal("1200.00"), "INR",
-            status, null, null, null, Instant.parse("2026-08-13T00:00:00Z"), Instant.parse("2026-08-13T00:00:00Z")
+            status, null, null, null, Instant.parse("2026-08-13T00:00:00Z"), Instant.parse("2026-08-13T00:00:00Z"), null, acceptingSubscribers
         );
     }
 }

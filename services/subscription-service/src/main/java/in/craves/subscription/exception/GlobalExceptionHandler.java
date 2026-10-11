@@ -9,6 +9,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
@@ -35,6 +36,18 @@ public class GlobalExceptionHandler {
             "Request validation failed",
             request.getRequestURI(),
             details
+        ));
+    }
+
+    /** The Chef plan photo is the only multipart upload in this service, so Spring's size limit maps to its documented code. */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<ApiError> handleUploadTooLarge(MaxUploadSizeExceededException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiError(
+            Instant.now(),
+            "PLAN_IMAGE_SIZE_INVALID",
+            "Plan photo must be between 1 byte and 5 MB",
+            request.getRequestURI(),
+            List.of()
         ));
     }
 

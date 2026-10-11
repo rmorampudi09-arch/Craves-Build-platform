@@ -128,6 +128,8 @@ put_operation "$CHEF_API" "${SUB_BASE}/api/v1/chef/subscription-plans" "update-c
 put_operation "$CHEF_API" "${SUB_BASE}/api/v1/chef/subscription-plans" "get-chef-meal-plan-schedule" "GET" "/{planId}/schedule" "Get my meal schedule" "$PLAN_PARAM"
 put_operation "$CHEF_API" "${SUB_BASE}/api/v1/chef/subscription-plans" "put-chef-meal-plan-schedule" "PUT" "/{planId}/schedule" "Save my meal schedule" "$PLAN_PARAM"
 put_operation "$CHEF_API" "${SUB_BASE}/api/v1/chef/subscription-plans" "submit-chef-meal-plan" "POST" "/{planId}/submit" "Submit meal plan for approval" "$PLAN_PARAM"
+put_operation "$CHEF_API" "${SUB_BASE}/api/v1/chef/subscription-plans" "put-chef-meal-plan-image" "PUT" "/{planId}/image" "Upload my meal plan photo" "$PLAN_PARAM"
+put_operation "$CHEF_API" "${SUB_BASE}/api/v1/chef/subscription-plans" "set-chef-meal-plan-accepting-subscribers" "PATCH" "/{planId}/accepting-subscribers" "Open or close my meal plan to new subscribers" "$PLAN_PARAM"
 put_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "review-chef-meal-plan" "POST" "/{planId}/review" "Approve or reject Chef meal plan" "$PLAN_PARAM"
 
 # Remove the previous authorship model from the gateway. Admin remains review/policy/operations only.

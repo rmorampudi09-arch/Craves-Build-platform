@@ -29,6 +29,7 @@ import org.springframework.util.StringUtils;
 @Service
 public class ChefPlanWorkflowService {
     private static final Set<String> BILLING_PERIODS = Set.of("WEEKLY", "MONTHLY");
+    private static final Set<String> EDITABLE_STATUSES = Set.of("DRAFT", "REJECTED");
     private static final Set<String> REVIEW_DECISIONS = Set.of("APPROVE", "REJECT");
     private static final int DEFAULT_DISH_SUBSCRIPTION_UNITS = 5;
 
@@ -37,6 +38,7 @@ public class ChefPlanWorkflowService {
     private final DefaultSubscriptionPolicyService defaultPolicyService;
     private final SubscriptionRepository subscriptionRepository;
     private final CapacityService capacityService;
+    private final PlanImageRepository images;
 
     private CapacityRepository capacityRepository;
     private PlanScheduleRepository planScheduleRepository;
@@ -46,13 +48,15 @@ public class ChefPlanWorkflowService {
         ChefPlanScheduleService scheduleService,
         DefaultSubscriptionPolicyService defaultPolicyService,
         SubscriptionRepository subscriptionRepository,
-        CapacityService capacityService
+        CapacityService capacityService,
+        PlanImageRepository images
     ) {
         this.repository = repository;
         this.scheduleService = scheduleService;
         this.defaultPolicyService = defaultPolicyService;
         this.subscriptionRepository = subscriptionRepository;
         this.capacityService = capacityService;
+        this.images = images;
     }
 
     @Autowired
@@ -87,6 +91,25 @@ public class ChefPlanWorkflowService {
     public ChefPlanResponse update(UUID planId, ChefPlanInput input, CurrentUser user) {
         requireChef(user);
         return repository.update(planId, user.identityId(), normalize(input));
+    }
+
+    public ChefPlanResponse putImage(UUID planId, byte[] bytes, CurrentUser user) {
+        requireChef(user);
+        ChefPlanResponse plan = repository.requireOwned(planId, user.identityId());
+        if (!EDITABLE_STATUSES.contains(plan.status())) {
+            throw ApiException.conflict("PLAN_NOT_EDITABLE", "Only draft or rejected plans can change their photo");
+        }
+        images.upsert(planId, user.identityId(), PlanImageValidator.contentType(bytes), bytes);
+        return repository.requireOwned(planId, user.identityId());
+    }
+
+    public ChefPlanResponse setAcceptingSubscribers(UUID planId, boolean accepting, CurrentUser user) {
+        requireChef(user);
+        ChefPlanResponse plan = repository.requireOwned(planId, user.identityId());
+        if (!"ACTIVE".equals(plan.status())) {
+            throw ApiException.conflict("PLAN_NOT_ACTIVE", "Only active meal plans can change whether they accept new subscribers");
+        }
+        return repository.setAcceptingSubscribers(planId, user.identityId(), accepting);
     }
 
     @Transactional

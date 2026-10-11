@@ -184,7 +184,8 @@ function rewriteRepoReferences() {
   const listed = (dir, test) => fs.existsSync(dir) ? fs.readdirSync(dir).filter(test).map((name) => path.join(dir, name)) : [];
   const targets = [
     ...listed(REPO, (n) => /^azure-pipelines.*\.ya?ml$/.test(n)),
-    ...listed(path.join(REPO, ".github/workflows"), (n) => /\.ya?ml$/.test(n)),
+    // Not web-feature-folders.yml: it names the pre-move src/lib/utils.ts on purpose, to find the move commit.
+    ...listed(path.join(REPO, ".github/workflows"), (n) => /\.ya?ml$/.test(n) && n !== "web-feature-folders.yml"),
     ...walkAll(path.join(REPO, "scripts")).filter((f) => /\.(py|sh|mjs|js|ts|mts|json)$/.test(f)),
   ];
   // Folder and wildcard spellings that no single file entry covers.

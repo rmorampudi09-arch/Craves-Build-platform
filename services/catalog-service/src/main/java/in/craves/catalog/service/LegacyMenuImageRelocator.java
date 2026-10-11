@@ -13,9 +13,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Dish photos uploaded before the environment rebuild are still served from the previous storage account.
- * On start, each one is copied (server side) into this environment's photo store and its URL rewritten,
- * so existing menus keep their photos when the old account goes away. Rows already moved are skipped.
+ * Moves every dish photo whose URL is not under this environment's public photo address: photos left in the
+ * previous storage account, and photos still linked straight to blob storage after the address is switched to
+ * the Front Door path (CRAVES_MEDIA_PUBLIC_BASE_URL). On start, each one is copied (and shrunk if oversized)
+ * into this environment's photo store and its row rewritten. Rows already moved are skipped.
  */
 @Component
 public class LegacyMenuImageRelocator {
@@ -55,17 +56,18 @@ public class LegacyMenuImageRelocator {
             String url = (String) row.get("public_url");
             if (!AZURE_BLOB.matcher(url).matches()) continue;
             try {
-                String next = media.copyFromPublicUrl(url, (String) row.get("blob_name"), (String) row.get("content_type"));
+                var stored = media.copyFromPublicUrl(url, (String) row.get("blob_name"), (String) row.get("content_type"));
                 moved += jdbcTemplate.update(
-                    "UPDATE catalog_schema.menu_item_image SET public_url = ? WHERE id = ? AND public_url = ?", next, row.get("id"), url
+                    "UPDATE catalog_schema.menu_item_image SET public_url = ?, content_type = ?, file_size_bytes = ? WHERE id = ? AND public_url = ?",
+                    stored.publicUrl(), stored.contentType(), stored.fileSizeBytes(), row.get("id"), url
                 );
             } catch (RuntimeException ex) {
                 // Error codes and our own messages only; never response bodies.
                 String detail = ex instanceof BlobStorageException blob ? String.valueOf(blob.getErrorCode()) : ex instanceof ApiException api ? api.getMessage() : "";
-                log.warn("Legacy menu photo {} not relocated: {} {}", row.get("id"), ex.getClass().getSimpleName(), detail);
+                log.warn("Menu photo {} not relocated: {} {}", row.get("id"), ex.getClass().getSimpleName(), detail);
             }
         }
-        log.info("Relocated {} of {} legacy menu photos", moved, rows.size());
+        log.info("Relocated {} of {} menu photos", moved, rows.size());
         return moved;
     }
 }

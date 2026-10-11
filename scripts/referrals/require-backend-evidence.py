@@ -12,6 +12,7 @@ required = {
 }
 required['referral-service']['ChefEarningsIT']=17
 required['referral-service']['ChefMinimumMigrationIT']=1
+required['referral-service']['ChefActivationIT']=6
 required['auth-service']['ChefReferralEligibilityDatabaseTest']=3
 required['integration-service']['ChefReferralEarningsDatabaseTest']=13
 required['integration-service']['ReferralManualWithdrawalDatabaseTest']=13

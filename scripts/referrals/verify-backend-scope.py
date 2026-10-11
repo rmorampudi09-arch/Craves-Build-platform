@@ -182,6 +182,35 @@ def reviewed_shared_chef_finance_scope():
   actual[parts[1]]=parts[0]
  return actual==SHARED_FINANCE_REQUIRED
 
+# Exact chef programme activation follow-up (12 Oct 2026): engine-only changes plus release tooling.
+# Compared with the PR's base (first parent of the merge commit) so later main merges cannot leak in.
+CHEF_ACTIVATION_REQUIRED={
+ 'azure-pipelines-referral-chef.yml':'A',
+ 'docs/referrals/CHEF_ACTIVATION_20261012.md':'A',
+ 'docs/referrals/CHEF_REFERRAL_TERMS_V1.md':'A',
+ 'docs/referrals/README.md':'M',
+ 'scripts/referrals/chef_activation.py':'A',
+ 'scripts/referrals/require-backend-evidence.py':'M',
+ 'scripts/referrals/verify-backend-scope.py':'M',
+ 'scripts/referrals/verify-build.py':'M',
+ 'services/referral-service/src/main/java/in/craves/referral/api/SourceLookupController.java':'M',
+ 'services/referral-service/src/main/java/in/craves/referral/domain/OrderBindingService.java':'M',
+ 'services/referral-service/src/main/java/in/craves/referral/domain/OrderLifecycleService.java':'M',
+ 'services/referral-service/src/main/resources/db/referral_migration/V12__chef_order_exclusion.sql':'A',
+ 'services/referral-service/src/test/java/in/craves/referral/ChefActivationIT.java':'A',
+ 'services/referral-service/src/test/java/in/craves/referral/ChefMinimumMigrationIT.java':'M'}
+
+def reviewed_chef_activation_scope():
+ if subprocess.run(['git','rev-parse','--verify','-q','HEAD^2'],capture_output=True).returncode!=0:
+  return False
+ rows=subprocess.check_output(['git','diff','--name-status','--no-renames','HEAD^1','HEAD'],text=True).splitlines()
+ actual=dict(reversed(row.split('\t',1)) for row in rows)
+ return actual==CHEF_ACTIVATION_REQUIRED
+
+if reviewed_chef_activation_scope():
+ print('PASS: exact chef programme activation scope; full referral compatibility tests still required')
+ raise SystemExit(0)
+
 if reviewed_shared_chef_finance_scope():
  subprocess.run(['python3','scripts/launch/test_shared_chef_finance_scope.py'],check=True)
  print('PASS: exact shared chef finance follow-up; full referral compatibility tests still required')

@@ -38,7 +38,10 @@ def build(output):
     for offset in range(0,len(files),12):
         pages.append(("Changed file tree", "<p>Full runnable files are included in the ZIP at these exact repository paths.</p><ul class='file-list'>"+"".join("<li>"+html.escape(p)+"</li>" for p in files[offset:offset+12])+"</ul>"))
     for name in files:
-        text = (ROOT/name).read_text(encoding="utf-8")
+        try:
+            text = (ROOT/name).read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue  # images and other binary files are in the ZIP, not printed as source
         chunks = list(source_chunks(text))
         for number, chunk in enumerate(chunks,1):
             pages.append(("Complete source file", "<p class='path'>"+html.escape(name)+"</p><p class='part'>File part "+str(number)+" of "+str(len(chunks))+"</p><pre>"+html.escape(chunk)+"</pre>"))

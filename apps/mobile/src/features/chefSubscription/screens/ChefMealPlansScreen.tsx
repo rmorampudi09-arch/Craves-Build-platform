@@ -50,6 +50,7 @@ import type {ChefMealPlan} from '../api/chefSubscriptionApi';
 import {
   acceptingSubscribersHint,
   acceptingSubscribersValue,
+  chefPlanAccessibilityLabel,
   chefPlanMetaLine,
   chefPlanMetrics,
   chefPlanPriceLabel,
@@ -124,7 +125,12 @@ function PlanCard({
   return (
     <View style={styles.card}>
       <Pressable
-        accessibilityLabel={`Open ${plan.name} meal plan`}
+        accessibilityHint={
+          plan.status === 'REJECTED' && plan.reviewReason
+            ? `Admin: ${plan.reviewReason}`
+            : undefined
+        }
+        accessibilityLabel={chefPlanAccessibilityLabel(plan)}
         accessibilityRole="button"
         onPress={onOpen}
         style={({pressed}) => [styles.cardOpenArea, pressed && styles.pressed]}>
@@ -168,23 +174,26 @@ function PlanCard({
         </View>
       </Pressable>
 
-      {shown !== null ? (
+      {shown !== null || toggleError ? (
         <View style={styles.availabilityBlock}>
-          <View style={styles.availabilityRow}>
-            <View style={styles.availabilityCopy}>
-              <Text style={styles.availabilityTitle}>Accepting new subscribers</Text>
-              <Text style={styles.availabilityHint}>{acceptingSubscribersHint(shown)}</Text>
+          {shown !== null ? (
+            <View style={styles.availabilityRow}>
+              <View style={styles.availabilityCopy}>
+                <Text style={styles.availabilityTitle}>Accepting new subscribers</Text>
+                <Text style={styles.availabilityHint}>{acceptingSubscribersHint(shown)}</Text>
+              </View>
+              <Switch
+                accessibilityLabel={`${plan.name} accepting new subscribers`}
+                accessibilityState={{busy: chosen !== null, checked: shown}}
+                disabled={chosen !== null}
+                onValueChange={toggle}
+                thumbColor={colors.white}
+                trackColor={{false: colors.borderStrong, true: colors.flameRed}}
+                value={shown}
+              />
             </View>
-            <Switch
-              accessibilityLabel={`${plan.name} accepting new subscribers`}
-              accessibilityState={{busy: chosen !== null, checked: shown}}
-              disabled={chosen !== null}
-              onValueChange={toggle}
-              thumbColor={colors.white}
-              trackColor={{false: colors.borderStrong, true: colors.flameRed}}
-              value={shown}
-            />
-          </View>
+          ) : null}
+          {/* Outside the switch row: a 409 can flip the plan out of ACTIVE, which hides the row but must keep the message. */}
           {toggleError ? (
             <Text accessibilityLiveRegion="polite" style={styles.toggleError}>
               {toggleError}
@@ -463,8 +472,8 @@ const styles = StyleSheet.create({
   toggleError: {
     color: colors.error,
     fontSize: typography.small,
-    paddingBottom: spacing.sm,
     paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   skeletonList: {gap: spacing.md},
   skeletonCard: {flexDirection: 'row', gap: spacing.sm, padding: spacing.md},

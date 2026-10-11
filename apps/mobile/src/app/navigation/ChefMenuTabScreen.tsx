@@ -47,7 +47,7 @@ export function ChefMenuTabScreen() {
       <View style={styles.menuCreateBar}>
         <Pressable
           accessibilityLabel={
-            segment === 'items' ? 'Add new Chef menu item' : 'Add new meal plan'
+            segment === 'items' ? 'Add new Chef menu item' : 'Add new plan'
           }
           accessibilityRole="button"
           onPress={() =>
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
   },
   menuCreateButton: {
     alignItems: 'center',
-    backgroundColor: colors.flameRedAccessible,
+    backgroundColor: colors.flameRed,
     borderRadius: 999,
     justifyContent: 'center',
     minHeight: 48,

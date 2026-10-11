@@ -1,6 +1,7 @@
 import React from 'react';
-import {Text} from 'react-native';
+import {StyleSheet, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
+import {colors} from '../../design/tokens';
 import {ChefMenuTabScreen} from './ChefMenuTabScreen';
 
 const mockNavigate = jest.fn();
@@ -38,12 +39,11 @@ const labels = () =>
     .findAllByType(Text)
     .map(node => node.props.children)
     .filter((child: unknown): child is string => typeof child === 'string');
-const press = (accessibilityLabel: string) =>
-  act(() =>
-    tree.root
-      .findAll(node => node.props.accessibilityLabel === accessibilityLabel && node.props.onPress)[0]
-      .props.onPress(),
-  );
+const button = (accessibilityLabel: string) =>
+  tree.root.findAll(
+    node => node.props.accessibilityLabel === accessibilityLabel && node.props.onPress,
+  )[0];
+const press = (accessibilityLabel: string) => act(() => button(accessibilityLabel).props.onPress());
 
 describe('ChefMenuTabScreen', () => {
   beforeEach(() => {
@@ -62,6 +62,18 @@ describe('ChefMenuTabScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith('ChefAddMenuItem');
   });
 
+  it('keeps the approved brand-red bar button on both segments', () => {
+    const fill = () =>
+      StyleSheet.flatten(
+        button(labels().includes('+ Add new item') ? 'Add new Chef menu item' : 'Add new plan').props
+          .style({pressed: false}),
+      ).backgroundColor;
+
+    expect(fill()).toBe(colors.flameRed);
+    press('Meal plans');
+    expect(fill()).toBe(colors.flameRed);
+  });
+
   it('switches to the meal plans list and the add-plan bar', () => {
     press('Meal plans');
 
@@ -69,7 +81,7 @@ describe('ChefMenuTabScreen', () => {
     expect(labels()).not.toContain('ITEMS_LIST');
     expect(labels()).not.toContain('+ Add new item');
 
-    press('Add new meal plan');
+    press('Add new plan');
     expect(mockNavigate).toHaveBeenCalledWith('ChefMealPlanEditor', {});
 
     press('Items');

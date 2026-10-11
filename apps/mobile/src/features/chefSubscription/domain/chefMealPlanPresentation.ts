@@ -58,6 +58,17 @@ export function chefPlanPriceLabel(
   return `${formatPlanPrice(plan.amount, plan.currency)} / ${billingUnit(plan.billingPeriod)}`;
 }
 
+/** Spoken summary for the card button, e.g. "Weekly Home Lunch Plan, Live, ₹1,499 per week". */
+export function chefPlanAccessibilityLabel(
+  plan: Pick<ChefMealPlan, 'name' | 'status' | 'amount' | 'currency' | 'billingPeriod'>,
+): string {
+  return [
+    plan.name,
+    STATUS[plan.status].label,
+    chefPlanPriceLabel(plan).replace(' / ', ' per '),
+  ].join(', ');
+}
+
 /** The switch position, or null when the switch must be hidden (not live, or an older backend without the field). */
 export function acceptingSubscribersValue(
   plan: Pick<ChefMealPlan, 'status' | 'acceptingSubscribers'>,

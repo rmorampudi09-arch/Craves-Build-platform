@@ -2,6 +2,7 @@ import type {ChefMealPlan} from '../api/chefSubscriptionApi';
 import {
   acceptingSubscribersHint,
   acceptingSubscribersValue,
+  chefPlanAccessibilityLabel,
   chefPlanMetaLine,
   chefPlanMetrics,
   chefPlanPriceLabel,
@@ -88,6 +89,22 @@ describe('chefPlanPriceLabel', () => {
     expect(
       chefPlanPriceLabel(plan({amount: '5499.50', currency: 'INR', billingPeriod: 'MONTHLY'})),
     ).toBe('₹5,499.50 / month');
+  });
+});
+
+describe('chefPlanAccessibilityLabel', () => {
+  it('reads name, status and price per billing unit', () => {
+    expect(
+      chefPlanAccessibilityLabel(
+        plan({
+          name: 'Weekly Home Lunch Plan',
+          status: 'ACTIVE',
+          amount: '1499',
+          currency: 'INR',
+          billingPeriod: 'WEEKLY',
+        }),
+      ),
+    ).toBe('Weekly Home Lunch Plan, Live, ₹1,499 per week');
   });
 });
 

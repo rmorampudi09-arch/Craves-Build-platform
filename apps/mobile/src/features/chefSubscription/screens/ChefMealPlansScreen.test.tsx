@@ -74,13 +74,16 @@ const weekdayLunches = {
 
 let tree: renderer.ReactTestRenderer;
 
+const queryClient = new QueryClient();
+const element = (accessory?: React.ReactNode) => (
+  <QueryClientProvider client={queryClient}>
+    <ChefMealPlansScreen headerAccessory={accessory} />
+  </QueryClientProvider>
+);
+
 function render(accessory?: React.ReactNode) {
   act(() => {
-    tree = renderer.create(
-      <QueryClientProvider client={new QueryClient()}>
-        <ChefMealPlansScreen headerAccessory={accessory} />
-      </QueryClientProvider>,
-    );
+    tree = renderer.create(element(accessory));
   });
 }
 
@@ -91,10 +94,8 @@ const texts = () =>
     .flat()
     .filter((child: unknown): child is string => typeof child === 'string');
 
-const openButton = (name: string): ReactTestInstance =>
-  tree.root.findAll(
-    node => node.props.accessibilityLabel === `Open ${name} meal plan` && node.props.onPress,
-  )[0];
+const openButton = (label: string): ReactTestInstance =>
+  tree.root.findAll(node => node.props.accessibilityLabel === label && node.props.onPress)[0];
 
 describe('ChefMealPlansScreen', () => {
   beforeEach(() => {
@@ -219,11 +220,41 @@ describe('ChefMealPlansScreen', () => {
     expect(texts()).toContain('Only live plans can change who they accept.');
   });
 
-  it('opens the editor for a tapped plan', () => {
-    mockPlans = [plan({id: PLAN_A, name: 'Live'})];
+  it('keeps the server message when the failed toggle leaves the plan no longer live', async () => {
+    mockSetAccepting.mockRejectedValue(
+      new AppApiError('PLAN_NOT_ACTIVE', 'This plan is no longer live.', 409),
+    );
+    mockPlans = [plan({id: PLAN_A, name: 'Live', acceptingSubscribers: true})];
     render();
 
-    act(() => openButton('Live').props.onPress());
+    await act(async () => {
+      tree.root.findByType(Switch).props.onValueChange(false);
+    });
+    mockPlans = [plan({id: PLAN_A, name: 'Live', status: 'INACTIVE', acceptingSubscribers: true})];
+    act(() => tree.update(element()));
+
+    expect(tree.root.findAllByType(Switch)).toHaveLength(0);
+    expect(texts()).toContain('This plan is no longer live.');
+  });
+
+  it('describes each card by name, status and price, with the admin reason as the hint', () => {
+    mockPlans = [
+      plan({id: PLAN_A, name: 'Rejected', status: 'REJECTED', reviewReason: 'Add a photo'}),
+      plan({id: PLAN_B, name: 'Fine'}),
+    ];
+    render();
+
+    expect(openButton('Rejected, Changes requested, ₹1,499 per week').props.accessibilityHint).toBe(
+      'Admin: Add a photo',
+    );
+    expect(openButton('Fine, Live, ₹1,499 per week').props.accessibilityHint).toBeUndefined();
+  });
+
+  it('opens the editor for a tapped plan', () => {
+    mockPlans = [plan({id: PLAN_A, name: 'Lunch Plan'})];
+    render();
+
+    act(() => openButton('Lunch Plan, Live, ₹1,499 per week').props.onPress());
 
     expect(mockNavigate).toHaveBeenCalledWith('ChefMealPlanEditor', {planId: PLAN_A});
   });

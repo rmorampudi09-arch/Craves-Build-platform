@@ -1,6 +1,6 @@
-import { ChefAccessBoundary } from "@/components/chef-access-boundary";
-import { ChefPageHeader } from "@/components/chef-page-header";
-import { DocumentCenter } from "@/components/document-center";
+import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
+import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
+import { DocumentCenter } from "@/features/chef-onboarding/components/document-center";
 
 export const metadata = { title: "Chef statements | Craves", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";

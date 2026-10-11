@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseAdminChefApplications } from "@/lib/admin-chef-review-contract";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
+import { parseAdminChefApplications } from "@/features/admin/chef-review/lib/admin-chef-review-contract";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 const ALLOWED_STATUSES = new Set(["PENDING", "APPROVED", "REJECTED"]);

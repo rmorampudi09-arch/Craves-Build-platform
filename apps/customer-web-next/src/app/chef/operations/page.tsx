@@ -1,6 +1,6 @@
-import { ChefAccessBoundary } from "@/components/chef-access-boundary";
-import { ChefOperationsWorkspace } from "@/components/chef-operations-workspace";
-import { ChefPageHeader } from "@/components/chef-page-header";
+import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
+import { ChefOperationsWorkspace } from "@/features/chef/components/chef-operations-workspace";
+import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
 
 export const metadata = {
   title: "Chef operations | Craves",

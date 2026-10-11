@@ -1,6 +1,6 @@
 "use client";
 
-import ConfirmationPage from "@/screens/OrderSuccess/OrderSuccess";
+import ConfirmationPage from "@/features/checkout/screens/OrderSuccess";
 import { Suspense } from "react";
 
 export default function ConfirmationRoute() {

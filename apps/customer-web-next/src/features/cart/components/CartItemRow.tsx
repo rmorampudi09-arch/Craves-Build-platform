@@ -1,0 +1,109 @@
+import { FaImage, FaMinus, FaPlus, FaTrashCan } from "react-icons/fa6";
+import { AnimateCount } from "@/shared/ui/AnimateCount";
+import type { CartItem } from "@/features/cart/api/cravesCart";
+
+interface CartItemRowProps {
+  item: CartItem;
+  disabled?: boolean;
+  priorityImage?: boolean;
+  onDecrease: () => void;
+  onIncrease: () => void;
+  onRemove: () => void;
+}
+
+function money(amount: number, currency: string): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+export function CartItemRow({
+  item,
+  disabled = false,
+  priorityImage = false,
+  onDecrease,
+  onIncrease,
+  onRemove,
+}: CartItemRowProps) {
+  return (
+    <article className="grid grid-cols-[4.75rem_minmax(0,1fr)] gap-3 border-b border-[#F1F3F5] bg-white py-4 last:border-b-0 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-center">
+      <div className="relative flex aspect-square w-[4.75rem] items-center justify-center overflow-hidden rounded-[8px] bg-[#F1F3F5] sm:w-[5.5rem]">
+        <img
+          src={item.img}
+          alt={item.imageIsPlaceholder ? "" : item.name}
+          aria-hidden={item.imageIsPlaceholder || undefined}
+          loading={priorityImage ? "eager" : "lazy"}
+          decoding="async"
+          fetchPriority={priorityImage ? "high" : "auto"}
+          className={
+            item.imageIsPlaceholder
+              ? "h-14 w-14 object-contain opacity-70"
+              : "h-full w-full object-cover"
+          }
+        />
+        {item.imageIsPlaceholder && (
+          <span
+            className="absolute bottom-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-white text-[#6B6B6B]"
+            title="Image not uploaded"
+          >
+            <FaImage className="text-[10px]" aria-hidden="true" />
+          </span>
+        )}
+      </div>
+
+      <div className="min-w-0">
+        <h2 className="text-[15px] font-semibold leading-5 text-[#1A1A1A]">
+          {item.name}
+        </h2>
+        <p className="mt-1 truncate text-xs text-[#6B6B6B]">{item.chef}</p>
+        <p className="mt-2 text-[15px] font-bold tabular-nums text-[#1A1A1A]">
+          {money(item.lineTotal, item.currency)}
+        </p>
+      </div>
+
+      <div className="col-span-2 flex items-center justify-between gap-3 sm:col-span-1 sm:flex-col sm:items-end">
+        <div className="flex h-12 items-center overflow-hidden rounded-[8px] border border-[#D7DADF] bg-[#F1F3F5] shadow-[0_1px_2px_rgba(26,26,26,0.05)]">
+          <button
+            type="button"
+            data-craves-borderless="true"
+            onClick={onDecrease}
+            disabled={disabled}
+            className="flex h-12 w-12 items-center justify-center border-0 bg-transparent text-[#1A1A1A] shadow-none transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BFC4C9] disabled:pointer-events-none disabled:opacity-45"
+            aria-label={`Decrease quantity of ${item.name}`}
+          >
+            <FaMinus className="text-xs" aria-hidden="true" />
+          </button>
+          <AnimateCount
+            className="w-9 text-center text-sm font-bold text-[#1A1A1A]"
+            aria-live="polite"
+          >
+            {item.qty}
+          </AnimateCount>
+          <button
+            type="button"
+            data-craves-borderless="true"
+            onClick={onIncrease}
+            disabled={disabled || item.qty >= 50}
+            className="flex h-12 w-12 items-center justify-center border-0 bg-transparent text-[#1A1A1A] shadow-none transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#BFC4C9] disabled:pointer-events-none disabled:opacity-45"
+            aria-label={`Increase quantity of ${item.name}`}
+          >
+            <FaPlus className="text-xs" aria-hidden="true" />
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disabled}
+          className="inline-flex min-h-12 items-center gap-2 rounded-[8px] px-3 text-sm font-semibold text-[#6B6B6B] transition-colors hover:bg-[#F1F3F5] hover:text-[#F62E18] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 disabled:pointer-events-none disabled:opacity-45"
+        >
+          <FaTrashCan className="text-xs" aria-hidden="true" />
+          Remove
+        </button>
+      </div>
+    </article>
+  );
+}
+
+export default CartItemRow;

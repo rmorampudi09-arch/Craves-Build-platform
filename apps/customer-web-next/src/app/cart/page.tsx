@@ -1,5 +1,5 @@
 "use client";
 
-import CartPage from "@/screens/Cart/Cart";
+import CartPage from "@/features/cart/screens/Cart";
 
 export default CartPage;

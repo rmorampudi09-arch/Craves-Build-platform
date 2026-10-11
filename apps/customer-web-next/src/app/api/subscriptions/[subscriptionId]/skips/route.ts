@@ -1,8 +1,8 @@
-import { boundBffRequest } from "@/lib/bff-request-limits";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
-import { parseSkipRequest } from "@/lib/subscription-lifecycle-contract";
-import { isSameOrigin } from "@/lib/request-security";
-import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
+import { parseSkipRequest } from "@/features/meal-plans/lib/subscription-lifecycle-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 

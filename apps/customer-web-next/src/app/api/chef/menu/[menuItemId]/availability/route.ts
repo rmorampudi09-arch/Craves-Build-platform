@@ -1,10 +1,10 @@
-import { chefUpstream } from "@/lib/chef-errors";
-import { boundedFetch } from "@/lib/bounded-fetch";
-import { boundBffRequest } from "@/lib/bff-request-limits";
-import { isSameOrigin } from "@/lib/request-security";
+import { chefUpstream } from "@/features/chef/lib/chef-errors";
+import { boundedFetch } from "@/shared/lib/bounded-fetch";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
+import { isSameOrigin } from "@/shared/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
-import { parseChefMenuItem } from "@/lib/chef-menu-contract";
-import { chefMenuFailure } from "@/lib/chef-menu-errors";
+import { parseChefMenuItem } from "@/features/chef/lib/chef-menu-contract";
+import { chefMenuFailure } from "@/features/chef/lib/chef-menu-errors";
 
 export const dynamic = "force-dynamic";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

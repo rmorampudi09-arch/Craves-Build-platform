@@ -27,8 +27,8 @@ steps:
       print('Customer cart policy XML is valid.')
       PY
       grep -q 'isSameOrigin' apps/customer-web-next/src/app/api/cart/items/route.ts
-      grep -q 'foodSubtotal' apps/customer-web-next/src/lib/cart-contract.ts
-      if grep -REn '(platformFee|taxAmount|deliveryFee).*[-+*/]' apps/customer-web-next/src/components/customer-cart.tsx apps/customer-web-next/src/lib/cart-contract.ts; then
+      grep -q 'foodSubtotal' apps/customer-web-next/src/features/cart/lib/cart-contract.ts
+      if grep -REn '(platformFee|taxAmount|deliveryFee).*[-+*/]' apps/customer-web-next/src/features/cart/components/customer-cart.tsx apps/customer-web-next/src/features/cart/lib/cart-contract.ts; then
         echo 'ERROR: Frontend cart code appears to calculate checkout fees.' >&2
         exit 1
       fi

@@ -22,7 +22,7 @@ steps:
       if grep -REn '(customerIdentityId|checkoutId|kitchenId|pickupAddress|localStorage|sessionStorage|console\.(log|debug))' \
         apps/customer-web-next/src/app/chef/orders \
         apps/customer-web-next/src/app/api/chef/orders \
-        apps/customer-web-next/src/components/chef-order-* --exclude='*.test.ts'; then
+        apps/customer-web-next/src/features/chef/components/chef-order-* --exclude='*.test.ts'; then
         echo 'ERROR: Chef order runtime exposes internal identity/pickup fields or insecure behavior.' >&2
         exit 1
       fi

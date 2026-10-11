@@ -1,8 +1,8 @@
-import { boundBffRequest } from "@/lib/bff-request-limits";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
-import { parseCart, parseQuantityInput } from "@/lib/cart-contract";
-import { isSameOrigin } from "@/lib/request-security";
-import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
+import { parseCart, parseQuantityInput } from "@/features/cart/lib/cart-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 
 async function itemId(context: { params: Promise<{ cartItemId: string }> }) { const { cartItemId } = await context.params; return isUuid(cartItemId) ? cartItemId : null; }
 function failure(status: number) { return NextResponse.json({ error: status === 401 ? "SESSION_REQUIRED" : status === 404 ? "CART_ITEM_NOT_FOUND" : "CART_UPDATE_FAILED", message: status === 401 ? "Please sign in to use your cart." : status === 404 ? "Cart item was not found." : "Cart could not be updated." }, { status }); }

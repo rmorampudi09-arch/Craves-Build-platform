@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isSameOrigin } from "@/lib/request-security";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
-import { isDataset, parseExplorerRequest, parseExplorerResult } from "@/lib/admin-explorer";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
+import { isDataset, parseExplorerRequest, parseExplorerResult } from "@/features/admin/explorer/lib/admin-explorer";
 export const dynamic = "force-dynamic";
 const headers={"Cache-Control":"no-store","X-Content-Type-Options":"nosniff","X-Robots-Tag":"noindex, nofollow"};
 const fail=(code:string,status:number) => NextResponse.json({code},{status,headers});

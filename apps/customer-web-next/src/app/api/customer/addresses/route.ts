@@ -1,15 +1,15 @@
-import { boundBffRequest } from "@/lib/bff-request-limits";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import {
   parseAddressInput,
   parseCustomerAddress,
   parseCustomerAddresses,
-} from "@/lib/address-contract";
-import { isSameOrigin } from "@/lib/request-security";
+} from "@/features/addresses/lib/address-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
 import {
   authenticatedApiFetch,
   SessionRequiredError,
-} from "@/lib/server-api";
+} from "@/shared/lib/server-api";
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)

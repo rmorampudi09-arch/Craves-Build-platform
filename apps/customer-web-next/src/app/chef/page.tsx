@@ -1,5 +1,5 @@
-import { ChefModeDashboard } from "@/components/chef-mode-dashboard";
-import { ChefAccessBoundary } from "@/components/chef-access-boundary";
+import { ChefModeDashboard } from "@/features/chef/components/chef-mode-dashboard";
+import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
 
 export const dynamic = "force-dynamic";
 

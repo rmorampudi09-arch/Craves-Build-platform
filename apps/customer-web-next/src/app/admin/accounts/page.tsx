@@ -1,5 +1,5 @@
-import { AdminAccountIntervention } from "@/components/admin-account-intervention";
-import { AdminPageIntro } from "@/components/admin-page-intro";
+import { AdminAccountIntervention } from "@/features/admin/accounts/components/admin-account-intervention";
+import { AdminPageIntro } from "@/features/admin/shell/components/admin-page-intro";
 
 export const dynamic = "force-dynamic";
 

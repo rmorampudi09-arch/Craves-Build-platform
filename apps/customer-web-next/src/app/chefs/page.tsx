@@ -1,4 +1,4 @@
-import AllChefsPage from "@/screens/public/AllChefs/AllChefs";
+import AllChefsPage from "@/features/chefs/screens/AllChefs";
 
 export const metadata = {
   title: "Home chefs near you | Craves",

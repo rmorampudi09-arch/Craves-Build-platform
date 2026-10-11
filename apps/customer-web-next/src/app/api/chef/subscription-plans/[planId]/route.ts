@@ -1,9 +1,9 @@
-import { chefUpstream } from "@/lib/chef-errors";
-import { boundBffRequest } from "@/lib/bff-request-limits";
+import { chefUpstream } from "@/features/chef/lib/chef-errors";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
-import { parseChefMealPlan, parseChefMealPlanInput } from "@/lib/chef-subscription-plan-contract";
-import { isSameOrigin } from "@/lib/request-security";
-import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
+import { parseChefMealPlan, parseChefMealPlanInput } from "@/features/chef/lib/chef-subscription-plan-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ planId: string }> };

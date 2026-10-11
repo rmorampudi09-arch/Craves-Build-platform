@@ -1,7 +1,7 @@
-import { boundBffRequest } from "@/lib/bff-request-limits";
-import { boundedFetch } from "@/lib/bounded-fetch";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
+import { boundedFetch } from "@/shared/lib/bounded-fetch";
 import { NextRequest, NextResponse } from "next/server";
-import { reverseGeocodeWithOlaMaps } from "@/lib/server/ola-maps";
+import { reverseGeocodeWithOlaMaps } from "@/features/addresses/lib/server/ola-maps";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_REQUESTS = 30;

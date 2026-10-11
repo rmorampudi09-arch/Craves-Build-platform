@@ -6,8 +6,8 @@ import "@syncfusion/ej2-tailwind3-theme/styles/pager/pager.css";
 import "@syncfusion/ej2-tailwind3-theme/styles/popup/popup.css";
 import "@syncfusion/ej2-tailwind3-theme/styles/spinner/spinner.css";
 import "@syncfusion/ej2-tailwind3-theme/styles/tooltip/tooltip.css";
-import { AdminExplorerSession } from "@/components/admin-explorer-session";
-import { AdminWorkspace } from "@/components/admin-workspace";
+import { AdminExplorerSession } from "@/features/admin/explorer/components/admin-explorer-session";
+import { AdminWorkspace } from "@/features/admin/shell/components/admin-workspace";
 
 export const metadata: Metadata = {
   title: "Craves administration",

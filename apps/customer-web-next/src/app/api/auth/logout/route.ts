@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { clearSessionCookies } from "@/lib/auth-cookies";
-import { isSameOrigin } from "@/lib/request-security";
-import { forgetServerRefresh } from "@/lib/refresh-server";
-import { apiBaseUrl } from "@/lib/server-api";
-import { boundedFetch } from "@/lib/bounded-fetch";
+import { clearSessionCookies } from "@/features/auth/lib/auth-cookies";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { forgetServerRefresh } from "@/features/auth/lib/refresh-server";
+import { apiBaseUrl } from "@/shared/lib/server-api";
+import { boundedFetch } from "@/shared/lib/bounded-fetch";
 
 const headers = { "Cache-Control": "private, no-store, max-age=0", Pragma: "no-cache" };
 function unconfirmed() {

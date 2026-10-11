@@ -22,7 +22,7 @@ steps:
       if grep -REn '(kitchenId|blobContainer|blobName|localStorage|sessionStorage|console\.(log|debug))' \
         apps/customer-web-next/src/app/chef/menu \
         apps/customer-web-next/src/app/api/chef/menu \
-        apps/customer-web-next/src/components/chef-menu-manager.tsx --exclude='*.test.ts'; then
+        apps/customer-web-next/src/features/chef/components/chef-menu-manager.tsx --exclude='*.test.ts'; then
         echo 'ERROR: Chef menu runtime exposes internal identifiers/storage metadata or insecure behavior.' >&2
         exit 1
       fi

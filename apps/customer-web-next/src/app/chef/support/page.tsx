@@ -1,7 +1,7 @@
-import { ChefAccessBoundary } from "@/components/chef-access-boundary";
-import { ChefPageHeader } from "@/components/chef-page-header";
-import { SupportChat } from "@/components/support/SupportChat";
-import { isUuid } from "@/lib/server-api";
+import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
+import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
+import { SupportChat } from "@/features/support/components/SupportChat";
+import { isUuid } from "@/shared/lib/server-api";
 
 export const metadata = {
   title: "Chef support | Craves",

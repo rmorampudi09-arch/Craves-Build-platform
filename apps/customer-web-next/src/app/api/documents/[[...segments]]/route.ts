@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { apiBaseUrl } from "@/lib/server-api";
-import { isSameOrigin } from "@/lib/request-security";
-import { documentCapabilitiesSchema, documentEmailSchema, documentPageSchema, documentRequestSchema, documentSummarySchema, documentTypes, documentTypeSchema } from "@/lib/document-contract";
-import { documentQuery, documentRoute, DocumentTransportError, readDocumentBytes } from "@/lib/document-transport";
+import { apiBaseUrl } from "@/shared/lib/server-api";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { documentCapabilitiesSchema, documentEmailSchema, documentPageSchema, documentRequestSchema, documentSummarySchema, documentTypes, documentTypeSchema } from "@/features/chef-onboarding/lib/document-contract";
+import { documentQuery, documentRoute, DocumentTransportError, readDocumentBytes } from "@/shared/lib/document-transport";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -6,7 +6,7 @@ from pathlib import Path
 BASE = "870f5293884888aa28f0c069b91a86d06492c9a2"
 ALLOWED = (
     "services/referral-service/", "docs/referrals/", "scripts/referrals/", "tests/referrals/",
-    "apps/customer-web-next/src/components/referrals/", "apps/customer-web-next/src/lib/referrals/",
+    "apps/customer-web-next/src/features/referrals/components/", "apps/customer-web-next/src/features/referrals/lib/",
     "apps/mobile/src/features/referralsV2/", ".github/workflows/chef-referral-v2-ci.yml",
 )
 

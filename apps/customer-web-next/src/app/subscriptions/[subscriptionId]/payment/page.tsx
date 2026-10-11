@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { SubscriptionRazorpayPayment } from "@/components/subscription-razorpay-payment";
-import { isUuid } from "@/lib/server-api";
+import { SubscriptionRazorpayPayment } from "@/features/meal-plans/components/subscription-razorpay-payment";
+import { isUuid } from "@/shared/lib/server-api";
 
 export const metadata = {
   title: "Meal plan payment | Craves",

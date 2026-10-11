@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { CravesLogo } from "@/components/brand/CravesLogo";
-import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
-import { ContextualBackBoundary } from "@/components/navigation/ContextualBackBoundary";
-import { SubscriptionManager } from "@/components/subscription-manager";
+import { CravesLogo } from "@/shared/components/brand/CravesLogo";
+import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
+import { ContextualBackBoundary } from "@/shared/components/navigation/ContextualBackBoundary";
+import { SubscriptionManager } from "@/features/meal-plans/components/subscription-manager";
 
 export const metadata = {
   title: "My subscriptions | Craves",

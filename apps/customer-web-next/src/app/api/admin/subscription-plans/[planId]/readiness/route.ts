@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseAdminReadiness } from "@/lib/admin-subscription-runtime-contract";
-import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
+import { parseAdminReadiness } from "@/features/admin/subscriptions/lib/admin-subscription-runtime-contract";
+import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 

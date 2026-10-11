@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseApprovedChefReferences } from "@/lib/admin-subscription-plan-contract";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
+import { parseApprovedChefReferences } from "@/features/admin/subscriptions/lib/admin-subscription-plan-contract";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 

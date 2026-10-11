@@ -108,8 +108,8 @@ jobs:
         run: |
           set -euo pipefail
           ROUTE='apps/customer-web-next/src/app/api/admin/operations/investigate/route.ts'
-          CONTRACT='apps/customer-web-next/src/lib/admin-investigation-contract.ts'
-          COMPONENT='apps/customer-web-next/src/components/admin-operational-investigator.tsx'
+          CONTRACT='apps/customer-web-next/src/features/admin/investigations/lib/admin-investigation-contract.ts'
+          COMPONENT='apps/customer-web-next/src/features/admin/investigations/components/admin-operational-investigator.tsx'
           CONFIG='scripts/apim/configure-admin-operational-investigations-apim.sh'
           STATUS='scripts/apim/status-admin-operational-investigations-apim.sh'
           POLICY='infra/apim/admin-operational-investigations/authenticated-policy.xml'

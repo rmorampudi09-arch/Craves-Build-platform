@@ -28,7 +28,7 @@
         "./src/*"
       ],
       "@tanstack/react-router": [
-        "./src/compat/router.tsx"
+        "./src/shared/compat/router.tsx"
       ]
     }
   },

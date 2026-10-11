@@ -20,9 +20,9 @@ steps:
   - script: |
       set -euo pipefail
       grep -q 'isSameOrigin' apps/customer-web-next/src/app/api/admin/subscriptions/\[subscriptionId\]/status/route.ts
-      grep -q 'reason' apps/customer-web-next/src/lib/admin-subscription-operation-contract.ts
+      grep -q 'reason' apps/customer-web-next/src/features/admin/subscriptions/lib/admin-subscription-operation-contract.ts
       if grep -REn '(customerIdentityId|chefIdentityId|localStorage|sessionStorage|console\.(log|debug)|refund|credit|payout)' \
-        apps/customer-web-next/src/components/admin-subscription-operator.tsx \
+        apps/customer-web-next/src/features/admin/subscriptions/components/admin-subscription-operator.tsx \
         apps/customer-web-next/src/app/admin/subscriptions \
         apps/customer-web-next/src/app/api/admin/subscriptions; then
         echo 'ERROR: Admin subscription runtime exposes internal identities, insecure storage/logging or unsupported finance actions.' >&2

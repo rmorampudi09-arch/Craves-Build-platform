@@ -1,6 +1,6 @@
-import { ChefAccessBoundary } from "@/components/chef-access-boundary";
-import { ChefEarningsLedger } from "@/components/chef-earnings-ledger";
-import { ChefPageHeader } from "@/components/chef-page-header";
+import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
+import { ChefEarningsLedger } from "@/features/chef/components/chef-earnings-ledger";
+import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
 
 export const metadata = {
   title: "What I've earned | Craves",

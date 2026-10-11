@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseKitchenDiscovery } from "@/lib/discovery-contract";
-import { publicApiFetch } from "@/lib/public-api";
-import { DEFAULT_DISCOVERY_RADIUS_METERS, MAX_DISCOVERY_RADIUS_METERS } from "@/lib/catalog-discovery-policy";
+import { parseKitchenDiscovery } from "@/features/home/lib/discovery-contract";
+import { publicApiFetch } from "@/shared/lib/public-api";
+import { DEFAULT_DISCOVERY_RADIUS_METERS, MAX_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 
 const QUERY_KEYS = new Set(["latitude", "longitude", "radiusMeters", "page", "size"]);
 const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;

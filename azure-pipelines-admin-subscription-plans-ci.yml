@@ -23,7 +23,7 @@ steps:
       grep -q 'parseAdminPlanStatus' apps/customer-web-next/src/app/api/admin/subscription-plans/\[planId\]/status/route.ts
       grep -q 'status=APPROVED' apps/customer-web-next/src/app/api/admin/subscription-plans/chefs/route.ts
       if grep -REn '(localStorage|sessionStorage|console\.(log|debug)|discount|commission|tax|deliveryFee)' \
-        apps/customer-web-next/src/components/admin-subscription-plan-manager.tsx \
+        apps/customer-web-next/src/features/admin/subscriptions/components/admin-subscription-plan-manager.tsx \
         apps/customer-web-next/src/app/admin/subscription-plans \
         apps/customer-web-next/src/app/api/admin/subscription-plans; then
         echo 'ERROR: Admin plan runtime introduced insecure storage/logging or unapproved pricing logic.' >&2

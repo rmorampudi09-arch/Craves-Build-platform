@@ -1,5 +1,5 @@
-import { AdminNotificationRecovery } from "@/components/admin-notification-recovery";
-import { AdminPageIntro } from "@/components/admin-page-intro";
+import { AdminNotificationRecovery } from "@/features/admin/notifications/components/admin-notification-recovery";
+import { AdminPageIntro } from "@/features/admin/shell/components/admin-page-intro";
 
 export const dynamic = "force-dynamic";
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { ContextualBackBoundary } from "@/components/navigation/ContextualBackBoundary";
-import AddressesPage from "@/screens/Profile/Addresses";
+import { ContextualBackBoundary } from "@/shared/components/navigation/ContextualBackBoundary";
+import AddressesPage from "@/features/addresses/screens/Addresses";
 
 export default function AddressesRoutePage() {
   return (

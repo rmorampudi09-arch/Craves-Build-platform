@@ -83,7 +83,7 @@ steps:
       test -f "$pricing"
       test -f "$web_readiness"
       grep -Fq 'data-craves-policy-status={policyStatus}' \
-        apps/customer-web-next/src/components/legal/PublicPolicyPage.tsx
+        apps/customer-web-next/src/features/legal/components/PublicPolicyPage.tsx
       grep -Fq 'CRAVES_PUBLIC_SUPPORT_PHONE' "$contact"
       grep -Fq 'CRAVES_REGISTERED_BUSINESS_NAME' "$contact"
       grep -Fq 'data-craves-live-pricing-status' "$pricing"

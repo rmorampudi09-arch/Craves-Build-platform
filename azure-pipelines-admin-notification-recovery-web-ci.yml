@@ -22,8 +22,8 @@ steps:
       set -euo pipefail
       LIST_ROUTE='apps/customer-web-next/src/app/api/admin/notifications/recovery/route.ts'
       RETRY_ROUTE='apps/customer-web-next/src/app/api/admin/notifications/recovery/[requestId]/route.ts'
-      CONTRACT='apps/customer-web-next/src/lib/admin-notification-recovery-contract.ts'
-      COMPONENT='apps/customer-web-next/src/components/admin-notification-recovery.tsx'
+      CONTRACT='apps/customer-web-next/src/features/admin/notifications/lib/admin-notification-recovery-contract.ts'
+      COMPONENT='apps/customer-web-next/src/features/admin/notifications/components/admin-notification-recovery.tsx'
       grep -q 'isSameOrigin' "$RETRY_ROUTE"
       grep -q 'confirmation !== "RETRY"' "$COMPONENT"
       grep -q 'Recipient identity and provider payloads are intentionally omitted' "$COMPONENT"

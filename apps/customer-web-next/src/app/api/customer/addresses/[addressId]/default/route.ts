@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { parseCustomerAddress } from "@/lib/address-contract";
-import { isSameOrigin } from "@/lib/request-security";
+import { parseCustomerAddress } from "@/features/addresses/lib/address-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
 import {
   authenticatedApiFetch,
   isUuid,
   SessionRequiredError,
-} from "@/lib/server-api";
+} from "@/shared/lib/server-api";
 
 function failure(status: number, message?: string) {
   return NextResponse.json(

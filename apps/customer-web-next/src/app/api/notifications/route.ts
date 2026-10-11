@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseCustomerNotifications } from "@/lib/notification-contract";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
+import { parseCustomerNotifications } from "@/features/notifications/lib/notification-contract";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 

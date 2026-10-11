@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { clearSessionCookies, setSessionCookies } from "@/lib/auth-cookies";
-import { isSameOrigin } from "@/lib/request-security";
-import { apiBaseUrl } from "@/lib/server-api";
-import { renewServerSession } from "@/lib/refresh-server";
-import { sessionTiming } from "@/lib/refresh-policy";
+import { clearSessionCookies, setSessionCookies } from "@/features/auth/lib/auth-cookies";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { apiBaseUrl } from "@/shared/lib/server-api";
+import { renewServerSession } from "@/features/auth/lib/refresh-server";
+import { sessionTiming } from "@/features/auth/lib/refresh-policy";
 
 const headers = { "Cache-Control": "no-store, private", Pragma: "no-cache" };
 export async function POST(request: NextRequest) {

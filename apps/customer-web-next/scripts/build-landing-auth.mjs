@@ -20,12 +20,12 @@ await mkdir(output, { recursive: true });
 const result = await build({
   configFile: false, root: project, publicDir: false, define,
   resolve: { alias: [
-    { find: 'next/image', replacement: path.join(source, 'landing-auth/Image.tsx') },
+    { find: 'next/image', replacement: path.join(source, 'features/sign-in/landing-modal/Image.tsx') },
     { find: '@', replacement: source },
   ], dedupe: ['react', 'react-dom'] },
   build: {
     outDir: output, emptyOutDir: false, write: false, target: 'es2020', minify: true,
-    lib: { entry: path.join(source, 'landing-auth/entry.tsx'), formats: ['es'] },
+    lib: { entry: path.join(source, 'features/sign-in/landing-modal/entry.tsx'), formats: ['es'] },
     rolldownOptions: { output: {
       entryFileNames: 'auth-[hash].js',
       chunkFileNames: '[name]-[hash].js',
@@ -44,7 +44,7 @@ for (const artifact of artifacts) {
 
 // Publish the original ZIP stylesheet unchanged. Its selectors are already
 // scoped to .auth-modal, and the popup renders a portal outside the host node.
-const css = await readFile(path.join(source, 'landing-auth/AuthModal.css'));
+const css = await readFile(path.join(source, 'features/sign-in/landing-modal/AuthModal.css'));
 const cssName = `auth-${createHash('sha256').update(css).digest('hex').slice(0, 16)}.css`;
 await writeFile(path.join(output, cssName), css);
 await writeFile(path.join(output, 'manifest.json'), JSON.stringify({ script: `/landing-auth/${entry.fileName}`, style: `/landing-auth/${cssName}` }) + '\n');

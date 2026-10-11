@@ -2,6 +2,7 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -42,18 +43,27 @@ import {
   isDiscoverySearchActive,
 } from '../../discoverySearch/discoverySearchOrchestration';
 import {useDiscoverySearchSession} from '../../discoverySearch/hooks/useDiscoverySearchSession';
+import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
+import {
+  useFavoriteKitchensQuery,
+  useToggleFavoriteKitchen,
+} from '../../favorites/query/homeFavoriteQueries';
+import {useHomeNearbyDishesQuery} from '../../home/query/homeFeedQueries';
 import type {NearbyKitchen} from '../api/nearbyChefDiscoveryApi';
 import {
   filterLoadedNearbyKitchens,
   flattenNearbyKitchenPages,
   formatKitchenDistance,
-  formatKitchenLocation,
   getKitchenInitials,
+  summarizeKitchenDishes,
+  type KitchenDishSummary,
 } from '../chefDiscoveryPresentation';
 import {useNearbyChefDiscoveryQuery} from '../query/nearbyChefDiscoveryQueries';
 
 const DISCOVERY_RADIUS_METERS = 10_000;
 const DISCOVERY_PAGE_SIZE = 20;
+// Same size as Home's top-kitchen feed, so both tabs share one cached request.
+const KITCHEN_DISH_PAGE_SIZE = 100;
 
 function ChefDiscoverySkeleton() {
   return (
@@ -70,60 +80,110 @@ function ChefDiscoverySkeleton() {
   );
 }
 
+// shortcut: these are the kitchen's dish photos; switch to chef-uploaded kitchen photos once the API has them.
+function KitchenPhotoStrip({imageUrls}: {imageUrls: readonly string[]}) {
+  const [first, second, third] = imageUrls;
+  const hiddenCount = imageUrls.length - 3;
+
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={styles.photoStrip}>
+      <Image source={{uri: first}} resizeMode="cover" style={styles.photoMain} />
+      {second ? (
+        <View style={styles.photoColumn}>
+          <Image source={{uri: second}} resizeMode="cover" style={styles.photoSide} />
+          {third ? (
+            <View style={styles.photoSide}>
+              <Image source={{uri: third}} resizeMode="cover" style={StyleSheet.absoluteFill} />
+              {hiddenCount > 0 ? (
+                <View style={styles.photoMore}>
+                  <Text style={styles.photoMoreText}>+{hiddenCount}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 interface KitchenCardProps {
   kitchen: NearbyKitchen;
+  summary: KitchenDishSummary | undefined;
+  favorite: boolean;
+  favoritePending: boolean;
+  onFavorite: (kitchenId: string) => void;
   onViewKitchen: (kitchen: NearbyKitchen) => void;
 }
 
-function KitchenCard({kitchen, onViewKitchen}: KitchenCardProps) {
+function KitchenCard({
+  kitchen,
+  summary,
+  favorite,
+  favoritePending,
+  onFavorite,
+  onViewKitchen,
+}: KitchenCardProps) {
   const title = kitchen.kitchenName;
-  const location = formatKitchenLocation(kitchen);
+  const imageUrls = summary?.imageUrls ?? [];
+  const dishCount = `${kitchen.activeMenuItemCount} ${
+    kitchen.activeMenuItemCount === 1 ? 'dish' : 'dishes'
+  }`;
 
   return (
     <View style={styles.kitchenCard}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{getKitchenInitials(kitchen)}</Text>
-      </View>
-      <View style={styles.cardBody}>
-        <View style={styles.cardTitleRow}>
+      <Pressable
+        accessibilityHint="Opens this kitchen's public profile and available dishes"
+        accessibilityLabel={`View ${title} kitchen`}
+        accessibilityRole="button"
+        onPress={() => onViewKitchen(kitchen)}
+        style={({pressed}) => pressed && styles.kitchenCardPressed}>
+        <View style={styles.cardHeader}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{getKitchenInitials(kitchen)}</Text>
+            <View style={styles.openDot} />
+          </View>
           <View style={styles.cardTitleCopy}>
             <Text numberOfLines={1} style={styles.kitchenTitle}>
               {title}
             </Text>
-          </View>
-          <View style={styles.availableBadge}>
-            <Text style={styles.availableBadgeText}>Open</Text>
+            <Text numberOfLines={1} style={styles.metadata}>
+              {[kitchen.areaName || kitchen.city, formatKitchenDistance(kitchen.distanceMeters)]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
           </View>
         </View>
 
-        {kitchen.description ? (
+        {imageUrls.length > 0 ? (
+          <KitchenPhotoStrip imageUrls={imageUrls} />
+        ) : kitchen.description ? (
           <Text numberOfLines={2} style={styles.description}>
             {kitchen.description}
           </Text>
         ) : null}
 
-        <Text numberOfLines={1} style={styles.metadata}>
-          {[formatKitchenDistance(kitchen.distanceMeters), location]
-            .filter(Boolean)
-            .join(' • ')}
-        </Text>
-
         <View style={styles.cardFooter}>
-          <Text style={styles.menuCount}>
-            {kitchen.activeMenuItemCount}{' '}
-            {kitchen.activeMenuItemCount === 1 ? 'dish available' : 'dishes available'}
+          <Text numberOfLines={1} style={styles.menuCount}>
+            {[summary?.preparationTimeLabel, dishCount].filter(Boolean).join('  ·  ')}
           </Text>
-          <Pressable
-            accessibilityHint="Opens this kitchen's public profile and available dishes"
-            accessibilityLabel={`View ${title} kitchen`}
-            accessibilityRole="button"
-            onPress={() => onViewKitchen(kitchen)}
-            style={({pressed}) => [styles.viewKitchenButton, pressed && styles.filterButtonPressed]}>
-            <Text style={styles.viewKitchen}>View kitchen</Text>
-            <Icon name="chevron-right" size={18} color={colors.flameRedAccessible} surface={false} />
-          </Pressable>
+          {summary ? (
+            <Text style={styles.startingPrice}>From {summary.startingPriceLabel}</Text>
+          ) : null}
         </View>
-      </View>
+      </Pressable>
+
+      {/* Sibling of the card button so TalkBack can still reach it. */}
+      <CustomerFavoriteHeartButton
+        favorite={favorite}
+        pending={favoritePending}
+        onToggle={() => onFavorite(kitchen.id)}
+        itemLabel={title}
+        style={styles.favoriteButton}
+      />
     </View>
   );
 }
@@ -158,6 +218,34 @@ export function DiscoverHomeChefsScreen() {
     () => filterLoadedNearbyKitchens(kitchens, search.query),
     [kitchens, search.query],
   );
+  const nearbyKitchenCount = discovery.data?.pages[0]?.page.totalElements ?? null;
+
+  const dishDiscovery = useHomeNearbyDishesQuery({
+    radiusMeters: DISCOVERY_RADIUS_METERS,
+    size: KITCHEN_DISH_PAGE_SIZE,
+  });
+  // shortcut: only the first 100 nearby dishes are summarized; kitchens past that show no photos.
+  const dishSummaries = useMemo(
+    () =>
+      summarizeKitchenDishes(
+        dishDiscovery.data?.pages.flatMap(page => page.menuItems) ?? [],
+      ),
+    [dishDiscovery.data?.pages],
+  );
+
+  const favoriteKitchens = useFavoriteKitchensQuery();
+  const toggleFavoriteKitchen = useToggleFavoriteKitchen();
+  const favoriteKitchenIds = useMemo(
+    () => new Set(favoriteKitchens.items.map(item => item.kitchenId)),
+    [favoriteKitchens.items],
+  );
+  const handleFavorite = (kitchenId: string) => {
+    if (!favoriteKitchens.identityId || toggleFavoriteKitchen.isPending) return;
+    toggleFavoriteKitchen.mutate({
+      kitchenId,
+      favorite: favoriteKitchenIds.has(kitchenId),
+    });
+  };
 
   useEffect(() => {
     restorePendingRef.current = search.scrollOffset > 0;
@@ -328,44 +416,47 @@ export function DiscoverHomeChefsScreen() {
 
   const headerContent = (
     <View>
-      <CustomerHeader
-        onPressLocation={() => setLocationSelectorVisible(true)}
-        onPressNotifications={() => header.refreshNotifications()}
-      />
-
-      <View style={styles.heroCopy}>
-        <Text style={styles.eyebrow}>HOME CHEFS NEAR YOU</Text>
-        <Text style={styles.heading}>Discover home chefs</Text>
-      </View>
-
-      <View onLayout={handleSearchRowLayout} style={styles.searchRow}>
-        <DiscoverySearchInput
-          accessibilityLabel="Search nearby kitchens"
-          onChangeText={handleSearchChange}
-          onClear={handleClearSearch}
-          onFocus={handleSearchFocus}
-          placeholder="Search chefs, kitchens or area"
-          style={styles.searchField}
-          value={search.draft}
+      <View style={styles.topPanel}>
+        <CustomerHeader
+          onPressLocation={() => setLocationSelectorVisible(true)}
+          onPressNotifications={() => header.refreshNotifications()}
         />
-        <Pressable
-          accessibilityHint="Open filter and sort options"
-          accessibilityLabel="Filters"
-          accessibilityRole="button"
-          onPress={openFilters}
-          style={({pressed}) => [styles.filterButton, pressed && styles.filterButtonPressed]}>
-          <Icon name="filter" size={18} color={colors.flameRedAccessible} surface={false} />
-          <Text style={styles.filterButtonText}>Filters</Text>
-        </Pressable>
+
+        <View style={styles.heroCopy}>
+          <Text style={styles.eyebrow}>HOME CHEFS NEAR YOU</Text>
+          <Text style={styles.heading}>Discover home chefs</Text>
+        </View>
+
+        <View onLayout={handleSearchRowLayout} style={styles.searchRow}>
+          <DiscoverySearchInput
+            accessibilityLabel="Search nearby kitchens"
+            onChangeText={handleSearchChange}
+            onClear={handleClearSearch}
+            onFocus={handleSearchFocus}
+            placeholder="Search chefs, kitchens or area"
+            style={styles.searchField}
+            value={search.draft}
+          />
+          <Pressable
+            accessibilityHint="Open filter and sort options"
+            accessibilityLabel="Filters"
+            accessibilityRole="button"
+            onPress={openFilters}
+            style={({pressed}) => [styles.filterButton, pressed && styles.filterButtonPressed]}>
+            <Icon name="filter" size={22} color={colors.flameRedAccessible} surface={false} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.sectionHeadingRow}>
         <View style={styles.sectionHeadingCopy}>
-          <Text style={styles.sectionTitle}>Nearby chefs</Text>
+          <Text accessibilityRole="header" style={styles.sectionTitle}>
+            Nearby kitchens
+          </Text>
         </View>
-        <View style={styles.radiusPill}>
-          <Text style={styles.radiusPillText}>Within 10 km</Text>
-        </View>
+        <Text style={styles.radiusPillText}>
+          {nearbyKitchenCount ? `${nearbyKitchenCount} within 10 km` : 'Within 10 km'}
+        </Text>
       </View>
 
       {queryError && kitchens.length > 0 ? (
@@ -421,7 +512,14 @@ export function DiscoverHomeChefsScreen() {
           />
         }
         renderItem={({item}) => (
-          <KitchenCard kitchen={item} onViewKitchen={openKitchenProfile} />
+          <KitchenCard
+            kitchen={item}
+            summary={dishSummaries.get(item.id)}
+            favorite={favoriteKitchenIds.has(item.id)}
+            favoritePending={toggleFavoriteKitchen.isPending}
+            onFavorite={handleFavorite}
+            onViewKitchen={openKitchenProfile}
+          />
         )}
         scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
         showsVerticalScrollIndicator={false}
@@ -439,7 +537,14 @@ const styles = StyleSheet.create({
   listContent: {
     flexGrow: 1,
     paddingBottom: spacing.xxl,
-    backgroundColor: colors.surfaceBase,
+    backgroundColor: colors.surfaceMuted,
+  },
+  topPanel: {
+    paddingBottom: spacing.md,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    backgroundColor: colors.white,
+    ...elevation.card,
   },
   heroCopy: {
     paddingHorizontal: spacing.md,
@@ -474,34 +579,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   filterButton: {
+    width: touchTarget.minimum,
     minHeight: touchTarget.minimum,
-    minWidth: 92,
-    flexDirection: 'row',
-    paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.borderStrong,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xxs,
   },
   filterButtonPressed: {
     backgroundColor: colors.surfaceMuted,
     transform: [{scale: 0.98}],
   },
-  filterButtonText: {
-    color: colors.flameRedAccessible,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
   sectionHeadingRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
   },
   sectionHeadingCopy: {
@@ -517,28 +614,19 @@ const styles = StyleSheet.create({
     fontSize: typography.tiny,
     marginTop: spacing.xxs,
   },
-  radiusPill: {
-    borderRadius: radius.pill,
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
   radiusPillText: {
-    color: colors.espressoBrown,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.semibold,
+    color: colors.textSecondary,
+    fontSize: typography.small,
+    fontWeight: fontWeight.medium,
   },
   inlineNotice: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
   },
   kitchenCard: {
-    flexDirection: 'row',
-    gap: spacing.sm,
     marginHorizontal: spacing.md,
-    marginVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+    padding: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,
@@ -547,13 +635,18 @@ const styles = StyleSheet.create({
   },
   kitchenCardPressed: {
     opacity: 0.88,
-    transform: [{scale: 0.99}],
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingRight: touchTarget.minimum,
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.white,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.cream,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -562,14 +655,16 @@ const styles = StyleSheet.create({
     fontSize: typography.heading,
     fontWeight: fontWeight.extrabold,
   },
-  cardBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  cardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
+  openDot: {
+    position: 'absolute',
+    right: 1,
+    bottom: 1,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: colors.white,
+    backgroundColor: colors.success,
   },
   cardTitleCopy: {
     flex: 1,
@@ -577,52 +672,70 @@ const styles = StyleSheet.create({
   },
   kitchenTitle: {
     color: colors.espressoBrown,
-    fontSize: typography.body,
+    fontSize: typography.button,
     fontWeight: fontWeight.bold,
   },
-  availableBadge: {
-    borderRadius: radius.pill,
-    backgroundColor: colors.successSoft,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xxs,
+  metadata: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
+    marginTop: 2,
   },
-  availableBadgeText: {
-    color: colors.success,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.bold,
+  favoriteButton: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.sm,
+    backgroundColor: colors.surfaceMuted,
   },
   description: {
     color: colors.textPrimary,
     fontSize: typography.small,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
   },
-  metadata: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    marginTop: spacing.xs,
+  photoStrip: {
+    height: 150,
+    flexDirection: 'row',
+    gap: spacing.xxs,
+    marginTop: spacing.sm,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  photoMain: {
+    flex: 2,
+    backgroundColor: colors.surfaceMuted,
+  },
+  photoColumn: {
+    flex: 1,
+    gap: spacing.xxs,
+  },
+  photoSide: {
+    flex: 1,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceMuted,
+  },
+  photoMore: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.42)',
+  },
+  photoMoreText: {
+    color: colors.white,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
   },
   cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
   },
   menuCount: {
     flex: 1,
     color: colors.textSecondary,
-    fontSize: typography.tiny,
+    fontSize: typography.small,
   },
-  viewKitchenButton: {
-    minHeight: touchTarget.minimum,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xxs,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radius.md,
-  },
-  viewKitchen: {
+  startingPrice: {
     color: colors.flameRedAccessible,
     fontSize: typography.small,
     fontWeight: fontWeight.bold,
@@ -650,22 +763,22 @@ const styles = StyleSheet.create({
     height: 22,
     width: '62%',
     borderRadius: radius.sm,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.border,
   },
   skeletonLine: {
     height: 14,
     width: '82%',
     borderRadius: radius.sm,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.border,
   },
   skeletonSearch: {
     height: touchTarget.comfortable,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.border,
   },
   skeletonCard: {
-    height: 120,
+    height: 240,
     borderRadius: radius.lg,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.white,
   },
 });

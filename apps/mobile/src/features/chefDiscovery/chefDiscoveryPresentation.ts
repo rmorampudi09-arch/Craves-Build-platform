@@ -1,4 +1,56 @@
 import type {NearbyKitchen, NearbyKitchenPage} from './api/nearbyChefDiscoveryApi';
+import type {NearbyDish} from '../home/api/homeFeedApi';
+import {formatDishPrice} from '../home/homePresentation';
+
+export interface KitchenDishSummary {
+  imageUrls: string[];
+  preparationTimeLabel: string | null;
+  startingPriceLabel: string;
+}
+
+export function formatPreparationTime(dishes: readonly NearbyDish[]): string | null {
+  const times = dishes
+    .map(dish => dish.preparationTimeMinutes)
+    .filter((value): value is number => typeof value === 'number');
+
+  if (times.length === 0) return null;
+  const minimum = Math.min(...times);
+  const maximum = Math.max(...times);
+  return minimum === maximum
+    ? `${minimum} min`
+    : `${minimum}–${maximum} min`;
+}
+
+/** Photos, prep time and cheapest price per kitchen, from the nearby dish feed. */
+export function summarizeKitchenDishes(
+  dishes: readonly NearbyDish[],
+): Map<string, KitchenDishSummary> {
+  const dishesByKitchen = new Map<string, NearbyDish[]>();
+  for (const dish of dishes) {
+    const current = dishesByKitchen.get(dish.kitchenId) ?? [];
+    current.push(dish);
+    dishesByKitchen.set(dish.kitchenId, current);
+  }
+
+  const summaries = new Map<string, KitchenDishSummary>();
+  dishesByKitchen.forEach((kitchenDishes, kitchenId) => {
+    const cheapestDish = kitchenDishes.reduce((cheapest, dish) =>
+      dish.price < cheapest.price ? dish : cheapest,
+    );
+    summaries.set(kitchenId, {
+      imageUrls: Array.from(
+        new Set(
+          kitchenDishes
+            .map(dish => dish.primaryImageUrl?.trim() || null)
+            .filter((url): url is string => Boolean(url)),
+        ),
+      ),
+      preparationTimeLabel: formatPreparationTime(kitchenDishes),
+      startingPriceLabel: formatDishPrice(cheapestDish.price, cheapestDish.currency),
+    });
+  });
+  return summaries;
+}
 
 export function flattenNearbyKitchenPages(
   pages: NearbyKitchenPage[] | undefined,

@@ -36,6 +36,7 @@ import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface'
 import {KitchenImageCarousel} from './KitchenImageCarousel';
 import {useNearbyChefDiscoveryQuery} from '../../chefDiscovery/query/nearbyChefDiscoveryQueries';
 import type {NearbyKitchen} from '../../chefDiscovery/api/nearbyChefDiscoveryApi';
+import {formatPreparationTime} from '../../chefDiscovery/chefDiscoveryPresentation';
 import {CustomerChefAvatar} from '../../customerShell/components/CustomerChefAvatar';
 import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
 import {
@@ -183,19 +184,6 @@ export function PromoCarousel({
       </View>
     </View>
   );
-}
-
-function formatPreparationTime(dishes: readonly NearbyDish[]): string | null {
-  const times = dishes
-    .map(dish => dish.preparationTimeMinutes)
-    .filter((value): value is number => typeof value === 'number');
-
-  if (times.length === 0) return null;
-  const minimum = Math.min(...times);
-  const maximum = Math.max(...times);
-  return minimum === maximum
-    ? `${minimum} min`
-    : `${minimum}–${maximum} min`;
 }
 
 function buildTopKitchenCards(

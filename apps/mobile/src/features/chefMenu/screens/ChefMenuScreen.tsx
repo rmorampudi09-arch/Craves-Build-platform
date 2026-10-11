@@ -211,7 +211,7 @@ function MenuItemCard({
   );
 }
 
-export function ChefMenuScreen() {
+export function ChefMenuScreen({headerAccessory}: {headerAccessory?: React.ReactNode}) {
   const navigation = useNavigation<ChefMenuNavigation>();
   const menu = useChefMenuModel();
   const {
@@ -336,6 +336,8 @@ export function ChefMenuScreen() {
           Keep item availability accurate so customers only see food you can prepare.
         </Text>
       </View>
+
+      {headerAccessory}
 
       {menu.feedback ? (
         <View

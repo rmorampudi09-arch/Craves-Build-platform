@@ -18,6 +18,10 @@ export const chefMealPlanSchema = z.object({
   reviewReason: z.string().nullable().optional().transform(value => value ?? null),
   submittedAt: instant,
   reviewedAt: instant,
+  // Added by the plan-photo/accepting-subscribers backend; absent from older deployments, so no defaults:
+  // key presence tells the screens whether the feature exists.
+  imageUrl: z.string().nullable().optional(),
+  acceptingSubscribers: z.boolean().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -289,6 +293,26 @@ export const chefSubscriptionApi = {
       chefMealPlanSchema,
       await httpClient.put<unknown>(`/api/v1/chef/subscription-plans/${encodeURIComponent(planId)}`, input),
       'Updated meal plan could not be verified.',
+    );
+  },
+  async setAcceptingSubscribers(planId: string, acceptingSubscribers: boolean): Promise<ChefMealPlan> {
+    return parseOne(
+      chefMealPlanSchema,
+      await httpClient.patch<unknown>(
+        `/api/v1/chef/subscription-plans/${encodeURIComponent(planId)}/accepting-subscribers`,
+        {acceptingSubscribers},
+      ),
+      'Updated meal plan could not be verified.',
+    );
+  },
+  async uploadPlanImage(planId: string, form: FormData): Promise<ChefMealPlan> {
+    return parseOne(
+      chefMealPlanSchema,
+      await httpClient.put<unknown>(
+        `/api/v1/chef/subscription-plans/${encodeURIComponent(planId)}/image`,
+        form,
+      ),
+      'Uploaded plan photo could not be verified.',
     );
   },
   async getSchedule(planId: string, signal?: AbortSignal): Promise<ChefMealSchedule> {

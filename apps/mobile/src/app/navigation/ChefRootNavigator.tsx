@@ -1,17 +1,7 @@
 import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
-import {
-  createBottomTabNavigator,
-  type BottomTabNavigationProp,
-} from '@react-navigation/bottom-tabs';
-import {
-  useNavigation,
-  type CompositeNavigationProp,
-} from '@react-navigation/native';
-import {
-  createNativeStackNavigator,
-  type NativeStackNavigationProp,
-} from '@react-navigation/native-stack';
+import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
@@ -22,7 +12,6 @@ import {ChefBusinessInformationScreen} from '../../features/chefBusinessInformat
 import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDashboardScreen';
 import {ChefAddMenuItemScreen} from '../../features/chefMenu/screens/ChefAddMenuItemScreen';
 import {ChefEditMenuItemScreen} from '../../features/chefMenu/screens/ChefEditMenuItemScreen';
-import {ChefMenuScreen} from '../../features/chefMenu/screens/ChefMenuScreen';
 import {ChefMenuItemDetailScreen} from '../../features/chefMenu/screens/ChefMenuItemDetailScreen';
 import {ChefCompletedOrdersScreen} from '../../features/chefOrders/screens/ChefCompletedOrdersScreen';
 import {ChefNewOrdersScreen} from '../../features/chefOrders/screens/ChefNewOrdersScreen';
@@ -43,10 +32,12 @@ import {
   ChefOperationalProvider,
   useChefOperationalState,
 } from '../../features/chefShell/state/ChefOperationalProvider';
+import {ChefMealPlanEditorScreen} from '../../features/chefSubscription/screens/ChefMealPlanEditorScreen';
 import {ChefSubscriptionPlanScreen} from '../../features/chefSubscription/screens/ChefSubscriptionPlanScreen';
 import {ChefSupportScreen} from '../../features/chefSupport/screens/ChefSupportScreen';
 import {BottomMenuIcon} from '../../shared/components/BottomMenuIcon';
 import {renderLiquidBottomTabBar, LiquidTabButton, LiquidTabScene, LiquidTabScenesProvider} from '../../shared/components/LiquidBottomTabBar';
+import {ChefMenuTabScreen} from './ChefMenuTabScreen';
 import {
   CHEF_TAB_ACTIVE_COLOR,
   CHEF_TAB_INACTIVE_COLOR,
@@ -135,29 +126,6 @@ function useChefStackScreenOptions() {
       ),
     }),
     [reduceMotionEnabled],
-  );
-}
-
-type ChefMenuNavigation = CompositeNavigationProp<
-  BottomTabNavigationProp<ChefTabParamList, 'Menu'>,
-  NativeStackNavigationProp<ChefProductStackParamList>
->;
-
-function ChefMenuTabScreen() {
-  const navigation = useNavigation<ChefMenuNavigation>();
-  return (
-    <View style={styles.menuScreenBoundary}>
-      <ChefMenuScreen />
-      <View style={styles.menuCreateBar}>
-        <Pressable
-          accessibilityLabel="Add new Chef menu item"
-          accessibilityRole="button"
-          onPress={() => navigation.navigate('ChefAddMenuItem')}
-          style={({pressed}) => [styles.menuCreateButton, pressed && styles.pressed]}>
-          <Text style={styles.menuCreateButtonText}>+ Add new item</Text>
-        </Pressable>
-      </View>
-    </View>
   );
 }
 
@@ -324,6 +292,10 @@ function ChefProductNavigator() {
         />
         <Stack.Screen name="ChefAddMenuItem" component={ChefAddMenuItemScreen} />
         <Stack.Screen
+          name="ChefMealPlanEditor"
+          component={ChefMealPlanEditorScreen}
+        />
+        <Stack.Screen
           name="ChefEditMenuItem"
           component={ChefEditMenuItemScreen}
           options={{gestureEnabled: false}}
@@ -393,28 +365,6 @@ export function ChefRootNavigator() {
 }
 
 const styles = StyleSheet.create({
-  menuScreenBoundary: {flex: 1},
-  menuCreateBar: {
-    backgroundColor: colors.white,
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  menuCreateButton: {
-    alignItems: 'center',
-    backgroundColor: colors.flameRed,
-    borderRadius: 999,
-    justifyContent: 'center',
-    minHeight: 48,
-    paddingHorizontal: spacing.lg,
-  },
-  menuCreateButtonText: {
-    color: colors.white,
-    fontSize: typography.button,
-    fontWeight: fontWeight.bold,
-  },
-  pressed: {opacity: 0.65},
   ordersBadge: {
     backgroundColor: colors.flameRed,
     color: colors.white,

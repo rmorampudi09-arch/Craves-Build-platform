@@ -199,6 +199,7 @@ export type ChefProductStackParamList = {
   ChefMenuItemDetail: ChefMenuItemDetailRouteParams;
   ChefAddMenuItem: undefined;
   ChefEditMenuItem: ChefMenuItemEditRouteParams;
+  ChefMealPlanEditor: {planId?: string};
 };
 
 export type ChefTabRouteName = keyof ChefTabParamList;

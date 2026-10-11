@@ -10,7 +10,6 @@ import {
   createPublicQueryKey,
 } from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
-import {getRuntimeConfig} from '../../../core/config/runtimeConfig';
 import {useCustomerOrderDetailQuery} from '../../customerOrders/query/customerOrdersQueries';
 import {
   dishDetailApi,
@@ -23,6 +22,7 @@ import {
   summarizeSchedule,
   type PlanScheduleSummary,
 } from '../../mealPlans/domain/mealPlanSchedule';
+import {resolveApiImageUrl} from '../../mealPlans/domain/resolveApiImageUrl';
 import {customerSubscriptionApi} from '../api/customerSubscriptionApi';
 import {subscriptionPaymentApi} from '../api/subscriptionPaymentApi';
 
@@ -257,24 +257,8 @@ export function usePlanCover(planId: string | null): {
   };
 }
 
-/** https URLs pass through; `/api/...` paths hang off the configured API origin; anything else is not an image. */
-export function resolveApiImageUrl(path: string | null | undefined): string | null {
-  const value = path?.trim();
-  if (!value) {
-    return null;
-  }
-  if (/^https:\/\/\S+$/i.test(value)) {
-    return value;
-  }
-  if (!value.startsWith('/api/')) {
-    return null;
-  }
-  try {
-    return `${getRuntimeConfig().apiBaseUrl}${value}`;
-  } catch {
-    return null;
-  }
-}
+// Lives in features/mealPlans (shared with the chef screens); re-exported for existing importers.
+export {resolveApiImageUrl};
 
 export function useSubscriptionActions(subscriptionId: string) {
   const queryClient = useQueryClient();

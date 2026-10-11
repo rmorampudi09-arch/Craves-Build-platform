@@ -15,6 +15,8 @@ export const publicSubscriptionPlanSchema = z.object({
   billingPeriod: z.string().min(1).max(80),
   amount: moneyValue,
   currency: z.string().length(3),
+  // Added by the backend later; absent on older production. Relative `/api/...` path or https URL.
+  imageUrl: z.string().min(1).nullable().optional(),
 });
 
 export type PublicSubscriptionPlan = z.infer<typeof publicSubscriptionPlanSchema>;
@@ -71,9 +73,16 @@ export const customerSubscriptionSchema = z.object({
   notes: z.string().max(2000).nullable().optional().transform(value => value ?? null),
   createdAt: instant,
   updatedAt: instant,
+  // Added by the backend later; each may be absent (older production) or null. Never assume a value.
+  planName: z.string().min(1).max(160).nullable().optional(),
+  billingPeriod: z.string().min(1).max(80).nullable().optional(),
+  amount: z.number().nullable().optional(),
+  currency: z.string().length(3).nullable().optional(),
+  nextBillingDate: localDate.nullable().optional(),
+  planImageUrl: z.string().min(1).nullable().optional(),
 });
 
-export type CustomerSubscription = z.infer<typeof customerSubscriptionSchema>;
+export type CustomerSubscription =z.infer<typeof customerSubscriptionSchema>;
 
 const occurrenceItemSchema = z.object({
   menuItemId: uuid,
@@ -88,6 +97,8 @@ export const customerSubscriptionOccurrenceSchema = z.object({
   serviceAt: instant,
   status: z.string().min(1).max(60),
   items: z.array(occurrenceItemSchema).max(100),
+  // Added by the backend later; the placed order for this meal, absent on older production.
+  orderId: uuid.nullable().optional(),
 });
 
 export type CustomerSubscriptionOccurrence = z.infer<

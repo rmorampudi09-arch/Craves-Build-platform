@@ -26,6 +26,15 @@ it("shows customers the launching-soon note unless the private link is used", as
   expect(await page({ access: "test-key", returnTo: "/home" })).toContain("phone-auth-form");
 });
 
+it("sends a chef who tried to switch to the customer app back to their kitchen", async () => {
+  const chef = await page({ from: "chef" });
+  expect(chef).toContain("Craves is launching soon for customers");
+  expect(chef).toContain('href="/chef"');
+  expect(chef).toContain("Back to my kitchen");
+  expect(chef).not.toContain("/chef/sign-in");
+  expect(chef).not.toContain("phone-auth-form");
+});
+
 it("leaves chef return paths and the admin portal sign-in unchanged", async () => {
   await expect(page({ returnTo: "/chef/orders" })).rejects.toThrow("redirect:/chef/sign-in?returnTo=%2Fchef%2Forders");
   vi.stubEnv("CRAVES_ADMIN_PORTAL", "true");

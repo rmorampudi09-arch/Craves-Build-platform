@@ -9,10 +9,14 @@ import {
   DropdownMenuTrigger,
 } from "@/shared/ui/overlays/dropdown-menu";
 import { clearChefMode } from "@/features/chef/lib/chef-mode";
+import { CUSTOMERS_LAUNCHING_SOON } from "@/features/sign-in/lib/customer-launch";
 import { clearSession, getSession, subscribeSession, type CravesUser } from "@/features/auth/api/cravesAuth";
 
 /** The only way from Chef Mode to customer screens; the full load leaves no chef state behind. */
 export function switchToCustomerApp() {
+  // Customer launch lock: chefs stay in Chef Mode and see the launching-soon note (see customer-launch.ts).
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full load drops every chef screen
+  if (CUSTOMERS_LAUNCHING_SOON) return window.location.assign("/sign-in?from=chef");
   clearChefMode();
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full load drops every chef screen
   window.location.assign("/home");

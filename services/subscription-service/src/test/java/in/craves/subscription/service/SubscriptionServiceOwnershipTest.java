@@ -12,6 +12,7 @@ import in.craves.subscription.billing.SubscriptionBillingProperties;
 import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
+import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository;
 import in.craves.subscription.plan.PlanImageRepository;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
@@ -38,9 +39,11 @@ class SubscriptionServiceOwnershipTest {
     private final CapacityService capacityService = mock(CapacityService.class);
     private final PlanImageRepository planImages = mock(PlanImageRepository.class);
     private final SubscriptionBillingRepository billingRepository = mock(SubscriptionBillingRepository.class);
+    private final SubscriptionLifecycleRepository lifecycleRepository = mock(SubscriptionLifecycleRepository.class);
 
-    private final SubscriptionService service =
-        new SubscriptionService(repository, capacityService, planImages, billing(true, 7), billingRepository);
+    private final SubscriptionService service = new SubscriptionService(
+        repository, capacityService, planImages, billing(true, 7), billingRepository, lifecycleRepository
+    );
 
     private static final UUID SUBSCRIPTION_ID = UUID.fromString("55555555-5555-4555-8555-555555555555");
     private static final CurrentUser ADMIN = new CurrentUser(
@@ -200,6 +203,39 @@ class SubscriptionServiceOwnershipTest {
         service.adminChangeStatus(SUBSCRIPTION_ID, "ACTIVE", "Paid by bank transfer", ADMIN);
 
         verify(billingRepository, never()).applyPauseCredit(any(), any());
+    }
+
+    @Test
+    void adminPauseCancelsQueuedMeals() {
+        assertAdminChangeCancelsQueuedMeals("PAUSED");
+    }
+
+    @Test
+    void adminCancelCancelsQueuedMeals() {
+        assertAdminChangeCancelsQueuedMeals("CANCELLED");
+    }
+
+    @Test
+    void adminExpireCancelsQueuedMeals() {
+        assertAdminChangeCancelsQueuedMeals("EXPIRED");
+    }
+
+    @Test
+    void adminPaymentFailedLeavesMeals() {
+        when(repository.findSubscriptionById(SUBSCRIPTION_ID)).thenReturn(Optional.of(subscription("ACTIVE", null)));
+
+        service.adminChangeStatus(SUBSCRIPTION_ID, "PAYMENT_FAILED", "Bank reversed the payment", ADMIN);
+
+        verify(lifecycleRepository, never()).cancelUndispatchedOccurrences(any(), any(), any());
+    }
+
+    // The order worker sends every READY_FOR_ORDER meal without checking the plan's status.
+    private void assertAdminChangeCancelsQueuedMeals(String target) {
+        when(repository.findSubscriptionById(SUBSCRIPTION_ID)).thenReturn(Optional.of(subscription("ACTIVE", null)));
+
+        service.adminChangeStatus(SUBSCRIPTION_ID, target, "Customer asked by phone", ADMIN);
+
+        verify(lifecycleRepository).cancelUndispatchedOccurrences(SUBSCRIPTION_ID, ADMIN.identityId(), "ADMIN_STATUS_CHANGE");
     }
 
     private static SubscriptionResponse subscription(String status, LocalDate nextServiceDate) {

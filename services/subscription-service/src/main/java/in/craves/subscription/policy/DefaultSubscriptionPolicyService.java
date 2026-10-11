@@ -9,7 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class DefaultSubscriptionPolicyService {
     private static final String DEFAULT_NOTE =
-        "Craves platform default: customer self-service pause, resume, cancel and skip are disabled until explicitly configured.";
+        "Craves platform default: customer self-service pause, resume, cancel and skip are enabled. "
+            + "Pause and cancel apply to meals not yet sent to the kitchen; skip and resume need 24 hours notice.";
 
     private final JdbcTemplate jdbcTemplate;
     private final SubscriptionPolicyRepository repository;
@@ -48,8 +49,8 @@ public class DefaultSubscriptionPolicyService {
                 created_by_identity_id, created_at, updated_at, activated_at
             ) VALUES (
                 ?, ?, 1, 'ACTIVE',
-                FALSE, FALSE, FALSE, FALSE,
-                NULL, NULL, NULL, NULL,
+                TRUE, TRUE, TRUE, TRUE,
+                0, 1440, 0, 1440,
                 NULL, NULL, NULL, ?,
                 ?, now(), now(), now()
             )

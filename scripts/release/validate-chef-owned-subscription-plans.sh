@@ -33,7 +33,7 @@ require_text "$BACKEND_CONTROLLER" '@PutMapping("/chef/subscription-plans/{planI
 require_text "$BACKEND_CONTROLLER" '@PostMapping("/chef/subscription-plans/{planId}/submit")'
 require_text "$BACKEND_CONTROLLER" '@PostMapping("/admin/subscription-plans/{planId}/review")'
 require_text "$WORKFLOW_SERVICE" 'defaultPolicyService.ensureActiveDefault'
-require_text "$DEFAULT_POLICY_SERVICE" 'customer self-service pause, resume, cancel and skip are disabled'
+require_text "$DEFAULT_POLICY_SERVICE" 'customer self-service pause, resume, cancel and skip are enabled'
 require_text "$DEFAULT_POLICY_SERVICE" "'PLATFORM_DEFAULT_ACTIVATE'"
 require_text "$POLICY_SERVICE" 'repository.findPublicActive(planId)'
 require_text "$POLICY_REPOSITORY" "p.status = 'ACTIVE'"

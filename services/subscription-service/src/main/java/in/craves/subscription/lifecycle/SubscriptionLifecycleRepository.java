@@ -80,7 +80,7 @@ public class SubscriptionLifecycleRepository {
             return List.of();
         }
         return jdbcTemplate.query(
-            "SELECT id, service_date, meal_slot_code, service_at, status " +
+            "SELECT id, service_date, meal_slot_code, service_at, status, order_id " +
                 "FROM subscription_schema.subscription_occurrence WHERE subscription_id = ? " +
                 "ORDER BY service_at DESC, meal_slot_code, id DESC LIMIT ?",
             (rs, rowNum) -> {
@@ -91,7 +91,8 @@ public class SubscriptionLifecycleRepository {
                     rs.getString("meal_slot_code"),
                     rs.getTimestamp("service_at").toInstant(),
                     rs.getString("status"),
-                    listOccurrenceItems(occurrenceId)
+                    listOccurrenceItems(occurrenceId),
+                    rs.getObject("order_id", UUID.class)
                 );
             }, subscriptionId, limit
         );

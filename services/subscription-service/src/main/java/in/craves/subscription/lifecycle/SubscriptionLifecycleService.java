@@ -299,7 +299,8 @@ public class SubscriptionLifecycleService {
         SubscriptionResponse value = requireSubscription(subscriptionId);
         return new CustomerSubscriptionResponse(
             value.id(), value.planId(), value.status(), value.startDate(), value.endDate(),
-            value.nextServiceDate(), value.deliveryAddressId(), value.notes(), value.createdAt(), value.updatedAt()
+            value.nextServiceDate(), value.deliveryAddressId(), value.notes(), value.createdAt(), value.updatedAt(),
+            value.planName(), value.billingPeriod(), value.amount(), value.currency(), value.nextBillingDate(), value.planImageUrl()
         );
     }
 

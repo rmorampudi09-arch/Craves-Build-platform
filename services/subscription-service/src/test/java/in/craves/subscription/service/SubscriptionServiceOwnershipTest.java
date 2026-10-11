@@ -2,14 +2,21 @@ package in.craves.subscription.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
+import in.craves.subscription.plan.PlanImageRepository;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
+import in.craves.subscription.web.ApiDtos.CreateSubscriptionRequest;
+import in.craves.subscription.web.ApiDtos.CustomerSubscriptionResponse;
 import in.craves.subscription.web.ApiDtos.PlanResponse;
+import in.craves.subscription.web.ApiDtos.PublicPlanResponse;
 import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -25,7 +32,8 @@ class SubscriptionServiceOwnershipTest {
 
     private final SubscriptionRepository repository = mock(SubscriptionRepository.class);
     private final CapacityService capacityService = mock(CapacityService.class);
-    private final SubscriptionService service = new SubscriptionService(repository, capacityService);
+    private final PlanImageRepository planImages = mock(PlanImageRepository.class);
+    private final SubscriptionService service = new SubscriptionService(repository, capacityService, planImages);
 
     @Test
     void chefCannotUseAdministratorPlanListing() {
@@ -46,8 +54,57 @@ class SubscriptionServiceOwnershipTest {
 
         Object publicPlan = service.getPlan(planId);
 
-        assertThat(publicPlan).hasNoNullFieldsOrPropertiesExcept("description");
+        assertThat(publicPlan).hasNoNullFieldsOrPropertiesExcept("description", "imageUrl");
         assertThat(publicPlan.toString()).doesNotContain(CHEF_ID.toString());
+    }
+
+    @Test
+    void publicPlanCarriesImageUrlOnlyWhenAnImageExists() {
+        UUID planId = UUID.fromString("44444444-4444-4444-8444-444444444444");
+        PlanResponse stored = plan(CHEF_ID, "ACTIVE");
+        when(repository.findActivePlanById(planId)).thenReturn(Optional.of(stored));
+        when(capacityService.isPlanBookable(stored)).thenReturn(true);
+
+        assertThat(service.getPlan(planId).imageUrl()).isNull();
+
+        String path = "/api/v1/subscriptions/plans/" + planId + "/image?v=1790000000";
+        when(planImages.findImagePath(planId)).thenReturn(path);
+        PublicPlanResponse withImage = service.getPlan(planId);
+
+        assertThat(withImage.imageUrl()).isEqualTo(path);
+    }
+
+    @Test
+    void planNotAcceptingSubscribersIsRejectedBeforeAnySubscriptionIsCreated() {
+        CurrentUser customer = new CurrentUser(CUSTOMER_ID, "firebase-customer", "+918888888888", List.of("CUSTOMER"));
+        UUID planId = UUID.fromString("44444444-4444-4444-8444-444444444444");
+        PlanResponse stored = plan(CHEF_ID, "ACTIVE");
+        when(repository.findActivePlanById(planId)).thenReturn(Optional.of(stored));
+        when(repository.isPlanAcceptingSubscribers(planId)).thenReturn(false);
+        when(capacityService.isPlanBookable(stored)).thenReturn(true);
+        CreateSubscriptionRequest request = new CreateSubscriptionRequest(
+            planId, LocalDate.now().plusDays(1), UUID.fromString("66666666-6666-4666-8666-666666666666"), null
+        );
+
+        assertThatThrownBy(() -> service.createSubscription(request, "enroll-key-0001", customer))
+            .isInstanceOfSatisfying(ApiException.class, error -> {
+                assertThat(error.getStatus()).isEqualTo(409);
+                assertThat(error.getCode()).isEqualTo("PLAN_NOT_ACCEPTING_SUBSCRIBERS");
+            });
+
+        verify(repository, never()).createSubscription(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void missingPlanImageIsAnApiNotFound() {
+        UUID planId = UUID.fromString("44444444-4444-4444-8444-444444444444");
+        when(planImages.findImage(planId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getPlanImage(planId))
+            .isInstanceOfSatisfying(ApiException.class, error -> {
+                assertThat(error.getStatus()).isEqualTo(404);
+                assertThat(error.getCode()).isEqualTo("PLAN_IMAGE_NOT_FOUND");
+            });
     }
 
     @Test
@@ -79,13 +136,25 @@ class SubscriptionServiceOwnershipTest {
             UUID.fromString("66666666-6666-4666-8666-666666666666"),
             null,
             Instant.parse("2026-07-30T00:00:00Z"),
-            Instant.parse("2026-07-30T00:00:00Z")
+            Instant.parse("2026-07-30T00:00:00Z"),
+            "Weekly meals",
+            "WEEKLY",
+            new BigDecimal("1200.00"),
+            "INR",
+            LocalDate.now().plusDays(7),
+            "/api/v1/subscriptions/plans/44444444-4444-4444-8444-444444444444/image?v=1790000000"
         );
         when(repository.findSubscriptionById(subscriptionId)).thenReturn(Optional.of(stored));
 
-        Object response = service.getMine(subscriptionId, customer);
+        CustomerSubscriptionResponse response = service.getMine(subscriptionId, customer);
 
         assertThat(response.toString()).doesNotContain(CUSTOMER_ID.toString(), CHEF_ID.toString());
+        assertThat(response.planName()).isEqualTo("Weekly meals");
+        assertThat(response.billingPeriod()).isEqualTo("WEEKLY");
+        assertThat(response.amount()).isEqualByComparingTo("1200.00");
+        assertThat(response.currency()).isEqualTo("INR");
+        assertThat(response.nextBillingDate()).isEqualTo(LocalDate.now().plusDays(7));
+        assertThat(response.planImageUrl()).endsWith("/image?v=1790000000");
     }
 
     private static PlanResponse plan(UUID chefIdentityId, String status) {

@@ -49,7 +49,8 @@ public final class ApiDtos {
         String description,
         String billingPeriod,
         BigDecimal amount,
-        String currency
+        String currency,
+        String imageUrl
     ) {
     }
 
@@ -76,7 +77,13 @@ public final class ApiDtos {
         UUID deliveryAddressId,
         String notes,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String planName,
+        String billingPeriod,
+        BigDecimal amount,
+        String currency,
+        LocalDate nextBillingDate,
+        String planImageUrl
     ) {
     }
 
@@ -90,7 +97,13 @@ public final class ApiDtos {
         UUID deliveryAddressId,
         String notes,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String planName,
+        String billingPeriod,
+        BigDecimal amount,
+        String currency,
+        LocalDate nextBillingDate,
+        String planImageUrl
     ) {
     }
 }

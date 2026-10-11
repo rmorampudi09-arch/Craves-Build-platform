@@ -36,7 +36,8 @@ public final class SubscriptionLifecycleModels {
         String mealSlotCode,
         Instant serviceAt,
         String status,
-        List<OccurrenceItemResponse> items
+        List<OccurrenceItemResponse> items,
+        UUID orderId
     ) {
     }
 

@@ -29,7 +29,7 @@ parameters:
     default: craves-domain-events
   - name: apimName
     type: string
-    default: apim-craves-prodlow-l3ing6
+    default: apim-craves-prodlow-kmqgfy
   - name: apimHost
     type: string
     default: api.craves.in

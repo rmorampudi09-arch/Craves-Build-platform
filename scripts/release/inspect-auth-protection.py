@@ -71,7 +71,7 @@ def template(value):
     settings = {name: setting(indexed.get(name), spec) for name, spec in SETTINGS.items()}
     image = container.get('image', '')
     require(isinstance(image, str) and re.fullmatch(
-        r'cravesprodlowacr82121\.azurecr\.io/craves/auth-service(?::[A-Za-z0-9_.-]+|@sha256:[a-f0-9]{64})', image),
+        r'cravesrm09prodlow6bf632\.azurecr\.io/craves/auth-service(?::[A-Za-z0-9_.-]+|@sha256:[a-f0-9]{64})', image),
         'Auth image reference not in expected registry/repository')
     return {'image': image, 'sourceProvenanceVerified': False,
             'settings': settings, 'possibleOverrideNames': sorted(OVERRIDES & indexed.keys()),

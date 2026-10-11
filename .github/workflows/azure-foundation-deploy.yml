@@ -37,7 +37,7 @@ concurrency:
 env:
   PROJECT: craves
   ENV_NAME: prodlow
-  ACR_NAME: cravesprodlowacr82121
+  ACR_NAME: cravesrm09prodlow6bf632
   TEMPLATE_FILE: infra/main.bicep
 
 jobs:

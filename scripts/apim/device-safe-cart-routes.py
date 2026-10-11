@@ -9,7 +9,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 RG = 'rg-craves-prodlow-centralindia'
-APIM = 'apim-craves-prodlow-l3ing6'
+APIM = 'apim-craves-prodlow-kmqgfy'
 APP = 'ca-craves-order-service-prodlow'
 SUB = '4f897b61-9b52-44b4-8cf1-bdac281cc1aa'
 VERSION = '2022-08-01'

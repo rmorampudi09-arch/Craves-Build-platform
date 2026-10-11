@@ -11,7 +11,7 @@ SPEC.loader.exec_module(m)
 
 
 def fixture():
-    template = {'containers': [{'image': 'cravesprodlowacr82121.azurecr.io/craves/auth-service:customer-email-' + 'a'*40,
+    template = {'containers': [{'image': 'cravesrm09prodlow6bf632.azurecr.io/craves/auth-service:customer-email-' + 'a'*40,
                                'env': [{'name': m.PREFIX + 'ENABLED', 'value': 'false'},
                                        {'name': 'DATABASE_PASSWORD', 'value': 'PRIVATE_PASSWORD'},
                                        {'name': 'JAVA_TOOL_OPTIONS', 'value': 'PRIVATE_JVM_ARGUMENTS'}]}],

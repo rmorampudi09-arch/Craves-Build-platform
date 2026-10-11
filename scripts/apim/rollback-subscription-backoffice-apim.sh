@@ -3,7 +3,7 @@ set -euo pipefail
 set +x
 
 RG="${RG:-rg-craves-prodlow-centralindia}"
-APIM="${APIM:-apim-craves-prodlow-l3ing6}"
+APIM="${APIM:-apim-craves-prodlow-kmqgfy}"
 CONFIRM_APIM_ROLLBACK="${CONFIRM_APIM_ROLLBACK:-false}"
 
 fail() { echo "ERROR: $*" >&2; exit 1; }

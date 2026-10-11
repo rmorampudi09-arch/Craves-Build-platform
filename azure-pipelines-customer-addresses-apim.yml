@@ -13,7 +13,7 @@ parameters:
   - name: apimServiceName
     displayName: API Management service
     type: string
-    default: apim-craves-prodlow-l3ing6
+    default: apim-craves-prodlow-kmqgfy
   - name: userChefContainerAppName
     displayName: User/Chef Service Container App
     type: string

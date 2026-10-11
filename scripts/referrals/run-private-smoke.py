@@ -26,7 +26,7 @@ body={'location':'centralindia','identity':{'type':'UserAssigned','userAssignedI
       'properties':{'environmentId':p['managedEnvironmentId'],
           'configuration':{'triggerType':'Manual','replicaTimeout':150,'replicaRetryLimit':0,
               'manualTriggerConfig':{'parallelism':1,'replicaCompletionCount':1},
-              'registries':[{'server':'cravesprodlowacr82121.azurecr.io','identity':identity}]},
+              'registries':[{'server':'cravesrm09prodlow6bf632.azurecr.io','identity':identity}]},
           'template':{'containers':[{'name':'smoke','image':EXPECTED_IMAGE,'command':['/bin/bash'],'args':['-c',script],
               'env':[{'name':'REFERRAL_SMOKE_HOST','value':p['configuration']['ingress']['fqdn']}],
               'resources':{'cpu':0.5,'memory':'1Gi'}}]}}}

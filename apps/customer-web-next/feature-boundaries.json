@@ -212,6 +212,7 @@
     "profile -> src/features/home/components/CustomerSignOutDialog.tsx",
     "profile -> src/features/orders/lib/order-contract.ts",
     "profile -> src/features/sign-in/components/EmailVerificationPanel.tsx",
+    "seo -> src/features/dish/lib/public-menu-item-contract.ts",
     "sign-in -> src/features/auth/api/cravesAuth.ts",
     "sign-in -> src/features/auth/lib/auth-contract.ts",
     "sign-in -> src/features/auth/lib/firebase-client.ts",

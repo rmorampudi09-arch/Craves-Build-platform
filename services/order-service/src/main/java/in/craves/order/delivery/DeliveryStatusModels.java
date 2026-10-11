@@ -28,7 +28,21 @@ public final class DeliveryStatusModels {
         String providerDeliveryId,
         String status,
         String trackingUrl,
-        Instant observedAt
+        Instant observedAt,
+        String handoffFromProviderId,
+        String handoffFromProviderDeliveryId,
+        Boolean handoffContinuation
     ) {
+        public DeliveryStatusChangedData(UUID deliveryJobId, UUID orderId, UUID chefSubOrderId,
+                                         String providerId, String providerDeliveryId, String status,
+                                         String trackingUrl, Instant observedAt) {
+            this(deliveryJobId, orderId, chefSubOrderId, providerId, providerDeliveryId,
+                status, trackingUrl, observedAt, null, null, null);
+        }
+
+        public boolean hasHandoff() {
+            return handoffFromProviderId != null || handoffFromProviderDeliveryId != null
+                || handoffContinuation != null;
+        }
     }
 }

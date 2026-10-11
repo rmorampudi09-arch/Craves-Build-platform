@@ -78,3 +78,43 @@ Local PostgreSQL must contain `craves_business_db`. Flyway creates `subscription
 Use `azure-pipelines-subscription-service.yml`.
 
 Important: the existing Container App placeholder currently used target port 80. This pipeline updates ingress target port to 8080 to match Spring Boot services.
+
+## Customer delivery-address eligibility (CP03)
+
+New customer enrollment, pending-enrollment hold reacquisition, new billing invoices,
+and new provider orders require an active, complete saved address owned by the
+authenticated customer. The existing User-Chef internal customer-address lookup is
+authoritative; no User-Chef or Chef workflow change is required. This does not
+assert courier/distance serviceability, which has a separate contract.
+
+Subscription requires these existing configuration names for the new lookup:
+
+```text
+CRAVES_USER_CHEF_INTERNAL_BASE_URL=<verified HTTPS root of the User-Chef service>
+CRAVES_INTERNAL_SERVICE_SECRET=<existing internal-service secret reference>
+```
+
+Use the existing secret reference; do not create or paste a new credential. A missing
+URL/secret or unavailable upstream fails these customer operations closed with a safe
+error and leaves unrelated service startup/read paths available. The client uses a
+3-second connect timeout, a 5-second socket-read timeout, and never follows redirects. Response cleanup may consume one additional read-timeout window; this is not a 5-second total request deadline.
+Production URLs must use HTTPS; loopback HTTP is supported for isolated tests.
+
+The read-only `GET /api/v1/subscriptions/{subscriptionId}/payment-eligibility`
+endpoint requires the customer's verified token and an `expectedCustomerIdentityId`
+query matching both that principal and the stored subscription owner. Success is
+exactly HTTP 204 with no address data. Integration calls it before a new provider
+order, using the durable payment intent's customer and subscription IDs. Ordinary
+administrator detail reads and existing-order/payment reconciliation remain unchanged.
+
+A billing address failure creates no invoice, invoice history or payment outbox and
+does not advance the billing date. Its token-bound claim uses the existing stale-lock
+window as a retry cooldown; never-attempted due rows are prioritized over stale
+failed claims to avoid an invalid batch starving valid customers. A corrected address
+becomes eligible on retry after that window.
+
+Before any rollout, verify the actual User-Chef URL, existing secret reference,
+private service-to-service route for the eligibility endpoint, and release provenance
+for both services. Deploying Integration before Subscription exposes the 204 endpoint
+fails new provider orders closed. This source change alone does not configure or
+deploy either service.

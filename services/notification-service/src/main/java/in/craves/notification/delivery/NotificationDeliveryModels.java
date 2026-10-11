@@ -47,8 +47,18 @@ public final class NotificationDeliveryModels {
         Map<String, String> payload,
         int priority,
         int attemptCount,
-        UUID lockToken
+        UUID lockToken,
+        String recipientRole
     ) {
+        // Older internal callers have no persisted audience; keep their existing delivery policy.
+        public DeliveryWorkItem(
+            UUID requestId, UUID recipientIdentityId, String channel, String deliveryAddress,
+            String title, String body, String targetType, UUID targetId, Map<String, String> payload,
+            int priority, int attemptCount, UUID lockToken
+        ) {
+            this(requestId, recipientIdentityId, channel, deliveryAddress, title, body, targetType, targetId,
+                payload, priority, attemptCount, lockToken, null);
+        }
     }
 
     public record PushDevice(UUID id, String deviceToken, String tokenHash) {

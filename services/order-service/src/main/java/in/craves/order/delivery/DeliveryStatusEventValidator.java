@@ -62,6 +62,13 @@ public class DeliveryStatusEventValidator {
         if (data.observedAt() == null) {
             throw new DeliveryStatusValidationException("Delivery status observation timestamp is required");
         }
+        if (data.hasHandoff()) {
+            if (!"pidge".equals(data.providerId()) || !"borzo".equals(data.handoffFromProviderId())
+                || !StringUtils.hasText(data.handoffFromProviderDeliveryId())
+                || Boolean.FALSE.equals(data.handoffContinuation())) {
+                throw new DeliveryStatusValidationException("Unsupported delivery handoff provenance");
+            }
+        }
         validateTrackingUrl(data.trackingUrl());
     }
 

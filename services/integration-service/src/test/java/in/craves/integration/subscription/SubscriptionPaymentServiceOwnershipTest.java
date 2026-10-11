@@ -232,7 +232,8 @@ class SubscriptionPaymentServiceOwnershipTest {
                 "9876543210",
                 "customer@example.com",
                 "https://craves.in/subscriptions/" + SUBSCRIPTION_ID + "/payment"
-            )
+            ),
+            null
         );
 
         assertSame(response, actual);

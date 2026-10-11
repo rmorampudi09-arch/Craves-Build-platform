@@ -63,7 +63,7 @@ public class DeliveryJobRepository {
                     'handoffFromProviderId', 'borzo',
                     'handoffFromProviderDeliveryId', ?,
                     'pidgeProviderDeliveryId', ?,
-                    'pidgeDeliveryFee', ?,
+                    'pidgeDeliveryFee', CAST(? AS numeric),
                     'previousRouting', quote_snapshot),
                 last_status_observed_at = ?, last_status_source = 'RECONCILIATION',
                 next_tracking_at = CASE WHEN ? IN ('DELIVERED','CANCELLED','RETURNED','FAILED')

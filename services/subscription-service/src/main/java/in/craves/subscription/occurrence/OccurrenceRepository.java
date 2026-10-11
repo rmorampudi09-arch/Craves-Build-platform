@@ -101,7 +101,7 @@ public class OccurrenceRepository {
         List<ScheduleItem> matchingItems,
         SkipRequest skipRequest
     ) {
-        lockActiveSubscription(subscription.subscriptionId());
+        lockGenerationClaim(subscription, serviceDate);
         boolean paidCycle = skipRequest == null && hasPaidInvoiceCovering(subscription.subscriptionId(), serviceDate);
         UUID occurrenceId = UUID.randomUUID();
         String initialStatus = skipRequest != null ? "SKIPPED" : paidCycle ? "READY_FOR_ORDER" : "BILLING_PENDING";
@@ -176,24 +176,28 @@ public class OccurrenceRepository {
         return Boolean.TRUE.equals(paid);
     }
 
-    private void lockActiveSubscription(UUID subscriptionId) {
-        String status = jdbcTemplate.queryForObject(
-            "SELECT status FROM subscription_schema.customer_subscription WHERE id = ? FOR UPDATE",
-            String.class,
-            subscriptionId
-        );
-        if (!"ACTIVE".equals(status)) {
-            throw new IllegalStateException("Subscription is no longer ACTIVE during occurrence generation");
+    private void lockGenerationClaim(ClaimedSubscription subscription, LocalDate serviceDate) {
+        // Keep this lock until occurrence, items, history, skip and capacity-trigger writes commit.
+        // ACTIVE alone cannot distinguish the original claim from pause/resume ABA or lease replacement.
+        if (!serviceDate.equals(subscription.serviceDate()) || jdbcTemplate.queryForList(
+            "SELECT id FROM subscription_schema.customer_subscription WHERE id = ? AND customer_identity_id = ? " +
+                "AND status = 'ACTIVE' AND generation_lock_token = ? AND next_service_date = ? FOR UPDATE",
+            UUID.class, subscription.subscriptionId(), subscription.customerIdentityId(), subscription.lockToken(), subscription.serviceDate()
+        ).isEmpty()) {
+            throw new IllegalStateException("Subscription generation claim was lost");
         }
     }
 
     public void releaseAndAdvance(ClaimedSubscription subscription, LocalDate nextServiceDate) {
         int updated = jdbcTemplate.update(
             "UPDATE subscription_schema.customer_subscription SET next_service_date = ?, generation_lock_token = NULL, " +
-                "generation_locked_at = NULL, updated_at = now() WHERE id = ? AND generation_lock_token = ?",
+                "generation_locked_at = NULL, updated_at = now() WHERE id = ? AND customer_identity_id = ? " +
+                "AND status = 'ACTIVE' AND generation_lock_token = ? AND next_service_date = ?",
             nextServiceDate,
             subscription.subscriptionId(),
-            subscription.lockToken()
+            subscription.customerIdentityId(),
+            subscription.lockToken(),
+            subscription.serviceDate()
         );
         if (updated != 1) {
             throw new IllegalStateException("Subscription generation claim was lost");

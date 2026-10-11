@@ -227,12 +227,24 @@ public class SubscriptionRepository {
         return rows.stream().findFirst();
     }
 
+    /** Hold the subscription before admin capacity work, matching worker and customer lifecycle lock order. */
+    public Optional<SubscriptionResponse> lockSubscriptionById(UUID id) {
+        if (jdbcTemplate.queryForList(
+            "SELECT id FROM subscription_schema.customer_subscription WHERE id = ? FOR UPDATE", UUID.class, id
+        ).isEmpty()) {
+            return Optional.empty();
+        }
+        return findSubscriptionById(id);
+    }
+
     @Transactional
     public SubscriptionResponse updateSubscriptionStatus(UUID id, String newStatus, String reason, UUID actorIdentityId) {
-        SubscriptionResponse existing = findSubscriptionById(id)
+        SubscriptionResponse existing = lockSubscriptionById(id)
             .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
         int updated = jdbcTemplate.update(
-            "UPDATE subscription_schema.customer_subscription SET status = ?, updated_at = now() WHERE id = ?",
+            "UPDATE subscription_schema.customer_subscription SET status = ?, updated_at = now(), " +
+                "generation_lock_token = NULL, generation_locked_at = NULL, " +
+                "billing_lock_token = NULL, billing_locked_at = NULL WHERE id = ?",
             newStatus,
             id
         );

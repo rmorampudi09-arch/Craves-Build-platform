@@ -3,6 +3,8 @@ package in.craves.subscription.billing;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import in.craves.subscription.billing.SubscriptionBillingRepository.BillingClaim;
+import in.craves.subscription.address.SubscriptionDeliveryAddressClient;
+import in.craves.subscription.exception.ApiException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -22,26 +24,30 @@ public class SubscriptionBillingService {
     private final SubscriptionBillingRepository repository;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final SubscriptionDeliveryAddressClient deliveryAddresses;
 
     @Autowired
     public SubscriptionBillingService(
         SubscriptionBillingProperties properties,
         SubscriptionBillingRepository repository,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        SubscriptionDeliveryAddressClient deliveryAddresses
     ) {
-        this(properties, repository, objectMapper, Clock.systemUTC());
+        this(properties, repository, objectMapper, deliveryAddresses, Clock.systemUTC());
     }
 
     SubscriptionBillingService(
         SubscriptionBillingProperties properties,
         SubscriptionBillingRepository repository,
         ObjectMapper objectMapper,
+        SubscriptionDeliveryAddressClient deliveryAddresses,
         Clock clock
     ) {
         this.properties = properties;
         this.repository = repository;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.deliveryAddresses = deliveryAddresses;
     }
 
     public BillingSummary generateDueInvoices() {
@@ -54,6 +60,17 @@ public class SubscriptionBillingService {
         for (BillingClaim claim : claims) {
             try {
                 validate(claim);
+                try {
+                    deliveryAddresses.requireEligible(claim.customerIdentityId(), claim.deliveryAddressId());
+                } catch (ApiException unavailableAddress) {
+                    // Invalid/stale addresses may persist. Cool down this claim so the oldest
+                    // invalid batch cannot starve later eligible subscriptions on every tick.
+                    repository.deferAddressFailure(claim);
+                    failed++;
+                    LOGGER.warn("Subscription billing address check deferred subscriptionId={} code={}",
+                        claim.subscriptionId(), unavailableAddress.getCode());
+                    continue;
+                }
                 LocalDate cycleEnd = cycleEnd(claim.cycleStart(), claim.billingPeriod());
                 UUID invoiceId = UUID.randomUUID();
                 UUID outboxId = UUID.randomUUID();

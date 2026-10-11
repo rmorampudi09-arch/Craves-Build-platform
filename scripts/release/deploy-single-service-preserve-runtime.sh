@@ -15,6 +15,18 @@ READY_ATTEMPTS=${READY_ATTEMPTS:-60}
 READY_SLEEP_SECONDS=${READY_SLEEP_SECONDS:-5}
 STATUS_READ_FAILURE_LIMIT=${STATUS_READ_FAILURE_LIMIT:-4}
 DEPLOY_PREFLIGHT_ONLY=${DEPLOY_PREFLIGHT_ONLY:-false}
+DEPLOY_RECOVERY_ONLY=${DEPLOY_RECOVERY_ONLY:-false}
+DEPLOY_RECEIPT_FILE=${DEPLOY_RECEIPT_FILE:-}
+MUTATION_SUBMITTED=false
+OBSERVED_REVISION=''
+RESTORED_REVISION=''
+RECEIPT_STATUS=not-submitted
+RECEIPT_REASON=''
+STATE_HASH_BEFORE=''
+TEMPLATE_HASH_BEFORE=''
+SECRET_HASH_BEFORE=''
+PREVIOUS_REVISION=''
+PREVIOUS_IMAGE=''
 
 fail() {
   echo "ERROR: $*" >&2
@@ -27,6 +39,8 @@ command -v sha256sum >/dev/null 2>&1 || fail 'sha256sum is required.'
 command -v curl >/dev/null 2>&1 || fail 'curl is required.'
 [[ "$DEPLOY_PREFLIGHT_ONLY" == true || "$DEPLOY_PREFLIGHT_ONLY" == false ]] \
   || fail 'DEPLOY_PREFLIGHT_ONLY must be true or false.'
+[[ "$DEPLOY_RECOVERY_ONLY" == true || "$DEPLOY_RECOVERY_ONLY" == false ]] \
+  || fail 'DEPLOY_RECOVERY_ONLY must be true or false.'
 
 runtime_template_hash() {
   local revision=$1
@@ -254,6 +268,7 @@ wait_for_image() {
         || "$health" == 'Unhealthy' ) ]]; then
       show_revision_diagnostics "$latest"
       show_revision_logs_if_available "$latest"
+      printf '%s\n' "$latest"
       return 10
     fi
 
@@ -266,44 +281,6 @@ wait_for_image() {
   return 20
 }
 
-verify_previous_ready_revision_intact() {
-  local app_json revision_json mode current_ready previous_image previous_health previous_active
-
-  app_json=$(az containerapp show \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$APP_NAME" \
-    --output json \
-    --only-show-errors 2>/dev/null || true)
-
-  [[ -n "$app_json" ]] && jq -e . >/dev/null 2>&1 <<<"$app_json" || return 1
-
-  mode=$(jq -r '.properties.configuration.activeRevisionsMode // ""' <<<"$app_json")
-  current_ready=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$app_json")
-
-  [[ "$mode" == 'Single' ]] || return 1
-  [[ "$current_ready" == "$PREVIOUS_REVISION" ]] || return 1
-
-  revision_json=$(az containerapp revision show \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$APP_NAME" \
-    --revision "$PREVIOUS_REVISION" \
-    --output json \
-    --only-show-errors 2>/dev/null || true)
-
-  [[ -n "$revision_json" ]] && jq -e . >/dev/null 2>&1 <<<"$revision_json" || return 1
-
-  previous_image=$(jq -r '.properties.template.containers[0].image // ""' <<<"$revision_json")
-  previous_health=$(jq -r '.properties.healthState // ""' <<<"$revision_json")
-  previous_active=$(jq -r '.properties.active // false' <<<"$revision_json")
-  previous_active=${previous_active,,}
-
-  [[ "$previous_image" == "$PREVIOUS_IMAGE" ]] || return 1
-  [[ "$previous_health" == 'Healthy' ]] || return 1
-  [[ "$previous_active" == 'true' ]] || return 1
-
-  echo "Single revision mode preserved previous ready revision $PREVIOUS_REVISION on $PREVIOUS_IMAGE; no rollback image update is required." >&2
-  return 0
-}
 
 smoke_health() {
   local app_json=$1
@@ -349,6 +326,156 @@ smoke_health() {
   done
 }
 
+
+# Receipts contain only identities and hashes, never runtime values or secrets.
+# Persist intent before submission: a nonzero az exit cannot prove no mutation.
+write_receipt() {
+  local tmp="${DEPLOY_RECEIPT_FILE}.tmp.$$"
+  jq -n --arg resourceGroup "$RESOURCE_GROUP" --arg containerApp "$APP_NAME" \
+    --arg serviceKey "$SERVICE_KEY" --arg targetImage "$TARGET_IMAGE" \
+    --arg previousImage "$PREVIOUS_IMAGE" --arg previousRevision "$PREVIOUS_REVISION" \
+    --arg observedRevision "$OBSERVED_REVISION" --arg restoredRevision "$RESTORED_REVISION" \
+    --arg stateHash "$STATE_HASH_BEFORE" --arg templateHash "$TEMPLATE_HASH_BEFORE" \
+    --arg secretHash "$SECRET_HASH_BEFORE" --arg status "$RECEIPT_STATUS" \
+    --arg reason "$RECEIPT_REASON" --argjson submitted "$MUTATION_SUBMITTED" \
+    '{schemaVersion:1,resourceGroup:$resourceGroup,containerApp:$containerApp,serviceKey:$serviceKey,
+      targetImage:$targetImage,previousImage:$previousImage,previousRevision:$previousRevision,
+      observedRevision:$observedRevision,restoredRevision:$restoredRevision,
+      stateHash:$stateHash,templateHash:$templateHash,secretHash:$secretHash,
+      submitted:$submitted,status:$status,reason:$reason}' >"$tmp" && mv "$tmp" "$DEPLOY_RECEIPT_FILE"
+}
+
+# Recovery includes traffic and desired template state, unlike the deployment
+# comparison that deliberately ignores normal ingress traffic bookkeeping.
+# Only the deployed container's image and revision suffix may differ.
+safe_state_hash() {
+  jq -eS '
+    if (.properties.configuration | type) != "object" or
+       (.properties.template.containers | type) != "array" or
+       (.properties.template.containers | length) == 0
+    then error("Incomplete runtime state") else
+      {identity:(.identity // {}), configuration:.properties.configuration,
+       environmentId:.properties.environmentId, workloadProfileName:.properties.workloadProfileName,
+       template:(.properties.template | del(.revisionSuffix) | del(.containers[0].image))}
+    end' <<<"$1" | sha256sum | cut -d' ' -f1
+}
+
+recovery_blocked() {
+  RECEIPT_STATUS=operator-required
+  RECEIPT_REASON=$1
+  write_receipt || echo 'ERROR: Could not persist recovery outcome; receipt remains unresolved.' >&2
+  echo "ERROR: Recovery is operator-required: $1. Receipt: $DEPLOY_RECEIPT_FILE" >&2
+  return 1
+}
+
+verify_recovery_state() {
+  local expected_image=$1 expected_revision=$2 app_json revision_json current_state current_template current_secrets
+  app_json=$(az containerapp show --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --output json --only-show-errors) || return 1
+  jq -e --arg image "$expected_image" --arg revision "$expected_revision" '
+    .properties.latestRevisionName == $revision and
+    .properties.template.containers[0].image == $image
+  ' <<<"$app_json" >/dev/null || return 1
+  current_state=$(safe_state_hash "$app_json") || return 1
+  [[ "$current_state" == "$STATE_HASH_BEFORE" ]] || return 1
+  revision_json=$(az containerapp revision show --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --revision "$expected_revision" --output json --only-show-errors) || return 1
+  jq -e --arg image "$expected_image" '
+    (.properties.template | type) == "object" and
+    .properties.template.containers[0].image == $image
+  ' <<<"$revision_json" >/dev/null || return 1
+  current_template=$(jq -S '.properties.template | del(.revisionSuffix) | (.containers // []) |= map(del(.image))' <<<"$revision_json" | sha256sum | cut -d' ' -f1) || return 1
+  [[ "$current_template" == "$TEMPLATE_HASH_BEFORE" ]] || return 1
+  current_secrets=$(secret_metadata_hash) || return 1
+  [[ "$current_secrets" == "$SECRET_HASH_BEFORE" ]] || return 1
+}
+
+guarded_recovery() {
+  local rollback_rc verified_revision
+  [[ "$MUTATION_SUBMITTED" == true ]] || return 0
+  # An earlier failed recovery is not permission to retry another mutation.
+  [[ "$RECEIPT_STATUS" != operator-required ]] || return 1
+  if [[ "$RECEIPT_STATUS" == restored ]]; then
+    verify_recovery_state "$PREVIOUS_IMAGE" "$RESTORED_REVISION" \
+      || { recovery_blocked 'Previously restored state changed or is unreadable'; return 1; }
+    verified_revision=$(wait_for_image "$PREVIOUS_IMAGE" "$OBSERVED_REVISION") \
+      || { recovery_blocked 'Previously restored readiness is no longer verified'; return 1; }
+    [[ "$verified_revision" == "$RESTORED_REVISION" ]] \
+      || { recovery_blocked 'Previously restored revision changed'; return 1; }
+    return 0
+  fi
+  [[ -n "$OBSERVED_REVISION" ]] \
+    || { recovery_blocked 'Submission outcome or target revision ownership is unknown'; return 1; }
+  verify_recovery_state "$TARGET_IMAGE" "$OBSERVED_REVISION" \
+    || { recovery_blocked 'Current image, revision, runtime, or secret metadata changed or is unreadable'; return 1; }
+  # This is a read/compare/update guard, not an Azure atomic compare-and-swap.
+  # Any observed drift blocks recovery; a write after the final read remains a
+  # control-plane concurrency limitation and requires operational serialization.
+  RECEIPT_STATUS=restore-submitted
+  RECEIPT_REASON='Guarded image-only recovery submitted'
+  write_receipt || { recovery_blocked 'Recovery intent could not be persisted'; return 1; }
+  az containerapp update --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" \
+    --image "$PREVIOUS_IMAGE" --no-wait --only-show-errors >/dev/null \
+    || { recovery_blocked 'Restore submission failed or its outcome is unknown'; return 1; }
+  if RESTORED_REVISION=$(wait_for_image "$PREVIOUS_IMAGE" "$OBSERVED_REVISION"); then
+    rollback_rc=0
+  else
+    rollback_rc=$?
+  fi
+  [[ "$rollback_rc" -eq 0 ]] \
+    || { recovery_blocked 'Restore readiness could not be verified'; return 1; }
+  verify_recovery_state "$PREVIOUS_IMAGE" "$RESTORED_REVISION" \
+    || { recovery_blocked 'Restored runtime could not be verified unchanged'; return 1; }
+  RECEIPT_STATUS=restored
+  RECEIPT_REASON='Previous image restored and original runtime fingerprints verified'
+  write_receipt || { recovery_blocked 'Restored outcome could not be persisted'; return 1; }
+  echo "Previous image restored as $RESTORED_REVISION. Receipt: $DEPLOY_RECEIPT_FILE" >&2
+}
+
+on_deploy_exit() {
+  local rc=$?
+  trap - EXIT
+  if [[ "$rc" -ne 0 && "$MUTATION_SUBMITTED" == true ]]; then
+    set +e
+    guarded_recovery
+  fi
+  exit "$rc"
+}
+
+if [[ "$DEPLOY_RECOVERY_ONLY" == true ]]; then
+  [[ -n "$DEPLOY_RECEIPT_FILE" && -s "$DEPLOY_RECEIPT_FILE" ]] || fail 'Original deployment receipt is required for recovery.'
+  jq -e --arg rg "$RESOURCE_GROUP" --arg app "$APP_NAME" --arg key "$SERVICE_KEY" --arg image "$TARGET_IMAGE" '
+    .schemaVersion == 1 and .resourceGroup == $rg and .containerApp == $app and
+    .serviceKey == $key and .targetImage == $image and (.submitted | type == "boolean") and
+    (.status | IN("not-submitted", "submitted", "deployment-verified", "restored", "restore-submitted", "operator-required")) and
+    (if .submitted then
+      ([.stateHash,.templateHash,.secretHash] | all(type == "string" and test("^[0-9a-f]{64}$"))) and
+      ([.previousImage,.previousRevision] | all(type == "string" and length > 0))
+     else true end)
+  ' "$DEPLOY_RECEIPT_FILE" >/dev/null || fail 'Recovery receipt identity or evidence is invalid; manual recovery is required.'
+  MUTATION_SUBMITTED=$(jq -r '.submitted' "$DEPLOY_RECEIPT_FILE")
+  PREVIOUS_IMAGE=$(jq -r '.previousImage' "$DEPLOY_RECEIPT_FILE")
+  PREVIOUS_REVISION=$(jq -r '.previousRevision' "$DEPLOY_RECEIPT_FILE")
+  OBSERVED_REVISION=$(jq -r '.observedRevision' "$DEPLOY_RECEIPT_FILE")
+  RESTORED_REVISION=$(jq -r '.restoredRevision' "$DEPLOY_RECEIPT_FILE")
+  STATE_HASH_BEFORE=$(jq -r '.stateHash' "$DEPLOY_RECEIPT_FILE")
+  TEMPLATE_HASH_BEFORE=$(jq -r '.templateHash' "$DEPLOY_RECEIPT_FILE")
+  SECRET_HASH_BEFORE=$(jq -r '.secretHash' "$DEPLOY_RECEIPT_FILE")
+  RECEIPT_STATUS=$(jq -r '.status' "$DEPLOY_RECEIPT_FILE")
+  RECEIPT_REASON=$(jq -r '.reason' "$DEPLOY_RECEIPT_FILE")
+  if [[ "$RECEIPT_STATUS" == restore-submitted ]]; then
+    recovery_blocked 'An earlier restore outcome is unknown; do not resubmit blindly'
+    exit 1
+  fi
+  guarded_recovery
+  exit $?
+fi
+
+if [[ "$DEPLOY_PREFLIGHT_ONLY" != true ]]; then
+  [[ -n "$DEPLOY_RECEIPT_FILE" ]] || DEPLOY_RECEIPT_FILE=$(mktemp)
+  write_receipt || fail 'Deployment receipt cannot be written; no mutation attempted.'
+  echo "Deployment receipt: $DEPLOY_RECEIPT_FILE"
+  trap on_deploy_exit EXIT
+fi
+
 BEFORE=$(az containerapp show \
   --resource-group "$RESOURCE_GROUP" \
   --name "$APP_NAME" \
@@ -390,6 +517,9 @@ fi
 
 [[ "$PREVIOUS_IMAGE" != "$TARGET_IMAGE" ]] || fail 'Target image is already the current ready image; use a new immutable tag.'
 
+[[ "$(jq -r '.properties.latestRevisionName // ""' <<<"$BEFORE")" == "$PREVIOUS_REVISION" ]] || fail 'Another rollout is in progress; no mutation attempted.'
+[[ "$(jq -r '.properties.template.containers[0].image // ""' <<<"$BEFORE")" == "$PREVIOUS_IMAGE" ]] || fail 'Desired image changed; no mutation attempted.'
+STATE_HASH_BEFORE=$(safe_state_hash "$BEFORE")
 TEMPLATE_HASH_BEFORE=$(runtime_template_hash "$PREVIOUS_REVISION")
 CONFIG_HASH_BEFORE=$(configuration_hash)
 IDENTITY_HASH_BEFORE=$(identity_hash)
@@ -411,6 +541,13 @@ Secret metadata hash:       $SECRET_HASH_BEFORE
 ============================================================
 EOF
 
+# Recheck the captured baseline immediately before submission. This narrows, but
+# cannot eliminate, the control-plane read/write race.
+verify_recovery_state "$PREVIOUS_IMAGE" "$PREVIOUS_REVISION" || fail 'Runtime changed or became unreadable before submission; no mutation attempted.'
+# Fail before the first mutation if durable recovery evidence cannot be saved.
+MUTATION_SUBMITTED=true
+RECEIPT_STATUS=submitted
+write_receipt || { MUTATION_SUBMITTED=false; fail 'Submission intent could not be persisted; no mutation attempted.'; }
 az containerapp update \
   --resource-group "$RESOURCE_GROUP" \
   --name "$APP_NAME" \
@@ -423,36 +560,11 @@ NEW_REVISION=$(wait_for_image "$TARGET_IMAGE" "$PREVIOUS_REVISION")
 WAIT_RC=$?
 set -e
 
-if [[ "$WAIT_RC" -eq 10 ]]; then
-  echo 'ERROR: New revision reported an explicit failed/unhealthy state. Attempting guarded rollback to the previous immutable image.' >&2
-  az containerapp update \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$APP_NAME" \
-    --image "$PREVIOUS_IMAGE" \
-    --no-wait \
-    --only-show-errors >/dev/null || \
-    fail 'New revision failed and rollback submission also failed. Manual Azure recovery is required.'
-
-  set +e
-  ROLLBACK_REVISION=$(wait_for_image "$PREVIOUS_IMAGE" "$NEW_REVISION")
-  ROLLBACK_RC=$?
-  set -e
-
-  if [[ "$ROLLBACK_RC" -ne 0 ]]; then
-    fail 'New revision failed and the rollback revision could not be proven healthy. Manual Azure recovery is required.'
-  fi
-
-  fail "New revision failed. Previous image was restored as ready revision $ROLLBACK_REVISION."
+if [[ "$WAIT_RC" -eq 0 || "$WAIT_RC" -eq 10 ]]; then
+  OBSERVED_REVISION=$NEW_REVISION
+  write_receipt || fail 'Observed target revision could not be persisted.'
 fi
-
-if [[ "$WAIT_RC" -eq 20 ]]; then
-  if verify_previous_ready_revision_intact; then
-    fail "Deployment verification was inconclusive after $((READY_ATTEMPTS * READY_SLEEP_SECONDS)) seconds. The previous ready revision is still healthy and serving; retry only after inspecting Azure control-plane status."
-  fi
-  fail "Deployment verification was inconclusive after $((READY_ATTEMPTS * READY_SLEEP_SECONDS)) seconds. Automatic rollback was suppressed because Azure did not report an explicit unhealthy state. Inspect the latest revision before retrying."
-fi
-
-[[ "$WAIT_RC" -eq 0 ]] || fail "Deployment verification failed with unexpected status $WAIT_RC."
+[[ "$WAIT_RC" -eq 0 ]] || fail "Deployment verification failed or was inconclusive (status $WAIT_RC); recovery will use the original receipt."
 
 AFTER=$(az containerapp show \
   --resource-group "$RESOURCE_GROUP" \
@@ -479,26 +591,11 @@ SECRET_HASH_AFTER=$(secret_metadata_hash)
 [[ "$SECRET_HASH_AFTER" == "$SECRET_HASH_BEFORE" ]] || \
   fail 'Container App secret metadata drift detected after image deployment.'
 
-smoke_health "$AFTER" || {
-  echo 'ERROR: New revision passed Azure health but failed HTTP liveness/readiness smoke. Attempting guarded rollback.' >&2
-  az containerapp update \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$APP_NAME" \
-    --image "$PREVIOUS_IMAGE" \
-    --no-wait \
-    --only-show-errors >/dev/null || \
-    fail 'HTTP smoke failed and rollback submission also failed. Manual Azure recovery is required.'
-
-  set +e
-  ROLLBACK_REVISION=$(wait_for_image "$PREVIOUS_IMAGE" "$NEW_REVISION")
-  ROLLBACK_RC=$?
-  set -e
-
-  if [[ "$ROLLBACK_RC" -ne 0 ]]; then
-    fail 'HTTP smoke failed and the rollback revision could not be proven healthy. Manual Azure recovery is required.'
-  fi
-
-  fail "HTTP smoke failed. Previous image was restored as ready revision $ROLLBACK_REVISION."
-}
+# Also detect changed desired image/revision and recovery-sensitive traffic.
+verify_recovery_state "$TARGET_IMAGE" "$OBSERVED_REVISION" || fail 'Post-deployment identity or runtime state changed or is unreadable.'
+smoke_health "$AFTER" || fail 'New revision failed HTTP liveness/readiness smoke.'
+RECEIPT_STATUS=deployment-verified
+RECEIPT_REASON='Target readiness, runtime preservation and applicable health checks passed'
+write_receipt || fail 'Verified deployment outcome could not be persisted.'
 
 echo "SUCCESS: $SERVICE_KEY deployed as $TARGET_IMAGE on revision $NEW_REVISION with runtime configuration preserved."

@@ -9,6 +9,7 @@ import in.craves.integration.config.PaymentRoutingProperties;
 import in.craves.integration.payment.CashfreeRequestSafety;
 import in.craves.integration.payment.RazorpayPaymentClient;
 import in.craves.integration.payment.RazorpayRequestSafety;
+import in.craves.integration.security.CravesPrincipal;
 import in.craves.integration.subscription.SubscriptionPaymentModels.CreateSubscriptionPaymentOrderRequest;
 import in.craves.integration.subscription.SubscriptionPaymentModels.EventEnvelope;
 import in.craves.integration.subscription.SubscriptionPaymentModels.PaymentRequestedData;
@@ -16,7 +17,9 @@ import in.craves.integration.subscription.SubscriptionPaymentModels.StatusChange
 import in.craves.integration.subscription.SubscriptionPaymentModels.SubscriptionPaymentResponse;
 import in.craves.integration.subscription.SubscriptionPaymentModels.VerifySubscriptionPaymentRequest;
 import in.craves.integration.subscription.SubscriptionPaymentRepository.PaymentIntent;
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -27,11 +30,14 @@ import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -49,7 +55,9 @@ public class SubscriptionPaymentService {
     private final ObjectMapper objectMapper;
     private final RestClient providerClient;
     private final RestClient subscriptionClient;
+    private final RestClient eligibilityClient;
 
+    @Autowired
     public SubscriptionPaymentService(
         SubscriptionPaymentRepository repository,
         SubscriptionPaymentProperties properties,
@@ -58,6 +66,20 @@ public class SubscriptionPaymentService {
         RazorpayPaymentClient razorpayClient,
         ObjectMapper objectMapper,
         RestClient.Builder builder
+    ) {
+        this(repository, properties, provider, routing, razorpayClient, objectMapper, builder,
+            newEligibilityClient(properties, builder));
+    }
+
+    SubscriptionPaymentService(
+        SubscriptionPaymentRepository repository,
+        SubscriptionPaymentProperties properties,
+        PaymentProviderProperties provider,
+        PaymentRoutingProperties routing,
+        RazorpayPaymentClient razorpayClient,
+        ObjectMapper objectMapper,
+        RestClient.Builder builder,
+        RestClient eligibilityClient
     ) {
         this.repository = repository;
         this.properties = properties;
@@ -69,6 +91,24 @@ public class SubscriptionPaymentService {
         this.subscriptionClient = StringUtils.hasText(properties.getSubscriptionServiceBaseUrl())
             ? builder.clone().baseUrl(properties.getSubscriptionServiceBaseUrl()).build()
             : null;
+        this.eligibilityClient = eligibilityClient;
+    }
+
+    private static RestClient newEligibilityClient(SubscriptionPaymentProperties properties, RestClient.Builder builder) {
+        if (!StringUtils.hasText(properties.getSubscriptionServiceBaseUrl())) return null;
+        // Eligibility must be an exact response from the configured service, with bounded latency.
+        // Keep existing ownership reads and payment recovery on their unchanged transport.
+        var factory = new SimpleClientHttpRequestFactory() {
+            @Override
+            protected void prepareConnection(HttpURLConnection connection, String method) throws IOException {
+                super.prepareConnection(connection, method);
+                connection.setInstanceFollowRedirects(false);
+            }
+        };
+        // Socket read timeout also bounds a stalled body after response headers arrive.
+        factory.setConnectTimeout(Duration.ofSeconds(3));
+        factory.setReadTimeout(Duration.ofSeconds(5));
+        return builder.clone().baseUrl(properties.getSubscriptionServiceBaseUrl()).requestFactory(factory).build();
     }
 
     public boolean acceptRequested(String rawPayload) {
@@ -104,7 +144,8 @@ public class SubscriptionPaymentService {
     public SubscriptionPaymentResponse createProviderOrder(
         String authorization,
         UUID invoiceId,
-        CreateSubscriptionPaymentOrderRequest request
+        CreateSubscriptionPaymentOrderRequest request,
+        CravesPrincipal principal
     ) {
         PaymentIntent intent = owned(authorization, invoiceId);
         if ("PAID".equals(intent.status())) {
@@ -120,6 +161,7 @@ public class SubscriptionPaymentService {
         ) {
             return repository.response(reconcilePending(intent));
         }
+        requireNewOrderEligibility(authorization, intent, principal);
         if (routing.razorpay()) {
             return createRazorpayOrder(intent);
         }
@@ -397,6 +439,39 @@ public class SubscriptionPaymentService {
         event.put("subject", intent.invoiceId().toString());
         event.set("data", objectMapper.valueToTree(data));
         repository.applyProviderStatus(intent, normalized, providerStatus, providerPaymentId, event);
+    }
+
+    private void requireNewOrderEligibility(String authorization, PaymentIntent intent, CravesPrincipal principal) {
+        if (principal == null || principal.identityId() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Verified customer access token is required");
+        }
+        if (!principal.hasRole("CUSTOMER") || !principal.identityId().equals(intent.customerIdentityId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Subscription payment customer does not match the authenticated customer");
+        }
+        if (eligibilityClient == null) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Subscription payment eligibility is unavailable");
+        }
+        try {
+            var response = eligibilityClient.get()
+                .uri(builder -> builder.path("/api/v1/subscriptions/{subscriptionId}/payment-eligibility")
+                    .queryParam("expectedCustomerIdentityId", intent.customerIdentityId()).build(intent.subscriptionId()))
+                .header(HttpHeaders.AUTHORIZATION, authorization)
+                .retrieve().toBodilessEntity();
+            if (response.getStatusCode() != HttpStatus.NO_CONTENT) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Subscription payment eligibility could not be confirmed");
+            }
+        } catch (RestClientResponseException exception) {
+            int status = exception.getStatusCode().value();
+            if (status == 401 || status == 403) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Subscription payment eligibility access was denied");
+            }
+            if (status == 400 || status == 404) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The subscription delivery address is not available or complete");
+            }
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Subscription payment eligibility is temporarily unavailable");
+        } catch (RestClientException exception) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Subscription payment eligibility is temporarily unavailable");
+        }
     }
 
     private PaymentIntent owned(String authorization, UUID invoiceId) {

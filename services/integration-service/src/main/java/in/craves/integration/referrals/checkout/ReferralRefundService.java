@@ -47,7 +47,7 @@ public class ReferralRefundService {
     /** Before initial outbox insertion: defer success until every tender has actually been restored. */
     public SerializedRefundStatusEvent customerEvent(SerializedRefundStatusEvent event){
         var rows=db.queryForList("SELECT gross_paise FROM payment_schema.referral_refund_allocation WHERE chef_order_id=?",event.subject());if(rows.isEmpty())return event;
-        var p=(ObjectNode)parse(event.payloadJson());var data=(ObjectNode)p.path("data");if("SUCCESS".equals(data.path("status").asText()))return null;
+        var p=(ObjectNode)parse(event.payloadJson());var data=(ObjectNode)p.path("data");if("REFUNDED".equals(data.path("status").asText()))return null;
         data.put("refundAmount",BigDecimal.valueOf(((Number)rows.getFirst().get("gross_paise")).longValue(),2));
         return new SerializedRefundStatusEvent(event.eventId(),event.eventType(),event.eventVersion(),event.occurredAt(),event.correlationId(),event.causationId(),event.subject(),p.toString(),event.eventKey());
     }
@@ -82,18 +82,38 @@ public class ReferralRefundService {
     private void finish(Work w,JsonNode p){
         db.queryForMap("SELECT * FROM payment_schema.referral_refund_sequence WHERE checkout_id=? FOR UPDATE",w.checkout());
         var rows=db.queryForList("SELECT * FROM payment_schema.referral_refund_allocation WHERE chef_order_id=? AND lease_id=? AND lease_until>now() FOR UPDATE",w.order(),w.lease());if(rows.isEmpty())return;var a=rows.getFirst();var refund=db.queryForMap("SELECT * FROM payment_schema.refund WHERE chef_sub_order_id=? FOR UPDATE",w.order());
-        if(number(a,"gateway_paise")>0 && !"SUCCESS".equals(refund.get("status")))throw new IllegalStateException("GATEWAY_REFUND_NOT_CONFIRMED");
+        validateCompletionEvidence(a,refund);
         Instant now=Instant.now();var lines=new ArrayList<LedgerJournal.Line>();lines.add(LedgerJournal.Line.debit("CUSTOMER_FUNDS",BigDecimal.valueOf(number(a,"gross_paise"),2),null));credit(lines,"GATEWAY_CLEARING",number(a,"gateway_paise"));credit(lines,"REFERRAL_CHECKOUT_CLEARING",number(a,"wallet_paise"));credit(lines,"REFERRAL_MARKETING_EXPENSE",number(a,"discount_paise"));
         var posted=ledger.post(new LedgerJournal.Entry("referral-refund/"+w.order(),stable(w.order(),"ledger"),"referral-finance","REFERRAL_SPLIT_REFUND",w.checkout(),w.order(),"INR",now,"finance-refund/"+w.order(),null,"SERVICE","referral-refund-worker",lines));
         if(posted.outcome()==LedgerJournal.Outcome.CONFLICT)throw new IllegalStateException("REFERRAL_REFUND_LEDGER_CONFLICT");
         if(number(a,"gateway_paise")==0)db.update("UPDATE payment_schema.refund SET status='SUCCESS',provider_status='NO_EXTERNAL_REFUND',processed_at=?,updated_at=? WHERE id=?",Timestamp.from(now),Timestamp.from(now),refund.get("id"));
         db.update("UPDATE payment_schema.referral_refund_allocation SET state='COMPLETE',completed_at=?,lease_id=NULL,lease_until=NULL,last_code=NULL WHERE chef_order_id=?",Timestamp.from(now),w.order());
         db.update("UPDATE payment_schema.referral_refund_sequence SET version=?,wallet_refunded_paise=?,discount_refunded_paise=? WHERE checkout_id=?",p.path("version").intValue(),Long.parseLong(p.path("cumulativeWalletPaise").asText()),Long.parseLong(p.path("cumulativeDiscountPaise").asText()),w.checkout());
-        UUID event=stable(w.order(),"customer-success");var data=json.createObjectNode().put("refundId",refund.get("id").toString()).put("checkoutId",w.checkout().toString()).put("chefSubOrderId",w.order().toString()).put("customerIdentityId",refund.get("customer_identity_id").toString()).put("refundReference",refund.get("refund_ref").toString()).put("refundAmount",BigDecimal.valueOf(number(a,"gross_paise"),2)).put("currency","INR").put("reason",refund.get("reason").toString()).put("status","SUCCESS").put("provider",refund.get("provider").toString()).put("providerStatus","ALL_TENDERS_RESTORED").put("updatedAt",now.toString());
+        UUID event=stable(w.order(),"customer-success");var data=json.createObjectNode().put("refundId",refund.get("id").toString()).put("checkoutId",w.checkout().toString()).put("chefSubOrderId",w.order().toString()).put("customerIdentityId",refund.get("customer_identity_id").toString()).put("refundReference",refund.get("refund_ref").toString()).put("refundAmount",BigDecimal.valueOf(number(a,"gross_paise"),2)).put("currency","INR").put("reason",refund.get("reason").toString()).put("status","REFUNDED").put("provider",refund.get("provider").toString()).put("providerStatus",number(a,"gateway_paise")==0?"NO_EXTERNAL_REFUND":refund.get("provider_status").toString()).put("updatedAt",now.toString());
         if(refund.get("provider_refund_id")!=null)data.put("providerRefundId",refund.get("provider_refund_id").toString());
-        var body=json.createObjectNode().put("eventId",event.toString()).put("eventType","REFUND_STATUS_CHANGED").put("eventVersion","1.0").put("occurredAt",now.toString()).put("correlationId",w.checkout().toString()).put("causationId",a.get("request_event_id").toString()).put("source","integration-service").put("subject",w.order().toString()).set("data",data);
-        db.update("INSERT INTO payment_schema.refund_status_outbox(id,event_key,aggregate_id,event_type,event_version,correlation_id,causation_id,subject,payload,status,attempt_count,next_attempt_at,created_at,updated_at) VALUES (?,?,?,'REFUND_STATUS_CHANGED','1.0',?,?,?,?::jsonb,'PENDING',0,now(),now(),now())",event,"referral-refund/"+w.order()+"/complete",w.order(),w.checkout(),a.get("request_event_id"),w.order(),body.toString());
+        if("CASHFREE".equals(refund.get("provider")) && refund.get("cf_refund_id")!=null)data.put("cfRefundId",refund.get("cf_refund_id").toString());
+        data.set("completion",json.createObjectNode().put("type","ALL_TENDERS_RESTORED")
+            .put("gatewayPaise",number(a,"gateway_paise")).put("walletPaise",number(a,"wallet_paise"))
+            .put("discountPaise",number(a,"discount_paise")).put("operationId",parse(w.envelope()).path("operationId").asText())
+            .put("version",p.path("version").intValue()));
+        var body=json.createObjectNode().put("eventId",event.toString()).put("eventType","REFUND_STATUS_CHANGED").put("eventVersion","1.1").put("occurredAt",now.toString()).put("correlationId",w.checkout().toString()).put("causationId",a.get("request_event_id").toString()).put("source","integration-service").put("subject",w.order().toString()).set("data",data);
+        db.update("INSERT INTO payment_schema.refund_status_outbox(id,event_key,aggregate_id,event_type,event_version,correlation_id,causation_id,subject,payload,status,attempt_count,next_attempt_at,created_at,updated_at) VALUES (?,?,?,'REFUND_STATUS_CHANGED','1.1',?,?,?,?::jsonb,'PENDING',0,now(),now(),now())",event,"referral-refund/"+w.order()+"/complete",w.order(),w.checkout(),a.get("request_event_id"),w.order(),body.toString());
         db.update("UPDATE payment_schema.referral_finance_binding SET next_observation_at=now() WHERE chef_order_id=?",w.order());
+    }
+    /** Validate exactly the evidence the consumer will receive before making completion immutable. */
+    private static void validateCompletionEvidence(Map<String,Object> allocation,Map<String,Object> refund) {
+        String provider=(String)refund.get("provider");
+        String providerRefundId=(String)refund.get("provider_refund_id");
+        if(provider==null || !Set.of("RAZORPAY","CASHFREE","REFERRAL_WALLET").contains(provider))
+            throw new IllegalStateException("REFUND_PROVIDER_EVIDENCE_INCOMPLETE");
+        if(number(allocation,"gateway_paise")==0) {
+            if(providerRefundId!=null || refund.get("cf_refund_id")!=null)
+                throw new IllegalStateException("ZERO_GATEWAY_REFUND_HAS_EXTERNAL_IDENTITY");
+        } else if(!Set.of("RAZORPAY","CASHFREE").contains(provider) || !"SUCCESS".equals(refund.get("status"))
+            || !"SUCCESS".equals(refund.get("provider_status")) || providerRefundId==null || providerRefundId.isBlank()
+            || ("CASHFREE".equals(provider) && !providerRefundId.equals(refund.get("cf_refund_id")))) {
+            throw new IllegalStateException("GATEWAY_REFUND_NOT_CONFIRMED");
+        }
     }
     private void failed(Work w){db.update("UPDATE payment_schema.referral_refund_allocation SET state=CASE WHEN attempts>=40 THEN 'REVIEW' ELSE state END,lease_id=NULL,lease_until=NULL,next_attempt_at=now()+interval '5 seconds',last_code='TENDER_RESTORATION_UNCONFIRMED' WHERE chef_order_id=? AND lease_id=? AND lease_until>now()",w.order(),w.lease());}
     private static long number(Map<String,Object> row,String field){return ((Number)row.get(field)).longValue();}

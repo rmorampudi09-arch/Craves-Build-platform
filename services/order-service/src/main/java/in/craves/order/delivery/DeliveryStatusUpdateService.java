@@ -34,17 +34,27 @@ public class DeliveryStatusUpdateService {
     private final DeliveryStatusEventValidator validator;
     private final DeliveryStatusTransitionPolicy transitionPolicy;
     private final DeliveryStatusCustomerNotificationService notificationService;
+    private final DeliveryHandoffProofClient handoffProof;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public DeliveryStatusUpdateService(
         JdbcTemplate jdbcTemplate,
         DeliveryStatusEventValidator validator,
         DeliveryStatusTransitionPolicy transitionPolicy,
-        DeliveryStatusCustomerNotificationService notificationService
+        DeliveryStatusCustomerNotificationService notificationService,
+        DeliveryHandoffProofClient handoffProof
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.validator = validator;
         this.transitionPolicy = transitionPolicy;
         this.notificationService = notificationService;
+        this.handoffProof = handoffProof;
+    }
+
+    public DeliveryStatusUpdateService(JdbcTemplate jdbcTemplate, DeliveryStatusEventValidator validator,
+                                       DeliveryStatusTransitionPolicy transitionPolicy,
+                                       DeliveryStatusCustomerNotificationService notificationService) {
+        this(jdbcTemplate, validator, transitionPolicy, notificationService, null);
     }
 
     @Transactional
@@ -89,7 +99,7 @@ public class DeliveryStatusUpdateService {
         }
 
         LockedOrder order = lockOrder(data.chefSubOrderId());
-        validateOrder(order, data);
+        boolean providerSwitch = validateOrder(order, event, rawPayload);
 
         Decision decision = transitionPolicy.decide(
             order.deliveryStatus(),
@@ -100,6 +110,8 @@ public class DeliveryStatusUpdateService {
             data.observedAt()
         );
 
+        // A verified provider transition is a real projection change even if its status/URL are unchanged.
+        if (providerSwitch && decision == Decision.NO_CHANGE) decision = Decision.APPLY;
         if (decision != Decision.APPLY) {
             markInbox(event.eventId(), decision.name());
             return new ProcessingResult(false, false, decision.name());
@@ -187,7 +199,9 @@ public class DeliveryStatusUpdateService {
         ));
     }
 
-    private void validateOrder(LockedOrder order, DeliveryStatusChangedData data) {
+    private boolean validateOrder(LockedOrder order, EventEnvelope<DeliveryStatusChangedData> event,
+                                  String rawPayload) {
+        DeliveryStatusChangedData data = event.data();
         if (!order.checkoutId().equals(data.orderId())) {
             throw new DeliveryStatusNonRetryableException(
                 "Delivery checkout does not match the chef sub-order"
@@ -208,18 +222,43 @@ public class DeliveryStatusUpdateService {
                 "Delivery job identifier changed for the chef sub-order"
             );
         }
-        if (order.deliveryProviderId() != null
+        boolean providerSwitch = false;
+        if (data.hasHandoff()) {
+            if (order.deliveryJobId() == null || order.deliveryProviderId() == null
+                || order.deliveryProviderDeliveryId() == null) {
+                throw new DeliveryStatusRetryableException("Original delivery binding is not available yet");
+            }
+            providerSwitch = "borzo".equalsIgnoreCase(order.deliveryProviderId())
+                && order.deliveryProviderDeliveryId().equals(data.handoffFromProviderDeliveryId());
+            boolean alreadyApplied = "pidge".equalsIgnoreCase(order.deliveryProviderId())
+                && order.deliveryProviderDeliveryId().equals(data.providerDeliveryId());
+            if (!providerSwitch && !alreadyApplied) {
+                throw new DeliveryStatusNonRetryableException("Delivery handoff binding does not match the chef sub-order");
+            }
+            if (providerSwitch && (order.deliveryStatus() == null
+                || !Set.of("PENDING", "SEARCHING", "DELAYED").contains(order.deliveryStatus()))) {
+                throw new DeliveryStatusNonRetryableException("Original delivery is not eligible for handoff");
+            }
+            if (providerSwitch) {
+                if (handoffProof == null) {
+                    throw new DeliveryStatusRetryableException("Delivery handoff proof is temporarily unavailable");
+                }
+                handoffProof.verify(event, rawPayload);
+            }
+        }
+        if (!providerSwitch && order.deliveryProviderId() != null
             && !order.deliveryProviderId().equalsIgnoreCase(data.providerId())) {
             throw new DeliveryStatusNonRetryableException(
                 "Delivery provider changed for the chef sub-order"
             );
         }
-        if (order.deliveryProviderDeliveryId() != null
+        if (!providerSwitch && order.deliveryProviderDeliveryId() != null
             && !order.deliveryProviderDeliveryId().equals(data.providerDeliveryId())) {
             throw new DeliveryStatusNonRetryableException(
                 "Provider delivery identifier changed for the chef sub-order"
             );
         }
+        return providerSwitch;
     }
 
     private void synchronizeCommercialOrderStatus(

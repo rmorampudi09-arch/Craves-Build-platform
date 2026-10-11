@@ -31,15 +31,23 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 @Service
 public class AuthService {
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
     private static final String ROLE_CUSTOMER = "CUSTOMER";
     private static final String ROLE_CHEF = "CHEF";
     private static final String STATUS_ACTIVE = "ACTIVE";
 
+    private final FailedLoginAuditService failedLoginAudit;
+    private final TransactionTemplate exchangeTransaction;
     private final FirebaseApp firebaseApp;
     private final JwtProperties jwtProperties;
     private final AuthIdentityRepository identityRepository;
@@ -67,8 +75,12 @@ public class AuthService {
         CravesJwtService jwtService,
         RefreshTokenGenerator refreshTokenGenerator,
         TokenHasher tokenHasher,
-        AdminSessionService adminSessions
+        AdminSessionService adminSessions,
+        FailedLoginAuditService failedLoginAudit,
+        PlatformTransactionManager transactionManager
     ) {
+        this.failedLoginAudit = failedLoginAudit;
+        this.exchangeTransaction = new TransactionTemplate(transactionManager);
         this.firebaseApp = firebaseApp;
         this.jwtProperties = jwtProperties;
         this.identityRepository = identityRepository;
@@ -83,19 +95,30 @@ public class AuthService {
         this.adminSessions = adminSessions;
     }
 
-    @Transactional
+    // Participate in a caller transaction without opening one before Firebase verification.
+    @Transactional(propagation = Propagation.SUPPORTS)
     public AuthTokenResponse exchangeFirebaseToken(FirebaseExchangeRequest request, HttpServletRequest httpRequest) {
         String ipAddress = clientIp(httpRequest);
         String userAgent = truncate(httpRequest.getHeader("User-Agent"), 512);
+        // Verify before opening the identity/session transaction. Rejected requests need only
+        // the audit connection, avoiding nested-transaction pool starvation under concurrent failures.
+        FirebaseToken decodedToken;
         try {
-            FirebaseToken decodedToken = FirebaseAuth.getInstance(firebaseApp).verifyIdToken(request.firebaseIdToken(), true);
-            String firebaseUid = decodedToken.getUid();
-            String phoneNumber = firebasePhoneNumber(decodedToken);
-            if (!StringUtils.hasText(phoneNumber)) {
-                saveLoginAttempt(firebaseUid, null, false, "PHONE_NUMBER_MISSING", ipAddress, userAgent);
-                throw AuthException.unauthorized("PHONE_NUMBER_MISSING", "Firebase token does not contain a verified phone number");
-            }
+            decodedToken = FirebaseAuth.getInstance(firebaseApp).verifyIdToken(request.firebaseIdToken(), true);
+        } catch (FirebaseAuthException ex) {
+            saveFailedLoginAttempt(null, "FIREBASE_TOKEN_INVALID", ipAddress, userAgent);
+            throw AuthException.unauthorized("FIREBASE_TOKEN_INVALID", "Firebase ID token is invalid or expired");
+        }
+        String firebaseUid = decodedToken.getUid();
+        String phoneNumber = firebasePhoneNumber(decodedToken);
+        if (!StringUtils.hasText(phoneNumber)) {
+            saveFailedLoginAttempt(firebaseUid, "PHONE_NUMBER_MISSING", ipAddress, userAgent);
+            throw AuthException.unauthorized("PHONE_NUMBER_MISSING", "Firebase token does not contain a verified phone number");
+        }
 
+        // Keep every successful-path write and token operation in the original REQUIRED,
+        // rollback-on-runtime-exception boundary. Successful auditing must not commit separately.
+        return exchangeTransaction.execute(status -> {
             AuthIdentity identity = loadOrCreateIdentity(decodedToken, phoneNumber);
             boolean newIdentity = identity.getId() == null;
             identity.setLastLoginAt(Instant.now());
@@ -116,10 +139,7 @@ public class AuthService {
                 return adminSessions.create(identity, roles, decodedToken.getClaims().get("auth_time"));
             }
             return issueTokenPair(identity, roles, userAgent, ipAddress);
-        } catch (FirebaseAuthException ex) {
-            saveLoginAttempt(null, null, false, "FIREBASE_TOKEN_INVALID", ipAddress, userAgent);
-            throw AuthException.unauthorized("FIREBASE_TOKEN_INVALID", "Firebase ID token is invalid or expired");
-        }
+        });
     }
 
     @Transactional(noRollbackFor = AuthException.class)
@@ -305,6 +325,16 @@ public class AuthService {
     private void assertActive(AuthIdentity identity) {
         if (!STATUS_ACTIVE.equals(identity.getStatus())) {
             throw AuthException.forbidden("IDENTITY_NOT_ACTIVE", "Identity is not active");
+        }
+    }
+
+    private void saveFailedLoginAttempt(String firebaseUid, String failureCode, String ipAddress, String userAgent) {
+        try {
+            failedLoginAudit.record(firebaseUid, failureCode, ipAddress, userAgent);
+        } catch (RuntimeException ex) {
+            // Audit begin/write/commit failure must not replace the authentication rejection.
+            // Do not log the exception or request data: either can contain credentials or PII.
+            log.warn("Failed to persist rejected Firebase login audit");
         }
     }
 

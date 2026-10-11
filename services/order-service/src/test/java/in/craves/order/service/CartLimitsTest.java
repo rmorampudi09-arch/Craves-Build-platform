@@ -1,6 +1,7 @@
 package in.craves.order.service;
 
 import in.craves.order.exception.OrderApiException;
+import in.craves.order.launchpolicy.LaunchPolicyCheckoutValidator;
 import in.craves.order.security.CravesPrincipal;
 import in.craves.order.web.ApiDtos.AddCartItemRequest;
 import in.craves.order.web.ApiDtos.UpdateCartItemRequest;
@@ -9,6 +10,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -31,7 +33,8 @@ class CartLimitsTest {
         var jdbc = mock(JdbcTemplate.class);
         var catalog = mock(CatalogClient.class);
         var service = new OrderService(jdbc, catalog, mock(CustomerAddressClient.class),
-            new CheckoutSnapshotFactory(), mock(NotificationInternalClient.class));
+            new CheckoutSnapshotFactory(), mock(NotificationInternalClient.class),
+            new StaticListableBeanFactory().getBeanProvider(LaunchPolicyCheckoutValidator.class));
         var customer = new CravesPrincipal(UUID.randomUUID(), "", Set.of("CUSTOMER"));
         for (int quantity : new int[]{0, 101, Integer.MAX_VALUE}) {
             assertEquals("CART_QUANTITY_LIMIT", assertThrows(OrderApiException.class,

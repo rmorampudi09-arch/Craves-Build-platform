@@ -2,6 +2,7 @@ package in.craves.subscription.lifecycle;
 
 import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
+import in.craves.subscription.lifecycle.CustomerResumeOccurrences.ResumeOccurrence;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.AdminSubscriptionPage;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.CustomerOccurrenceResponse;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.ResumeSubscriptionRequest;
@@ -69,7 +70,7 @@ public class SubscriptionLifecycleService {
     @Transactional
     public CustomerSubscriptionResponse pause(UUID subscriptionId, String reason, CurrentUser user) {
         requireCustomer(user);
-        OwnedSubscription subscription = owned(subscriptionId, user);
+        OwnedSubscription subscription = lockOwned(subscriptionId, user);
         if (!"ACTIVE".equals(subscription.status())) {
             throw ApiException.conflict("SUBSCRIPTION_NOT_ACTIVE", "Only an active subscription can be paused");
         }
@@ -78,6 +79,7 @@ public class SubscriptionLifecycleService {
             throw ApiException.forbidden("SUBSCRIPTION_PAUSE_DISABLED", "Pause is disabled by the active admin policy");
         }
         enforceNextServiceCutoff(subscription, policy.pauseCutoffMinutes(), "SUBSCRIPTION_PAUSE_CUTOFF");
+        enforceAffectedOccurrenceCutoffs(subscription, policy.pauseCutoffMinutes(), "SUBSCRIPTION_PAUSE_CUTOFF");
         SubscriptionResponse full = requireSubscription(subscriptionId);
         if (!lifecycleRepository.pause(subscriptionId, user.identityId(), trim(reason))) {
             throw ApiException.conflict("SUBSCRIPTION_STATE_CHANGED", "Subscription state changed before pause could be applied");
@@ -91,7 +93,7 @@ public class SubscriptionLifecycleService {
     @Transactional
     public CustomerSubscriptionResponse cancel(UUID subscriptionId, String reason, CurrentUser user) {
         requireCustomer(user);
-        OwnedSubscription subscription = owned(subscriptionId, user);
+        OwnedSubscription subscription = lockOwned(subscriptionId, user);
         if (!("ACTIVE".equals(subscription.status()) || "PAUSED".equals(subscription.status()))) {
             throw ApiException.conflict("SUBSCRIPTION_NOT_CANCELLABLE", "Only an active or paused subscription can be cancelled");
         }
@@ -102,6 +104,7 @@ public class SubscriptionLifecycleService {
         if ("ACTIVE".equals(subscription.status())) {
             enforceNextServiceCutoff(subscription, policy.cancelCutoffMinutes(), "SUBSCRIPTION_CANCEL_CUTOFF");
         }
+        enforceAffectedOccurrenceCutoffs(subscription, policy.cancelCutoffMinutes(), "SUBSCRIPTION_CANCEL_CUTOFF");
         SubscriptionResponse full = requireSubscription(subscriptionId);
         if (!lifecycleRepository.cancel(subscriptionId, user.identityId(), trim(reason))) {
             throw ApiException.conflict("SUBSCRIPTION_STATE_CHANGED", "Subscription state changed before cancellation could be applied");
@@ -119,7 +122,8 @@ public class SubscriptionLifecycleService {
         CurrentUser user
     ) {
         requireCustomer(user);
-        OwnedSubscription subscription = owned(subscriptionId, user);
+        OwnedSubscription subscription = lifecycleRepository.lockOwned(subscriptionId, user.identityId())
+            .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
         if (!"PAUSED".equals(subscription.status())) {
             throw ApiException.conflict("SUBSCRIPTION_NOT_PAUSED", "Only a paused subscription can be resumed");
         }
@@ -134,7 +138,19 @@ public class SubscriptionLifecycleService {
         Instant resumeAt = serviceAt(request.resumeDate(), schedule);
         enforceCutoff(resumeAt, policy.resumeLeadMinutes(), "SUBSCRIPTION_RESUME_LEAD");
         SubscriptionResponse full = requireSubscription(subscriptionId);
+        List<ResumeOccurrence> preserved = lifecycleRepository.lockResumeOccurrences(full, request.resumeDate());
+        for (ResumeOccurrence occurrence : preserved) {
+            enforceCutoff(occurrence.serviceAt(), policy.resumeLeadMinutes(), "SUBSCRIPTION_RESUME_LEAD");
+        }
         capacityService.reacquireForResume(full, request.resumeDate());
+        for (ResumeOccurrence occurrence : preserved) {
+            lifecycleRepository.validateResumeOccurrence(full, occurrence, false);
+        }
+        for (ResumeOccurrence occurrence : preserved) {
+            lifecycleRepository.restorePausedOccurrence(occurrence, user.identityId());
+            capacityService.markMaterialized(subscriptionId, occurrence.serviceDate(), occurrence.mealSlotCode(), occurrence.id());
+            lifecycleRepository.validateResumeOccurrence(full, occurrence, true);
+        }
         if (!lifecycleRepository.resume(
             subscriptionId,
             user.identityId(),
@@ -243,6 +259,11 @@ public class SubscriptionLifecycleService {
             .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
     }
 
+    private OwnedSubscription lockOwned(UUID subscriptionId, CurrentUser user) {
+        return lifecycleRepository.lockOwned(subscriptionId, user.identityId())
+            .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
+    }
+
     private SubscriptionResponse requireSubscription(UUID subscriptionId) {
         return subscriptionRepository.findSubscriptionById(subscriptionId)
             .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
@@ -272,6 +293,14 @@ public class SubscriptionLifecycleService {
         Instant serviceAt = lifecycleRepository.findOccurrenceServiceAt(subscription.id(), subscription.nextServiceDate())
             .orElseGet(() -> serviceAt(subscription.nextServiceDate(), schedule));
         enforceCutoff(serviceAt, minutes, code);
+    }
+
+    private void enforceAffectedOccurrenceCutoffs(OwnedSubscription subscription, Integer minutes, String code) {
+        // The generation cursor can already be past undispatched meals. Lock and validate every
+        // row the transition will cancel, while retaining the owned subscription lock until commit.
+        for (var occurrence : lifecycleRepository.lockCancellableOccurrences(subscription.id())) {
+            enforceCutoff(occurrence.serviceAt(), minutes, code);
+        }
     }
 
     private void enforceCutoff(Instant serviceAt, Integer minutes, String code) {

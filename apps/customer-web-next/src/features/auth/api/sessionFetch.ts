@@ -45,6 +45,19 @@ export async function refreshSessionCookies(): Promise<boolean> {
   return (await refreshSession()) === "refreshed";
 }
 
+// A chef approved after this access token was signed still carries the old roles, and a refresh
+// re-reads them. At most once a minute, so an account without the role never rotates on every poll.
+const ROLE_REFRESH_GAP_MS = 60_000;
+let lastRoleRefresh = 0;
+
+async function lacksFreshChefRole(input: RequestInfo | URL, response: Response): Promise<boolean> {
+  if (response.status !== 403 || Date.now() - lastRoleRefresh < ROLE_REFRESH_GAP_MS) return false;
+  const url = input instanceof Request ? input.url : String(input);
+  if (!new URL(url, "http://same-origin.invalid").pathname.startsWith("/api/chef/")) return false;
+  const body = (await response.clone().json().catch(() => null)) as { code?: unknown } | null;
+  return body?.code === "CHEF_ACCESS_REQUIRED";
+}
+
 /**
  * Same-origin client fetch for authenticated BFF routes.
  * If the short-lived access cookie expires, all concurrent requests share one
@@ -62,6 +75,10 @@ export async function sessionFetch(
   };
 
   let response = await fetch(input, requestInit);
+  if (await lacksFreshChefRole(input, response)) {
+    lastRoleRefresh = Date.now();
+    return (await refreshSession()) === "refreshed" ? fetch(input, requestInit) : response;
+  }
   if (response.status !== 401 || String(input) === "/api/auth/refresh") {
     return response;
   }

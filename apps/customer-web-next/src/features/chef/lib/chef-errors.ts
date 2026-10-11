@@ -9,8 +9,8 @@ export const CHEF_ERROR_MESSAGES: Record<string, string> = {
   // Session and access
   AUTHENTICATION_REQUIRED: "You are signed out. Sign in again to continue.",
   SESSION_EXPIRED: "Your session expired. Sign in again to continue.",
-  CHEF_ACCESS_REQUIRED: "This needs an approved chef account. Sign out and sign in again after approval.",
-  CHEF_ROLE_REQUIRED: "This needs an approved chef account. Sign out and sign in again after approval.",
+  CHEF_ACCESS_REQUIRED: "Your chef access needs a fresh sign-in. Tap Sign in again. If this message stays, call Craves support: the problem is on our side, not yours.",
+  CHEF_ROLE_REQUIRED: "Your chef access needs a fresh sign-in. Tap Sign in again. If this message stays, call Craves support: the problem is on our side, not yours.",
   // Kitchen
   KITCHEN_PROFILE_REQUIRED: "Set up your kitchen before adding or managing dishes.",
   KITCHEN_NOT_FOUND: "Your kitchen isn't set up yet. Open Kitchen to create it.",
@@ -101,6 +101,9 @@ function exact(code: string | undefined, body: Fields): string | undefined {
   return CHEF_ERROR_MESSAGES[code];
 }
 
+/** Sign-in and access read the same everywhere, whatever a route wrote for developers. */
+const OWN_SENTENCE = new Set(["AUTHENTICATION_REQUIRED", "SESSION_EXPIRED", "CHEF_ACCESS_REQUIRED", "CHEF_ROLE_REQUIRED"]);
+
 /** Our own "the reply couldn't be read" codes: their BFF text is written for developers. */
 const unreadable = (code: string | undefined) => !!code && code.startsWith("INVALID_") && code.endsWith("_RESPONSE");
 
@@ -138,6 +141,7 @@ export function chefApiError(response: { status: number }, body: unknown, fallba
   const text = typeof b.message === "string" ? b.message : typeof nested === "string" ? nested : "";
   const serverText = text.trim() && text.length <= 300 ? text.trim() : undefined;
   const message = exact(reason, b) ?? (unreadable(code) ? CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE : undefined)
+    ?? (code && OWN_SENTENCE.has(code) ? exact(code, b) : undefined)
     ?? serverText ?? exact(code, b) ?? family(reason) ?? family(code)
     ?? STATUS_MESSAGES[response.status]
     ?? (fallback || "Craves couldn't finish this right now. Please try again in a few minutes.");

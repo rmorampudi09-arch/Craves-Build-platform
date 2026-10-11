@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CalendarDays, Gauge, RefreshCw, Utensils } from "lucide-react";
@@ -60,8 +61,8 @@ export function ChefCapacityManager() {
 
   const load = useCallback(async () => {
     const [capacityResponse, menuResponse] = await Promise.all([
-      fetch("/api/chef/subscription-capacity", { cache: "no-store", credentials: "same-origin" }),
-      fetch("/api/chef/menu", { cache: "no-store", credentials: "same-origin" }),
+      sessionFetch("/api/chef/subscription-capacity", { cache: "no-store", credentials: "same-origin" }),
+      sessionFetch("/api/chef/menu", { cache: "no-store", credentials: "same-origin" }),
     ]);
     const [capacityRaw, menuRaw] = await Promise.all([
       capacityResponse.json().catch(() => null), menuResponse.json().catch(() => null),
@@ -82,7 +83,7 @@ export function ChefCapacityManager() {
   async function save(path: string, payload: unknown, success: string) {
     setBusy(true); setStatus("");
     try {
-      const response = await fetch(path, {
+      const response = await sessionFetch(path, {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), credentials: "same-origin",
       });
       const body = await response.json().catch(() => null);

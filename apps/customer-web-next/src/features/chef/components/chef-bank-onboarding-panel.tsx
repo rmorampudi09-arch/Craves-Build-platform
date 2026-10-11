@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { chefErrorText } from "@/features/chef/lib/chef-errors";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
@@ -76,7 +77,7 @@ function ChefBankOnboardingContent() {
     loading.current = true;
     try {
       const [profileResponse, bankResponse] = await Promise.all([
-        fetch("/api/chef/application", {cache: "no-store"}), fetch("/api/chef-onboarding/bank", {cache: "no-store"}),
+        sessionFetch("/api/chef/application", {cache: "no-store"}), sessionFetch("/api/chef-onboarding/bank", {cache: "no-store"}),
       ]);
       if (!profileResponse.ok || !bankResponse.ok) throw new Error("Bank account setup isn’t available yet. Your application hasn’t changed.");
       const profile = applicantSchema.parse(await profileResponse.json());
@@ -108,7 +109,7 @@ function ChefBankOnboardingContent() {
     if (!parsed.success) {setMessage("Check that both account numbers match, the IFSC has 11 characters, and the consent box is ticked.");return;}
     pending.current = parsed.data; setBusy(true);setMessage("");
     try {
-      const response = await fetch("/api/chef-onboarding/bank", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(pending.current)});
+      const response = await sessionFetch("/api/chef-onboarding/bank", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(pending.current)});
       if (!response.ok) throw new Error(response.status === 409
         ? "Your bank details changed or a payout is in progress. Refresh before changing them; a payout already on its way can’t be redirected."
         : response.status === 429 ? "You’ve changed your bank account too often today. Try again after 24 hours."

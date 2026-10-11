@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { ChefAccountingBreakdown } from "@/features/chef/components/chef-accounting-breakdown";
 import { AlertTriangle, ChevronDown, Info, RefreshCw } from "lucide-react";
@@ -24,7 +25,7 @@ export function ChefWithdrawalPanel() {
   const [message, setMessage] = useState("");
   const request = useRef<{requestKey: string; expectedAvailableAmount: string} | null>(null);
   async function load() {
-    const response = await fetch("/api/chef/finance/balance", {cache: "no-store"});
+    const response = await sessionFetch("/api/chef/finance/balance", {cache: "no-store"});
     if (!response.ok) throw chefApiError(response, await response.json().catch(() => null), "Your finance balance is unavailable. No amount is being estimated.");
     return chefBalanceSchema.parse(await response.json());
   }
@@ -35,7 +36,7 @@ export function ChefWithdrawalPanel() {
     if (!request.current) request.current = {requestKey: crypto.randomUUID(), expectedAvailableAmount: balance.available};
     setBusy(true);
     try {
-      const response = await fetch("/api/chef/finance/withdrawals", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(request.current)});
+      const response = await sessionFetch("/api/chef/finance/withdrawals", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(request.current)});
       if (!response.ok) throw new ChefError("Withdrawal was not confirmed. Refresh your balance and review any existing request before retrying.", chefApiError(response, await response.json().catch(() => null), "").ref, response.status);
       const result = payoutSchema.parse(await response.json());request.current = null;
       setMessage(`You asked for ${formatInr(result.amount)}. It’s in your bank when it shows Paid below.`);

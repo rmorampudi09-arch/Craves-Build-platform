@@ -9,7 +9,8 @@ import {
   DropdownMenuTrigger,
 } from "@/shared/ui/overlays/dropdown-menu";
 import { clearChefMode } from "@/features/chef/lib/chef-mode";
-import { clearSession, getSession, subscribeSession, type CravesUser } from "@/features/auth/api/cravesAuth";
+import { getChefName, subscribeChefName, type ChefName } from "@/features/chef/lib/chef-name";
+import { clearSession, getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 
 /** The only way from Chef Mode to customer screens; the full load leaves no chef state behind. */
 export function switchToCustomerApp() {
@@ -38,17 +39,22 @@ export function useChefSignOut() {
   return { ...state, signOut };
 }
 
-export function chefDisplayName(user: CravesUser | null): string {
-  return [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username || "Chef";
+/**
+ * For a chef whose access is out of date: a fresh OTP in Chef Mode issues a token with the roles
+ * Craves holds now. The marker goes first, or the sign-in page would send the chef straight back.
+ */
+export function signInToChefModeAgain() {
+  clearChefMode();
+  const here = `${window.location.pathname}${window.location.search}`;
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full load re-reads the session
+  window.location.assign(`/chef/sign-in?returnTo=${encodeURIComponent(here)}`);
 }
 
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter((word) => /^\p{L}/u.test(word))
-    .map((word) => word[0])
+/** Initials from the chef's application name; nothing from the customer profile or the phone. */
+function initials(name: ChefName | null): string {
+  return [name?.firstName, name?.lastName]
+    .map((part) => part?.trim().match(/^\p{L}/u)?.[0] ?? "")
     .join("")
-    .slice(0, 2)
     .toUpperCase();
 }
 
@@ -58,10 +64,10 @@ const ITEM =
 /** Avatar menu in the Chef Mode header, also shown to applicants so they are never stranded. */
 export function ChefAccountMenu() {
   const user = useSyncExternalStore(subscribeSession, getSession, () => null);
+  const chef = useSyncExternalStore(subscribeChefName, () => getChefName(user?.id), () => null);
   const { busy, error, signOut } = useChefSignOut();
   if (!user) return null;
-  const name = chefDisplayName(user);
-  const letters = initials(name);
+  const letters = initials(chef);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -76,8 +82,8 @@ export function ChefAccountMenu() {
         className="w-72 rounded-2xl border border-[#E5E7EB] bg-white p-2 text-[#1A1A1A] shadow-[0_12px_32px_rgba(26,26,26,0.12)]"
       >
         <div className="px-3 py-2">
-          <p className="truncate text-sm font-bold">{name}</p>
-          <p className="truncate text-xs text-[#6B6B6B]">{user.phoneNumber}</p>
+          <p className="truncate text-sm font-bold">{chef?.firstName || "Your chef account"}</p>
+          <p className="truncate text-xs text-[#6B6B6B]">Craves chef</p>
         </div>
         <DropdownMenuItem className={ITEM} onSelect={switchToCustomerApp}>
           <ArrowLeftRight aria-hidden="true" />

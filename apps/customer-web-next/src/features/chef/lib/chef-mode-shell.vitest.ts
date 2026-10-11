@@ -113,8 +113,8 @@ describe("More hub", () => {
     await screen.findByRole("heading", { name: "Asha Rao" });
     for (const [label, href] of [
       ["Kitchen details", "/chef/kitchen"], ["Meal plans", "/chef/meal-plans"],
-      ["Plates per day", "/chef/capacity"], ["Can customers find you\\?", "/chef/operations"], ["Earnings", "/chef/earnings"],
-      ["Balance & payouts", "/chef/finance"], ["Statements", "/chef/statements"], ["Your application", "/chef/application/status"],
+      ["Can customers find you\\?", "/chef/operations"], ["Earnings", "/chef/earnings"],
+      ["Balance & payouts", "/chef/finance"], ["Edit bank account details", "/chef/bank"], ["Statements", "/chef/statements"], ["Your application", "/chef/application/status"],
       ["Notifications", "/chef/notifications"], ["Get help", "/chef/support"],
     ]) expect(screen.getByRole("link", { name: new RegExp(`^${label}`) }).getAttribute("href")).toBe(href);
     expect(screen.queryByText(/not available yet/i)).toBeNull();

@@ -2,14 +2,17 @@
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BellRing,
+  LogIn,
   RefreshCw,
   Store,
   Utensils,
 } from "lucide-react";
+import { signInToChefModeAgain } from "@/features/chef/components/chef-account-menu";
+import { createKitchenFromApplication } from "@/features/chef/lib/chef-kitchen-handoff";
 import {
   ChefEmpty,
   ChefNotice,
@@ -35,7 +38,7 @@ import {
   parseChefEarnings,
   type ChefEarning,
 } from "@/features/chef/lib/chef-earnings-contract";
-import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
+import { getSession } from "@/features/auth/api/cravesAuth";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { ChefLoading } from "@/features/chef/components/chef-loading";
@@ -51,6 +54,8 @@ type Snapshot = {
   unavailable: string[];
   /** Why each unavailable part failed, as shown to the chef. */
   details: string[];
+  /** A part failed because this sign-in's chef access is out of date: a fresh sign-in fixes it. */
+  accessProblem?: boolean;
 };
 
 type PriorityAction = {
@@ -88,8 +93,6 @@ function isThisWeek(value: string): boolean {
 
 export function ChefModeDashboard() {
   const [state, setState] = useState<DashboardState>("loading");
-  // ChefAccessBoundary only renders the dashboard for a confirmed, approved chef session.
-  const user = useSyncExternalStore(subscribeSession, getSession, () => null);
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY);
   const [message, setMessage] = useState("Loading your kitchen…");
   const [refreshTick, setRefreshTick] = useState(0);
@@ -130,7 +133,9 @@ export function ChefModeDashboard() {
       if (!active) return;
       const unavailable: string[] = [];
       const details: string[] = [];
+      let accessProblem = false;
       const fail = (label: string, failure: unknown) => {
+        if (failure instanceof ChefError && /^CHEF_(ACCESS|ROLE)_REQUIRED$/.test(failure.ref)) accessProblem = true;
         unavailable.push(label);
         details.push(`${label.charAt(0).toUpperCase()}${label.slice(1)}: ${chefErrorText(failure, "It couldn’t be loaded.")}`);
       };
@@ -176,10 +181,15 @@ export function ChefModeDashboard() {
         }
       }
 
+      if (application?.status === "APPROVED" && !kitchen && !unavailable.includes("kitchen")) {
+        // The application already named the kitchen and its address: save it, so the chef's only step is a first dish.
+        kitchen = await createKitchenFromApplication(application, getSession()?.phoneNumber ?? "").catch(() => null);
+      }
+
       if (!active) return;
       // Orders already waiting when Chef Mode opens are on screen; only later ones ring.
       if (!unavailable.includes("orders")) noticeNewOrders(orders);
-      setSnapshot({ application, kitchen, menu, orders, earnings, unavailable, details });
+      setSnapshot({ application, kitchen, menu, orders, earnings, unavailable, details, accessProblem });
       if (application?.status === "APPROVED" && !unavailable.includes("kitchen")) {
         const noticeKey = `craves-chef-approved:${application.id ?? getSession()?.id}:${application.reviewedAt ?? "approved"}`;
         setApprovalNoticeKey(noticeKey);
@@ -308,7 +318,8 @@ export function ChefModeDashboard() {
   }
 
   const kitchenName = snapshot.kitchen?.kitchenName || "Your Craves kitchen";
-  const firstName = user?.firstName || user?.username || "Chef";
+  // The chef's name from the application: never the phone number, never the customer profile.
+  const firstName = snapshot.application?.firstName?.trim() || "Chef";
   const ordersUnknown = snapshot.unavailable.includes("orders");
   const newOrders = stats.actionOrders;
   const activeOrders = stats.activeOrders;
@@ -354,6 +365,12 @@ export function ChefModeDashboard() {
           <ChefNotice icon={AlertTriangle} role="status">
             <p>Some information couldn’t refresh. Everything else below is up to date.</p>
             {snapshot.details.map((detail) => <p key={detail} className="mt-1 text-[#6B6B6B]">{detail}</p>)}
+            {snapshot.accessProblem ? (
+              <button type="button" onClick={signInToChefModeAgain} className="chef-btn is-primary mt-3 w-full sm:w-auto">
+                <LogIn className="h-4 w-4" aria-hidden="true" />
+                Sign in again
+              </button>
+            ) : null}
           </ChefNotice>
         ) : null}
 

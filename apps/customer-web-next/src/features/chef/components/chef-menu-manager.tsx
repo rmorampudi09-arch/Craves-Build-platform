@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -133,7 +134,7 @@ export function ChefMenuManager() {
   const load = useCallback(async (initial = false): Promise<boolean> => {
     if (initial) setLoading(true);
     try {
-      const kitchenResponse = await fetch("/api/chef/kitchen", { cache: "no-store" });
+      const kitchenResponse = await sessionFetch("/api/chef/kitchen", { cache: "no-store" });
       const kitchenBody: unknown = await kitchenResponse.json().catch(() => undefined);
       if (!kitchenResponse.ok)
         throw apiError(kitchenResponse, kitchenBody, "Your kitchen could not be checked. Please retry.");
@@ -145,7 +146,7 @@ export function ChefMenuManager() {
       }
       if (!parseChefKitchen(kitchenBody))
         throw new ChefError("Your kitchen could not be verified. Please retry.", "INVALID_KITCHEN_RESPONSE", 0);
-      const response = await fetch("/api/chef/menu", { cache: "no-store" });
+      const response = await sessionFetch("/api/chef/menu", { cache: "no-store" });
       const body: unknown = await response.json().catch(() => null);
       if (requiresKitchen(response, body)) {
         setItems([]);
@@ -276,7 +277,7 @@ export function ChefMenuManager() {
       status: form.status,
     };
     try {
-      const response = await fetch(form.id ? `/api/chef/menu/${form.id}` : "/api/chef/menu", {
+      const response = await sessionFetch(form.id ? `/api/chef/menu/${form.id}` : "/api/chef/menu", {
         method: creating ? "POST" : "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -306,7 +307,7 @@ export function ChefMenuManager() {
         // Customers download photos at upload size: send a 1600 px copy, not the phone original.
         data.set("file", await shrinkDishPhoto(file));
         data.set("primary", "false");
-        const upload = await fetch(`/api/chef/menu/${saved.id}/images`, {
+        const upload = await sessionFetch(`/api/chef/menu/${saved.id}/images`, {
           method: "POST",
           body: data,
         });
@@ -348,7 +349,7 @@ export function ChefMenuManager() {
     setMessage("");
     setNotice("");
     try {
-      const response = await fetch(`/api/chef/menu/${item.id}/availability`, {
+      const response = await sessionFetch(`/api/chef/menu/${item.id}/availability`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ available, reason: null }),
@@ -381,7 +382,7 @@ export function ChefMenuManager() {
     setMessage("");
     setNotice("");
     try {
-      const response = await fetch(`/api/chef/menu/${form.id}/images/${imageId}`, {
+      const response = await sessionFetch(`/api/chef/menu/${form.id}/images/${imageId}`, {
         method: action === "remove" ? "DELETE" : "PUT",
       });
       const body: unknown = await response.json().catch(() => null);

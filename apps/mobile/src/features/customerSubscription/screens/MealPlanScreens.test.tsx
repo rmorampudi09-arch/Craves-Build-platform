@@ -11,8 +11,11 @@ import type {
 import {upcomingStartDates} from '../domain/mealPlanPresentation';
 import * as queries from '../query/mealPlanQueries';
 import * as checkout from '../state/MealPlanCheckoutContext';
+import * as subscriptionCheckout from '../state/useSubscriptionCheckout';
+import {MealPlanActivatedScreen} from './MealPlanActivatedScreen';
 import {MealPlanAddressScreen} from './MealPlanAddressScreen';
 import {MealPlanDetailScreen} from './MealPlanDetailScreen';
+import {MealPlanPaymentScreen} from './MealPlanPaymentScreen';
 import {MealPlanReviewScreen} from './MealPlanReviewScreen';
 import {MealPlansScreen} from './MealPlansScreen';
 
@@ -30,6 +33,15 @@ jest.mock('../query/mealPlanQueries', () => ({
   usePlanScheduleQuery: jest.fn(),
   usePlanPolicyQuery: jest.fn(),
   useMenuItemPreview: jest.fn(() => ({imageUrl: null, kitchenName: null})),
+  useLatestSubscriptionPaymentQuery: jest.fn(() => ({data: undefined})),
+}));
+jest.mock('../state/useSubscriptionCheckout', () => ({
+  useSubscriptionCheckout: jest.fn(),
+  useInterruptedPaymentRecovery: jest.fn(() => ({pending: null, resume: jest.fn()})),
+  alertProfileIncomplete: jest.fn(),
+}));
+jest.mock('@react-navigation/native', () => ({
+  useFocusEffect: jest.fn(),
 }));
 jest.mock('../state/MealPlanCheckoutContext', () => ({
   useMealPlanCheckout: jest.fn(),
@@ -112,6 +124,7 @@ function address(id: string, overrides: Partial<CustomerAddress> = {}): Customer
 
 const navigation = {
   navigate: jest.fn(),
+  replace: jest.fn(),
   goBack: jest.fn(),
   popToTop: jest.fn(),
   getParent: jest.fn(() => ({goBack: jest.fn()})),
@@ -352,5 +365,122 @@ describe('MealPlanAddressScreen', () => {
     act(() => mockEditor.mock.calls.at(-1)?.[0].onClose());
     act(() => byLabel(root, 'Add new address').props.onPress());
     expect(mockEditor.mock.calls.at(-1)?.[0].mode).toBe('add');
+  });
+});
+
+describe('MealPlanPaymentScreen', () => {
+  const payNew = jest.fn();
+  const payExisting = jest.fn();
+  const renderPayment = (params: object = {planId: weekly.id}) =>
+    render(<MealPlanPaymentScreen navigation={navigation as never} route={route(params)} />);
+  const pay = async (root: ReactTestInstance) => {
+    await act(async () => {
+      byLabel(root, 'Pay & Subscribe').props.onPress();
+    });
+  };
+  beforeEach(() => {
+    jest.mocked(subscriptionCheckout.useSubscriptionCheckout).mockReturnValue({
+      payNew,
+      payExisting,
+      busy: false,
+    });
+  });
+
+  it('disables paying without an address and offers to add one', () => {
+    given({covers: {[weekly.id]: {summary}}});
+    const root = renderPayment();
+    expect(byLabel(root, 'Pay & Subscribe').props.disabled).toBe(true);
+    act(() => byLabel(root, 'Add an address delivery address').props.onPress());
+    expect(mockEditor.mock.calls.at(-1)?.[0].mode).toBe('add');
+  });
+
+  it('subscribes with the selected address and replaces itself with Activated when paid', async () => {
+    checkoutState.startDate = upcomingStartDates(new Date())[1];
+    given({covers: {[weekly.id]: {summary}}, addresses: [address('home')]});
+    payNew.mockResolvedValue({kind: 'paid', subscriptionId: 'sub-1', payment: {}});
+    const root = renderPayment();
+    expect(texts(root)).toEqual(
+      expect.arrayContaining(['5 lunches · Mon – Fri', 'Every week', 'You can cancel anytime. No lock-in period.']),
+    );
+    await pay(root);
+    expect(payNew).toHaveBeenCalledWith({
+      planId: weekly.id,
+      startDate: checkoutState.startDate,
+      deliveryAddressId: 'home',
+    });
+    expect(navigation.replace).toHaveBeenCalledWith('MealPlanActivated', {subscriptionId: 'sub-1'});
+  });
+
+  it('stays on Payment with an inline message when Razorpay does not complete', async () => {
+    given({addresses: [address('home')]});
+    payNew.mockResolvedValue({kind: 'not-completed', subscriptionId: 'sub-1', message: 'Payment not completed. Closed.'});
+    const root = renderPayment();
+    await pay(root);
+    expect(texts(root)).toContain('Payment not completed. Closed.');
+    expect(navigation.replace).not.toHaveBeenCalled();
+  });
+
+  it('pays an existing subscription and hides the footnote when cancelling is off', async () => {
+    given();
+    jest.mocked(queries.usePlanPolicyQuery).mockReturnValue({
+      data: {...policy, customerCancelEnabled: false},
+    } as never);
+    payExisting.mockResolvedValue({kind: 'processing', subscriptionId: 'sub-1'});
+    const root = renderPayment({planId: weekly.id, subscriptionId: 'sub-1'});
+    expect(texts(root)).not.toContain('You can cancel anytime. No lock-in period.');
+    await pay(root);
+    expect(payExisting).toHaveBeenCalledWith('sub-1');
+    expect(texts(root)).toContain("Payment is processing. We'll update your plan shortly.");
+    act(() => byLabel(root, 'Go to My Meal Plan').props.onPress());
+    expect(navigation.replace).toHaveBeenCalledWith('MyMealPlan', {subscriptionId: 'sub-1'});
+  });
+});
+
+describe('MealPlanActivatedScreen', () => {
+  it('summarises the plan and leaves the meal-plan flow for Home', () => {
+    const startDate = '2026-10-14'; // a Wednesday
+    given({
+      subscriptions: [
+        {id: '3f2a9c1e-5b6d-4e7f-8a9b-0c1d2e3f4a5b', planId: weekly.id, startDate, planName: null} as never,
+      ],
+    });
+    jest.mocked(queries.usePlanScheduleQuery).mockReturnValue({
+      data: {
+        items: [
+          {menuItemId: 'a', menuItemName: 'Pulao', isoDayOfWeek: 5, mealSlotCode: 'LUNCH', serviceTime: '12:30:00', sequenceNumber: 2, quantity: 1},
+          {menuItemId: 'b', menuItemName: 'Dal Rice', isoDayOfWeek: 3, mealSlotCode: 'LUNCH', serviceTime: '12:30:00', sequenceNumber: 1, quantity: 1},
+        ],
+      },
+    } as never);
+    jest.mocked(queries.useLatestSubscriptionPaymentQuery).mockReturnValue({
+      data: {status: 'PAID', amount: {amount: '1499.00', currency: 'INR'}},
+    } as never);
+    const tabs = {navigate: jest.fn()};
+    const tabStack = {goBack: jest.fn(), getParent: () => tabs};
+    navigation.getParent.mockReturnValue(tabStack as never);
+
+    const root = render(
+      <MealPlanActivatedScreen
+        navigation={navigation as never}
+        route={route({subscriptionId: '3f2a9c1e-5b6d-4e7f-8a9b-0c1d2e3f4a5b'})}
+      />,
+    );
+    expect(texts(root)).toEqual(
+      expect.arrayContaining([
+        'CRV-3F2A9C1E',
+        'Weekly Home Lunch Plan',
+        '₹1,499',
+        'Wed, 14 Oct 2026',
+        'Dal Rice · 12:30 PM',
+      ]),
+    );
+
+    act(() => byLabel(root, 'View My Plan').props.onPress());
+    expect(navigation.replace).toHaveBeenCalledWith('MyMealPlan', {
+      subscriptionId: '3f2a9c1e-5b6d-4e7f-8a9b-0c1d2e3f4a5b',
+    });
+    act(() => byLabel(root, 'Back to Home').props.onPress());
+    expect(tabStack.goBack).toHaveBeenCalled();
+    expect(tabs.navigate).toHaveBeenCalledWith('Home', {screen: 'CustomerHomeRoot', pop: true});
   });
 });

@@ -5,6 +5,7 @@ import type {
 import type {CustomerAddress} from '../../customerAddresses/domain/customerAddressContract';
 import {
   addressAreaLine,
+  firstScheduledItem,
   formatCutoff,
   formatMealPlanDate,
   formatPlanPrice,
@@ -330,5 +331,30 @@ describe('addressAreaLine', () => {
     expect(at(null, 'Serilingampally', 'Hyderabad')).toBe('Serilingampally, Hyderabad');
     expect(at('Hyderabad', null, 'Hyderabad')).toBe('Hyderabad');
     expect(at(null, null, 'Hyderabad')).toBe('Hyderabad');
+  });
+});
+
+describe('firstScheduledItem', () => {
+  const item = (day: {isoDayOfWeek?: number; dayOfMonth?: number}, sequenceNumber: number) => ({
+    menuItemId: `dish-${sequenceNumber}`,
+    mealSlotCode: 'LUNCH',
+    serviceTime: '12:30:00',
+    quantity: 1,
+    sequenceNumber,
+    ...day,
+  });
+
+  it('picks the first weekly item on or after the start weekday, wrapping to next week', () => {
+    const items = [item({isoDayOfWeek: 5}, 3), item({isoDayOfWeek: 1}, 1), item({isoDayOfWeek: 3}, 2)];
+    // 2026-10-14 is a Wednesday, 2026-10-17 a Saturday.
+    expect(firstScheduledItem(items, '2026-10-14')?.sequenceNumber).toBe(2);
+    expect(firstScheduledItem(items, '2026-10-17')?.sequenceNumber).toBe(1);
+  });
+
+  it('uses the day of month for monthly plans and is null without items', () => {
+    const items = [item({dayOfMonth: 20}, 2), item({dayOfMonth: 5}, 1)];
+    expect(firstScheduledItem(items, '2026-10-12')?.sequenceNumber).toBe(2);
+    expect(firstScheduledItem(items, '2026-10-30')?.sequenceNumber).toBe(1);
+    expect(firstScheduledItem([], '2026-10-12')).toBeNull();
   });
 });

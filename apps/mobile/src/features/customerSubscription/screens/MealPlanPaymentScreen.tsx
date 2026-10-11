@@ -1,0 +1,393 @@
+import React from 'react';
+import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import type {CustomerMealPlanStackParamList} from '../../../app/navigation/types';
+import {
+  borderWidth,
+  colors,
+  elevation,
+  fontWeight,
+  iconSize,
+  radius,
+  spacing,
+  textDefaults,
+  touchTarget,
+  typography,
+} from '../../../design/tokens';
+import {
+  Badge,
+  Button,
+  Icon,
+  OfflineNotice,
+  RecoverableErrorBanner,
+  ScreenShell,
+} from '../../../shared/components';
+import {
+  customerAddressDisplayLine,
+  customerAddressLabel,
+} from '../../customerAddresses/domain/customerAddressContract';
+import {useCustomerAddressesQuery} from '../../customerAddresses/query/customerAddressQueries';
+import {CustomerAddressEditorModal} from '../../customerAddresses/screens/CustomerAddressEditorModal';
+import {
+  billingUnit,
+  dayLabel,
+  formatMealCount,
+  sortScheduleItems,
+} from '../../mealPlans/domain/mealPlanSchedule';
+import {
+  CardSection,
+  InfoRow,
+  MealPlanHeader,
+  MealPlanPhoto,
+  PlanRating,
+  PlanUnavailable,
+} from '../components/MealPlanUi';
+import {
+  formatMealPlanDate,
+  formatPlanPrice,
+  upcomingStartDates,
+} from '../domain/mealPlanPresentation';
+import {
+  useMySubscriptionsQuery,
+  usePlanCover,
+  usePlanPolicyQuery,
+  usePlanScheduleQuery,
+  usePublicMealPlansQuery,
+} from '../query/mealPlanQueries';
+import {
+  useMealPlanCheckout,
+  useSelectedDeliveryAddress,
+} from '../state/MealPlanCheckoutContext';
+import {
+  alertProfileIncomplete,
+  useSubscriptionCheckout,
+  type CheckoutOutcome,
+} from '../state/useSubscriptionCheckout';
+
+type Props = NativeStackScreenProps<CustomerMealPlanStackParamList, 'MealPlanPayment'>;
+type Notice = Extract<CheckoutOutcome, {kind: 'processing' | 'not-completed'}>;
+
+export function MealPlanPaymentScreen({navigation, route}: Props) {
+  const {planId, subscriptionId} = route.params;
+  const insets = useSafeAreaInsets();
+  const plansQuery = usePublicMealPlansQuery();
+  const plan = plansQuery.data?.find(candidate => candidate.id === planId);
+  const {imageUrl, kitchenName, summary, rating} = usePlanCover(planId);
+  const schedule = usePlanScheduleQuery(planId);
+  const policy = usePlanPolicyQuery(planId);
+  // Completing payment for an existing subscription shows its own date and address.
+  const existing = useMySubscriptionsQuery().data?.find(item => item.id === subscriptionId);
+  const {startDate, setDeliveryAddressId} = useMealPlanCheckout();
+  const {address: selected, addresses, loading: addressLoading, isError: addressError} =
+    useSelectedDeliveryAddress();
+  const addressesQuery = useCustomerAddressesQuery();
+  const {payNew, payExisting, busy} = useSubscriptionCheckout();
+  const [notice, setNotice] = React.useState<Notice | null>(null);
+  const [editorOpen, setEditorOpen] = React.useState(false);
+
+  if (!plan) {
+    return (
+      <ScreenShell edges={['top', 'bottom']} keyboardAvoiding={false}>
+        <MealPlanHeader title="Payment" onBack={navigation.goBack} />
+        <PlanUnavailable
+          loading={plansQuery.isLoading}
+          onBack={navigation.popToTop}
+          onRetry={
+            plansQuery.isError
+              ? () => {
+                  plansQuery.refetch();
+                }
+              : undefined
+          }
+        />
+      </ScreenShell>
+    );
+  }
+
+  const unit = billingUnit(plan.billingPeriod);
+  const price = formatPlanPrice(plan.amount, plan.currency);
+  const tomorrow = upcomingStartDates(new Date())[0];
+  // Same rule as Review: a date that has fallen behind tomorrow is never sent.
+  const start = subscriptionId
+    ? existing?.startDate
+    : startDate && startDate >= tomorrow
+      ? startDate
+      : tomorrow;
+  const address = subscriptionId
+    ? addresses.find(candidate => candidate.id === existing?.deliveryAddressId) ?? null
+    : selected;
+
+  const menu: {label: string; value: string}[] = [];
+  const items = sortScheduleItems(schedule.data?.items ?? []);
+  for (const item of unit === 'month' ? items.slice(0, 7) : items) {
+    const label = dayLabel(item, 'short');
+    const last = menu[menu.length - 1];
+    if (last?.label === label) {
+      last.value = `${last.value}, ${item.menuItemName}`;
+    } else {
+      menu.push({label, value: item.menuItemName});
+    }
+  }
+
+  const pay = async () => {
+    setNotice(null);
+    let outcome: CheckoutOutcome;
+    if (subscriptionId) {
+      outcome = await payExisting(subscriptionId);
+    } else if (selected && start) {
+      outcome = await payNew({planId, startDate: start, deliveryAddressId: selected.id});
+    } else {
+      return;
+    }
+    if (outcome.kind === 'paid') {
+      navigation.replace('MealPlanActivated', {subscriptionId: outcome.subscriptionId});
+    } else if (outcome.kind === 'profile-incomplete') {
+      alertProfileIncomplete();
+    } else {
+      setNotice(outcome);
+    }
+  };
+
+  const addressAction = subscriptionId
+    ? undefined
+    : address
+      ? {label: 'Change', onPress: () => navigation.navigate('MealPlanAddress')}
+      : addressLoading
+        ? undefined
+        : addressError
+          ? {
+              label: 'Retry',
+              onPress: () => {
+                addressesQuery.refetch();
+              },
+            }
+          : {label: 'Add an address', onPress: () => setEditorOpen(true)};
+
+  return (
+    <ScreenShell edges={['top']} keyboardAvoiding={false} testID="meal-plan-payment">
+      <MealPlanHeader title="Payment" onBack={navigation.goBack} />
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <CardSection>
+          <View style={styles.planRow}>
+            <MealPlanPhoto uri={imageUrl} size={88} />
+            <View style={styles.grow}>
+              <Badge label={unit === 'month' ? 'Monthly' : 'Weekly'} tone="error" />
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.planName}>
+                {plan.name}
+              </Text>
+              {kitchenName || rating ? (
+                <View style={styles.kitchenRow}>
+                  {kitchenName ? (
+                    <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+                      {kitchenName}
+                    </Text>
+                  ) : null}
+                  <PlanRating rating={rating} />
+                </View>
+              ) : null}
+            </View>
+          </View>
+          {summary ? (
+            <InfoRow
+              icon="meal"
+              label="Meals"
+              value={[formatMealCount(summary, unit), summary.daysLabel].filter(Boolean).join(' · ')}
+            />
+          ) : null}
+          {summary?.timeLabel ? (
+            <InfoRow icon="clock" label="Delivery time" value={summary.timeLabel} />
+          ) : null}
+          {start ? (
+            <InfoRow icon="calendar" label="Starts" value={formatMealPlanDate(start, 'long')} />
+          ) : null}
+          <InfoRow icon="wallet" label="Billing" value={`Every ${unit}`} />
+        </CardSection>
+
+        {menu.length > 0 ? (
+          <CardSection title={unit === 'month' ? 'Menu' : "This week's menu"}>
+            {menu.map((row, index) => (
+              <InfoRow key={row.label} first={index === 0} label={row.label} value={row.value} />
+            ))}
+          </CardSection>
+        ) : null}
+
+        {address || addressAction ? (
+          <CardSection>
+            <View style={styles.addressRow}>
+              <View style={styles.addressTile}>
+                <Icon
+                  name="location-outline"
+                  size={iconSize.lg}
+                  color={colors.flameRedAccessible}
+                  surface={false}
+                />
+              </View>
+              <View style={styles.grow}>
+                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+                  Delivering to
+                </Text>
+                {address ? (
+                  <>
+                    <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.addressLabel}>
+                      {customerAddressLabel(address)}
+                    </Text>
+                    <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+                      {customerAddressDisplayLine(address)}
+                    </Text>
+                  </>
+                ) : addressError ? (
+                  <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+                    Your addresses could not be loaded.
+                  </Text>
+                ) : null}
+              </View>
+              {addressAction ? (
+                <Pressable
+                  accessibilityLabel={`${addressAction.label} delivery address`}
+                  accessibilityRole="button"
+                  onPress={addressAction.onPress}
+                  style={({pressed}) => [styles.link, pressed && styles.pressed]}>
+                  <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.linkText}>
+                    {addressAction.label}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </CardSection>
+        ) : null}
+
+        <View style={styles.secureNote}>
+          <Icon name="shield" size={iconSize.md} color={colors.successText} surface={false} />
+          <View style={styles.grow}>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secureTitle}>
+              Secure payment with Razorpay
+            </Text>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secureBody}>
+              Pay with UPI, card, net banking or wallet on the next step.
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+
+      <View style={[styles.bar, {paddingBottom: Math.max(insets.bottom, spacing.sm) + spacing.xs}]}>
+        {notice?.kind === 'processing' ? (
+          <OfflineNotice
+            message="Payment is processing. We'll update your plan shortly."
+            retryLabel="Go to My Meal Plan"
+            onRetry={() => navigation.replace('MyMealPlan', {subscriptionId: notice.subscriptionId})}
+          />
+        ) : notice ? (
+          <RecoverableErrorBanner message={notice.message} />
+        ) : null}
+        <View accessible accessibilityLabel={`Total amount ${price} per ${unit}`} style={styles.totalRow}>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+            Total amount
+          </Text>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.total}>
+            {price}
+            <Text style={styles.per}> / {unit}</Text>
+          </Text>
+        </View>
+        <Button
+          label="Pay & Subscribe"
+          loading={busy}
+          disabled={!subscriptionId && !selected}
+          onPress={() => {
+            pay();
+          }}
+        />
+        {policy.data?.customerCancelEnabled ? (
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.footnote}>
+            You can cancel anytime. No lock-in period.
+          </Text>
+        ) : null}
+      </View>
+
+      {editorOpen ? (
+        <CustomerAddressEditorModal
+          mode="add"
+          addresses={addressesQuery.addresses}
+          onSaved={saved => setDeliveryAddressId(saved.id)}
+          onClose={() => setEditorOpen(false)}
+        />
+      ) : null}
+    </ScreenShell>
+  );
+}
+
+const styles = StyleSheet.create({
+  content: {gap: spacing.md, padding: spacing.md, paddingBottom: spacing.xl},
+  grow: {flex: 1, minWidth: 0},
+  planRow: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, marginBottom: spacing.sm},
+  planName: {
+    marginTop: spacing.xs,
+    color: colors.textPrimary,
+    fontSize: typography.button,
+    fontWeight: fontWeight.bold,
+  },
+  kitchenRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 2},
+  secondary: {color: colors.textSecondary, fontSize: typography.small},
+  addressRow: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm},
+  addressTile: {
+    width: touchTarget.minimum,
+    height: touchTarget.minimum,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    backgroundColor: colors.errorSoft,
+  },
+  addressLabel: {
+    color: colors.textPrimary,
+    fontSize: typography.body,
+    fontWeight: fontWeight.semibold,
+  },
+  link: {
+    minWidth: touchTarget.minimum,
+    minHeight: touchTarget.minimum,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  linkText: {
+    color: colors.flameRedAccessible,
+    fontSize: typography.body,
+    fontWeight: fontWeight.semibold,
+  },
+  pressed: {opacity: 0.7},
+  secureNote: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.successSoft,
+  },
+  secureTitle: {
+    color: colors.successText,
+    fontSize: typography.body,
+    fontWeight: fontWeight.semibold,
+  },
+  secureBody: {color: colors.successText, fontSize: typography.small},
+  bar: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    backgroundColor: colors.white,
+    borderTopWidth: borderWidth.standard,
+    borderTopColor: colors.border,
+    ...elevation.card,
+    shadowOpacity: 0.05,
+    shadowOffset: {width: 0, height: -6},
+  },
+  totalRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
+  total: {
+    color: colors.textPrimary,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
+  },
+  per: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
+    fontWeight: fontWeight.regular,
+  },
+  footnote: {color: colors.textSecondary, fontSize: typography.small, textAlign: 'center'},
+});

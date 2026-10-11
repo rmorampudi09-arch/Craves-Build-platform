@@ -3,8 +3,10 @@ import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import type {CustomerMealPlanStackParamList} from '../../../app/navigation/types';
 import {resolveReducedMotionAnimation} from '../../../design/motion';
 import {useReducedMotionPreference} from '../../../design/reducedMotion';
+import {MealPlanActivatedScreen} from '../screens/MealPlanActivatedScreen';
 import {MealPlanAddressScreen} from '../screens/MealPlanAddressScreen';
 import {MealPlanDetailScreen} from '../screens/MealPlanDetailScreen';
+import {MealPlanPaymentScreen} from '../screens/MealPlanPaymentScreen';
 import {MealPlanReviewScreen} from '../screens/MealPlanReviewScreen';
 import {MealPlansScreen} from '../screens/MealPlansScreen';
 import {MealPlanCheckoutProvider} from '../state/MealPlanCheckoutContext';
@@ -24,7 +26,7 @@ function useMealPlanStackScreenOptions() {
   );
 }
 
-// Tasks 5-6 replace these placeholders with the real screens.
+// Task 6 replaces these placeholders with the real screens.
 const renderNothing = () => null;
 
 export function CustomerMealPlanNavigator() {
@@ -36,8 +38,13 @@ export function CustomerMealPlanNavigator() {
         <Stack.Screen name="MealPlanDetail" component={MealPlanDetailScreen} />
         <Stack.Screen name="MealPlanReview" component={MealPlanReviewScreen} />
         <Stack.Screen name="MealPlanAddress" component={MealPlanAddressScreen} />
-        <Stack.Screen name="MealPlanPayment" component={renderNothing} />
-        <Stack.Screen name="MealPlanActivated" component={renderNothing} />
+        <Stack.Screen name="MealPlanPayment" component={MealPlanPaymentScreen} />
+        {/* No swipe back into a finished checkout; Android back is handled by the screen. */}
+        <Stack.Screen
+          name="MealPlanActivated"
+          component={MealPlanActivatedScreen}
+          options={{gestureEnabled: false}}
+        />
         <Stack.Screen name="MyMealPlan" component={renderNothing} />
         <Stack.Screen name="MealPlanMeal" component={renderNothing} />
       </Stack.Navigator>

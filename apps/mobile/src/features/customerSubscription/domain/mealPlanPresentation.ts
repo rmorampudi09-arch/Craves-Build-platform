@@ -1,6 +1,7 @@
 // Pure presentation helpers for the customer meal-plan screens.
 // No Intl and no React: Hermes' Intl support is unreliable, so money and dates are formatted by hand.
 import {
+  sortScheduleItems,
   titleCaseCode,
   type ScheduleItemLike,
 } from '../../mealPlans/domain/mealPlanSchedule';
@@ -229,4 +230,24 @@ export function addressAreaLine(address: CustomerAddress): string {
 
 export function shortSubscriptionId(id: string): string {
   return `CRV-${id.split('-')[0].slice(0, 8).toUpperCase()}`;
+}
+
+/** The first item served on or after `startIso`, wrapping to the next week or month; null without items. */
+export function firstScheduledItem<T extends ScheduleItemLike>(
+  items: readonly T[],
+  startIso: string,
+): T | null {
+  const [year, month, day] = startIso.split('-').map(Number);
+  const start = new Date(Date.UTC(year, month - 1, day));
+  const isoWeekday = start.getUTCDay() || 7;
+  const sorted = sortScheduleItems(items);
+  return (
+    sorted.find(item =>
+      item.isoDayOfWeek != null
+        ? item.isoDayOfWeek >= isoWeekday
+        : (item.dayOfMonth ?? 0) >= start.getUTCDate(),
+    ) ??
+    sorted[0] ??
+    null
+  );
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import {FlatList, Image, StyleSheet, Text, View} from 'react-native';
+import {Alert, FlatList, Image, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {CustomerMealPlanStackParamList} from '../../../app/navigation/types';
 import {
@@ -18,6 +18,7 @@ import {
   IconButton,
   InputField,
   ListSkeleton,
+  OfflineNotice,
   PressableCard,
   RecoverableErrorBanner,
   ScreenShell,
@@ -47,6 +48,10 @@ import {
   usePlanCover,
   usePublicMealPlansQuery,
 } from '../query/mealPlanQueries';
+import {
+  alertProfileIncomplete,
+  useInterruptedPaymentRecovery,
+} from '../state/useSubscriptionCheckout';
 
 type Props = NativeStackScreenProps<CustomerMealPlanStackParamList, 'MealPlans'>;
 type Filter = 'all' | BillingUnit;
@@ -166,6 +171,7 @@ export function MealPlansScreen({navigation}: Props) {
   const subscriptionsQuery = useMySubscriptionsQuery();
   const [filter, setFilter] = React.useState<Filter>('all');
   const [searchText, setSearchText] = React.useState('');
+  const recovery = useInterruptedPaymentRecovery();
   const search = searchText.trim().toLowerCase();
 
   const plans = plansQuery.data ?? [];
@@ -183,9 +189,30 @@ export function MealPlansScreen({navigation}: Props) {
     plans.find(plan => plan.id === subscription.planId)?.name ??
     'Meal plan';
 
+  const resumePayment = async () => {
+    const outcome = await recovery.resume();
+    if (outcome?.kind === 'paid') {
+      navigation.navigate('MealPlanActivated', {subscriptionId: outcome.subscriptionId});
+    } else if (outcome?.kind === 'profile-incomplete') {
+      alertProfileIncomplete();
+    } else if (outcome?.kind === 'processing') {
+      Alert.alert('Payment processing', "Payment is processing. We'll update your plan shortly.");
+    } else if (outcome) {
+      Alert.alert('Meal-plan payment', outcome.message);
+    }
+  };
+
   const header = (
     <View style={styles.listHeader}>
-      {/* The interrupted-payment recovery banner belongs here, above everything else. */}
+      {recovery.pending ? (
+        <OfflineNotice
+          message="Payment in progress. You have an unfinished meal-plan payment."
+          retryLabel="Resume payment"
+          onRetry={() => {
+            resumePayment();
+          }}
+        />
+      ) : null}
       {current.length > 1 ? (
         <View style={styles.subscriptions}>
           <Text

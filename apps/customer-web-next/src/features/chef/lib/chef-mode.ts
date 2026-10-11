@@ -65,6 +65,28 @@ function deviceStorage(): Storage | null {
   }
 }
 
+/**
+ * Customer launch lock (customer-launch.ts): this device used Chef Mode for this account. Applicants
+ * have only the CUSTOMER role, so this is how a new tab knows to show them the launching-soon note.
+ */
+export const CHEF_ACCOUNT_KEY = "craves.chef-account";
+
+export function rememberChefAccount(userId: string): void {
+  try {
+    deviceStorage()?.setItem(CHEF_ACCOUNT_KEY, userId);
+  } catch {
+    // Blocked storage: a new tab opens the customer app, as before the lock.
+  }
+}
+
+export function isChefAccountOnDevice(userId: string | null | undefined): boolean {
+  try {
+    return Boolean(userId) && deviceStorage()?.getItem(CHEF_ACCOUNT_KEY) === userId;
+  } catch {
+    return false;
+  }
+}
+
 /** A customer-side sign-in: this tab leaves Chef Mode (only this tab) and the customer side is confirmed. */
 export function markCustomerModeVerified(userId: string): void {
   clearChefMode();

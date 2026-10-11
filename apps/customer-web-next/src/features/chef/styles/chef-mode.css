@@ -864,3 +864,30 @@ body .chef-notifications [aria-label="Notification filters"] button { border-col
 .chef-panel-content:focus {
   outline: none;
 }
+
+/* ---------- Dish editor ---------- */
+/* Adding a dish is one focused job: on phones the tab bar steps aside and Save stays under the thumb. */
+@media (max-width: 1023px) {
+  .chef-panel-theme:has(.chef-dish-editor) { padding-bottom: 0; }
+  .chef-panel-theme:has(.chef-dish-editor) .chef-mobile-nav { display: none; }
+  .chef-panel-theme:has(.chef-dish-editor) .chef-order-banner-wrap { bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+}
+.chef-dish-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  gap: 0.75rem;
+  margin: 1.25rem -1rem -2rem;
+  border-top: 1px solid var(--chef-line);
+  background: color-mix(in srgb, var(--chef-surface) 94%, transparent);
+  padding: 0.75rem 1rem max(0.75rem, env(safe-area-inset-bottom));
+  backdrop-filter: saturate(1.4) blur(12px);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+}
+@media (min-width: 768px) {
+  .chef-dish-actions { margin: 1.5rem 0 0; border: 1px solid var(--chef-line); border-radius: var(--chef-radius); bottom: 1rem; box-shadow: 0 12px 32px rgba(26, 26, 26, 0.1); }
+}
+@media (min-width: 1024px) {
+  .chef-dish-actions { max-width: calc(100% - 19.5rem); }
+}

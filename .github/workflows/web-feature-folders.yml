@@ -1,12 +1,9 @@
 name: Web feature folders
-# Moves apps/customer-web-next onto src/features/<feature>/ and keeps open branches working.
-#  - push to claude/web-feature-folders: the one-time move (removed before that branch is merged).
-#  - a pull request, or a manual run with its number: if the branch started before the folders, bring it over with
-#    apps/customer-web-next/scripts/features/update-branch.sh, then push only if lint, types and every web test pass.
-#    Otherwise nothing is pushed and the author gets a comment saying what to do.
+# Keeps branches that started before apps/customer-web-next moved onto src/features/<feature>/ working.
+# On a pull request, or a manual run with its number: bring the branch over with
+# apps/customer-web-next/scripts/features/update-branch.sh and push only if lint, types and every web test pass.
+# Otherwise nothing is pushed and the author gets one comment saying what to do.
 on:
-  push:
-    branches: [claude/web-feature-folders]
   pull_request:
     types: [opened, reopened, synchronize]
     paths: ['apps/customer-web-next/**']
@@ -24,37 +21,6 @@ concurrency:
   group: web-feature-folders-${{ github.event.pull_request.number || inputs.pull || github.ref }}
 
 jobs:
-  move:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Move files, record today's links between features and commit
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ -d apps/customer-web-next/src/lib ]; then node apps/customer-web-next/scripts/features/move-to-features.mjs; fi
-          (cd apps/customer-web-next && node scripts/features/check-boundaries.mjs --update)
-          (cd apps/mobile && node scripts/check-feature-boundaries.mjs --update)
-          # GitHub won't take workflow edits from this token, so those are committed by a person beforehand.
-          if ! git diff --quiet -- .github; then echo "::error::The move would change these workflow files; commit their updated paths first:"; git diff --stat -- .github; exit 1; fi
-          # Committed before the checks, so their build output stays out.
-          git add -A
-          git diff --cached --quiet || git commit -qm "Move web files into feature folders (apps/customer-web-next/scripts/features/move-to-features.mjs)"
-      - name: Check web lint, types and every test
-        working-directory: apps/customer-web-next
-        run: npm ci && npm run lint && npm run typecheck && npm test
-      - name: Check mobile boundaries
-        working-directory: apps/mobile
-        run: node scripts/check-feature-boundaries.mjs
-      - name: Push
-        run: git push
-
   migrate:
     if: >-
       github.event_name == 'workflow_dispatch' ||
@@ -113,6 +79,7 @@ jobs:
       - name: Tell the author
         if: always() && (steps.move.outputs.result == 'moved' || steps.move.outputs.result == 'conflict')
         run: |
+          ASKED=$(gh api "repos/${{ github.repository }}/issues/$NUMBER/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("I couldn") or contains("pushed nothing") or contains("Nothing was pushed"))) | .id' | wc -l)
           RUN="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           HOW="On your machine: \`bash apps/customer-web-next/scripts/features/update-branch.sh\` from the repository root. It stops at each set of conflicts; fix them, commit and run it again."
           if [ "${{ steps.move.outputs.result }}" = conflict ]; then
@@ -125,4 +92,6 @@ jobs:
             LEFT=$(grep '^  src/' "$RUNNER_TEMP/update.log" | sort -u | tr -s ' \n' ' ')
             BODY="The web app now keeps each feature in its own folder (\`src/features/<feature>/\`). I moved this branch over, but lint, types or tests did not pass, so I pushed nothing: $RUN. ${LEFT:+New files that need a home in src/features/<feature>/ or src/shared/ first:$LEFT. }$HOW"
           fi
+          # Instructions once per pull request; a successful move is always reported.
+          if [ "$ASKED" -gt 0 ] && [ "${{ steps.push.outputs.pushed }}" != true ]; then echo "$BODY"; exit 0; fi
           gh pr comment "$NUMBER" --body "$BODY"

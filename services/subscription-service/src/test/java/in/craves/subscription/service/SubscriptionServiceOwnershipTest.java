@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import in.craves.subscription.billing.SubscriptionBillingProperties;
 import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.plan.PlanImageRepository;
@@ -21,6 +22,7 @@ import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,11 +31,14 @@ import org.junit.jupiter.api.Test;
 class SubscriptionServiceOwnershipTest {
     private static final UUID CHEF_ID = UUID.fromString("11111111-1111-4111-8111-111111111111");
     private static final UUID CUSTOMER_ID = UUID.fromString("33333333-3333-4333-8333-333333333333");
+    private static final LocalDate TODAY = LocalDate.now(ZoneId.of("Asia/Kolkata"));
 
     private final SubscriptionRepository repository = mock(SubscriptionRepository.class);
     private final CapacityService capacityService = mock(CapacityService.class);
     private final PlanImageRepository planImages = mock(PlanImageRepository.class);
-    private final SubscriptionService service = new SubscriptionService(repository, capacityService, planImages);
+
+    private final SubscriptionService service =
+        new SubscriptionService(repository, capacityService, planImages, billing(true, 7));
 
     @Test
     void chefCannotUseAdministratorPlanListing() {
@@ -141,7 +146,7 @@ class SubscriptionServiceOwnershipTest {
             "WEEKLY",
             new BigDecimal("1200.00"),
             "INR",
-            LocalDate.now().plusDays(7),
+            TODAY.plusDays(10),
             "/api/v1/subscriptions/plans/44444444-4444-4444-8444-444444444444/image?v=1790000000"
         );
         when(repository.findSubscriptionById(subscriptionId)).thenReturn(Optional.of(stored));
@@ -153,8 +158,29 @@ class SubscriptionServiceOwnershipTest {
         assertThat(response.billingPeriod()).isEqualTo("WEEKLY");
         assertThat(response.amount()).isEqualByComparingTo("1200.00");
         assertThat(response.currency()).isEqualTo("INR");
-        assertThat(response.nextBillingDate()).isEqualTo(LocalDate.now().plusDays(7));
+        // The cycle starting in 10 days is charged 7 days early.
+        assertThat(response.nextBillingDate()).isEqualTo(TODAY.plusDays(3));
         assertThat(response.planImageUrl()).endsWith("/image?v=1790000000");
+    }
+
+    @Test
+    void nextChargeDateIsTheBillingLeadBeforeTheNextCycleAndNeverInThePast() {
+        LocalDate today = LocalDate.parse("2026-10-11");
+        assertThat(SubscriptionService.nextChargeDate(LocalDate.parse("2026-10-25"), billing(true, 7), today))
+            .isEqualTo("2026-10-18");
+        // A weekly cycle that already started: its successor is charged now, not a week late.
+        assertThat(SubscriptionService.nextChargeDate(LocalDate.parse("2026-10-15"), billing(true, 7), today))
+            .isEqualTo(today);
+        assertThat(SubscriptionService.nextChargeDate(null, billing(true, 7), today)).isNull();
+        // With automatic billing off nothing renews, so no date is promised.
+        assertThat(SubscriptionService.nextChargeDate(LocalDate.parse("2026-10-25"), billing(false, 7), today)).isNull();
+    }
+
+    private static SubscriptionBillingProperties billing(boolean generatorEnabled, int horizonDays) {
+        SubscriptionBillingProperties properties = new SubscriptionBillingProperties();
+        properties.setGeneratorEnabled(generatorEnabled);
+        properties.setHorizonDays(horizonDays);
+        return properties;
     }
 
     private static PlanResponse plan(UUID chefIdentityId, String status) {

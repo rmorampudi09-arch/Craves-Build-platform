@@ -1,3 +1,5 @@
+-- Fail fast instead of queueing plan reads behind a long transaction; the deploy can simply be retried.
+SET LOCAL lock_timeout = '5s';
 ALTER TABLE subscription_schema.subscription_plan
     ADD COLUMN accepting_subscribers BOOLEAN NOT NULL DEFAULT TRUE;
 

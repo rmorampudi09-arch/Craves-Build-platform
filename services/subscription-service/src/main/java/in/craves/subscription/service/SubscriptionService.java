@@ -1,5 +1,6 @@
 package in.craves.subscription.service;
 
+import in.craves.subscription.billing.SubscriptionBillingProperties;
 import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.plan.PlanImageRepository;
@@ -33,15 +34,18 @@ public class SubscriptionService {
     private final SubscriptionRepository repository;
     private final CapacityService capacityService;
     private final PlanImageRepository planImages;
+    private final SubscriptionBillingProperties billing;
 
     public SubscriptionService(
         SubscriptionRepository repository,
         CapacityService capacityService,
-        PlanImageRepository planImages
+        PlanImageRepository planImages,
+        SubscriptionBillingProperties billing
     ) {
         this.repository = repository;
         this.capacityService = capacityService;
         this.planImages = planImages;
+        this.billing = billing;
     }
 
     public List<PublicPlanResponse> listActivePlans() {
@@ -134,7 +138,7 @@ public class SubscriptionService {
     public List<CustomerSubscriptionResponse> listMine(CurrentUser user) {
         requireRole(user, "CUSTOMER");
         return repository.listCustomerSubscriptions(user.identityId()).stream()
-            .map(SubscriptionService::toCustomerSubscription)
+            .map(this::toCustomerSubscription)
             .toList();
     }
 
@@ -220,14 +224,28 @@ public class SubscriptionService {
         );
     }
 
-    private static CustomerSubscriptionResponse toCustomerSubscription(SubscriptionResponse subscription) {
+    private CustomerSubscriptionResponse toCustomerSubscription(SubscriptionResponse subscription) {
         return new CustomerSubscriptionResponse(
             subscription.id(), subscription.planId(), subscription.status(), subscription.startDate(),
             subscription.endDate(), subscription.nextServiceDate(), subscription.deliveryAddressId(),
             subscription.notes(), subscription.createdAt(), subscription.updatedAt(),
             subscription.planName(), subscription.billingPeriod(), subscription.amount(), subscription.currency(),
-            subscription.nextBillingDate(), subscription.planImageUrl()
+            nextChargeDate(subscription.nextBillingDate(), billing, LocalDate.now(BUSINESS_ZONE)),
+            subscription.planImageUrl()
         );
+    }
+
+    /**
+     * next_billing_date is the start of the next unbilled cycle, and the billing job charges it
+     * horizonDays early, so that is when the customer is next charged (never in the past).
+     * Null while automatic billing is off, because then nothing renews on its own.
+     */
+    public static LocalDate nextChargeDate(LocalDate nextBillingDate, SubscriptionBillingProperties billing, LocalDate today) {
+        if (nextBillingDate == null || !billing.isGeneratorEnabled()) {
+            return null;
+        }
+        LocalDate charge = nextBillingDate.minusDays(billing.getHorizonDays());
+        return charge.isBefore(today) ? today : charge;
     }
 
     private static String normalize(String value, String fieldName) {

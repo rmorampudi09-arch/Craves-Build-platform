@@ -76,8 +76,13 @@ class PlanImageValidatorTest {
         assertSizeInvalid(image("png", 4097, 1));
         assertSizeInvalid(image("png", 1, 4097));
         assertSizeInvalid(image("jpg", 4097, 1));
-        // 3000 x 3000 = 9 megapixels, over the 8 megapixel cap although each side is within 4096.
-        assertSizeInvalid(image("png", 3000, 3000));
+    }
+
+    @Test
+    void acceptsATypicalTwelveMegapixelPhoneCropAndTheFullSizeLimit() {
+        // A 4:3 crop of a 12 MP phone photo, and the largest allowed square; both are decoded at reduced resolution.
+        assertThat(PlanImageValidator.contentType(image("jpg", 4000, 3000))).isEqualTo("image/jpeg");
+        assertThat(PlanImageValidator.contentType(image("png", 4096, 4096))).isEqualTo("image/png");
     }
 
     private static void assertUnsupported(byte[] bytes) {

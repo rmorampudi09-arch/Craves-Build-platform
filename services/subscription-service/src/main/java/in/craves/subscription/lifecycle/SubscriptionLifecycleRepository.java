@@ -8,6 +8,7 @@ import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.SkipRequestR
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.SubscriptionStatusHistoryResponse;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -72,6 +73,16 @@ public class SubscriptionLifecycleRepository {
             "SELECT service_at FROM subscription_schema.subscription_occurrence " +
                 "WHERE subscription_id = ? AND service_date = ? ORDER BY service_at, meal_slot_code LIMIT 1",
             (rs, rowNum) -> rs.getTimestamp("service_at").toInstant(), subscriptionId, serviceDate
+        ).stream().findFirst();
+    }
+
+    /** The earliest meal still ahead that will be prepared (skipped, cancelled and failed meals are not). */
+    public Optional<Instant> findNextUpcomingServiceAt(UUID subscriptionId, Instant after) {
+        return jdbcTemplate.query(
+            "SELECT service_at FROM subscription_schema.subscription_occurrence " +
+                "WHERE subscription_id = ? AND service_at > ? AND status NOT IN ('SKIPPED', 'CANCELLED', 'FAILED') " +
+                "ORDER BY service_at LIMIT 1",
+            (rs, rowNum) -> rs.getTimestamp("service_at").toInstant(), subscriptionId, Timestamp.from(after)
         ).stream().findFirst();
     }
 

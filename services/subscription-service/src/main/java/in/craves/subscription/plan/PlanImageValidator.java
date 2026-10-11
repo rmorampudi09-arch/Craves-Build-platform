@@ -5,6 +5,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Iterator;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReadParam;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 import javax.imageio.stream.MemoryCacheImageInputStream;
@@ -20,7 +21,8 @@ public final class PlanImageValidator {
     /** The anonymous image route reads the whole row per request, so this is deliberately tighter than the DB CHECK (5 MiB). */
     public static final int MAX_BYTES = 2_097_152;
     public static final int MAX_DIMENSION = 4096;
-    public static final long MAX_PIXELS = 8_000_000L;
+    /** The decode check never builds a raster larger than this, so a 4096 x 4096 photo costs about as much heap as 4 MP. */
+    static final long MAX_DECODED_PIXELS = 4_000_000L;
 
     private PlanImageValidator() {
     }
@@ -55,10 +57,16 @@ public final class PlanImageValidator {
                 }
                 int width = reader.getWidth(0);
                 int height = reader.getHeight(0);
-                if (width < 1 || height < 1 || width > MAX_DIMENSION || height > MAX_DIMENSION || (long) width * height > MAX_PIXELS) {
+                if (width < 1 || height < 1 || width > MAX_DIMENSION || height > MAX_DIMENSION) {
                     throw sizeInvalid();
                 }
-                if (reader.read(0) == null) {
+                // Phone photos (12 MP and up) are accepted; subsampling still reads every byte but keeps the raster small.
+                ImageReadParam param = reader.getDefaultReadParam();
+                int step = (int) Math.ceil(Math.sqrt((double) width * height / MAX_DECODED_PIXELS));
+                if (step > 1) {
+                    param.setSourceSubsampling(step, step, 0, 0);
+                }
+                if (reader.read(0, param) == null) {
                     throw typeUnsupported();
                 }
             } finally {
@@ -73,7 +81,7 @@ public final class PlanImageValidator {
     }
 
     private static ApiException sizeInvalid() {
-        return ApiException.badRequest("PLAN_IMAGE_SIZE_INVALID", "Plan photo must be 2 MB or smaller, at most 4096 pixels on a side and 8 megapixels");
+        return ApiException.badRequest("PLAN_IMAGE_SIZE_INVALID", "Plan photo must be 2 MB or smaller and at most 4096 pixels on a side");
     }
 
     private static ApiException typeUnsupported() {

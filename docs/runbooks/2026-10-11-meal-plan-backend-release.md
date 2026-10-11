@@ -16,17 +16,25 @@ Branch `feat/meal-plan-backend`. It backs the redesigned meal-plan screens in ap
   - chef plan `imageUrl`, `acceptingSubscribers`.
 - **New routes:**
   - public `GET /api/v1/subscriptions/plans/{planId}/image`;
-  - chef `PUT /api/v1/chef/subscription-plans/{planId}/image` (multipart `file`; JPEG or PNG only, up to 2 MiB, 4096 px and 8 MP; DRAFT or REJECTED plans only);
+  - chef `PUT /api/v1/chef/subscription-plans/{planId}/image` (multipart `file`; JPEG or PNG only, up to 2 MiB and 4096 px on a side, so a normal 12 MP phone photo is accepted; DRAFT or REJECTED plans only);
   - chef `PATCH /api/v1/chef/subscription-plans/{planId}/accepting-subscribers` (ACTIVE plans only).
 - **Customer-facing effects:**
   - Plans with `accepting_subscribers = FALSE` disappear from the public list.
   - Creating a subscription to such a plan returns 409 `PLAN_NOT_ACCEPTING_SUBSCRIBERS`.
   - Existing subscribers are unaffected.
 - **Unchanged:** cancel still takes effect immediately, by user decision.
+- **`nextBillingDate` (customer subscription) is the next charge date:** the next unbilled cycle start minus the billing lead (`CRAVES_SUBSCRIPTION_BILLING_HORIZON_DAYS`, 7), never earlier than today. It is null while `CRAVES_SUBSCRIPTION_BILLING_GENERATOR_ENABLED` is false, because nothing renews then; the app falls back to "Paid until".
+- **Pause and cancel cutoffs protect the earliest meal still ahead** (a generated occurrence that is not skipped, cancelled or failed, else the next scheduled date if it is in the future). Before, they used `next_service_date`, which only moves while the occurrence generator runs, so with the generator off every pause or cancel after the first meal day returned 409.
+- **V18 sets `lock_timeout` to 5 s.** If a long transaction holds `subscription_plan`, the migration fails, the new revision does not become healthy, and the old revision keeps serving. Retry the deploy.
+- **Customer web (`apps/customer-web-next`, same branch):** a 0-minute cutoff reads "any time before a meal" instead of "up to 0 minutes", and a subscription to a plan that is no longer listed (closed to new subscribers) shows its own `planName` instead of "Meal plan". Both are backward compatible.
+
+## Known issue: fix before turning on automatic billing
+
+Pause and resume do not move `next_billing_date`. With `CRAVES_SUBSCRIPTION_BILLING_GENERATOR_ENABLED=true`, a customer who pauses past a cycle and then resumes would be invoiced for the paused cycles (one invoice per cycle, from the old date). Billing is off in production today (handover notes), so nothing is charged now. Do not enable the billing generator until resume shifts `next_billing_date` (decide whether paused days are credited).
 
 ## Before merge
 
-1. CI must run the Postgres-gated tests. They were never run locally, because no Postgres was available. These are `SubscriptionMigrationDatabaseTest` (V18 fixtures), `SubscriptionPresentationDatabaseTest` and `ChefPlanImageDatabaseTest`. Confirm the launch CI shows no skips.
+1. CI must run the Postgres-gated tests. They passed locally on 2026-10-11 against an embedded Postgres 16 (121 then 126 subscription-service tests, 0 skipped); CI must still confirm. These are `SubscriptionMigrationDatabaseTest` (V18 fixtures), `SubscriptionPresentationDatabaseTest` and `ChefPlanImageDatabaseTest`. Confirm the launch CI shows no skips.
 
 ## Before deploy: read-only production checks
 
@@ -68,6 +76,7 @@ WHERE s.status = 'PAUSED'
 ## Deploy
 
 1. Merge the PR into `main`. The launch regression CI must pass.
+1. Deploy customer web first (`Craves (14)` with `operation=web`, which also redeploys admin). The web changes work against the current backend too, and this avoids customers seeing "up to 0 minutes" once V18 is live.
 2. Run `azure-pipelines-subscription-service.yml` (manual; container app `ca-craves-subscription-service-p`). Wait for the new revision to be Ready and healthy.
 3. Run `CONFIRM_APIM_WRITE=true bash scripts/apim/configure-meal-plan-image-apim.sh` by hand, with an `az login` session. It adds only the public image operation, with a cacheable policy.
 4. Run `configure-chef-subscription-plan-workflow-apim.sh` through `azure-pipelines-subscription-backoffice-apim.yml` with `confirmApimWrite=true`. It adds the chef PUT image and PATCH accepting-subscribers operations.

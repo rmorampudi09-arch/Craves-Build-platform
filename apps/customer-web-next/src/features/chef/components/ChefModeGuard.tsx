@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { isChefModeVerified, isCustomerModeVerified } from "@/features/chef/lib/chef-mode";
+import { isChefAccountOnDevice, isChefModeVerified, isCustomerModeVerified, rememberChefAccount } from "@/features/chef/lib/chef-mode";
 import { CUSTOMERS_LAUNCHING_SOON } from "@/features/sign-in/lib/customer-launch";
 import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 
@@ -40,9 +40,15 @@ export function ChefModeGuard() {
   const confirm = Boolean(
     customerScreen &&
       !leave &&
-      customerScreen.roles.some((role) => role.toUpperCase() === "CHEF") &&
+      (customerScreen.roles.some((role) => role.toUpperCase() === "CHEF") ||
+        // Until the customer launch, an applicant who used Chef Mode on this device counts as a chef too.
+        (CUSTOMERS_LAUNCHING_SOON && isChefAccountOnDevice(customerScreen.id))) &&
       !isCustomerModeVerified(customerScreen.id),
   );
+
+  useEffect(() => {
+    if (CUSTOMERS_LAUNCHING_SOON && user && isChefModeVerified(user.id)) rememberChefAccount(user.id);
+  }, [user]);
 
   useEffect(() => {
     if (leave) router.replace("/chef");

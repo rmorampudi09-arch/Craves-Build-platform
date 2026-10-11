@@ -1,0 +1,46 @@
+# Dish photos through Front Door (craves.in/media/*) instead of straight from blob storage. Manual runs only.
+#
+# Order of use:
+#   1. Release Catalog with the photo optimizer (azure-pipelines-catalog-service.yml).
+#   2. inspect   read-only: Front Door endpoint, /media route, Catalog photo base URL, sample photo headers.
+#   3. apply     blob origin + cached /media/* route on the craves.in domains, proves a photo loads through it,
+#                then sets CRAVES_MEDIA_PUBLIC_BASE_URL on Catalog. Catalog rewrites stored links on start.
+# After apply, set the Azure DevOps variable CRAVES_MEDIA_PUBLIC_BASE_URL to https://craves.in/media as well,
+# so the production variable preflight matches the running app.
+trigger: none
+pr: none
+
+parameters:
+  - name: operation
+    type: string
+    default: inspect
+    values: [inspect, apply]
+  - name: confirmProductionChange
+    type: boolean
+    default: false
+
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 1
+    persistCredentials: false
+
+  - script: bash -n scripts/frontdoor/configure-media-route.sh
+    displayName: Validate media route script
+
+  - task: AzureCLI@2
+    displayName: Dish photos through Front Door (${{ parameters.operation }})
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: scriptPath
+      scriptPath: scripts/frontdoor/configure-media-route.sh
+    env:
+      OPERATION: ${{ parameters.operation }}
+      CONFIRM: ${{ parameters.confirmProductionChange }}

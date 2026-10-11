@@ -10,9 +10,10 @@ import {
   setSessionProfile,
   subscribeSession,
 } from "@/features/auth/api/cravesAuth";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import { parseCustomerProfile } from "@/features/profile/lib/profile-contract";
 import { EmailVerificationPanel } from "@/features/sign-in/components/EmailVerificationPanel";
-import { Sheet } from "@/shared/ui/overlays/overlay";
+import { secondaryActionClass, Sheet } from "@/shared/ui/overlays/overlay";
 
 // Customer pages only: sign-in, Chef Mode, the admin portal and the legal pages never ask.
 const SKIP = ["/sign-in", "/chef", "/admin", "/privacy", "/terms", "/security", "/refunds-cancellations", "/contact", "/products-pricing", "/pilot-launch"];
@@ -32,6 +33,9 @@ export function NewCustomerProfileGate() {
   const [lastName, setLastName] = useState("");
   const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; form?: string }>({});
   const [busy, setBusy] = useState(false);
+  // After a failed save that isn't the name's fault, the person may go on; it asks again next load.
+  const [outage, setOutage] = useState(false);
+  const [later, setLater] = useState<string | null>(null);
   const id = useId();
   const skipped = SKIP.some((path) => pathname === path || pathname.startsWith(`${path}/`));
   const candidate =
@@ -43,7 +47,7 @@ export function NewCustomerProfileGate() {
     if (!candidate || skipped || !isSessionReady()) return;
     let active = true;
     const context = captureSessionContext();
-    void fetch("/api/customer/profile", { cache: "no-store", credentials: "same-origin" })
+    void sessionFetch("/api/customer/profile", { cache: "no-store" })
       .then(async (response) => {
         if (!active || !response.ok || !isSessionContextCurrent(context)) return;
         const raw: unknown = await response.json().catch(() => undefined);
@@ -68,7 +72,7 @@ export function NewCustomerProfileGate() {
     const last = lastName.trim();
     const next = {
       ...(first.length < 2 ? { firstName: "Enter your first name (at least 2 letters)." } : {}),
-      ...(!last ? { lastName: "Enter your last name." } : {}),
+      ...(!last ? { lastName: "Enter your last name (an initial is fine)." } : {}),
     };
     setErrors(next);
     if (next.firstName || next.lastName) {
@@ -78,14 +82,18 @@ export function NewCustomerProfileGate() {
     setBusy(true);
     const context = captureSessionContext();
     try {
-      const response = await fetch("/api/customer/profile", {
+      // sessionFetch renews an expired access cookie; an ended sign-in brings up "Please sign in again".
+      const response = await sessionFetch("/api/customer/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
         body: JSON.stringify({ firstName: first, lastName: last }),
       });
+      if (response.status === 400) throw new Error("We couldn’t save that name. Check it and try again.");
       const profile = response.ok ? parseCustomerProfile(await response.json().catch(() => null)) : null;
-      if (!profile) throw new Error("We couldn’t save your name. Check your connection and try again.");
+      if (!profile) {
+        setOutage(true);
+        throw new Error("We couldn’t save your name just now. Try again, or do this later.");
+      }
       if (isSessionContextCurrent(context)) setSessionProfile(profile, context);
       setMissingFor(null);
     } catch (failure) {
@@ -95,7 +103,7 @@ export function NewCustomerProfileGate() {
     }
   }
 
-  const open = Boolean(candidate && missingFor === candidate && !skipped);
+  const open = Boolean(candidate && missingFor === candidate && later !== candidate && !skipped);
   return (
     <Sheet
       open={open}
@@ -104,9 +112,16 @@ export function NewCustomerProfileGate() {
       title="Welcome to Craves"
       description="Tell us your name. Chefs see it on your orders."
       footer={
-        <button type="submit" form={`${id}-form`} className="craves-primary-action w-full" aria-busy={busy} disabled={busy}>
-          {busy ? "Saving…" : "Continue"}
-        </button>
+        <>
+          <button type="submit" form={`${id}-form`} className="craves-primary-action w-full" aria-busy={busy} disabled={busy}>
+            {busy ? "Saving…" : "Continue"}
+          </button>
+          {outage ? (
+            <button type="button" className={secondaryActionClass} disabled={busy} onClick={() => setLater(candidate)}>
+              Do this later
+            </button>
+          ) : null}
+        </>
       }
     >
       <form id={`${id}-form`} noValidate onSubmit={(event) => void save(event)} className="mt-5 grid gap-4">
@@ -148,7 +163,7 @@ export function NewCustomerProfileGate() {
               required
               disabled={busy}
               aria-invalid={Boolean(errors.lastName)}
-              aria-describedby={errors.lastName ? `${id}-last-error` : undefined}
+              aria-describedby={errors.lastName ? `${id}-last-error` : `${id}-last-hint`}
               onChange={(event) => {
                 setLastName(event.target.value);
                 setErrors((current) => ({ ...current, lastName: undefined, form: undefined }));
@@ -159,7 +174,11 @@ export function NewCustomerProfileGate() {
               <p id={`${id}-last-error`} className="mt-1.5 text-sm font-medium text-[#C4200F]">
                 {errors.lastName}
               </p>
-            ) : null}
+            ) : (
+              <p id={`${id}-last-hint`} className="mt-1.5 text-sm text-[#6B6B6B]">
+                No surname? Your initial or family name is fine.
+              </p>
+            )}
           </div>
         </div>
         {errors.form ? (

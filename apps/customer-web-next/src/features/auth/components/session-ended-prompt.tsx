@@ -27,7 +27,11 @@ export function SessionEndedPrompt() {
     window.addEventListener(SESSION_ENDED_EVENT, ended);
     return () => window.removeEventListener(SESSION_ENDED_EVENT, ended);
   }, []);
-  if (OWN_SIGN_IN.some((path) => pathname === path || pathname.startsWith(`${path}/`))) return null;
+  const ownSignIn = OWN_SIGN_IN.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  // Once a sign-in page takes over, the prompt has done its job: a guest who leaves that page
+  // (or someone who signs in there without a reload) never sees it again.
+  if (open && ownSignIn) setOpen(false);
+  if (ownSignIn) return null;
   const chef = pathname === "/chef" || pathname.startsWith("/chef/");
 
   function signInAgain() {
@@ -47,7 +51,7 @@ export function SessionEndedPrompt() {
       title="Please sign in again"
       description={
         chef
-          ? "For your safety, Craves signs you out after some time. Your saved work is kept. Confirm your phone number with an OTP and you’ll come back to this page."
+          ? "For your safety, Craves signs you out after some time. Everything you’ve saved is kept. Confirm your phone number with an OTP and you’ll come back to this page."
           : "For your safety, Craves signs you out after some time. Your cart and orders are kept. Confirm your phone number with an OTP and you’ll come back to this page."
       }
       footer={

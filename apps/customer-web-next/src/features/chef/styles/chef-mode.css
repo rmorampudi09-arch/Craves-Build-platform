@@ -876,6 +876,8 @@ body .chef-notifications [aria-label="Notification filters"] button { border-col
 .chef-panel-theme:has(.chef-dish-editor) .chef-panel-content { padding-bottom: 0; }
 .chef-panel-theme:has(.chef-dish-editor) .chef-order-banner-wrap { bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
 @media (min-width: 768px) { .chef-panel-theme:has(.chef-dish-editor) .chef-order-banner-wrap { bottom: 6.5rem; } }
+/* Wide screens: centred over the form column, which is the centred page minus the 19.5rem preview. */
+@media (min-width: 1024px) { .chef-panel-theme:has(.chef-dish-editor) .chef-order-banner-wrap { padding-right: 19.5rem; } }
 /* While that bar shows, the last field can still scroll clear of it. */
 .chef-panel-theme:has(.chef-order-banner) .chef-dish-actions { margin-top: 5rem; }
 .chef-dish-actions {

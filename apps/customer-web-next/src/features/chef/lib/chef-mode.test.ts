@@ -65,7 +65,10 @@ test("the customer side is verified on this device for its own user while the si
   Object.assign(globalThis, { window: { sessionStorage, localStorage } });
   try {
     assert.equal(isCustomerModeVerified(owner), false);
+    markChefModeVerified(owner);
     markCustomerModeVerified(owner);
+    // A customer-side sign-in ends Chef Mode in this tab, or the guard would send the chef straight back.
+    assert.equal(isChefModeVerified(owner), false);
     assert.equal(JSON.parse(device.get(CUSTOMER_MODE_KEY) ?? "null").userId, owner);
     assert.equal(isCustomerModeVerified(owner), true);
     assert.equal(isCustomerModeVerified("22222222-2222-4222-8222-222222222222"), false);

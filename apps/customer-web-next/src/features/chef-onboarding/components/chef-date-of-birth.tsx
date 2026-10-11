@@ -182,7 +182,7 @@ export function DateOfBirthPicker({
                   const tone = draft?.year === year
                     ? "!bg-[#1A1A1A] !text-white"
                     : current
-                      ? "!bg-white !text-[#1A1A1A] !shadow-[inset_0_0_0_1.5px_#1A1A1A]"
+                      ? "!bg-white !text-[#1A1A1A] !inset-ring-[1.5px] !inset-ring-[#1A1A1A]"
                       : "!bg-[#F1F3F5] !text-[#1A1A1A] hover:!bg-[#E6E9EC]";
                   return (
                     <button

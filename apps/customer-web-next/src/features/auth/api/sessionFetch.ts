@@ -3,6 +3,13 @@
 type RefreshResult = "refreshed" | "rejected" | "unavailable";
 
 let refreshInFlight: Promise<RefreshResult> | null = null;
+// The session store (cravesAuth) lends its refresh, which runs once per sign-in at a time. A refresh
+// rotates the cookie, and the server takes a second, parallel use of the old one for a stolen token
+// and ends the session, so this helper must never refresh beside it.
+let sharedRefresh: (() => Promise<Response | null>) | null = null;
+export function shareSessionRefresh(refresh: () => Promise<Response | null>): void {
+  sharedRefresh = refresh;
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -13,11 +20,12 @@ async function refreshSession(): Promise<RefreshResult> {
 
   const pending = (async (): Promise<RefreshResult> => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const response = await fetch("/api/auth/refresh", {
-        method: "POST",
-        credentials: "same-origin",
-        cache: "no-store",
-      }).catch(() => null);
+      const response = await (sharedRefresh?.() ??
+        fetch("/api/auth/refresh", {
+          method: "POST",
+          credentials: "same-origin",
+          cache: "no-store",
+        }).catch(() => null));
 
       if (response?.ok) return "refreshed";
       if (
@@ -51,12 +59,11 @@ export async function refreshSessionCookies(): Promise<boolean> {
 }
 
 // A chef approved after this access token was signed still carries the old roles, and a refresh
-// re-reads them. At most once a minute, so an account without the role never rotates on every poll.
-const ROLE_REFRESH_GAP_MS = 60_000;
-let lastRoleRefresh = 0;
+// re-reads them. Once per page load: a second refresh can't add a role the first didn't find.
+let roleRefreshTried = false;
 
 async function lacksFreshChefRole(input: RequestInfo | URL, response: Response): Promise<boolean> {
-  if (response.status !== 403 || Date.now() - lastRoleRefresh < ROLE_REFRESH_GAP_MS) return false;
+  if (response.status !== 403 || roleRefreshTried) return false;
   const url = input instanceof Request ? input.url : String(input);
   if (!new URL(url, "http://same-origin.invalid").pathname.startsWith("/api/chef/")) return false;
   const body = (await response.clone().json().catch(() => null)) as { code?: unknown } | null;
@@ -81,7 +88,7 @@ export async function sessionFetch(
 
   let response = await fetch(input, requestInit);
   if (await lacksFreshChefRole(input, response)) {
-    lastRoleRefresh = Date.now();
+    roleRefreshTried = true;
     return (await refreshSession()) === "refreshed" ? fetch(input, requestInit) : response;
   }
   if (response.status !== 401 || String(input) === "/api/auth/refresh") {

@@ -115,7 +115,8 @@ export const CodeSlots = forwardRef<HTMLInputElement, CodeSlotsProps>(function C
         inputMode="numeric"
         autoComplete="one-time-code"
         pattern="[0-9]*"
-        maxLength={length}
+        // No maxLength: the browser would cut a pasted "123 456" or "Your OTP is 123456" before the
+        // digits are picked out below.
         spellCheck={false}
         disabled={disabled}
         value={code}

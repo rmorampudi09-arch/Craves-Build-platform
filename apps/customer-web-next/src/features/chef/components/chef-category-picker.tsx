@@ -65,7 +65,7 @@ export function ChefCategoryPicker({
             <LayoutGrid className="h-5 w-5" aria-hidden="true" />
           </span>
         )}
-        <span id={valueId} className={`min-w-0 flex-1 truncate text-base ${value.trim() ? "font-semibold text-[#1A1A1A]" : "text-[#8A8F98]"}`}>
+        <span id={valueId} className={`min-w-0 flex-1 truncate text-base ${value.trim() ? "font-semibold text-[#1A1A1A]" : "text-[#6B6B6B]"}`}>
           {value.trim() || "Choose a category"}
         </span>
         <ChevronDown className="h-5 w-5 shrink-0 text-[#6B6B6B]" aria-hidden="true" />
@@ -131,7 +131,7 @@ export function ChefCategoryPicker({
               onChange={(event) => setCustom(event.target.value)}
               placeholder="For example, Andhra meals"
               autoComplete="off"
-              className="block min-h-12 min-w-0 flex-1 rounded-xl border border-[#D3D7DD] bg-white px-4 text-base text-[#1A1A1A] placeholder:text-[#8A8F98] focus:border-[#1A1A1A] focus:outline-none focus:ring-1 focus:ring-[#1A1A1A]"
+              className="block min-h-12 min-w-0 flex-1 rounded-xl border border-[#D3D7DD] bg-white px-4 text-base text-[#1A1A1A] placeholder:text-[#6B6B6B] focus:border-[#1A1A1A] focus:outline-none focus:ring-1 focus:ring-[#1A1A1A]"
             />
             {/* The sheet renders outside Chef Mode's theme, so this button carries its own look. */}
             <button

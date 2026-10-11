@@ -66,7 +66,7 @@ describe("Chef Mode guard", () => {
   });
 
   it("checks a customer page again when Back restores it from the page cache", async () => {
-    sessionStorage.clear();
+    markCustomerModeVerified(chef.id);
     render(createElement(ChefModeGuard));
     expect(mocks.replace).not.toHaveBeenCalled();
     markChefModeVerified(chef.id);
@@ -75,10 +75,26 @@ describe("Chef Mode guard", () => {
   });
 
   it("leaves customers, and other accounts in this tab, on customer screens", () => {
-    sessionStorage.clear();
+    markCustomerModeVerified(chef.id);
     render(createElement(ChefModeGuard));
     markChefModeVerified("71111111-1111-4111-8111-111111111111");
     cleanup();
+    render(createElement(ChefModeGuard));
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it("asks a chef to confirm the customer side before customer screens open in a new tab", async () => {
+    sessionStorage.clear();
+    clearCustomerMode();
+    vi.mocked(usePathname).mockReturnValue("/cart");
+    render(createElement(ChefModeGuard));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?confirm=customer&returnTo=%2Fcart"));
+  });
+
+  it("never asks a customer without the chef role", () => {
+    sessionStorage.clear();
+    clearCustomerMode();
+    setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
     render(createElement(ChefModeGuard));
     expect(mocks.replace).not.toHaveBeenCalled();
   });
@@ -121,7 +137,9 @@ describe("More hub", () => {
   });
 
   it("switches to the customer app only by leaving Chef Mode, once this device passed a customer OTP", async () => {
+    // A customer sign-in earlier on this device, then this tab's Chef Mode sign-in.
     markCustomerModeVerified(chef.id);
+    markChefModeVerified(chef.id);
     render(createElement(ChefMorePage));
     fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
     expect(isChefModeVerified(chef.id)).toBe(false);

@@ -204,6 +204,7 @@
     "profile -> src/features/addresses/components/AddressCard.tsx",
     "profile -> src/features/addresses/lib/address-contract.ts",
     "profile -> src/features/auth/api/cravesAuth.ts",
+    "profile -> src/features/auth/api/sessionFetch.ts",
     "profile -> src/features/cart/api/cravesCart.ts",
     "profile -> src/features/chef-onboarding/lib/chef-application-contract.ts",
     "profile -> src/features/favorites/api/customerFavorites.ts",

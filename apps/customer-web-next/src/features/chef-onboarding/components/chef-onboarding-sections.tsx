@@ -934,6 +934,8 @@ function FssaiGuide({ flow }: Props) {
                     </button>
                   )}
                 </div>
+                {/* Said on the video itself when the chosen language has no version of it yet. */}
+                {item.language === "en" && language !== "en" ? <span className="cob-helper">In English</span> : null}
                 {playback[item.id] ? (
                   <button
                     type="button"

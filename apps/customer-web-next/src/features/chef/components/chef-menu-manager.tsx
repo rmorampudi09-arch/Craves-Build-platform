@@ -1,7 +1,8 @@
 "use client";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
-import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
+import { ChefError, chefApiError, chefErrorText, isChefAccessText } from "@/features/chef/lib/chef-errors";
+import { signInToChefModeAgain } from "@/features/chef/components/chef-account-menu";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -385,7 +386,8 @@ export function ChefMenuManager() {
         (required || value) &&
         (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 100000)
       )
-        next[field] = `${label} must be a whole number from 1 to 100,000.`;
+        // Only the packed weight is required, so an empty value here is always the weight.
+        next[field] = value ? `${label} must be a whole number from 1 to 100,000.` : "Enter the packed weight in grams.";
     }
     // A rejected photo is never queued, so its message stays visible without blocking the save.
     setErrors(errors.photo ? { ...next, photo: errors.photo } : next);
@@ -688,14 +690,20 @@ export function ChefMenuManager() {
               title="Your menu couldn’t load"
               text={loadError}
               action={
-                <button
-                  type="button"
-                  className="chef-btn"
-                  disabled={busy || loading}
-                  onClick={() => void load(true)}
-                >
-                  Reload menu
-                </button>
+                isChefAccessText(loadError) ? (
+                  <button type="button" className="chef-btn is-primary" onClick={signInToChefModeAgain}>
+                    Sign in again
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="chef-btn"
+                    disabled={busy || loading}
+                    onClick={() => void load(true)}
+                  >
+                    Reload menu
+                  </button>
+                )
               }
             />
           </ChefSection>
@@ -1071,7 +1079,7 @@ export function ChefMenuManager() {
                       className={`${FIELD} pl-9 font-semibold tabular-nums`}
                       value={form.price}
                       onChange={(event) => update("price", event.target.value)}
-                      placeholder="180"
+                      placeholder="e.g. 180"
                     />
                   </div>
                   {errorText("price")}
@@ -1101,7 +1109,7 @@ export function ChefMenuManager() {
                       className="block min-h-12 w-full min-w-0 rounded-xl border bg-white px-2 text-center text-base font-semibold tabular-nums text-[#1A1A1A]"
                       value={form.servesCount}
                       onChange={(event) => update("servesCount", event.target.value)}
-                      placeholder="1"
+                      placeholder="Not set"
                     />
                     <button
                       type="button"
@@ -1129,7 +1137,7 @@ export function ChefMenuManager() {
                     className={`${FIELD} sm:max-w-[12rem]`}
                     value={form.preparationTimeMinutes}
                     onChange={(event) => update("preparationTimeMinutes", event.target.value)}
-                    placeholder="30"
+                    placeholder="e.g. 30"
                   />
                   <QuickPicks
                     label="Usual cooking times"
@@ -1167,7 +1175,7 @@ export function ChefMenuManager() {
                   className={`${FIELD} sm:max-w-[12rem]`}
                   value={form.unitPackageWeightGrams}
                   onChange={(event) => update("unitPackageWeightGrams", event.target.value)}
-                  placeholder="500"
+                  placeholder="e.g. 500"
                 />
                 <QuickPicks
                   label="Usual packed weights"
@@ -1186,7 +1194,7 @@ export function ChefMenuManager() {
                   <AppleSwitch
                     tone="go"
                     size="md"
-                    aria-label="Thermal box needed"
+                    aria-label="Needs a thermal box"
                     checked={form.thermoboxRequired}
                     onCheckedChange={(value) => update("thermoboxRequired", value)}
                   />

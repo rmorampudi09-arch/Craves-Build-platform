@@ -276,11 +276,20 @@ export function PhoneAuthForm({
                 if (otpStatus !== "verifying" && otpStatus !== "success") setOtpStatus("idle");
               }}
               onComplete={(code) => void verifyCode(code)}
-              disabled={busy || stage === "done"}
+              // Read-only while checking, never disabled: the field keeps focus and the keypad stays up.
+              readOnly={busy}
+              disabled={stage === "done"}
+              aria-describedby={otpStatus === "error" ? "otp-error" : undefined}
               // Mounts only after "Send OTP", replacing the focused phone field.
               autoFocus
               required
             />
+            {/* A wrong code is explained right under the boxes, not below the buttons. */}
+            {otpStatus === "error" ? (
+              <p id="otp-error" role="alert" className="text-left text-sm font-medium text-[#C4200F]">
+                {message}
+              </p>
+            ) : null}
           </>
         ) : prefilled ? (
           <div className="flex min-h-12 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-2xl bg-[#F1F3F5] py-2 pl-4 pr-2">
@@ -367,7 +376,7 @@ export function PhoneAuthForm({
         aria-live="polite"
         className="mt-4 text-sm leading-6 text-[#1A1A1A]"
       >
-        {message}
+        {otpStatus === "error" ? null : message}
       </p>
       <p className="mt-4 text-xs leading-5 text-[#6B6B6B]">
         {chefJourney

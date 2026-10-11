@@ -28,6 +28,8 @@ describe("CodeSlots", () => {
     fireEvent.change(input, { target: { value: "12a" } });
     expect(input.value).toBe("12");
     expect(document.querySelectorAll(".code-slot[data-filled]")).toHaveLength(2);
+    // Browsers cut a paste to maxlength before onChange (jsdom doesn't), so there must be none.
+    expect(input.hasAttribute("maxlength")).toBe(false);
     fireEvent.change(input, { target: { value: "123 456" } });
     expect(input.value).toBe("123456");
     expect(onComplete).toHaveBeenCalledTimes(1);

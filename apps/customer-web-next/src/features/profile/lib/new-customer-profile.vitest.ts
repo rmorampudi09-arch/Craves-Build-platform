@@ -54,6 +54,21 @@ describe("a new customer", () => {
     expect(getSession()?.profileComplete).toBe(true);
   });
 
+  it("never traps anyone when the profile service is down: they may go on and are asked again later", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) =>
+      init?.method === "PUT" ? Response.json({ code: "PROFILE_UNAVAILABLE" }, { status: 503 }) : Response.json(null)));
+    render(createElement(NewCustomerProfileGate));
+    await screen.findByRole("dialog", { name: "Welcome to Craves" });
+    expect(screen.queryByRole("button", { name: "Do this later" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Asha" } });
+    fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "R" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Continue" })));
+    expect(screen.getByRole("alert").textContent).toContain("do this later");
+    fireEvent.click(screen.getByRole("button", { name: "Do this later" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(getSession()?.profileComplete).toBe(false);
+  });
+
   it("is never asked inside Chef Mode", async () => {
     route.pathname = "/chef/menu";
     render(createElement(NewCustomerProfileGate));

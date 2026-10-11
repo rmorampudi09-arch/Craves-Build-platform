@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useSyncExternalStore } from "react";
 import { getSession, loadSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 import { PhoneAuthForm } from "@/features/sign-in/components/phone-auth-form";
@@ -15,20 +16,20 @@ export function CustomerSignIn({ returnTo, centralOtp, confirm }: { returnTo: st
   }, [confirm]);
   const phone = confirm ? user?.phoneNumber : undefined;
   return (
-    <PhoneAuthForm
-      // The number arrives with the session; a new key starts the form with it filled in.
-      key={phone ?? "phone"}
-      returnTo={returnTo}
-      centralOtp={centralOtp}
-      initialPhone={phone}
-      heading={
-        confirm
-          ? {
-              title: "Switch to the customer app",
-              text: "Confirm it’s you with a code to your phone. Chef Mode and the customer app each ask once, so neither can open the other on its own.",
-            }
-          : undefined
-      }
-    />
+    <>
+      <PhoneAuthForm
+        // The number arrives with the session; a new key starts the form with it filled in.
+        key={phone ?? "phone"}
+        returnTo={returnTo}
+        centralOtp={centralOtp}
+        initialPhone={phone}
+        heading={confirm ? { title: "Switch to the customer app", text: "Confirm it’s you with a code sent to this number." } : undefined}
+      />
+      {confirm ? (
+        <Link href="/chef" className="mt-4 flex min-h-12 items-center justify-center text-sm font-semibold text-[#1A1A1A] hover:underline">
+          Back to Chef Mode
+        </Link>
+      ) : null}
+    </>
   );
 }

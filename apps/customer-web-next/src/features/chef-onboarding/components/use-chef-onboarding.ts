@@ -249,7 +249,9 @@ export function useChefOnboarding() {
       let nextDetails = next.details ?? { ...EMPTY_ONBOARDING };
       if (!current()) return;
       // Back from "Sign in again": what was typed before comes back, still to be saved.
-      const unsaved = editable(next) ? takeUnsaved(owner.current.identityId, next.version) : null;
+      // Read (and so delete) it on every load, even when the application can no longer be edited.
+      const stashed = takeUnsaved(owner.current.identityId, next.version);
+      const unsaved = editable(next) ? stashed : null;
       if (unsaved) nextDetails = unsaved;
       currentDetails.current = nextDetails;
       setDetails(nextDetails);

@@ -372,8 +372,8 @@ export function ChefModeDashboard() {
               <>
                 <p className="font-semibold">Sign in again to load your orders</p>
                 <p className="mt-1 text-[#6B6B6B]">
-                  Your chef access needs a fresh sign-in. If this message stays after you sign in, call Craves support:
-                  the problem is on our side, not yours.
+                  Craves couldn’t confirm your chef access, so new orders won’t show or ring. If this stays after you
+                  sign in again, the problem is on our side, not yours: tell us in More → Get help.
                 </p>
               </>
             ) : (

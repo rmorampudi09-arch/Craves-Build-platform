@@ -1321,7 +1321,8 @@ a.cob-thumb:focus-visible {
 .cob .cob-date-trigger:hover:not(:disabled) { background-color: #eceef1; }
 .cob .cob-date-trigger[aria-expanded="true"] { border-color: var(--cob-ink); background-color: var(--cob-white); }
 .cob .cob-date-trigger[data-invalid] { border-color: var(--cob-red-text); background-color: var(--cob-white); }
-.cob-date-placeholder { color: #8a8d92; font-weight: 400; }
+/* The trigger's only text, so it meets 4.5:1 on the grey field (unlike an input's placeholder). */
+.cob-date-placeholder { color: var(--cob-muted); font-weight: 400; }
 .cob-language-value { display: inline-flex; min-width: 0; align-items: center; gap: 10px; }
 .cob-language-value > svg { flex-shrink: 0; color: var(--cob-muted); }
 .cob-language-english { color: var(--cob-muted); font-size: 14px; font-weight: 400; }

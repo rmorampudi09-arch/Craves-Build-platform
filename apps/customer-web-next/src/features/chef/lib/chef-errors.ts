@@ -9,8 +9,9 @@ export const CHEF_ERROR_MESSAGES: Record<string, string> = {
   // Session and access
   AUTHENTICATION_REQUIRED: "You are signed out. Sign in again to continue.",
   SESSION_EXPIRED: "Your session expired. Sign in again to continue.",
-  CHEF_ACCESS_REQUIRED: "Your chef access needs a fresh sign-in. Tap Sign in again. If this message stays, call Craves support: the problem is on our side, not yours.",
-  CHEF_ROLE_REQUIRED: "Your chef access needs a fresh sign-in. Tap Sign in again. If this message stays, call Craves support: the problem is on our side, not yours.",
+  // The app already re-reads chef access once by itself, so what remains is almost always Craves' side.
+  CHEF_ACCESS_REQUIRED: "Craves couldn’t confirm your chef access. Sign in again; if this stays, the problem is on our side, not yours: tell us in More → Get help.",
+  CHEF_ROLE_REQUIRED: "Craves couldn’t confirm your chef access. Sign in again; if this stays, the problem is on our side, not yours: tell us in More → Get help.",
   // Kitchen
   KITCHEN_PROFILE_REQUIRED: "Set up your kitchen before adding or managing dishes.",
   KITCHEN_NOT_FOUND: "Your kitchen isn't set up yet. Open Kitchen to create it.",
@@ -177,6 +178,11 @@ function report(ref: string, status: number) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ screen, code: ref, status }),
   }).catch(() => undefined);
+}
+
+/** Whether a sentence from chefErrorText is about chef access, which "Sign in again" (not a retry) can fix. */
+export function isChefAccessText(text: string): boolean {
+  return /\(Ref: CHEF_(ACCESS|ROLE)_REQUIRED\)$/.test(text);
 }
 
 /** The sentence a chef screen shows for any failure, ending with a reference such as "(Ref: CHEF_ACCEPTANCE_EXPIRED)". */

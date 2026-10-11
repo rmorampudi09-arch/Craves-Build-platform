@@ -331,6 +331,8 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode, customersLaunchingSoo
   /** Checks a complete code: from the submit button, or by itself once the last digit lands. */
   const verifyCode = async (code: string) => {
     if (pendingRequest.current || isClosing.current) return;
+    // The last digit verifies by itself; a cleared name must stop it before the code is used up.
+    if (!validateFields()) return;
     if (!/^\d{6}$/.test(code)) {
       setOtpError('Enter the 6-digit verification code.');
       otpRef.current?.focus();
@@ -508,7 +510,7 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode, customersLaunchingSoo
                       <CodeSlots
                         ref={otpRef}
                         id="craves-auth-otp" name="one-time-code"
-                        length={6} required disabled={submitting || otpAccepted}
+                        length={6} required readOnly={submitting} disabled={otpAccepted}
                         autoCapitalize="none"
                         value={otp}
                         status={requestKind === 'verify' ? 'verifying' : otpAccepted ? 'success' : otpError ? 'error' : 'idle'}

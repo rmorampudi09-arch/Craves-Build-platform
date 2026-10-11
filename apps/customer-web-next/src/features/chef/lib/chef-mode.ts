@@ -65,7 +65,9 @@ function deviceStorage(): Storage | null {
   }
 }
 
+/** A customer-side sign-in: this tab leaves Chef Mode (only this tab) and the customer side is confirmed. */
 export function markCustomerModeVerified(userId: string): void {
+  clearChefMode();
   try {
     deviceStorage()?.setItem(CUSTOMER_MODE_KEY, JSON.stringify({ userId, verifiedAt: Date.now() } satisfies ChefModeMarker));
   } catch {

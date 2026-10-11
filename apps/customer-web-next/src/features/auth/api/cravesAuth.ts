@@ -12,7 +12,7 @@ import {
   parseCustomerProfile,
   type CustomerProfile,
 } from "@/features/profile/lib/profile-contract";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch, shareSessionRefresh } from "@/features/auth/api/sessionFetch";
 
 export type CravesUser = {
   id: string;
@@ -172,6 +172,8 @@ function refreshSessionForGeneration(generation: number): Promise<Response | nul
   sessionRefreshes.set(generation, pending);
   return pending;
 }
+// sessionFetch refreshes through this map too: one refresh per sign-in at a time for the whole tab.
+shareSessionRefresh(() => refreshSessionForGeneration(sessionGeneration));
 
 function fromIdentity(identity: CravesIdentity): CravesUser {
   const digits = identity.phoneNumber.replace(/\D/g, "");
@@ -391,6 +393,8 @@ export async function clearSession(): Promise<void> {
     }
     throw new LogoutUnconfirmedError(retryContext);
   }
+  // Signing out also drops chef application details kept across "Sign in again" (use-chef-onboarding).
+  try { window.sessionStorage.removeItem("craves.chef-application-unsaved"); } catch { /* storage blocked */ }
   forgetSession();
 }
 

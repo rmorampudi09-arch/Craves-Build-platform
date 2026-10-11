@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { boundBffRequest } from "@/lib/bff-request-limits";
-import { searchOlaMapsAddresses } from "@/lib/server/ola-maps";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
+import { searchOlaMapsAddresses } from "@/features/addresses/lib/server/ola-maps";
 
 const WINDOW_MS = 60_000;
 // Sized for debounced typeahead on the single web replica; abandoned keystrokes are aborted.

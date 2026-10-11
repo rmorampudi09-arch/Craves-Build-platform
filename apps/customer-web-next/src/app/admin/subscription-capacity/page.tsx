@@ -1,5 +1,5 @@
-import { AdminPageIntro } from "@/components/admin-page-intro";
-import { AdminSubscriptionCapacityOperator } from "@/components/admin-subscription-capacity-operator";
+import { AdminPageIntro } from "@/features/admin/shell/components/admin-page-intro";
+import { AdminSubscriptionCapacityOperator } from "@/features/admin/subscriptions/components/admin-subscription-capacity-operator";
 
 export const metadata = {
   title: "Subscription capacity | Craves Admin",

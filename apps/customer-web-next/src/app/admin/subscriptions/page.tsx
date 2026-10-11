@@ -1,5 +1,5 @@
-import { AdminPageIntro } from "@/components/admin-page-intro";
-import { AdminSubscriptionOperator } from "@/components/admin-subscription-operator";
+import { AdminPageIntro } from "@/features/admin/shell/components/admin-page-intro";
+import { AdminSubscriptionOperator } from "@/features/admin/subscriptions/components/admin-subscription-operator";
 
 export const metadata = { title: "Subscription operations | Craves Admin", robots: { index: false, follow: false } };
 

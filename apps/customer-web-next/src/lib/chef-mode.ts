@@ -1,4 +1,4 @@
-import { safeReturnPath } from "./auth-contract.ts";
+import { safeReturnPath } from "../features/auth/lib/auth-contract.ts";
 
 /**
  * Chef Mode is a separate app inside the Craves web app. A browser tab enters it only after a

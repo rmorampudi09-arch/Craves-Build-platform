@@ -1,5 +1,5 @@
-import { AdminPageIntro } from "@/components/admin-page-intro";
-import { AdminChefOnboardingContent } from "@/components/admin-chef-onboarding-content";
+import { AdminPageIntro } from "@/features/admin/shell/components/admin-page-intro";
+import { AdminChefOnboardingContent } from "@/features/admin/chef-review/components/admin-chef-onboarding-content";
 export const metadata={title:"Chef onboarding help | Craves Admin",robots:{index:false,follow:false}};
 export const dynamic="force-dynamic";
 export default function ChefOnboardingAdminPage() {

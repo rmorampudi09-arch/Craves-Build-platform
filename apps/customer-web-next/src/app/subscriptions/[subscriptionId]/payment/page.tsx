@@ -1,5 +1,5 @@
-import { SubscriptionRazorpayPayment } from "@/components/subscription-razorpay-payment";
-import { isUuid } from "@/lib/server-api";
+import { SubscriptionRazorpayPayment } from "@/features/meal-plans/components/subscription-razorpay-payment";
+import { isUuid } from "@/shared/lib/server-api";
 import { MealPlanPage } from "../../meal-plan-page";
 
 export const metadata = {

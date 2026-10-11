@@ -3,11 +3,11 @@
 import { createElement } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ChefOnboardingWorkspace } from "@/components/chef-onboarding-workspace";
-import { ChefApplicationStatus } from "@/components/chef-application-status";
-import { ChefApplicationWorkspace } from "@/components/chef-application-workspace";
-import { EMPTY_ONBOARDING } from "./chef-onboarding-v2-contract";
-import { setSessionIdentity } from "../services/auth/cravesAuth";
+import { ChefOnboardingWorkspace } from "@/features/chef-onboarding/components/chef-onboarding-workspace";
+import { ChefApplicationStatus } from "@/features/chef-onboarding/components/chef-application-status";
+import { ChefApplicationWorkspace } from "@/features/chef-onboarding/components/chef-application-workspace";
+import { EMPTY_ONBOARDING } from "../features/chef-onboarding/lib/chef-onboarding-v2-contract";
+import { setSessionIdentity } from "../features/auth/api/cravesAuth";
 
 const url = vi.hoisted(() => {
   const entries = [""];
@@ -32,8 +32,8 @@ vi.mock("next/navigation", async () => {
     useSearchParams: () => new URLSearchParams(useSyncExternalStore(url.subscribe, url.get)),
   };
 });
-vi.mock("@/components/auth/EmailVerificationPanel", () => ({ EmailVerificationPanel: () => null }));
-vi.mock("@/components/location/AddressMapPicker", () => ({ AddressMapPicker: () => null }));
+vi.mock("@/features/sign-in/components/EmailVerificationPanel", () => ({ EmailVerificationPanel: () => null }));
+vi.mock("@/features/addresses/components/AddressMapPicker", () => ({ AddressMapPicker: () => null }));
 
 const HUB = "/chef/application/status";
 const id = "12345678-1234-4123-8123-123456789012";

@@ -5,9 +5,9 @@ import {
   MAP_TILES_PATH,
   mapTileQuery,
   mapTileUpstreamPath,
-} from "@/lib/map-tiles";
-import { isSameSitePublicRequest, publicRequestOrigin } from "@/lib/request-security";
-import { fetchOlaMapsVectorResource, OlaMapsUnavailableError } from "@/lib/server/ola-maps";
+} from "@/features/addresses/lib/map-tiles";
+import { isSameSitePublicRequest, publicRequestOrigin } from "@/shared/lib/request-security";
+import { fetchOlaMapsVectorResource, OlaMapsUnavailableError } from "@/features/addresses/lib/server/ola-maps";
 
 const WINDOW_MS = 60_000;
 

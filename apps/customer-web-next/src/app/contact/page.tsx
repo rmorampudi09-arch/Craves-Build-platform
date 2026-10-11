@@ -1,5 +1,5 @@
-import { PolicySection, PublicPolicyPage } from "@/components/legal/PublicPolicyPage";
-import { ContextualBackBoundary } from "@/components/navigation/ContextualBackBoundary";
+import { PolicySection, PublicPolicyPage } from "@/features/legal/components/PublicPolicyPage";
+import { ContextualBackBoundary } from "@/shared/components/navigation/ContextualBackBoundary";
 
 export const dynamic = "force-dynamic";
 

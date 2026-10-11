@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { AdminPageIntro } from "@/components/admin-page-intro";
-import { AdminSupportCase } from "@/components/admin-support-inbox";
-import { isUuid } from "@/lib/server-api";
+import { AdminPageIntro } from "@/features/admin/shell/components/admin-page-intro";
+import { AdminSupportCase } from "@/features/admin/support/components/admin-support-inbox";
+import { isUuid } from "@/shared/lib/server-api";
 
 export const metadata = { title: "Support case | Craves Admin", robots: { index: false, follow: false } };
 

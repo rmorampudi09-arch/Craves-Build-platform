@@ -1,5 +1,5 @@
 "use client";
 
-import CheckoutPage from "@/screens/Checkout/Checkout";
+import CheckoutPage from "@/features/checkout/screens/Checkout";
 
 export default CheckoutPage;

@@ -1,11 +1,11 @@
-import { chefUpstream } from "@/lib/chef-errors";
-import { boundedFetch } from "@/lib/bounded-fetch";
+import { chefUpstream } from "@/features/chef/lib/chef-errors";
+import { boundedFetch } from "@/shared/lib/bounded-fetch";
 import { NextRequest, NextResponse } from "next/server";
 import {
   isCanonicalUuid,
   parseChefOrderResponse,
-} from "@/lib/chef-order-contract";
-import { isSameOrigin } from "@/lib/request-security";
+} from "@/features/chef/lib/chef-order-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
 
 export const dynamic = "force-dynamic";
 

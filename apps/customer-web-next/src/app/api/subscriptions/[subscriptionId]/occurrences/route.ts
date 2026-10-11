@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseSubscriptionOccurrences } from "@/lib/subscription-lifecycle-contract";
-import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
+import { parseSubscriptionOccurrences } from "@/features/meal-plans/lib/subscription-lifecycle-contract";
+import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 

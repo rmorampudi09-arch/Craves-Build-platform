@@ -1,5 +1,5 @@
 "use client";
 
-import DishDetailPage from "@/screens/public/FoodDetails/FoodDetails";
+import DishDetailPage from "@/features/dish/screens/FoodDetails";
 
 export default DishDetailPage;

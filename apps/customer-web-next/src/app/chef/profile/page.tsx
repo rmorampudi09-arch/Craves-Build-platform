@@ -1,6 +1,6 @@
 "use client";
 
-import { chefApiError, chefErrorText } from "@/lib/chef-errors";
+import { chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";
 import { useEffect, useState, type ComponentType } from "react";
 import {
@@ -19,9 +19,9 @@ import {
   Store,
   UserRound,
 } from "lucide-react";
-import { ChefAccessBoundary } from "@/components/chef-access-boundary";
+import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
 import { switchToCustomerApp, useChefSignOut } from "@/components/chef-account-menu";
-import { ChefPageHeader } from "@/components/chef-page-header";
+import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
 import { ChefPill, ChefSkeleton } from "@/components/chef-ui";
 
 type Application = { firstName:string|null; lastName:string|null; status:string };

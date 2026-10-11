@@ -1,5 +1,5 @@
-import { SubscriptionDetails } from "@/components/subscription-details";
-import { isUuid } from "@/lib/server-api";
+import { SubscriptionDetails } from "@/features/meal-plans/components/subscription-details";
+import { isUuid } from "@/shared/lib/server-api";
 import { MealPlanPage } from "../meal-plan-page";
 
 export const metadata = { title: "Your meal plan | Craves", robots: { index: false, follow: false } };

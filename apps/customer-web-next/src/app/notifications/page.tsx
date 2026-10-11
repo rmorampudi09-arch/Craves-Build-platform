@@ -1,7 +1,7 @@
 "use client";
 
-import { ContextualBackBoundary } from "@/components/navigation/ContextualBackBoundary";
-import NotificationsPage from "@/screens/Notifications/Notifications";
+import { ContextualBackBoundary } from "@/shared/components/navigation/ContextualBackBoundary";
+import NotificationsPage from "@/features/notifications/screens/Notifications";
 
 export default function NotificationsRoutePage() {
   return (

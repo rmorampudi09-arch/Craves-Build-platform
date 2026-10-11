@@ -1,7 +1,7 @@
-import { chefUpstream } from "@/lib/chef-errors";
+import { chefUpstream } from "@/features/chef/lib/chef-errors";
 import { NextRequest, NextResponse } from "next/server";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
-import { parseChefApplicationReadiness } from "@/lib/chef-readiness-contract";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
+import { parseChefApplicationReadiness } from "@/features/chef/lib/chef-readiness-contract";
 
 function unavailable(status: number, raw: unknown = null) {
   return NextResponse.json({ message: status === 401 ? "Please sign in again." : "Application readiness is temporarily unavailable. Please try again.", ...chefUpstream(raw) },

@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { isChefModeVerified } from "@/lib/chef-mode";
-import { getSession, subscribeSession } from "@/services/auth/cravesAuth";
+import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 
 // Reachable from Chef Mode: the chef app, legal and help pages, sign-in, and the separate admin portal.
 const OPEN_PATHS = [

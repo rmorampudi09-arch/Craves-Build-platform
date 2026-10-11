@@ -1,5 +1,5 @@
-import { ChefAccessBoundary } from "@/components/chef-access-boundary";
-import { ChefMenuManager } from "@/components/chef-menu-manager";
+import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
+import { ChefMenuManager } from "@/features/chef/components/chef-menu-manager";
 
 export const metadata = {
   title: "My menu | Craves",

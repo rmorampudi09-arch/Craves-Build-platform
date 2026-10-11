@@ -1,8 +1,8 @@
-import { boundBffRequest } from "@/lib/bff-request-limits";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
-import { parseAddressInput, parseCustomerAddress } from "@/lib/address-contract";
-import { isSameOrigin } from "@/lib/request-security";
-import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
+import { parseAddressInput, parseCustomerAddress } from "@/features/addresses/lib/address-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 function failure(status: number) { return NextResponse.json({ error: status === 401 ? "SESSION_REQUIRED" : status === 404 ? "ADDRESS_NOT_FOUND" : "ADDRESS_REQUEST_FAILED", message: status === 401 ? "Please sign in again." : status === 404 ? "Address was not found." : "Address request could not be completed." }, { status }); }
 async function idFrom(context: { params: Promise<{ addressId: string }> }) { const { addressId } = await context.params; return isUuid(addressId) ? addressId : null; }
 export async function GET(request: NextRequest, context: { params: Promise<{ addressId: string }> }) { const id = await idFrom(context); if (!id) return failure(400); try { const upstream = await authenticatedApiFetch(request, `/customer/addresses/${id}`); const body = await upstream.json().catch(() => null); if (!upstream.ok) return failure(upstream.status); const address = parseCustomerAddress(body); return address ? NextResponse.json(address, { headers: { "Cache-Control": "no-store" } }) : failure(502); } catch (error) { return error instanceof SessionRequiredError ? failure(401) : failure(503); } }

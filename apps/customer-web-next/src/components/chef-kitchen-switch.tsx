@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import { LifeBuoy, Store } from "lucide-react";
-import { AppleSwitch } from "@/components/ui/AppleSwitch";
-import { ChefError, chefApiError, chefErrorText } from "@/lib/chef-errors";
-import { parseChefKitchen } from "@/lib/chef-kitchen-contract";
-import type { ChefKitchen, ChefKitchenInput } from "@/lib/chef-kitchen-types";
-import { sessionFetch } from "@/services/auth/sessionFetch";
+import { AppleSwitch } from "@/shared/ui/AppleSwitch";
+import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
+import { parseChefKitchen } from "@/features/chef/lib/chef-kitchen-contract";
+import type { ChefKitchen, ChefKitchenInput } from "@/features/chef/lib/chef-kitchen-types";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 /** The saved kitchen with only open/closed changed: the same body the kitchen form saves. Nothing else is filled in. */
 export function kitchenWithStatus(kitchen: ChefKitchen, status: "ACTIVE" | "INACTIVE"): ChefKitchenInput {

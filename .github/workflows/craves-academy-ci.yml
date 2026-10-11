@@ -6,9 +6,9 @@ on:
     paths:
       - 'services/auth-service/**'
       - 'apps/customer-web-next/src/**/academy/**'
-      - 'apps/customer-web-next/src/lib/academy-*'
-      - 'apps/customer-web-next/src/components/admin-workspace.tsx'
-      - 'apps/customer-web-next/src/components/academy-workspace.tsx'
+      - 'apps/customer-web-next/src/features/admin/academy/lib/academy-*'
+      - 'apps/customer-web-next/src/features/admin/shell/components/admin-workspace.tsx'
+      - 'apps/customer-web-next/src/features/admin/academy/components/academy-workspace.tsx'
       - 'scripts/academy/**'
       - 'docs/academy/**'
       - 'azure-pipelines-auth-service.yml'
@@ -134,8 +134,8 @@ jobs:
           cache: npm
           cache-dependency-path: apps/customer-web-next/package-lock.json
       - run: npm ci
-      - run: node --test --experimental-strip-types src/lib/academy-*.test.ts
-      - run: npx eslint src/app/admin/academy src/app/api/admin/academy src/lib/academy-route-policy.ts src/lib/academy-ux-state.ts src/components/academy-workspace.tsx --max-warnings=0
+      - run: node --test --experimental-strip-types src/features/admin/academy/lib/academy-*.test.ts
+      - run: npx eslint src/app/admin/academy src/app/api/admin/academy src/features/admin/academy/lib/academy-route-policy.ts src/features/admin/academy/lib/academy-ux-state.ts src/features/admin/academy/components/academy-workspace.tsx --max-warnings=0
       - run: npm run typecheck
       - run: npm run build
         env:

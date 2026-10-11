@@ -1,5 +1,5 @@
-import { ContextualBackBoundary } from "@/components/navigation/ContextualBackBoundary";
-import { SubscriptionManager } from "@/components/subscription-manager";
+import { ContextualBackBoundary } from "@/shared/components/navigation/ContextualBackBoundary";
+import { SubscriptionManager } from "@/features/meal-plans/components/subscription-manager";
 import { MealPlanPage } from "./meal-plan-page";
 
 export const metadata = {

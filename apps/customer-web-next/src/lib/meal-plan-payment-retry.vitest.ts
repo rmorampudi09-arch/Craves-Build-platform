@@ -3,7 +3,7 @@
 import { createElement } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { SubscriptionRazorpayPayment } from "@/components/subscription-razorpay-payment";
+import { SubscriptionRazorpayPayment } from "@/features/meal-plans/components/subscription-razorpay-payment";
 
 const SUBSCRIPTION_ID = "11111111-1111-4111-8111-111111111111";
 const PLAN_ID = "22222222-2222-4222-8222-222222222222";

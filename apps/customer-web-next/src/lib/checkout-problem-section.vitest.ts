@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkoutProblem } from "@/screens/Checkout/Checkout";
+import { checkoutProblem } from "@/features/checkout/screens/Checkout";
 
 describe("checkout problems show in the section that fixes them", () => {
   it.each([

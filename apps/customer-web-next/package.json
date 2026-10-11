@@ -11,9 +11,9 @@
     "build": "next build",
     "standalone:prepare": "node scripts/prepare-standalone.mjs",
     "start": "npm run standalone:prepare && node .next/standalone/server.js",
-    "lint": "eslint . --max-warnings=0",
+    "lint": "eslint . --max-warnings=0 && node scripts/features/check-boundaries.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/verify-landing-hero.mjs && vitest run && node --test --experimental-strip-types src/lib/*.test.ts",
+    "test": "node scripts/verify-landing-hero.mjs && vitest run && node --test --experimental-strip-types \"src/**/*.test.ts\"",
     "verify": "npm run lint && npm run typecheck && npm run test && npm run build",
     "format": "prettier --write ."
   },

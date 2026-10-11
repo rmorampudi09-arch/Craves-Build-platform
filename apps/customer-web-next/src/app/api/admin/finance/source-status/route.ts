@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
-import { sourceStatusSchema } from "@/lib/finance-source-contract";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
+import { sourceStatusSchema } from "@/features/admin/finance/lib/finance-source-contract";
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const headers = {"Cache-Control": "no-store"};

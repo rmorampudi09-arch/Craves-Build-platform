@@ -1,5 +1,5 @@
-import { AdminPageIntro } from "@/components/admin-page-intro";
-import { AdminHomeBanners } from "@/components/admin-home-banners";
+import { AdminPageIntro } from "@/features/admin/shell/components/admin-page-intro";
+import { AdminHomeBanners } from "@/features/admin/banners/components/admin-home-banners";
 
 export const metadata = { title: "Home banners | Craves Admin", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";

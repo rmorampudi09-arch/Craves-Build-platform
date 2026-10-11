@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
-import { CravesLogo } from "@/components/brand/CravesLogo";
-import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
+import { CravesLogo } from "@/shared/components/brand/CravesLogo";
+import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
 
 /** White meal-plan page: back link, one h1, optional one-line intro. */
 export function MealPlanPage({

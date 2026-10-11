@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CustomerOrder } from "./order-contract";
+import type { CustomerOrder } from "../features/orders/lib/order-contract";
 
 const cart = vi.hoisted(() => ({ addToCart: vi.fn(async () => undefined), loadCart: vi.fn(async () => []) }));
 const menu = vi.hoisted(() => ({ loadKitchenMenu: vi.fn() }));
-vi.mock("@/services/api/cravesCart", () => ({ addToCart: cart.addToCart, loadCart: cart.loadCart, CartKeptError: class extends Error {} }));
-vi.mock("@/services/api/dishes", () => ({ loadKitchenMenu: menu.loadKitchenMenu }));
+vi.mock("@/features/cart/api/cravesCart", () => ({ addToCart: cart.addToCart, loadCart: cart.loadCart, CartKeptError: class extends Error {} }));
+vi.mock("@/features/dish/api/dishes", () => ({ loadKitchenMenu: menu.loadKitchenMenu }));
 
-import { reorderIntoCart } from "@/screens/OrderHistory/OrderHistory";
+import { reorderIntoCart } from "@/features/orders/screens/OrderHistory";
 
 const KITCHEN = "11111111-1111-4111-8111-111111111111";
 const PANEER = "22222222-2222-4222-8222-222222222222";

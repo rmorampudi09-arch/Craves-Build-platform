@@ -1,7 +1,7 @@
-import { ChefAccessBoundary } from "@/components/chef-access-boundary";
+import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
 import { ChefPageHead } from "@/components/chef-ui";
-import { ContextualBackBoundary } from "@/components/navigation/ContextualBackBoundary";
-import NotificationsPage from "@/screens/Notifications/Notifications";
+import { ContextualBackBoundary } from "@/shared/components/navigation/ContextualBackBoundary";
+import NotificationsPage from "@/features/notifications/screens/Notifications";
 
 export const metadata = {
   title: "Notifications | Craves Chef",

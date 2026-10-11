@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { PolicyList, PolicySection, PublicPolicyPage } from "@/components/legal/PublicPolicyPage";
+import { PolicyList, PolicySection, PublicPolicyPage } from "@/features/legal/components/PublicPolicyPage";
 
 export const metadata = {
   title: "Terms of Service | Craves",

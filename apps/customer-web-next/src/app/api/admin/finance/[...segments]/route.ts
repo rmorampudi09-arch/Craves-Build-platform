@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { financeProxy } from "@/lib/finance-bff";
+import { financeProxy } from "@/features/admin/finance/lib/finance-bff";
 export const dynamic = "force-dynamic";
 type Context = {params: Promise<{segments: string[]}>};
 export async function GET(request: NextRequest, context: Context) {return financeProxy(request, "admin", (await context.params).segments);}

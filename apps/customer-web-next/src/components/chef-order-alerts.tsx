@@ -2,7 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { BellRing, Megaphone, Volume2 } from "lucide-react";
-import { AppleSwitch } from "@/components/ui/AppleSwitch";
+import { AppleSwitch } from "@/shared/ui/AppleSwitch";
 import {
   canSpeak,
   ringForNewOrder,

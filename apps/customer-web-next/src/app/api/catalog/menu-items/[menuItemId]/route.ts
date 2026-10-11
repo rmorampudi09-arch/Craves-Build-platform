@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   isUuid,
   parsePublicMenuItemDetail,
-} from "@/lib/public-menu-item-contract";
-import { publicApiFetch } from "@/lib/public-api";
+} from "@/features/dish/lib/public-menu-item-contract";
+import { publicApiFetch } from "@/shared/lib/public-api";
 
 function failure(status: number, message: string) {
   return NextResponse.json(

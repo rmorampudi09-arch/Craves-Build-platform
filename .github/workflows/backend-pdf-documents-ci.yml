@@ -14,7 +14,7 @@ on:
       - 'apps/customer-web-next/src/app/api/documents/**'
       - 'apps/customer-web-next/src/app/chef/statements/**'
       - 'apps/customer-web-next/src/app/chef/earnings/page.tsx'
-      - 'apps/customer-web-next/src/screens/OrderHistory/**'
+      - 'apps/customer-web-next/src/features/orders/screens/OrderHistory.tsx'
       - 'scripts/documents/**'
   pull_request:
     types: [opened, reopened, ready_for_review]

@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { SubscriptionEnrollmentForm } from "@/components/subscription-enrollment-form";
-import { isUuid } from "@/lib/server-api";
+import { SubscriptionEnrollmentForm } from "@/features/meal-plans/components/subscription-enrollment-form";
+import { isUuid } from "@/shared/lib/server-api";
 import { MealPlanPage } from "../meal-plan-page";
 
 export const metadata = { title: "Start a meal plan | Craves", robots: { index: false, follow: false } };

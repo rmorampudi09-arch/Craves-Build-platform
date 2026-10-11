@@ -7,7 +7,7 @@ import {
   holdScrollChrome,
   resetScrollChrome,
   useScrollChrome,
-} from "@/components/navigation/AutoHideCustomerHeader";
+} from "@/shared/components/navigation/AutoHideCustomerHeader";
 
 function scrollTo(y: number) {
   Object.defineProperty(window, "scrollY", { configurable: true, value: y });

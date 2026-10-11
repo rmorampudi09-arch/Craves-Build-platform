@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { parseKitchenReviewSummary } from "@/lib/review-summary-contract";
-import { publicApiFetch } from "@/lib/public-api";
-import { isUuid } from "@/lib/server-api";
+import { parseKitchenReviewSummary } from "@/features/dish/lib/review-summary-contract";
+import { publicApiFetch } from "@/shared/lib/public-api";
+import { isUuid } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 

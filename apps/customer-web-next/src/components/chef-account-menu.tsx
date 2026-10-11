@@ -7,9 +7,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/overlays/dropdown-menu";
+} from "@/shared/ui/overlays/dropdown-menu";
 import { clearChefMode } from "@/lib/chef-mode";
-import { clearSession, getSession, subscribeSession, type CravesUser } from "@/services/auth/cravesAuth";
+import { clearSession, getSession, subscribeSession, type CravesUser } from "@/features/auth/api/cravesAuth";
 
 /** The only way from Chef Mode to customer screens; the full load leaves no chef state behind. */
 export function switchToCustomerApp() {

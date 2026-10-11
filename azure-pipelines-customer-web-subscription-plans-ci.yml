@@ -21,7 +21,7 @@ steps:
       set -euo pipefail
       grep -q '/subscriptions/plans' apps/customer-web-next/src/app/api/subscriptions/plans/route.ts
       if grep -REn '(chefIdentityId|customerIdentityId|localStorage|sessionStorage|console\.(log|debug))' \
-        apps/customer-web-next/src/components/subscription-plan-browser.tsx \
+        apps/customer-web-next/src/features/meal-plans/components/subscription-plan-browser.tsx \
         apps/customer-web-next/src/app/subscriptions/plans \
         apps/customer-web-next/src/app/api/subscriptions/plans; then
         echo 'ERROR: Subscription plan runtime exposes internal identities, browser storage or debug logging.' >&2

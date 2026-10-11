@@ -1,5 +1,5 @@
-import { ChefApplicationSessionBoundary } from "@/components/chef-application-session-boundary";
-import { ChefApplicationStatus } from "@/components/chef-application-status";
+import { ChefApplicationSessionBoundary } from "@/features/chef-onboarding/components/chef-application-session-boundary";
+import { ChefApplicationStatus } from "@/features/chef-onboarding/components/chef-application-status";
 
 export const dynamic = "force-dynamic";
 export const metadata = {

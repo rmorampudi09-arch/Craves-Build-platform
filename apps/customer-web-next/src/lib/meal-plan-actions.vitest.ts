@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MotionGlobalConfig } from "framer-motion";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { SubscriptionDetails } from "@/components/subscription-details";
+import { SubscriptionDetails } from "@/features/meal-plans/components/subscription-details";
 
 const ID = "11111111-1111-4111-8111-111111111111";
 const PLAN = "22222222-2222-4222-8222-222222222222";

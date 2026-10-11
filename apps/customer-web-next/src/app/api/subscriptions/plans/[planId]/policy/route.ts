@@ -1,7 +1,7 @@
-import { boundedFetch } from "@/lib/bounded-fetch";
+import { boundedFetch } from "@/shared/lib/bounded-fetch";
 import { NextResponse } from "next/server";
-import { parseSubscriptionPlanPolicy } from "@/lib/subscription-lifecycle-contract";
-import { apiBaseUrl, isUuid } from "@/lib/server-api";
+import { parseSubscriptionPlanPolicy } from "@/features/meal-plans/lib/subscription-lifecycle-contract";
+import { apiBaseUrl, isUuid } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 

@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   parseCheckoutOperationRequest,
   parseCheckoutOperationResponse,
-} from "@/lib/checkout-operation-contract";
-import { boundBffRequest } from "@/lib/bff-request-limits";
-import { isSameOrigin } from "@/lib/request-security";
+} from "@/features/checkout/lib/checkout-operation-contract";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
+import { isSameOrigin } from "@/shared/lib/request-security";
 import {
   authenticatedApiFetch,
   isUuid,
   SessionRequiredError,
-} from "@/lib/server-api";
+} from "@/shared/lib/server-api";
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)

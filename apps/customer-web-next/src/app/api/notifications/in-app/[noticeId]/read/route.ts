@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isSameOrigin } from "@/lib/request-security";
-import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 export async function PATCH(request: NextRequest, context: { params: Promise<{ noticeId: string }> }) {
   if (!isSameOrigin(request)) return NextResponse.json({ error: "ORIGIN_REJECTED", message: "Invalid notification request origin." }, { status: 403 });
   const { noticeId } = await context.params; if (!isUuid(noticeId)) return NextResponse.json({ error: "INVALID_NOTICE_ID", message: "Notification id is invalid." }, { status: 400 });

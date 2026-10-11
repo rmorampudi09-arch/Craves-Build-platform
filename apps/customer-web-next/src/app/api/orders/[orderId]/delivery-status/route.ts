@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DeliveryStatusContractError, parseDeliveryStatusResponse } from "@/lib/delivery-status";
-import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
+import { DeliveryStatusContractError, parseDeliveryStatusResponse } from "@/features/orders/lib/delivery-status";
+import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest, context: { params: Promise<{ orderId: string }> }) {
   const { orderId } = await context.params; if (!isUuid(orderId)) return NextResponse.json({ error: "INVALID_ORDER_ID", message: "The order identifier is invalid." }, { status: 400 });

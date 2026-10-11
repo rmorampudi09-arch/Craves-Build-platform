@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { onboardingBff } from "@/lib/chef-onboarding-bff";
+import { onboardingBff } from "@/features/chef-onboarding/lib/chef-onboarding-bff";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 async function handle(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {

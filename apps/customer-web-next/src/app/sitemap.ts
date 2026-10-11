@@ -7,7 +7,7 @@ import {
   foodUrl,
   launchCities,
   siteUrl,
-} from "@/lib/seo-craves";
+} from "@/features/seo/lib/seo-craves";
 
 const publicRoutes = [
   "",

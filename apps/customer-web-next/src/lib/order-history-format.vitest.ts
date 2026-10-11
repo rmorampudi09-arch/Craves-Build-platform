@@ -1,6 +1,6 @@
 // Order list dates read like the order page: "Sat, 10 Oct · 12:42 pm".
 import { describe, expect, it } from "vitest";
-import { formatOrderDate } from "@/screens/OrderHistory/OrderHistory";
+import { formatOrderDate } from "@/features/orders/screens/OrderHistory";
 
 describe("order list dates", () => {
   const now = new Date("2026-10-11T06:00:00");

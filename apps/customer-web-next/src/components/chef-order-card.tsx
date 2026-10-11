@@ -14,10 +14,10 @@ import {
   XCircle,
 } from "lucide-react";
 import { ChefPill, chefOrderStatus, formatInr, timeAgo } from "@/components/chef-ui";
-import { ChefOrderActions } from "@/components/chef-order-actions";
+import { ChefOrderActions } from "@/features/chef/components/chef-order-actions";
 import { canSpeak, speakOrder } from "@/lib/chef-order-alert";
 import { shortOrderNumber } from "@/lib/order-number";
-import type { ChefOrder } from "@/lib/chef-order-contract";
+import type { ChefOrder } from "@/features/chef/lib/chef-order-contract";
 
 /** A picture for every order state, so the state reads without the words. */
 export function chefStatusIcon(status: string) {

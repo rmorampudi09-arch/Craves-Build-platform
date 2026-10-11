@@ -2,14 +2,14 @@
 import { createElement, type ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import AddressesPage from "@/screens/Profile/Addresses";
+import AddressesPage from "@/features/addresses/screens/Addresses";
 
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
   Link: ({ children, to, ...props }: { children: ReactNode; to: string }) => createElement("a", { href: to, ...props }, children),
 }));
-vi.mock("@/components/profile/AddressEditorFlow", () => ({ AddressEditorFlow: () => null }));
-vi.mock("@/services/auth/cravesAuth", () => ({
+vi.mock("@/features/addresses/components/AddressEditorFlow", () => ({ AddressEditorFlow: () => null }));
+vi.mock("@/features/auth/api/cravesAuth", () => ({
   loadSession: async () => ({ firstName: "Fixture", lastName: "Customer", phoneNumber: "+910000000000" }),
   invalidateSelectedAddress: vi.fn(),
 }));

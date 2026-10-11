@@ -1,6 +1,6 @@
-import { boundedFetch } from "@/lib/bounded-fetch";
+import { boundedFetch } from "@/shared/lib/bounded-fetch";
 import { NextRequest, NextResponse } from "next/server";
-import { parseChefModeIdentity } from "@/lib/chef-mode-contract";
+import { parseChefModeIdentity } from "@/features/chef/lib/chef-mode-contract";
 
 export const dynamic = "force-dynamic";
 

@@ -33,7 +33,7 @@ describe("legacy on-device wishlist", () => {
       return Response.json(favorite(url.split("/").pop()!));
     });
     vi.stubGlobal("fetch", fetch);
-    const { migrateLegacyWishlist, getCustomerFavoriteIds } = await import("@/services/api/customerFavorites");
+    const { migrateLegacyWishlist, getCustomerFavoriteIds } = await import("@/features/favorites/api/customerFavorites");
 
     await Promise.all([migrateLegacyWishlist(), migrateLegacyWishlist()]);
 
@@ -46,7 +46,7 @@ describe("legacy on-device wishlist", () => {
   it("leaves the device list alone while signed out", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ message: "Please sign in again." }, { status: 401 })));
     const before = window.localStorage.getItem(KEY);
-    const { migrateLegacyWishlist } = await import("@/services/api/customerFavorites");
+    const { migrateLegacyWishlist } = await import("@/features/favorites/api/customerFavorites");
     await migrateLegacyWishlist();
     expect(window.localStorage.getItem(KEY)).toBe(before);
   });

@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { ChefAppHeader } from "@/components/chef-app-header";
-import { ChefWorkspaceNavigation } from "@/components/chef-workspace-navigation";
+import { ChefWorkspaceNavigation } from "@/features/chef/components/chef-workspace-navigation";
 import { ChefOrderWatcher } from "@/components/chef-order-watcher";
-import "./chef-mode.css";
+import "../../features/chef/styles/chef-mode.css";
 
 export default function ChefLayout({children}:{children:ReactNode}) {
  return <div className="chef-panel-theme min-h-screen">

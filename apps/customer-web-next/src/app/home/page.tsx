@@ -1,5 +1,5 @@
 "use client";
 
-import BrowseFoodsPage from "@/screens/public/BrowseFoods/BrowseFoods";
+import BrowseFoodsPage from "@/features/home/screens/BrowseFoods";
 
 export default BrowseFoodsPage;

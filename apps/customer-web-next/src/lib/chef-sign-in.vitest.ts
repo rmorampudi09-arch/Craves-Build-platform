@@ -5,15 +5,15 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ChefSignIn } from "../components/chef-sign-in";
 import { isChefModeVerified, markChefModeVerified } from "./chef-mode";
-import { captureSessionContext, invalidateSession, setSessionIdentity } from "../services/auth/cravesAuth";
-import type { CravesIdentity } from "./auth-contract";
+import { captureSessionContext, invalidateSession, setSessionIdentity } from "../features/auth/api/cravesAuth";
+import type { CravesIdentity } from "../features/auth/lib/auth-contract";
 
 const mocks = vi.hoisted(() => ({ msg91: vi.fn(), navigate: vi.fn() }));
 vi.mock("firebase/auth", () => ({ RecaptchaVerifier: class { render = vi.fn(); clear = vi.fn(); }, signInWithPhoneNumber: vi.fn() }));
-vi.mock("@/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
-vi.mock("@/lib/msg91-browser", () => ({ beginMsg91PhoneSignIn: mocks.msg91, parkMsg91Captcha: vi.fn() }));
+vi.mock("@/features/auth/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
+vi.mock("@/features/sign-in/lib/msg91-browser", () => ({ beginMsg91PhoneSignIn: mocks.msg91, parkMsg91Captcha: vi.fn() }));
 // next/image needs a real location; the logo is not under test here.
-vi.mock("../components/brand/CravesLogo", () => ({ CravesLogo: () => null }));
+vi.mock("../shared/components/brand/CravesLogo", () => ({ CravesLogo: () => null }));
 
 const customer: CravesIdentity = { id: "31111111-1111-4111-8111-111111111111", phoneNumber: "+919876543210", displayName: "Fixture", email: null, emailVerified: false, status: "ACTIVE", roles: ["CUSTOMER"] };
 let application: { status: string; documents: [] };

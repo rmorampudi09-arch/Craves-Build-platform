@@ -3,7 +3,7 @@
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { CustomerOrderStatus } from "../components/order/CustomerOrderStatus";
+import { CustomerOrderStatus } from "../features/orders/components/CustomerOrderStatus";
 
 const fixture = vi.hoisted(() => ({
   id: "0bde0000-0000-4000-8000-000000000010",
@@ -11,7 +11,7 @@ const fixture = vi.hoisted(() => ({
   push: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: fixture.push, replace: vi.fn() }) }));
-vi.mock("../components/tracking/TrackingHeader", () => ({
+vi.mock("../features/orders/components/TrackingHeader", () => ({
   TrackingHeader: ({ title }: { title: string }) => createElement("header", null, createElement("h1", null, title)),
 }));
 

@@ -1,10 +1,10 @@
-import { boundedFetch } from "@/lib/bounded-fetch";
-import { boundBffRequest } from "@/lib/bff-request-limits";
+import { boundedFetch } from "@/shared/lib/bounded-fetch";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
-import { parseSessionExchange, publicAuthError } from "@/lib/auth-contract";
-import { setSessionCookies } from "@/lib/auth-cookies";
-import { isSameOrigin } from "@/lib/request-security";
-import { apiBaseUrl } from "@/lib/server-api";
+import { parseSessionExchange, publicAuthError } from "@/features/auth/lib/auth-contract";
+import { setSessionCookies } from "@/features/auth/lib/auth-cookies";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { apiBaseUrl } from "@/shared/lib/server-api";
 
 export async function POST(request: NextRequest) {
   const bounded = await boundBffRequest(request);

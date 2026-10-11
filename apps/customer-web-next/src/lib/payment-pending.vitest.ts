@@ -3,13 +3,13 @@
 import { createElement } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CheckoutPaymentButton } from "@/components/checkout/CheckoutPaymentButton";
-import type { CustomerCheckout } from "./checkout-contract";
+import { CheckoutPaymentButton } from "@/features/checkout/components/CheckoutPaymentButton";
+import type { CustomerCheckout } from "../features/checkout/lib/checkout-contract";
 
 const router = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-vi.mock("@/services/auth/sessionFetch", () => ({ sessionFetch: (url: string, init?: RequestInit) => fetch(url, init) }));
-vi.mock("@/services/auth/cravesAuth", () => ({
+vi.mock("@/features/auth/api/sessionFetch", () => ({ sessionFetch: (url: string, init?: RequestInit) => fetch(url, init) }));
+vi.mock("@/features/auth/api/cravesAuth", () => ({
   loadSession: async () => ({ firstName: "Fixture", lastName: "Customer", phoneNumber: "+910000000000", email: null }),
 }));
 

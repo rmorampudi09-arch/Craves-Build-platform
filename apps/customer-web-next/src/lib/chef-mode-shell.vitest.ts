@@ -10,8 +10,8 @@ import ChefMorePage from "../app/chef/profile/page";
 import ChefNotificationsPage from "../app/chef/notifications/page";
 import LegacyChefProfilePage from "../app/chef/[id]/page";
 import { isChefModeVerified, markChefModeVerified } from "./chef-mode";
-import { captureSessionContext, getSession, invalidateSession, setSessionIdentity } from "../services/auth/cravesAuth";
-import type { CravesIdentity } from "./auth-contract";
+import { captureSessionContext, getSession, invalidateSession, setSessionIdentity } from "../features/auth/api/cravesAuth";
+import type { CravesIdentity } from "../features/auth/lib/auth-contract";
 
 const mocks = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn(), assign: vi.fn(), locationReplace: vi.fn() }));
 vi.mock("next/navigation", () => ({

@@ -1,4 +1,4 @@
-import { launchHtml } from "@/lib/web-launch-view";
+import { launchHtml } from "@/features/pilot-launch/lib/web-launch-view";
 export const dynamic = "force-dynamic";
 export function GET() {
   const page = launchHtml(true);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { boundBffRequest } from "@/lib/bff-request-limits";
-import { boundedFetch } from "@/lib/bounded-fetch";
-import { apiBaseUrl } from "@/lib/server-api";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
+import { boundedFetch } from "@/shared/lib/bounded-fetch";
+import { apiBaseUrl } from "@/shared/lib/server-api";
 
 const headers = { "Cache-Control": "private, no-store" };
 export async function POST(request: NextRequest) {

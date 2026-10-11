@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { isSameOrigin } from "@/lib/request-security";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
-import { payoutReconcileRequestSchema, payoutReconcileResponseSchema } from "@/lib/finance-reconciliation-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
+import { payoutReconcileRequestSchema, payoutReconcileResponseSchema } from "@/features/admin/finance/lib/finance-reconciliation-contract";
 
 export const dynamic = "force-dynamic";
 type Context = {params: Promise<{id: string}>};

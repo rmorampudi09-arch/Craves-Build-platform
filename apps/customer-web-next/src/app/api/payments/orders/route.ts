@@ -1,9 +1,9 @@
-import { boundBffRequest } from "@/lib/bff-request-limits";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
-import { parseIdentity } from "@/lib/auth-contract";
-import { parsePaymentCreateInput, parsePaymentSession } from "@/lib/payment-contract";
-import { isSameOrigin } from "@/lib/request-security";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
+import { parseIdentity } from "@/features/auth/lib/auth-contract";
+import { parsePaymentCreateInput, parsePaymentSession } from "@/features/checkout/lib/payment-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 
 export async function POST(request: NextRequest) {
   const bounded = await boundBffRequest(request);

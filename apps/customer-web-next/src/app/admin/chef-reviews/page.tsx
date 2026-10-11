@@ -1,5 +1,5 @@
-import { AdminChefReviewList } from "@/components/admin-chef-review-list";
-import { AdminPageIntro } from "@/components/admin-page-intro";
+import { AdminChefReviewList } from "@/features/admin/chef-review/components/admin-chef-review-list";
+import { AdminPageIntro } from "@/features/admin/shell/components/admin-page-intro";
 
 export const metadata = { title: "Chef applications | Craves Admin", robots: { index: false, follow: false } };
 

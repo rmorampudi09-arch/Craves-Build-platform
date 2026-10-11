@@ -43,7 +43,7 @@ steps:
       grep -Fq 'CASHFREE_API_ENABLED=false' azure-pipelines-razorpay-environment.yml
       grep -Fq 'X-Razorpay-Signature' infra/apim/customer-payments/razorpay-webhook-policy.xml
       ! grep -Fq 'validate-jwt' infra/apim/customer-payments/razorpay-webhook-policy.xml
-      grep -Fq 'checkout.razorpay.com/v1/checkout.js' apps/customer-web-next/src/components/checkout/RazorpayPayment.tsx
-      grep -Fq 'checkout.razorpay.com/v1/checkout.js' apps/customer-web-next/src/components/subscription-razorpay-payment.tsx
-      ! rg -n 'sdk.cashfree.com' apps/customer-web-next/src/components/checkout apps/customer-web-next/src/components/subscription-razorpay-payment.tsx
+      grep -Fq 'checkout.razorpay.com/v1/checkout.js' apps/customer-web-next/src/features/checkout/components/RazorpayPayment.tsx
+      grep -Fq 'checkout.razorpay.com/v1/checkout.js' apps/customer-web-next/src/features/meal-plans/components/subscription-razorpay-payment.tsx
+      ! rg -n 'sdk.cashfree.com' apps/customer-web-next/src/features/checkout/components apps/customer-web-next/src/features/meal-plans/components/subscription-razorpay-payment.tsx
     displayName: Verify provider switch is Razorpay-only and fail-closed

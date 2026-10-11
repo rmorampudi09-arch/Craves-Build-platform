@@ -1,0 +1,297 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
+
+const mocks = vi.hoisted(() => ({ catalog: vi.fn(), maps: vi.fn(), search: vi.fn(), image: vi.fn() }));
+vi.mock("@/shared/lib/public-api", () => ({ publicApiFetch: mocks.catalog }));
+vi.mock("@/features/addresses/lib/server/ola-maps", () => ({ reverseGeocodeWithOlaMaps: mocks.maps, searchOlaMapsAddresses: mocks.search, renderOlaMapsStaticImage: mocks.image }));
+
+beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+afterEach(() => { vi.restoreAllMocks(); });
+
+const address = { formattedAddress: "Fixture address", city: "Fixture city" };
+function location(body: unknown = { latitude: 0, longitude: 0 }, headers: Record<string, string> = {}) {
+  return new NextRequest("https://craves.in/api/location/reverse-geocode", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "https://craves.in", ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
+describe("kitchen discovery request boundary", () => {
+  for (const query of [
+    "", "latitude=0", "longitude=0", "latitude=&longitude=0", "latitude=%20&longitude=0",
+    "latitude=0&longitude=", "latitude=0&longitude=%09", "latitude=0x10&longitude=0",
+    "latitude=NaN&longitude=0", "latitude=Infinity&longitude=0", "latitude=90.001&longitude=0",
+    "latitude=-90.001&longitude=0", "latitude=0&longitude=180.001", "latitude=0&longitude=-180.001",
+    "latitude=0&latitude=1&longitude=0", "latitude=0&longitude=0&size=1&size=2",
+    "latitude=0&longitude=0&unknown=1", "latitude=0&longitude=0&radiusMeters=",
+    "latitude=0&longitude=0&radiusMeters=0", "latitude=0&longitude=0&radiusMeters=50001",
+    "latitude=0&longitude=0&page=-1", "latitude=0&longitude=0&page=1.5",
+    "latitude=0&longitude=0&page=1001", "latitude=0&longitude=0&page=9007199254740992",
+    "latitude=0&longitude=0&size=0", "latitude=0&longitude=0&size=51",
+    "latitude=0&longitude=0&size=1e1", `latitude=${"0".repeat(33)}&longitude=0`,
+    `latitude=0&longitude=0&${"x".repeat(256)}`,
+  ]) it(`denies invalid query without Catalog: ${query.slice(0, 70)}`, async () => {
+    const { GET } = await import("../../../app/api/discovery/kitchens/route");
+    const response = await GET(new NextRequest(`https://craves.in/api/discovery/kitchens?${query}`));
+    expect(response.status).toBe(400);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(mocks.catalog).not.toHaveBeenCalled();
+  });
+
+  for (const [latitude, longitude] of [[0, 0], [-90, -180], [90, 180], [0.0000001, -0.0000001]]) {
+    it(`preserves legitimate coordinates ${latitude},${longitude} and defaults`, async () => {
+      const { GET } = await import("../../../app/api/discovery/kitchens/route");
+      mocks.catalog.mockResolvedValue(Response.json({ latitude, longitude, radiusMeters: 50_000,
+        page: { page: 0, size: 20, totalElements: 0, totalPages: 0, hasNext: false }, kitchens: [] }));
+      const params = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude) });
+      expect((await GET(new NextRequest(`https://craves.in/api/discovery/kitchens?${params}`))).status).toBe(200);
+      expect(mocks.catalog).toHaveBeenCalledWith(`/discovery/kitchens?${new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), radiusMeters: "50000", page: "0", size: "20" })}`);
+    });
+  }
+  it("accepts the inclusive discovery bounds", async () => {
+    const { GET } = await import("../../../app/api/discovery/kitchens/route");
+    mocks.catalog.mockResolvedValue(Response.json({ latitude: 0, longitude: 0, radiusMeters: 50_000,
+      page: { page: 1_000, size: 50, totalElements: 0, totalPages: 0, hasNext: false }, kitchens: [] }));
+    const response = await GET(new NextRequest("https://craves.in/api/discovery/kitchens?latitude=0&longitude=0&radiusMeters=50000&page=1000&size=50"));
+    expect(response.status).toBe(200);
+    expect(mocks.catalog).toHaveBeenCalledOnce();
+  });
+});
+
+describe("dish discovery 50 km availability boundary", () => {
+  for (const radius of [undefined, "50000", "10000"]) {
+    it(`uses the requested customer location and radius ${radius ?? "default"}`, async () => {
+      const { GET } = await import("../../../app/api/discovery/menu-items/route");
+      const radiusMeters = Number(radius ?? "50000");
+      mocks.catalog.mockResolvedValue(Response.json({ latitude: 17.4483, longitude: 78.3915, radiusMeters,
+        page: { page: 0, size: 20, totalElements: 0, totalPages: 0, hasNext: false }, menuItems: [] }));
+      const params = new URLSearchParams({ latitude: "17.4483", longitude: "78.3915" });
+      if (radius !== undefined) params.set("radiusMeters", radius);
+      const response = await GET(new NextRequest(`https://craves.in/api/discovery/menu-items?${params}`));
+      expect(response.status).toBe(200);
+      expect(mocks.catalog).toHaveBeenCalledWith(`/discovery/menu-items?latitude=17.4483&longitude=78.3915&radiusMeters=${radiusMeters}&page=0&size=20`);
+    });
+  }
+  for (const radius of ["50001", "100000", "0", "50000.5"]) {
+    it(`rejects unsupported radius ${radius} before querying Catalog`, async () => {
+      const { GET } = await import("../../../app/api/discovery/menu-items/route");
+      const response = await GET(new NextRequest(`https://craves.in/api/discovery/menu-items?latitude=17.4483&longitude=78.3915&radiusMeters=${radius}`));
+      expect(response.status).toBe(400);
+      expect(mocks.catalog).not.toHaveBeenCalled();
+    });
+  }
+});
+
+describe("anonymous reverse geocoding bounded admission", () => {
+  it("keeps zero coordinates valid without an authentication cookie", async () => {
+    const { POST } = await import("../../../app/api/location/reverse-geocode/route");
+    mocks.maps.mockResolvedValue(address);
+    const response = await POST(location());
+    expect(response.status).toBe(200);
+    expect(mocks.maps).toHaveBeenCalledWith(0, 0);
+    expect(await response.json()).toEqual(address);
+  });
+
+  it("rejects invalid coordinates before consuming the global provider budget", async () => {
+    const { POST } = await import("../../../app/api/location/reverse-geocode/route");
+    mocks.maps.mockResolvedValue(address);
+    for (let i = 0; i < 40; i += 1) {
+      expect((await POST(location({ latitude: "0", longitude: 0 }))).status).toBe(400);
+    }
+    for (const body of [null, {}, [], { latitude: 91, longitude: 0 }, { latitude: 0, longitude: -181 }, { latitude: null, longitude: 0 }]) {
+      expect((await POST(location(body))).status).toBe(400);
+    }
+    expect(mocks.maps).not.toHaveBeenCalled();
+    for (let i = 0; i < 30; i += 1) expect((await POST(location())).status).toBe(200);
+    expect(mocks.maps).toHaveBeenCalledTimes(30);
+  });
+
+  it("cannot gain extra rolling budgets with spoofed forwarding headers", async () => {
+    let now = 100_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const { POST } = await import("../../../app/api/location/reverse-geocode/route");
+    mocks.maps.mockResolvedValue(address);
+    for (let i = 0; i < 30; i += 1) {
+      expect((await POST(location(undefined, { "x-forwarded-for": `192.0.2.${i}`, "x-azure-clientip": `198.51.100.${i}` }))).status).toBe(200);
+    }
+    for (let i = 0; i < 10; i += 1) {
+      const response = await POST(location(undefined, { "x-forwarded-for": `203.0.113.${i}`, "x-azure-clientip": `spoof-${i}` }));
+      expect(response.status).toBe(429);
+      expect(response.headers.get("retry-after")).toBe("60");
+    }
+    now += 59_999;
+    expect((await POST(location())).status).toBe(429);
+    expect(mocks.maps).toHaveBeenCalledTimes(30);
+    now += 1;
+    expect((await POST(location())).status).toBe(200);
+    expect(mocks.maps).toHaveBeenCalledTimes(31);
+  });
+
+  it("limits concurrent calls to four and releases the slot on provider failure", async () => {
+    const { POST } = await import("../../../app/api/location/reverse-geocode/route");
+    const pending: Array<{ resolve: (value: unknown) => void; reject: (reason: Error) => void }> = [];
+    mocks.maps.mockImplementation(() => new Promise((resolve, reject) => pending.push({ resolve, reject })));
+    const active = Array.from({ length: 4 }, () => POST(location()));
+    await vi.waitFor(() => expect(mocks.maps).toHaveBeenCalledTimes(4));
+    const denied = await POST(location(undefined, { "x-forwarded-for": "new-value" }));
+    expect(denied.status).toBe(429);
+    expect(denied.headers.get("retry-after")).toBe("1");
+    expect(mocks.maps).toHaveBeenCalledTimes(4);
+    pending[0].reject(new Error("fixture private provider context"));
+    expect((await active[0]).status).toBe(503);
+    const replacement = POST(location());
+    await vi.waitFor(() => expect(mocks.maps).toHaveBeenCalledTimes(5));
+    for (const item of pending.slice(1)) item.resolve(address);
+    expect((await replacement).status).toBe(200);
+    expect((await Promise.all(active.slice(1))).every(response => response.status === 200)).toBe(true);
+  });
+
+  it("counts failed provider starts but never logs or returns their private context", async () => {
+    const { POST } = await import("../../../app/api/location/reverse-geocode/route");
+    const logger = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.maps.mockRejectedValue(new Error("fixture bearer token and provider address"));
+    for (let i = 0; i < 30; i += 1) {
+      const response = await POST(location());
+      expect(response.status).toBe(503);
+      expect(await response.text()).not.toContain("fixture bearer");
+    }
+    expect((await POST(location())).status).toBe(429);
+    expect(mocks.maps).toHaveBeenCalledTimes(30);
+    expect(logger).not.toHaveBeenCalled();
+  });
+
+  it("denies cross-origin and oversized requests without any provider call", async () => {
+    const { POST } = await import("../../../app/api/location/reverse-geocode/route");
+    expect((await POST(location(undefined, { Origin: "https://attacker.invalid" }))).status).toBe(403);
+    expect((await POST(location({ latitude: 0, longitude: 0, padding: "x".repeat(1_025) }))).status).toBe(413);
+    expect(mocks.maps).not.toHaveBeenCalled();
+  });
+});
+
+function search(body: unknown = { query: "Madhapur" }, headers: Record<string, string> = {}) {
+  return new NextRequest("https://craves.in/api/location/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "https://craves.in", ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
+const searchResult = {
+  id: "ola-platform:madhapur", title: "Madhapur", subtitle: "Hyderabad, Telangana, India",
+  formattedAddress: "Madhapur, Hyderabad, Telangana, India", latitude: 17.4483, longitude: 78.3915,
+  houseNumber: null, street: null, area: null, district: null, city: null, state: null, postalCode: null,
+};
+
+describe("anonymous location search provider boundary", () => {
+  it("rejects short, oversized and half-located queries before the provider", async () => {
+    const { POST } = await import("../../../app/api/location/search/route");
+    for (const body of [null, {}, { query: "M" }, { query: "   " }, { query: "x".repeat(161) },
+      { query: "Madhapur", latitude: 17.4 }, { query: "Madhapur", latitude: 91, longitude: 78 }]) {
+      expect((await POST(search(body))).status).toBe(400);
+    }
+    expect(mocks.search).not.toHaveBeenCalled();
+  });
+
+  it("passes the trimmed query and optional bias point and returns results privately", async () => {
+    const { POST } = await import("../../../app/api/location/search/route");
+    mocks.search.mockResolvedValue([searchResult]);
+    const response = await POST(search({ query: "  Madhapur ", latitude: 17.385, longitude: 78.4867 }));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(mocks.search).toHaveBeenCalledWith("Madhapur", 17.385, 78.4867, expect.any(AbortSignal));
+    expect(await response.json()).toEqual({ results: [searchResult] });
+  });
+
+  it("returns an empty list for zero matches", async () => {
+    const { POST } = await import("../../../app/api/location/search/route");
+    mocks.search.mockResolvedValue([]);
+    const response = await POST(search({ query: "zzzzzz" }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ results: [] });
+  });
+
+  it("maps provider errors and timeouts to a generic 503 without private context", async () => {
+    const { POST } = await import("../../../app/api/location/search/route");
+    const logger = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.search
+      .mockRejectedValueOnce(new Error("fixture api_key=secret-value"))
+      .mockRejectedValueOnce(new DOMException("Upstream deadline exceeded", "AbortError"));
+    for (let i = 0; i < 2; i += 1) {
+      const response = await POST(search());
+      expect(response.status).toBe(503);
+      const body = await response.text();
+      expect(body).not.toContain("secret-value");
+      expect(JSON.parse(body).error).toBe("LOCATION_SEARCH_UNAVAILABLE");
+    }
+    expect(logger).not.toHaveBeenCalled();
+  });
+
+  it("admits at most 120 typeahead searches per rolling minute", async () => {
+    const { POST } = await import("../../../app/api/location/search/route");
+    mocks.search.mockResolvedValue([]);
+    for (let i = 0; i < 120; i += 1) expect((await POST(search())).status).toBe(200);
+    const limited = await POST(search());
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBeTruthy();
+    expect(mocks.search).toHaveBeenCalledTimes(120);
+  });
+
+  it("limits concurrent searches to eight and frees slots when the provider fails", async () => {
+    const { POST } = await import("../../../app/api/location/search/route");
+    const pending: Array<{ resolve: (value: unknown) => void; reject: (reason: Error) => void }> = [];
+    mocks.search.mockImplementation(() => new Promise((resolve, reject) => pending.push({ resolve, reject })));
+    const active = Array.from({ length: 8 }, () => POST(search()));
+    await vi.waitFor(() => expect(mocks.search).toHaveBeenCalledTimes(8));
+    const denied = await POST(search());
+    expect(denied.status).toBe(429);
+    pending[0].reject(new DOMException("aborted", "AbortError"));
+    expect((await active[0]).status).toBe(503);
+    const replacement = POST(search());
+    await vi.waitFor(() => expect(mocks.search).toHaveBeenCalledTimes(9));
+    for (const item of pending.slice(1)) item.resolve([]);
+    expect((await replacement).status).toBe(200);
+  });
+
+  it("denies cross-origin searches without a provider call", async () => {
+    const { POST } = await import("../../../app/api/location/search/route");
+    expect((await POST(search(undefined, { Origin: "https://attacker.invalid" }))).status).toBe(403);
+    expect(mocks.search).not.toHaveBeenCalled();
+  });
+});
+
+function mapImage(query = "latitude=17.4483&longitude=78.3915&zoom=17", headers: Record<string, string> = { "sec-fetch-site": "same-origin" }) {
+  return new NextRequest(`https://craves.in/api/location/map-image?${query}`, { headers });
+}
+
+describe("same-origin static map boundary", () => {
+  it("rejects cross-site and invalid map requests before the provider", async () => {
+    const { GET } = await import("../../../app/api/location/map-image/route");
+    expect((await GET(mapImage(undefined, { "sec-fetch-site": "cross-site", referer: "https://attacker.invalid/" }))).status).toBe(403);
+    for (const query of ["latitude=91&longitude=0&zoom=17", "latitude=0&longitude=181&zoom=17",
+      "latitude=0&longitude=0&zoom=11", "latitude=0&longitude=0&zoom=21", "latitude=0&longitude=0&zoom=16.5",
+      "latitude=x&longitude=0"]) {
+      expect((await GET(mapImage(query))).status).toBe(400);
+    }
+    expect(mocks.image).not.toHaveBeenCalled();
+  });
+
+  it("returns provider image bytes as a private, non-cacheable response", async () => {
+    const { GET } = await import("../../../app/api/location/map-image/route");
+    mocks.image.mockResolvedValue({ bytes: new Uint8Array([137, 80, 78, 71]), contentType: "image/png" });
+    const response = await GET(mapImage());
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual([137, 80, 78, 71]);
+    expect(mocks.image).toHaveBeenCalledWith(17.4483, 78.3915, 17);
+  });
+
+  it("returns a generic 503 when the provider image fails", async () => {
+    const { GET } = await import("../../../app/api/location/map-image/route");
+    mocks.image.mockRejectedValue(new Error("fixture api_key=secret-value"));
+    const response = await GET(mapImage());
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain("secret-value");
+  });
+});

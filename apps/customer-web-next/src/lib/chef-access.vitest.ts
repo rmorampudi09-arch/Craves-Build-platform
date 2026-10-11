@@ -3,10 +3,10 @@
 import { createElement } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ChefAccessBoundary } from "../components/chef-access-boundary";
+import { ChefAccessBoundary } from "../features/chef/components/chef-access-boundary";
 import { isChefModeVerified, markChefModeVerified } from "./chef-mode";
-import { getSession, setSessionIdentity } from "../services/auth/cravesAuth";
-import type { CravesIdentity } from "./auth-contract";
+import { getSession, setSessionIdentity } from "../features/auth/api/cravesAuth";
+import type { CravesIdentity } from "../features/auth/lib/auth-contract";
 
 const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => navigation }));

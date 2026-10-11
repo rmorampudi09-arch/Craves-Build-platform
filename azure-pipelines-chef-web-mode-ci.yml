@@ -20,11 +20,11 @@ steps:
     displayName: Build and test chef web shell
   - script: |
       set -euo pipefail
-      grep -q 'chefEnabled' apps/customer-web-next/src/lib/chef-mode-contract.ts
+      grep -q 'chefEnabled' apps/customer-web-next/src/features/chef/lib/chef-mode-contract.ts
       grep -q 'craves_access_token' apps/customer-web-next/src/app/api/chef/me/route.ts
       if grep -REn '(localStorage|sessionStorage|console\.(log|debug)|accessToken)' \
         apps/customer-web-next/src/app/chef \
-        apps/customer-web-next/src/components/chef-mode-dashboard.tsx; then
+        apps/customer-web-next/src/features/chef/components/chef-mode-dashboard.tsx; then
         echo 'ERROR: Chef web shell exposes insecure storage, tokens or debug logging.' >&2
         exit 1
       fi

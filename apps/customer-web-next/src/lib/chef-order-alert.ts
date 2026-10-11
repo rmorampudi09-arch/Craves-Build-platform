@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { parseChefOrdersResponse, type ChefOrder } from "@/lib/chef-order-contract";
-import { loadSession } from "@/services/auth/cravesAuth";
-import { sessionFetch } from "@/services/auth/sessionFetch";
+import { parseChefOrdersResponse, type ChefOrder } from "@/features/chef/lib/chef-order-contract";
+import { loadSession } from "@/features/auth/api/cravesAuth";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 /**
  * New-order alerts for chefs who are cooking, not watching the screen: the phone rings,

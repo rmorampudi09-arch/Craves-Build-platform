@@ -4,15 +4,15 @@ import { createElement, type ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UndoToast } from "@/components/ui/overlays/undo-toast";
-import NotificationsPage from "@/screens/Notifications/Notifications";
+import NotificationsPage from "@/features/notifications/screens/Notifications";
 
 const ACCOUNT = "11111111-1111-4111-8111-111111111111";
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
   Link: ({ children, to, ...props }: { children: ReactNode; to: string }) => createElement("a", { href: to, ...props }, children),
 }));
-vi.mock("@/components/brand/CravesLogo", () => ({ CravesLogo: () => createElement("span", null, "Craves") }));
-vi.mock("@/services/auth/cravesAuth", () => ({ loadSession: async () => ({ id: ACCOUNT }) }));
+vi.mock("@/shared/components/brand/CravesLogo", () => ({ CravesLogo: () => createElement("span", null, "Craves") }));
+vi.mock("@/features/auth/api/cravesAuth", () => ({ loadSession: async () => ({ id: ACCOUNT }) }));
 
 afterEach(() => {
   cleanup();

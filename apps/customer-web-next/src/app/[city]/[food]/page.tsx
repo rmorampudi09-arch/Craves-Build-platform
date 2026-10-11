@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { LocalDiscoveryPage } from "@/components/seo/LocalDiscoveryPage";
+import { LocalDiscoveryPage } from "@/features/seo/components/LocalDiscoveryPage";
 import {
   cityBySlug,
   cityFoodUrl,
@@ -9,7 +9,7 @@ import {
   foodIntents,
   launchCities,
   seoKeywords,
-} from "@/lib/seo-craves";
+} from "@/features/seo/lib/seo-craves";
 
 type CityFoodPageProps = {
   params: Promise<{ city: string; food: string }>;

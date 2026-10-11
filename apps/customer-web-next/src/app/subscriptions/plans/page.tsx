@@ -1,4 +1,4 @@
-import { SubscriptionPlanBrowser } from "@/components/subscription-plan-browser";
+import { SubscriptionPlanBrowser } from "@/features/meal-plans/components/subscription-plan-browser";
 import { MealPlanPage } from "../meal-plan-page";
 
 export const metadata = {

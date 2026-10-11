@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseCustomerFavorites } from "@/lib/customer-favorites-contract";
+import { parseCustomerFavorites } from "@/features/favorites/lib/customer-favorites-contract";
 import {
   authenticatedApiFetch,
   SessionRequiredError,
-} from "@/lib/server-api";
+} from "@/shared/lib/server-api";
 
 function failure(status: number, upstreamMessage?: string) {
   const message = upstreamMessage?.trim()

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { AdminChefReviewDetails } from "@/components/admin-chef-review-details";
-import { AdminPageIntro } from "@/components/admin-page-intro";
-import { isUuid } from "@/lib/server-api";
+import { AdminChefReviewDetails } from "@/features/admin/chef-review/components/admin-chef-review-details";
+import { AdminPageIntro } from "@/features/admin/shell/components/admin-page-intro";
+import { isUuid } from "@/shared/lib/server-api";
 
 export const metadata = { title: "Chef review details | Craves Admin", robots: { index: false, follow: false } };
 

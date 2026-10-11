@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { boundBffRequest } from "@/lib/bff-request-limits";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 
 export const dynamic = "force-dynamic";
 

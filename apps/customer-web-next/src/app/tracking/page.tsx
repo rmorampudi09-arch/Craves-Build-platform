@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { isUuid } from "@/lib/delivery-status";
+import { isUuid } from "@/features/orders/lib/delivery-status";
 
 // One tracking screen: old /tracking?id= links land on the order's tracking page.
 export default async function TrackingRoute({

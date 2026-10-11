@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 export const dynamic = "force-dynamic";
 export async function GET(request:NextRequest,context:{params:Promise<{ifsc:string}>}) {
   const headers={"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff"};

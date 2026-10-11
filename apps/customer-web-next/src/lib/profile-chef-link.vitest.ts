@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { chefLink } from "@/screens/Profile/Profile";
-import type { ChefApplication } from "./chef-application-contract";
-import type { CravesUser } from "@/services/auth/cravesAuth";
+import { chefLink } from "@/features/profile/screens/Profile";
+import type { ChefApplication } from "../features/chef-onboarding/lib/chef-application-contract";
+import type { CravesUser } from "@/features/auth/api/cravesAuth";
 
 const customer = { roles: ["CUSTOMER"] } as CravesUser;
 const application = (patch: Partial<ChefApplication>) =>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseMenuDiscovery } from "@/lib/discovery-contract";
-import { publicApiFetch } from "@/lib/public-api";
-import { DEFAULT_DISCOVERY_RADIUS_METERS, MAX_DISCOVERY_RADIUS_METERS } from "@/lib/catalog-discovery-policy";
+import { parseMenuDiscovery } from "@/features/home/lib/discovery-contract";
+import { publicApiFetch } from "@/shared/lib/public-api";
+import { DEFAULT_DISCOVERY_RADIUS_METERS, MAX_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 
 function numeric(request: NextRequest, name: string, min: number, max: number, fallback?: number): number | null {
   const raw = request.nextUrl.searchParams.get(name);

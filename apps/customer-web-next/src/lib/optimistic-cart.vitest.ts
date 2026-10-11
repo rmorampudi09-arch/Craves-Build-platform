@@ -23,9 +23,9 @@ const mocks = vi.hoisted(() => ({
   dishes: new Map<string, { img: string }>(),
   menu: vi.fn<(kitchenId: string, options?: { remember?: boolean }) => Promise<unknown[]>>(async () => []),
 }));
-vi.mock("@/services/auth/sessionFetch", () => ({ sessionFetch: mocks.fetch }));
-vi.mock("@/lib/cart-kitchen-replacement", () => ({ requestCartKitchenReplacement: mocks.replace }));
-vi.mock("@/services/api/dishes", () => ({
+vi.mock("@/features/auth/api/sessionFetch", () => ({ sessionFetch: mocks.fetch }));
+vi.mock("@/features/cart/lib/cart-kitchen-replacement", () => ({ requestCartKitchenReplacement: mocks.replace }));
+vi.mock("@/features/dish/api/dishes", () => ({
   getDish: (id: string) => mocks.dishes.get(id),
   loadDish: async () => { throw new Error("offline"); },
   loadKitchenMenu: mocks.menu,
@@ -85,7 +85,7 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 async function loadedCart() {
-  const cart = await import("@/services/api/cravesCart");
+  const cart = await import("@/features/cart/api/cravesCart");
   await cart.loadCart();
   calls = [];
   return cart;
@@ -94,7 +94,7 @@ async function loadedCart() {
 describe("optimistic cart", () => {
   it("loads dish photos for a cart opened straight from a link, once per kitchen", async () => {
     mocks.menu.mockResolvedValue([{ id: ids.dosa, img: "/dosa.jpg" }]);
-    const cart = await import("@/services/api/cravesCart");
+    const cart = await import("@/features/cart/api/cravesCart");
     await cart.loadCart();
     await flushMicrotasks();
     // Read without adding that kitchen's menu to the dishes Home lists.
@@ -107,7 +107,7 @@ describe("optimistic cart", () => {
 
   it("keeps the neutral placeholder and the cart when the menu can't load, and tries again a minute later", async () => {
     mocks.menu.mockRejectedValueOnce(new Error("offline")).mockResolvedValue([{ id: ids.dosa, img: "/dosa.jpg" }]);
-    const cart = await import("@/services/api/cravesCart");
+    const cart = await import("@/features/cart/api/cravesCart");
     await cart.loadCart();
     await flushMicrotasks();
     expect(cart.getCart()[0]).toMatchObject({ qty: 1, imageIsPlaceholder: true });

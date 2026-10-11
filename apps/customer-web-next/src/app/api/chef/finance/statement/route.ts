@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
-import { chefStatementSchema, statementPeriodSchema } from "@/lib/finance-source-contract";
-import { readDocumentBytes } from "@/lib/document-transport";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
+import { chefStatementSchema, statementPeriodSchema } from "@/features/admin/finance/lib/finance-source-contract";
+import { readDocumentBytes } from "@/shared/lib/document-transport";
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const headers = {"Cache-Control": "no-store"};

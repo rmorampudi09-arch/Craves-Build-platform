@@ -1,5 +1,5 @@
-import { ChefAccessBoundary } from "@/components/chef-access-boundary";
-import { ChefKitchenForm } from "@/components/chef-kitchen-form";
+import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
+import { ChefKitchenForm } from "@/features/chef/components/chef-kitchen-form";
 
 export const metadata = {
   title: "My kitchen | Craves",

@@ -1,5 +1,5 @@
-import type { CustomerSubscriptionStatus } from "./subscription-contract.ts";
-import type { SubscriptionOccurrence } from "./subscription-lifecycle-contract.ts";
+import type { CustomerSubscriptionStatus } from "../features/meal-plans/lib/subscription-contract.ts";
+import type { SubscriptionOccurrence } from "../features/meal-plans/lib/subscription-lifecycle-contract.ts";
 
 /** Customer words for meal plans; never the raw enums or minute counts. */
 const INDIA = "Asia/Kolkata";

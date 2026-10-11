@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseAdminIdentity } from "@/lib/admin-contract";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
+import { parseAdminIdentity } from "@/features/admin/shell/lib/admin-contract";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store, private", Pragma: "no-cache" };

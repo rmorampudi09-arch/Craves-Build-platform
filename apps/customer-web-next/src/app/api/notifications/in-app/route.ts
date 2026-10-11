@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseCustomerNotifications } from "@/lib/notification-contract";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
+import { parseCustomerNotifications } from "@/features/notifications/lib/notification-contract";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 export async function GET(request: NextRequest) {
   const limitRaw = request.nextUrl.searchParams.get("limit") ?? "50"; const limit = Number(limitRaw);
   if (!Number.isInteger(limit) || limit < 1 || limit > 50) return NextResponse.json({ error: "INVALID_LIMIT", message: "Notification limit must be between 1 and 50." }, { status: 400 });

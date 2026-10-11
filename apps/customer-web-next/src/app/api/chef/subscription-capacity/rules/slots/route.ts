@@ -1,9 +1,9 @@
-import { chefUpstream } from "@/lib/chef-errors";
-import { boundBffRequest } from "@/lib/bff-request-limits";
+import { chefUpstream } from "@/features/chef/lib/chef-errors";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
-import { parseSlotRuleInput } from "@/lib/chef-subscription-capacity-contract";
-import { isSameOrigin } from "@/lib/request-security";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
+import { parseSlotRuleInput } from "@/features/chef/lib/chef-subscription-capacity-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 
 export async function PUT(request: NextRequest) {
   const bounded = await boundBffRequest(request);

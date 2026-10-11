@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseCapacityIncidentPage } from "@/lib/admin-subscription-capacity-contract";
-import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/lib/server-api";
+import { parseCapacityIncidentPage } from "@/features/admin/subscriptions/lib/admin-subscription-capacity-contract";
+import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 

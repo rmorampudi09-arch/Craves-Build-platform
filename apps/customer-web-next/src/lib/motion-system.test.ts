@@ -8,9 +8,9 @@ function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
-const theme = source("../craves-theme.css");
-const overrides = source("../control-border-overrides.css");
-const homeStyles = source("../screens/public/BrowseFoods/HomeReference.module.css");
+const theme = source("../shared/styles/craves-theme.css");
+const overrides = source("../shared/styles/control-border-overrides.css");
+const homeStyles = source("../features/home/screens/HomeReference.module.css");
 
 /** Every `:hover` rule must sit inside `@media (hover: hover)` so taps never leave a stuck hover. */
 function unguardedHoverRules(css: string): string[] {
@@ -106,9 +106,9 @@ test("reduced motion keeps busy spinners alive as a slow pulse", () => {
 });
 
 test("counts roll quickly without blur and the Veg switch slides without overshoot", () => {
-  const count = source("../components/ui/AnimateCount.tsx");
-  const toggle = source("../components/ui/AppleSwitch.tsx");
-  const checkoutBar = source("../components/cart/CartCheckoutBar.tsx");
+  const count = source("../shared/ui/AnimateCount.tsx");
+  const toggle = source("../shared/ui/AppleSwitch.tsx");
+  const checkoutBar = source("../features/cart/components/CartCheckoutBar.tsx");
 
   // The old value leaves first, so two totals are never drawn over each other.
   assert.match(count, /<AnimatePresence mode="wait" initial=\{false\}/);

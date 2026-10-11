@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { publicApiFetch } from "@/lib/public-api";
+import { publicApiFetch } from "@/shared/lib/public-api";
 
 export const dynamic = "force-dynamic";
 

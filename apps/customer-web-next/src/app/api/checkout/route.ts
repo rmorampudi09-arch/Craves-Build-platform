@@ -1,11 +1,11 @@
-import { boundBffRequest } from "@/lib/bff-request-limits";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
-import { parseCheckout, parseCheckoutInput } from "@/lib/checkout-contract";
-import { isSameOrigin } from "@/lib/request-security";
+import { parseCheckout, parseCheckoutInput } from "@/features/checkout/lib/checkout-contract";
+import { isSameOrigin } from "@/shared/lib/request-security";
 import {
   authenticatedApiFetch,
   SessionRequiredError,
-} from "@/lib/server-api";
+} from "@/shared/lib/server-api";
 
 const SAFE_CHECKOUT_SERVICE_ERRORS = new Set([
   "CHECKOUT_PRICING_UNAVAILABLE",

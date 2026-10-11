@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseIdentity } from "@/lib/auth-contract";
-import { authenticatedApiFetch, SessionRequiredError } from "@/lib/server-api";
+import { parseIdentity } from "@/features/auth/lib/auth-contract";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 
 export async function GET(request: NextRequest) {
   try {

@@ -1,4 +1,4 @@
-import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
+import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 
 /** Shown the moment navigation starts, shaped like the page that is coming. */
 export default function Loading() {

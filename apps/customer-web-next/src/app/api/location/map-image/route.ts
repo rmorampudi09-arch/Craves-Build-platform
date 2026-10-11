@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { boundedFetch } from "@/lib/bounded-fetch";
-import { isSameSitePublicRequest } from "@/lib/request-security";
-import { renderOlaMapsStaticImage } from "@/lib/server/ola-maps";
+import { boundedFetch } from "@/shared/lib/bounded-fetch";
+import { isSameSitePublicRequest } from "@/shared/lib/request-security";
+import { renderOlaMapsStaticImage } from "@/features/addresses/lib/server/ola-maps";
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 90;

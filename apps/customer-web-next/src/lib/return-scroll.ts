@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, type MouseEvent } from "react";
-import { holdScrollChrome } from "@/components/navigation/AutoHideCustomerHeader";
+import { holdScrollChrome } from "@/shared/components/navigation/AutoHideCustomerHeader";
 
 const RETURN_SCROLL_KEY = "craves:return-scroll";
 const RETURN_INTENT_KEY = "craves:return-scroll:intent";

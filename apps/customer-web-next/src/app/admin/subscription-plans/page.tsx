@@ -1,5 +1,5 @@
-import { AdminPageIntro } from "@/components/admin-page-intro";
-import { AdminSubscriptionPlanManager } from "@/components/admin-subscription-plan-manager";
+import { AdminPageIntro } from "@/features/admin/shell/components/admin-page-intro";
+import { AdminSubscriptionPlanManager } from "@/features/admin/subscriptions/components/admin-subscription-plan-manager";
 
 export const metadata = { title: "Subscription plans | Craves Admin", robots: { index: false, follow: false } };
 

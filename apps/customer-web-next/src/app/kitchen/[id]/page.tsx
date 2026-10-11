@@ -1,5 +1,5 @@
 "use client";
 
-import ChefProfilePage from "@/screens/public/ChefProfile/ChefProfile";
+import ChefProfilePage from "@/features/chefs/screens/ChefProfile";
 
 export default ChefProfilePage;

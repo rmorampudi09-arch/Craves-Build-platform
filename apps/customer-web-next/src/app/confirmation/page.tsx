@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { isUuid } from "@/lib/delivery-status";
+import { isUuid } from "@/features/orders/lib/delivery-status";
 
 // One post-order screen: old /confirmation?id= links land on the order's status page,
 // where checkout itself sends customers after payment.

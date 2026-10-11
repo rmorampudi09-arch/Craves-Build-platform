@@ -19,6 +19,40 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.26.0 - Meal Plan Redesign, 2026-10-11
+
+- User approved the meal-plan redesign (board `design-review/meal-plans/board.html`
+  in the Downloads folder) with "go with your design", then asked for the backend
+  that satisfies it. Plan: `docs/superpowers/plans/2026-10-11-meal-plan-redesign.md`.
+- Builds on 1.25.14 (code 53, commit `4592ba4bd`) and another session's 1.25.15
+  (code 54, commit `ce0171258`, Chefs-tab photo strip), both committed on this branch.
+- Customer: the single meal-plan screen is replaced by a nested stack on the existing
+  `CustomerSettingsSubscription` route: Meal Plans list (search, All/Weekly/Monthly,
+  banner, plan cards), Meal Plan detail, Review Subscription (start date and address
+  Change), Delivery Address picker (add/edit via the Ola editor), Payment (no in-app
+  method list; Pay & Subscribe opens Razorpay), Meal Plan Activated, My Meal Plan
+  (pause/resume, skip a meal, cancel, this week's schedule, Complete payment) and the
+  meal details screen (order tracker when the backend links an order).
+- Payment: the old Razorpay sequence is ported unchanged (create with Idempotency-Key,
+  invoice wait, order, pending-payment store, verify, recovery). New: leaving Payment
+  is blocked while checkout is open; retries and re-entry reuse the created
+  subscription; a verify failure after Razorpay returned proof shows "processing";
+  recovered payments show a notice on the list.
+- Chef: Menu tab has an "Items | Meal plans" switch; the Meal plans tab lists plans
+  like items (status, schedule summary, price, Accepting new subscribers switch when
+  the backend supports it) with "+ Add new plan"; new Create/Edit Meal Plan editor
+  (plan photo, weekly/monthly, price, description, lead time, per-day meal slots with
+  editable times, dish and quantity; Save draft / Submit for approval). The old
+  Profile "Subscription plan" screen stays for capacity rules.
+- Works against today's production: plan photos, ratings, Renews date, the order
+  tracker, the chef photo upload and the accepting switch use optional fields from the
+  backend branch `feat/meal-plan-backend` (`C:\msub`, not yet merged or deployed) and
+  fall back when absent. Ratings use the existing public kitchen review summary.
+- Android 1.26.0 / code 55, tag `KUSHIRAVI-app-v1.26.0`.
+- Checks: TypeScript clean, ESLint zero warnings on changed files, Jest 224 suites /
+  1,383 tests, APIM contract check unchanged (3 pre-existing failures), every task
+  spec + quality reviewed, final whole-branch review with one fix wave.
+
 ### Version 1.25.1 - Ola Maps Address Flow, 2026-10-10
 
 - User approved the address designs (Design canvas "Craves Address & Ola Maps

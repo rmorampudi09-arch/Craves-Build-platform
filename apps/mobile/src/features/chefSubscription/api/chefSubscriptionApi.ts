@@ -29,12 +29,13 @@ export type ChefMealPlan = z.infer<typeof chefMealPlanSchema>;
 
 const scheduleItemSchema = z.object({
   id: uuid,
+  // Schedules saved before the V17 dish snapshots have no name, price or currency.
   menuItemId: uuid,
-  menuItemName: z.string(),
+  menuItemName: z.string().nullable().transform(value => value ?? 'Dish'),
   menuItemCategory: z.string().nullable().optional().transform(value => value ?? null),
   menuItemFoodType: z.string().nullable().optional().transform(value => value ?? null),
-  menuItemPrice: decimal,
-  menuItemCurrency: z.string().length(3),
+  menuItemPrice: decimal.nullable(),
+  menuItemCurrency: z.string().length(3).nullable(),
   quantity: z.number().int().positive(),
   isoDayOfWeek: z.number().int().min(1).max(7).nullable().optional().transform(value => value ?? null),
   dayOfMonth: z.number().int().min(1).max(28).nullable().optional().transform(value => value ?? null),

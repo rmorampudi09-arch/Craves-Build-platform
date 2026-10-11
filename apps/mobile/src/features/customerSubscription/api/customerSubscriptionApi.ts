@@ -22,12 +22,13 @@ export const publicSubscriptionPlanSchema = z.object({
 export type PublicSubscriptionPlan = z.infer<typeof publicSubscriptionPlanSchema>;
 
 const publicScheduleItemSchema = z.object({
+  // Schedules saved before the V17 dish snapshots have no name, price or currency.
   menuItemId: uuid,
-  menuItemName: z.string().min(1).max(200),
+  menuItemName: z.string().min(1).max(200).nullable().transform(value => value ?? 'Dish'),
   menuItemCategory: z.string().max(120).nullable().optional().transform(value => value ?? null),
   menuItemFoodType: z.string().max(40).nullable().optional().transform(value => value ?? null),
-  menuItemPrice: moneyValue,
-  menuItemCurrency: z.string().length(3),
+  menuItemPrice: moneyValue.nullable(),
+  menuItemCurrency: z.string().length(3).nullable(),
   quantity: z.number().int().positive(),
   isoDayOfWeek: z.number().int().min(1).max(7).nullable().optional().transform(value => value ?? null),
   dayOfMonth: z.number().int().min(1).max(28).nullable().optional().transform(value => value ?? null),

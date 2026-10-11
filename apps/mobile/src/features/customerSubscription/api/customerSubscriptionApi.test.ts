@@ -1,6 +1,7 @@
 import {httpClient} from '../../../core/http/httpClient';
 import {
   customerSubscriptionApi,
+  publicPlanScheduleSchema,
   publicSubscriptionPolicySchema,
 } from './customerSubscriptionApi';
 
@@ -249,3 +250,24 @@ describe('customerSubscriptionApi skip contract', () => {
   });
 });
 
+describe('customerSubscriptionApi schedules saved before dish snapshots', () => {
+  it('parses a schedule row with no dish name, price or currency and labels it as a dish', () => {
+    const parsed = publicPlanScheduleSchema.parse({
+      planId: PLAN_ID,
+      recurrenceType: 'WEEKLY',
+      timezone: 'Asia/Kolkata',
+      items: [{
+        menuItemId: '22222222-2222-4222-8222-222222222222',
+        menuItemName: null,
+        menuItemPrice: null,
+        menuItemCurrency: null,
+        quantity: 1,
+        isoDayOfWeek: 1,
+        mealSlotCode: 'LUNCH',
+        serviceTime: '12:30:00',
+        sequenceNumber: 1,
+      }],
+    });
+    expect(parsed.items[0]).toMatchObject({menuItemName: 'Dish', menuItemPrice: null, menuItemCurrency: null});
+  });
+});

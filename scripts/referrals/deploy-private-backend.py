@@ -4,7 +4,7 @@ import base64, hashlib, json, os, pathlib, secrets, subprocess, tempfile, time, 
 RG='rg-craves-prodlow-centralindia'; SUB='4f897b61-9b52-44b4-8cf1-bdac281cc1aa'
 APP='ca-craves-referral-prodlow'; IDENTITY='id-craves-referral-prodlow'; VAULT='kvcravesprodlowl3ing6'
 SERVER='pg-craves-prodlow-l3ing6.postgres.database.azure.com'; DATABASE='craves_referral_db'
-SOURCE='036b3211b2e81465699766f7d8104a4199c67723'; ACR='cravesrm09prodlow6bf632'
+SOURCE='036b3211b2e81465699766f7d8104a4199c67723'; ACR='cravesprodlowacr82121'
 OWNER='craves_referral_owner'; RUNTIME='craves_referral_runtime'
 EVIDENCE=pathlib.Path(os.environ['BUILD_ARTIFACTSTAGINGDIRECTORY'])/'referral-deployment'; EVIDENCE.mkdir(parents=True,exist_ok=True)
 

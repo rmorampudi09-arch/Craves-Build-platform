@@ -36,6 +36,10 @@ public class MediaStorageService {
         "image/webp"
     );
 
+    // Uploads always get a new unique blob name and relocation rewrites a photo once, before it is ever served
+    // from the Front Door path, so a served photo never changes and can be cached for a year.
+    static final String CACHE_CONTROL = "public, max-age=31536000, immutable";
+
     private final CatalogStorageProperties properties;
 
     public MediaStorageService(CatalogStorageProperties properties) {
@@ -46,20 +50,13 @@ public class MediaStorageService {
         validate(file);
         String originalFileName = StringUtils.hasText(file.getOriginalFilename()) ? file.getOriginalFilename() : "menu-image";
         String blobName = "public/dishes/" + kitchenId + "/" + menuItemId + "/" + UUID.randomUUID() + "-" + sanitize(originalFileName);
-        BlobClient blobClient = containerClient().getBlobClient(blobName);
+        byte[] data;
         try {
-            blobClient.upload(file.getInputStream(), file.getSize(), true);
-            blobClient.setHttpHeaders(new BlobHttpHeaders().setContentType(file.getContentType()));
+            data = file.getBytes();
         } catch (IOException ex) {
             throw new ApiException(500, "MEDIA_UPLOAD_FAILED", "Could not read uploaded media file");
         }
-        return new StoredMedia(
-            properties.getMediaContainer(),
-            blobName,
-            file.getContentType(),
-            file.getSize(),
-            publicUrl(blobClient, blobName)
-        );
+        return store(blobName, data, file.getContentType());
     }
 
     /** Best effort: a missing blob or unconfigured store never blocks removing the photo record. */
@@ -83,10 +80,10 @@ public class MediaStorageService {
     }
 
     /**
-     * Copies a publicly readable photo into this container and returns its new public URL. Downloaded here and
+     * Copies a publicly readable photo into this container and returns where it is stored. Downloaded here and
      * uploaded, because Azure's server-side copy from the previous account was refused (BlobStorageException).
      */
-    public String copyFromPublicUrl(String sourceUrl, String blobName, String contentType) {
+    public StoredMedia copyFromPublicUrl(String sourceUrl, String blobName, String contentType) {
         byte[] data;
         try {
             HttpResponse<InputStream> response = HTTP.send(
@@ -106,10 +103,22 @@ public class MediaStorageService {
         if (data.length == 0 || data.length > properties.getMaxImageFileSizeBytes()) {
             throw new ApiException(502, "LEGACY_MEDIA_UNAVAILABLE", "Previous photo is empty or too large");
         }
+        return store(blobName, data, contentType);
+    }
+
+    /** Shrinks the photo when it is oversized, then stores it with long-lived caching for browsers and Front Door. */
+    private StoredMedia store(String blobName, byte[] data, String contentType) {
+        MenuPhotoOptimizer.Photo photo = MenuPhotoOptimizer.optimize(data, contentType);
         BlobClient blobClient = containerClient().getBlobClient(blobName);
-        blobClient.upload(BinaryData.fromBytes(data), true);
-        blobClient.setHttpHeaders(new BlobHttpHeaders().setContentType(contentType));
-        return publicUrl(blobClient, blobName);
+        blobClient.upload(BinaryData.fromBytes(photo.data()), true);
+        blobClient.setHttpHeaders(new BlobHttpHeaders().setContentType(photo.contentType()).setCacheControl(CACHE_CONTROL));
+        return new StoredMedia(
+            properties.getMediaContainer(),
+            blobName,
+            photo.contentType(),
+            photo.data().length,
+            publicUrl(blobClient, blobName)
+        );
     }
 
     private BlobContainerClient containerClient() {

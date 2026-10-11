@@ -237,6 +237,8 @@ CRAVES_STORAGE_MEDIA_CONTAINER
 CRAVES_MEDIA_PUBLIC_BASE_URL
 ```
 
+`CRAVES_MEDIA_PUBLIC_BASE_URL` is the address customers load dish photos from. In production it is `https://craves.in/media`, the cached Front Door route created by `azure-pipelines-media-cdn.yml`. Left empty, photo links point straight at blob storage. Uploads larger than 1600 px or 400 KB are shrunk (opaque PNGs become JPEGs) and stored with a one-year immutable `Cache-Control`. On start, photos whose links are not under this address are copied once, shrunk, and their links rewritten.
+
 Optional discovery configuration:
 
 ```text

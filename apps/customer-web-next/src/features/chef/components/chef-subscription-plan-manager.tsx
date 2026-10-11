@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";
@@ -354,15 +355,15 @@ export function ChefSubscriptionPlanManager() {
   const load = useCallback(async () => {
     const [plansResponse, menuResponse, capacityResponse] =
       await Promise.all([
-        fetch("/api/chef/subscription-plans", {
+        sessionFetch("/api/chef/subscription-plans", {
           cache: "no-store",
           credentials: "same-origin",
         }),
-        fetch("/api/chef/menu", {
+        sessionFetch("/api/chef/menu", {
           cache: "no-store",
           credentials: "same-origin",
         }),
-        fetch("/api/chef/subscription-capacity", {
+        sessionFetch("/api/chef/subscription-capacity", {
           cache: "no-store",
           credentials: "same-origin",
         }),
@@ -419,7 +420,7 @@ export function ChefSubscriptionPlanManager() {
   }, []);
 
   const loadSchedule = useCallback(async (plan: ChefMealPlan) => {
-    const response = await fetch(
+    const response = await sessionFetch(
       `/api/chef/subscription-plans/${plan.id}/schedule`,
       {
         cache: "no-store",
@@ -564,7 +565,7 @@ export function ChefSubscriptionPlanManager() {
     setInfoMessage("Creating your meal-plan draft…");
 
     try {
-      const response = await fetch("/api/chef/subscription-plans", {
+      const response = await sessionFetch("/api/chef/subscription-plans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
@@ -606,7 +607,7 @@ export function ChefSubscriptionPlanManager() {
     setInfoMessage("Saving plan details…");
 
     try {
-      const response = await fetch(
+      const response = await sessionFetch(
         `/api/chef/subscription-plans/${selected.id}`,
         {
           method: "PUT",
@@ -713,7 +714,7 @@ export function ChefSubscriptionPlanManager() {
     );
 
     try {
-      const save = await fetch(
+      const save = await sessionFetch(
         `/api/chef/subscription-plans/${selected.id}/schedule`,
         {
           method: "PUT",
@@ -741,7 +742,7 @@ export function ChefSubscriptionPlanManager() {
         return;
       }
 
-      const submit = await fetch(
+      const submit = await sessionFetch(
         `/api/chef/subscription-plans/${selected.id}/submit`,
         {
           method: "POST",
@@ -809,7 +810,7 @@ export function ChefSubscriptionPlanManager() {
     setInfoMessage("Saving subscription capacity…");
 
     try {
-      const response = await fetch(
+      const response = await sessionFetch(
         "/api/chef/subscription-capacity/rules/slots",
         {
           method: "PUT",
@@ -831,7 +832,7 @@ export function ChefSubscriptionPlanManager() {
         throw chefApiError(response, body, "Subscription capacity could not be saved.");
       }
 
-      const refreshed = await fetch("/api/chef/subscription-capacity", {
+      const refreshed = await sessionFetch("/api/chef/subscription-capacity", {
         cache: "no-store",
         credentials: "same-origin",
       });

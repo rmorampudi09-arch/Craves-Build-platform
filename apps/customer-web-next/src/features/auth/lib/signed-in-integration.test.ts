@@ -244,7 +244,7 @@ test("pending chef applications remain editable exactly as the backend permits",
 test("chef dashboard reuses the session its access boundary confirmed", () => {
   const dashboard = source("../../chef/components/chef-mode-dashboard.tsx");
   const phoneAuth = source("../../sign-in/components/phone-auth-form.tsx");
-  assert.match(dashboard, /useSyncExternalStore\(subscribeSession, getSession/);
+  assert.match(dashboard, /getSession\(\)\?\.phoneNumber/);
   // The boundary already loaded the session and refreshed roles once; the dashboard never repeats it.
   assert.doesNotMatch(dashboard, /loadSession|synchronizeSessionRoles/);
   assert.doesNotMatch(dashboard, /fetch\("\/api\/chef\/me"/);

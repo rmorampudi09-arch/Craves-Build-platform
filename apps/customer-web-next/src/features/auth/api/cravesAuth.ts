@@ -7,12 +7,12 @@ import type {
   DeliveryReadyAddress,
 } from "@/features/addresses/lib/address-contract";
 import { selectDefaultDeliveryAddress } from "@/features/addresses/lib/address-selection";
-import { clearChefMode } from "@/features/chef/lib/chef-mode";
+import { clearChefMode, clearCustomerMode } from "@/features/chef/lib/chef-mode";
 import {
   parseCustomerProfile,
   type CustomerProfile,
 } from "@/features/profile/lib/profile-contract";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch, shareSessionRefresh } from "@/features/auth/api/sessionFetch";
 
 export type CravesUser = {
   id: string;
@@ -143,8 +143,9 @@ export function isSessionReady(): boolean { return !sessionEnding && session?.st
 function invalidatePendingSessionWork() { sessionGeneration += 1; roleSynchronization = null; }
 export function invalidateSession(context: SessionContext): void { if (isSessionContextCurrent(context)) forgetSession(); }
 function forgetSession() {
-  // Chef Mode never outlives the session that verified it.
+  // Neither side (Chef Mode or the customer app) outlives the session that verified it.
   clearChefMode();
+  clearCustomerMode();
   invalidatePendingSessionWork(); sessionEnding = false; session = null; sessionEmailRevision = -1; selectedLocation = null; persistSessionSnapshot(null); persistAddressSnapshot(null); notify();
 }
 let selectedLocation: CravesAddress | null = null;
@@ -171,6 +172,8 @@ function refreshSessionForGeneration(generation: number): Promise<Response | nul
   sessionRefreshes.set(generation, pending);
   return pending;
 }
+// sessionFetch refreshes through this map too: one refresh per sign-in at a time for the whole tab.
+shareSessionRefresh(() => refreshSessionForGeneration(sessionGeneration));
 
 function fromIdentity(identity: CravesIdentity): CravesUser {
   const digits = identity.phoneNumber.replace(/\D/g, "");
@@ -390,6 +393,8 @@ export async function clearSession(): Promise<void> {
     }
     throw new LogoutUnconfirmedError(retryContext);
   }
+  // Signing out also drops chef application details kept across "Sign in again" (use-chef-onboarding).
+  try { window.sessionStorage.removeItem("craves.chef-application-unsaved"); } catch { /* storage blocked */ }
   forgetSession();
 }
 

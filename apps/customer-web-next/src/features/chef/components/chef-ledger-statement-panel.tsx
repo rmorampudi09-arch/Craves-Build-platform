@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";
@@ -25,7 +26,7 @@ export function ChefLedgerStatementPanel() {
     try {
       const checked = statementPeriodSchema.safeParse({...period, kind});
       if (!checked.success) throw new ChefError(CHEF_ERROR_MESSAGES.INVALID_STATEMENT_PERIOD, "INVALID_STATEMENT_PERIOD", 0);
-      const response = await fetch(`/api/chef/finance/statement?${new URLSearchParams(checked.data)}`, {cache: "no-store"});
+      const response = await sessionFetch(`/api/chef/finance/statement?${new URLSearchParams(checked.data)}`, {cache: "no-store"});
       if (!response.ok) {
         const failure = chefApiError(response, await response.json().catch(() => null), "Statement data is unavailable. Check the selected dates.");
         throw response.status === 422 ? new ChefError("This period has too many records to show at once. Choose a shorter period.", failure.ref, 422) : failure;

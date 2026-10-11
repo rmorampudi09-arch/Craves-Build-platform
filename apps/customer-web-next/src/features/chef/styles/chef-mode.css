@@ -864,3 +864,39 @@ body .chef-notifications [aria-label="Notification filters"] button { border-col
 .chef-panel-content:focus {
   outline: none;
 }
+
+/* ---------- Dish editor ---------- */
+/* Adding a dish is one focused job: on phones the tab bar steps aside and Save stays under the thumb. */
+@media (max-width: 1023px) {
+  .chef-panel-theme:has(.chef-dish-editor) { padding-bottom: 0; }
+  .chef-panel-theme:has(.chef-dish-editor) .chef-mobile-nav { display: none; }
+}
+/* The Save bar ends the page, so the new-order bar rides just above it (stuck or at the end)
+   instead of reserving room below it: both stay tappable at every width. */
+.chef-panel-theme:has(.chef-dish-editor) .chef-panel-content { padding-bottom: 0; }
+.chef-panel-theme:has(.chef-dish-editor) .chef-order-banner-wrap { bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+@media (min-width: 768px) { .chef-panel-theme:has(.chef-dish-editor) .chef-order-banner-wrap { bottom: 6.5rem; } }
+/* Wide screens: centred over the form column, which is the centred page minus the 19.5rem preview. */
+@media (min-width: 1024px) { .chef-panel-theme:has(.chef-dish-editor) .chef-order-banner-wrap { padding-right: 19.5rem; } }
+/* While that bar shows, the last field can still scroll clear of it. */
+.chef-panel-theme:has(.chef-order-banner) .chef-dish-actions { margin-top: 5rem; }
+.chef-dish-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  gap: 0.75rem;
+  margin: 1.25rem -1rem -2rem;
+  border-top: 1px solid var(--chef-line);
+  background: color-mix(in srgb, var(--chef-surface) 94%, transparent);
+  padding: 0.75rem 1rem max(0.75rem, env(safe-area-inset-bottom));
+  backdrop-filter: saturate(1.4) blur(12px);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+}
+@media (min-width: 768px) {
+  /* -2rem: at the end of the page the bar rests 1rem up, where it also sticks while scrolling. */
+  .chef-dish-actions { margin: 1.5rem 0 -2rem; border: 1px solid var(--chef-line); border-radius: var(--chef-radius); bottom: 1rem; box-shadow: 0 12px 32px rgba(26, 26, 26, 0.1); }
+}
+@media (min-width: 1024px) {
+  .chef-dish-actions { max-width: calc(100% - 19.5rem); }
+}

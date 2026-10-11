@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { useEffect, useRef, useState } from "react";
@@ -73,7 +74,7 @@ export function ChefOnboardingBank({
     if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) return;
     const controller = new AbortController();
     setLookup("loading");
-    void fetch(`/api/chef-onboarding/bank/ifsc/${ifsc}`, {
+    void sessionFetch(`/api/chef-onboarding/bank/ifsc/${ifsc}`, {
       cache: "no-store",
       credentials: "same-origin",
       signal: controller.signal,
@@ -150,7 +151,7 @@ export function ChefOnboardingBank({
     onBusy(true);
     setError(null);
     try {
-      const response = await fetch("/api/chef-onboarding/bank", {
+      const response = await sessionFetch("/api/chef-onboarding/bank", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },

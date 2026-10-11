@@ -7,8 +7,9 @@ export const metadata = {
 };
 
 export default function ChefMenuPage() {
+  // Narrow list; on wide screens the dish form gets room for its customer preview.
   return (
-    <main className="chef-page is-narrow">
+    <main className="chef-page is-narrow lg:!max-w-[66rem]">
       <ChefAccessBoundary>
         <ChefMenuManager />
       </ChefAccessBoundary>

@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react";
 import { Link } from "@tanstack/react-router";
-import { Bell, CalendarDays, ChevronDown } from "lucide-react";
+import { Bell, CalendarDays, ChevronDown, ClipboardList } from "lucide-react";
 import {
   FaArrowLeft,
   FaMapMarkerAlt,
@@ -217,6 +217,15 @@ export function BrowseHeader({
             <FaUser className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
           </Link>
 
+          {/* Where the chef switch used to sit: on desktop, orders are one tap away (phones have the tab bar). */}
+          <Link
+            to="/orders"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F62E18] text-white shadow-[0_8px_18px_rgba(26,26,26,0.14)] transition-[translate,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(26,26,26,0.14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/35 motion-reduce:transform-none lg:h-10 lg:w-10"
+            aria-label="Open your orders"
+            title="Your orders"
+          >
+            <ClipboardList className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
+          </Link>
 
           <button
             type="button"

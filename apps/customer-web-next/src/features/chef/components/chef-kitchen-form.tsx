@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { ChefNotice, ChefPageHead, ChefPill, ChefSection } from "@/features/chef/components/chef-ui";
@@ -181,9 +182,9 @@ export function ChefKitchenForm() {
     let active = true;
     const sessionContext = captureSessionContext();
     void Promise.all([
-      fetch("/api/chef/kitchen", { cache: "no-store" }),
-      fetch("/api/chef/application", { cache: "no-store" }),
-      fetch("/api/chef/onboarding", { cache: "no-store" }).catch(() => null),
+      sessionFetch("/api/chef/kitchen", { cache: "no-store" }),
+      sessionFetch("/api/chef/application", { cache: "no-store" }),
+      sessionFetch("/api/chef/onboarding", { cache: "no-store" }).catch(() => null),
     ])
       .then(async ([kitchenResponse, applicationResponse, onboardingResponse]) => {
         const kitchenBody = await kitchenResponse.json().catch(() => null);
@@ -202,7 +203,8 @@ export function ChefKitchenForm() {
         setKitchen(nextKitchen);
         const registeredPhone = getSession()?.phoneNumber ?? "";
         const initial = nextKitchen ? fromKitchen(nextKitchen, registeredPhone) : fromApplication(applicationBody, registeredPhone);
-        if (!nextKitchen && applicationBody?.status === "APPROVED" && onboardingBody && applicationBody.id && onboardingBody.application.id === applicationBody.id && onboardingBody.legacy && onboardingBody.details) {
+        // Whatever the approved application already says about the kitchen is filled in, never asked again.
+        if (!nextKitchen && applicationBody?.status === "APPROVED" && onboardingBody && applicationBody.id && onboardingBody.application.id === applicationBody.id && onboardingBody.details) {
           initial.kitchenName = onboardingBody.details.kitchenName;
           initial.description = onboardingBody.details.kitchenDescription;
           initial.addressLine1 = onboardingBody.details.addressLine1;
@@ -361,7 +363,7 @@ export function ChefKitchenForm() {
         latitude: form.latitude === "" ? null : Number(form.latitude),
         longitude: form.longitude === "" ? null : Number(form.longitude),
       };
-      const response = await fetch("/api/chef/kitchen", {
+      const response = await sessionFetch("/api/chef/kitchen", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

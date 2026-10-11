@@ -1,6 +1,7 @@
 "use client";
 
-import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
+import { ChefError, chefApiError, chefErrorText, isChefAccessText } from "@/features/chef/lib/chef-errors";
+import { signInToChefModeAgain } from "@/features/chef/components/chef-account-menu";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -162,7 +163,13 @@ export function ChefOrderInbox() {
             icon={AlertTriangle}
             title="Orders couldn’t load"
             text={error}
-            action={<button type="button" onClick={() => void load()} className="chef-btn is-primary">Try again</button>}
+            action={
+              isChefAccessText(error) ? (
+                <button type="button" onClick={signInToChefModeAgain} className="chef-btn is-primary">Sign in again</button>
+              ) : (
+                <button type="button" onClick={() => void load()} className="chef-btn is-primary">Try again</button>
+              )
+            }
           />
         </ChefSection>
       ) : orders.length === 0 ? (

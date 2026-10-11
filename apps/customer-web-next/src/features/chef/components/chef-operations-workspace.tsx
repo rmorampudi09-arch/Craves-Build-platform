@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { ChefEmpty, ChefSection, clockTime, dateTime } from "@/features/chef/components/chef-ui";
@@ -97,19 +98,19 @@ export function ChefOperationsWorkspace() {
     try {
       const [applicationResponse, kitchenResponse, menuResponse, readinessResponse] =
         await Promise.all([
-          fetch("/api/chef/application", {
+          sessionFetch("/api/chef/application", {
             cache: "no-store",
             credentials: "same-origin",
           }),
-          fetch("/api/chef/kitchen", {
+          sessionFetch("/api/chef/kitchen", {
             cache: "no-store",
             credentials: "same-origin",
           }),
-          fetch("/api/chef/menu", {
+          sessionFetch("/api/chef/menu", {
             cache: "no-store",
             credentials: "same-origin",
           }),
-          fetch("/api/chef/application/readiness", {
+          sessionFetch("/api/chef/application/readiness", {
             cache: "no-store",
             credentials: "same-origin",
           }),

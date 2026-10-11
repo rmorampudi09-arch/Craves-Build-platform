@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // Actual rendered components; all service responses and identity changes are disposable fixtures.
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { MotionGlobalConfig } from "framer-motion";
 import { createElement, useState } from "react";
 import { usePathname } from "next/navigation";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -305,11 +306,14 @@ describe("profile owner privacy", () => {
 
 describe("Chef menu save and recovery", () => {
   let stored: ChefMenuItem[];
+  // Sheets and the dish form settle at once, so a closed sheet never leaves the page hidden.
+  beforeAll(() => { MotionGlobalConfig.skipAnimations = true; });
+  afterAll(() => { MotionGlobalConfig.skipAnimations = false; });
   const fixture: ChefMenuItem = { id: a.id, itemName: "Fixture dish", description: null, category: "Meals", foodType: "VEG", price: 180, currency: "INR", servesCount: null, preparationTimeMinutes: null, spiceLevel: null, unitPackageWeightGrams: 500, thermoboxRequired: false, available: true, status: "ACTIVE", images: [], createdAt: "2026-10-02T00:00:00Z", updatedAt: "2026-10-02T00:00:00Z" };
   beforeEach(() => {
     stored = [];
     vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
-    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })));
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
     fetcher.mockImplementation(async (input, options) => {
       const url = String(input);
@@ -325,15 +329,21 @@ describe("Chef menu save and recovery", () => {
     render(createElement(ChefMenuManager));
     fireEvent.click(await screen.findByRole("button", { name: "Add your first dish" }));
   }
-  function fillRequired() {
-    fireEvent.change(screen.getByLabelText(/Dish Name/), { target: { value: "Fixture dish" } });
-    fireEvent.change(screen.getByLabelText(/Category/), { target: { value: "Meals" } });
+  /** Category is a picker: a sheet of the categories customers browse. */
+  async function pickCategory(name: string) {
+    fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
+    fireEvent.click(await screen.findByRole("button", { name }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  }
+  async function fillRequired() {
+    fireEvent.change(screen.getByLabelText(/Dish name/), { target: { value: "Fixture dish" } });
+    await pickCategory("Meals");
     fireEvent.click(screen.getByRole("radio", { name: "Veg" }));
     fireEvent.change(screen.getByLabelText(/Price/), { target: { value: "180" } });
     fireEvent.change(screen.getByLabelText(/Packed weight/), { target: { value: "500" } });
   }
   it("saves a new dish as a draft after Currently Available is turned on and back off", async () => {
-    await openNew(); fillRequired();
+    await openNew(); await fillRequired();
     fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
     fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
     fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
@@ -362,7 +372,7 @@ describe("Chef menu save and recovery", () => {
       return original(input, options);
     });
     vi.stubGlobal("URL", class extends URL { static createObjectURL() { return "blob:fixture"; } static revokeObjectURL() {} });
-    await openNew(); fillRequired();
+    await openNew(); await fillRequired();
     fireEvent.change(screen.getByLabelText(/Dish photo/), { target: { files: [new File(["fixture"], "fixture.png", { type: "image/png" })] } });
     fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
     fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
@@ -370,7 +380,7 @@ describe("Chef menu save and recovery", () => {
     expect(screen.getByRole("alert").textContent?.toLowerCase()).toContain("publishing");
     expect((screen.getByRole("button", { name: "Save dish" }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByRole("button", { name: "Reload menu to check the save" })).toBeNull();
-    expect((screen.getByLabelText(/Dish Name/) as HTMLInputElement).value).toBe("Fixture dish");
+    expect((screen.getByLabelText(/Dish name/) as HTMLInputElement).value).toBe("Fixture dish");
     expect(screen.getByRole("img", { name: "Dish preview" }).getAttribute("src")).toBe("blob:fixture");
     expect(stored).toHaveLength(0);
     // The actual finance review/authority recovery happens outside this form.
@@ -417,7 +427,7 @@ describe("Chef menu save and recovery", () => {
     expect(savedKitchen).toMatchObject({ kitchenName: "New fixture kitchen", status: "DRAFT", latitude: null, longitude: null });
     cleanup(); render(createElement(ChefKitchenForm));
     await screen.findByRole("heading", { name: "New fixture kitchen" });
-    cleanup(); await openNew(); fillRequired();
+    cleanup(); await openNew(); await fillRequired();
     fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish added successfully");
     fireEvent.click(screen.getByRole("button", { name: "Edit Fixture dish" }));
@@ -433,7 +443,7 @@ describe("Chef menu save and recovery", () => {
     await screen.findByText("Dish is now available");
     cleanup(); render(createElement(ChefMenuManager));
     await screen.findByRole("button", { name: "Edit Fixture dish" });
-    expect(screen.getByText("₹190.00")).toBeTruthy();
+    expect(screen.getByText("₹190")).toBeTruthy();
     expect(screen.getByRole("switch", { name: "Fixture dish available to order" }).getAttribute("aria-checked")).toBe("true");
   });
   it.each(["phoneNumber", "areaName", "postalCode"] as const)("focuses missing pickup %s instead of opening an unorderable kitchen", async field => {
@@ -536,7 +546,7 @@ describe("Chef menu save and recovery", () => {
     expect(screen.queryByRole("button", { name: "Add Dish" })).toBeNull();
   });
   it.each(["POST", "PUT", "PATCH"] as const)("returns to kitchen setup if the kitchen disappears before a %s mutation", async method => {
-    if (method === "POST") { await openNew(); fillRequired(); }
+    if (method === "POST") { await openNew(); await fillRequired(); }
     else {
       stored = [{ ...fixture }];
       render(createElement(ChefMenuManager));
@@ -551,7 +561,7 @@ describe("Chef menu save and recovery", () => {
     expect(screen.queryByText(/Dish (added|updated) successfully|Dish is now/)).toBeNull();
   });
   it("creates, edits, changes availability and retains the server result after remount", async () => {
-    await openNew(); fillRequired();
+    await openNew(); await fillRequired();
     fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
     fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish added successfully");
@@ -576,10 +586,10 @@ describe("Chef menu save and recovery", () => {
   it("focuses each missing required field and never submits fractional packed weight", async () => {
     await openNew();
     fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Dish Name/)));
-    expect(screen.getByText("Dish name is required.")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText(/Dish Name/), { target: { value: "Fixture" } });
-    fireEvent.change(screen.getByLabelText(/Category/), { target: { value: "Meals" } });
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Dish name/)));
+    expect(screen.getByText("Give your dish a name.")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Dish name/), { target: { value: "Fixture" } });
+    await pickCategory("Meals");
     fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("radio", { name: "Veg" })));
     fireEvent.click(screen.getByRole("radio", { name: "Veg" }));
@@ -592,7 +602,7 @@ describe("Chef menu save and recovery", () => {
     expect(fetcher.mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
   });
   it("shows server rejection codes and prevents an uncertain POST from being duplicated", async () => {
-    await openNew(); fillRequired();
+    await openNew(); await fillRequired();
     fetcher.mockResolvedValueOnce(Response.json({ code: "MENU_REQUEST_FAILED" }, { status: 400 }));
     fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     expect((await screen.findByRole("alert")).textContent).toContain("MENU_REQUEST_FAILED");
@@ -611,7 +621,7 @@ describe("Chef menu save and recovery", () => {
     expect(screen.queryByText("Your first dish starts here")).toBeNull();
   });
   it("rejects a photo above 8 MB without queueing it, so the dish still saves without that photo", async () => {
-    await openNew(); fillRequired();
+    await openNew(); await fillRequired();
     const file = new File([new Uint8Array(8 * 1024 * 1024 + 1)], "large.png", { type: "image/png" });
     fireEvent.change(screen.getByLabelText(/Dish photo/), { target: { files: [file] } });
     expect(screen.getByText("Choose a JPEG, PNG or WebP photo up to 8 MB.")).toBeTruthy();
@@ -671,7 +681,7 @@ describe("Chef menu save and recovery", () => {
     ]);
   });
   it("keeps the saved dish ID after a photo failure so retry updates instead of creating a duplicate", async () => {
-    await openNew(); fillRequired();
+    await openNew(); await fillRequired();
     const original = fetcher.getMockImplementation()!;
     vi.stubGlobal("URL", class extends URL { static createObjectURL() { return "blob:fixture"; } static revokeObjectURL() {} });
     fetcher.mockImplementation((input, options) => String(input).endsWith("/images") ? Promise.resolve(Response.json({ code: "MENU_IMAGE_UPLOAD_FAILED" }, { status: 500 })) : original(input, options));
@@ -704,6 +714,21 @@ describe("Approved Chef first step", () => {
     const first = await screen.findByRole("link", { name: hasKitchen ? "Add my first dish" : "Set up my kitchen" });
     expect(first.getAttribute("href")).toBe(hasKitchen ? "/chef/menu" : "/chef/kitchen");
     expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/menu")).toBe(hasKitchen);
+  });
+  it("explains a stale chef sign-in once, with one way forward", async () => {
+    fetcher.mockImplementation(input => {
+      const url = String(input);
+      if (url === "/api/chef/kitchen") return Promise.resolve(Response.json(kitchenFixture));
+      if (url === "/api/chef/menu") return Promise.resolve(Response.json([]));
+      if (["/api/chef/orders", "/api/chef/earnings"].includes(url)) return Promise.resolve(Response.json({ code: "CHEF_ACCESS_REQUIRED" }, { status: 403 }));
+      return normal(input);
+    });
+    render(createElement(ChefModeDashboard));
+    await screen.findByText("Sign in again to load your orders");
+    expect(screen.getByText(/the problem is on our side, not yours/)).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Sign in again", hidden: true })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Check now", hidden: true })).toBeNull();
+    expect(screen.queryByText(/^Orders:/)).toBeNull();
   });
   it.each(["unavailable", "invalid"])("does not claim kitchen setup is missing after a %s kitchen read", async state => {
     fetcher.mockImplementation(input => {

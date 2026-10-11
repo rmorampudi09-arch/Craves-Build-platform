@@ -12,6 +12,7 @@ import {
   foodIntents,
   launchCities,
   seoKeywords,
+  shareImage,
 } from "@/features/seo/lib/seo-craves";
 
 // The second segment is either a food intent (/hyderabad/biryani) or a neighborhood (/hyderabad/gachibowli).
@@ -40,6 +41,7 @@ export async function generateMetadata({ params }: CityFoodPageProps): Promise<M
       keywords: seoKeywords(city, undefined, area),
       alternates: { canonical: url },
       openGraph: {
+        images: [shareImage],
         title: `Homemade food in ${area}, ${city.name} | Craves`,
         description: `Fresh home-cooked meals from trusted home chefs near ${area}, ${city.name}.`,
         url,
@@ -59,6 +61,7 @@ export async function generateMetadata({ params }: CityFoodPageProps): Promise<M
     keywords: seoKeywords(city, food),
     alternates: { canonical: cityFoodUrl(city, food) },
     openGraph: {
+      images: [shareImage],
       title: `${food.name} in ${city.searchName} from Craves`,
       description: food.description,
       url: cityFoodUrl(city, food),

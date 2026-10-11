@@ -1,5 +1,12 @@
 export const siteUrl = "https://craves.in";
 export const cravesLogoUrl = `${siteUrl}/brand/craves-logo-20260805.png`;
+// Served by app/opengraph-image.tsx; child pages that set openGraph must list it or they lose the preview image.
+export const shareImage = {
+  url: `${siteUrl}/opengraph-image`,
+  width: 1200,
+  height: 630,
+  alt: "Craves – Homemade food from trusted home chefs",
+};
 
 export type LaunchCity = {
   slug: string;
@@ -327,6 +334,43 @@ export function cravesSiteGraph() {
   };
 }
 
+// Neighbors in the (roughly geographic) list order, so every area page links to a different set.
+export function nearbyAreas(city: LaunchCity, area: string, count = 6): string[] {
+  const index = city.neighborhoods.indexOf(area);
+  if (index < 0) return [];
+  const half = Math.floor(count / 2);
+  const start = Math.max(0, Math.min(index - half, city.neighborhoods.length - count - 1));
+  return city.neighborhoods.slice(start, start + count + 1).filter((item) => item !== area);
+}
+
+// Rendered on the page and in FAQPage schema; Google requires the two to match.
+export function localFaq(city: LaunchCity, food?: FoodIntent, area?: string) {
+  const place = area ? `${area}, ${city.name}` : city.searchName;
+  const dish = food ? food.name.toLowerCase() : "homemade food";
+  return [
+    {
+      question: `Where can I order ${dish} in ${place}?`,
+      answer: `On Craves (craves.in), a homemade food marketplace for ${place}. Browse trusted home chefs near you, order fresh home-cooked ${dish}, pay securely and track your delivery.`,
+    },
+    {
+      question: `Does Craves deliver in ${place}?`,
+      answer: area
+        ? `Yes. Craves serves ${area} and nearby localities as part of ${city.name}, one of its primary cities. Open craves.in/home and set your address to see the kitchens cooking near you right now.`
+        : `Yes. ${city.searchName} is one of the primary Craves cities. Open craves.in/home and set your address to see the kitchens cooking near you right now.`,
+    },
+    {
+      question: food ? `What kind of ${dish} can I find on Craves?` : "What food can I order on Craves?",
+      answer: food
+        ? `${food.description} What you see depends on which approved home kitchens near you are cooking today.`
+        : "Home-style biryani, breakfast and tiffin, lunch and dinner meals, veg and non-veg curries, healthy meals, snacks, sweets and weekly meal subscriptions, all cooked by approved home chefs.",
+    },
+    {
+      question: "Are Craves home chefs verified?",
+      answer: "Every Craves home chef goes through an application and document review before their kitchen can list food, and customers can see ratings and reviews before ordering.",
+    },
+  ];
+}
+
 export function cityStructuredData(city: LaunchCity, food?: FoodIntent, area?: string) {
   const url = area ? cityAreaUrl(city, area) : food ? cityFoodUrl(city, food) : cityUrl(city);
   const place = area ? `${area}, ${city.name}` : city.searchName;
@@ -377,36 +421,11 @@ export function cityStructuredData(city: LaunchCity, food?: FoodIntent, area?: s
       {
         "@type": "FAQPage",
         "@id": `${url}#faq`,
-        mainEntity: [
-          {
-            "@type": "Question",
-            name: `Does Craves cover ${place}?`,
-            acceptedAnswer: {
-              "@type": "Answer",
-              text: area
-                ? `Yes. Craves serves ${area} as part of ${city.name}, one of its primary launch cities for homemade food discovery and home-chef ordering. Open https://craves.in/home to see live kitchens near you.`
-                : `${city.searchName} is one of the primary Craves launch cities for homemade food discovery and home-chef ordering.`,
-            },
-          },
-          {
-            "@type": "Question",
-            name: `Where can I order homemade food in ${place}?`,
-            acceptedAnswer: {
-              "@type": "Answer",
-              text: `Craves (https://craves.in) is a homemade food marketplace for ${place}. Customers browse trusted home chefs, order fresh home-cooked meals, pay securely, and track delivery.`,
-            },
-          },
-          {
-            "@type": "Question",
-            name: food ? `Can I find ${food.name} on Craves?` : "What can I find on Craves?",
-            acceptedAnswer: {
-              "@type": "Answer",
-              text: food
-                ? `Craves helps customers discover ${food.name.toLowerCase()} and related home-chef food options where approved kitchens are available.`
-                : "Craves helps customers discover homemade meals, chef kitchens, live pricing, ordering, payment, and delivery-supported workflows.",
-            },
-          },
-        ],
+        mainEntity: localFaq(city, food, area).map((item) => ({
+          "@type": "Question",
+          name: item.question,
+          acceptedAnswer: { "@type": "Answer", text: item.answer },
+        })),
       },
       {
         "@type": "BreadcrumbList",

@@ -8,8 +8,13 @@ import {
 } from './MealPlanCheckoutContext';
 
 let mockData: CustomerAddress[] | undefined;
+let mockError = false;
 jest.mock('../../customerAddresses/query/customerAddressQueries', () => ({
-  useCustomerAddressesQuery: () => ({data: mockData, isLoading: mockData === undefined}),
+  useCustomerAddressesQuery: () => ({
+    data: mockData,
+    isLoading: mockData === undefined && !mockError,
+    isError: mockError,
+  }),
 }));
 
 function address(id: string, overrides: Partial<CustomerAddress> = {}): CustomerAddress {
@@ -84,6 +89,16 @@ describe('useSelectedDeliveryAddress', () => {
     expect(renderCheckout().selected).toMatchObject({address: null, addresses: [], loading: false});
     mockData = undefined;
     expect(renderCheckout().selected?.loading).toBe(true);
+  });
+
+  it('reports a fetch failure separately from having no address', () => {
+    mockData = undefined;
+    mockError = true;
+    try {
+      expect(renderCheckout().selected).toMatchObject({address: null, loading: false, isError: true});
+    } finally {
+      mockError = false;
+    }
   });
 });
 

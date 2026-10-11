@@ -41,6 +41,45 @@ describe('P111 process restoration policy', () => {
     });
   });
 
+  it.each(['Home', 'Profile'] as const)(
+    'restores the meal-plan list from any inner meal-plan screen under %s',
+    tab => {
+      const root = state([
+        {
+          name: tab,
+          state: state(
+            [
+              {name: tab === 'Home' ? 'CustomerHomeRoot' : 'CustomerProfileRoot'},
+              {
+                name: 'CustomerSettingsSubscription',
+                state: state(
+                  [
+                    {name: 'MealPlans'},
+                    {name: 'MealPlanPayment', params: {planId: 'plan-1', subscriptionId: 'sub-1'}},
+                  ],
+                  1,
+                ),
+              },
+            ],
+            1,
+          ),
+        },
+      ]);
+
+      const snapshot = captureProcessRestorationSnapshot(root, 'CUSTOMER');
+      expect(snapshot).toEqual({
+        version: 1,
+        role: 'CUSTOMER',
+        target: {kind: 'CUSTOMER_SCREEN', tab, screen: 'CustomerSettingsSubscription'},
+      });
+      expect(JSON.stringify(snapshot)).not.toContain('plan-1');
+      expect(toRestorationNavigatePayload(snapshot!)).toEqual({
+        name: tab,
+        params: {screen: 'CustomerSettingsSubscription'},
+      });
+    },
+  );
+
   it('collapses customer draft-bearing routes to their safe owner tab', () => {
     const root = state([
       {

@@ -139,7 +139,7 @@ describe('planRules', () => {
   it('returns the support rule when nothing is enabled', () => {
     expect(planRules(policy())).toEqual([
       {
-        icon: 'information-outline',
+        icon: 'info',
         title: 'Plan changes',
         body: 'Contact Craves support to change this plan.',
       },
@@ -163,7 +163,7 @@ describe('planRules', () => {
         body: 'Pause from My Meal Plan up to 2 hours before a meal.',
       },
       {
-        icon: 'calendar-remove-outline',
+        icon: 'calendar',
         title: 'Skip a meal',
         body: 'Skip any upcoming meal up to 24 hours before it.',
       },

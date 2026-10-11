@@ -13,8 +13,9 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
-import {Button, Icon, IconButton, type IconName} from '../../../shared/components';
+import {Button, Icon, type IconName} from '../../../shared/components';
 import type {MealPlanFoodType} from '../../mealPlans/domain/mealPlanSchedule';
+import type {PlanRule} from '../domain/mealPlanPresentation';
 
 export interface MealPlanHeaderProps {
   title: string;
@@ -27,7 +28,14 @@ export interface MealPlanHeaderProps {
 export function MealPlanHeader({title, subtitle, onBack, right}: MealPlanHeaderProps) {
   return (
     <View style={styles.header}>
-      <IconButton icon="arrow-left" accessibilityLabel="Go back" onPress={onBack} />
+      <Pressable
+        accessibilityLabel="Go back"
+        accessibilityRole="button"
+        hitSlop={spacing.xs}
+        onPress={onBack}
+        style={({pressed}) => [styles.backButton, pressed && styles.backPressed]}>
+        <Icon name="arrow-left" size={20} color={colors.espressoBrown} surface={false} />
+      </Pressable>
       <View style={styles.headerTitleBlock}>
         <Text
           accessibilityRole="header"
@@ -210,12 +218,6 @@ export function BottomPriceBar({
   );
 }
 
-export interface PlanRule {
-  icon: IconName;
-  title: string;
-  body: string;
-}
-
 export function PlanRulesList({rules}: {rules: PlanRule[]}) {
   return (
     <View>
@@ -248,6 +250,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     backgroundColor: colors.white,
   },
+  // Same look as the customer header back button: white, bare arrow.
+  backButton: {
+    width: touchTarget.minimum,
+    height: touchTarget.minimum,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.white,
+  },
+  backPressed: {backgroundColor: colors.surfaceMuted},
   headerTitleBlock: {flex: 1, minWidth: 0, alignItems: 'center'},
   headerTitle: {
     color: colors.textPrimary,
@@ -313,7 +325,9 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   infoAction: {
+    minWidth: touchTarget.minimum,
     minHeight: touchTarget.minimum,
+    alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xxs,
   },

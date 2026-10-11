@@ -40,14 +40,17 @@ export function useMealPlanCheckout(): MealPlanCheckoutValue {
 /**
  * Delivery-ready saved addresses only. The chosen one wins while it is still delivery-ready;
  * otherwise the default address, then the first. `address` is null when none qualifies.
+ * Always send `address?.id` to the API, never the context's raw `deliveryAddressId` (it may be stale).
+ * A failed fetch leaves `address` null with `isError` true: show a retry, not "Add an address".
  */
 export function useSelectedDeliveryAddress(): {
   address: CustomerAddress | null;
   addresses: CustomerAddress[];
   loading: boolean;
+  isError: boolean;
 } {
   const {deliveryAddressId} = useMealPlanCheckout();
-  const {data, isLoading} = useCustomerAddressesQuery();
+  const {data, isLoading, isError} = useCustomerAddressesQuery();
   const addresses = React.useMemo(
     () => (data ?? []).filter(isCustomerAddressDeliveryReady),
     [data],
@@ -57,5 +60,5 @@ export function useSelectedDeliveryAddress(): {
     addresses.find(candidate => candidate.isDefault) ??
     addresses[0] ??
     null;
-  return {address, addresses, loading: isLoading};
+  return {address, addresses, loading: isLoading, isError};
 }

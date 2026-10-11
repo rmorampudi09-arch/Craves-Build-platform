@@ -4,6 +4,7 @@ import {
   titleCaseCode,
   type ScheduleItemLike,
 } from '../../mealPlans/domain/mealPlanSchedule';
+import type {IconName} from '../../../shared/components/Icon';
 import type {
   CustomerSubscriptionOccurrence,
   PublicSubscriptionPolicy,
@@ -12,7 +13,7 @@ import type {
 export type Tone = 'neutral' | 'success' | 'warning' | 'error' | 'info';
 
 export interface PlanRule {
-  icon: string;
+  icon: IconName;
   title: string;
   body: string;
 }
@@ -148,7 +149,7 @@ export function planRules(policy: PublicSubscriptionPolicy): PlanRule[] {
   }
   if (policy.customerSkipEnabled) {
     rules.push({
-      icon: 'calendar-remove-outline',
+      icon: 'calendar',
       title: 'Skip a meal',
       body: policy.skipCutoffMinutes
         ? `Skip any upcoming meal up to ${formatCutoff(policy.skipCutoffMinutes)} before it.`
@@ -166,7 +167,7 @@ export function planRules(policy: PublicSubscriptionPolicy): PlanRule[] {
     ? rules
     : [
         {
-          icon: 'information-outline',
+          icon: 'info',
           title: 'Plan changes',
           body: 'Contact Craves support to change this plan.',
         },

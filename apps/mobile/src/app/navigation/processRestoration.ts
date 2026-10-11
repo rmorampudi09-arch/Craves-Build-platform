@@ -132,6 +132,17 @@ function captureCustomer(chain: NavigationRouteLike[]): ProcessRestorationSnapsh
   const leaf = chain[chain.length - 1];
   if (!leaf || chain.length === 1) return customerTabFallback(tab);
 
+  // The meal-plan flow is a nested stack under this route, so the deepest leaf is one of its inner
+  // screens. Those carry payment context and stay out of the allowlist: restore the meal-plan list,
+  // where interrupted-payment recovery runs.
+  if (chain.some(route => route.name === 'CustomerSettingsSubscription')) {
+    return {
+      version: PROCESS_RESTORATION_VERSION,
+      role: 'CUSTOMER',
+      target: {kind: 'CUSTOMER_SCREEN', tab, screen: 'CustomerSettingsSubscription'},
+    };
+  }
+
   const noParamResult = customerNoParamScreenSchema.safeParse(leaf.name);
   if (noParamResult.success) {
     // Draft-bearing forms are intentionally excluded from this allowlist. Only

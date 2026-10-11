@@ -9,6 +9,7 @@ import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from 
 import { phoneCodeRequestError, phoneCodeVerifyError } from "@/features/sign-in/lib/phone-auth-errors";
 import { getFirebaseBrowserClient } from "@/features/auth/lib/firebase-client";
 import { safeReturnPath, type CravesIdentity } from "@/features/auth/lib/auth-contract";
+import { CodeSlots, type CodeSlotsStatus } from "@/shared/ui/forms/code-slots";
 
 type Stage = "phone" | "otp" | "creating-session" | "done";
 type RecaptchaMode = "visible" | "invisible";
@@ -44,6 +45,8 @@ export function PhoneAuthForm({
   const [phone, setPhone] = useState(initialPhone ?? "+91");
   const [prefilled, setPrefilled] = useState(Boolean(initialPhone));
   const [otp, setOtp] = useState("");
+  const [otpStatus, setOtpStatus] = useState<CodeSlotsStatus>("idle");
+  const verifying = useRef(false);
   const [stage, setStage] = useState<Stage>("phone");
   const [message, setMessage] = useState(
     "Use your mobile number to receive a one-time password.",
@@ -129,6 +132,7 @@ export function PhoneAuthForm({
       clearVerifier();
       setOtp("");
       setStage("otp");
+      setOtpStatus("idle");
       setResendIn(RESEND_DELAY_SECONDS);
       setMessage(
         isResend
@@ -155,15 +159,24 @@ export function PhoneAuthForm({
 
   async function verifyOtp(event: FormEvent) {
     event.preventDefault();
-    if (!confirmation.current || !/^\d{6}$/.test(otp)) {
+    await verifyCode(otp);
+  }
+
+  /** Checks a complete code: from Verify OTP, or by itself once the last digit lands. */
+  async function verifyCode(code: string) {
+    if (verifying.current) return;
+    if (!confirmation.current || !/^\d{6}$/.test(code)) {
       setMessage("Enter the six-digit OTP.");
+      setOtpStatus("error");
       return;
     }
+    verifying.current = true;
     setBusy(true);
     setStage("creating-session");
+    setOtpStatus("verifying");
     setMessage(chefJourney ? "Checking your OTP…" : "Verifying OTP and creating your Craves session…");
     try {
-      const credential = await confirmation.current.confirm(otp);
+      const credential = await confirmation.current.confirm(code);
       const firebaseIdToken = await credential.user.getIdToken(true);
       const response = await fetch("/api/auth/session", {
         method: "POST",
@@ -177,7 +190,11 @@ export function PhoneAuthForm({
       };
       if (!response.ok) throw new Error(body.message ?? "We couldn’t sign you in. Check the code and try again, or request a new code.");
       setStage("done");
+      setOtpStatus("success");
       setMessage(chefJourney ? "Verified. Opening your kitchen…" : "Signed in successfully.");
+      // Let the accepted wave finish before the page changes.
+      if (!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)
+        await new Promise((resolve) => window.setTimeout(resolve, 450));
       if (onSignedIn) {
         if (!body.identity?.id) throw new Error("Sign-in failed. Please try again.");
         await onSignedIn(body.identity);
@@ -187,8 +204,12 @@ export function PhoneAuthForm({
       }
     } catch (error) {
       setStage("otp");
+      setOtpStatus("error");
       setMessage(phoneCodeVerifyError(error));
+      // After the shake, clear the slots so the code can be typed again from the first digit.
+      window.setTimeout(() => setOtp((current) => (current === code ? "" : current)), 600);
     } finally {
+      verifying.current = false;
       setBusy(false);
     }
   }
@@ -197,6 +218,7 @@ export function PhoneAuthForm({
     clearVerifier();
     confirmation.current = null;
     setOtp("");
+    setOtpStatus("idle");
     setResendIn(0);
     setPrefilled(false);
     setStage("phone");
@@ -237,15 +259,17 @@ export function PhoneAuthForm({
             >
               Six-digit OTP
             </label>
-            <input
+            <CodeSlots
               id="otp"
-              className={`craves-otp-field ${FIELD} text-center text-2xl tracking-[0.45em]`}
+              length={6}
               value={otp}
-              onChange={(event) =>
-                setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
-              }
-              autoComplete="one-time-code"
-              inputMode="numeric"
+              status={otpStatus}
+              onChange={(next) => {
+                setOtp(next);
+                if (otpStatus !== "verifying" && otpStatus !== "success") setOtpStatus("idle");
+              }}
+              onComplete={(code) => void verifyCode(code)}
+              disabled={busy || stage === "done"}
               // Mounts only after "Send OTP", replacing the focused phone field.
               autoFocus
               required

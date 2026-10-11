@@ -18,8 +18,20 @@ test("customer and chef OTP flows hide visible captcha and enforce one border", 
     assert.match(contents, /type RecaptchaMode = "visible" \| "invisible"/);
     assert.match(contents, /craves-recaptcha-resend/);
     assert.match(contents, /size: visible \? "normal" : "invisible"/);
-    assert.match(contents, /craves-otp-field/);
+    // The code is typed into CodeSlots: one real input under six animated slots.
+    assert.match(contents, /<CodeSlots/);
   }
+  const codeSlots = source("../../../shared/ui/forms/code-slots.tsx");
+  const codeSlotStyles = source("../../../shared/ui/forms/code-slots.css");
+  assert.match(codeSlots, /autoComplete="one-time-code"/);
+  assert.match(codeSlots, /inputMode="numeric"/);
+  assert.match(codeSlots, /className="code-slots-row" aria-hidden="true"/);
+  for (const motion of [/bounce = 0\.2/, /settle = 0\.3/, /rise = 8/, /cascade = 20/, /outcome = "accept"/])
+    assert.match(codeSlots, motion);
+  assert.match(codeSlotStyles, /prefers-reduced-motion: reduce/);
+  // A wrong code turns the borders red; it never fills the slots with a red tint.
+  assert.doesNotMatch(codeSlotStyles, /is-error[^}]*background: var\(--cs-danger\)/);
+  assert.match(source("../landing-modal/AuthModal.tsx"), /<CodeSlots/);
 
   assert.match(modal, /Resend verification code/);
   assert.doesNotMatch(modal, /Resend OTP/);

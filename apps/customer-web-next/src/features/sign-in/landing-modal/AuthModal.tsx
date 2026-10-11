@@ -3,6 +3,7 @@ import type { FormEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { phoneCodeVerifyError } from '@/features/sign-in/lib/phone-auth-errors';
 import { CUSTOMERS_LAUNCHING_SOON_COPY } from '@/features/sign-in/lib/customer-launch';
+import { CodeSlots } from '@/shared/ui/forms/code-slots';
 import './AuthModal.css';
 
 export type AuthRole = 'customer' | 'chef';
@@ -80,6 +81,7 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode, customersLaunchingSoo
   const [otpVisible, setOtpVisible] = useState(false);
   const [otp, setOtp] = useState('');
   const [otpError, setOtpError] = useState('');
+  const [otpAccepted, setOtpAccepted] = useState(false);
   const [requestKind, setRequestKind] = useState<'send' | 'resend' | 'verify' | null>(null);
   const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null);
   const [resendSeconds, setResendSeconds] = useState(0);
@@ -234,6 +236,7 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode, customersLaunchingSoo
     setOtpVisible(false);
     setOtp('');
     setOtpError('');
+    setOtpAccepted(false);
     setResendAvailableAt(null);
     setResendSeconds(0);
   };
@@ -322,7 +325,13 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode, customersLaunchingSoo
       await requestVerificationCode('send');
       return;
     }
-    if (!/^\d{6}$/.test(otp)) {
+    await verifyCode(otp);
+  };
+
+  /** Checks a complete code: from the submit button, or by itself once the last digit lands. */
+  const verifyCode = async (code: string) => {
+    if (pendingRequest.current || isClosing.current) return;
+    if (!/^\d{6}$/.test(code)) {
       setOtpError('Enter the 6-digit verification code.');
       otpRef.current?.focus();
       return;
@@ -332,13 +341,16 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode, customersLaunchingSoo
     setRequestKind('verify');
     try {
       // Submit verifies the entered code; it never requests another SMS.
-      await onVerifyCode({ ...buildRequest(), code: otp }, controller.signal);
+      await onVerifyCode({ ...buildRequest(), code }, controller.signal);
       if (!controller.signal.aborted && !isClosing.current) {
+        setOtpAccepted(true);
         setNotice('Mobile number verified successfully.');
       }
     } catch (error) {
       if (!controller.signal.aborted && !isClosing.current) {
         setOtpError(phoneCodeVerifyError(error));
+        // After the shake, clear the slots so the code can be typed again from the first digit.
+        window.setTimeout(() => setOtp((current) => (current === code ? '' : current)), 600);
       }
     } finally {
       if (!controller.signal.aborted && !isClosing.current) setRequestKind(null);
@@ -493,20 +505,20 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode, customersLaunchingSoo
                   {otpVisible && (
                     <div className="auth-modal__field auth-modal__otp">
                       <label htmlFor="craves-auth-otp">Verification code</label>
-                      <input
+                      <CodeSlots
                         ref={otpRef}
-                        id="craves-auth-otp" name="one-time-code" type="text"
-                        autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}"
-                        placeholder="Enter 6-digit OTP" maxLength={6} required disabled={submitting}
-                        autoCapitalize="none" spellCheck={false}
+                        id="craves-auth-otp" name="one-time-code"
+                        length={6} required disabled={submitting || otpAccepted}
+                        autoCapitalize="none"
                         value={otp}
-                        aria-invalid={!!otpError}
+                        status={requestKind === 'verify' ? 'verifying' : otpAccepted ? 'success' : otpError ? 'error' : 'idle'}
                         aria-describedby={otpError ? 'craves-auth-otp-error' : undefined}
-                        onChange={(event) => {
-                          setOtp(event.target.value.replace(/\D/g, '').slice(0, 6));
+                        onChange={(next) => {
+                          setOtp(next);
                           setOtpError('');
                           setNotice('');
                         }}
+                        onComplete={(code) => void verifyCode(code)}
                       />
                       {otpError && (
                         <span className="auth-modal__field-error" id="craves-auth-otp-error" role="alert">

@@ -9,6 +9,7 @@ import {
 } from "firebase/auth";
 import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from "@/features/sign-in/lib/msg91-browser";
 import { phoneCodeRequestError, phoneCodeVerifyError } from "@/features/sign-in/lib/phone-auth-errors";
+import { CodeSlots } from "@/shared/ui/forms/code-slots";
 import { getFirebaseBrowserClient } from "@/features/auth/lib/firebase-client";
 import {
   loadSession,
@@ -630,18 +631,16 @@ export function AuthModal({
                 className="block text-sm font-semibold text-ink"
               >
                 Six-digit verification code
-                <input
+                <CodeSlots
                   id={`${fieldPrefix}-otp`}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="000000"
+                  length={6}
                   value={otp}
-                  onChange={(event) =>
-                    setOtp(event.target.value.replace(/\D/g, ""))
-                  }
-                  className="craves-otp-field mt-2 min-h-12 w-full rounded-lg bg-white px-3 text-center text-lg tracking-widest text-ink placeholder:text-grey-400"
-                  autoComplete="one-time-code"
+                  status={busy ? "verifying" : error ? "error" : "idle"}
+                  onChange={(next) => {
+                    setOtp(next);
+                    setError(null);
+                  }}
+                  className="mt-2"
                   autoFocus
                   required
                 />

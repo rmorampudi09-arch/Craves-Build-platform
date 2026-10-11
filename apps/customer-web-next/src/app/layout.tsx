@@ -13,6 +13,7 @@ import { cravesLogoUrl, cravesSiteGraph, seoKeywords, siteUrl } from "@/features
 import "../shared/styles/styles.css";
 import "../shared/styles/craves-theme.css";
 import "../features/sign-in/styles/otp-overrides.css";
+import "../shared/ui/forms/code-slots.css";
 import "../shared/styles/control-border-overrides.css";
 
 const displayFont = Plus_Jakarta_Sans({

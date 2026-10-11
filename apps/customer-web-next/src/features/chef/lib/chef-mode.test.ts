@@ -3,7 +3,12 @@ import test from "node:test";
 import {
   CHEF_MODE_KEY,
   CHEF_MODE_MAX_AGE_MS,
+  CUSTOMER_MODE_KEY,
+  CUSTOMER_MODE_MAX_AGE_MS,
   clearChefMode,
+  clearCustomerMode,
+  isCustomerModeVerified,
+  markCustomerModeVerified,
   isChefModeVerified,
   markChefModeVerified,
   resolveChefDestination,
@@ -50,6 +55,34 @@ test("chef mode is verified only for the user who signed in to it in this tab", 
   }
 });
 
+test("the customer side is verified on this device for its own user while the sign-in lasts", () => {
+  const device = new Map<string, string>();
+  const localStorage = {
+    getItem: (key: string) => device.get(key) ?? null,
+    setItem: (key: string, value: string) => void device.set(key, value),
+    removeItem: (key: string) => void device.delete(key),
+  };
+  Object.assign(globalThis, { window: { sessionStorage, localStorage } });
+  try {
+    assert.equal(isCustomerModeVerified(owner), false);
+    markChefModeVerified(owner);
+    markCustomerModeVerified(owner);
+    // A customer-side sign-in ends Chef Mode in this tab, or the guard would send the chef straight back.
+    assert.equal(isChefModeVerified(owner), false);
+    assert.equal(JSON.parse(device.get(CUSTOMER_MODE_KEY) ?? "null").userId, owner);
+    assert.equal(isCustomerModeVerified(owner), true);
+    assert.equal(isCustomerModeVerified("22222222-2222-4222-8222-222222222222"), false);
+    // Thirty days, like the sign-in itself; then the switch from Chef Mode asks for an OTP again.
+    device.set(CUSTOMER_MODE_KEY, JSON.stringify({ userId: owner, verifiedAt: Date.now() - CUSTOMER_MODE_MAX_AGE_MS - 1 }));
+    assert.equal(isCustomerModeVerified(owner), false);
+    markCustomerModeVerified(owner);
+    clearCustomerMode();
+    assert.equal(isCustomerModeVerified(owner), false);
+  } finally {
+    Reflect.deleteProperty(globalThis, "window");
+  }
+});
+
 test("chef mode stays closed and never throws without browser storage", () => {
   markChefModeVerified(owner);
   assert.equal(isChefModeVerified(owner), false);
@@ -64,6 +97,10 @@ test("approved chefs open their requested chef page, applicants their applicatio
     assert.equal(resolveChefDestination({ roles: ["CUSTOMER"], applicationStatus: status, returnTo: "/chef/earnings" }), "/chef/application/status");
   // Approved but the CHEF role has not reached this session yet: never loop through /chef.
   assert.equal(resolveChefDestination({ roles: ["CUSTOMER"], applicationStatus: "APPROVED", returnTo: "/chef" }), "/chef/application/status");
+  // Signing in again mid-application returns to that step; other chef pages still go to the status.
+  assert.equal(resolveChefDestination({ roles: ["CUSTOMER"], applicationStatus: "PENDING", returnTo: "/chef/application?step=kitchen" }), "/chef/application?step=kitchen");
+  assert.equal(resolveChefDestination({ roles: ["CUSTOMER"], applicationStatus: null, returnTo: "/chef/application?step=personal" }), "/chef/application?step=personal");
+  assert.equal(resolveChefDestination({ roles: ["CUSTOMER"], applicationStatus: "PENDING", returnTo: "/chef/applications-fake" }), "/chef/application/status");
   for (const status of ["NOT_SUBMITTED", null, undefined])
     assert.equal(resolveChefDestination({ roles: ["CUSTOMER"], applicationStatus: status, returnTo: "/chef/menu" }), "/chef/application");
   // A stale CHEF role does not open the kitchen for a pending application.

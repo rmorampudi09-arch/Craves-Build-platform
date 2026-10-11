@@ -105,7 +105,7 @@ test("reduced motion keeps busy spinners alive as a slow pulse", () => {
   assert.doesNotMatch(homeStyles, /will-change/);
 });
 
-test("counts roll quickly without blur and the Veg switch slides without overshoot", () => {
+test("counts roll quickly without blur and the Veg switch keeps its original liquid slide", () => {
   const count = source("../shared/ui/AnimateCount.tsx");
   const toggle = source("../shared/ui/AppleSwitch.tsx");
   const checkoutBar = source("../features/cart/components/CartCheckoutBar.tsx");
@@ -117,9 +117,15 @@ test("counts roll quickly without blur and the Veg switch slides without oversho
   assert.doesNotMatch(count, /blur|ANIMATE_COUNT_DURATION_MS = 450/);
   assert.match(checkoutBar, /<AnimateCount format=\{\(value\) => money\(value, currency\)\}>\{total\}<\/AnimateCount>/);
 
+  // The owner asked for the original switch back: spring slide, a thumb that swells while held, drag to switch.
+  assert.match(toggle, /const thumbSpring = \{ stiffness: 700, damping: 48, mass: 0\.55 \}/);
+  assert.match(toggle, /const grabSpring = \{ stiffness: 500, damping: 25 \}/);
+  assert.match(toggle, /setPointerCapture\(event\.pointerId\)/);
+  assert.match(toggle, /setChecked\(targetX\.get\(\) >= thumbTravel \/ 2\)/);
+  // Reduced motion: the thumb jumps and never swells.
   assert.match(toggle, /useReducedMotion\(\)/);
-  assert.match(toggle, /transition=\{reduceMotion \? \{ duration: 0 \} : spring\.ui\}/);
-  assert.match(toggle, /animate=\{\{ x: on \? thumbTravel : 0 \}\}/);
-  assert.match(toggle, /on \? \(tone === "veg" \? "!bg-\[#2E7D32\]" : tone === "go" \? "!bg-\[#17803D\]" : "!bg-\[#F62E18\]"\) : "!bg-\[#8A8F98\]"/);
-  assert.doesNotMatch(toggle, /useSpring|grabSpring|backdropFilter|blur\(|width: thumbWidth/);
+  assert.match(toggle, /const thumbX = reduceMotion \? targetX : springX/);
+  assert.match(toggle, /grabTarget\.set\(reduceMotion \? 0 : value\)/);
+  assert.match(toggle, /ON_COLOR = \{ flame: "#F62E18", veg: "#2E7D32", go: "#17803D" \}/);
+  assert.match(toggle, /OFF_COLOR = "#8A8F98"/);
 });

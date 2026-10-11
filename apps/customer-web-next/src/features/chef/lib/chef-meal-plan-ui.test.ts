@@ -48,14 +48,15 @@ test("Chef meal plan controls meet the accessibility target-size baseline", () =
   assert.match(manager, /aria-label=\{\`Remove meal/);
 });
 
-test("Chef meal plans remain reachable from the Chef Mode More hub", () => {
+test("Chef meal plans stay reachable from the More hub, as a coming soon page for now", () => {
   const navigation = readFileSync(
     new URL("../../../app/chef/profile/page.tsx", import.meta.url),
     "utf8",
   );
   assert.match(navigation, /href: "\/chef\/meal-plans"/);
   assert.match(navigation, /label: "Meal plans"/);
-  assert.match(page, /ChefSubscriptionPlanManager/);
+  assert.match(page, /Meal plans are coming soon/);
+  assert.doesNotMatch(page, /<ChefSubscriptionPlanManager/);
 });
 
 test("Chef capacity contract supports recurring and date-specific rules", () => {

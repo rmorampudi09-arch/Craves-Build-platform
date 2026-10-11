@@ -75,9 +75,9 @@ async function requestCode() {
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Send verification code" })));
 }
 
+/** The sixth digit verifies the code by itself; no Submit tap is needed. */
 async function submitCode() {
-  fireEvent.change(screen.getByLabelText("Verification code"), { target: { value: "123456" } });
-  await act(async () => fireEvent.click(screen.getByRole("button", { name: /^Submit$/ })));
+  await act(async () => fireEvent.change(screen.getByLabelText("Verification code"), { target: { value: "123456" } }));
 }
 
 it("opens the exact ZIP popup and switches registration roles without requesting codes", async () => {

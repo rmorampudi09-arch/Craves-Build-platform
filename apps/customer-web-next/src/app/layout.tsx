@@ -5,6 +5,8 @@ import type { ReactNode } from "react";
 import { CartKitchenReplacementDialogHost } from "@/features/cart/components/CartKitchenReplacementDialogHost";
 import { BottomNav } from "@/features/customer-shell/components/BottomNav";
 import { ChefModeGuard } from "@/features/chef/components/ChefModeGuard";
+import { SessionEndedPrompt } from "@/features/auth/components/session-ended-prompt";
+import { NewCustomerProfileGate } from "@/features/profile/components/new-customer-profile-gate";
 import { MotionPreferences } from "@/shared/components/layout/MotionPreferences";
 import { StructuredData } from "@/features/seo/components/StructuredData";
 import { cravesLogoUrl, cravesSiteGraph, seoKeywords, siteUrl } from "@/features/seo/lib/seo-craves";
@@ -12,6 +14,7 @@ import { cravesLogoUrl, cravesSiteGraph, seoKeywords, siteUrl } from "@/features
 import "../shared/styles/styles.css";
 import "../shared/styles/craves-theme.css";
 import "../features/sign-in/styles/otp-overrides.css";
+import "../shared/ui/forms/code-slots.css";
 import "../shared/styles/control-border-overrides.css";
 
 const displayFont = Plus_Jakarta_Sans({
@@ -91,6 +94,8 @@ export default function RootLayout({
           <BottomNav />
           <CartKitchenReplacementDialogHost />
           <ChefModeGuard />
+          <NewCustomerProfileGate />
+          <SessionEndedPrompt />
         </MotionPreferences>
       </body>
     </html>

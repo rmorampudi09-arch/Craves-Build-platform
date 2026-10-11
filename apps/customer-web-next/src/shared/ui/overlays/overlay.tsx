@@ -153,6 +153,8 @@ export type OverlayProps = {
   busy?: boolean;
   /** Something was typed: the close button, Esc and Back ask "Discard your changes?" first. */
   unsavedChanges?: boolean;
+  /** False for a required step: no close button, and Esc, outside taps and Back keep it open. */
+  dismissible?: boolean;
 };
 
 /**
@@ -201,8 +203,10 @@ function Overlay({
   closeOnOutsideTap = true,
   busy = false,
   unsavedChanges = false,
+  dismissible = true,
   closeLabel = "Close",
 }: OverlayProps & { kind: "sheet" | "dialog"; closeLabel?: string }) {
+  const locked = busy || !dismissible;
   const reduceMotion = useReducedMotion();
   const wide = useSyncExternalStore(subscribeWide, isWide, () => false);
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -216,7 +220,7 @@ function Overlay({
   }
   /** Every way of closing comes here; false means the overlay stays open. */
   const requestClose = (): boolean => {
-    if (busy) return false;
+    if (locked) return false;
     if (asking) {
       setAsking(false); // Esc or Back while asking: keep editing.
       return false;
@@ -248,9 +252,10 @@ function Overlay({
       <AnimatePresence>
         {open ? (
           <RadixDialog.Portal forceMount>
+            {/* 62: above the chef application screen (.cob-modal, 61), which opens sheets of its own. */}
             <RadixDialog.Overlay forceMount asChild>
               <motion.div
-                className="fixed inset-0 z-[60] bg-[#1A1A1A]/48"
+                className="fixed inset-0 z-[62] bg-[#1A1A1A]/48"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1, transition: ENTER }}
                 exit={{ opacity: 0, transition: EXIT }}
@@ -259,8 +264,8 @@ function Overlay({
             <div
               className={
                 bottomSheet
-                  ? "pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center"
-                  : "pointer-events-none fixed inset-0 z-[60] flex items-center justify-center p-4"
+                  ? "pointer-events-none fixed inset-x-0 bottom-0 z-[62] flex justify-center"
+                  : "pointer-events-none fixed inset-0 z-[62] flex items-center justify-center p-4"
               }
             >
               <RadixDialog.Content
@@ -276,10 +281,10 @@ function Overlay({
                   returnFocus.current?.focus();
                 }}
                 onEscapeKeyDown={(event) => {
-                  if (busy) event.preventDefault();
+                  if (locked) event.preventDefault();
                 }}
                 onInteractOutside={(event) => {
-                  if (busy || !closeOnOutsideTap) event.preventDefault();
+                  if (locked || !closeOnOutsideTap) event.preventDefault();
                 }}
               >
                 <motion.div
@@ -305,7 +310,7 @@ function Overlay({
                         </RadixDialog.Description>
                       ) : null}
                     </div>
-                    {kind === "sheet" ? (
+                    {kind === "sheet" && dismissible ? (
                       <RadixDialog.Close
                         disabled={busy}
                         aria-label={closeLabel}

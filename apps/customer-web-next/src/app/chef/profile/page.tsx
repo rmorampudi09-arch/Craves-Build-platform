@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";
@@ -11,7 +12,7 @@ import {
   ChevronRight,
   FileCheck2,
   FileText,
-  Gauge,
+  Wallet,
   Landmark,
   LifeBuoy,
   LogOut,
@@ -37,12 +38,13 @@ function groups(kitchen: Kitchen | null): { title: string; items: Item[] }[] {
     { title: "Kitchen", items: [
       { href: "/chef/kitchen", icon: Store, label: "Kitchen details", description: kitchen?.kitchenName || "Name, address and phone" },
       { href: "/chef/operations", icon: ShieldCheck, label: "Can customers find you?", description: "See what’s done and what’s left" },
-      { href: "/chef/meal-plans", icon: CalendarDays, label: "Meal plans", description: "Plans customers buy for a week or month" },
-      { href: "/chef/capacity", icon: Gauge, label: "Plates per day", description: "How many meal plan plates you can cook" },
+      // Plates per day only counts meal plan plates, so it waits for meal plans.
+      { href: "/chef/meal-plans", icon: CalendarDays, label: "Meal plans", description: "Coming soon" },
     ] },
     { title: "Money", items: [
       { href: "/chef/earnings", icon: BadgeIndianRupee, label: "Earnings", description: "Money from your orders" },
-      { href: "/chef/finance", icon: Landmark, label: "Balance & payouts", description: "Take out money, and your bank account" },
+      { href: "/chef/finance", icon: Wallet, label: "Balance & payouts", description: "Take out the money you earned" },
+      { href: "/chef/bank", icon: Landmark, label: "Edit bank account details", description: "The account Craves sends your money to" },
       { href: "/chef/statements", icon: FileText, label: "Statements", description: "PDF records to keep or share" },
     ] },
     { title: "Account", items: [
@@ -71,7 +73,7 @@ function MoreHub(){
  const [error,setError]=useState("");
  const [retry,setRetry]=useState(0);
  const signOut=useChefSignOut();
- useEffect(()=>{let active=true; setLoading(true); setError(""); void Promise.all([fetch("/api/chef/application",{cache:"no-store"}),fetch("/api/chef/kitchen",{cache:"no-store"})]).then(async([a,k])=>{if(!a.ok) throw chefApiError(a,await a.json().catch(()=>null),PROFILE_UNAVAILABLE);if(!k.ok) throw chefApiError(k,await k.json().catch(()=>null),PROFILE_UNAVAILABLE);const av=await a.json().catch(()=>null);const kv=await k.json().catch(()=>null);if(active){setApplication(av);setKitchen(kv);setLoading(false)}}).catch((cause:unknown)=>{if(active){setError(chefErrorText(cause,PROFILE_UNAVAILABLE));setLoading(false)}});return()=>{active=false}},[retry]);
+ useEffect(()=>{let active=true; setLoading(true); setError(""); void Promise.all([sessionFetch("/api/chef/application",{cache:"no-store"}),sessionFetch("/api/chef/kitchen",{cache:"no-store"})]).then(async([a,k])=>{if(!a.ok) throw chefApiError(a,await a.json().catch(()=>null),PROFILE_UNAVAILABLE);if(!k.ok) throw chefApiError(k,await k.json().catch(()=>null),PROFILE_UNAVAILABLE);const av=await a.json().catch(()=>null);const kv=await k.json().catch(()=>null);if(active){setApplication(av);setKitchen(kv);setLoading(false)}}).catch((cause:unknown)=>{if(active){setError(chefErrorText(cause,PROFILE_UNAVAILABLE));setLoading(false)}});return()=>{active=false}},[retry]);
  const name=[application?.firstName,application?.lastName].filter(Boolean).join(" ")||"Chef";
  return <div className="chef-stack">
    <section className="chef-section" aria-busy={loading}>

@@ -17,10 +17,10 @@ test("chef workspace navigation and the More hub expose every implemented backen
   for (const route of [
     "/chef/kitchen",
     "/chef/meal-plans",
-    "/chef/capacity",
     "/chef/operations",
     "/chef/earnings",
     "/chef/finance",
+    "/chef/bank",
     "/chef/statements",
     "/chef/application/status",
     "/chef/notifications",
@@ -28,6 +28,8 @@ test("chef workspace navigation and the More hub expose every implemented backen
   ]) {
     assert.match(more, new RegExp(`href: "${route.replaceAll("/", "\\/")}"`), route);
   }
+  // Plates per day only counts meal plan plates; it returns to More with meal plans.
+  assert.doesNotMatch(more, /href: "\/chef\/capacity"/);
   assert.match(more, /Switch to customer app/);
   assert.match(more, /Sign out/);
   assert.doesNotMatch(more, /not available yet/i);

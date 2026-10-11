@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PhoneAuthForm } from "@/features/sign-in/components/phone-auth-form";
+import { CustomerSignIn } from "@/features/sign-in/components/customer-sign-in";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import { safeReturnPath } from "@/features/auth/lib/auth-contract";
 import { safeChefReturnTo } from "@/features/chef/lib/chef-mode";
@@ -15,7 +16,7 @@ export const metadata = {
 };
 
 export default async function SignInPage({ searchParams }: {
-  searchParams: Promise<{ returnTo?: string; access?: string; from?: string }>;
+  searchParams: Promise<{ returnTo?: string; access?: string; confirm?: string; from?: string }>;
 }) {
   const query = await searchParams;
   const destination = safeReturnPath(query.returnTo);
@@ -43,7 +44,8 @@ export default async function SignInPage({ searchParams }: {
       </>}</div>
     </section>
   </div></main>;
-  if (!adminJourney) return <main className="flex min-h-screen items-center bg-[#F1F3F5] px-5 py-12"><div className="mx-auto w-full max-w-xl"><PhoneAuthForm returnTo={returnTo} centralOtp={centralOtp}/></div></main>;
+  // confirm=customer: a chef switching to the customer app confirms with an OTP first.
+  if (!adminJourney) return <main className="flex min-h-screen items-center bg-[#F1F3F5] px-5 py-12"><div className="mx-auto w-full max-w-xl"><CustomerSignIn returnTo={returnTo} centralOtp={centralOtp} confirm={query.confirm === "customer"}/></div></main>;
 
   return <main className="cr-admin cr-login">
     <section className="cr-login-story" aria-labelledby="cr-login-title">

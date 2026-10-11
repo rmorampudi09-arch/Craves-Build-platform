@@ -1,0 +1,148 @@
+/*
+ * One-time-code slots (CodeSlots). Plain CSS, so the separately built landing popup uses it too.
+ * Motion: each digit rises 8px and settles in 0.3s with a 0.2 overshoot; the success and error
+ * waves step 20ms per slot. Colours come from the component's --cs-* variables.
+ */
+.code-slots {
+  position: relative;
+  width: 100%;
+  font-family: var(--font-display-family, var(--font-craves-display, "Plus Jakarta Sans")), system-ui, sans-serif;
+}
+.code-slots-row {
+  display: grid;
+  grid-template-columns: repeat(var(--cs-length), minmax(0, var(--cs-size)));
+  justify-content: center;
+  gap: var(--cs-gap);
+}
+/* The real input lies over the slots: taps, paste and SMS autofill go to it, and it draws nothing. */
+.code-slots .code-slots-input {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
+  caret-color: transparent !important;
+  /* 16px stops iOS from zooming the page when the field takes focus. */
+  font-size: 16px !important;
+  letter-spacing: -0.5em;
+  cursor: text;
+  -webkit-tap-highlight-color: transparent;
+}
+/* Theme rules such as `.chef-panel-theme input` paint inputs with !important from Tailwind's
+   components layer, and a layered !important beats every unlayered one, so the paint reset is
+   repeated in the earlier base layer (on chef sign-in the slots were hidden behind a white box). */
+@layer base {
+  .code-slots .code-slots-input.code-slots-input {
+    border: 0 !important;
+    outline: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: transparent !important;
+  }
+}
+.code-slots .code-slots-input::selection { background: transparent; }
+.code-slots .code-slots-input:disabled { cursor: not-allowed; }
+
+.code-slot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: calc(var(--cs-size) * 1.18);
+  border: 1.5px solid transparent;
+  border-radius: var(--cs-radius);
+  background: var(--cs-slot);
+  color: var(--cs-ink);
+  font-size: calc(var(--cs-size) * 0.5);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.code-slot[data-filled] { border-color: #d3d7dd; background: #fff; }
+.code-slot[data-active] { border-color: var(--cs-accent); background: #fff; transform: translateY(-1px); }
+.code-slot-digit {
+  display: block;
+  animation: cs-rise var(--cs-settle) cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.code-slot-caret {
+  width: 2px;
+  height: 42%;
+  border-radius: 1px;
+  background: var(--cs-accent);
+  animation: cs-blink 1.06s steps(1, end) infinite;
+}
+
+.code-slots.is-disabled .code-slot { opacity: 0.65; }
+/* Checking the code: a soft wave runs across the slots. */
+.code-slots.is-verifying .code-slot {
+  opacity: 1;
+  animation: cs-wait 1.2s ease-in-out calc(var(--cs-i) * 90ms) infinite;
+}
+/* Accepted: the slots fill green in a wave, left to right. */
+.code-slots.is-success.is-accepting .code-slot {
+  opacity: 1;
+  border-color: var(--cs-success);
+  background: var(--cs-success);
+  color: var(--cs-digit);
+  animation: cs-accept 420ms cubic-bezier(0.22, 1, 0.36, 1) calc(var(--cs-i) * var(--cs-cascade)) both;
+}
+/* Wrong code: the row shakes once and the borders turn red, slot by slot. No red fill. */
+.code-slots.is-error .code-slot {
+  border-color: var(--cs-danger);
+  background: #fff;
+  animation: cs-flag 260ms ease calc(var(--cs-i) * var(--cs-cascade)) both;
+}
+.code-slots.is-error .code-slots-row { animation: cs-shake 360ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+
+@keyframes cs-rise {
+  0% { opacity: 0; transform: translateY(var(--cs-rise)) scale(0.9); }
+  60% { opacity: 1; transform: translateY(calc(var(--cs-rise) * var(--cs-bounce) * -1)) scale(1.03); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes cs-blink {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@keyframes cs-wait {
+  0%, 100% { transform: none; }
+  40% { transform: translateY(-3px); }
+}
+@keyframes cs-accept {
+  0% { border-color: #d3d7dd; background: #fff; color: var(--cs-ink); transform: none; }
+  45% { transform: translateY(-4px) scale(1.04); }
+  100% { border-color: var(--cs-success); background: var(--cs-success); color: var(--cs-digit); transform: none; }
+}
+@keyframes cs-flag {
+  from { border-color: #d3d7dd; }
+  to { border-color: var(--cs-danger); }
+}
+@keyframes cs-shake {
+  0%, 100% { transform: none; }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .code-slots .code-slot,
+  .code-slots .code-slot-digit,
+  .code-slots .code-slots-row,
+  .code-slots .code-slot-caret {
+    animation: none !important;
+    transition: none !important;
+  }
+}

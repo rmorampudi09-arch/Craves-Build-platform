@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -18,7 +19,7 @@ export function ChefReadinessPanel() {
     setState("loading");
     const timeout = window.setTimeout(() => controller.abort(), 15_000);
     try {
-      const response = await fetch("/api/chef/application/readiness", { cache: "no-store", signal: controller.signal });
+      const response = await sessionFetch("/api/chef/application/readiness", { cache: "no-store", signal: controller.signal });
       if (!response.ok) throw chefApiError(response, await response.json().catch(() => null), READINESS_UNAVAILABLE);
       const parsed = parseChefApplicationReadiness(await response.json());
       if (!parsed) throw new ChefError(READINESS_UNAVAILABLE, "INVALID_READINESS_RESPONSE", response.status);

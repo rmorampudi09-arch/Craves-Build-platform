@@ -229,6 +229,9 @@ export function activeChefSections(state: OnboardingState | null): readonly Chef
 }
 export function afterSectionSave(section: ChefFormSection, fromReview: boolean, state: OnboardingState | null = null): ChefFormScreen {
   if (fromReview) return "review";
+  // Changes Craves asked for: only the flagged sections, in order, then review. The rest is already done.
+  const flagged = state ? correctionSections(state) : [];
+  if (flagged.length) return flagged.find((next) => CHEF_SECTIONS.indexOf(next) > CHEF_SECTIONS.indexOf(section)) ?? "review";
   const sections = activeChefSections(state);
   return sections[sections.indexOf(section) + 1] ?? "review";
 }

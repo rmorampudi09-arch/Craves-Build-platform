@@ -44,7 +44,12 @@ for (const artifact of artifacts) {
 
 // Publish the original ZIP stylesheet unchanged. Its selectors are already
 // scoped to .auth-modal, and the popup renders a portal outside the host node.
-const css = await readFile(path.join(source, 'features/sign-in/landing-modal/AuthModal.css'));
+// The OTP code slots are shared with the app; their stylesheet rides along with the popup's.
+const css = Buffer.concat([
+  await readFile(path.join(source, 'features/sign-in/landing-modal/AuthModal.css')),
+  Buffer.from('\n'),
+  await readFile(path.join(source, 'shared/ui/forms/code-slots.css')),
+]);
 const cssName = `auth-${createHash('sha256').update(css).digest('hex').slice(0, 16)}.css`;
 await writeFile(path.join(output, cssName), css);
 await writeFile(path.join(output, 'manifest.json'), JSON.stringify({ script: `/landing-auth/${entry.fileName}`, style: `/landing-auth/${cssName}` }) + '\n');

@@ -36,7 +36,6 @@ const workspaceRoutes = [
   "/chef/kitchen",
   "/chef/menu",
   "/chef/meal-plans",
-  "/chef/capacity",
   "/chef/orders",
   "/chef/earnings",
   "/chef/operations",

@@ -52,8 +52,8 @@ it("shows the signed-in number and opens the application after a fresh OTP", asy
   expect(screen.getByText(/keeps your orders, menu and earnings safe/)).toBeTruthy();
   expect(isChefModeVerified(customer.id)).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Send OTP" }));
+  // The sixth digit verifies the code by itself.
   fireEvent.change(await screen.findByLabelText("Six-digit OTP"), { target: { value: "123456" } });
-  fireEvent.click(screen.getByRole("button", { name: "Verify OTP" }));
   await waitFor(() => expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/chef/application"));
   expect(mocks.msg91).toHaveBeenCalledWith("+919876543210", "craves-recaptcha");
   expect(isChefModeVerified(customer.id)).toBe(true);

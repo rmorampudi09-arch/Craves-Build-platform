@@ -4,6 +4,7 @@ import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/f
 import { usePathname, useRouter } from "next/navigation";
 import { parseChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
 import { clearChefMode, isChefModeVerified } from "@/features/chef/lib/chef-mode";
+import { rememberChefName } from "@/features/chef/lib/chef-name";
 import { ChefLoading, chefLoadingShapeFor } from "@/features/chef/components/chef-loading";
 import { Fragment, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
@@ -109,6 +110,7 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
       const failureBody: unknown = response.ok ? null : await response.json().catch(() => null);
       if (!active || !isSessionContextCurrent(context)) return;
       if (response.status === 401) return signIn();
+      if (application) rememberChefName(current.id, application);
       if (!application)
         return unavailable(chefErrorText(response.ok
           ? new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, "INVALID_CHEF_APPLICATION_RESPONSE", response.status)

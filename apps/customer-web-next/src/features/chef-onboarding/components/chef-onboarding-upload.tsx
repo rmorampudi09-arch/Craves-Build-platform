@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { chefErrorText } from "@/features/chef/lib/chef-errors";
 import { useEffect, useRef, useState } from "react";
@@ -76,7 +77,7 @@ export function useSavedPreview(evidence: ChefEvidenceMetadata | undefined, enab
     setUrl(null);
     if (!id || !enabled || !image) return;
     const controller = new AbortController();
-    void fetch(`/api/chef/onboarding/documents/${id}/preview`, {
+    void sessionFetch(`/api/chef/onboarding/documents/${id}/preview`, {
       cache: "no-store",
       credentials: "same-origin",
       signal: controller.signal,

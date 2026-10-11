@@ -2,7 +2,8 @@
 // Isolated fixtures for the redesigned Chef onboarding popup. No production APIs are called.
 import { createElement, useEffect } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { MotionGlobalConfig } from "framer-motion";
 import { ChefOnboardingWorkspace } from "../components/chef-onboarding-workspace";
 import { ChefApplicationSessionBoundary } from "../components/chef-application-session-boundary";
 import { EMPTY_ONBOARDING, type OnboardingState } from "./chef-onboarding-v2-contract";
@@ -120,6 +121,10 @@ function normal(input: RequestInfo | URL, init?: RequestInit): Promise<Response>
   if (url.startsWith("/api/chef/onboarding/content")) return Promise.resolve(Response.json([]));
   return Promise.resolve(Response.json({ message: "Fixture unavailable" }, { status: 503 }));
 }
+// Pickers open sheets; skipped animations let a closed sheet leave the page at once.
+beforeAll(() => { MotionGlobalConfig.skipAnimations = true; });
+afterAll(() => { MotionGlobalConfig.skipAnimations = false; });
+
 beforeEach(() => {
   saved = fixture();
   setSessionIdentity(identity);
@@ -371,18 +376,19 @@ describe("Redesigned Chef onboarding popup", () => {
 });
 
 describe("Backend gap fixes", () => {
-  it("blocks applicants under 18 before saving Basic details", async () => {
+  it("offers only birth dates of applicants who are 18 or older, and never saves without one", async () => {
     saved.details = null;
     saved.application = { ...saved.application, status: "NOT_SUBMITTED" };
     open();
     await screen.findByRole("heading", { name: "Basic details" });
     fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Young Chef" } });
-    fireEvent.change(screen.getByLabelText("Date of birth"), {
-      target: { value: `${new Date().getFullYear() - 16}-05-01` },
-    });
     fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
-    expect((await screen.findByRole("alert")).textContent).toContain("at least 18 years old");
+    expect((await screen.findByRole("alert")).textContent).toContain("date of birth");
     expect(fetcher.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: /^Date of birth/ }));
+    const adultYear = new Date().getFullYear() - 18;
+    expect(await screen.findByRole("button", { name: String(adultYear) })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: String(adultYear + 2) })).toBeNull();
   });
 
   it("lets an Other government ID be marked as having no back side", async () => {
@@ -418,8 +424,9 @@ describe("Backend gap fixes", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Continue application" }));
     await screen.findByRole("heading", { name: "FSSAI details" });
     fireEvent.click(screen.getByRole("button", { name: "Don’t have FSSAI?" }));
-    expect(await screen.findByText(/showing the English guide/)).toBeTruthy();
-    expect(screen.getByText("Apply for FSSAI")).toBeTruthy();
+    // The English guide shows as it is: no "not in your language" line under the language choice.
+    expect(await screen.findByText("Apply for FSSAI")).toBeTruthy();
+    expect(screen.queryByText(/showing the English guide|in this language/)).toBeNull();
     expect(screen.getByText("Request received")).toBeTruthy();
     expect(screen.getByText(/SUP-2041/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Request a call from Craves" })).toBeNull();

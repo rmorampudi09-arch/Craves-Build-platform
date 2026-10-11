@@ -9,6 +9,8 @@ import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from 
 import { phoneCodeRequestError, phoneCodeVerifyError } from "@/features/sign-in/lib/phone-auth-errors";
 import { getFirebaseBrowserClient } from "@/features/auth/lib/firebase-client";
 import { safeReturnPath, type CravesIdentity } from "@/features/auth/lib/auth-contract";
+import { CodeSlots, type CodeSlotsStatus } from "@/shared/ui/forms/code-slots";
+import { markCustomerModeVerified } from "@/features/chef/lib/chef-mode";
 
 type Stage = "phone" | "otp" | "creating-session" | "done";
 type RecaptchaMode = "visible" | "invisible";
@@ -31,6 +33,7 @@ export function PhoneAuthForm({
   centralOtp = true,
   initialPhone,
   onSignedIn,
+  heading,
 }: {
   returnTo?: string;
   centralOtp?: boolean;
@@ -38,12 +41,16 @@ export function PhoneAuthForm({
   initialPhone?: string;
   /** Takes over once the session exists (Chef Mode) instead of opening returnTo. */
   onSignedIn?: (identity: CravesIdentity) => Promise<void> | void;
+  /** Replaces the title and line under it, for example when switching over from Chef Mode. */
+  heading?: { title: string; text: string };
 }) {
   const destination = safeReturnPath(returnTo);
   const chefJourney = destination.startsWith("/chef");
   const [phone, setPhone] = useState(initialPhone ?? "+91");
   const [prefilled, setPrefilled] = useState(Boolean(initialPhone));
   const [otp, setOtp] = useState("");
+  const [otpStatus, setOtpStatus] = useState<CodeSlotsStatus>("idle");
+  const verifying = useRef(false);
   const [stage, setStage] = useState<Stage>("phone");
   const [message, setMessage] = useState(
     "Use your mobile number to receive a one-time password.",
@@ -129,6 +136,7 @@ export function PhoneAuthForm({
       clearVerifier();
       setOtp("");
       setStage("otp");
+      setOtpStatus("idle");
       setResendIn(RESEND_DELAY_SECONDS);
       setMessage(
         isResend
@@ -155,15 +163,24 @@ export function PhoneAuthForm({
 
   async function verifyOtp(event: FormEvent) {
     event.preventDefault();
-    if (!confirmation.current || !/^\d{6}$/.test(otp)) {
+    await verifyCode(otp);
+  }
+
+  /** Checks a complete code: from Verify OTP, or by itself once the last digit lands. */
+  async function verifyCode(code: string) {
+    if (verifying.current) return;
+    if (!confirmation.current || !/^\d{6}$/.test(code)) {
       setMessage("Enter the six-digit OTP.");
+      setOtpStatus("error");
       return;
     }
+    verifying.current = true;
     setBusy(true);
     setStage("creating-session");
+    setOtpStatus("verifying");
     setMessage(chefJourney ? "Checking your OTP…" : "Verifying OTP and creating your Craves session…");
     try {
-      const credential = await confirmation.current.confirm(otp);
+      const credential = await confirmation.current.confirm(code);
       const firebaseIdToken = await credential.user.getIdToken(true);
       const response = await fetch("/api/auth/session", {
         method: "POST",
@@ -177,7 +194,13 @@ export function PhoneAuthForm({
       };
       if (!response.ok) throw new Error(body.message ?? "We couldn’t sign you in. Check the code and try again, or request a new code.");
       setStage("done");
+      setOtpStatus("success");
+      // A customer OTP opens the customer app on this device; Chef Mode keeps its own check.
+      if (!chefJourney && body.identity?.id) markCustomerModeVerified(body.identity.id);
       setMessage(chefJourney ? "Verified. Opening your kitchen…" : "Signed in successfully.");
+      // Let the accepted wave finish before the page changes.
+      if (!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)
+        await new Promise((resolve) => window.setTimeout(resolve, 450));
       if (onSignedIn) {
         if (!body.identity?.id) throw new Error("Sign-in failed. Please try again.");
         await onSignedIn(body.identity);
@@ -187,8 +210,12 @@ export function PhoneAuthForm({
       }
     } catch (error) {
       setStage("otp");
+      setOtpStatus("error");
       setMessage(phoneCodeVerifyError(error));
+      // After the shake, clear the slots so the code can be typed again from the first digit.
+      window.setTimeout(() => setOtp((current) => (current === code ? "" : current)), 600);
     } finally {
+      verifying.current = false;
       setBusy(false);
     }
   }
@@ -197,6 +224,7 @@ export function PhoneAuthForm({
     clearVerifier();
     confirmation.current = null;
     setOtp("");
+    setOtpStatus("idle");
     setResendIn(0);
     setPrefilled(false);
     setStage("phone");
@@ -217,12 +245,13 @@ export function PhoneAuthForm({
         <p className="text-sm font-semibold text-[#C4200F]">Secure Craves access</p>
       )}
       <h1 className={`text-3xl font-bold tracking-tight text-[#1A1A1A] ${chefJourney ? "" : "mt-2"}`}>
-        {chefJourney ? "Sign in to your kitchen" : "Sign in with mobile OTP"}
+        {heading?.title ?? (chefJourney ? "Sign in to your kitchen" : "Sign in with mobile OTP")}
       </h1>
       <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">
-        {chefJourney
-          ? "We’ll send a code to your phone. This keeps your orders, menu and earnings safe."
-          : "Use one mobile number for both customer and chef mode."}
+        {heading?.text ??
+          (chefJourney
+            ? "We’ll send a code to your phone. This keeps your orders, menu and earnings safe."
+            : "Use one mobile number for both customer and chef mode.")}
       </p>
 
       <form
@@ -237,19 +266,30 @@ export function PhoneAuthForm({
             >
               Six-digit OTP
             </label>
-            <input
+            <CodeSlots
               id="otp"
-              className={`craves-otp-field ${FIELD} text-center text-2xl tracking-[0.45em]`}
+              length={6}
               value={otp}
-              onChange={(event) =>
-                setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
-              }
-              autoComplete="one-time-code"
-              inputMode="numeric"
+              status={otpStatus}
+              onChange={(next) => {
+                setOtp(next);
+                if (otpStatus !== "verifying" && otpStatus !== "success") setOtpStatus("idle");
+              }}
+              onComplete={(code) => void verifyCode(code)}
+              // Read-only while checking, never disabled: the field keeps focus and the keypad stays up.
+              readOnly={busy}
+              disabled={stage === "done"}
+              aria-describedby={otpStatus === "error" ? "otp-error" : undefined}
               // Mounts only after "Send OTP", replacing the focused phone field.
               autoFocus
               required
             />
+            {/* A wrong code is explained right under the boxes, not below the buttons. */}
+            {otpStatus === "error" ? (
+              <p id="otp-error" role="alert" className="text-left text-sm font-medium text-[#C4200F]">
+                {message}
+              </p>
+            ) : null}
           </>
         ) : prefilled ? (
           <div className="flex min-h-12 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-2xl bg-[#F1F3F5] py-2 pl-4 pr-2">
@@ -336,7 +376,7 @@ export function PhoneAuthForm({
         aria-live="polite"
         className="mt-4 text-sm leading-6 text-[#1A1A1A]"
       >
-        {message}
+        {otpStatus === "error" ? null : message}
       </p>
       <p className="mt-4 text-xs leading-5 text-[#6B6B6B]">
         {chefJourney

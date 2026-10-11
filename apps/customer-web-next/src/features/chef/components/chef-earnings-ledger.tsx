@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -40,7 +41,7 @@ export function ChefEarningsLedger() {
     else setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/chef/earnings", {
+      const response = await sessionFetch("/api/chef/earnings", {
         cache: "no-store",
         credentials: "same-origin",
       });

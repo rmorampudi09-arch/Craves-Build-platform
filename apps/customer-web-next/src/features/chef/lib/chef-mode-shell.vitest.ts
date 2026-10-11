@@ -9,7 +9,7 @@ import ChefLayout from "../../../app/chef/layout";
 import ChefMorePage from "../../../app/chef/profile/page";
 import ChefNotificationsPage from "../../../app/chef/notifications/page";
 import LegacyChefProfilePage from "../../../app/chef/[id]/page";
-import { isChefModeVerified, markChefModeVerified } from "./chef-mode";
+import { clearCustomerMode, isChefModeVerified, markChefModeVerified, markCustomerModeVerified } from "./chef-mode";
 import { captureSessionContext, getSession, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
@@ -72,7 +72,7 @@ describe("Chef Mode guard", () => {
   });
 
   it("checks a customer page again when Back restores it from the page cache", async () => {
-    sessionStorage.clear();
+    markCustomerModeVerified(chef.id);
     render(createElement(ChefModeGuard));
     expect(mocks.replace).not.toHaveBeenCalled();
     markChefModeVerified(chef.id);
@@ -81,10 +81,35 @@ describe("Chef Mode guard", () => {
   });
 
   it("leaves customers, and other accounts in this tab, on customer screens", () => {
-    sessionStorage.clear();
+    markCustomerModeVerified(chef.id);
     render(createElement(ChefModeGuard));
     markChefModeVerified("71111111-1111-4111-8111-111111111111");
     cleanup();
+    render(createElement(ChefModeGuard));
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it("asks a chef to confirm the customer side before customer screens open in a new tab", async () => {
+    sessionStorage.clear();
+    clearCustomerMode();
+    vi.mocked(usePathname).mockReturnValue("/cart");
+    render(createElement(ChefModeGuard));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?confirm=customer&returnTo=%2Fcart"));
+  });
+
+  it("shows that chef the launching-soon note instead while customers wait", async () => {
+    launch.soon = true;
+    sessionStorage.clear();
+    clearCustomerMode();
+    vi.mocked(usePathname).mockReturnValue("/cart");
+    render(createElement(ChefModeGuard));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?from=chef"));
+  });
+
+  it("never asks a customer without the chef role", () => {
+    sessionStorage.clear();
+    clearCustomerMode();
+    setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
     render(createElement(ChefModeGuard));
     expect(mocks.replace).not.toHaveBeenCalled();
   });
@@ -119,19 +144,31 @@ describe("More hub", () => {
     await screen.findByRole("heading", { name: "Asha Rao" });
     for (const [label, href] of [
       ["Kitchen details", "/chef/kitchen"], ["Meal plans", "/chef/meal-plans"],
-      ["Plates per day", "/chef/capacity"], ["Can customers find you\\?", "/chef/operations"], ["Earnings", "/chef/earnings"],
-      ["Balance & payouts", "/chef/finance"], ["Statements", "/chef/statements"], ["Your application", "/chef/application/status"],
+      ["Can customers find you\\?", "/chef/operations"], ["Earnings", "/chef/earnings"],
+      ["Balance & payouts", "/chef/finance"], ["Edit bank account details", "/chef/bank"], ["Statements", "/chef/statements"], ["Your application", "/chef/application/status"],
       ["Notifications", "/chef/notifications"], ["Get help", "/chef/support"],
     ]) expect(screen.getByRole("link", { name: new RegExp(`^${label}`) }).getAttribute("href")).toBe(href);
     expect(screen.queryByText(/not available yet/i)).toBeNull();
   });
 
-  it("switches to the customer app only by leaving Chef Mode", async () => {
+  it("switches to the customer app only by leaving Chef Mode, once this device passed a customer OTP", async () => {
+    // A customer sign-in earlier on this device, then this tab's Chef Mode sign-in.
+    markCustomerModeVerified(chef.id);
+    markChefModeVerified(chef.id);
     render(createElement(ChefMorePage));
     fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
     expect(isChefModeVerified(chef.id)).toBe(false);
     expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/home");
     expect(getSession()?.id).toBe(chef.id);
+    clearCustomerMode();
+  });
+
+  it("asks for a customer OTP before opening the customer app, keeping Chef Mode until it succeeds", async () => {
+    clearCustomerMode();
+    render(createElement(ChefMorePage));
+    fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
+    expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/sign-in?returnTo=%2Fhome&confirm=customer");
+    expect(isChefModeVerified(chef.id)).toBe(true);
   });
 
   it("keeps the chef in Chef Mode and shows the launching-soon note while customers wait", async () => {

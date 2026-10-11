@@ -1,4 +1,5 @@
 "use client";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -61,8 +62,8 @@ export function ChefCapacityQuickSetup() {
 
   const load = useCallback(async () => {
     const [capacityResponse, menuResponse] = await Promise.all([
-      fetch("/api/chef/subscription-capacity", { cache: "no-store", credentials: "same-origin" }),
-      fetch("/api/chef/menu", { cache: "no-store", credentials: "same-origin" }),
+      sessionFetch("/api/chef/subscription-capacity", { cache: "no-store", credentials: "same-origin" }),
+      sessionFetch("/api/chef/menu", { cache: "no-store", credentials: "same-origin" }),
     ]);
     const [capacityRaw, menuRaw] = await Promise.all([
       capacityResponse.json().catch(() => null),
@@ -130,7 +131,7 @@ export function ChefCapacityQuickSetup() {
   }
 
   async function put(path: string, payload: unknown) {
-    const response = await fetch(path, {
+    const response = await sessionFetch(path, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",

@@ -40,10 +40,12 @@ import {
 import {
   CHEF_SECTION_LABELS,
   adultCutoff,
+  bankCanContinue,
   chefFullName,
   completedSections,
   evidenceComplete,
   kitchenAddress,
+  missingKitchenFields,
   type ChefFormSection,
 } from "@/features/chef-onboarding/lib/chef-onboarding-flow";
 import { ChefOnboardingUpload, useSavedPreview } from "@/features/chef-onboarding/components/chef-onboarding-upload";
@@ -67,7 +69,7 @@ import { chefOnboardingApi, type ChefOnboardingFlow } from "@/features/chef-onbo
 type Props = { flow: ChefOnboardingFlow };
 
 function fieldError(flow: ChefOnboardingFlow, name: string) {
-  return flow.fieldError?.field === name ? flow.fieldError.message : null;
+  return flow.fieldErrors.find((item) => item.field === name)?.message || null;
 }
 
 type TextFieldProps = Props & {
@@ -111,6 +113,7 @@ function TextField({
         min={type === "date" ? "1900-01-01" : undefined}
         maxLength={maxLength}
         disabled={flow.busy}
+        aria-required={optional ? undefined : true}
         aria-invalid={Boolean(error) || undefined}
         aria-describedby={describedBy(id, error, helper)}
         onChange={(event) =>
@@ -128,7 +131,15 @@ function Upload({
   photo,
   helper,
   emptyTitle,
-}: Props & { type: string; label: string; photo?: boolean; helper?: string; emptyTitle?: string }) {
+  beforePick,
+}: Props & {
+  type: string;
+  label: string;
+  photo?: boolean;
+  helper?: string;
+  emptyTitle?: string;
+  beforePick?: () => boolean;
+}) {
   return (
     <ChefOnboardingUpload
       type={type}
@@ -136,6 +147,7 @@ function Upload({
       photo={photo}
       helper={helper}
       emptyTitle={emptyTitle}
+      beforePick={beforePick}
       disabled={flow.busy}
       fieldError={fieldError(flow, type)}
       evidence={flow.state?.documents.find((document) => document.documentType === type)}
@@ -210,7 +222,7 @@ export function ChefBasicDetails({ flow }: Props) {
             <div className="cob-field" id="chef-phoneNumber" tabIndex={-1}>
               <span className="cob-label">Mobile number</span>
               <FieldError>{phoneError ?? "Sign in again to verify your mobile number."}</FieldError>
-              <Link href="/sign-in?returnTo=/chef/application" className="cob-link">
+              <Link href="/chef/sign-in?returnTo=%2Fchef%2Fapplication" className="cob-link">
                 Verify mobile number
               </Link>
             </div>
@@ -352,6 +364,8 @@ export function ChefKitchenDetails({ flow }: Props) {
   );
   const description = d.kitchenDescription ?? "";
   const locationFieldError = fieldError(flow, "location");
+  // Photos are saved with the application, which needs these details first (server rule).
+  const missing = missingKitchenFields(d);
   return (
     <div className="cob-stack">
       <Card
@@ -473,12 +487,11 @@ export function ChefKitchenDetails({ flow }: Props) {
               </span>
             ) : null}
             {results.length ? (
-              <div id="chef-location-results" className="cob-results" role="list">
+              <ul id="chef-location-results" className="cob-results">
                 {results.map((result) => (
+                  <li key={result.id}>
                   <button
-                    key={result.id}
                     type="button"
-                    role="listitem"
                     className="cob-result"
                     onClick={() => {
                       setResults([]);
@@ -489,8 +502,9 @@ export function ChefKitchenDetails({ flow }: Props) {
                     <MapPin size={16} aria-hidden="true" />
                     <span>{result.formattedAddress}</span>
                   </button>
+                  </li>
                 ))}
-              </div>
+              </ul>
             ) : null}
           </div>
 
@@ -538,6 +552,7 @@ export function ChefKitchenDetails({ flow }: Props) {
               flow={flow}
               name="addressLine2"
               label="Street / area"
+              optional
               autoComplete="address-line2"
             />
             <TextField
@@ -582,6 +597,28 @@ export function ChefKitchenDetails({ flow }: Props) {
         subtitle="Two clear photos of where you cook."
         done={photosDone}
       >
+        {missing.length && !photosDone ? (
+          <div className="cob-requires" role="group" aria-labelledby="chef-photos-requires">
+            <p id="chef-photos-requires">
+              <strong>Finish your kitchen address to add photos</strong>
+              Photos are saved with your address. Still needed:
+            </p>
+            <ul className="cob-requires-list">
+              {missing.map((item) => (
+                <li key={item.field}>
+                  <button
+                    type="button"
+                    className="cob-requires-chip"
+                    aria-label={`Go to ${item.label}`}
+                    onClick={() => flow.goToField(item.field)}
+                  >
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div className="cob-photo-grid">
           <Upload
             flow={flow}
@@ -589,6 +626,7 @@ export function ChefKitchenDetails({ flow }: Props) {
             label="Overall kitchen photo"
             photo
             helper="Show the full kitchen space where you prepare food."
+            beforePick={flow.kitchenReadyForPhotos}
           />
           <Upload
             flow={flow}
@@ -596,6 +634,7 @@ export function ChefKitchenDetails({ flow }: Props) {
             label="Cooking setup photo"
             photo
             helper="Show your stove and the cooking equipment you use."
+            beforePick={flow.kitchenReadyForPhotos}
           />
           <p className="cob-formats">JPG, PNG, HEIC or WebP · up to 10 MB each</p>
         </div>
@@ -656,7 +695,7 @@ export function ChefFssaiDetails({ flow }: Props) {
                 flow.field("fssaiNumber", event.target.value.replace(/\D/g, "").slice(0, 14))
               }
             />
-            <span className="cob-adornment" aria-live="polite">
+            <span className="cob-adornment">
               {reviewed ? (
                 <VerifiedBadge label="Verified by Craves" />
               ) : complete ? (
@@ -1013,28 +1052,36 @@ export function ChefIdentityDetails({ flow }: Props) {
         title="Document type"
       >
         <div className="cob-fields">
-          <div className="cob-choices" role="radiogroup" aria-label="Identity document">
+          {/* Native radios: one Tab stop and arrow keys, drawn as chips. */}
+          <fieldset className="cob-choices">
+            <legend className="sr-only">Identity document</legend>
             {PROOF_OPTIONS.map(([key]) => {
               const selected = proof === key;
+              const disabled = flow.busy || (locked && !selected);
               return (
-                <button
+                <label
                   key={key}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
                   className="cob-choice"
-                  disabled={flow.busy || (locked && !selected)}
-                  onClick={() => {
-                    flow.field("proofKind", key as ProofKind);
-                    if (key !== "OTHER_GOVERNMENT_ID") flow.field("proofHasBack", null);
-                  }}
+                  data-checked={selected || undefined}
+                  data-disabled={disabled || undefined}
                 >
+                  <input
+                    type="radio"
+                    name="chef-proof-kind"
+                    className="sr-only"
+                    checked={selected}
+                    disabled={disabled}
+                    onChange={() => {
+                      flow.field("proofKind", key as ProofKind);
+                      if (key !== "OTHER_GOVERNMENT_ID") flow.field("proofHasBack", null);
+                    }}
+                  />
                   {selected ? <Check size={16} strokeWidth={3} aria-hidden="true" /> : null}
                   {PROOF_SHORT[key]}
-                </button>
+                </label>
               );
             })}
-          </div>
+          </fieldset>
           {proofError ? (
             <FieldError>{proofError}</FieldError>
           ) : (
@@ -1315,13 +1362,31 @@ export function ChefReviewDetails({ flow }: Props) {
             </span>
             <div className="cob-card-title">
               <h2 id="review-bank">Bank details</h2>
-              <StatusChip tone="idle">Add later</StatusChip>
+              {bankCanContinue(flow.bank) ? (
+                <StatusChip tone="complete">Saved</StatusChip>
+              ) : (
+                <StatusChip tone="idle">Add later</StatusChip>
+              )}
             </div>
           </div>
           <p className="cob-helper" style={{ fontSize: 14 }}>
-            You can add bank details later. They aren’t needed to submit your application for
-            review.
+            {bankCanContinue(flow.bank)
+              ? `Account ending ${flow.bank?.lastFour ?? ""} is saved. ${flow.bank?.message ?? ""}`
+              : "You can add bank details later. They aren’t needed to submit your application for review. Saving them now means one less step when payouts open."}
           </p>
+          <button
+            type="button"
+            className="cob-link"
+            style={{ marginTop: 8 }}
+            disabled={flow.busy}
+            onClick={() => flow.edit("bank")}
+          >
+            {bankCanContinue(flow.bank)
+              ? "Change bank details"
+              : flow.bank
+                ? "Add bank details now"
+                : "Add or check bank details"}
+          </button>
         </section>
       ) : (
         <ReviewCard
@@ -1357,7 +1422,6 @@ export function ChefReviewDetails({ flow }: Props) {
         <label className="cob-check">
           <input
             type="checkbox"
-            aria-label="Accept terms and privacy policy"
             checked={flow.terms}
             disabled={flow.busy}
             onChange={(event) => flow.setTerms(event.target.checked)}

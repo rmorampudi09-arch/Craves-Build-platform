@@ -7,10 +7,15 @@ const layout = readFileSync(
   new URL("../../../app/chef/layout.tsx", import.meta.url),
   "utf8",
 );
+const header = readFileSync(
+  new URL("../components/chef-app-header.tsx", import.meta.url),
+  "utf8",
+);
 const navigation = readFileSync(
   new URL("../components/chef-workspace-navigation.tsx", import.meta.url),
   "utf8",
 );
+const moreHub = readFileSync(new URL("../../../app/chef/profile/page.tsx", import.meta.url), "utf8");
 const dashboard = readFileSync(
   new URL("../components/chef-mode-dashboard.tsx", import.meta.url),
   "utf8",
@@ -53,15 +58,21 @@ const deferredDashboardRoutes = [
 
 test("every chef route inherits the responsive Craves workspace shell", () => {
   assert.match(layout, /className="chef-panel-theme[^"]*min-h-screen/);
-  assert.match(layout, /chef-panel-header[^"]*bg-white/);
+  assert.match(layout, /<ChefAppHeader\/>/);
   assert.match(layout, /ChefWorkspaceNavigation/);
-  assert.match(layout, /href="\/home"/);
-  assert.match(layout, /Back to Craves/);
-  assert.match(layout, /max-w-7xl/);
-  for (const route of workspaceRoutes) {
-    assert.match(navigation, new RegExp(route.replaceAll("/", "\\/")));
+  assert.match(header, /className="chef-panel-header"/);
+  assert.match(header, /className="chef-header-bar"/);
+  // Chef Mode is its own app: the logo stays in it and leaving is an explicit account action.
+  assert.match(header, /<Link href="\/chef"/);
+  assert.match(header, /<ChefAccountMenu \/>/);
+  for (const shell of [layout, header]) {
+    assert.doesNotMatch(shell, /href="\/home"|Back to Craves|Customer home/);
   }
-  assert.match(navigation, /aria-current=\{active \? "page" : undefined\}/);
+  for (const route of workspaceRoutes) {
+    assert.match(`${navigation}\n${moreHub}`, new RegExp(`"${route.replaceAll("/", "\\/")}"`), route);
+  }
+  assert.match(navigation, /const ariaCurrent = active \? \(pathname === link\.href \? "page" : "true"\) : undefined;/);
+  assert.equal(navigation.match(/aria-current=\{ariaCurrent\}/g)?.length, 2);
 });
 
 function navigationStyles(selector: string, width: number) {
@@ -91,10 +102,9 @@ for (const width of [390, 768, 1440]) {
       assert.equal(bottom.get("position"), "fixed");
       assert.equal(bottom.get("top"), "auto");
       assert.equal(bottom.get("bottom"), "0");
-      assert.equal(bottom.get("max-width"), "32rem");
       assert.match(bottom.get("padding") ?? "", /safe-area-inset-bottom/);
       assert.match(navigationStyles(".chef-panel-theme", width).get("padding-bottom") ?? "", /safe-area-inset-bottom/);
-      assert.equal(navigationStyles(".chef-mobile-nav-link", width).get("min-height"), "3.45rem");
+      assert.equal(navigationStyles(".chef-mobile-nav-link", width).get("min-height"), "3.5rem");
     } else {
       assert.equal(desktop.get("display"), "flex");
       assert.equal(bottom.get("display"), "none");
@@ -116,11 +126,13 @@ test("chef dashboard keeps daily actions visible and defers advanced areas", () 
 });
 
 test("chef workspace shell is wide while focused setup flows stay readable", () => {
-  assert.match(layout, /max-w-7xl/);
-  assert.match(applicationPage, /max-w-3xl/);
-  assert.match(kitchenPage, /max-w-3xl/);
-  assert.doesNotMatch(applicationPage, /max-w-7xl/);
-  assert.doesNotMatch(kitchenPage, /max-w-7xl/);
+  const widths = new Map<string, string>();
+  chefTheme.walkRules(rule => rule.walkDecls("max-width", declaration => { widths.set(rule.selector, declaration.value); }));
+  assert.equal(widths.get(".chef-header-bar"), "72rem");
+  assert.equal(widths.get(".chef-page"), "72rem");
+  assert.equal(widths.get(".chef-page.is-narrow"), "48rem");
+  assert.match(applicationPage, /className="chef-page is-narrow"/);
+  assert.match(kitchenPage, /className="chef-page is-narrow"/);
 });
 
 test("chef theme still maps legacy form classes to canonical customer tokens", () => {

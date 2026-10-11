@@ -32,17 +32,31 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(chefs, /discoverDishes\(/);
   assert.match(chefs, /dishImagesByKitchen=\{dishImagesByKitchen\}/);
   assert.match(kitchens, /KitchenDishPreview/);
-  assert.match(kitchens, /window\.setTimeout/);
+  // Kitchen photos slide on by themselves (the next one follows from the right) only with a
+  // Pause photos control (WCAG 2.2.2), never for reduced motion, only while the card is on
+  // screen, held on hover or focus; a swipe hands the card to the customer.
+  assert.match(kitchens, /Pause photos/);
+  assert.match(kitchens, /useReducedMotion\(\)/);
+  assert.match(kitchens, /intersectionRatio >= 0\.6/);
+  assert.match(kitchens, /:hover, :focus-within/);
+  assert.match(kitchens, /if \(!moving\.current\) setSwiped\(true\)/);
+  assert.match(kitchens, /behavior: "smooth"/);
+  // Home shows a few kitchens and links to all of them with the count.
+  assert.match(kitchens, /See all \{kitchens\.length\} home chefs/);
+  assert.match(home, /limit=\{6\}/);
   assert.doesNotMatch(kitchens, /ChevronLeft/);
   assert.doesNotMatch(kitchens, /ChevronRight/);
   assert.doesNotMatch(kitchens, /kitchenPreviewTrack/);
-  assert.match(kitchens, /3000/);
-  assert.match(kitchens, /onPointerDown/);
+  assert.doesNotMatch(kitchens, /\b3000\b/);
+  // A native snap strip follows the finger; dots track the scroll with opacity/scale only.
+  assert.match(kitchens, /snap-x snap-mandatory overflow-x-auto/);
+  assert.doesNotMatch(kitchens, /onPointerDown|setPointerCapture|duration-500/);
   assert.match(kitchens, /new window\.Image\(\)/);
   assert.match(kitchens, /kitchenImagePreloads/);
   assert.match(kitchens, /priority=\{index < 4\}/);
   assert.match(kitchens, /fetchPriority=\{priority && index === 0 \? "high" : "auto"\}/);
-  assert.match(kitchens, /transition-\[opacity,transform\]/);
+  assert.match(kitchens, /transition-\[opacity,scale\]/);
+  assert.doesNotMatch(kitchens, /transition-all|w-4 bg-white/);
   assert.doesNotMatch(kitchens, /View chef/);
   assert.match(dishes, /priorityImage=\{index < 4\}/);
   assert.match(progressiveImage, /unoptimized = true/);
@@ -51,20 +65,23 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(wishlist, /fetchPriority=\{index < 4 \? "high" : "auto"\}/);
   assert.match(dishHeader, /fetchPriority=\{index === safeIndex \? "high" : "low"\}/);
   assert.match(similarDishes, /fetchPriority=\{index === 0 \? "high" : "auto"\}/);
-  assert.match(cravings, /translate-y-\[var\(--craves-mobile-search-offset,0px\)\]/);
+  assert.match(cravings, /compact \? "top-\[3\.75rem\]" : "top-0"/);
   assert.match(cravings, /fetchPriority=\{priorityImage \? "high" : "auto"\}/);
-  assert.match(cravings, /md:top-\[var\(--craves-desktop-header-offset-md,4\.25rem\)\]/);
-  assert.match(cravings, /lg:top-\[var\(--craves-desktop-header-offset-lg,4\.65rem\)\]/);
+  assert.match(cravings, /md:top-\[4\.25rem\] lg:top-\[4\.65rem\]/);
   assert.match(cravings, /shadow-\[0_3px_10px_rgba\(26,26,26,0\.09\)\]/);
-  assert.match(cravings, /lg:top-\[var\(--craves-desktop-header-offset-lg,4\.65rem\)\]/);
   assert.doesNotMatch(cravings, /md:static/);
-  assert.match(cravings, /duration-\[240ms\]/);
-  assert.match(header, /hover:-translate-y-0\.5/);
+  // Chips: a real press state, scroll arrows only for pointers, selection without a tint.
+  assert.match(cravings, /group-active:scale-\[0\.96\]/);
+  assert.match(cravings, /duration-\(--dur-component\)/);
+  assert.match(cravings, /ring-2 ring-\[#F62E18\] ring-offset-2/);
+  assert.match(cravings, /md:left-4 md:top-\[3\.75rem\] md:flex/);
+  assert.doesNotMatch(cravings, /rgba\(246,46,24,0\.12\)|backdrop-blur/);
+  // No chef shortcut in the Home header: Profile is the way into chef mode.
+  assert.doesNotMatch(header, /to="\/chef/);
   assert.match(header, /focus-within:bg-white/);
   assert.match(header, /mobileCompact/);
   assert.match(header, /<CravesLogo size="md" \/>/);
   assert.doesNotMatch(header, /Food From Home/);
-  assert.match(cravings, /md:duration-\[260ms\]/);
   assert.match(header, /fixed inset-x-0 top-0 z-50/);
   assert.match(skeleton, /CustomerPageSkeleton\.module\.css/);
   assert.match(skeleton, /SkeletonBlock/);
@@ -78,7 +95,9 @@ test("profile edit stays focused on name, phone and optional OTP email verificat
 
   assert.match(edit, /Phone number/);
   assert.match(edit, /readOnly/);
-  assert.match(edit, /body\.style\.overflow = "hidden"/);
+  // The shared Sheet owns scroll lock, focus trap and Back-to-close.
+  assert.match(edit, /<Sheet/);
+  assert.match(edit, /closeOnOutsideTap=\{!typed\}/);
   assert.match(edit, /overscroll-contain/);
   assert.match(edit, /replace\(\/\^\\\+91/);
   assert.match(edit, /EmailVerificationPanel initialEmail=\{initialEmail\} compact/);
@@ -95,9 +114,10 @@ test("reviewed checkout never traps the customer while restoring the cart", () =
   assert.match(checkout, /ensureCheckoutCart\(currentCheckout\.orders\)/);
   assert.match(checkout, /handleBackToCart/);
   assert.match(checkout, /removeItem\(CHECKOUT_ID_KEY\)/);
-  assert.match(checkout, /Step 1/);
-  assert.match(checkout, /Step 2/);
-  assert.match(checkout, /Step 3/);
+  // Clear section titles, no "Step n" eyebrows; each problem shows in the section that fixes it.
+  assert.doesNotMatch(checkout, /Step \d/);
+  assert.match(checkout, /addressProblem/);
+  assert.match(checkout, /cartProblem/);
   assert.match(checkout, /CART_NOTICE_KEY/);
   assert.match(checkout, /navigate\(\{ to: "\/cart" \}\)/);
   assert.match(checkout, /Promise\.race/);
@@ -138,7 +158,7 @@ test("profile destinations preserve contextual back navigation", () => {
   assert.match(policy, /data-contextual-back="true"/);
 });
 
-test("favorites hydrate the shared cart and notifications expose only supported clear actions", () => {
+test("favorites hydrate the shared cart and notifications offer read-all and undoable clears", () => {
   const wishlist = source("../features/favorites/screens/Wishlist.tsx");
   const notifications = source("../features/notifications/screens/Notifications.tsx");
   const readAll = source("../app/api/notifications/in-app/read-all/route.ts");
@@ -146,12 +166,83 @@ test("favorites hydrate the shared cart and notifications expose only supported 
   assert.match(wishlist, /loadCart\(\)/);
   assert.match(wishlist, /CustomerFloatingCart/);
   assert.match(wishlist, /CustomerPageSkeleton/);
-  assert.doesNotMatch(notifications, /Mark all read/);
-  assert.doesNotMatch(notifications, /\/read/);
+  assert.match(notifications, /Mark all as read/);
+  assert.match(notifications, /fetch\("\/api\/notifications\/in-app\/read-all"/);
+  assert.match(notifications, /<UndoToast/);
   assert.match(notifications, /CustomerPageSkeleton/);
   assert.match(notifications, /Clear read/);
   assert.match(notifications, /Clear all/);
   assert.match(notifications, /craves\.notifications\.cleared:/);
   assert.match(readAll, /\/notifications\/in-app\/read-all/);
   assert.match(readAll, /isSameOrigin\(request\)/);
+});
+
+test("navigation shows page-shaped skeletons the moment a dish, kitchen or cart opens", () => {
+  const skeleton = source("../shared/components/loading/CustomerPageSkeleton.tsx");
+  const kitchens = source("../features/home/components/KitchensGrid.tsx");
+
+  for (const [route, variant] of [
+    ["../app/dish/[id]/loading.tsx", "dish"],
+    ["../app/kitchen/[id]/loading.tsx", "kitchen"],
+    ["../app/kitchens/[id]/loading.tsx", "kitchen"],
+    ["../app/cart/loading.tsx", "cart"],
+  ] as const) {
+    assert.match(source(route), new RegExp(`<CustomerPageSkeleton variant="${variant}"`), route);
+  }
+  for (const [screen, variant] of [
+    ["../features/dish/screens/FoodDetails.tsx", "dish"],
+    ["../features/chefs/screens/ChefProfile.tsx", "kitchen"],
+    ["../features/chefs/screens/AllChefs.tsx", "chefs"],
+    ["../features/cart/screens/Cart.tsx", "cart"],
+  ] as const) {
+    assert.match(source(screen), new RegExp(`<CustomerPageSkeleton variant="${variant}"`), screen);
+  }
+  assert.match(skeleton, /export type CustomerPageSkeletonVariant = "home" \| "dish" \| "kitchen" \| "cart" \| "chefs"/);
+  // The dish skeleton reserves the action bar so the tab bar does not flash in and out.
+  assert.match(skeleton, /data-craves-action-bar/);
+  assert.match(kitchens, /\$\{skeletonStyles\.block\} aspect-\[16\/9\]/);
+});
+
+test("every page loads in its own shape under its own header, and quick loads show nothing", () => {
+  for (const [screen, variant] of [
+    ["../features/profile/screens/Profile.tsx", "profile"],
+    ["../features/notifications/screens/Notifications.tsx", "notifications"],
+    ["../features/favorites/screens/Wishlist.tsx", "saved"],
+    ["../features/checkout/screens/Checkout.tsx", "checkout"],
+    ["../features/meal-plans/components/subscription-plan-browser.tsx", "plans"],
+    ["../features/meal-plans/components/subscription-enrollment-form.tsx", "plan-form"],
+    ["../features/meal-plans/components/subscription-details.tsx", "plan-details"],
+  ] as const) {
+    const contents = source(screen);
+    assert.match(contents, new RegExp(`<CustomerSectionSkeleton variant="${variant}"`), screen);
+    // Never Home's shape (the default variant) on a page that is not Home.
+    assert.doesNotMatch(contents, /<CustomerPageSkeleton(?![^>]*variant=)/, screen);
+  }
+  // Blocks fade in only after 300 ms, so fast loads and quick revisits never flash a skeleton.
+  assert.match(source("../shared/components/loading/CustomerPageSkeleton.module.css"), /cravesSkeletonReveal 200ms ease-out 300ms both/);
+  assert.match(source("../features/chef/styles/chef-mode.css"), /chefSkeletonReveal 200ms ease-out 300ms both/);
+  // Chef access check: the page's own shape, never invisible grey slabs; no false empty states.
+  const boundary = source("../features/chef/components/chef-access-boundary.tsx");
+  assert.match(boundary, /<ChefLoading shape=\{loadingShape\}/);
+  assert.doesNotMatch(boundary, /animate-pulse/);
+  assert.match(source("../features/chef/components/chef-subscription-plan-manager.tsx"), /if \(!loaded\) return <ChefLoading shape="plans"/);
+  assert.match(source("../features/chef/components/chef-capacity-quick-setup.tsx"), /if \(message === LOADING_PLATES\) return <ChefLoading/);
+  assert.doesNotMatch(source("../features/chef-onboarding/styles/chef-onboarding.css"), /#f2d3cf/i);
+});
+
+test("photos show instantly from cache and dish photos swipe natively", () => {
+  const progressiveImage = source("../shared/components/media/ProgressiveImage.tsx");
+  const dishHeader = source("../features/dish/components/DishImageHeader.tsx");
+  const card = source("../features/home/components/DishCard.tsx");
+
+  assert.match(progressiveImage, /image\?\.complete && image\.naturalWidth > 0/);
+  assert.match(progressiveImage, /instant \? "transition-\[scale\]" : "transition-\[opacity,scale\]"/);
+  assert.doesNotMatch(card, /transition-transform/);
+  assert.match(card, /className="object-cover group-hover:scale-\[1\.03\]"/);
+
+  // No remount per photo: a snap strip follows the finger; arrows and thumbnails scroll it.
+  assert.doesNotMatch(dishHeader, /key=\{activeImage\}/);
+  assert.match(dishHeader, /snap-x snap-mandatory overflow-x-auto/);
+  assert.match(dishHeader, /onClick=\{\(\) => showIndex\(index\)\}/);
+  assert.doesNotMatch(dishHeader, /backdrop-blur/);
 });

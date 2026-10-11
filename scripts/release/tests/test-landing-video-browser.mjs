@@ -117,7 +117,7 @@ async function assertAdvancing(page, startupTimeout = 20000) {
 async function watchSplashHandoff(page, stallMainThread = false) {
   await page.addInitScript(({ stallMainThread }) => {
     const probe = window.__landingHandoff = {
-      coverSeen: false, splashSeen: false, readySeen: false,
+      coverSeen: false, splashSeen: false, readySeen: false, bootMode: null,
       exposedSamples: 0, failures: [], handoff: null, finished: false, stallMs: 0,
     };
     let afterHandoff = 0;
@@ -147,6 +147,7 @@ async function watchSplashHandoff(page, stallMainThread = false) {
     const inspect = () => {
       const boot = document.getElementById('craves-boot');
       const splash = document.querySelector('.splash');
+      probe.bootMode ||= document.documentElement.getAttribute('data-craves-boot');
       probe.coverSeen ||= Boolean(boot || splash);
       probe.splashSeen ||= Boolean(splash);
       if (splash?.classList.contains('splash--ready') && !probe.readySeen) {
@@ -203,6 +204,26 @@ async function assertSplashHandoff(page, stalled = false) {
   return { splashHandoffSamples: probe.exposedSamples, splashHandoffAtMs: probe.handoff.atMs, mainThreadStallMs: probe.stallMs };
 }
 
+/** A repeat visit in the same browser session skips the splash: a plain white cover fades out within moments. */
+async function assertQuietRepeatVisit(page) {
+  await page.waitForFunction(() => !document.getElementById('craves-boot') && !document.documentElement.hasAttribute('data-craves-boot'), null, { timeout: 5000 });
+  await page.waitForFunction(() => {
+    const shown = element => {
+      for (let current = element; current; current = current.parentElement) {
+        const style = getComputedStyle(current);
+        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) < 0.98) return false;
+      }
+      return Boolean(element);
+    };
+    const logo = document.querySelector('.navbar__logo img');
+    return shown(document.querySelector('.navbar')) && shown(document.querySelector('.hero')) && Boolean(logo?.complete && logo.naturalWidth > 0);
+  }, null, { timeout: 5000 });
+  const probe = await page.evaluate(() => window.__landingHandoff);
+  assert.equal(probe.bootMode, 'quiet', 'A repeat visit in the same session must start behind the quiet white cover');
+  assert.equal(probe.splashSeen, false, 'A repeat visit in the same session must not replay the splash');
+  return { quietRepeatVisit: true };
+}
+
 async function assertNavbarGlassAndFooter(page) {
   const readBlur = () => page.locator('.navbar__inner').evaluate(element => {
     const filter = getComputedStyle(element).getPropertyValue('backdrop-filter');
@@ -250,7 +271,8 @@ try {
     if (name === 'cold-desktop') {
       await fixture.page.reload({ waitUntil: 'domcontentloaded' });
       await assertHero(fixture.page);
-      await assertSplashHandoff(fixture.page);
+      // Same browser session: the splash already played, so the reload is quiet.
+      await assertQuietRepeatVisit(fixture.page);
       await assertAdvancing(fixture.page);
       await fixture.page.evaluate(() => {
         document.querySelector('.hero__video').pause();

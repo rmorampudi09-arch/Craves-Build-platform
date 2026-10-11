@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -31,6 +31,7 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [favoriteError, setFavoriteError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const stripRef = useRef<HTMLDivElement>(null);
 
   const images = Array.from(
     new Set(
@@ -40,11 +41,6 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
     ),
   );
   const safeIndex = Math.min(activeIndex, Math.max(images.length - 1, 0));
-  const activeImage = images[safeIndex] ?? dish.img;
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [dish.id]);
 
   useEffect(() => {
     let active = true;
@@ -85,7 +81,7 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
       setFavoriteError(
         error instanceof Error
           ? error.message
-          : "Saved dishes could not be updated.",
+          : "Saved dishes didn’t update. Try again.",
       );
     } finally {
       setFavoriteBusy(false);
@@ -105,38 +101,55 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
     }
   };
 
-  const showPrevious = () => {
-    setActiveIndex((current) =>
-      images.length > 0 ? (current - 1 + images.length) % images.length : 0,
-    );
+  // Photos sit side by side in a native snap strip: a swipe follows the finger,
+  // and arrows/thumbnails scroll it. The counter follows the scroll position.
+  const showIndex = (index: number) => {
+    const strip = stripRef.current;
+    if (!strip || images.length === 0) return;
+    const target = (index + images.length) % images.length;
+    strip.scrollTo({
+      left: target * strip.clientWidth,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
   };
 
-  const showNext = () => {
-    setActiveIndex((current) =>
-      images.length > 0 ? (current + 1) % images.length : 0,
-    );
+  const syncIndexFromScroll = () => {
+    const strip = stripRef.current;
+    if (!strip || strip.clientWidth === 0) return;
+    setActiveIndex(Math.round(strip.scrollLeft / strip.clientWidth));
   };
 
   return (
     <section aria-label={`${dish.name} photos`}>
       <div className="relative overflow-hidden rounded-[1.65rem] border border-[#E5E7EB] bg-[#F1F3F5] shadow-[0_14px_36px_rgba(26,26,26,0.08)] md:rounded-[2rem]">
         <div className="relative aspect-[4/3] md:aspect-[16/10]">
-          <ProgressiveImage
-            key={activeImage}
-            src={activeImage}
-            alt={dish.imageIsPlaceholder ? "" : `${dish.name} photo ${safeIndex + 1}`}
-            aria-hidden={dish.imageIsPlaceholder || undefined}
-            fill
-            sizes="(min-width: 1280px) 42rem, (min-width: 1024px) 60vw, calc(100vw - 32px)"
-            loading="eager"
-            fetchPriority="high"
-            fallbackLabel="Dish photo unavailable"
-            className={
-              dish.imageIsPlaceholder
-                ? "object-contain p-16 opacity-80 sm:p-20"
-                : "object-cover object-center"
-            }
-          />
+          <div
+            ref={stripRef}
+            onScroll={syncIndexFromScroll}
+            className="flex h-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {(images.length > 0 ? images : [dish.img]).map((image, index) => (
+              <div key={`${image}-${index}`} className="relative h-full w-full shrink-0 snap-center snap-always">
+                <ProgressiveImage
+                  src={image}
+                  alt={dish.imageIsPlaceholder ? "" : `${dish.name} photo ${index + 1}`}
+                  aria-hidden={dish.imageIsPlaceholder || undefined}
+                  fill
+                  sizes="(min-width: 1280px) 42rem, (min-width: 1024px) 60vw, calc(100vw - 32px)"
+                  loading={index === 0 ? "eager" : "lazy"}
+                  fetchPriority={index === 0 ? "high" : "auto"}
+                  fallbackLabel="Dish photo unavailable"
+                  className={
+                    dish.imageIsPlaceholder
+                      ? "object-contain p-16 opacity-80 sm:p-20"
+                      : "object-cover object-center"
+                  }
+                />
+              </div>
+            ))}
+          </div>
 
           <div className="absolute inset-x-0 top-0 flex items-center justify-end p-3.5 sm:p-4">
             <div className="flex items-center gap-2">
@@ -151,7 +164,7 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
                     : `Save ${dish.name}`
                 }
                 title={favoriteError ?? (favorite ? "Saved" : "Save dish")}
-                className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !border !border-white/80 !bg-white/95 !p-0 !text-[#1A1A1A] !shadow-[0_7px_22px_rgba(26,26,26,0.12)] !backdrop-blur-md transition-colors hover:!text-[#F62E18] disabled:cursor-wait disabled:opacity-60"
+                className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !border !border-white/80 !bg-white !p-0 !text-[#1A1A1A] !shadow-[0_7px_22px_rgba(26,26,26,0.12)] transition-colors hover:!text-[#F62E18] disabled:cursor-wait disabled:opacity-60"
               >
                 <Heart
                   className={`h-5 w-5 ${
@@ -167,7 +180,7 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
                 <button
                   type="button"
                   onClick={() => void handleShare()}
-                  className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !border !border-white/80 !bg-white/95 !p-0 !text-[#1A1A1A] !shadow-[0_7px_22px_rgba(26,26,26,0.12)] !backdrop-blur-md hover:!text-[#F62E18]"
+                  className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !border !border-white/80 !bg-white !p-0 !text-[#1A1A1A] !shadow-[0_7px_22px_rgba(26,26,26,0.12)] hover:!text-[#F62E18]"
                   aria-label="Share this dish"
                 >
                   <Share2 className="h-5 w-5" aria-hidden="true" />
@@ -180,21 +193,21 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
             <>
               <button
                 type="button"
-                onClick={showPrevious}
-                className="!absolute !left-3 !top-1/2 !flex !h-10 !w-10 !-translate-y-1/2 !items-center !justify-center !rounded-full !border !border-white/75 !bg-white/92 !p-0 !text-[#1A1A1A] !shadow-[0_6px_18px_rgba(26,26,26,0.12)] !backdrop-blur-md hover:!text-[#F62E18] md:!hidden"
+                onClick={() => showIndex(safeIndex - 1)}
+                className="!absolute !left-3 !top-1/2 !flex !h-10 !w-10 !-translate-y-1/2 !items-center !justify-center !rounded-full !border !border-white/75 !bg-white !p-0 !text-[#1A1A1A] !shadow-[0_6px_18px_rgba(26,26,26,0.12)] hover:!text-[#F62E18] md:!hidden"
                 aria-label="Previous dish photo"
               >
                 <ChevronLeft className="h-5 w-5" aria-hidden="true" />
               </button>
               <button
                 type="button"
-                onClick={showNext}
-                className="!absolute !right-3 !top-1/2 !flex !h-10 !w-10 !-translate-y-1/2 !items-center !justify-center !rounded-full !border !border-white/75 !bg-white/92 !p-0 !text-[#1A1A1A] !shadow-[0_6px_18px_rgba(26,26,26,0.12)] !backdrop-blur-md hover:!text-[#F62E18] md:!hidden"
+                onClick={() => showIndex(safeIndex + 1)}
+                className="!absolute !right-3 !top-1/2 !flex !h-10 !w-10 !-translate-y-1/2 !items-center !justify-center !rounded-full !border !border-white/75 !bg-white !p-0 !text-[#1A1A1A] !shadow-[0_6px_18px_rgba(26,26,26,0.12)] hover:!text-[#F62E18] md:!hidden"
                 aria-label="Next dish photo"
               >
                 <ChevronRight className="h-5 w-5" aria-hidden="true" />
               </button>
-              <span className="absolute bottom-3.5 right-3.5 rounded-full bg-[#1A1A1A]/78 px-2.5 py-1 text-[0.68rem] font-black text-white backdrop-blur-md md:hidden">
+              <span className="absolute bottom-3.5 right-3.5 pointer-events-none rounded-full bg-[#1A1A1A]/78 px-2.5 py-1 text-[0.68rem] font-black text-white md:hidden">
                 {safeIndex + 1} / {images.length}
               </span>
             </>
@@ -215,11 +228,11 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
             <button
               key={`${image}-${index}`}
               type="button"
-              onClick={() => setActiveIndex(index)}
-              className={`relative !h-[4rem] !w-[5.15rem] shrink-0 overflow-hidden rounded-xl !border !bg-[#F1F3F5] !p-0 transition sm:!h-[4.4rem] sm:!w-[5.8rem] ${
+              onClick={() => showIndex(index)}
+              className={`relative !h-[4rem] !w-[5.15rem] shrink-0 overflow-hidden rounded-xl !border !bg-[#F1F3F5] !p-0 transition-[border-color,box-shadow] sm:!h-[4.4rem] sm:!w-[5.8rem] ${
                 index === safeIndex
-                  ? "!border-[#F62E18] !shadow-[0_0_0_2px_rgba(246,46,24,0.12)]"
-                  : "!border-[#E5E7EB] hover:!border-[#F62E18]/45"
+                  ? "!border-[#F62E18] !shadow-[0_0_0_2px_rgba(26,26,26,0.12)]"
+                  : "!border-[#E5E7EB] hover:!border-[#D7DADF]"
               }`}
               aria-label={`Show photo ${index + 1} of ${images.length}`}
               aria-pressed={index === safeIndex}

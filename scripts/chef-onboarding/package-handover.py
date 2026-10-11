@@ -13,12 +13,14 @@ BASE = "a79d0d83de730715597956d82da9970b78323152"
 def git(*args):
     return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
 
+LINE_CHARS, PAGE_LINES = 82, 42
+
 def source_chunks(text):
     # Keep original line contents; wrapping is visual, not a modified source file.
     chunk, cost = [], 0
     for line in text.splitlines(keepends=True):
-        weight = max(1, math.ceil(len(line.expandtabs(4).rstrip("\r\n")) / 82))
-        if chunk and cost + weight > 42:
+        weight = max(1, math.ceil(len(line.expandtabs(4).rstrip("\r\n")) / LINE_CHARS))
+        if chunk and cost + weight > PAGE_LINES:
             yield "".join(chunk)
             chunk, cost = [], 0
         chunk.append(line)
@@ -42,6 +44,8 @@ def build(output):
             text = (ROOT/name).read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue  # images and other binary files are in the ZIP, not printed as source
+        if any(len(line.expandtabs(4)) > LINE_CHARS * PAGE_LINES for line in text.splitlines()):
+            continue  # minified or generated files (a line longer than a page) are in the ZIP, not printed
         chunks = list(source_chunks(text))
         for number, chunk in enumerate(chunks,1):
             pages.append(("Complete source file", "<p class='path'>"+html.escape(name)+"</p><p class='part'>File part "+str(number)+" of "+str(len(chunks))+"</p><pre>"+html.escape(chunk)+"</pre>"))

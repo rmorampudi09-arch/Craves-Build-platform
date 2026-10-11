@@ -109,7 +109,7 @@ components:
         ifsc: { type: string, nullable: true }
         bankValidated: { type: boolean }
         applicationApproved: { type: boolean }
-        automaticActivation: { type: boolean, enum: [true] }
+        automaticActivation: { type: boolean, description: 'True when chefs can save bank details (encrypted storage and submissions are on). Validation may run later, once RazorpayX is live.' }
         message: { type: string, maxLength: 1000 }
         updatedAt: { type: string, format: date-time, nullable: true }
     BankControls:

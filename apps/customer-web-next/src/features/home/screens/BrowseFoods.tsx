@@ -1,17 +1,22 @@
 import { useNavigate } from "@tanstack/react-router";
+import { AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import {
   useCallback,
+  useDeferredValue,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { preconnect } from "react-dom";
 
 import { BrowseHeader } from "@/features/home/components/BrowseHeader";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
-import { CartAddressAvailabilityDialog } from "@/features/home/components/CartAddressAvailabilityDialog";
+import { CartAddressAvailabilityBanner } from "@/features/home/components/CartAddressAvailabilityBanner";
 import { CustomerSignOutDialog } from "@/features/home/components/CustomerSignOutDialog";
 import { DishesGrid } from "@/features/home/components/DishesGrid";
 import { CustomerFloatingCart } from "@/features/cart/components/CustomerFloatingCart";
@@ -21,6 +26,8 @@ import {
 } from "@/features/home/components/HomeCategoryRail";
 import { KitchensGrid } from "@/features/home/components/KitchensGrid";
 import { WelcomeBanner } from "@/features/home/components/WelcomeBanner";
+import { holdScrollChrome } from "@/shared/components/navigation/AutoHideCustomerHeader";
+import { returnedToOverlayEntry } from "@/shared/ui/overlays/overlay";
 import { ALL_DISHES_CATEGORY } from "@/features/home/lib/dishCategories";
 import {
   DEFAULT_DISCOVERY_RADIUS_METERS,
@@ -29,11 +36,19 @@ import {
 import { type NearbyKitchen } from "@/features/home/lib/discovery-contract";
 import {
   clearHomeReturnState,
+  DEFAULT_DISH_FILTERS,
   readHomeReturnState,
   saveHomeReturnState,
+  type HomeDishFilters,
   type HomeDishSort,
   type HomeFoodPreference,
 } from "@/features/home/lib/home-return-state";
+import {
+  matchesDishFilters,
+  matchesFoodPreference,
+  sortDishes,
+  type DishView,
+} from "@/features/home/lib/dish-filters";
 import { rememberReturnRoute } from "@/shared/lib/return-navigation";
 import {
   cartCount,
@@ -80,15 +95,28 @@ const HomeBottomSections = dynamic(
   { ssr: false, loading: () => null },
 );
 
-const HomeSearchOverlay = dynamic(
-  () =>
-    import("@/features/home/components/HomeSearchOverlay").then(
-      (module) => module.HomeSearchOverlay,
-    ),
-  { ssr: false, loading: () => null },
-);
+type SearchOverlay = typeof import("@/features/home/components/HomeSearchOverlay").HomeSearchOverlay;
+
+// The search overlay stays out of the first bundle. It is fetched when the page goes idle
+// or a finger lands on search, and kept in state rather than behind next/dynamic: a lazy
+// component suspends on its first mount, and React holds a revealed Suspense boundary back
+// for up to 300 ms, which made search open late even when the code was already loaded.
+let searchOverlayModule: Promise<SearchOverlay> | null = null;
+function loadHomeSearchOverlay(): Promise<SearchOverlay> {
+  searchOverlayModule ??= import("@/features/home/components/HomeSearchOverlay").then(
+    (module) => module.HomeSearchOverlay,
+  );
+  return searchOverlayModule;
+}
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
+
+/** A dish belongs to a craving when its name, category or description mentions one of its words. */
+function matchesCraving(dish: Dish, keywords: readonly string[] | null): boolean {
+  if (!keywords) return true;
+  const searchable = `${dish.name} ${dish.category} ${dish.desc}`.toLocaleLowerCase("en-IN");
+  return keywords.some((keyword) => searchable.includes(keyword));
+}
 
 const HOME_CATEGORY_KEYWORDS: Record<CravingCategory, readonly string[]> = {
   Biryani: ["biryani"],
@@ -121,8 +149,16 @@ export const routeMeta = {
   }),
 };
 
+const CART_AVAILABILITY_DISMISSED_KEY = "craves-cart-availability-dismissed";
+/** Where dish photos were served from last time, so the next visit can connect early. */
+const MEDIA_ORIGIN_KEY = "craves.media-origin";
+
 function isCravingCategory(value: string | null): value is CravingCategory {
   return value !== null && CRAVING_CATEGORIES.has(value as CravingCategory);
+}
+
+function prefersReducedMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function forceInstantWindowScroll(top: number): void {
@@ -138,14 +174,22 @@ function forceInstantWindowScroll(top: number): void {
   body.style.scrollBehavior = previousBodyBehavior;
 }
 
+const noSubscribe = () => () => {};
+
 function BrowseFoodsPage() {
   const navigate = useNavigate();
-  const [initialCache] = useState(() => ({
-    user: getSession() ?? recoverSessionSnapshotForNavigation(),
-    address: getAddress(),
-    dishes: allDishes(),
-    kitchens: allKitchens(),
-  }));
+  // Cached dishes, address and cart paint Home instantly when it opens inside the app. A full
+  // page load must first match the server's empty Home (no browser storage there), so it starts
+  // empty and the mount effect fills it in; otherwise React throws the page away (error #418).
+  const hydrating = !useSyncExternalStore(noSubscribe, () => true, () => false);
+  const [initialCache] = useState(() => hydrating
+    ? { user: null, address: null, dishes: [] as Dish[], kitchens: [] as NearbyKitchen[] }
+    : {
+        user: getSession() ?? recoverSessionSnapshotForNavigation(),
+        address: getAddress(),
+        dishes: allDishes(),
+        kitchens: allKitchens(),
+      });
   const hasInitialCatalog =
     initialCache.dishes.length > 0 || initialCache.kitchens.length > 0;
 
@@ -154,12 +198,57 @@ function BrowseFoodsPage() {
   const [homeCategory, setHomeCategory] = useState<CravingCategory | null>(null);
   const [dishSort, setDishSort] = useState<HomeDishSort>("recommended");
   const [foodPreference, setFoodPreference] = useState<HomeFoodPreference>("all");
+  const [dishFilters, setDishFilters] = useState<HomeDishFilters>(DEFAULT_DISH_FILTERS);
+  // The rail, Veg switch and filter chips answer a tap in the next frame; the dish list
+  // re-renders from these right after, so a slow phone never delays the pressed state.
+  const listCategory = useDeferredValue(homeCategory);
+  const listSort = useDeferredValue(dishSort);
+  const listFoodPreference = useDeferredValue(foodPreference);
+  const listDishFilters = useDeferredValue(dishFilters);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [cartItemCount, setCartItemCount] = useState(() => cartCount());
-  const [cartItems, setCartItems] = useState<CartItem[]>(() => getCart());
+  const [HomeSearchOverlay, setHomeSearchOverlay] = useState<SearchOverlay | null>(null);
+  const preloadHomeSearchOverlay = useCallback(() => {
+    void loadHomeSearchOverlay()
+      .then((overlay) => setHomeSearchOverlay(() => overlay))
+      .catch(() => {
+        // Offline or a stale deploy: the next tap on search tries again.
+        searchOverlayModule = null;
+      });
+  }, []);
+  // Search opens on a tap or click, or on typing; never because Tab landed on the field (WCAG 3.2.1).
+  // The field a keyboard user typed into gets focus back when search closes.
+  const searchOpenerRef = useRef<HTMLElement | null>(null);
+  const openSearchOnTap = useCallback(() => {
+    preloadHomeSearchOverlay();
+    searchOpenerRef.current = null;
+    setSearchOpen(true);
+  }, [preloadHomeSearchOverlay]);
+  const typeInSearch = useCallback((value: string) => {
+    setSearchTerm(value);
+    if (searchOpen) return;
+    preloadHomeSearchOverlay();
+    searchOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSearchOpen(true);
+  }, [preloadHomeSearchOverlay, searchOpen]);
+  const closeSearch = useCallback(() => {
+    setSearchTerm("");
+    setSearchOpen(false);
+    const opener = searchOpenerRef.current;
+    searchOpenerRef.current = null;
+    if (opener?.isConnected) window.requestAnimationFrame(() => opener.focus({ preventScroll: true }));
+  }, []);
+  const [cartItemCount, setCartItemCount] = useState(() => (hydrating ? 0 : cartCount()));
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => (hydrating ? [] : getCart()));
   const [unavailableCartItems, setUnavailableCartItems] = useState<CartItem[]>([]);
-  const [dismissedCartAvailabilityKey, setDismissedCartAvailabilityKey] = useState<string | null>(null);
+  // Remembered for the browser session so the dialog doesn't reopen on every visit to /home.
+  const [dismissedCartAvailabilityKey, setDismissedCartAvailabilityKey] = useState<string | null>(() => {
+    try {
+      return typeof window === "undefined" ? null : window.sessionStorage.getItem(CART_AVAILABILITY_DISMISSED_KEY);
+    } catch {
+      return null;
+    }
+  });
   const [cartRepairBusy, setCartRepairBusy] = useState(false);
   const [cartRepairError, setCartRepairError] = useState<string | null>(null);
   const [kitchens, setKitchens] = useState<NearbyKitchen[]>(initialCache.kitchens);
@@ -186,6 +275,29 @@ function BrowseFoodsPage() {
     }
     return null;
   });
+  // After a full page load has hydrated the empty Home, paint the cached Home before the first
+  // frame, so a reload shows your address, cart and dishes at once (the network then refreshes).
+  const startedEmpty = useRef(hydrating);
+  useLayoutEffect(() => {
+    if (!startedEmpty.current) return;
+    startedEmpty.current = false;
+    const cachedAddress = getAddress();
+    const cachedDishes = allDishes();
+    const cachedKitchens = allKitchens();
+    setUser(getSession() ?? recoverSessionSnapshotForNavigation());
+    setAddress(cachedAddress);
+    setDefaultAddressResolved(Boolean(cachedAddress));
+    setCartItemCount(cartCount());
+    setCartItems(getCart());
+    if (cachedDishes.length === 0 && cachedKitchens.length === 0) return;
+    setNearbyDishes(cachedDishes);
+    setKitchens(cachedKitchens);
+    setKitchenDiscoveryVerified(true);
+    setDiscoveryState("ready");
+    setCatalogMessage("Fresh homemade food available near your default delivery address.");
+    setRadiusLabel(formatDiscoveryRadius(cachedKitchens.length > 0 ? getKitchenDiscoveryRadiusMeters() : getDiscoveryRadiusMeters()));
+  }, []);
+
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [sessionUnavailable, setSessionUnavailable] = useState(false);
@@ -318,35 +430,82 @@ function BrowseFoodsPage() {
       isCravingCategory(restored.homeCategory) ? restored.homeCategory : null,
     );
     setDishSort(restored.dishSort);
-    setFoodPreference(restored.foodPreference === "veg" ? "veg" : "all");
-    setSearchTerm("");
-    setSearchOpen(false);
-  }, []);
+    setFoodPreference(restored.foodPreference);
+    setDishFilters(restored.dishFilters);
+    // Back from a dish or kitchen opened in search lands on search's history entry and shows the
+    // same results; any other way back to Home (tab, logo) starts with search closed.
+    const backToSearch = restored.searchOpen && returnedToOverlayEntry();
+    setSearchTerm(backToSearch ? restored.searchTerm : "");
+    setSearchOpen(backToSearch);
+    if (backToSearch) preloadHomeSearchOverlay();
+  }, [preloadHomeSearchOverlay]);
 
   const rememberHomeView = useCallback(() => {
     window.history.scrollRestoration = "manual";
     saveHomeReturnState({
       scrollY: window.scrollY,
-      searchTerm: "",
-      searchOpen: false,
+      searchTerm: searchOpen ? searchTerm : "",
+      searchOpen,
       homeCategory,
       dishSort,
       foodPreference,
+      dishFilters,
     });
-  }, [dishSort, foodPreference, homeCategory]);
+  }, [dishFilters, dishSort, foodPreference, homeCategory, searchOpen, searchTerm]);
 
-  const scrollToDishes = useCallback(() => {
-    const heading = document.getElementById("available-dishes-heading");
-    const section = heading?.closest("section");
-    if (!section) return;
+  // The search overlay is its own chunk: fetch it once the page is idle, so the first tap
+  // on search opens it at once instead of waiting for the download.
+  useEffect(() => {
+    if (typeof window.requestIdleCallback !== "function") {
+      const timer = window.setTimeout(preloadHomeSearchOverlay, 1500);
+      return () => window.clearTimeout(timer);
+    }
+    const handle = window.requestIdleCallback(preloadHomeSearchOverlay, { timeout: 3000 });
+    return () => window.cancelIdleCallback(handle);
+  }, [preloadHomeSearchOverlay]);
 
-    section.scrollIntoView({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
-      block: "start",
-    });
+  // One way to bring the dish list into view after a category, Veg or sort
+  // change: land the section just below the stuck rail, jump when it is more
+  // than a screen away (a long smooth scroll would toggle all the chrome), and
+  // keep the chrome still while the page moves. The move waits for the new list
+  // (layout effect below), so the page and the list change in the same frame.
+  const pendingRevealRef = useRef<{ onlyIfPast: boolean } | null>(null);
+  const revealDishes = useCallback((onlyIfPast = false) => {
+    pendingRevealRef.current = { onlyIfPast };
   }, []);
+
+  useLayoutEffect(() => {
+    const request = pendingRevealRef.current;
+    pendingRevealRef.current = null;
+    if (!request) return;
+    const section = document
+      .getElementById("available-dishes-heading")
+      ?.closest("section");
+    if (!section) return;
+    const rail = document.querySelector<HTMLElement>("[data-craves-category-rail]");
+    const chromeBottom = rail
+      ? (parseFloat(getComputedStyle(rail).top) || 0) + rail.offsetHeight
+      : 0;
+    const target = Math.max(
+      0,
+      Math.round(section.getBoundingClientRect().top + window.scrollY - chromeBottom),
+    );
+    const distance = Math.abs(target - window.scrollY);
+    if (distance < 2 || (request.onlyIfPast && window.scrollY <= target)) return;
+
+    holdScrollChrome();
+    if (distance > window.innerHeight || prefersReducedMotion()) {
+      forceInstantWindowScroll(target);
+    } else {
+      window.scrollTo({ top: target, behavior: "smooth" });
+    }
+  }, [listCategory, listSort, listFoodPreference, listDishFilters]);
+
+  const changeFoodPreference = useCallback((next: HomeFoodPreference) => {
+    setFoodPreference(next);
+    // Veg lives in the header: only move the page when the list it changes is above.
+    revealDishes(true);
+  }, [revealDishes]);
 
   const handleDetailNavigationCapture = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const target = event.target;
@@ -356,7 +515,8 @@ function BrowseFoodsPage() {
     if (
       href?.startsWith("/dish/") ||
       href?.startsWith("/kitchen/") ||
-      href?.startsWith("/chef/")
+      href?.startsWith("/chef/") ||
+      href === "/chefs"
     ) {
       rememberHomeView();
     }
@@ -380,6 +540,7 @@ function BrowseFoodsPage() {
     let secondFrame = 0;
     firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
+        holdScrollChrome();
         forceInstantWindowScroll(targetScrollY);
         pendingHomeScrollYRef.current = null;
         clearHomeReturnState();
@@ -401,8 +562,13 @@ function BrowseFoodsPage() {
   useEffect(() => {
     if (window.sessionStorage.getItem("craves-home-open-search") !== "1") return;
     window.sessionStorage.removeItem("craves-home-open-search");
+    // Words typed in a dish or kitchen page's search field (Enter) carry over.
+    const term = window.sessionStorage.getItem("craves-home-search-term");
+    window.sessionStorage.removeItem("craves-home-search-term");
+    if (term) setSearchTerm(term);
+    preloadHomeSearchOverlay();
     setSearchOpen(true);
-  }, []);
+  }, [preloadHomeSearchOverlay]);
 
   useEffect(() => {
     let active = true;
@@ -629,6 +795,26 @@ function BrowseFoodsPage() {
     return result;
   }, [nearbyDishes]);
 
+  // Dish photos come from one storage host: open that connection while discovery is loading,
+  // instead of after the first card asks for its photo.
+  useEffect(() => {
+    try {
+      const origin = window.localStorage.getItem(MEDIA_ORIGIN_KEY);
+      if (origin?.startsWith("https://") && new URL(origin).origin === origin) preconnect(origin);
+    } catch {
+      // No hint: the first photo opens the connection itself.
+    }
+  }, []);
+  useEffect(() => {
+    const photo = nearbyDishes.find((dish) => !dish.imageIsPlaceholder)?.img;
+    if (!photo?.startsWith("https://")) return;
+    try {
+      window.localStorage.setItem(MEDIA_ORIGIN_KEY, new URL(photo).origin);
+    } catch {
+      // Storage blocked: nothing to remember.
+    }
+  }, [nearbyDishes]);
+
   const kitchenDishImages = useMemo<Record<string, string[]>>(() => {
     const grouped: Record<string, string[]> = {};
     for (const dish of nearbyDishes) {
@@ -644,28 +830,41 @@ function BrowseFoodsPage() {
   const filteredKitchens = kitchens;
 
   const filteredDishes = useMemo(() => {
-    const homeKeywords = homeCategory ? HOME_CATEGORY_KEYWORDS[homeCategory] : null;
+    const homeKeywords = listCategory ? HOME_CATEGORY_KEYWORDS[listCategory] : null;
+    return sortDishes(
+      nearbyDishes.filter(
+        (dish) =>
+          matchesCraving(dish, homeKeywords) &&
+          matchesFoodPreference(dish, listFoodPreference) &&
+          matchesDishFilters(dish, listDishFilters),
+      ),
+      listSort,
+    );
+  }, [listCategory, listDishFilters, listFoodPreference, listSort, nearbyDishes]);
 
-    const matchingDishes = nearbyDishes.filter((dish) => {
-      const searchable = `${dish.name} ${dish.category} ${dish.desc}`.toLocaleLowerCase("en-IN");
-      const categoryMatches =
-        !homeKeywords || homeKeywords.some((keyword) => searchable.includes(keyword));
-      const foodType = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
-      const foodTypeMatches = foodPreference !== "veg" || foodType === "VEG";
-      return categoryMatches && foodTypeMatches;
-    });
-
-    if (dishSort === "rating") {
-      return [...matchingDishes].sort((left, right) => right.rating - left.rating);
-    }
-    if (dishSort === "price-low-high") {
-      return [...matchingDishes].sort((left, right) => left.price - right.price);
-    }
-    if (dishSort === "price-high-low") {
-      return [...matchingDishes].sort((left, right) => right.price - left.price);
-    }
-    return matchingDishes;
-  }, [dishSort, foodPreference, homeCategory, nearbyDishes]);
+  // The filter sheet's "Show N dishes": the same rules on the current craving, for a draft view.
+  const countDishes = useCallback(
+    (view: DishView) => {
+      const keywords = homeCategory ? HOME_CATEGORY_KEYWORDS[homeCategory] : null;
+      return nearbyDishes.filter(
+        (dish) =>
+          matchesCraving(dish, keywords) &&
+          matchesFoodPreference(dish, view.foodPreference) &&
+          matchesDishFilters(dish, view.filters),
+      ).length;
+    },
+    [homeCategory, nearbyDishes],
+  );
+  const dishView = useMemo<DishView>(
+    () => ({ sort: dishSort, filters: dishFilters, foodPreference }),
+    [dishFilters, dishSort, foodPreference],
+  );
+  const changeDishView = useCallback((next: DishView) => {
+    setDishSort(next.sort);
+    setDishFilters(next.filters);
+    setFoodPreference(next.foodPreference);
+    revealDishes();
+  }, [revealDishes]);
 
   const locationLabel = address
     ? Array.from(
@@ -689,12 +888,9 @@ function BrowseFoodsPage() {
 
   const searchDishes = useMemo(
     () =>
-      foodPreference === "veg"
-        ? nearbyDishes.filter((dish) => {
-            const foodType = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
-            return foodType === "VEG";
-          })
-        : nearbyDishes,
+      foodPreference === "all"
+        ? nearbyDishes
+        : nearbyDishes.filter((dish) => matchesFoodPreference(dish, foodPreference)),
     [foodPreference, nearbyDishes],
   );
 
@@ -755,7 +951,7 @@ function BrowseFoodsPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-white px-5 text-[#1A1A1A]">
         <section className="w-full max-w-md rounded-[1.5rem] border border-[#E5E7EB] bg-white p-6 text-center shadow-[0_14px_42px_rgba(26,26,26,0.08)]">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FFF1EF] text-xl font-black text-[#F62E18]">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-xl font-black text-[#F62E18]">
             C
           </div>
           <h1 className="mt-4 text-xl font-black tracking-[-0.02em]">
@@ -771,7 +967,7 @@ function BrowseFoodsPage() {
               setDefaultAddressResolved(false);
               setSessionRetryNonce((current) => current + 1);
             }}
-            className="mt-5 min-h-11 rounded-xl bg-[#F62E18] px-5 text-sm font-bold text-white shadow-[0_6px_18px_rgba(246,46,24,0.18)]"
+            className="mt-5 min-h-11 rounded-xl !border-transparent !bg-[#F62E18] px-5 text-sm font-bold !text-white shadow-[0_6px_18px_rgba(26,26,26,0.14)] active:!bg-[#C4200F]"
           >
             Try again
           </button>
@@ -790,7 +986,6 @@ function BrowseFoodsPage() {
       onClickCapture={handleDetailNavigationCapture}
     >
       <BrowseHeader
-        user={user}
         locationLabel={locationLabel}
         locationTypeLabel={locationTypeLabel}
         onOpenLocation={openAddressManager}
@@ -798,15 +993,36 @@ function BrowseFoodsPage() {
         onOpenCart={() => navigate({ to: "/cart" })}
         onLogout={() => setSignOutOpen(true)}
         searchTerm={searchTerm}
-        onSearchTermChange={setSearchTerm}
-        onSearchFocus={() => setSearchOpen(true)}
+        onSearchTermChange={typeInSearch}
+        onSearchActivate={openSearchOnTap}
+        onSearchIntent={preloadHomeSearchOverlay}
         foodPreference={foodPreference}
-        onFoodPreferenceChange={setFoodPreference}
+        onFoodPreferenceChange={changeFoodPreference}
       />
 
       <main>
+        <CartAddressAvailabilityBanner
+          open={cartAvailabilityOpen}
+          addressLabel={locationLabel}
+          unavailableItems={unavailableCartItems}
+          totalCartItems={cartItems.length}
+          busy={cartRepairBusy}
+          error={cartRepairError}
+          onResolve={() => void resolveUnavailableCartItems()}
+          onChooseAddress={openAddressManager}
+          onClose={() => {
+            if (cartAvailabilityKey) {
+              setDismissedCartAvailabilityKey(cartAvailabilityKey);
+              try {
+                window.sessionStorage.setItem(CART_AVAILABILITY_DISMISSED_KEY, cartAvailabilityKey);
+              } catch {
+                // Private mode: the dismissal still holds for this page view.
+              }
+            }
+          }}
+        />
+
         <WelcomeBanner
-          firstName={user.firstName || user.username.split(" ")[0] || "there"}
           dishCount={nearbyDishes.length}
           radiusLabel={radiusLabel}
           defaultAddressLabel={locationLabel}
@@ -818,9 +1034,10 @@ function BrowseFoodsPage() {
           selected={homeCategory}
           images={categoryImages}
           onSelect={(nextCategory) => {
-            setHomeCategory(nextCategory);
+            // aria-pressed chips: tapping the selected one again shows every dish.
+            setHomeCategory((current) => (current === nextCategory ? null : nextCategory));
             setSearchTerm("");
-            window.requestAnimationFrame(scrollToDishes);
+            revealDishes();
           }}
         />
 
@@ -836,21 +1053,29 @@ function BrowseFoodsPage() {
           onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}
           dishImagesByKitchen={kitchenDishImages}
+          limit={6}
         />
 
         <DishesGrid
           dishes={filteredDishes}
-          selectedCategory={homeCategory ?? ALL_DISHES_CATEGORY}
+          selectedCategory={listCategory ?? ALL_DISHES_CATEGORY}
           searchTerm=""
           state={discoveryState}
           message={catalogMessage}
-          sort={dishSort}
-          foodPreference={foodPreference}
-          onSortChange={setDishSort}
-          onFoodPreferenceChange={setFoodPreference}
+          view={dishView}
+          onViewChange={changeDishView}
+          countFor={countDishes}
           onRemoveFilters={() => {
             setHomeCategory(null);
             setDishSort("recommended");
+            setDishFilters(DEFAULT_DISH_FILTERS);
+            // Veg is the header switch's choice and stays; Egg or Non-veg came from the filters.
+            setFoodPreference((current) => (current === "veg" ? current : "all"));
+            revealDishes();
+            // The button goes away with the filters: keep keyboard focus on the list it changed.
+            window.requestAnimationFrame(() =>
+              document.getElementById("available-dishes-heading")?.focus({ preventScroll: true }),
+            );
           }}
           onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}
@@ -864,36 +1089,20 @@ function BrowseFoodsPage() {
 
       <CustomerFloatingCart />
 
-      <CartAddressAvailabilityDialog
-        open={cartAvailabilityOpen}
-        addressLabel={locationLabel}
-        unavailableItems={unavailableCartItems}
-        totalCartItems={cartItems.length}
-        busy={cartRepairBusy}
-        error={cartRepairError}
-        onResolve={() => void resolveUnavailableCartItems()}
-        onChooseAddress={openAddressManager}
-        onClose={() => {
-          if (cartAvailabilityKey) {
-            setDismissedCartAvailabilityKey(cartAvailabilityKey);
-          }
-        }}
-      />
-
-      {searchOpen ? (
-        <HomeSearchOverlay
-          dishes={searchDishes}
-          kitchens={kitchens}
-          searchTerm={searchTerm}
-          vegOnly={foodPreference === "veg"}
-          onSearchTermChange={setSearchTerm}
-          onDisableVeg={() => setFoodPreference("all")}
-          onClose={() => {
-            setSearchTerm("");
-            setSearchOpen(false);
-          }}
-        />
-      ) : null}
+      <AnimatePresence>
+        {searchOpen && HomeSearchOverlay ? (
+          <HomeSearchOverlay
+            key="home-search"
+            dishes={searchDishes}
+            kitchens={kitchens}
+            searchTerm={searchTerm}
+            vegOnly={foodPreference === "veg"}
+            onSearchTermChange={setSearchTerm}
+            onDisableVeg={() => setFoodPreference("all")}
+            onClose={closeSearch}
+          />
+        ) : null}
+      </AnimatePresence>
 
       <CustomerSignOutDialog
         open={signOutOpen}

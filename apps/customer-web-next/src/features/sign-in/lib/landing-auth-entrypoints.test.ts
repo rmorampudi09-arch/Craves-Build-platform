@@ -80,7 +80,8 @@ test("rebuilt landing preserves the released host auth and startup scripts", () 
   const index = source("../../../../public/landing-v20/index.html");
   for (const [id, checksum] of [
     ["craves-landing-auth-bridge", "c90adbd8f77822fb26a8efe308dc72fb925fc886f9e8eb71a135924a79cb9f48"],
-    ["craves-boot-script", "11a49bd7849c76b8e0df9021bed0556220b3f113547b932cfa3fc05c8be00d6d"],
+    // Repeat visits in a session get a plain white cover instead of the splash.
+    ["craves-boot-script", "1c453f8374f5f64751d09cca36e6e53b2901a5b3b5b8d9b3ddc12da212eeabbe"],
   ]) {
     const scripts = Array.from(
       index.matchAll(new RegExp(`<script\\b[^>]*\\bid=["']${id}["'][^>]*>[\\s\\S]*?<\\/script>`, "g")),

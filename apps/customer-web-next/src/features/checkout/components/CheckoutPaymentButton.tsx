@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LoaderCircle, LockKeyhole } from "lucide-react";
+import { AlertCircle, LoaderCircle, LockKeyhole } from "lucide-react";
 import {
   parsePaymentSession,
   parsePaymentStatus,
@@ -11,6 +11,7 @@ import {
 import type { CustomerCheckout } from "@/features/checkout/lib/checkout-contract";
 import { loadSession } from "@/features/auth/api/cravesAuth";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { loadCart } from "@/features/cart/api/cravesCart";
 
 type CheckoutWindow = Window & {
   Razorpay?: new (options: RazorpayCheckoutOptions) => RazorpayCheckout;
@@ -55,7 +56,44 @@ type RazorpayCheckoutOptions = {
 export type CheckoutPaymentFailure = {
   message: string;
   retryAllowed: boolean;
+  /** Where the fix lives. Payment and connection problems show next to Pay. */
+  section?: "address" | "cart";
 } | null;
+
+// A submitted but unconfirmed payment survives a reload, so Pay isn't offered twice.
+const PENDING_PAYMENT_KEY = "craves.checkout.paymentPending";
+
+type PendingPayment = { paymentOrderId: string; checkedAt: Date | null };
+
+function storedPendingPayment(checkoutId: string): string | null {
+  try {
+    const saved = JSON.parse(window.sessionStorage.getItem(PENDING_PAYMENT_KEY) ?? "null") as {
+      checkoutId?: unknown;
+      paymentOrderId?: unknown;
+    } | null;
+    return saved?.checkoutId === checkoutId && typeof saved.paymentOrderId === "string"
+      ? saved.paymentOrderId
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberPendingPayment(checkoutId: string, paymentOrderId: string) {
+  window.sessionStorage.setItem(
+    PENDING_PAYMENT_KEY,
+    JSON.stringify({ checkoutId, paymentOrderId, at: Date.now() }),
+  );
+}
+
+function forgetPendingPayment() {
+  window.sessionStorage.removeItem(PENDING_PAYMENT_KEY);
+}
+
+/** The customer closed Razorpay before paying: nothing happened, so not an error. */
+class PaymentDismissedError extends Error {}
+
+const clockTime = new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" });
 
 interface CheckoutPaymentButtonProps {
   checkout: CustomerCheckout | null;
@@ -102,7 +140,7 @@ function loadRazorpay(): Promise<void> {
       existing.addEventListener("load", () => resolve(), { once: true });
       existing.addEventListener(
         "error",
-        () => reject(new Error("Razorpay checkout could not be loaded.")),
+        () => reject(new Error("Razorpay checkout didn’t load. Check your connection and tap Pay again. You haven’t been charged.")),
         { once: true },
       );
       return;
@@ -115,7 +153,7 @@ function loadRazorpay(): Promise<void> {
     script.referrerPolicy = "strict-origin";
     script.onload = () => resolve();
     script.onerror = () =>
-      reject(new Error("Razorpay checkout could not be loaded."));
+      reject(new Error("Razorpay checkout didn’t load. Check your connection and tap Pay again. You haven’t been charged."));
     document.head.appendChild(script);
   });
 }
@@ -152,18 +190,61 @@ export function CheckoutPaymentButton({
 }: CheckoutPaymentButtonProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<PendingPayment | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [checkProblem, setCheckProblem] = useState("");
+  const [notice, setNotice] = useState("");
 
-  async function finishConfirmedOrder(currentCheckout: CustomerCheckout) {
+  const finishConfirmedOrder = useCallback(async (currentCheckout: CustomerCheckout) => {
     const orderId = currentCheckout.orders[0]?.id;
     if (!orderId) {
       throw new Error("Confirmed checkout did not include an order.");
     }
 
+    forgetPendingPayment();
+    // The order used the cart: refresh it so the tab bar badge and "Order again" start from it.
+    void loadCart().catch(() => undefined);
     window.sessionStorage.removeItem("craves.checkout.instructions");
     window.sessionStorage.removeItem("craves.checkout.id");
     window.sessionStorage.removeItem("craves.checkout.operationId");
     router.replace(`/orders/${orderId}`);
-  }
+  }, [router]);
+
+  const checkStatus = useCallback(async (paymentOrderId: string) => {
+    if (!checkout) return;
+    setChecking(true);
+    setCheckProblem("");
+    try {
+      const status = await readPaymentStatus(paymentOrderId);
+      if (status.status === "PAID") {
+        await finishConfirmedOrder(checkout);
+        return;
+      }
+      if (status.status === "FAILED" || status.status === "CANCELLED") {
+        forgetPendingPayment();
+        setPending(null);
+        onFailure({
+          message:
+            "The payment wasn’t completed. Nothing was charged by Craves. Your reviewed order is still available.",
+          retryAllowed: true,
+        });
+        return;
+      }
+      setPending({ paymentOrderId, checkedAt: new Date() });
+    } catch {
+      setCheckProblem("We couldn’t check just now. Try again in a moment.");
+    } finally {
+      setChecking(false);
+    }
+  }, [checkout, finishConfirmedOrder, onFailure]);
+
+  // After a reload, pick up a payment that was submitted for this checkout.
+  useEffect(() => {
+    const paymentOrderId = checkout ? storedPendingPayment(checkout.id) : null;
+    if (!paymentOrderId) return;
+    setPending({ paymentOrderId, checkedAt: null });
+    void checkStatus(paymentOrderId);
+  }, [checkout, checkStatus]);
 
   async function createPayment(checkoutId: string) {
     const response = await sessionFetch("/api/payments/orders", {
@@ -175,7 +256,7 @@ export function CheckoutPaymentButton({
     const raw = await response.json().catch(() => null);
     if (!response.ok) {
       throw new Error(
-        responseMessage(raw, "Payment order could not be created."),
+        responseMessage(raw, "We couldn’t start the payment. You haven’t been charged. Try again."),
       );
     }
 
@@ -242,7 +323,9 @@ export function CheckoutPaymentButton({
   async function openPayment() {
     if (busy || disabled) return;
     setBusy(true);
+    setNotice("");
     onFailure(null);
+    let submitted: string | null = null;
 
     try {
       const session = await loadSession();
@@ -299,14 +382,13 @@ export function CheckoutPaymentButton({
               if (settled) return;
               settled = true;
               reject(
-                new Error(
-                  bankFailureReason ||
-                    "Razorpay checkout was closed before payment was completed.",
-                ),
+                bankFailureReason
+                  ? new Error(bankFailureReason)
+                  : new PaymentDismissedError(),
               );
             },
           },
-          theme: { color: "#16A34A" },
+          theme: { color: "#F62E18" },
         });
 
         instance.on("payment.failed", (response) => {
@@ -318,32 +400,29 @@ export function CheckoutPaymentButton({
         instance.open();
       });
 
-      const confirmed = await verifyPayment(
-        currentCheckout,
-        payment.paymentOrderId,
-        result,
-      );
-      if (!confirmed) {
-        onFailure({
-          message:
-            "Payment was submitted, but Craves has not confirmed it yet. Do not pay again until the status is checked.",
-          retryAllowed: false,
-        });
-      }
+      submitted = payment.paymentOrderId;
+      rememberPendingPayment(currentCheckout.id, submitted);
+      const confirmed = await verifyPayment(currentCheckout, submitted, result);
+      if (!confirmed) setPending({ paymentOrderId: submitted, checkedAt: new Date() });
     } catch (error) {
+      if (submitted) {
+        // Money may have moved: never offer Pay again until the status is known.
+        setPending({ paymentOrderId: submitted, checkedAt: null });
+        return;
+      }
+      if (error instanceof PaymentDismissedError) {
+        setNotice("Payment cancelled. You haven’t been charged.");
+        return;
+      }
       const message =
         error instanceof Error
           ? error.message
           : "Payment checkout could not be completed.";
-      const uncertain =
-        /verification|status could not be confirmed|submitted/i.test(message);
       onFailure({
-        message: uncertain
-          ? `${message} Do not pay again until the payment status is confirmed.`
-          : checkout
-            ? `${message} Nothing was charged by Craves. Your reviewed order is still available.`
-            : `${message} Nothing was charged by Craves. Your cart is still here.`,
-        retryAllowed: !uncertain,
+        message: checkout
+          ? `${message} Nothing was charged by Craves. Your reviewed order is still available.`
+          : `${message} Nothing was charged by Craves. Your cart is still here.`,
+        retryAllowed: true,
       });
     } finally {
       setBusy(false);
@@ -355,16 +434,74 @@ export function CheckoutPaymentButton({
     ? checkout
       ? "Try payment again"
       : "Retry total"
-    : failure
-      ? "Payment pending"
-      : authoritativeAmount !== null
-        ? `Pay ${money(authoritativeAmount, checkout?.currency ?? currency)}`
-        : "Preparing total…";
+    : authoritativeAmount !== null
+      ? `Pay ${money(authoritativeAmount, checkout?.currency ?? currency)}`
+      : "Preparing total…";
+  const barClass =
+    "fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white shadow-[0_-8px_28px_rgba(17,24,39,0.06)] lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:shadow-none";
+
+  if (pending) {
+    return (
+      <div className={barClass}>
+        <div className="mx-auto max-w-2xl px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-6 lg:max-w-none lg:px-0 lg:pb-0 lg:pt-4">
+          <div role="status" className="lg:rounded-xl lg:bg-[#F1F3F5] lg:p-4">
+            <p className="text-base font-bold text-[#1A1A1A]">
+              We’re confirming your payment.
+            </p>
+            <p className="mt-0.5 text-sm leading-5 text-[#6B6B6B]">
+              Please don’t pay again.
+              {pending.checkedAt
+                ? ` Last checked at ${clockTime.format(pending.checkedAt)}.`
+                : " This usually takes a minute."}
+            </p>
+            {checkProblem ? (
+              <p className="mt-1 text-sm font-medium text-[#C4200F]">{checkProblem}</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            disabled={checking}
+            aria-busy={checking}
+            onClick={() => void checkStatus(pending.paymentOrderId)}
+            className="craves-primary-action mt-3 w-full"
+          >
+            {checking ? (
+              <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
+            ) : null}
+            {checking ? "Checking…" : "Check status"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const paymentProblem = failure && !failure.section ? failure : null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white shadow-[0_-8px_28px_rgba(17,24,39,0.06)] lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:shadow-none">
+    <div className={barClass}>
+      {paymentProblem ? (
+        <div
+          role="alert"
+          className="mx-auto flex max-w-2xl items-start gap-2.5 px-4 pt-3 md:px-6 lg:max-w-none lg:rounded-xl lg:bg-[#F1F3F5] lg:p-4"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#C4200F]" aria-hidden="true" />
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-[#1A1A1A]">
+              {checkout ? "Payment didn’t go through" : "We couldn’t prepare your order"}
+            </p>
+            <p className="mt-0.5 text-xs leading-5 text-[#6B6B6B]">{paymentProblem.message}</p>
+          </div>
+        </div>
+      ) : notice ? (
+        <p
+          role="status"
+          className="mx-auto max-w-2xl px-4 pt-3 text-sm font-medium text-[#1A1A1A] md:px-6 lg:max-w-none lg:px-0"
+        >
+          {notice}
+        </p>
+      ) : null}
       <div className="mx-auto flex max-w-2xl items-center gap-4 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-6 lg:max-w-none lg:flex-col lg:items-stretch lg:gap-3 lg:px-0 lg:pb-0 lg:pt-4">
-        <div className="min-w-[7.5rem] lg:hidden">
+        <div className="shrink-0 lg:hidden">
           <p className="text-xl font-bold tabular-nums text-[#1A1A1A]">
             {authoritativeAmount !== null
               ? money(authoritativeAmount, checkout?.currency ?? currency)
@@ -381,19 +518,21 @@ export function CheckoutPaymentButton({
 
         <button
           type="button"
-          disabled={busy || disabled || Boolean(failure && !failure.retryAllowed)}
+          disabled={busy || disabled}
+          aria-busy={busy}
           onClick={() => void openPayment()}
-          className="ml-auto inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-[11px] border border-[#138A3D] bg-[#16A34A] px-5 py-[13px] text-[15px] font-semibold text-white shadow-[0_4px_12px_rgba(22,163,74,0.22)] transition-[background-color,box-shadow,transform] hover:-translate-y-px hover:bg-[#15803D] hover:shadow-[0_7px_18px_rgba(22,163,74,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A]/35 focus-visible:ring-offset-2 sm:flex-none sm:min-w-52 lg:ml-0 lg:w-full lg:min-w-0 lg:flex-none disabled:pointer-events-none disabled:opacity-45"
+          className="craves-primary-action ml-auto flex-1 !px-4 sm:flex-none sm:min-w-52 sm:!px-6 lg:ml-0 lg:w-full lg:min-w-0 lg:flex-none"
         >
           {busy ? (
-            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+            <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
           ) : (
-            <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+            <LockKeyhole className="h-5 w-5" aria-hidden="true" />
           )}
+          {/* Short busy labels keep the 19px label on one line at 360px. */}
           {busy
             ? checkout
-              ? "Opening Razorpay…"
-              : "Preparing total…"
+              ? "Opening…"
+              : "Preparing…"
             : buttonLabel}
         </button>
       </div>

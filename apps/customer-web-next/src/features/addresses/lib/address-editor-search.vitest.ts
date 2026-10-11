@@ -111,3 +111,47 @@ describe("customer address search typeahead", () => {
     expect(mocks.search).not.toHaveBeenCalled();
   });
 });
+
+describe("leaving the address editor", () => {
+  const open = (onClose: () => void) => render(createElement(AddressEditorFlow, {
+    open: true,
+    initialAddress: null,
+    profileDefaults: { recipientName: "Fixture Customer", contactPhoneNumber: "9876543210" },
+    onClose,
+    onSaved: () => {},
+  }));
+
+  it("closes on phone Back without leaving the page when nothing changed", async () => {
+    const onClose = vi.fn();
+    const routerPopState = vi.fn();
+    window.addEventListener("popstate", routerPopState);
+    open(onClose);
+    await act(async () => {
+      window.history.back();
+    });
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(routerPopState).not.toHaveBeenCalled();
+    window.removeEventListener("popstate", routerPopState);
+  });
+
+  it("asks before throwing away a placed pin; Keep editing stays, Discard closes", async () => {
+    const onClose = vi.fn();
+    mocks.search.mockResolvedValue([result("p1", "Madhapur", 17.4483, 78.3915)]);
+    open(onClose);
+    fireEvent.change(input(), { target: { value: "Madhapur" } });
+    fireEvent.click(await screen.findByText("Madhapur", {}, { timeout: 3_000 }));
+    await screen.findByTestId("map");
+
+    await act(async () => {
+      window.history.back();
+    });
+    await screen.findByRole("alertdialog", { name: "Discard your changes?" });
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close address flow" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

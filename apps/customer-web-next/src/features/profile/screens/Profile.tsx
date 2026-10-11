@@ -18,9 +18,10 @@ import { GiChefToque } from "react-icons/gi";
 import { AccountCard } from "@/features/profile/components/AccountCard";
 import { AddressCard } from "@/features/addresses/components/AddressCard";
 import { EditProfileModal } from "@/features/profile/components/EditProfileModal";
+import { CustomerSignOutDialog } from "@/features/home/components/CustomerSignOutDialog";
 import { ProfileHeader } from "@/features/profile/components/ProfileHeader";
 import { ProfileLinkCard } from "@/features/profile/components/ProfileLinkCard";
-import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import type { CustomerAddress } from "@/features/addresses/lib/address-contract";
 import type { ChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
 import type { CustomerOrder } from "@/features/orders/lib/order-contract";
@@ -40,10 +41,14 @@ import {
 import { cartCount, loadCart } from "@/features/cart/api/cravesCart";
 import { loadCustomerFavoriteIds } from "@/features/favorites/api/customerFavorites";
 
-function chefLink(user: CravesUser, application: ChefApplication | null) {
+// Chef mode has its own sign-in, which then returns to the chef destination.
+const CHEF_MODE_LINK = "/chef/sign-in?returnTo=/chef";
+const CHEF_APPLICATION_LINK = "/chef/sign-in?returnTo=/chef/application";
+
+export function chefLink(user: CravesUser, application: ChefApplication | null) {
   if (user.roles.some((role) => role.toUpperCase() === "CHEF")) {
     return {
-      to: "/chef",
+      to: CHEF_MODE_LINK,
       title: "Switch to Chef mode",
       subtitle: "Manage your kitchen, menu and orders",
     };
@@ -51,7 +56,7 @@ function chefLink(user: CravesUser, application: ChefApplication | null) {
 
   if (application?.status === "PENDING") {
     return {
-      to: "/chef/application",
+      to: CHEF_APPLICATION_LINK,
       title: "Chef application pending",
       subtitle: "Review your application and document status",
     };
@@ -59,7 +64,7 @@ function chefLink(user: CravesUser, application: ChefApplication | null) {
 
   if (application?.status === "REJECTED") {
     return {
-      to: "/chef/application",
+      to: CHEF_APPLICATION_LINK,
       title: "Update chef application",
       subtitle: "Read the review note and submit corrected details",
     };
@@ -67,14 +72,23 @@ function chefLink(user: CravesUser, application: ChefApplication | null) {
 
   if (application?.status === "APPROVED") {
     return {
-      to: "/chef",
+      to: CHEF_MODE_LINK,
       title: "Chef approval received",
       subtitle: "Open Chef mode and finish your kitchen setup",
     };
   }
 
+  // A saved draft is still NOT_SUBMITTED, but it already has a record or uploads.
+  if (application && (application.id || application.documents.length > 0)) {
+    return {
+      to: CHEF_APPLICATION_LINK,
+      title: "Continue your chef application",
+      subtitle: "Pick up where you left off",
+    };
+  }
+
   return {
-    to: "/chef/application",
+    to: CHEF_APPLICATION_LINK,
     title: "Become a home chef",
     subtitle: "Apply to cook and sell through Craves",
   };
@@ -92,41 +106,24 @@ function profileScope(): string {
 const serverProfileScope = () => "server";
 
 type ProfileContentProps = {
-  logoutBusy: boolean;
-  logoutError: string;
   onSignOut: () => void;
 };
 
-function ProfileSignOutAction({
-  logoutBusy,
-  logoutError,
-  onSignOut,
-}: ProfileContentProps) {
-  const label = logoutBusy
-    ? "Signing out…"
-    : logoutError
-      ? "Retry sign out"
-      : "Sign out";
-
+function ProfileSignOutAction({ onSignOut }: ProfileContentProps) {
   return (
     <button
       type="button"
       onClick={onSignOut}
-      disabled={logoutBusy}
-      aria-label={label}
-      className="group flex min-h-[76px] w-full items-center justify-between gap-3 rounded-2xl border border-[#F62E18]/20 bg-white p-3.5 text-left transition-[box-shadow,background-color] hover:bg-[#FFF8F7] hover:shadow-[0_8px_22px_rgba(246,46,24,0.07)] disabled:opacity-50 sm:p-4"
+      aria-label="Sign out"
+      className="flex min-h-[76px] w-full items-center gap-3 rounded-2xl !border-[#E5E7EB] !bg-white p-3.5 text-left !shadow-none transition-[box-shadow] hover:!shadow-[0_8px_22px_rgba(26,26,26,0.07)] sm:p-4"
     >
-      <span className="flex min-w-0 items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFF1EF] text-[#F62E18]">
-          <FaRightFromBracket className="text-[18px]" aria-hidden="true" />
-        </span>
-        <span>
-          <span className="block text-sm font-black text-[#C92716]">
-            {label}
-          </span>
-          <span className="mt-0.5 block text-xs leading-5 text-[#6B6B6B]">
-            Sign out of this Craves account
-          </span>
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
+        <FaRightFromBracket className="text-[18px]" aria-hidden="true" />
+      </span>
+      <span>
+        <span className="block text-sm font-black text-[#1A1A1A]">Sign out</span>
+        <span className="mt-0.5 block text-xs leading-5 text-[#6B6B6B]">
+          Sign out of this Craves account
         </span>
       </span>
     </button>
@@ -141,6 +138,8 @@ export default function ProfilePage() {
     serverProfileScope,
   );
   const logoutAttempt = useRef(0);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [logout, setLogout] = useState<{
     context: SessionContext | null;
     busy: boolean;
@@ -164,7 +163,11 @@ export default function ProfilePage() {
     try {
       await pending;
       if (attempt !== logoutAttempt.current) return;
-      if (!getSession()) navigate({ to: "/" });
+      if (!getSession()) {
+        // Stay on "Signing out…" until the landing page replaces this one.
+        setLeaving(true);
+        navigate({ to: "/" });
+      }
       setLogout({ context: null, busy: false, error: "" });
     } catch (error) {
       if (attempt !== logoutAttempt.current) return;
@@ -180,26 +183,27 @@ export default function ProfilePage() {
         context: error.retryContext,
         busy: false,
         error:
-          "Sign-out could not be confirmed. You are still signed in. Please try again.",
+          "We couldn’t confirm that you signed out, so you’re still signed in. Please try again.",
       });
     }
   }
 
+  const logoutBusy = leaving || (currentLogout && logout.busy);
   return (
-    <ProfileContent
-      key={scope}
-      logoutBusy={currentLogout && logout.busy}
-      logoutError={currentLogout ? logout.error : ""}
-      onSignOut={() => void signOut()}
-    />
+    <>
+      <ProfileContent key={scope} onSignOut={() => setConfirmOpen(true)} />
+      <CustomerSignOutDialog
+        open={confirmOpen}
+        busy={logoutBusy}
+        error={currentLogout ? logout.error : ""}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => void signOut()}
+      />
+    </>
   );
 }
 
-function ProfileContent({
-  logoutBusy,
-  logoutError,
-  onSignOut,
-}: ProfileContentProps) {
+function ProfileContent({ onSignOut }: ProfileContentProps) {
   const navigate = useNavigate();
   const [user, setUser] = useState<CravesUser | null>(null);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
@@ -331,49 +335,31 @@ function ProfileContent({
   }, [navigate]);
 
   if (loading) {
-    return <CustomerPageSkeleton label="Loading your Craves profile" />;
+    return (
+      <div className="min-h-screen bg-[#FAFAFA] pb-8 text-[#1A1A1A] md:pb-12">
+        <ProfileHeader />
+        <main className="mx-auto max-w-5xl px-4 pb-8 pt-4 md:px-6 md:pt-6">
+          <CustomerSectionSkeleton variant="profile" label="Loading your Craves profile" />
+        </main>
+      </div>
+    );
   }
 
   if (!user) {
     return (
       <div className="min-h-screen bg-white">
         <ProfileHeader />
-        <main
-          aria-busy={loading}
-          className="mx-auto max-w-5xl space-y-4 px-4 py-5 md:px-6 md:py-7"
-        >
-          {loading ? (
-            <>
-              <span className="sr-only">Loading profile</span>
-              <div className="h-56 animate-pulse rounded-[1.6rem] bg-[#F1F3F5]" />
-              <div className="h-28 animate-pulse rounded-[1.6rem] bg-[#F1F3F5]" />
-              <div className="h-48 animate-pulse rounded-[1.6rem] bg-[#F1F3F5]" />
-            </>
-          ) : error ? (
+        <main className="mx-auto max-w-5xl space-y-4 px-4 py-5 md:px-6 md:py-7">
+          {error ? (
             <p
               role="alert"
-              className="rounded-xl border border-[#F62E18]/20 bg-[#F62E18]/5 p-4 text-sm text-[#C92716]"
+              className="rounded-xl bg-[#F1F3F5] p-4 text-sm font-medium text-[#C4200F]"
             >
               {error}
             </p>
           ) : null}
 
-          {getSession() ? (
-            <ProfileSignOutAction
-              logoutBusy={logoutBusy}
-              logoutError={logoutError}
-              onSignOut={onSignOut}
-            />
-          ) : null}
-
-          {logoutError ? (
-            <p
-              role="alert"
-              className="rounded-xl bg-[#FFF1EF] p-3 text-xs font-semibold text-[#C92716]"
-            >
-              {logoutError}
-            </p>
-          ) : null}
+          {getSession() ? <ProfileSignOutAction onSignOut={onSignOut} /> : null}
         </main>
       </div>
     );
@@ -412,49 +398,26 @@ function ProfileContent({
         {error ? (
           <p
             role="alert"
-            className="mt-4 rounded-xl border border-[#F62E18]/20 bg-[#F62E18]/5 p-3 text-xs font-semibold text-[#C92716]"
+            className="mt-4 rounded-xl bg-[#F1F3F5] p-3 text-xs font-semibold text-[#C4200F]"
           >
             {error}
           </p>
         ) : message ? (
           <p
             role="status"
-            className="mt-3 rounded-xl bg-[#EDF7EE] px-3 py-2.5 text-xs font-semibold text-[#2E7D32]"
+            className="mt-3 rounded-xl bg-[#F1F3F5] px-3 py-2.5 text-xs font-semibold text-[#1A1A1A]"
           >
             {message}
           </p>
         ) : null}
 
-        <section className="mt-5 rounded-[1.55rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_8px_24px_rgba(26,26,26,0.05)] sm:p-5">
-          <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFF1EF] text-[#F62E18]">
-              <FaGift className="text-lg" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-[0.6rem] font-black uppercase tracking-[0.14em] text-[#F62E18]">
-                Craves Rewards
-              </p>
-              <h2 className="mt-1 text-base font-black text-[#1A1A1A]">
-                Rewards currently unavailable
-              </h2>
-              <p className="mt-1 text-xs leading-5 text-[#6B6B6B]">
-                Your rewards balance and tier will appear here when the
-                customer rewards experience is available on web.
-              </p>
-            </div>
-          </div>
-        </section>
-
         <section aria-labelledby="profile-your-craves" className="mt-7">
           <div className="mb-3 px-1">
-            <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#F62E18]">
-              Your Craves
-            </p>
             <h2
               id="profile-your-craves"
-              className="mt-1 text-lg font-black text-[#1A1A1A]"
+              className="text-lg font-black text-[#1A1A1A]"
             >
-              Orders, favorites & delivery
+              Orders, saved dishes & delivery
             </h2>
           </div>
 
@@ -477,7 +440,7 @@ function ProfileContent({
             <ProfileLinkCard
               to="/wishlist"
               icon={FaHeart}
-              title="Favorites"
+              title="Saved"
               subtitle={
                 favoriteCount +
                 " " +
@@ -496,12 +459,9 @@ function ProfileContent({
 
         <section aria-labelledby="profile-meal-subscription" className="mt-7">
           <div className="mb-3 px-1">
-            <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#F62E18]">
-              Meal Subscription
-            </p>
             <h2
               id="profile-meal-subscription"
-              className="mt-1 text-lg font-black text-[#1A1A1A]"
+              className="text-lg font-black text-[#1A1A1A]"
             >
               Your recurring meal plans
             </h2>
@@ -510,19 +470,16 @@ function ProfileContent({
           <ProfileLinkCard
             to="/subscriptions"
             icon={FaCalendarDays}
-            title="Meal Subscription"
+            title="Meal plans"
             subtitle="Browse, start and manage recurring home-cooked meal plans"
           />
         </section>
 
         <section aria-labelledby="profile-benefits" className="mt-7">
           <div className="mb-3 px-1">
-            <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#F62E18]">
-              Payments & more
-            </p>
             <h2
               id="profile-benefits"
-              className="mt-1 text-lg font-black text-[#1A1A1A]"
+              className="text-lg font-black text-[#1A1A1A]"
             >
               Payments, referrals & chef tools
             </h2>
@@ -542,7 +499,7 @@ function ProfileContent({
             />
             <ProfileLinkCard
               icon={FaGift}
-              title="Referral to friend"
+              title="Refer a friend"
               subtitle="Invite friends and earn rewards"
               badge="Soon"
               disabled
@@ -558,12 +515,9 @@ function ProfileContent({
 
         <section aria-labelledby="profile-support" className="mt-7">
           <div className="mb-3 px-1">
-            <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#F62E18]">
-              Account & support
-            </p>
             <h2
               id="profile-support"
-              className="mt-1 text-lg font-black text-[#1A1A1A]"
+              className="text-lg font-black text-[#1A1A1A]"
             >
               Help & security
             </h2>
@@ -583,22 +537,8 @@ function ProfileContent({
               subtitle="Get quick answers about orders and payments"
             />
 
-            <ProfileSignOutAction
-              logoutBusy={logoutBusy}
-              logoutError={logoutError}
-              onSignOut={onSignOut}
-            />
+            <ProfileSignOutAction onSignOut={onSignOut} />
           </div>
-
-          {logoutError ? (
-            <p
-              role="alert"
-              className="mt-3 rounded-xl bg-[#FFF1EF] p-3 text-xs font-semibold text-[#C92716]"
-            >
-              {logoutError}
-            </p>
-          ) : null}
-
         </section>
       </main>
 

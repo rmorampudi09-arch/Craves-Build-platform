@@ -4,6 +4,7 @@ import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { captureSessionContext, isSessionContextCurrent } from "@/features/auth/api/cravesAuth";
+import { useStepHistory } from "@/features/chef-onboarding/lib/use-step-history";
 import { bankStatusSchema, type BankStatus } from "@/features/admin/finance/lib/bank-onboarding-contract";
 import { chefEmailEligible, type EmailVerificationState } from "@/features/sign-in/lib/email-verification-contract";
 import { parseCustomerProfile } from "@/features/profile/lib/profile-contract";
@@ -20,7 +21,9 @@ import {
   activeChefSections,
   correctionSections,
   firstIncompleteSection,
-  validateChefSection,
+  listInWords,
+  missingKitchenFields,
+  validateChefSectionAll,
   type ChefFieldError,
   type ChefFormScreen,
   type ChefFormSection,
@@ -70,6 +73,24 @@ function verifiedState(raw: unknown): OnboardingState {
   if (!next) throw new Error("We could not verify your saved application. Please retry.");
   return next;
 }
+/** The applicant's home inside Chef Mode; leaving the form always lands here, never on customer screens. */
+const APPLICATION_HUB = "/chef/application/status";
+/** The applicant may change the saved application, so a ?step= in the URL can open a section. */
+function editable(state: OnboardingState): boolean {
+  return (
+    state.enabled &&
+    !state.submitted &&
+    !state.legacy &&
+    state.application.status !== "APPROVED" &&
+    !(state.application.status === "REJECTED" && state.progress?.nextAction !== "EDIT_APPLICATION")
+  );
+}
+/** A URL step this application can show; anything else opens the first incomplete step. */
+function stepFor(state: OnboardingState, bank: BankStatus | null, step: string): ChefFormScreen {
+  return step === "review" || (activeChefSections(state) as readonly string[]).includes(step)
+    ? (step as ChefFormScreen)
+    : firstIncompleteSection(state, bank);
+}
 
 export function useChefOnboarding() {
   const router = useRouter();
@@ -85,8 +106,10 @@ export function useChefOnboarding() {
   const [busy, setBusy] = useState(false),
     [dirty, setDirty] = useState(false),
     [error, setError] = useState("");
-  const [fieldError, setFieldError] = useState<ChefFieldError | null>(null),
+  // Every field problem on the screen, in screen order; the first one gets focus.
+  const [fieldErrors, setFieldErrors] = useState<ChefFieldError[]>([]),
     [notice, setNotice] = useState("");
+  const fieldError = fieldErrors[0] ?? null;
   const [fromReview, setFromReview] = useState(false),
     [terms, setTerms] = useState(false),
     [callback, setCallback] = useState<CallbackRequest | null>(null);
@@ -101,6 +124,13 @@ export function useChefOnboarding() {
     upload = useRef<XMLHttpRequest | null>(null),
     helpKey = useRef<string | null>(null);
   const current = useCallback(() => mounted.current && isSessionContextCurrent(owner.current), []);
+  // The screen behind the bare /chef/application URL, chosen from the saved draft on load.
+  const entry = useRef<ChefFormScreen>("personal");
+  const { urlStep, showStep } = useStepHistory(browserStep);
+  const requestedStep = useRef(urlStep);
+  useEffect(() => {
+    requestedStep.current = urlStep;
+  }, [urlStep]);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -108,6 +138,16 @@ export function useChefOnboarding() {
       upload.current?.abort();
     };
   }, []);
+  useEffect(() => {
+    // Only a form the hook knows is unsaved warns before the page unloads.
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   function accept(next: OnboardingState, preserveDetails = false) {
     if (!current()) return;
     currentState.current = next;
@@ -194,6 +234,16 @@ export function useChefOnboarding() {
           : next.details
             ? "resume"
             : "personal";
+      entry.current = destination;
+      const requested = requestedStep.current;
+      if (requested && editable(next)) {
+        const step = stepFor(next, nextBank, requested);
+        setScreen(step);
+        if (step !== requested) showStep(step, true);
+        return;
+      }
+      // A step that can no longer be edited (for example after submission) falls back to the bare URL.
+      if (requested) showStep(null, true);
       setScreen(destination);
       if (destination === "resume" && firstIncompleteSection(next, nextBank) === "review")
         setNotice("Your saved details are ready to review.");
@@ -203,7 +253,7 @@ export function useChefOnboarding() {
     } finally {
       if (current()) setLoading(false);
     }
-  }, [current, refreshBank]);
+  }, [current, refreshBank, showStep]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -215,11 +265,25 @@ export function useChefOnboarding() {
       return next;
     });
     setDirty(true);
-    setFieldError(null);
+    setFieldErrors((errors) => errors.filter((item) => item.field !== key));
     setError("");
     setNotice("");
   }
   function updateDetails(update: (previous: OnboardingDetails) => OnboardingDetails) {
+    // Clear the errors this change fixes: the pin feeds "location", first and last name "fullName".
+    const before = currentDetails.current;
+    const after = update(before);
+    const fixed = new Set<string>(
+      (Object.keys(after) as (keyof OnboardingDetails)[])
+        .filter((key) => after[key] !== before[key])
+        .map((key) =>
+          key === "latitude" || key === "longitude"
+            ? "location"
+            : key === "firstName" || key === "lastName"
+              ? "fullName"
+              : key,
+        ),
+    );
     setDetails((previous) => {
       const next = update(previous);
       currentDetails.current = next;
@@ -227,6 +291,7 @@ export function useChefOnboarding() {
     });
     setDirty(true);
     setError("");
+    if (fixed.size) setFieldErrors((errors) => errors.filter((item) => !fixed.has(item.field)));
   }
   const onEmail = useCallback((next: EmailVerificationState | null) => {
     setEmail(next);
@@ -273,32 +338,73 @@ export function useChefOnboarding() {
       if (current()) setBusy(false);
     }
   }
-  function focusError(next: ChefFieldError) {
-    setFieldError(next);
+  /** Shows every error at its field and moves to the first one. */
+  function focusError(next: ChefFieldError | ChefFieldError[]) {
+    const errors = Array.isArray(next) ? next : [next];
+    if (!errors.length) return;
+    setFieldErrors(errors);
     requestAnimationFrame(() => {
-      const element = document.getElementById(`chef-${next.field}`);
-      element?.focus();
+      const element = document.getElementById(`chef-${errors[0]!.field}`);
+      element?.focus({ preventScroll: true });
       element?.scrollIntoView({ block: "center", behavior: "instant" });
     });
   }
-  /** Moves between screens and clears transient messages from the previous one. */
-  function go(next: ChefFormScreen) {
+  /** Jumps to a required kitchen field from the photo checklist and says what it needs. */
+  function goToField(field: string) {
+    const missing = missingKitchenFields(currentDetails.current).find((item) => item.field === field);
+    if (missing)
+      setFieldErrors((errors) =>
+        errors.some((item) => item.field === field) ? errors : [...errors, { field, message: missing.message }],
+      );
+    requestAnimationFrame(() => {
+      const element = document.getElementById(`chef-${field}`);
+      element?.focus({ preventScroll: true });
+      element?.scrollIntoView({ block: "center", behavior: "instant" });
+    });
+  }
+  /**
+   * Photos are saved to the application record, which the server creates only once the
+   * kitchen details are complete. Before a photo is picked, show what is missing and go there.
+   */
+  function kitchenReadyForPhotos(): boolean {
+    const missing = missingKitchenFields(currentDetails.current);
+    if (!missing.length) return true;
+    focusError(missing.map(({ field, message }) => ({ field, message })));
+    return false;
+  }
+  /** Shows a screen and clears transient messages from the previous one. */
+  function show(next: ChefFormScreen) {
     setScreen(next);
     setFssaiGuideState(false);
-    setFieldError(null);
+    setFieldErrors([]);
     setError("");
     setNotice("");
+  }
+  /** Moves between screens; each form step gets its own history entry (?step=<id>). */
+  function go(next: ChefFormScreen) {
+    show(next);
+    if (next !== "submitted" && next !== "status") showStep(next === entry.current ? null : next);
+  }
+  /** Browser Back/Forward changed ?step=: follow it without adding another history entry. */
+  function browserStep(step: string | null) {
+    const saved = currentState.current;
+    if (!saved || busy) return;
+    if (step === null) show(entry.current);
+    else if (editable(saved)) show(stepFor(saved, bank, step));
+  }
+  function toHub() {
+    router.push(APPLICATION_HUB);
   }
   async function saveSection(section: ChefFormSection) {
     const existing = currentState.current;
     if (!existing) return;
-    const invalid = validateChefSection(
+    const invalid = validateChefSectionAll(
       section,
       currentDetails.current,
       existing,
       chefEmailEligible(email),
     );
-    if (invalid) {
+    if (invalid.length) {
       focusError(invalid);
       return;
     }
@@ -327,7 +433,7 @@ export function useChefOnboarding() {
   }
   function setFssaiGuide(open: boolean) {
     setFssaiGuideState(open);
-    setFieldError(null);
+    setFieldErrors([]);
     setError("");
     setNotice("");
   }
@@ -362,7 +468,7 @@ export function useChefOnboarding() {
     if (index > 0) go(sections[index - 1]!);
     else if (screen === "review") go(sections[sections.length - 1]!);
     else if (index === 0 && currentState.current?.details) go("resume");
-    else router.push("/home");
+    else if (!dirty || window.confirm("Leave without saving? Your latest changes are not saved yet.")) toHub();
   }
   function cancelUpload() {
     upload.current?.abort();
@@ -370,12 +476,12 @@ export function useChefOnboarding() {
   function exit() {
     if (busy) return;
     if (screen === "status" || screen === "submitted" || !dirty) {
-      router.push("/home");
+      toHub();
       return;
     }
     void work(async () => {
       await persist(true);
-      router.push("/home");
+      toHub();
     });
   }
   async function removeFile(id:string) {
@@ -387,6 +493,12 @@ export function useChefOnboarding() {
   }
   async function uploadFile(type: string, file: File, progress: (value: number) => void) {
     if (inFlight.current || !current()) throw new Error("Wait for the current save to finish.");
+    if (type.startsWith("KITCHEN_PHOTO") && !kitchenReadyForPhotos())
+      throw new ChefError(
+        `Add your ${listInWords(missingKitchenFields(currentDetails.current).map((item) => item.noun))} first. Photos are saved with your kitchen address.`,
+        "KITCHEN_DETAILS_REQUIRED",
+        0,
+      );
     inFlight.current = true;
     setBusy(true);
     setError("");
@@ -522,6 +634,8 @@ export function useChefOnboarding() {
       if (current()) {
         accept(next);
         go("submitted");
+        // Replace, so Back from the status page can never reopen the submitted form.
+        router.replace(APPLICATION_HUB);
       }
     });
   }
@@ -541,6 +655,7 @@ export function useChefOnboarding() {
     dirty,
     error,
     fieldError,
+    fieldErrors,
     notice,
     setNotice,
     fromReview,
@@ -566,6 +681,8 @@ export function useChefOnboarding() {
     back,
     exit,
     uploadFile,
+    kitchenReadyForPhotos,
+    goToField,
     removeFile,
     requestCallback,
     savedBank,

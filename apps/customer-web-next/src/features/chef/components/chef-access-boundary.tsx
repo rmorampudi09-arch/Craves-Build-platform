@@ -1,11 +1,13 @@
 "use client";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { parseChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
+import { clearChefMode, isChefModeVerified } from "@/features/chef/lib/chef-mode";
+import { ChefLoading, chefLoadingShapeFor } from "@/features/chef/components/chef-loading";
 import { Fragment, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
+  AuthenticationRequiredError,
   captureSessionContext,
   getSession,
   isSessionContextCurrent,
@@ -16,12 +18,28 @@ import {
   type CravesUser,
 } from "@/features/auth/api/cravesAuth";
 
-const ACCESS_UNAVAILABLE = "Your application status is temporarily unavailable. Retry before opening chef tools.";
-type AccessState = "synchronizing" | "ready" | "sign-in" | "not-approved" | "unavailable";
+const ACCESS_UNAVAILABLE = "Check your connection and try again.";
+const READY_FOR_MS = 5 * 60_000;
+type AccessState = "checking" | "ready" | "unavailable";
+
+// One confirmed result per session: switching chef tabs renders at once instead of re-checking access.
+let confirmed: { userId: string; generation: number; at: number } | null = null;
 
 function hasChefRole(user: CravesUser | null): boolean {
   return Boolean(
     user?.status === "ACTIVE" && user.roles.some((role) => role.toUpperCase() === "CHEF"),
+  );
+}
+
+function recentlyConfirmed(user: CravesUser | null): boolean {
+  return Boolean(
+    user &&
+      confirmed?.userId === user.id &&
+      confirmed.generation === captureSessionContext().generation &&
+      Date.now() - confirmed.at < READY_FOR_MS &&
+      isSessionReady() &&
+      hasChefRole(user) &&
+      isChefModeVerified(user.id),
   );
 }
 
@@ -36,46 +54,52 @@ function accessScope(): string {
 }
 const serverScope = () => "server";
 
+/**
+ * Chef workspace pages open only for an approved chef who signed in to Chef Mode in this tab.
+ * Anyone else goes to /chef/sign-in (returning here afterwards) or to their application status.
+ */
 export function ChefAccessBoundary({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const loadingShape = chefLoadingShapeFor(usePathname());
   const navigation = useRef(router);
   useEffect(() => {
     navigation.current = router;
   }, [router]);
   const scope = useSyncExternalStore(subscribeSession, accessScope, serverScope);
+  const cached = scope !== "server" && recentlyConfirmed(getSession());
   const [access, setAccess] = useState<{ scope: string; state: AccessState; detail?: string }>({
     scope: "server",
-    state: "synchronizing",
+    state: "checking",
   });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    if (cached) return;
     let active = true;
+    const here = `${window.location.pathname}${window.location.search}`;
+    const signIn = () => {
+      if (active) navigation.current.replace(`/chef/sign-in?returnTo=${encodeURIComponent(here)}`);
+    };
+    const unavailable = (detail: string) => {
+      if (active) setAccess({ scope: accessScope(), state: "unavailable", detail });
+    };
 
     void (async () => {
       const initial = captureSessionContext();
-      const current = await loadSession();
+      const current = await loadSession({ failFastUnauthenticated: true, hydrateCustomerProfile: "background" });
       if (!active) return;
       // Initial /me may establish an owner. An existing owner's logout or
       // replacement invalidates all work started under that session generation.
       if (initial.identityId !== null && !isSessionContextCurrent(initial)) return;
       if (!current) {
-        setAccess({ scope: accessScope(), state: "sign-in" });
-        return;
+        if (!getSession()) return signIn();
+        // A held identity is either a sign-out still settling (it navigates on its own) or Auth being unreachable.
+        return isSessionReady() ? unavailable(ACCESS_UNAVAILABLE) : undefined;
       }
       if (getSession()?.id !== current.id) return;
-      if (!isSessionReady()) {
-        setAccess({ scope: accessScope(), state: "sign-in" });
-        return;
-      }
+      if (!isSessionReady() || !isChefModeVerified(current.id)) return signIn();
 
-      if (!hasChefRole(current)) {
-        setAccess({ scope: accessScope(), state: "not-approved" });
-        navigation.current.replace("/chef/application/status");
-        return;
-      }
-
-      const applicationContext = captureSessionContext();
+      const context = captureSessionContext();
       const response = await fetch("/api/chef/application", {
         credentials: "same-origin",
         cache: "no-store",
@@ -83,118 +107,74 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
       });
       const application = response.ok ? parseChefApplication(await response.json()) : null;
       const failureBody: unknown = response.ok ? null : await response.json().catch(() => null);
-      if (!active || !isSessionContextCurrent(applicationContext)) return;
-      if (!application) {
-        setAccess({
-          scope: accessScope(),
-          state: response.status === 401 ? "sign-in" : "unavailable",
-          detail: response.status === 401 ? undefined : chefErrorText(response.ok
-            ? new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, "INVALID_CHEF_APPLICATION_RESPONSE", response.status)
-            : chefApiError(response, failureBody, ACCESS_UNAVAILABLE), ACCESS_UNAVAILABLE),
-        });
-        return;
-      }
+      if (!active || !isSessionContextCurrent(context)) return;
+      if (response.status === 401) return signIn();
+      if (!application)
+        return unavailable(chefErrorText(response.ok
+          ? new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, "INVALID_CHEF_APPLICATION_RESPONSE", response.status)
+          : chefApiError(response, failureBody, ACCESS_UNAVAILABLE), ACCESS_UNAVAILABLE));
       if (application.status !== "APPROVED") {
-        setAccess({ scope: accessScope(), state: "not-approved" });
         navigation.current.replace("/chef/application/status");
         return;
       }
 
-      // Auth /me reads the current database roles. Rotate the HTTP-only token
-      // before calling Catalog or Order so its signed JWT carries CHEF too.
-      const established = captureSessionContext();
-      const synchronized = await synchronizeSessionRoles();
-      if (!active || !isSessionContextCurrent(established) || getSession()?.id !== current.id)
-        return;
-      setAccess({
-        scope: accessScope(),
-        state:
-          isSessionReady() && synchronized?.id === current.id && hasChefRole(synchronized)
-            ? "ready"
-            : "sign-in",
-      });
+      let chef = current;
+      if (hasChefRole(current)) {
+        // One background token refresh keeps the signed roles current without delaying the page.
+        void synchronizeSessionRoles().catch(() => null);
+      } else {
+        // Auth /me only reports roles the current token carries; a refresh re-reads them, so an
+        // application approved after the last sign-in needs exactly one rotation.
+        const synchronized = await synchronizeSessionRoles();
+        if (!active || getSession()?.id !== current.id) return;
+        if (!synchronized) return unavailable(ACCESS_UNAVAILABLE);
+        if (!hasChefRole(synchronized)) {
+          // A fresh OTP sign-in reads the roles again; never loop between /chef and the status page.
+          clearChefMode();
+          return signIn();
+        }
+        chef = synchronized;
+      }
+      confirmed = { userId: chef.id, generation: captureSessionContext().generation, at: Date.now() };
+      setAccess({ scope: accessScope(), state: "ready" });
     })().catch((error: unknown) => {
-      if (active)
-        setAccess(isSessionReady()
-          ? { scope, state: "unavailable", detail: chefErrorText(error, ACCESS_UNAVAILABLE) }
-          : { scope, state: "sign-in" });
+      if (!active) return;
+      if (error instanceof AuthenticationRequiredError) signIn();
+      else unavailable(chefErrorText(error, ACCESS_UNAVAILABLE));
     });
 
     return () => {
       active = false;
     };
-  }, [scope, attempt]);
+  }, [scope, attempt, cached]);
 
-  const state = access.scope === scope ? access.state : "synchronizing";
+  const state = cached ? "ready" : access.scope === scope ? access.state : "checking";
   if (state === "ready" && isSessionReady() && hasChefRole(getSession())) {
     // Reset private forms and request receipts on owner/session changes, while
     // preserving local work during healthy same-owner email/profile updates.
     return <Fragment key={scope}>{children}</Fragment>;
   }
 
-  return (
-    <section className="rounded-[30px] border border-border bg-white p-7 text-slate-950">
-      <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#C4200F]">
-        Secure chef access
-      </p>
-      <h2 className="mt-3 text-2xl font-bold">
-        {state === "synchronizing"
-          ? "Checking your chef access…"
-          : state === "not-approved"
-            ? "Chef approval is still required"
-            : state === "unavailable"
-              ? "We couldn’t verify chef access"
-              : "Sign in again to continue"}
-      </h2>
-      {state !== "synchronizing" && (
-        <p className="mt-3 text-sm leading-6 text-slate-600">
-          {state === "not-approved"
-            ? "You are signed in. View your application for the latest review status."
-            : state === "unavailable"
-              ? (access.scope === scope && access.detail) || ACCESS_UNAVAILABLE
-              : "Verify your mobile number to open your chef tools."}
+  if (state === "unavailable") {
+    return (
+      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 text-[#1A1A1A] md:p-8">
+        <h2 className="text-2xl font-bold">We couldn’t reach Craves</h2>
+        <p role="alert" className="mt-2 text-sm leading-6 text-[#6B6B6B]">
+          {access.detail || ACCESS_UNAVAILABLE}
         </p>
-      )}
-      {state === "sign-in" ? (
-        <Link
-          href="/sign-in?returnTo=/chef"
-          className="mt-7 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto"
-        >
-          Verify and continue
-        </Link>
-      ) : null}
-
-      {state === "not-approved" ? (
-        <Link
-          href="/chef/application/status"
-          className="mt-7 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto"
-        >
-          View application status
-        </Link>
-      ) : null}
-      {state === "unavailable" ? (
         <button
           type="button"
-          className="mt-7 min-h-12 rounded-full bg-[#F62E18] px-6 font-semibold text-white"
+          className="craves-primary-action mt-6 w-full sm:w-auto"
           onClick={() => {
-            setAccess({ scope, state: "synchronizing" });
+            setAccess({ scope, state: "checking" });
             setAttempt((value) => value + 1);
           }}
         >
-          Retry access check
+          Try again
         </button>
-      ) : null}
+      </section>
+    );
+  }
 
-      {state !== "synchronizing" ? (
-        <div className="mt-3">
-          <Link
-            href="/home"
-            className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]"
-          >
-            Switch to Customer Mode
-          </Link>
-        </div>
-      ) : null}
-    </section>
-  );
+  return <ChefLoading shape={loadingShape} label="Opening Chef Mode" head={loadingShape !== "chat"} />;
 }

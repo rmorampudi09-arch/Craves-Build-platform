@@ -1,21 +1,11 @@
 "use client";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
+import { ChefEmpty, ChefSection, clockTime, dateTime } from "@/features/chef/components/chef-ui";
+import { ChefKitchenSwitch } from "@/features/chef/components/chef-kitchen-switch";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Clock3,
-  FileCheck2,
-  ImageIcon,
-  MapPinned,
-  RefreshCw,
-  ShieldAlert,
-  ShieldCheck,
-  Store,
-  Utensils,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { AlertTriangle, Check, CheckCircle2, Clock3, RefreshCw, X } from "lucide-react";
 import {
   parseChefApplication,
   type ChefApplication,
@@ -30,13 +20,64 @@ import {
   parseChefMenuItems,
   type ChefMenuItem,
 } from "@/features/chef/lib/chef-menu-contract";
+import { ChefLoading } from "@/features/chef/components/chef-loading";
 
 type LoadState = "loading" | "ready" | "error";
+type DocumentState = ChefApplicationReadiness["documents"][number]["status"];
 
-function statusTone(ready: boolean): string {
-  return ready
-    ? "border-success/20 bg-success/5 text-success"
-    : "border-warning/20 bg-warning/5 text-warning";
+/** Document names a chef recognises from the card in their hand. */
+const DOCUMENT_NAMES: Record<string, string> = {
+  APPLICANT_PHOTO: "Your photo",
+  GOVERNMENT_ID_FRONT: "ID card (front)",
+  GOVERNMENT_ID_BACK: "ID card (back)",
+  TAX_ID_CARD: "PAN card",
+  KITCHEN_PHOTO_1: "Kitchen photo 1",
+  KITCHEN_PHOTO_2: "Kitchen photo 2",
+  FSSAI_LICENSE: "Food licence (FSSAI)",
+  SELECTED_PROOF_FRONT: "Address proof (front)",
+  SELECTED_PROOF_BACK: "Address proof (back)",
+};
+const DOCUMENT_STATES: Record<DocumentState, string> = {
+  MISSING: "Not sent",
+  UPLOADED: "Being checked",
+  APPROVED: "Checked",
+  REJECTED: "Send again",
+};
+
+/** One thing customers need: a tick when it's done, and the one button that fixes it when it isn't. */
+function CheckRow({
+  done,
+  title,
+  detail,
+  action,
+  children,
+}: {
+  done: boolean;
+  title: string;
+  detail?: ReactNode;
+  action?: { href: string; label: string };
+  children?: ReactNode;
+}) {
+  return (
+    <li className={`chef-check${done ? " is-done" : ""}`}>
+      <span className="chef-check-mark" aria-hidden="true">
+        {done ? <Check className="h-4 w-4" strokeWidth={3} /> : null}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="chef-check-title">
+          {title}
+          <span className="sr-only">{done ? " (done)" : " (not done yet)"}</span>
+        </p>
+        {detail ? <p className="chef-check-detail">{detail}</p> : null}
+        {children}
+        {action ? (
+          <Link href={action.href} className={`chef-btn is-small mt-3${done ? "" : " is-primary"}`}>
+            {action.label}
+          </Link>
+        ) : null}
+      </div>
+    </li>
+  );
 }
 
 export function ChefOperationsWorkspace() {
@@ -81,10 +122,10 @@ export function ChefOperationsWorkspace() {
         readinessResponse.json().catch(() => null),
       ]);
 
-      if (!applicationResponse.ok) throw chefApiError(applicationResponse, applicationRaw, "Chef application status could not be loaded.");
-      if (!kitchenResponse.ok) throw chefApiError(kitchenResponse, kitchenRaw, "Kitchen operations could not be loaded.");
-      if (!menuResponse.ok) throw chefApiError(menuResponse, menuRaw, "Menu operations could not be loaded.");
-      if (!readinessResponse.ok) throw chefApiError(readinessResponse, readinessRaw, "Application readiness could not be loaded.");
+      if (!applicationResponse.ok) throw chefApiError(applicationResponse, applicationRaw, "We couldn’t check your application.");
+      if (!kitchenResponse.ok) throw chefApiError(kitchenResponse, kitchenRaw, "We couldn’t check your kitchen.");
+      if (!menuResponse.ok) throw chefApiError(menuResponse, menuRaw, "We couldn’t check your menu.");
+      if (!readinessResponse.ok) throw chefApiError(readinessResponse, readinessRaw, "We couldn’t check your documents.");
 
       const parsedApplication = parseChefApplication(applicationRaw);
       const parsedKitchen = kitchenRaw === null ? null : parseChefKitchen(kitchenRaw);
@@ -110,9 +151,7 @@ export function ChefOperationsWorkspace() {
       setState("ready");
       setLastUpdatedAt(new Date());
     } catch (caught) {
-      setError(
-        chefErrorText(caught, "Chef operations are temporarily unavailable."),
-      );
+      setError(chefErrorText(caught, "We couldn’t check your kitchen right now."));
       setState("error");
     } finally {
       setRefreshing(false);
@@ -134,6 +173,26 @@ export function ChefOperationsWorkspace() {
     };
   }, [menu]);
 
+  if (state === "loading") return <ChefLoading shape="checklist" head={false} label="Checking your kitchen" />;
+
+  if (state === "error") {
+    return (
+      <ChefSection>
+        <ChefEmpty
+          icon={AlertTriangle}
+          title="We couldn’t check your kitchen"
+          text={error}
+          action={
+            <button type="button" onClick={() => void load()} className="chef-btn is-primary">
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              Try again
+            </button>
+          }
+        />
+      </ChefSection>
+    );
+  }
+
   const applicationApproved = application?.status === "APPROVED";
   const hasSupportedProofs =
     readiness !== null &&
@@ -142,251 +201,142 @@ export function ChefOperationsWorkspace() {
   const locationMapped =
     typeof kitchen?.latitude === "number" &&
     typeof kitchen.longitude === "number";
-  const discoverable =
-    applicationApproved &&
-    kitchenActive &&
-    locationMapped &&
-    metrics.availableItems > 0;
-
-  if (state === "loading") {
-    return (
-      <div className="grid gap-4 md:grid-cols-2" aria-hidden="true">
-        {Array.from({ length: 6 }, (_, index) => (
-          <div key={index} className="h-44 animate-pulse rounded-2xl bg-grey-200" />
-        ))}
-        <p className="sr-only" role="status">
-          Loading chef operations and compliance status
-        </p>
-      </div>
-    );
-  }
-
-  if (state === "error") {
-    return (
-      <section className="rounded-2xl border border-error/20 bg-white p-8 text-center shadow-[var(--shadow-card)] md:p-12">
-        <AlertTriangle className="mx-auto h-10 w-10 text-error" aria-hidden="true" />
-        <h2 className="mt-4 font-display text-2xl font-bold text-ink">
-          Operations status unavailable
-        </h2>
-        <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-          {error}
-        </p>
-        <button type="button" onClick={() => void load()} className="btn-primary mt-6">
-          <RefreshCw className="h-4 w-4" aria-hidden="true" /> Retry
-        </button>
-      </section>
-    );
-  }
+  const hasDishOn = metrics.availableItems > 0;
+  // What makes a kitchen show up for customers; photos help but don't block it.
+  const steps = [applicationApproved, kitchenActive, locationMapped, hasDishOn];
+  const discoverable = steps.every(Boolean);
+  const todo = steps.filter((done) => !done).length;
+  const missingPhotos = metrics.activeItems - metrics.withImages;
+  const address = [kitchen?.addressLine1, kitchen?.areaName].filter(Boolean).join(", ");
 
   return (
-    <div className="space-y-6">
-      <section
-        className={`rounded-2xl border p-5 shadow-[var(--shadow-card)] md:p-6 ${
-          discoverable
-            ? "border-success/20 bg-success/5"
-            : "border-warning/20 bg-warning/5"
-        }`}
-      >
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            {discoverable ? (
-              <CheckCircle2 className="mt-1 h-7 w-7 shrink-0 text-success" aria-hidden="true" />
-            ) : (
-              <ShieldAlert className="mt-1 h-7 w-7 shrink-0 text-warning" aria-hidden="true" />
-            )}
-            <div>
-              <p className="craves-overline text-ink/65">Customer discovery readiness</p>
-              <h2 className="mt-1 font-display text-2xl font-bold text-ink">
-                {discoverable
-                  ? "Kitchen is operationally discoverable"
-                  : "Complete the required operational states"}
-              </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                Discovery requires an approved chef application, an ACTIVE kitchen with a confirmed mapped location and at least one ACTIVE and available menu item. The backend remains authoritative for every request.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            disabled={refreshing}
-            onClick={() => void load(true)}
-            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-semibold text-ink hover:border-primary disabled:opacity-50"
+    <div className="chef-stack">
+      <section className={`chef-check-hero${discoverable ? " is-live" : ""}`} aria-live="polite">
+        <span className="chef-check-hero-icon">
+          {discoverable ? <CheckCircle2 className="h-7 w-7" aria-hidden="true" /> : <Clock3 className="h-7 w-7" aria-hidden="true" />}
+        </span>
+        <div className="min-w-0">
+          <h2 className="chef-check-hero-title">
+            {discoverable ? "Yes, customers can find your kitchen" : "Not yet"}
+          </h2>
+          <p className="chef-check-hero-text">
+            {discoverable
+              ? "Everything customers need is done."
+              : `Finish ${todo === 1 ? "the step" : `the ${todo} steps`} without a tick below.`}
+          </p>
+        </div>
+      </section>
+
+      {kitchen ? <ChefKitchenSwitch kitchen={kitchen} onChange={setKitchen} /> : null}
+
+      <ChefSection title="What customers need" flush labelledBy="chef-checklist">
+        <ol className="chef-checklist">
+          <CheckRow
+            done={applicationApproved}
+            title="Craves approved you"
+            detail={
+              applicationApproved
+                ? application?.reviewedAt ? `Approved ${dateTime(application.reviewedAt)}` : "You’re a Craves chef."
+                : application?.rejectionReason
+                  ? `Craves asked for a change: ${application.rejectionReason}`
+                  : "Craves is checking your details. This can take a few days."
+            }
+            action={
+              applicationApproved
+                ? { href: "/chef/application/status", label: "See application" }
+                : { href: "/chef/application", label: "Open application" }
+            }
+          />
+          <CheckRow
+            done={kitchenActive}
+            title="Kitchen is open"
+            detail={
+              !kitchen
+                ? "Set up your kitchen first."
+                : kitchen.status === "SUSPENDED"
+                  ? "Craves has paused your kitchen. Ask Craves why."
+                  : kitchenActive
+                    ? "Customers can order now."
+                    : "Use the switch above to open it."
+            }
+            action={kitchen ? undefined : { href: "/chef/kitchen", label: "Set up kitchen" }}
+          />
+          <CheckRow
+            done={locationMapped}
+            title="Pickup address is on the map"
+            detail={locationMapped ? address || "Your address is saved." : "Add your address and put the pin on your home."}
+            action={{ href: "/chef/kitchen", label: locationMapped ? "Check address" : "Add address" }}
+          />
+          <CheckRow
+            done={hasDishOn}
+            title="At least one dish is on"
+            detail={
+              metrics.activeItems === 0
+                ? "Add a dish to your menu."
+                : `${metrics.availableItems} of ${metrics.activeItems} ${metrics.activeItems === 1 ? "dish is" : "dishes are"} on today.`
+            }
+            action={{ href: "/chef/menu", label: hasDishOn ? "Go to menu" : metrics.activeItems === 0 ? "Add a dish" : "Turn a dish on" }}
+          />
+        </ol>
+      </ChefSection>
+
+      <ChefSection title="Also good to have" flush labelledBy="chef-checklist-extra">
+        <ul className="chef-checklist">
+          <CheckRow
+            done={metrics.activeItems > 0 && missingPhotos === 0}
+            title="Every dish has a photo"
+            detail={
+              metrics.activeItems === 0
+                ? "Photos show once you add dishes."
+                : missingPhotos === 0
+                  ? "Customers see your food before they order."
+                  : `${missingPhotos} ${missingPhotos === 1 ? "dish has" : "dishes have"} no photo. Customers see a plain picture instead.`
+            }
+            action={missingPhotos > 0 ? { href: "/chef/menu", label: "Add photos" } : undefined}
+          />
+          <CheckRow
+            done={hasSupportedProofs}
+            title="Your documents are checked"
+            detail={
+              readiness
+                ? `${readiness.approvedDocumentCount} of ${readiness.requiredDocumentCount} checked by Craves.`
+                : undefined
+            }
           >
-            <RefreshCw
-              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-              aria-hidden="true"
-            />
-            Refresh
-          </button>
-        </div>
-      </section>
+            {readiness?.documents.length ? (
+              <ul className="chef-check-docs">
+                {readiness.documents.map((document) => (
+                  <li key={document.documentType} className={`is-${document.status.toLowerCase()}`}>
+                    {document.status === "APPROVED" ? (
+                      <Check className="h-4 w-4" strokeWidth={3} aria-hidden="true" />
+                    ) : document.status === "UPLOADED" ? (
+                      <Clock3 className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <X className="h-4 w-4" strokeWidth={3} aria-hidden="true" />
+                    )}
+                    <span className="min-w-0 flex-1">{DOCUMENT_NAMES[document.documentType] ?? "Document"}</span>
+                    <span className="chef-check-doc-state">{DOCUMENT_STATES[document.status]}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </CheckRow>
+        </ul>
+      </ChefSection>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <article className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)]">
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-primary">
-              <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusTone(applicationApproved)}`}>
-              {application?.status.replaceAll("_", " ")}
-            </span>
-          </div>
-          <h3 className="mt-4 font-display text-lg font-bold text-ink">
-            Chef approval
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Admin review controls access to chef-owned kitchen, menu, order and finance APIs.
-          </p>
-          {application?.reviewedAt && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              Reviewed {new Date(application.reviewedAt).toLocaleString("en-IN")}
-            </p>
-          )}
-          {application?.rejectionReason && (
-            <p className="mt-3 rounded-xl bg-error/5 p-3 text-xs leading-5 text-error">
-              Review note: {application.rejectionReason}
-            </p>
-          )}
-          <Link href="/chef/application" className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-contrast-red">
-            Review application
-          </Link>
-        </article>
-
-        <article className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)]">
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-primary">
-              <FileCheck2 className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusTone(hasSupportedProofs)}`}>
-              {readiness?.approvedDocumentCount ?? 0}/{readiness?.requiredDocumentCount ?? 4} approved
-            </span>
-          </div>
-          <h3 className="mt-4 font-display text-lg font-bold text-ink">
-            Supported proof evidence
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Approval readiness uses the four current evidence types reported by the backend: applicant photo, government ID front, government ID back and PAN / tax ID card.
-          </p>
-          <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
-            {(readiness?.documents ?? []).map((document) => (
-              <li key={document.documentType} className="flex items-center justify-between gap-3 rounded-lg bg-cream px-3 py-2">
-                <span>{document.documentType.replaceAll("_", " ")}</span>
-                <strong className="text-ink">{document.status}</strong>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-xs leading-5 text-muted-foreground">
-            Craves does not invent FSSAI eligibility or expiry rules in the UI. Add new compliance types only after the product/legal contract is approved.
-          </p>
-        </article>
-
-        <article className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)]">
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-primary">
-              <Store className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusTone(kitchenActive)}`}>
-              {kitchen?.status ?? "NOT CREATED"}
-            </span>
-          </div>
-          <h3 className="mt-4 font-display text-lg font-bold text-ink">
-            Kitchen availability
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Kitchen status is the current backend-supported operational switch. INACTIVE pauses discovery without fabricating weekly opening hours.
-          </p>
-          <Link href="/chef/kitchen" className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-contrast-red">
-            Manage kitchen
-          </Link>
-        </article>
-
-        <article className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)]">
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-primary">
-              <MapPinned className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusTone(locationMapped)}`}>
-              {locationMapped ? "MAPPED" : "MISSING"}
-            </span>
-          </div>
-          <h3 className="mt-4 font-display text-lg font-bold text-ink">
-            Kitchen location
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Craves keeps the precise kitchen map point securely in the background so nearby discovery and delivery pickup can work without exposing technical location values to chefs.
-          </p>
-          <Link href="/chef/kitchen" className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-contrast-red">
-            {locationMapped ? "Review kitchen address" : "Confirm kitchen location"}
-          </Link>
-        </article>
-
-        <article className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)]">
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-primary">
-              <Utensils className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusTone(metrics.availableItems > 0)}`}>
-              {metrics.availableItems} available
-            </span>
-          </div>
-          <h3 className="mt-4 font-display text-lg font-bold text-ink">
-            Menu availability
-          </h3>
-          <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
-            <div className="rounded-xl bg-cream p-3">
-              <dt className="text-xs text-muted-foreground">Active</dt>
-              <dd className="mt-1 font-display text-xl font-bold text-ink">{metrics.activeItems}</dd>
-            </div>
-            <div className="rounded-xl bg-cream p-3">
-              <dt className="text-xs text-muted-foreground">Available</dt>
-              <dd className="mt-1 font-display text-xl font-bold text-ink">{metrics.availableItems}</dd>
-            </div>
-          </dl>
-          <Link href="/chef/menu" className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-contrast-red">
-            Manage menu
-          </Link>
-        </article>
-
-        <article className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)]">
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-primary">
-              <ImageIcon className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-bold ${statusTone(metrics.withImages === metrics.activeItems && metrics.activeItems > 0)}`}>
-              {metrics.withImages}/{metrics.activeItems}
-            </span>
-          </div>
-          <h3 className="mt-4 font-display text-lg font-bold text-ink">
-            Active dish images
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Active dishes without approved public images remain valid but show the Craves placeholder to customers.
-          </p>
-          <Link href="/chef/menu/media" className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-contrast-red">
-            Images and availability
-          </Link>
-        </article>
-      </section>
-
-      <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
-        <div className="flex items-start gap-3">
-          <Clock3 className="mt-1 h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
-          <div>
-            <h2 className="font-display text-xl font-bold text-ink">
-              Schedule support without invented rules
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              The current backend exposes kitchen status and per-item availability, but no reviewed weekly opening-hours contract. This workspace therefore uses only those real controls. A weekly schedule must be designed and approved in the functional and architecture documents before implementation.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {lastUpdatedAt && (
-        <p className="text-xs text-muted-foreground">
-          Last refreshed {lastUpdatedAt.toLocaleString("en-IN")}
+      <ChefSection title="Opening hours">
+        <p className="text-[0.9375rem] leading-6 text-[#6B6B6B]">
+          Weekly opening hours aren’t available yet. For now, use the Kitchen open switch, and turn dishes on or off in Menu.
         </p>
-      )}
+      </ChefSection>
+
+      <div className="flex flex-col items-center gap-2 pt-1">
+        <button type="button" disabled={refreshing} onClick={() => void load(true)} className="chef-btn is-small" aria-busy={refreshing}>
+          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin motion-reduce:animate-none" : ""}`} aria-hidden="true" />
+          Check again
+        </button>
+        {lastUpdatedAt ? <p className="text-[0.8125rem] text-[#6B6B6B]">Checked {clockTime(lastUpdatedAt.toISOString())}</p> : null}
+      </div>
     </div>
   );
 }

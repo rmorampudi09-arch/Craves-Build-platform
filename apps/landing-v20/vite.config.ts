@@ -217,12 +217,21 @@ function cravesFirstPaintSplash(): Plugin {
             #craves-boot-brand { width: min(84vw,430px); }
             #craves-boot-wordmark { width: min(100%,410px); }
           }
+          /* Splash already seen this session: a plain cover that fades away. */
+          html[data-craves-boot="quiet"], html[data-craves-boot="quiet"] body {
+            background: #ffffff !important;
+          }
+          html[data-craves-boot="quiet"] #craves-boot { background: #ffffff; }
+          html[data-craves-boot="quiet"] #craves-boot::before,
+          html[data-craves-boot="quiet"] #craves-boot-brand { display: none; }
         `
 
         const script = `
           (function () {
             var root = document.documentElement;
-            root.setAttribute('data-craves-boot', 'pending');
+            var seen = false;
+            try { seen = sessionStorage.getItem('craves.landing.splashSeen') === '1'; } catch (error) {}
+            root.setAttribute('data-craves-boot', seen ? 'quiet' : 'pending');
             var released = false, parsed = false, stylesDone = false;
             var safety = 0, observer = null;
             var resolveStyles;

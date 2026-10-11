@@ -21,7 +21,7 @@ const landing = source("../../landing/screens/LandingPage.tsx");
 const home = source("../../home/screens/BrowseFoods.tsx");
 const welcome = source("../../home/components/WelcomeBanner.tsx");
 const floatingCart = source("../../home/components/FloatingCartBar.module.css");
-const cartAddressDialog = source("../../home/components/CartAddressAvailabilityDialog.tsx");
+const cartAddressBanner = source("../../home/components/CartAddressAvailabilityBanner.tsx");
 const addresses = source("../screens/Addresses.tsx");
 const checkout = source("../../checkout/screens/Checkout.tsx");
 const orders = source("../../orders/screens/OrderHistory.tsx");
@@ -124,9 +124,9 @@ test("welcome banner uses the approved responsive full-art asset while discovery
   assert.match(welcome, /height=\{793\}/);
   assert.match(welcome, /unoptimized/);
   assert.match(welcome, /className="block h-auto w-full"/);
-  assert.match(welcome, /aria-label=\{\`Hello \$\{greetingName\} home food banner`\}/);
-  assert.match(welcome, /Hello \{greetingName\}/);
-  assert.match(welcome, /left-\[4\.95%\]/);
+  // The approved artwork is shown as it is: no greeting box over it.
+  assert.doesNotMatch(welcome, /greetingName|Hello \{/);
+  assert.doesNotMatch(welcome, /absolute left-/);
   assert.match(welcome, /data-live-dish-count=\{dishCount\}/);
   assert.doesNotMatch(welcome, /styles\.heroArtwork/);
   assert.doesNotMatch(welcome, /import \{ Heart \} from "lucide-react"/);
@@ -176,20 +176,20 @@ test("address manager owns default selection and the shared location-first edito
   assert.match(addressEditor, /Please complete the highlighted fields/);
   assert.match(addressEditor, /Flat \/ house \/ floor/);
   assert.match(addressEditor, /Receiver&apos;s phone/);
-  assert.match(addressEditor, /Save and use this address/);
+  assert.match(addressEditor, /Save address/);
   assert.doesNotMatch(addressEditor, /Skip/);
   assert.doesNotMatch(addressEditor, /Add later/);
 });
 
 test("home rechecks cart availability after default-address changes", () => {
-  assert.match(home, /CartAddressAvailabilityDialog/);
+  assert.match(home, /CartAddressAvailabilityBanner/);
   assert.match(home, /loadKitchenMenu/);
   assert.match(home, /unavailableCartItems/);
   assert.match(home, /removeFromCart/);
   assert.match(home, /clearCart/);
-  assert.match(cartAddressDialog, /Choose another address/);
-  assert.match(cartAddressDialog, /Remove unavailable items/);
-  assert.match(cartAddressDialog, /Clear cart & browse here/);
+  assert.match(cartAddressBanner, /Choose another address/);
+  assert.match(cartAddressBanner, /Remove unavailable items/);
+  assert.match(cartAddressBanner, /Clear cart & browse here/);
 });
 
 test("home cart bar uses a balanced true frosted-glass blur", () => {
@@ -200,12 +200,14 @@ test("home cart bar uses a balanced true frosted-glass blur", () => {
   assert.match(floatingCart, /@supports not/);
 });
 
-test("meal plans keep their previous card layout and navigation flow", () => {
-  assert.match(mealPlans, /meal-plans-legacy-ui/);
-  assert.match(mealPlans, /rounded-\[28px\] bg-\[#FFF8EC\]/);
+test("meal plans keep their navigation flow on the brand palette", () => {
   assert.match(mealPlans, /subscriptions\/new\?planId=/);
-  assert.match(mealPlans, /craves-button-link/);
-  assert.match(mealPlanPage, /bg-\[#0B1426\]/);
+  assert.match(mealPlans, /craves-primary-action/);
+  assert.match(mealPlanPage, /<MealPlanPage/);
+  // No cream, gold, purple, navy or slate on customer meal-plan screens.
+  for (const screen of [mealPlans, mealPlanPage]) {
+    assert.doesNotMatch(screen, /#FFF8EC|#F6B545|#6930CA|#0B1426|slate-/i);
+  }
 });
 
 test("checkout is one page with saved addresses, ASAP delivery and the shared address sheet", () => {
@@ -236,7 +238,7 @@ test("checkout is one page with saved addresses, ASAP delivery and the shared ad
 
   assert.match(addressEditor, /sessionFetch\(\s*targetAddressId/);
   assert.match(addressEditor, /method:\s*targetAddressId \? "PUT" : "POST"/);
-  assert.match(addressEditor, /Save and use this address/);
+  assert.match(addressEditor, /Save address/);
 });
 
 test("customer orders page uses a white page surface", () => {
@@ -257,10 +259,11 @@ test("customer cart and notifications use white page surfaces", () => {
   assert.doesNotMatch(notifications, /border-b border-border bg-cream\/95/);
 });
 
-test("chef accept and reject fields use one neutral border with no focus outline or ring", () => {
+test("chef accept and reject fields use one neutral border with no extra focus ring", () => {
   assert.match(chefActions, /data-craves-single-border="true"/);
-  assert.match(chefActions, /border border-border/);
-  assert.match(chefActions, /focus:outline-none focus:ring-0/);
+  // One 1px border; Chef Mode's own focus style darkens that edge instead of adding a ring.
+  assert.match(chefActions, /rounded-xl border bg-white/);
+  assert.doesNotMatch(chefActions, /focus:ring-2|ring-\[#F62E18\]/);
   assert.match(theme, /outline:\s*none\s*!important/);
   assert.match(
     theme,

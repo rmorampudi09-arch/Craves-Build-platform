@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Check,
   ChevronRight,
@@ -14,6 +14,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { ChefOnboardingShell, type ChefSaveState } from "@/features/chef-onboarding/components/chef-onboarding-shell";
+import { switchToCustomerApp } from "@/features/chef/components/chef-account-menu";
 import { ChefOnboardingBank, type BankFormMode } from "@/features/chef-onboarding/components/chef-onboarding-bank";
 import {
   ChefBasicDetails,
@@ -142,6 +143,11 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
   const flow = useChefOnboarding();
   const { state, screen, busy } = flow;
   const [bankMode, setBankMode] = useState<BankFormMode>("entry");
+  const { bank: loadedBank, bankUnavailable, refreshBank } = flow;
+  useEffect(() => {
+    // An optional bank step is read only when the chef opens it (the application never needs it).
+    if (screen === "bank" && !loadedBank && !bankUnavailable) void refreshBank();
+  }, [screen, loadedBank, bankUnavailable, refreshBank]);
   if (flow.unavailable || (state && (!state.enabled || state.legacy) && screen !== "status"))
     return <>{fallback}</>;
   if (flow.signedOut)
@@ -150,7 +156,7 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
         title="Sign in to continue"
         message="Your saved application stays with your Craves account."
       >
-        <Link href="/sign-in?returnTo=/chef/application" className="cob-primary">
+        <Link href="/chef/sign-in?returnTo=%2Fchef%2Fapplication" className="cob-primary">
           Sign in
         </Link>
       </PageState>
@@ -225,16 +231,16 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
     footer =
       phase === "APPROVED" ? (
         <Link href="/chef" className="cob-primary">
-          Open Chef Dashboard
+          Open your kitchen
         </Link>
       ) : phase === "MORE_INFORMATION_REQUIRED" ? (
         primary("Update application", {
           onClick: () => flow.open(flow.nextCorrection()),
         })
       ) : phase === "REJECTED" ? (
-        <Link href="/home" className="cob-secondary">
-          Continue browsing as a customer
-        </Link>
+        <button type="button" className="cob-secondary" onClick={switchToCustomerApp}>
+          Switch to customer app
+        </button>
       ) : (
         <>
           <button
@@ -246,9 +252,9 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
             {flow.loading ? <Spinner /> : null}
             {flow.loading ? "Checking status…" : "Refresh status"}
           </button>
-          <Link href="/home" className="cob-link cob-link--ink cob-link--center">
-            Continue browsing as a customer
-          </Link>
+          <button type="button" className="cob-link cob-link--ink cob-link--center" onClick={switchToCustomerApp}>
+            Switch to customer app
+          </button>
         </>
       );
   else if (screen === "resume")
@@ -268,7 +274,11 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
         type="submit"
         form="chef-bank-form"
         className="cob-primary"
-        disabled={busy || (flow.bankUnavailable && !bankCanContinue(flow.bank))}
+        // Without automatic bank setup there is nothing to submit; the note above says why.
+        disabled={
+          busy ||
+          (!bankCanContinue(flow.bank) && (flow.bankUnavailable || !flow.bank?.automaticActivation))
+        }
       >
         {busy ? <Spinner /> : null}
         {busy ? "Saving…" : bankMode === "entry" ? "Continue" : saveLabel}

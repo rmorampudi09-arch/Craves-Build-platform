@@ -113,7 +113,7 @@ function UserBubble({ message, last, onRetry }: { message: Bubble; last: boolean
       {message.status === "failed" ? (
         <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-[#B8210F]">
           <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" /> Not sent
-          <button type="button" onClick={onRetry} className="inline-flex min-h-8 items-center gap-1 rounded-full px-2 font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30">
+          <button type="button" onClick={onRetry} className="inline-flex min-h-8 items-center gap-1 rounded-full px-2 font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30">
             <RotateCw className="h-3.5 w-3.5" aria-hidden="true" /> Retry
           </button>
         </p>
@@ -238,7 +238,7 @@ export function SupportChat({ contextRole, orderId }: { contextRole: "CUSTOMER" 
           : <UserBubble key={message.id} message={message} last={message.id === lastUser} onRetry={() => retry(message)} />)}
         {pending ? <TypingBubble /> : null}
         {caseNumber ? (
-          <li role="status" className="craves-chat-in mx-auto flex w-fit max-w-full items-center gap-2 rounded-full border border-[#F62E18]/25 bg-[#FFF6F4] px-3 py-1.5 text-xs font-semibold text-[#1A1A1A]">
+          <li role="status" className="craves-chat-in mx-auto flex w-fit max-w-full items-center gap-2 rounded-full border border-[#E5E7EB] bg-[#F1F3F5] px-3 py-1.5 text-xs font-semibold text-[#1A1A1A]">
             <Ticket className="h-3.5 w-3.5 shrink-0 text-[#DE2A14]" aria-hidden="true" />
             Ticket {caseNumber} created — our team will reply in your notifications
           </li>
@@ -252,7 +252,7 @@ export function SupportChat({ contextRole, orderId }: { contextRole: "CUSTOMER" 
               key={question}
               type="button"
               onClick={() => send(question)}
-              className="rounded-full border border-[#E5E7EB] bg-white px-3.5 py-2 text-sm font-medium text-[#1A1A1A] transition-colors hover:border-[#F62E18]/40 hover:bg-[#FFF6F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+              className="rounded-full border border-[#E5E7EB] bg-white px-3.5 py-2 text-sm font-medium text-[#1A1A1A] transition-colors hover:border-[#D7DADF] hover:bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
             >
               {question}
             </button>
@@ -260,10 +260,10 @@ export function SupportChat({ contextRole, orderId }: { contextRole: "CUSTOMER" 
         </div>
       ) : null}
 
-      {error ? <p role="alert" className="mb-3 rounded-xl bg-[#FFF1EF] p-3 text-sm text-[#B8210F]">{error}</p> : null}
+      {error ? <p role="alert" className="mb-3 rounded-xl bg-[#F1F3F5] p-3 text-sm text-[#B8210F]">{error}</p> : null}
 
       <form onSubmit={event => send(draft, event)} className="border-t border-[#E5E7EB] pt-3">
-        <div className="flex items-end gap-2 rounded-[24px] border border-[#E5E7EB] bg-white py-1.5 pr-1.5 pl-4 transition-colors focus-within:border-[#F62E18]/50 focus-within:ring-2 focus-within:ring-[#F62E18]/15">
+        <div className="flex items-end gap-2 rounded-[24px] border border-[#E5E7EB] bg-white py-1.5 pr-1.5 pl-4 transition-colors focus-within:border-[#1A1A1A] focus-within:ring-2 focus-within:ring-[#1A1A1A]/15">
           <label htmlFor="support-chat-input" className="sr-only">Message Craves support</label>
           <textarea
             ref={inputRef}
@@ -286,7 +286,7 @@ export function SupportChat({ contextRole, orderId }: { contextRole: "CUSTOMER" 
             type="submit"
             disabled={pending || !draft.trim()}
             aria-label="Send message"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#DE2A14] text-white shadow-[0_2px_8px_rgba(222,42,20,0.3)] transition-[transform,background-color,box-shadow] hover:bg-[#C92716] active:scale-95 disabled:bg-[#E5E7EB] disabled:text-[#6B6B6B] disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/40 focus-visible:ring-offset-2"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#DE2A14] text-white shadow-[0_2px_8px_rgba(26,26,26,0.14)] transition-[transform,background-color,box-shadow] hover:bg-[#C92716] active:scale-95 disabled:bg-[#E5E7EB] disabled:text-[#6B6B6B] disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/40 focus-visible:ring-offset-2"
           >
             <SendHorizontal className="h-5 w-5" aria-hidden="true" />
           </button>

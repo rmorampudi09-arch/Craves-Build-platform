@@ -22,8 +22,9 @@ test("cart validates with the backend before address selection", () => {
   assert.match(page, /await validateCart\(\)/);
   assert.match(page, /navigate\(\{ to: "\/checkout" \}\)/);
   assert.match(page, /cartCurrency\(\)/);
-  assert.match(bar, /bg-\[#6B6B6B\]/);
-  assert.match(bar, /hover:bg-\[#555555\]/);
+  // Continue is the screen's one brand primary (hover and disabled live in craves-theme.css).
+  assert.match(bar, /craves-primary-action/);
+  assert.match(bar, /aria-busy=\{disabled\}/);
   assert.match(cartService, /await cartRequest\("\/api\/cart", \{ method: "DELETE" \}\)/);
   assert.match(cartService, /return cartMatchesCheckout\(expected\)/);
 });
@@ -86,7 +87,7 @@ test("Razorpay payment is contract validated and backend verified", () => {
   assert.match(payment, /const session = await loadSession\(\)/);
   assert.match(payment, /if \(!checkout\) \{[\s\S]*await ensureCheckout\(\);[\s\S]*return;/);
   assert.match(payment, /Preparing total/);
-  assert.match(payment, /bg-\[#16A34A\]/);
+  assert.match(payment, /craves-primary-action/);
   assert.doesNotMatch(payment, /"Review total"/);
   assert.match(payment, /\/verify/);
   assert.doesNotMatch(
@@ -96,4 +97,44 @@ test("Razorpay payment is contract validated and backend verified", () => {
   assert.match(payment, /amount:\s*payment\.amountPaise/);
   assert.match(payment, /router\.replace\(\`\/orders\/\$\{orderId\}\`\)/);
   assert.doesNotMatch(payment, /amount\s*:\s*Math\.round\(/);
+});
+
+test("cart quantities are optimistic: steppers never dim and Continue waits only for validation", () => {
+  const cartService = source("../api/cravesCart.ts");
+  const page = source("../screens/Cart.tsx");
+  const row = source("../components/CartItemRow.tsx");
+  const card = source("../../home/components/DishCard.tsx");
+
+  // Behaviour is exercised in optimistic-cart.vitest.ts; these pin the wiring.
+  assert.match(cartService, /QUANTITY_WRITE_DELAY_MS = 250/);
+  assert.match(cartService, /function serialized</);
+  assert.match(cartService, /if \(intents\.get\(menuItemId\)\?\.seq === seq\) settle\(menuItemId, error\)/);
+  assert.match(cartService, /await settleIntents\(\);\s*return cartRequest\("\/api\/cart\/validate"/);
+  assert.match(cartService, /await cartRequest\("\/api\/cart", \{ method: "DELETE" \}, true\)/);
+
+  assert.match(page, /disabled=\{validating\}/);
+  assert.doesNotMatch(page, /busyItemId/);
+  assert.doesNotMatch(row, /disabled=\{disabled|disabled:opacity/);
+  assert.doesNotMatch(card, /disabled=\{state === "busy"|disabled:opacity-50/);
+  // "Added" is announced, not shown as a line that pushes every card below it down.
+  assert.match(card, /<p className="sr-only" role="status" aria-live="polite">/);
+});
+
+test("cart rows leave smoothly and the undo snackbar can actually be reached", () => {
+  const page = source("../screens/Cart.tsx");
+  const list = source("../components/CartItemList.tsx");
+
+  // Rows: fade out of the flow while the rows below glide up (transform-based layout animation).
+  assert.match(list, /<AnimatePresence mode="popLayout" initial=\{false\}>/);
+  assert.match(list, /layout="position"/);
+  assert.match(list, /key=\{item\.menuItemId\}/);
+
+  // Undo: 8 s, announced, pauses while hovered or focused.
+  assert.match(page, /UNDO_VISIBLE_MS = 10_000/);
+  assert.match(page, /role="status"\s*aria-live="polite"/);
+  assert.match(page, /onPointerEnter=\{pauseUndoTimer\}/);
+  assert.match(page, /onFocus=\{pauseUndoTimer\}/);
+  assert.match(page, /<Link\s+to="\/kitchen\/\$id"/);
+  assert.doesNotMatch(page, /<a\s+href=\{`\/kitchen/);
+  assert.doesNotMatch(page, /bg-\[#F62E18\]\/5|bg-\[#FFF8EC\]|#F6B545/);
 });

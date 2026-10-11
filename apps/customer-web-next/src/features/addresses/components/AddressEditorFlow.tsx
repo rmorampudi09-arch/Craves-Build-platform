@@ -25,6 +25,7 @@ import {
   type AddressCategory,
   type AddressLabelDraft,
   type CustomerAddress,
+  addressText,
   type CustomerAddressInput,
 } from "@/features/addresses/lib/address-contract";
 import type { ReverseGeocodedAddress } from "@/features/addresses/lib/location-contract";
@@ -35,6 +36,9 @@ import {
 } from "@/features/addresses/api/searchLocation";
 import { getAddress } from "@/features/auth/api/cravesAuth";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { duration, ease } from "@/shared/lib/motion";
+import { RequiredMark } from "@/shared/ui/forms/required-mark";
+import { DiscardChangesPrompt, useOverlayHistory } from "@/shared/ui/overlays/overlay";
 
 type Step = "locate" | "details";
 
@@ -126,20 +130,6 @@ function draftFrom(address: CustomerAddress): AddressDraft {
   };
 }
 
-function addressLine(address: CustomerAddress): string {
-  return [
-    address.addressLine1,
-    address.addressLine2,
-    address.landmark,
-    address.areaName,
-    address.districtName,
-    address.city,
-    address.state,
-    address.postalCode,
-  ]
-    .filter(Boolean)
-    .join(", ");
-}
 
 function hasCoordinates(draft: AddressDraft): boolean {
   const latitude = Number(draft.latitude);
@@ -261,6 +251,9 @@ export function AddressEditorFlow({
 }: AddressEditorFlowProps) {
   const [step, setStep] = useState<Step>("locate");
   const [draft, setDraft] = useState<AddressDraft>(EMPTY_DRAFT);
+  // What the editor opened with, so closing can ask before a changed address is thrown away.
+  const [openedDraft, setOpenedDraft] = useState<AddressDraft>(EMPTY_DRAFT);
+  const [asking, setAsking] = useState(false);
   const [targetAddressId, setTargetAddressId] = useState<string | null>(null);
   const [resolvedAddress, setResolvedAddress] = useState("");
   const [locating, setLocating] = useState(false);
@@ -290,8 +283,10 @@ export function AddressEditorFlow({
         };
 
     setDraft(nextDraft);
+    setOpenedDraft(nextDraft);
+    setAsking(false);
     setTargetAddressId(initialAddress?.id ?? null);
-    setResolvedAddress(initialAddress ? addressLine(initialAddress) : "");
+    setResolvedAddress(initialAddress ? addressText(initialAddress) : "");
     setMessage(null);
     setFieldErrors({});
     setStep(initialAddress && hasCoordinates(nextDraft) ? "details" : "locate");
@@ -505,21 +500,19 @@ export function AddressEditorFlow({
       );
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(body?.message || "Address could not be saved.");
+        throw new Error(body?.message || "This address wasn’t saved. Check the fields marked * and try again.");
       }
       await onSaved(
         body && typeof body === "object" ? (body as CustomerAddress) : null,
       );
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "Address could not be saved.",
+        error instanceof Error ? error.message : "This address wasn’t saved. Check the fields marked * and try again.",
       );
     } finally {
       setBusy(false);
     }
   };
-
-  if (!open) return null;
 
   const point = currentPoint(draft);
   const missingLocationFields = [
@@ -543,29 +536,44 @@ export function AddressEditorFlow({
   const inputClass = (key: FieldKey) =>
     "mt-1.5 w-full rounded-xl border bg-white px-3.5 py-3 text-sm text-[#1A1A1A] outline-none transition-[border-color,box-shadow] placeholder:text-[#9A9A9A] focus:ring-2 " +
     (fieldErrors[key]
-      ? "border-[#F62E18] focus:border-[#F62E18] focus:ring-[#F62E18]/10"
+      ? "border-[#F62E18] focus:border-[#F62E18] focus:ring-[#1A1A1A]/10"
       : "border-[#E5E7EB] focus:border-[#1A1A1A] focus:ring-[#1A1A1A]/10");
 
   const actionClass =
-    "transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none";
+    "transition-[background-color,box-shadow,translate,scale] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none";
+
+  const changed = (Object.keys(draft) as Array<keyof AddressDraft>).some((key) => draft[key] !== openedDraft[key]);
+  /** ×, Esc, a tap outside and phone Back come here; Cancel is an explicit discard. */
+  const requestClose = (): boolean => {
+    if (busy) return false;
+    if (asking) {
+      setAsking(false); // Esc or Back while asking: keep editing.
+      return false;
+    }
+    if (changed) {
+      setAsking(true);
+      return false;
+    }
+    onClose();
+    return true;
+  };
+  // Phone Back closes the editor instead of leaving the page underneath.
+  useOverlayHistory(open, requestClose);
 
   return (
     <Dialog.Root
       open={open}
       onOpenChange={(nextOpen) => {
-        if (!nextOpen && !busy) onClose();
+        if (!nextOpen) requestClose();
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[90] bg-black/35 backdrop-blur-[2px]" />
+        <Dialog.Overlay className="fixed inset-0 z-[90] bg-black/35 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-(--dur-component) data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-(--dur-sheet-out)" />
         <Dialog.Content
           aria-labelledby="address-flow-title"
-          className="fixed bottom-0 left-1/2 z-[91] flex max-h-[96svh] w-full max-w-2xl -translate-x-1/2 flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-[0_30px_90px_rgba(26,26,26,0.25)] outline-none md:bottom-auto md:top-1/2 md:max-h-[92vh] md:-translate-y-1/2 md:rounded-[2rem] md:border md:border-[#E5E7EB]"
+          // Phones: a sheet that slides up (320 ms ease-out) and down (220 ms ease-in); md+: a centered dialog.
+          className="fixed bottom-0 left-1/2 z-[91] flex max-h-[96svh] w-full max-w-2xl -translate-x-1/2 flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-[0_30px_90px_rgba(26,26,26,0.25)] outline-none data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom data-[state=open]:duration-(--dur-sheet-in) data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=closed]:duration-(--dur-sheet-out) data-[state=closed]:ease-in md:bottom-auto md:top-1/2 md:max-h-[92vh] md:-translate-y-1/2 md:rounded-[2rem] md:border md:border-[#E5E7EB] md:data-[state=open]:slide-in-from-bottom-0 md:data-[state=open]:fade-in-0 md:data-[state=open]:zoom-in-95 md:data-[state=closed]:slide-out-to-bottom-0 md:data-[state=closed]:fade-out-0 md:data-[state=closed]:zoom-out-95"
         >
-          <div
-            className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-[#D7DADF] md:hidden"
-            aria-hidden="true"
-          />
 
           <div className="flex items-start gap-3 border-b border-[#F1F3F5] px-5 py-5 md:px-7 md:py-6">
             {step === "details" ? (
@@ -603,13 +611,13 @@ export function AddressEditorFlow({
               >
                 {step === "locate"
                   ? "Search for your area or use your current location to place the delivery pin."
-                  : "Confirm the pin and complete the required address details."}
+                  : "Confirm the pin, then fill in the fields marked *."}
               </Dialog.Description>
             </div>
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => requestClose()}
               disabled={busy}
               className={
                 "flex h-10 w-10 shrink-0 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#1A1A1A] " +
@@ -622,15 +630,15 @@ export function AddressEditorFlow({
             </button>
           </div>
 
-          <div className="overflow-y-auto px-5 py-5 md:px-7 md:py-6">
-            <AnimatePresence mode="wait" initial={false}>
+          <div className="relative overflow-y-auto overscroll-contain px-5 py-5 md:px-7 md:py-6">
+            {/* popLayout: the next step enters while the last one leaves (no blank gap). */}
+            <AnimatePresence mode="popLayout" initial={false}>
               {step === "locate" ? (
                 <motion.div
                   key="locate"
                   initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  transition={{ duration: 0.2, ease: [0.23, 0.88, 0.26, 0.92] }}
+                  animate={{ opacity: 1, x: 0, transition: { duration: duration.component, ease: ease.out } }}
+                  exit={{ opacity: 0, x: -10, transition: { duration: duration.micro, ease: ease.in } }}
                 >
                   <label htmlFor="address-location-search" className="sr-only">
                     Search for your area, street or landmark
@@ -748,9 +756,8 @@ export function AddressEditorFlow({
                 <motion.div
                   key="details"
                   initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  transition={{ duration: 0.2, ease: [0.23, 0.88, 0.26, 0.92] }}
+                  animate={{ opacity: 1, x: 0, transition: { duration: duration.component, ease: ease.out } }}
+                  exit={{ opacity: 0, x: 10, transition: { duration: duration.micro, ease: ease.in } }}
                 >
                   {point ? (
                     <AddressMapPicker
@@ -769,7 +776,7 @@ export function AddressEditorFlow({
                     className="mt-4 flex items-start gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[0_6px_18px_rgba(26,26,26,0.06)]"
                     aria-live="polite"
                   >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F62E18]/10 text-[#F62E18]">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
                       {mapResolving ? (
                         <Loader2 className="h-4.5 w-4.5 animate-spin" />
                       ) : (
@@ -795,7 +802,7 @@ export function AddressEditorFlow({
                       type="button"
                       onClick={() => setStep("locate")}
                       disabled={busy}
-                      className="shrink-0 rounded-full px-3 py-1.5 text-xs font-black text-[#F62E18] transition-colors duration-150 hover:bg-[#F62E18]/10 focus-visible:bg-[#F62E18]/10 focus-visible:outline-none disabled:opacity-50"
+                      className="shrink-0 rounded-full px-3 py-1.5 text-xs font-black text-[#F62E18] transition-colors duration-150 hover:bg-[#F1F3F5] focus-visible:bg-[#F1F3F5] focus-visible:outline-none disabled:opacity-50"
                     >
                       Change
                     </button>
@@ -807,6 +814,7 @@ export function AddressEditorFlow({
                       className="text-xs font-bold text-[#1A1A1A]"
                     >
                       Flat / house / floor
+                      <RequiredMark />
                       <input
                         value={draft.addressLine1}
                         onChange={(event) =>
@@ -816,9 +824,10 @@ export function AddressEditorFlow({
                         maxLength={250}
                         className={inputClass("addressLine1")}
                         aria-invalid={Boolean(fieldErrors.addressLine1)}
+                        aria-required="true"
                       />
                       {fieldErrors.addressLine1 ? (
-                        <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                        <span className="mt-1.5 block text-[11px] font-semibold text-[#C4200F]">
                           {fieldErrors.addressLine1}
                         </span>
                       ) : null}
@@ -829,6 +838,7 @@ export function AddressEditorFlow({
                       className="text-xs font-bold text-[#1A1A1A]"
                     >
                       Area
+                      <RequiredMark />
                       <input
                         value={draft.areaName}
                         onChange={(event) =>
@@ -838,9 +848,10 @@ export function AddressEditorFlow({
                         maxLength={120}
                         className={inputClass("areaName")}
                         aria-invalid={Boolean(fieldErrors.areaName)}
+                        aria-required="true"
                       />
                       {fieldErrors.areaName ? (
-                        <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                        <span className="mt-1.5 block text-[11px] font-semibold text-[#C4200F]">
                           {fieldErrors.areaName}
                         </span>
                       ) : null}
@@ -851,6 +862,7 @@ export function AddressEditorFlow({
                       className="text-xs font-bold text-[#1A1A1A]"
                     >
                       Landmark
+                      <RequiredMark />
                       <input
                         value={draft.landmark ?? ""}
                         onChange={(event) =>
@@ -860,9 +872,10 @@ export function AddressEditorFlow({
                         maxLength={160}
                         className={inputClass("landmark")}
                         aria-invalid={Boolean(fieldErrors.landmark)}
+                        aria-required="true"
                       />
                       {fieldErrors.landmark ? (
-                        <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                        <span className="mt-1.5 block text-[11px] font-semibold text-[#C4200F]">
                           {fieldErrors.landmark}
                         </span>
                       ) : null}
@@ -877,15 +890,17 @@ export function AddressEditorFlow({
                             className="text-xs font-bold text-[#1A1A1A]"
                           >
                             {label}
+                            <RequiredMark />
                             <input
                               value={draft[key]}
                               onChange={(event) => update(key, event.target.value)}
                               inputMode={key === "postalCode" ? "numeric" : "text"}
                               className={inputClass(key)}
                               aria-invalid={Boolean(fieldErrors[key])}
+                              aria-required="true"
                             />
                             {fieldErrors[key] ? (
-                              <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                              <span className="mt-1.5 block text-[11px] font-semibold text-[#C4200F]">
                                 {fieldErrors[key]}
                               </span>
                             ) : null}
@@ -896,9 +911,7 @@ export function AddressEditorFlow({
                   </div>
 
                   <div className="mt-7">
-                    <p className="text-xs font-black uppercase tracking-[0.1em] text-[#6B6B6B]">
-                      Address type
-                    </p>
+                    <p className="text-xs font-bold text-[#1A1A1A]">Address type</p>
                     <div className="mt-2 grid grid-cols-3 gap-2 rounded-2xl bg-[#F1F3F5] p-1.5">
                       {LABELS.map((option) => {
                         const Icon = option.icon;
@@ -914,7 +927,7 @@ export function AddressEditorFlow({
                               }))
                             }
                             className={
-                              "flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-sm font-black transition-[background-color,box-shadow,transform] duration-200 ease-out " +
+                              "flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-sm font-black transition-[background-color,box-shadow,translate] duration-200 ease-out " +
                               (selected
                                 ? "bg-white text-[#1A1A1A] shadow-[0_3px_10px_rgba(26,26,26,0.08)]"
                                 : "text-[#6B6B6B] hover:-translate-y-0.5 hover:bg-white hover:text-[#1A1A1A] hover:shadow-[0_5px_14px_rgba(26,26,26,0.08)]") +
@@ -938,6 +951,7 @@ export function AddressEditorFlow({
                         className="mt-3 block text-xs font-bold text-[#1A1A1A]"
                       >
                         Name this address
+                        <RequiredMark />
                         <input
                           autoFocus
                           value={draft.customLabel}
@@ -948,9 +962,10 @@ export function AddressEditorFlow({
                           maxLength={80}
                           className={inputClass("customLabel")}
                           aria-invalid={Boolean(fieldErrors.customLabel)}
+                          aria-required="true"
                         />
                         {fieldErrors.customLabel ? (
-                          <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                          <span className="mt-1.5 block text-[11px] font-semibold text-[#C4200F]">
                             {fieldErrors.customLabel}
                           </span>
                         ) : null}
@@ -964,6 +979,7 @@ export function AddressEditorFlow({
                       className="text-xs font-bold text-[#1A1A1A]"
                     >
                       Receiver name
+                      <RequiredMark />
                       <input
                         value={draft.recipientName}
                         onChange={(event) =>
@@ -973,9 +989,10 @@ export function AddressEditorFlow({
                         maxLength={160}
                         className={inputClass("recipientName")}
                         aria-invalid={Boolean(fieldErrors.recipientName)}
+                        aria-required="true"
                       />
                       {fieldErrors.recipientName ? (
-                        <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                        <span className="mt-1.5 block text-[11px] font-semibold text-[#C4200F]">
                           {fieldErrors.recipientName}
                         </span>
                       ) : null}
@@ -986,6 +1003,7 @@ export function AddressEditorFlow({
                       className="text-xs font-bold text-[#1A1A1A]"
                     >
                       Receiver&apos;s phone
+                      <RequiredMark />
                       <input
                         value={draft.contactPhoneNumber}
                         onChange={(event) =>
@@ -996,9 +1014,10 @@ export function AddressEditorFlow({
                         maxLength={10}
                         className={inputClass("contactPhoneNumber")}
                         aria-invalid={Boolean(fieldErrors.contactPhoneNumber)}
+                        aria-required="true"
                       />
                       {fieldErrors.contactPhoneNumber ? (
-                        <span className="mt-1.5 block text-[11px] font-semibold text-[#F62E18]">
+                        <span className="mt-1.5 block text-[11px] font-semibold text-[#C4200F]">
                           {fieldErrors.contactPhoneNumber}
                         </span>
                       ) : null}
@@ -1018,7 +1037,17 @@ export function AddressEditorFlow({
             </AnimatePresence>
           </div>
 
-          {step === "details" ? (
+          {asking ? (
+            <div className="border-t border-[#F1F3F5] bg-white px-5 pb-4 md:px-7">
+              <DiscardChangesPrompt
+                onKeep={() => setAsking(false)}
+                onDiscard={() => {
+                  setAsking(false);
+                  onClose();
+                }}
+              />
+            </div>
+          ) : step === "details" ? (
             <div className="grid grid-cols-[0.7fr_1.3fr] gap-3 border-t border-[#F1F3F5] bg-white px-5 py-4 md:px-7">
               <button
                 type="button"
@@ -1036,18 +1065,15 @@ export function AddressEditorFlow({
                 type="button"
                 onClick={() => void save()}
                 disabled={busy || mapResolving}
-                className={
-                  "inline-flex min-h-12 items-center justify-center gap-2 rounded-xl !border !border-[#E5E7EB] !bg-[#F1F3F5] px-3 text-sm font-black !text-[#1A1A1A] " +
-                  actionClass +
-                  " disabled:cursor-not-allowed disabled:opacity-50"
-                }
+                aria-busy={busy}
+                className="craves-primary-action !px-3"
               >
                 {busy ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-[#F62E18]" />
+                  <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
-                  <Save className="h-4 w-4 text-[#F62E18]" />
+                  <Save className="h-5 w-5" />
                 )}
-                {busy ? "Saving…" : "Save and use this address"}
+                {busy ? "Saving…" : "Save address"}
               </button>
             </div>
           ) : null}

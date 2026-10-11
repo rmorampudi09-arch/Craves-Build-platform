@@ -2,7 +2,6 @@
 
 import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertCircle,
@@ -17,7 +16,7 @@ import {
   ChefHat,
   XCircle,
 } from "lucide-react";
-import { ChefOnboardingShell } from "@/features/chef-onboarding/components/chef-onboarding-shell";
+import { switchToCustomerApp } from "@/features/chef/components/chef-account-menu";
 import {
   Card,
   Note,
@@ -33,10 +32,12 @@ import {
   APPLICATION_PHASE_COPY,
   CHEF_SECTION_LABELS,
   applicationPhase,
+  correctionSections,
   sectionForDocument,
   type ChefApplicationPhase,
 } from "@/features/chef-onboarding/lib/chef-onboarding-flow";
 import { captureSessionContext, isSessionContextCurrent } from "@/features/auth/api/cravesAuth";
+import "@/features/chef-onboarding/styles/chef-onboarding.css";
 
 const PHASE_ICON: Record<ChefApplicationPhase, ReactNode> = {
   DRAFT: <FileText size={20} aria-hidden="true" />,
@@ -147,15 +148,7 @@ export function ChefStatusView({
     <div className="cob-stack">
       <Card>
         <div className="cob-status-line">
-          <span
-            className={`cob-icon-well ${
-              phase === "APPROVED" || phase === "MORE_INFORMATION_REQUIRED" || phase === "REJECTED"
-                ? ""
-                : "cob-icon-well--neutral"
-            }`}
-          >
-            {PHASE_ICON[phase]}
-          </span>
+          <span className="cob-icon-well cob-icon-well--neutral">{PHASE_ICON[phase]}</span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <small>Application status</small>
             <strong>{copy.label}</strong>
@@ -221,11 +214,19 @@ export function ChefStatusView({
         <SupportCard phone={supportPhone} email={supportEmail} applicationId={application.id} />
       ) : null}
 
-      {phase === "SUBMITTED" || phase === "UNDER_REVIEW" ? <WhatHappensNext /> : null}
+      {phase === "SUBMITTED" || phase === "UNDER_REVIEW" ? (
+        <>
+          <WhatHappensNext />
+          <Note tone="neutral" icon={<Clock3 size={18} aria-hidden="true" />}>
+            Applications are reviewed in the order they arrive, so the time can vary. You don’t need to
+            do anything now: this page shows the decision as soon as it’s made.
+          </Note>
+        </>
+      ) : null}
 
       {phase === "APPROVED" ? (
-        <Note icon={<ChefHat size={18} aria-hidden="true" />}>
-          Your Chef Dashboard is ready. Add your working hours, availability and menu items there.
+        <Note tone="neutral" icon={<ChefHat size={18} aria-hidden="true" />}>
+          Your kitchen is ready. Add your working hours, availability and menu items there.
         </Note>
       ) : null}
     </div>
@@ -266,9 +267,11 @@ function SupportCard({
   );
 }
 
-/** Standalone /chef/application/status route. Pending applicants are never offered the dashboard. */
+/**
+ * /chef/application/status: the applicant's home in Chef Mode, shown as a page inside the chef shell
+ * so the account menu stays in reach. Pending applicants are never offered the kitchen.
+ */
 export function ChefApplicationStatus({ draftsEnabled }: { draftsEnabled: boolean }) {
-  const router = useRouter();
   const [application, setApplication] = useState<ChefApplication | null>(null),
     [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
   const [busy, setBusy] = useState(true),
@@ -339,6 +342,13 @@ export function ChefApplicationStatus({ draftsEnabled }: { draftsEnabled: boolea
           : application.status !== "NOT_SUBMITTED",
       })
     : null;
+  // Changes requested: open the first section the reviewer flagged.
+  const correction = onboarding ? correctionSections(onboarding)[0] : undefined;
+  const switchToCustomer = (
+    <button type="button" className="cob-link cob-link--ink cob-link--center" onClick={switchToCustomerApp}>
+      Switch to customer app
+    </button>
+  );
   const footer = !phase ? (
     error ? (
       <button type="button" className="cob-primary" disabled={busy} onClick={() => void load()}>
@@ -348,39 +358,42 @@ export function ChefApplicationStatus({ draftsEnabled }: { draftsEnabled: boolea
     ) : null
   ) : phase === "APPROVED" ? (
     <Link href="/chef" className="cob-primary">
-      Open Chef Dashboard
+      Open your kitchen
     </Link>
-  ) : phase === "DRAFT" || phase === "MORE_INFORMATION_REQUIRED" ? (
+  ) : phase === "DRAFT" ? (
     <Link href="/chef/application" className="cob-primary">
-      {phase === "DRAFT" ? "Continue application" : "Update application"}
+      Continue application
     </Link>
+  ) : phase === "MORE_INFORMATION_REQUIRED" ? (
+    <Link href={correction ? `/chef/application?step=${correction}` : "/chef/application"} className="cob-primary">
+      Update application
+    </Link>
+  ) : phase === "REJECTED" ? (
+    <>
+      <Link href="/contact" className="cob-primary">
+        Contact Craves support
+      </Link>
+      {switchToCustomer}
+    </>
   ) : (
     <>
       <button type="button" className="cob-primary" disabled={busy} onClick={() => void load()}>
         {busy ? <Spinner /> : null}
         {busy ? "Checking status…" : "Refresh status"}
       </button>
-      <Link href="/home" className="cob-link cob-link--ink cob-link--center">
-        Continue browsing as a customer
-      </Link>
+      {switchToCustomer}
     </>
   );
   return (
-    <ChefOnboardingShell
-      title="Your application"
-      description={
-        phase
-          ? "Your application status and what happens next."
-          : "Checking your latest application status."
-      }
-      screenKey={phase ?? "loading"}
-      saveState={null}
-      busy={false}
-      onBack={null}
-      exitLabel="Close"
-      onExit={() => router.push("/home")}
-      footer={footer}
-    >
+    <section className="cob rounded-[20px] bg-[#F1F3F5] px-4 py-6 sm:p-8" aria-busy={busy}>
+      <div className="cob-heading">
+        <h1>Your application</h1>
+        <p>
+          {phase
+            ? "Your application status and what happens next."
+            : "Checking your latest application status."}
+        </p>
+      </div>
       {application && phase ? (
         <ChefStatusView
           phase={phase}
@@ -404,7 +417,7 @@ export function ChefApplicationStatus({ draftsEnabled }: { draftsEnabled: boolea
             {signedOut ? (
               <>
                 <br />
-                <Link href="/sign-in?returnTo=/chef/application/status" className="cob-link">
+                <Link href="/chef/sign-in?returnTo=%2Fchef%2Fapplication%2Fstatus" className="cob-link">
                   Sign in
                 </Link>
               </>
@@ -412,6 +425,7 @@ export function ChefApplicationStatus({ draftsEnabled }: { draftsEnabled: boolea
           </Note>
         </div>
       ) : null}
-    </ChefOnboardingShell>
+      {footer ? <div className="cob-page-actions">{footer}</div> : null}
+    </section>
   );
 }

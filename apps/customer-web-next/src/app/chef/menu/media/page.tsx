@@ -1,25 +1,6 @@
-import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
-import { ChefMenuManager } from "@/features/chef/components/chef-menu-manager";
-import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
+import { redirect } from "next/navigation";
 
-export const metadata = {
-  title: "Chef menu | Craves",
-  robots: { index: false, follow: false },
-};
-
+/** Photos are added and reordered on each dish in the menu, so older links open the menu itself. */
 export default function ChefMenuMediaCompatibilityPage() {
-  return (
-    <main className="mx-auto min-h-screen max-w-7xl px-4 py-6 md:px-6 md:py-8">
-      <ChefPageHeader
-        eyebrow="CHEF MENU"
-        title="Menu"
-        description="Manage dishes and attach customer-facing images directly to each dish from the same menu workspace."
-      />
-      <div className="mt-6">
-        <ChefAccessBoundary>
-          <ChefMenuManager />
-        </ChefAccessBoundary>
-      </div>
-    </main>
-  );
+  redirect("/chef/menu");
 }

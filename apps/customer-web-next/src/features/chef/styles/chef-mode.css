@@ -1,89 +1,866 @@
+/*
+ * Chef Mode: an operational tool a home chef uses on a phone between cooking.
+ * Neutral page, white working surfaces, ink text, Flame Red only for the next
+ * action, the current tab and orders waiting for an answer. Never a red tint.
+ */
 .chef-panel-theme {
   --chef-action: var(--color-flame-red);
+  --chef-action-hover: var(--color-contrast-red);
   --primary: var(--color-flame-red);
   --primary-foreground: #fff;
-  --ring: var(--color-flame-red);
+  --ring: #1a1a1a;
   --gradient-primary: var(--color-flame-red);
-  --chef-action-hover: var(--color-contrast-red);
-  --chef-page: var(--background);
+  --chef-page: #f1f3f5;
+  --chef-surface: #ffffff;
+  --chef-sunken: #f7f8fa;
+  --chef-line: #e3e6ea;
+  --chef-line-strong: #d3d7dd;
   --chef-text: #1a1a1a;
   --chef-muted: #6b6b6b;
-  --chef-placeholder: #9ca3af;
-  --chef-border: #e5e7eb;
+  --chef-placeholder: #8a8f98;
+  --chef-border: var(--chef-line);
   --chef-input: #f1f3f5;
-  --chef-success: var(--color-success);
-  --chef-warning: #b45309;
-  --chef-error: #b91c1c;
-  --chef-info: #2563eb;
-  --chef-food: #ff8a3d;
-  --chef-glass: rgba(255,255,255,.64);
+  --chef-accent-text: #c4200f;
+  /* Yes, open, ready: the green of the customer View cart button (5:1 with white). */
+  --chef-go: #17803d;
+  --chef-go-hover: #12692f;
+  --chef-success: #0e6b4c;
+  --chef-warning: #8a5300;
+  --chef-error: #c4200f;
+  --chef-info: #1a1a1a;
+  --chef-radius: 16px;
+  --chef-radius-sm: 12px;
+  --chef-shadow: 0 1px 2px rgba(26, 26, 26, 0.04);
+  --chef-ease: cubic-bezier(0.22, 1, 0.36, 1);
   min-height: 100vh;
   background: var(--chef-page);
   color: var(--chef-text);
   font-family: var(--font-craves-body), Inter, sans-serif;
+  font-variant-numeric: tabular-nums;
+  caret-color: var(--chef-action);
 }
-.chef-panel-theme :is(button,a)[class*="bg-[#F62E18]"],
+
+/*
+ * The customer theme styles every <button> outside any cascade layer, which beats
+ * Tailwind utilities. Inside Chef Mode, a button that names its own background,
+ * text colour, border or shadow utility gets that utility; buttons without one keep
+ * the shared white look.
+ */
+.chef-panel-theme :where(button, [role="tab"])[class*="bg-"]:not(.craves-primary-action, .btn-primary, .chef-primary-action) { background: revert-layer; }
+.chef-panel-theme :where(button, [role="tab"])[class*="text-"]:not(.craves-primary-action, .btn-primary, .chef-primary-action) { color: revert-layer; }
+.chef-panel-theme :where(button, [role="tab"])[class*="shadow"]:not(.craves-primary-action, .btn-primary, .chef-primary-action),
+.chef-panel-theme :where(button, [role="tab"])[class*="shadow"]:not(.craves-primary-action, .btn-primary, .chef-primary-action):not(:disabled):hover { box-shadow: revert-layer; }
+.chef-panel-theme :where(.chef-btn, .chef-chip, .chef-row):not(:disabled):hover { box-shadow: none; }
+
+/* ---------- Header and navigation ---------- */
+.chef-panel-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid var(--chef-line);
+  background: var(--chef-surface);
+}
+.chef-header-bar {
+  margin-inline: auto;
+  display: flex;
+  min-height: 3.5rem;
+  max-width: 72rem;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.25rem 1rem;
+}
+.chef-brand {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: var(--chef-radius-sm);
+  color: var(--chef-text);
+  text-decoration: none;
+}
+.chef-brand-name {
+  font-family: var(--font-display-family);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.chef-brand-tag {
+  border-radius: 6px;
+  background: var(--chef-text);
+  padding: 0.125rem 0.4375rem;
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.chef-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.chef-icon-button {
+  display: inline-grid;
+  height: 2.75rem;
+  width: 2.75rem;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--chef-text);
+  text-decoration: none;
+}
+@media (hover: hover) {
+  .chef-icon-button:hover { background: var(--chef-input); }
+}
+
+.chef-desktop-nav { display: flex; margin-left: 1.5rem; }
+.chef-desktop-nav-primary { display: flex; gap: 0.25rem; }
+.chef-desktop-nav-link {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 10px;
+  padding: 0 0.875rem;
+  color: var(--chef-muted);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 150ms var(--chef-ease), background-color 150ms var(--chef-ease);
+}
+.chef-desktop-nav-link.is-active { background: var(--chef-input); color: var(--chef-text); }
+.chef-desktop-nav-link.is-active svg { color: var(--chef-action); }
+@media (hover: hover) {
+  .chef-desktop-nav-link:hover { background: var(--chef-input); color: var(--chef-text); }
+}
+
+.chef-mobile-nav { display: none; }
+
+@media (min-width: 1024px) {
+  .chef-header-bar { min-height: 4rem; padding-inline: 1.5rem; }
+}
+
+@media (max-width: 1023px) {
+  .chef-panel-theme { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); }
+  .chef-desktop-nav { display: none; }
+  .chef-mobile-nav {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    border-top: 1px solid var(--chef-line);
+    background: var(--chef-surface);
+    padding: 0.25rem 0.25rem max(0.25rem, env(safe-area-inset-bottom));
+  }
+  .chef-mobile-nav-link {
+    display: flex;
+    min-height: 3.5rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    border-radius: 12px;
+    color: var(--chef-muted);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+    transition: color 150ms var(--chef-ease);
+  }
+  /* The selected tab is marked by shape and weight, not colour alone: ink label, icon in a pill. */
+  .chef-mobile-nav-link.is-active { color: var(--chef-text); font-weight: 700; }
+  .chef-mobile-nav-link:active { background: var(--chef-input); }
+  .chef-mobile-nav-icon {
+    display: grid;
+    place-items: center;
+    height: 1.75rem;
+    width: 3rem;
+    border-radius: 999px;
+    transition: background-color 200ms var(--chef-ease);
+  }
+  .chef-mobile-nav-link.is-active .chef-mobile-nav-icon { background: var(--chef-page); color: var(--chef-action); }
+}
+.chef-mobile-nav-link:focus-visible,
+.chef-desktop-nav-link:focus-visible { outline: 2px solid var(--chef-text); outline-offset: 2px; }
+
+/* ---------- Page scaffold ---------- */
+.chef-page {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 72rem;
+  padding: 1.25rem 1rem 2rem;
+}
+.chef-page.is-narrow { max-width: 48rem; }
+@media (min-width: 768px) { .chef-page { padding: 2rem 1.5rem 3rem; } }
+
+.chef-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+}
+.chef-page-title {
+  margin: 0;
+  font-family: var(--font-display-family);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  text-wrap: balance;
+  color: var(--chef-text);
+}
+.chef-page-subtitle {
+  margin-top: 0.25rem;
+  max-width: 40rem;
+  color: var(--chef-muted);
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+@media (min-width: 768px) { .chef-page-title { font-size: 1.75rem; } }
+.chef-back-link {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.375rem;
+  margin: -0.5rem 0 0.25rem -0.5rem;
+  border-radius: 10px;
+  padding: 0 0.5rem;
+  color: var(--chef-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+@media (hover: hover) { .chef-back-link:hover { background: var(--chef-input); } }
+
+/* ---------- Surfaces ---------- */
+.chef-section {
+  overflow: hidden;
+  border: 1px solid var(--chef-line);
+  border-radius: var(--chef-radius);
+  background: var(--chef-surface);
+  box-shadow: var(--chef-shadow);
+}
+.chef-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 1rem 1rem 0;
+}
+.chef-section-title {
+  margin: 0;
+  font-family: var(--font-display-family);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--chef-text);
+}
+.chef-section-note { color: var(--chef-muted); font-size: 0.8125rem; }
+.chef-section-body { padding: 1rem; }
+@media (min-width: 768px) {
+  .chef-section-head { padding: 1.25rem 1.25rem 0; }
+  .chef-section-body { padding: 1.25rem; }
+}
+.chef-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+@media (min-width: 768px) { .chef-stack { gap: 1.25rem; } }
+
+/* ---------- Lists ---------- */
+.chef-list { margin: 0; padding: 0; list-style: none; }
+.chef-list > li + li,
+.chef-list > .chef-row + .chef-row { border-top: 1px solid var(--chef-line); }
+/* Rows sit flush in sections that clip overflow, so their focus ring is drawn inside. */
+.chef-panel-theme .chef-row:focus-visible { outline-offset: -3px !important; }
+.chef-row {
+  display: flex;
+  min-height: 4rem;
+  width: 100%;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.875rem 1rem;
+  color: var(--chef-text);
+  text-align: left;
+  text-decoration: none;
+}
+@media (min-width: 768px) { .chef-row { padding-inline: 1.25rem; } }
+a.chef-row,
+button.chef-row { transition: background-color 150ms var(--chef-ease); }
+@media (hover: hover) {
+  a.chef-row:hover,
+  button.chef-row:hover { background: var(--chef-sunken); }
+}
+a.chef-row:active,
+button.chef-row:active { background: var(--chef-input); }
+.chef-row-main { min-width: 0; flex: 1; }
+.chef-row-title { font-size: 0.9375rem; font-weight: 600; line-height: 1.35; color: var(--chef-text); }
+.chef-row-meta { margin-top: 0.125rem; color: var(--chef-muted); font-size: 0.8125rem; font-weight: 400; line-height: 1.4; }
+.chef-row-value { flex-shrink: 0; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.chef-row-icon {
+  display: grid;
+  height: 2.5rem;
+  width: 2.5rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--chef-input);
+  color: var(--chef-text);
+}
+.chef-chevron { flex-shrink: 0; color: var(--chef-placeholder); }
+
+/* ---------- Status pills ---------- */
+.chef-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 999px;
+  background: var(--chef-input);
+  padding: 0.1875rem 0.5625rem;
+  color: var(--chef-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  white-space: nowrap;
+}
+.chef-pill::before {
+  content: "";
+  height: 0.4375rem;
+  width: 0.4375rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+/* Small white text needs 4.5:1: the deeper brand red (5.9:1) instead of Flame Red (3.95:1). */
+.chef-pill.is-attention { background: var(--chef-accent-text); color: #fff; }
+.chef-pill.is-active::before { background: var(--chef-text); }
+.chef-pill.is-success { color: var(--chef-success); }
+.chef-pill.is-warning { color: var(--chef-warning); }
+.chef-pill.is-muted { color: var(--chef-muted); }
+.chef-pill.is-danger { color: var(--chef-accent-text); }
+.chef-pill.is-plain::before { display: none; }
+
+/* ---------- Buttons ---------- */
+.chef-panel-theme .chef-btn {
+  display: inline-flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid var(--chef-line-strong);
+  border-radius: var(--chef-radius-sm);
+  background: var(--chef-surface);
+  padding: 0 1.125rem;
+  color: var(--chef-text);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: none;
+  transition: background-color 150ms var(--chef-ease), border-color 150ms var(--chef-ease), scale 120ms var(--chef-ease);
+}
+body .chef-panel-theme .chef-btn { border-color: var(--chef-line-strong) !important; }
+.chef-panel-theme .chef-btn:not(:disabled):active { scale: 0.98; }
+@media (hover: hover) {
+  .chef-panel-theme .chef-btn:not(:disabled):hover { background: var(--chef-sunken); }
+}
+.chef-panel-theme .chef-btn:disabled { cursor: not-allowed; opacity: 0.55; }
+/* White on Flame Red is 3.95:1, so the label is set as large text (19 px bold). */
+.chef-panel-theme .chef-btn.is-primary {
+  background: var(--chef-action);
+  color: #fff;
+  font-size: 1.1875rem;
+  font-weight: 700;
+}
+body .chef-panel-theme .chef-btn.is-primary { border-color: var(--chef-action) !important; }
+@media (hover: hover) {
+  .chef-panel-theme .chef-btn.is-primary:not(:disabled):hover { background: var(--chef-action-hover); }
+  body .chef-panel-theme .chef-btn.is-primary:not(:disabled):hover { border-color: var(--chef-action-hover) !important; }
+}
+.chef-panel-theme .chef-btn.is-primary[aria-busy="true"]:disabled { opacity: 1; cursor: progress; }
+.chef-panel-theme .chef-btn.is-quiet { background: var(--chef-input); }
+body .chef-panel-theme .chef-btn.is-quiet { border-color: transparent !important; }
+.chef-panel-theme .chef-btn.is-danger { color: var(--chef-accent-text); }
+.chef-panel-theme .chef-btn.is-block { width: 100%; }
+.chef-panel-theme .chef-btn.is-small { min-height: 2.75rem; padding: 0 0.875rem; font-size: 0.9375rem; }
+
+/* ---------- Filter chips ---------- */
+.chef-chips { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.25rem; scrollbar-width: none; }
+.chef-chips::-webkit-scrollbar { display: none; }
+/* Choices (not filters) wrap so every option stays in view. */
+.chef-chips.is-wrap { flex-wrap: wrap; overflow: visible; padding-bottom: 0; }
+.chef-field-label { display: block; margin: 0; padding: 0; font-size: 0.9375rem; font-weight: 600; color: var(--chef-text); }
+/* Choice chips are radios: the chosen one is filled, the keyboard focus ring sits on the chip. */
+.chef-panel-theme .chef-chip.is-choice { cursor: pointer; }
+.chef-panel-theme .chef-chip.is-choice:has(input:checked) { background: var(--chef-text); color: #fff; }
+body .chef-panel-theme .chef-chip.is-choice:has(input:checked) { border-color: var(--chef-text) !important; }
+.chef-panel-theme .chef-chip.is-choice:has(input:focus-visible) { outline: 2px solid var(--chef-text); outline-offset: 2px; }
+.chef-panel-theme .chef-chip.is-choice:has(input:disabled) { cursor: not-allowed; opacity: 0.6; }
+.chef-panel-theme .chef-chip {
+  display: inline-flex;
+  min-height: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid var(--chef-line-strong);
+  border-radius: 999px;
+  background: var(--chef-surface);
+  padding: 0 0.9375rem;
+  color: var(--chef-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: none;
+  transition: background-color 150ms var(--chef-ease), color 150ms var(--chef-ease);
+}
+.chef-panel-theme .chef-chip[aria-pressed="true"] { background: var(--chef-text); color: #fff; }
+body .chef-panel-theme .chef-chip[aria-pressed="true"] { border-color: var(--chef-text) !important; }
+.chef-chip-count {
+  min-width: 1.25rem;
+  border-radius: 999px;
+  background: var(--chef-accent-text);
+  padding: 0 0.3125rem;
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  text-align: center;
+}
+
+/* ---------- Numbers ---------- */
+.chef-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.chef-stat {
+  display: block;
+  min-width: 0;
+  padding: 1rem;
+  color: var(--chef-text);
+  text-decoration: none;
+}
+.chef-stats > .chef-stat:nth-child(odd) { border-right: 1px solid var(--chef-line); }
+.chef-stats > .chef-stat:nth-child(n + 3) { border-top: 1px solid var(--chef-line); }
+@media (min-width: 900px) {
+  .chef-stats.is-four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .chef-stats.is-four > .chef-stat { border-top: 0; border-right: 1px solid var(--chef-line); }
+  .chef-stats.is-four > .chef-stat:last-child { border-right: 0; }
+}
+.chef-stats.is-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.chef-stats.is-three > .chef-stat { border-top: 0; border-right: 1px solid var(--chef-line); }
+.chef-stats.is-three > .chef-stat:last-child { border-right: 0; }
+@media (max-width: 520px) {
+  .chef-stats.is-three { grid-template-columns: 1fr; }
+  .chef-stats.is-three > .chef-stat { border-right: 0; }
+  .chef-stats.is-three > .chef-stat + .chef-stat { border-top: 1px solid var(--chef-line); }
+}
+a.chef-stat { transition: background-color 150ms var(--chef-ease); }
+@media (hover: hover) { a.chef-stat:hover { background: var(--chef-sunken); } }
+.chef-stat-label { color: var(--chef-muted); font-size: 0.8125rem; font-weight: 500; }
+.chef-stat-value {
+  margin-top: 0.25rem;
+  font-family: var(--font-display-family);
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.chef-amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- Notices, empty and loading states ---------- */
+.chef-notice {
+  display: flex;
+  gap: 0.75rem;
+  border-radius: var(--chef-radius-sm);
+  background: var(--chef-input);
+  padding: 0.875rem 1rem;
+  color: var(--chef-text);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+.chef-notice > svg { margin-top: 0.0625rem; height: 1.125rem; width: 1.125rem; flex-shrink: 0; color: var(--chef-muted); }
+.chef-notice.is-danger > svg,
+.chef-notice.is-danger strong { color: var(--chef-accent-text); }
+.chef-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1.25rem;
+  text-align: center;
+}
+.chef-empty-icon {
+  display: grid;
+  height: 3rem;
+  width: 3rem;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--chef-input);
+  color: var(--chef-text);
+}
+.chef-empty-title { margin-top: 0.5rem; font-family: var(--font-display-family); font-size: 1.125rem; font-weight: 700; color: var(--chef-text); }
+.chef-empty-text { max-width: 26rem; color: var(--chef-muted); font-size: 0.9375rem; line-height: 1.5; }
+.chef-skeleton {
+  border-radius: var(--chef-radius);
+  background: linear-gradient(90deg, #e3e6ea 0%, #eceef1 45%, #e3e6ea 90%);
+  background-size: 200% 100%;
+  /* Quick loads show nothing: blocks fade in only once a wait passes 300 ms. */
+  animation: chefShimmer 1.4s ease-in-out infinite, chefSkeletonReveal 200ms ease-out 300ms both;
+}
+@keyframes chefShimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes chefSkeletonReveal { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- Forms ---------- */
+.chef-panel-theme :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]), select, textarea) {
+  border-color: var(--chef-line-strong);
+  color: var(--chef-text);
+}
+.chef-panel-theme :is(input, textarea, select):focus,
+.chef-panel-theme :is(input, textarea, select):focus-visible {
+  border-color: var(--chef-text) !important;
+  outline: none;
+  box-shadow: 0 0 0 1px var(--chef-text);
+}
+.chef-panel-theme ::placeholder { color: var(--chef-placeholder); }
+.chef-panel-theme :is(input, textarea, select)[aria-invalid="true"] { border-color: var(--chef-error) !important; }
+.chef-panel-theme :is(input, textarea, select)[aria-invalid="true"]:focus { box-shadow: 0 0 0 1px var(--chef-error); }
+.chef-panel-theme :is(button, input, textarea, select):disabled { cursor: not-allowed; }
+.chef-field-error { margin-top: 0.375rem; color: var(--chef-error); font-size: 0.8125rem; font-weight: 500; }
+.chef-panel-theme [role="alert"]:not([class*="text-"]) { color: var(--chef-error); }
+
+/* ---------- Older chef screens (still Tailwind-classed) ---------- */
+/* Primary buttons written with the Flame Red utility keep the brand fill and hover. */
+.chef-panel-theme :is(button, a)[class~="bg-[#F62E18]"],
 .chef-panel-theme .btn-primary,
 .chef-panel-theme .chef-primary-action {
   background: var(--chef-action) !important;
-  border-color: var(--chef-action) !important;
   color: #fff !important;
 }
-.chef-panel-theme :is(button,a)[class*="bg-[#F62E18]"]:not(:disabled):hover,
-.chef-panel-theme .btn-primary:not(:disabled):hover,
-.chef-panel-theme .chef-primary-action:not(:disabled):hover {
-  background: var(--chef-action-hover) !important;
-  border-color: var(--chef-action-hover) !important;
+body .chef-panel-theme :is(button, a)[class~="bg-[#F62E18]"],
+body .chef-panel-theme .btn-primary,
+body .chef-panel-theme .chef-primary-action { border-color: var(--chef-action) !important; }
+@media (hover: hover) {
+  .chef-panel-theme :is(button, a)[class~="bg-[#F62E18]"]:not(:disabled):hover,
+  .chef-panel-theme .btn-primary:not(:disabled):hover,
+  .chef-panel-theme .chef-primary-action:not(:disabled):hover { background: var(--chef-action-hover) !important; }
 }
-.chef-panel-theme :is(input,textarea,select):focus,
-.chef-panel-theme :is(input,textarea,select):focus-visible {
-  border-color: var(--chef-action) !important;
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-flame-red) 14%, transparent);
-}
-.chef-desktop-nav{display:flex;align-items:center;gap:6px;min-width:0;overflow-x:auto;scrollbar-width:none;border-top:1px solid var(--chef-border);padding:8px 0 2px}
-.chef-desktop-nav::-webkit-scrollbar{display:none}
-.chef-desktop-nav-primary{display:flex;gap:6px;min-width:max-content}
-.chef-desktop-nav-link,.chef-context-link{min-height:44px;display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:0 15px;color:var(--chef-text);font-size:14px;font-weight:700;text-decoration:none;white-space:nowrap}
-.chef-desktop-nav-link:hover,.chef-context-link:hover{background:var(--chef-input)}
-.chef-desktop-nav-link.is-active,.chef-context-link{background:color-mix(in srgb,var(--color-flame-red) 8%,white);color:var(--chef-action)}
-.chef-context-link{margin-left:auto}
-.chef-mobile-nav{display:none}
-@media (max-width:1023px){
- .chef-panel-theme{padding-bottom:calc(4.7rem + env(safe-area-inset-bottom))}
- .chef-desktop-nav{display:none}
- .chef-mobile-nav{position:fixed;z-index:40;left:0;right:0;top:auto;bottom:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));width:100%;max-width:32rem;margin-inline:auto;padding:6px 6px max(6px,env(safe-area-inset-bottom));border-top:1px solid #eceef0;border-radius:1.15rem 1.15rem 0 0;background:rgba(255,255,255,.96);box-shadow:0 -8px 24px rgba(26,26,26,.065);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
- .chef-mobile-nav-link{min-width:44px;min-height:3.45rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:12px;padding:0 2px;color:var(--chef-muted);font-size:.61rem;line-height:.72rem;font-weight:800;text-decoration:none;text-align:center}
- .chef-mobile-nav-link.is-active{color:var(--chef-action)}
- .chef-mobile-nav-icon{display:grid;place-items:center;min-height:1.12rem}
-}
-.chef-mobile-nav-link:focus-visible,.chef-desktop-nav-link:focus-visible,.chef-context-link:focus-visible{outline:2px solid var(--chef-action);outline-offset:2px}
-@media (prefers-reduced-motion:reduce){
- .chef-panel-theme *, .chef-panel-theme *::before, .chef-panel-theme *::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
-}
+.chef-panel-theme :is(button, a)[class~="bg-[#F62E18]"]:active { scale: 0.98; }
 
-/* Keep older Chef forms on the same customer tokens during their UI migration. */
-.chef-panel-theme [class*="text-[#F62E18]"],
-.chef-panel-theme [class*="text-[#178F56]"] { color: var(--chef-action); }
-.chef-panel-theme [class*="bg-[#F62E18]"]:not(button):not(a) { background: var(--chef-action); }
-.chef-panel-theme :is(button, a)[class*="bg-[#F62E18]"],
-.chef-panel-theme :is(button, a)[class*="bg-primary"] {
-  border-radius: var(--radius-md);
-  font-size: 1rem;
+/* ---------- Simple mode: big yes buttons, order cards, picture steps ---------- */
+/* Green means yes / open / ready; red means no or "needs you now". Never a tinted fill. */
+.chef-panel-theme .chef-btn.is-go {
+  background: var(--chef-go);
+  color: #fff;
+  font-size: 1.1875rem;
+  font-weight: 700;
+}
+body .chef-panel-theme .chef-btn.is-go { border-color: var(--chef-go) !important; }
+@media (hover: hover) {
+  .chef-panel-theme .chef-btn.is-go:not(:disabled):hover { background: var(--chef-go-hover); }
+  body .chef-panel-theme .chef-btn.is-go:not(:disabled):hover { border-color: var(--chef-go-hover) !important; }
+}
+.chef-panel-theme .chef-btn.is-go[aria-busy="true"]:disabled { opacity: 1; cursor: progress; }
+/* Decisions a busy hand must not miss: 56 px tall. */
+.chef-panel-theme .chef-btn.is-tall { min-height: 3.5rem; font-size: 1.125rem; }
+.chef-panel-theme .chef-btn.is-go.is-tall { font-size: 1.1875rem; }
+/* A main button that can't be used yet goes grey, never pale red or pale green. */
+.chef-panel-theme .chef-btn:is(.is-primary, .is-go):disabled:not([aria-busy="true"]) {
+  background: var(--chef-input);
+  color: var(--chef-placeholder);
+  opacity: 1;
+}
+body .chef-panel-theme .chef-btn:is(.is-primary, .is-go):disabled:not([aria-busy="true"]) { border-color: var(--chef-line) !important; }
+
+.chef-pill.is-plain svg { flex-shrink: 0; }
+
+.chef-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-family: var(--font-display-family);
+  font-size: 1.1875rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--chef-text);
+}
+.chef-group-title.is-attention { color: var(--chef-accent-text); }
+
+.chef-order-card {
+  border: 1px solid var(--chef-line);
+  border-radius: var(--chef-radius);
+  background: var(--chef-surface);
+  box-shadow: var(--chef-shadow);
+  padding: 1rem;
+}
+@media (min-width: 768px) { .chef-order-card { padding: 1.25rem; } }
+/* A waiting order is outlined in the brand's deep red: the one thing on screen that needs the chef. */
+.chef-order-card.is-new { border-color: var(--chef-accent-text); box-shadow: 0 0 0 1px var(--chef-accent-text); }
+.chef-order-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.chef-order-card-title {
+  margin: 0.625rem 0 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--chef-text);
+}
+.chef-order-items { display: grid; gap: 0.5rem; margin: 0.75rem 0 0; padding: 0; list-style: none; }
+.chef-order-items > li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.0625rem;
   font-weight: 600;
-  transition: background-color 200ms, box-shadow 200ms, transform 200ms;
+  line-height: 1.35;
+  color: var(--chef-text);
 }
-.chef-panel-theme :is(button, a)[class*="bg-[#F62E18]"]:active,
-.chef-panel-theme :is(button, a)[class*="bg-primary"]:active { transform: scale(.98); }
-.chef-panel-theme :is(button, input, textarea, select):disabled { cursor: not-allowed; }
-.chef-panel-theme [role="alert"] { color: #dc2626; }
-.chef-panel-theme :is(input, textarea, select)[aria-invalid="true"] { border-color: var(--chef-error) !important; }
-.chef-field-error { margin-top: .4rem; color: #dc2626; font-size: .8rem; font-weight: 500; }
-.chef-step { animation: chefStepIn 240ms cubic-bezier(.23,.88,.26,.92) both; }
-.chef-mobile-nav-link, .chef-desktop-nav-link { transition: color 200ms, background-color 200ms; }
-.chef-mobile-nav-link.is-active .chef-mobile-nav-icon { transform: translateY(-1px); }
-.chef-mobile-nav-icon { transition: transform 200ms cubic-bezier(.23,.88,.26,.92); }
-@keyframes chefStepIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes chefFieldShake { 0%,100% { transform: translateX(0); } 30% { transform: translateX(-3px); } 65% { transform: translateX(3px); } }
+.chef-order-qty {
+  display: grid;
+  min-width: 2.75rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: var(--chef-radius-sm);
+  background: var(--chef-input);
+  padding: 0 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.chef-order-card-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.875rem; }
+/* Links and buttons share one height and split the row, so both read as equal choices. */
+.chef-panel-theme .chef-order-card-tools .chef-btn { flex: 1 1 auto; min-height: 3rem; }
+.chef-order-step { margin-top: 1rem; border-top: 1px solid var(--chef-line); padding-top: 1rem; }
+.chef-order-step-title {
+  margin: 0;
+  font-family: var(--font-display-family);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--chef-text);
+}
 
-.chef-panel-theme :is(input,textarea,select)[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--chef-error) 14%, transparent); }
+/* Order progress: five picture steps with a line between them. */
+.chef-progress { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.chef-progress-step { position: relative; display: grid; justify-items: center; gap: 0.375rem; text-align: center; }
+.chef-progress-step + .chef-progress-step::before {
+  content: "";
+  position: absolute;
+  top: 1rem;
+  right: calc(50% + 1.125rem);
+  left: calc(-50% + 1.125rem);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--chef-line-strong);
+}
+.chef-progress-step.is-done + .chef-progress-step::before { background: var(--chef-go); }
+.chef-progress-dot {
+  display: grid;
+  height: 2rem;
+  width: 2rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--chef-input);
+  color: var(--chef-placeholder);
+}
+.chef-progress-step.is-done .chef-progress-dot { background: var(--chef-go); color: #fff; }
+.chef-progress-step.is-now .chef-progress-dot { background: var(--chef-text); color: #fff; box-shadow: 0 0 0 4px var(--chef-input); }
+.chef-progress-label { font-size: 0.75rem; font-weight: 600; line-height: 1.2; color: var(--chef-muted); }
+.chef-progress-step.is-now .chef-progress-label { font-weight: 800; color: var(--chef-text); }
+
+/* Kitchen open/closed: the day's on/off switch. */
+.chef-kitchen-switch {
+  border: 1px solid var(--chef-line);
+  border-radius: var(--chef-radius);
+  background: var(--chef-surface);
+  box-shadow: var(--chef-shadow);
+  padding: 1rem;
+}
+@media (min-width: 768px) { .chef-kitchen-switch { padding: 1.25rem; } }
+.chef-kitchen-switch-icon {
+  display: grid;
+  height: 3rem;
+  width: 3rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--chef-input);
+  color: var(--chef-muted);
+}
+.chef-kitchen-switch.is-open .chef-kitchen-switch-icon { color: var(--chef-go); }
+.chef-kitchen-switch-title {
+  margin: 0;
+  font-family: var(--font-display-family);
+  font-size: 1.1875rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--chef-text);
+}
+
+.chef-setting-row { display: flex; min-height: 3.5rem; align-items: center; gap: 0.875rem; padding: 0.375rem 0; }
+.chef-setting-row + .chef-setting-row { border-top: 1px solid var(--chef-line); }
+.chef-setting-title { font-size: 1rem; font-weight: 600; color: var(--chef-text); }
+/* Every chef switch (kitchen, alerts, each dish on Menu) takes a finger-sized tap, at least
+   44 px tall, without looking bigger. */
+.chef-panel-theme [role="switch"] { position: relative; }
+.chef-panel-theme [role="switch"]::after { content: ""; position: absolute; inset: -8px; }
+
+/* ---------- Checklist: a tick for done, an empty ring for to do ---------- */
+.chef-check-hero {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--chef-line);
+  border-radius: var(--chef-radius);
+  background: var(--chef-surface);
+  padding: 1.125rem 1rem;
+}
+@media (min-width: 768px) { .chef-check-hero { padding: 1.25rem; } }
+.chef-check-hero-icon {
+  display: grid;
+  height: 3.5rem;
+  width: 3.5rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--chef-input);
+  color: var(--chef-warning);
+}
+.chef-check-hero.is-live .chef-check-hero-icon { background: var(--chef-go); color: #fff; }
+.chef-check-hero-title {
+  margin: 0;
+  font-family: var(--font-display-family);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--chef-text);
+}
+.chef-check-hero-text { margin: 0.25rem 0 0; color: var(--chef-muted); font-size: 0.9375rem; line-height: 1.45; }
+.chef-checklist { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--chef-line); }
+.chef-check { display: flex; align-items: flex-start; gap: 0.875rem; padding: 1rem; }
+@media (min-width: 768px) { .chef-check { padding-inline: 1.25rem; } }
+.chef-check + .chef-check { border-top: 1px solid var(--chef-line); }
+.chef-check-mark {
+  display: grid;
+  height: 1.75rem;
+  width: 1.75rem;
+  flex-shrink: 0;
+  place-items: center;
+  border: 2px solid var(--chef-line-strong);
+  border-radius: 999px;
+  color: #fff;
+}
+.chef-check.is-done .chef-check-mark { border-color: var(--chef-go); background: var(--chef-go); }
+.chef-check-title { margin: 0.125rem 0 0; font-size: 1rem; font-weight: 600; line-height: 1.35; color: var(--chef-text); }
+.chef-check-detail { margin: 0.25rem 0 0; color: var(--chef-muted); font-size: 0.9375rem; line-height: 1.45; overflow-wrap: anywhere; }
+.chef-check-docs { display: grid; gap: 0.375rem; margin: 0.75rem 0 0; padding: 0; list-style: none; }
+.chef-check-docs li {
+  display: flex;
+  min-height: 2.5rem;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: var(--chef-radius-sm);
+  background: var(--chef-sunken);
+  padding: 0.375rem 0.75rem;
+  font-size: 0.9375rem;
+  color: var(--chef-text);
+}
+.chef-check-docs li > svg { flex-shrink: 0; color: var(--chef-warning); }
+.chef-check-docs li.is-approved > svg { color: var(--chef-go); }
+.chef-check-docs li.is-rejected > svg,
+.chef-check-docs li.is-missing > svg { color: var(--chef-accent-text); }
+.chef-check-doc-state { flex-shrink: 0; color: var(--chef-muted); font-size: 0.8125rem; font-weight: 600; }
+.chef-check-docs li.is-rejected .chef-check-doc-state { color: var(--chef-accent-text); }
+
+/* ---------- New order bar on pages that don't list orders ---------- */
+.chef-order-banner-wrap {
+  position: fixed;
+  right: 0.75rem;
+  bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  left: 0.75rem;
+  z-index: 45;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+@media (min-width: 1024px) { .chef-order-banner-wrap { bottom: 1.5rem; } }
+/* While the bar shows, pages get room for it, so the last button and a focused field are never under it. */
+.chef-panel-theme:has(.chef-order-banner) .chef-panel-content { padding-bottom: 5.5rem; }
+html:has(.chef-order-banner) { scroll-padding-bottom: 12rem; }
+.chef-order-banner {
+  display: flex;
+  width: 100%;
+  max-width: 30rem;
+  min-height: 3.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: var(--chef-radius);
+  background: var(--chef-accent-text);
+  padding: 0.5rem 0.5rem 0.5rem 1rem;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 10px 30px rgba(26, 26, 26, 0.22);
+  pointer-events: auto;
+}
+.chef-order-banner:focus-visible { outline: 2px solid var(--chef-text); outline-offset: 2px; }
+.chef-order-banner-cta {
+  display: inline-flex;
+  margin-left: auto;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  background: #fff;
+  padding: 0.5rem 0.875rem;
+  color: var(--chef-accent-text);
+  font-size: 0.9375rem;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .chef-order-banner { animation: chefBannerIn 260ms var(--chef-ease); }
+}
+@keyframes chefBannerIn { from { opacity: 0; transform: translateY(12px); } }
+
+/* ---------- Motion ---------- */
+.chef-step { animation: chefStepIn 200ms var(--chef-ease) both; }
+@keyframes chefStepIn { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .chef-panel-theme *,
+  .chef-panel-theme *::before,
+  .chef-panel-theme *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .chef-skeleton { animation: none; }
+}
+
+/* The shared notifications screen sits under the Chef Mode header with the chef page title. */
+.chef-notifications [data-craves-auto-hide-header] { display: none; }
+.chef-notifications .min-h-screen { min-height: 0; background: transparent; padding-bottom: 0; }
+.chef-notifications .min-h-screen > main { max-width: none; padding: 0; }
+body .chef-notifications [aria-label="Notification filters"] button { border-color: transparent !important; box-shadow: none; }
+/* The sign-in page has no bottom navigation to make room for. */
+.chef-panel-theme:has(.chef-sign-in) { padding-bottom: 0; }
+
+/* Keyboard users jump past the header and tabs; hidden until focused. */
+.chef-skip-link {
+  position: fixed;
+  top: 8px;
+  left: 12px;
+  z-index: 80;
+  transform: translateY(-200%);
+  border-radius: 999px;
+  background: var(--chef-text);
+  padding: 10px 18px;
+  color: #ffffff;
+  font-weight: 700;
+}
+.chef-skip-link:focus-visible {
+  transform: none;
+}
+.chef-panel-content:focus {
+  outline: none;
+}

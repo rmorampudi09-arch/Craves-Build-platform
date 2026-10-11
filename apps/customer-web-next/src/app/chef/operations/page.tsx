@@ -3,23 +3,17 @@ import { ChefOperationsWorkspace } from "@/features/chef/components/chef-operati
 import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
 
 export const metadata = {
-  title: "Chef operations | Craves",
+  title: "Can customers find you? | Craves Chef",
   robots: { index: false, follow: false },
 };
 
 export default function ChefOperationsPage() {
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-4 py-6 md:px-6 md:py-8">
-      <ChefPageHeader
-        eyebrow="Readiness and compliance"
-        title="Kitchen operations"
-        description="Review the real backend states that control chef approval, proof evidence, kitchen discovery, location readiness, menu availability and customer-facing images. Unsupported weekly schedules or legal eligibility rules are never fabricated."
-      />
-      <div className="mt-6">
-        <ChefAccessBoundary>
-          <ChefOperationsWorkspace />
-        </ChefAccessBoundary>
-      </div>
+    <main className="chef-page is-narrow">
+      <ChefAccessBoundary>
+        <ChefPageHeader title="Can customers find you?" back={{ href: "/chef/profile", label: "More" }} />
+        <ChefOperationsWorkspace />
+      </ChefAccessBoundary>
     </main>
   );
 }

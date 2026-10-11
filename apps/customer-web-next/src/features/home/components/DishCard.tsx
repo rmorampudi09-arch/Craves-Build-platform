@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import {
   ChefHat,
   Clock3,
@@ -7,15 +7,14 @@ import {
   MapPin,
   Minus,
   Plus,
-  ShoppingBag,
   UsersRound,
 } from "lucide-react";
 
+import { useCartLine } from "@/features/cart/components/CustomerFloatingCart";
 import {
   addToCart,
-  getCart,
+  CartKeptError,
   setQty,
-  subscribeCart,
 } from "@/features/cart/api/cravesCart";
 import {
   customerFavoritesLoaded,
@@ -55,10 +54,12 @@ function foodIndicator(dish: Dish): {
   if (foodType === "EGG") {
     return { label: "Egg", dotClass: "bg-[#D99A00]" };
   }
-  return { label: "Non Veg", dotClass: "bg-[#F62E18]" };
+  return { label: "Non-veg", dotClass: "bg-[#7B3F00]" };
 }
 
-export function DishCard({
+// Memoised: a filter tap re-renders the home page with the same dishes first, and
+// the cards skip that pass, so the pressed chip paints at once.
+export const DishCard = memo(function DishCard({
   dish,
   variant = "standard",
   priorityImage = false,
@@ -67,11 +68,11 @@ export function DishCard({
   variant?: "standard" | "featured";
   priorityImage?: boolean;
 }) {
-  const [state, setState] = useState<"idle" | "busy" | "error">("idle");
-  const [message, setMessage] = useState<string | null>(null);
-  const [cartLine, setCartLine] = useState(() =>
-    getCart().find((item) => item.menuItemId === dish.id),
-  );
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Screen-reader confirmation only: the stepper and the tab bar badge show it visually.
+  const [announcement, setAnnouncement] = useState<string | null>(null);
+  const cartLine = useCartLine(dish.id);
   const [favorite, setFavorite] = useState(() =>
     getCustomerFavoriteIds().has(dish.id),
   );
@@ -86,12 +87,10 @@ export function DishCard({
   const quantity = cartLine?.qty ?? 0;
 
   useEffect(() => {
-    const syncCartLine = () => {
-      setCartLine(getCart().find((item) => item.menuItemId === dish.id));
-    };
-    syncCartLine();
-    return subscribeCart(syncCartLine);
-  }, [dish.id]);
+    if (!announcement) return;
+    const timer = window.setTimeout(() => setAnnouncement(null), 1600);
+    return () => window.clearTimeout(timer);
+  }, [announcement]);
 
   useEffect(() => {
     let active = true;
@@ -132,65 +131,79 @@ export function DishCard({
       setFavoriteError(
         error instanceof Error
           ? error.message
-          : "Saved dishes could not be updated.",
+          : "Saved dishes didn’t update. Try again.",
       );
     } finally {
       setFavoriteBusy(false);
     }
   };
 
-  const handleAdd = async () => {
-    if (state === "busy") return;
-    setState("busy");
-    setMessage(null);
-    try {
-      await addToCart(
-        {
-          id: dish.id,
-          name: dish.name,
-          chef: dish.chef,
-          price: dish.price,
-          img: dish.img,
-          kitchenId: dish.kitchenId,
-        },
-        1,
-      );
-      setState("idle");
-      setMessage(`${dish.name} was added to the cart.`);
-      window.setTimeout(() => setMessage(null), 1600);
-    } catch (error) {
-      setState("error");
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "This dish could not be added to the cart.",
-      );
-    }
+  // Add and the stepper replace each other: keep focus on the control that is there now.
+  const controlRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef(false);
+  const inCart = quantity > 0;
+  useEffect(() => {
+    if (!restoreFocusRef.current) return;
+    restoreFocusRef.current = false;
+    controlRef.current
+      ?.querySelector<HTMLButtonElement>(inCart ? "[data-step='up']" : "[data-step='add']")
+      ?.focus();
+  }, [inCart]);
+  // Fade only controls the customer just swapped, never the list's first paint.
+  const [morph, setMorph] = useState(false);
+  const keepFocus = () => {
+    restoreFocusRef.current = Boolean(controlRef.current?.contains(document.activeElement));
+    setMorph(true);
   };
 
-  const handleQuantityChange = async (change: -1 | 1) => {
-    if (!cartLine || state === "busy") return;
+  // The cart shows the change at once and reconciles with Craves in the background.
+  const handleAdd = () => {
+    if (adding) return;
+    keepFocus();
+    setAdding(true);
+    setError(null);
+    addToCart(
+      {
+        id: dish.id,
+        name: dish.name,
+        chef: dish.chef,
+        price: dish.price,
+        img: dish.img,
+        kitchenId: dish.kitchenId,
+      },
+      1,
+    )
+      .then(() => setAnnouncement(`${dish.name} was added to the cart.`))
+      .catch((addError: unknown) => {
+        // Keeping the current cart is the customer's own choice: closing the dialog is feedback enough.
+        if (addError instanceof CartKeptError) return;
+        setError(
+          addError instanceof Error
+            ? addError.message
+            : "This dish could not be added to the cart.",
+        );
+      })
+      .finally(() => setAdding(false));
+  };
+
+  const handleQuantityChange = (change: -1 | 1) => {
+    if (!cartLine) return;
     const nextQuantity = cartLine.qty + change;
     if (nextQuantity > 50) return;
-
-    setState("busy");
-    setMessage(null);
-    try {
-      await setQty(cartLine.id, nextQuantity);
-      setState("idle");
-    } catch (error) {
-      setState("error");
-      setMessage(
-        error instanceof Error
-          ? error.message
+    if (nextQuantity === 0) keepFocus();
+    setError(null);
+    setQty(cartLine.id, nextQuantity).catch((quantityError: unknown) => {
+      setError(
+        quantityError instanceof Error
+          ? quantityError.message
           : "This cart quantity could not be updated.",
       );
-    }
+    });
   };
 
   return (
     <article
-      className={`${message && state === "idle" ? "ring-2 ring-[#2E7D32]/15" : ""} group flex h-full flex-col overflow-hidden border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(26,26,26,0.06)] transition-[border-color,box-shadow,ring-color,transform] duration-[420ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] hover:scale-[1.005] hover:border-[#D7DADF] hover:shadow-[0_16px_36px_rgba(26,26,26,0.10)] motion-reduce:transform-none ${
+      className={`group flex h-full flex-col overflow-hidden border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(26,26,26,0.06)] transition-[border-color,box-shadow,scale] duration-(--dur-component) ease-out hover:scale-[1.005] hover:border-[#D7DADF] hover:shadow-[0_16px_36px_rgba(26,26,26,0.10)] motion-reduce:transform-none ${
         featured ? "rounded-[1.7rem] sm:rounded-[1.85rem]" : "rounded-[1.25rem] sm:rounded-[1.45rem] lg:rounded-[1.55rem]"
       }`}
     >
@@ -202,7 +215,7 @@ export function DishCard({
         <Link
           to="/dish/$id"
           params={{ id: dish.id }}
-          className="absolute inset-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#F62E18]/35 focus-visible:ring-inset"
+          className="absolute inset-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#1A1A1A]/35 focus-visible:ring-inset"
           aria-label={`View ${dish.name} details`}
         >
           <ProgressiveImage
@@ -213,12 +226,12 @@ export function DishCard({
             loading={priorityImage ? "eager" : "lazy"}
             fetchPriority={priorityImage ? "high" : "auto"}
             fallbackLabel="Dish photo unavailable"
-            className="object-cover transition-transform duration-[520ms] ease-[cubic-bezier(0.23,0.88,0.26,0.92)] group-hover:scale-[1.03]"
+            className="object-cover group-hover:scale-[1.03]"
           />
         </Link>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#1A1A1A]/60 via-[#1A1A1A]/15 to-transparent" />
 
-        <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-full border border-[#E5E7EB] bg-white/92 px-2.5 py-1 text-[0.6rem] font-black uppercase tracking-[0.09em] text-[#1A1A1A] shadow-sm backdrop-blur-md sm:left-3.5 sm:top-3.5 sm:px-3 sm:py-1.5 sm:text-[0.64rem]">
+        <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-full border border-[#E5E7EB] bg-white px-2.5 py-1 text-[0.6rem] font-black uppercase tracking-[0.09em] text-[#1A1A1A] shadow-sm sm:left-3.5 sm:top-3.5 sm:px-3 sm:py-1.5 sm:text-[0.64rem]">
           {dish.category}
         </span>
 
@@ -229,7 +242,7 @@ export function DishCard({
           aria-pressed={favorite}
           aria-label={favorite ? `Remove ${dish.name} from saved dishes` : `Save ${dish.name}`}
           title={favoriteError ?? (favorite ? "Saved" : "Save dish")}
-          className="absolute right-2.5 top-2.5 z-10 flex h-9 w-9 items-center justify-center rounded-full !border !border-white/80 !bg-[#F1F3F5]/95 !text-[#F62E18] shadow-[0_8px_22px_rgba(26,26,26,0.12)] backdrop-blur-xl transition-[background-color,box-shadow] duration-200 ease-out hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 motion-reduce:transform-none disabled:cursor-wait disabled:opacity-60 sm:right-3.5 sm:top-3.5 sm:h-10 sm:w-10"
+          className="absolute right-2.5 top-2.5 z-10 flex h-9 w-9 items-center justify-center rounded-full !border !border-white/80 !bg-[#F1F3F5] !text-[#F62E18] shadow-[0_8px_22px_rgba(26,26,26,0.12)] transition-[background-color,box-shadow,scale] duration-(--dur-micro) ease-out hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:scale-[0.9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30 motion-reduce:transform-none disabled:cursor-wait disabled:opacity-60 sm:right-3.5 sm:top-3.5 sm:h-10 sm:w-10"
         >
           <Heart
             className={`h-[1.05rem] w-[1.05rem] transition-colors ${
@@ -239,7 +252,7 @@ export function DishCard({
           />
         </button>
 
-        <span className="pointer-events-none absolute bottom-2.5 left-2.5 inline-flex items-center gap-1.5 rounded-full bg-white/94 px-2 py-1 text-[0.62rem] font-black text-[#1A1A1A] shadow-sm backdrop-blur-md sm:bottom-3.5 sm:left-3.5 sm:px-2.5 sm:py-1.5 sm:text-[0.65rem]">
+        <span className="pointer-events-none absolute bottom-2.5 left-2.5 inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 text-[0.62rem] font-black text-[#1A1A1A] shadow-sm sm:bottom-3.5 sm:left-3.5 sm:px-2.5 sm:py-1.5 sm:text-[0.65rem]">
           <span
             className={`h-2 w-2 rounded-full ${indicator.dotClass}`}
             aria-hidden="true"
@@ -248,7 +261,7 @@ export function DishCard({
         </span>
 
         {distance ? (
-          <span className="pointer-events-none absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 rounded-full bg-[#1A1A1A]/90 px-2 py-1 text-[0.62rem] font-bold text-white backdrop-blur-md sm:bottom-3.5 sm:right-3.5 sm:px-2.5 sm:py-1.5 sm:text-[0.65rem]">
+          <span className="pointer-events-none absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 rounded-full bg-[#1A1A1A]/90 px-2 py-1 text-[0.62rem] font-bold text-white sm:bottom-3.5 sm:right-3.5 sm:px-2.5 sm:py-1.5 sm:text-[0.65rem]">
             <MapPin
               className="h-3 w-3 fill-current"
               strokeWidth={1.5}
@@ -265,7 +278,7 @@ export function DishCard({
             <Link
               to="/dish/$id"
               params={{ id: dish.id }}
-              className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35"
+              className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/35"
             >
               <h3
                 className={`font-display font-black leading-tight tracking-[-0.03em] text-[#1A1A1A] transition-colors group-hover:text-[#F62E18] ${
@@ -305,73 +318,78 @@ export function DishCard({
             ) : null}
           </div>
 
-          {quantity > 0 ? (
-            <div
-              className="inline-flex min-h-10 shrink-0 items-center overflow-hidden rounded-full bg-[#F1F3F5] text-[#1A1A1A] shadow-[0_5px_14px_rgba(26,26,26,0.06)]"
-              aria-label={`${dish.name} quantity ${quantity}`}
-            >
+          {/* One footprint for both states (as on Blinkit and Instamart): Add turns into the
+              stepper in place, so the card never changes height. Only the current control is
+              mounted (no motion components in every card); after a tap the new one fades in over
+              the shared pill with a CSS keyframe on the compositor. The count rolls. */}
+          <div
+            ref={controlRef}
+            className="relative h-12 w-[7.5rem] shrink-0 rounded-full bg-[#F1F3F5] text-[#1A1A1A] shadow-[0_5px_14px_rgba(26,26,26,0.06)]"
+          >
+            {inCart ? (
+              <div
+                role="group"
+                aria-label={`${dish.name} in cart`}
+                className={`absolute inset-0 flex items-center ${morph ? "animate-[craves-fade-in_150ms_ease-out]" : ""}`}
+              >
+                <button
+                  type="button"
+                  onClick={() => handleQuantityChange(-1)}
+                  className="flex h-12 min-h-12 w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-transparent !text-[#1A1A1A] !shadow-none transition-[background-color] duration-(--dur-micro) hover:!bg-white active:!bg-[#E5E7EB] active:duration-0"
+                  aria-label={quantity <= 1 ? `Remove ${dish.name} from cart` : `Decrease ${dish.name} quantity`}
+                >
+                  <Minus className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+                <span className="flex-1 text-center text-sm font-black" aria-live="polite" aria-atomic="true">
+                  <span className="sr-only">Quantity </span>
+                  <AnimateCount className="min-w-[1ch]">{quantity}</AnimateCount>
+                </span>
+                <button
+                  type="button"
+                  data-step="up"
+                  onClick={() => handleQuantityChange(1)}
+                  disabled={quantity >= 50}
+                  className="flex h-12 min-h-12 w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-transparent !text-[#1A1A1A] !shadow-none transition-[background-color] duration-(--dur-micro) hover:!bg-white active:!bg-[#E5E7EB] active:duration-0"
+                  aria-label={`Increase ${dish.name} quantity`}
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
-                onClick={() => void handleQuantityChange(-1)}
-                disabled={state === "busy"}
-                className="flex h-10 w-10 items-center justify-center !border-0 !bg-[#F1F3F5] !text-[#1A1A1A] !shadow-none transition-colors hover:!bg-white active:!transform-none disabled:cursor-wait disabled:opacity-50"
-                aria-label={`Decrease ${dish.name} quantity`}
+                data-step="add"
+                onClick={handleAdd}
+                aria-busy={adding}
+                className={`absolute inset-0 inline-flex min-h-12 items-center justify-center gap-1.5 rounded-full !border !border-transparent !bg-transparent text-sm font-black !text-[#1A1A1A] !shadow-none transition-[background-color,scale] duration-(--dur-micro) hover:!bg-white active:scale-[0.96] aria-busy:cursor-wait ${morph ? "animate-[craves-fade-in_150ms_ease-out]" : ""}`}
+                aria-label={`Add ${dish.name} to cart`}
               >
-                <Minus className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-              <AnimateCount
-                className="min-w-7 text-center text-sm font-black"
-                aria-live="polite"
-              >
-                {quantity}
-              </AnimateCount>
-              <button
-                type="button"
-                onClick={() => void handleQuantityChange(1)}
-                disabled={state === "busy" || quantity >= 50}
-                className="flex h-10 w-10 items-center justify-center !border-0 !bg-[#F1F3F5] !text-[#1A1A1A] !shadow-none transition-colors hover:!bg-white active:!transform-none disabled:cursor-wait disabled:opacity-50"
-                aria-label={`Increase ${dish.name} quantity`}
-              >
-                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void handleAdd()}
-              disabled={state === "busy"}
-              className="inline-flex min-h-12 shrink-0 items-center justify-center gap-1.5 rounded-full !border !border-transparent !bg-[#F1F3F5] px-5 text-sm font-black !text-[#1A1A1A] !shadow-[0_5px_14px_rgba(26,26,26,0.06)] transition-[background-color,box-shadow] hover:!bg-white hover:!shadow-[0_8px_18px_rgba(26,26,26,0.10)] disabled:cursor-wait disabled:opacity-60"
-              aria-label={`Add ${dish.name} to cart`}
-            >
-              {state === "busy" ? (
-                <ShoppingBag className="h-4 w-4 animate-pulse" aria-hidden="true" />
-              ) : (
+                {/* The stepper replaces this at once (optimistic), so no "Adding" label to flash. */}
                 <Plus className="h-4 w-4" aria-hidden="true" />
-              )}
-              {state === "busy" ? "Adding" : "Add"}
-            </button>
-          )}
+                Add
+              </button>
+            )}
+          </div>
         </div>
 
         {favoriteError ? (
-          <p className="mt-2 text-[0.68rem] font-bold text-[#F62E18]" role="alert">
+          <p className="mt-2 text-[0.68rem] font-bold text-[#C4200F]" role="alert">
             {favoriteError}
           </p>
         ) : null}
 
-        {message ? (
-          <p
-            className={`mt-2 text-[0.68rem] font-bold ${
-              state === "error" ? "text-[#F62E18]" : "text-[#6B6B6B]"
-            }`}
-            role={state === "error" ? "alert" : "status"}
-          >
-            {message}
+        {error ? (
+          <p className="mt-2 text-[0.68rem] font-bold text-[#C4200F]" role="alert">
+            {error}
           </p>
         ) : null}
+
+        <p className="sr-only" role="status" aria-live="polite">
+          {announcement}
+        </p>
       </div>
     </article>
   );
-}
+});
 
 export default DishCard;

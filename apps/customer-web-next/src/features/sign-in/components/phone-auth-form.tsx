@@ -1,26 +1,48 @@
 "use client";
 
-import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
 } from "firebase/auth";
 import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from "@/features/sign-in/lib/msg91-browser";
-import { phoneCodeRequestError } from "@/features/sign-in/lib/phone-auth-errors";
+import { phoneCodeRequestError, phoneCodeVerifyError } from "@/features/sign-in/lib/phone-auth-errors";
 import { getFirebaseBrowserClient } from "@/features/auth/lib/firebase-client";
-import { safeReturnPath } from "@/features/auth/lib/auth-contract";
+import { safeReturnPath, type CravesIdentity } from "@/features/auth/lib/auth-contract";
 
 type Stage = "phone" | "otp" | "creating-session" | "done";
 type RecaptchaMode = "visible" | "invisible";
 
 const RESEND_DELAY_SECONDS = 30;
+// Unlayered theme rules style every <button>; ! keeps these neutral actions on the brand palette.
+const SECONDARY_BUTTON =
+  "min-h-12 w-full rounded-full !border !border-[#E5E7EB] !bg-white px-5 font-semibold !text-[#1A1A1A] disabled:opacity-50";
+const TERTIARY_BUTTON =
+  "min-h-12 w-full rounded-full !border-0 !bg-[#F1F3F5] px-5 font-semibold !text-[#1A1A1A] !shadow-none disabled:opacity-50";
+const FIELD =
+  "min-h-12 w-full rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10";
 
-/** centralOtp=false: this host has no central MSG91 OTP (admin portal), so sign in with Firebase phone auth. */
-export function PhoneAuthForm({ returnTo, centralOtp = true }: { returnTo?: string; centralOtp?: boolean }) {
+/**
+ * Phone OTP sign-in shared by /sign-in, the admin portal and Chef Mode.
+ * centralOtp=false: this host has no central MSG91 OTP (admin portal), so sign in with Firebase phone auth.
+ */
+export function PhoneAuthForm({
+  returnTo,
+  centralOtp = true,
+  initialPhone,
+  onSignedIn,
+}: {
+  returnTo?: string;
+  centralOtp?: boolean;
+  /** The signed-in customer's number; shown with "Use another number". */
+  initialPhone?: string;
+  /** Takes over once the session exists (Chef Mode) instead of opening returnTo. */
+  onSignedIn?: (identity: CravesIdentity) => Promise<void> | void;
+}) {
   const destination = safeReturnPath(returnTo);
   const chefJourney = destination.startsWith("/chef");
-  const [phone, setPhone] = useState("+91");
+  const [phone, setPhone] = useState(initialPhone ?? "+91");
+  const [prefilled, setPrefilled] = useState(Boolean(initialPhone));
   const [otp, setOtp] = useState("");
   const [stage, setStage] = useState<Stage>("phone");
   const [message, setMessage] = useState(
@@ -30,6 +52,7 @@ export function PhoneAuthForm({ returnTo, centralOtp = true }: { returnTo?: stri
   const [resendIn, setResendIn] = useState(0);
   const confirmation = useRef<PhoneConfirmation | null>(null);
   const verifier = useRef<RecaptchaVerifier | null>(null);
+  const phoneInput = useRef<HTMLInputElement>(null);
 
   const clearVerifier = useCallback(() => {
     verifier.current?.clear();
@@ -87,8 +110,8 @@ export function PhoneAuthForm({ returnTo, centralOtp = true }: { returnTo?: stri
           ? "Sending a new OTP…"
           : "Sending your OTP…"
         : isResend
-          ? "Requesting a new verification code..."
-          : "Requesting your verification code...",
+          ? "Requesting a new verification code…"
+          : "Requesting your verification code…",
     );
     try {
       if (isResend && confirmation.current?.resend) {
@@ -138,7 +161,7 @@ export function PhoneAuthForm({ returnTo, centralOtp = true }: { returnTo?: stri
     }
     setBusy(true);
     setStage("creating-session");
-    setMessage(chefJourney ? "Checking your OTP…" : "Verifying OTP and creating your Craves session...");
+    setMessage(chefJourney ? "Checking your OTP…" : "Verifying OTP and creating your Craves session…");
     try {
       const credential = await confirmation.current.confirm(otp);
       const firebaseIdToken = await credential.user.getIdToken(true);
@@ -149,19 +172,22 @@ export function PhoneAuthForm({ returnTo, centralOtp = true }: { returnTo?: stri
         body: JSON.stringify({ firebaseIdToken }),
       });
       const body = (await response.json().catch(() => ({}))) as {
+        identity?: CravesIdentity;
         message?: string;
       };
-      if (!response.ok) throw new Error(body.message ?? "Sign-in failed.");
+      if (!response.ok) throw new Error(body.message ?? "We couldn’t sign you in. Check the code and try again, or request a new code.");
       setStage("done");
-      setMessage("Signed in successfully.");
-      window.location.assign(destination);
+      setMessage(chefJourney ? "Verified. Opening your kitchen…" : "Signed in successfully.");
+      if (onSignedIn) {
+        if (!body.identity?.id) throw new Error("Sign-in failed. Please try again.");
+        await onSignedIn(body.identity);
+      } else {
+        // Replace, so Back from the signed-in page never returns to this OTP form.
+        window.location.replace(destination);
+      }
     } catch (error) {
       setStage("otp");
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "The OTP could not be verified.",
-      );
+      setMessage(phoneCodeVerifyError(error));
     } finally {
       setBusy(false);
     }
@@ -172,47 +198,30 @@ export function PhoneAuthForm({ returnTo, centralOtp = true }: { returnTo?: stri
     confirmation.current = null;
     setOtp("");
     setResendIn(0);
+    setPrefilled(false);
     setStage("phone");
     setMessage("Request a new OTP.");
   }
 
+  function enterAnotherNumber() {
+    setPrefilled(false);
+    setPhone("+91");
+    requestAnimationFrame(() => phoneInput.current?.focus());
+  }
+
   const otpStage = stage !== "phone";
-  const shellClass = chefJourney
-    ? "w-full rounded-3xl border border-[#E5E7EB] bg-white p-6 text-[#1A1A1A] shadow-[0_8px_30px_rgba(0,0,0,0.08)] sm:p-8"
-    : "w-full rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950 shadow-2xl shadow-black/30 sm:p-8";
-  const eyebrowClass = chefJourney
-    ? "text-sm font-semibold text-[#F62E18]"
-    : "text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]";
-  const bodyClass = chefJourney
-    ? "mt-3 text-sm leading-6 text-[#6B6B6B]"
-    : "mt-3 text-sm leading-6 text-slate-600";
-  const phoneInputClass = chefJourney
-    ? "w-full rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10"
-    : "w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-[#6930CA]";
-  const otpInputClass = chefJourney
-    ? "craves-otp-field w-full rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-center text-2xl text-[#1A1A1A] tracking-[0.45em] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#F62E18]/10"
-    : "craves-otp-field w-full rounded-2xl bg-white px-4 py-3 text-center text-2xl tracking-[0.45em]";
-  const primaryButtonClass = chefJourney
-    ? "w-full rounded-full bg-[#F62E18] px-5 py-3 font-semibold text-white disabled:opacity-50"
-    : "w-full rounded-full bg-[#6930CA] px-5 py-3 font-semibold text-white disabled:opacity-50";
-  const secondaryButtonClass = chefJourney
-    ? "w-full rounded-full border border-[#E5E7EB] bg-white px-5 py-3 font-semibold text-[#1A1A1A] disabled:opacity-50"
-    : "w-full rounded-full border border-[#F62E18] bg-white px-5 py-3 font-semibold text-black disabled:opacity-50";
-  const tertiaryButtonClass = chefJourney
-    ? "w-full rounded-full bg-[#F1F3F5] px-5 py-3 font-semibold text-[#1A1A1A] disabled:opacity-50"
-    : "w-full rounded-full border border-[#6930CA] px-5 py-3 font-semibold text-[#6930CA] disabled:opacity-50";
 
   return (
-    <section className={shellClass}>
-      <p className={eyebrowClass}>
-        {chefJourney ? "Chef Mode" : "Secure Craves access"}
-      </p>
-      <h1 className={`mt-2 text-3xl font-bold ${chefJourney ? "tracking-tight text-[#1A1A1A]" : ""}`}>
-        {chefJourney ? "Verify to enter Chef Mode" : "Sign in with mobile OTP"}
+    <section className="w-full rounded-3xl border border-[#E5E7EB] bg-white p-6 text-[#1A1A1A] shadow-[0_8px_30px_rgba(0,0,0,0.08)] sm:p-8">
+      {chefJourney ? null : (
+        <p className="text-sm font-semibold text-[#C4200F]">Secure Craves access</p>
+      )}
+      <h1 className={`text-3xl font-bold tracking-tight text-[#1A1A1A] ${chefJourney ? "" : "mt-2"}`}>
+        {chefJourney ? "Sign in to your kitchen" : "Sign in with mobile OTP"}
       </h1>
-      <p className={bodyClass}>
+      <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">
         {chefJourney
-          ? "Confirm your Craves mobile number and we’ll take you straight back to Chef Mode."
+          ? "We’ll send a code to your phone. This keeps your orders, menu and earnings safe."
           : "Use one mobile number for both customer and chef mode."}
       </p>
 
@@ -223,34 +232,52 @@ export function PhoneAuthForm({ returnTo, centralOtp = true }: { returnTo?: stri
         {otpStage ? (
           <>
             <label
-              className={`block text-left text-sm font-semibold ${chefJourney ? "text-[#1A1A1A]" : ""}`}
+              className="block text-left text-sm font-semibold text-[#1A1A1A]"
               htmlFor="otp"
             >
               Six-digit OTP
             </label>
             <input
               id="otp"
-              className={otpInputClass}
+              className={`craves-otp-field ${FIELD} text-center text-2xl tracking-[0.45em]`}
               value={otp}
               onChange={(event) =>
                 setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
               }
               autoComplete="one-time-code"
               inputMode="numeric"
+              // Mounts only after "Send OTP", replacing the focused phone field.
+              autoFocus
               required
             />
           </>
+        ) : prefilled ? (
+          <div className="flex min-h-12 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-2xl bg-[#F1F3F5] py-2 pl-4 pr-2">
+            <span className="min-w-0">
+              <span className="block text-xs font-semibold text-[#6B6B6B]">Signed in as</span>
+              <strong className="block text-base tabular-nums text-[#1A1A1A]">{phone}</strong>
+            </span>
+            <button
+              type="button"
+              className="shrink-0 rounded-full !border-0 !bg-transparent px-3 text-sm font-semibold !text-[#C4200F] !shadow-none hover:underline"
+              disabled={busy}
+              onClick={enterAnotherNumber}
+            >
+              Use another number
+            </button>
+          </div>
         ) : (
           <>
             <label
-              className={`block text-left text-sm font-semibold ${chefJourney ? "text-[#1A1A1A]" : ""}`}
+              className="block text-left text-sm font-semibold text-[#1A1A1A]"
               htmlFor="phone"
             >
               Mobile number
             </label>
             <input
               id="phone"
-              className={phoneInputClass}
+              ref={phoneInput}
+              className={FIELD}
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
               autoComplete="tel"
@@ -263,7 +290,7 @@ export function PhoneAuthForm({ returnTo, centralOtp = true }: { returnTo?: stri
         {!otpStage && (
           <div
             id="craves-recaptcha"
-            className={`min-h-20 overflow-hidden rounded-2xl p-2 ${chefJourney ? "border border-[#E5E7EB] bg-[#F1F3F5]" : "bg-white"}`}
+            className="min-h-20 overflow-hidden rounded-2xl border border-[#E5E7EB] bg-[#F1F3F5] p-2 empty:min-h-0 empty:border-0 empty:p-0"
           />
         )}
         <div
@@ -275,14 +302,15 @@ export function PhoneAuthForm({ returnTo, centralOtp = true }: { returnTo?: stri
         {otpStage ? (
           <>
             <button
-              className={primaryButtonClass}
+              className="craves-primary-action w-full"
+              aria-busy={busy}
               disabled={busy || stage === "done"}
             >
-              {busy ? "Signing in..." : "Verify OTP"}
+              {busy ? "Signing in…" : "Verify OTP"}
             </button>
             <button
               type="button"
-              className={secondaryButtonClass}
+              className={SECONDARY_BUTTON}
               disabled={busy || resendIn > 0 || stage === "done"}
               onClick={() => void resendOtp()}
             >
@@ -290,7 +318,7 @@ export function PhoneAuthForm({ returnTo, centralOtp = true }: { returnTo?: stri
             </button>
             <button
               type="button"
-              className={tertiaryButtonClass}
+              className={TERTIARY_BUTTON}
               disabled={busy}
               onClick={useAnotherNumber}
             >
@@ -298,35 +326,23 @@ export function PhoneAuthForm({ returnTo, centralOtp = true }: { returnTo?: stri
             </button>
           </>
         ) : (
-          <button className={primaryButtonClass} disabled={busy}>
-            {busy ? "Requesting OTP..." : "Send OTP"}
+          <button className="craves-primary-action w-full" aria-busy={busy} disabled={busy}>
+            {busy ? "Requesting OTP…" : "Send OTP"}
           </button>
         )}
       </form>
 
       <p
         aria-live="polite"
-        className={
-          chefJourney
-            ? "mt-5 rounded-2xl bg-[#F1F3F5] px-4 py-3 text-sm text-[#6B6B6B]"
-            : "mt-5 rounded-2xl bg-white px-4 py-3 text-sm text-slate-700"
-        }
+        className="mt-4 text-sm leading-6 text-[#1A1A1A]"
       >
         {message}
       </p>
-      <p className={chefJourney ? "mt-4 text-xs leading-5 text-[#6B6B6B]" : "mt-4 text-xs leading-5 text-slate-500"}>
+      <p className="mt-4 text-xs leading-5 text-[#6B6B6B]">
         {chefJourney
           ? "Your OTP is used only to securely confirm your Craves account."
           : "Your phone number and OTP help securely confirm your Craves account."}
       </p>
-      {chefJourney ? (
-        <Link
-          href="/home"
-          className="mt-4 inline-flex min-h-11 items-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]"
-        >
-          Switch to Customer Mode
-        </Link>
-      ) : null}
     </section>
   );
 }

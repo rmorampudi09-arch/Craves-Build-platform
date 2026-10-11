@@ -23,7 +23,7 @@ export function TrackingOrderSummaryCard({ order }: { order: CustomerOrder }) {
         {order.items.map((item) => (
           <li key={item.id} className="flex items-start justify-between gap-3 py-3">
             <span className="min-w-0 text-[#1A1A1A]">
-              {item.itemName} <span className="text-[#6B6B6B]">× {item.quantity}</span>
+              <span className="font-semibold tabular-nums">{item.quantity} ×</span> {item.itemName}
             </span>
             <span className="shrink-0 font-semibold text-[#1A1A1A]">
               {money(item.lineTotal, order.currency, 0)}

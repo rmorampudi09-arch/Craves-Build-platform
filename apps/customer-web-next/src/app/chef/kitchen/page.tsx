@@ -8,7 +8,7 @@ export const metadata = {
 
 export default function ChefKitchenPage() {
   return (
-    <main className="mx-auto min-h-screen max-w-3xl px-4 py-6 md:px-6 md:py-8">
+    <main className="chef-page is-narrow">
       <ChefAccessBoundary>
         <ChefKitchenForm />
       </ChefAccessBoundary>

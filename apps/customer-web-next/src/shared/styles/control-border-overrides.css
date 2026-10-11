@@ -52,19 +52,28 @@ body :is(
   --tw-ring-shadow: 0 0 #0000 !important;
 }
 
-:where(a, button, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--color-grey-400) !important;
+/* Two-tone ring: ink outline plus a white gap, so focus shows on white and on dark surfaces. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid #1a1a1a !important;
   outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px #ffffff !important;
   --tw-ring-color: transparent !important;
   --tw-ring-offset-color: transparent !important;
   --tw-ring-offset-shadow: 0 0 #0000 !important;
   --tw-ring-shadow: 0 0 #0000 !important;
 }
 
+/* A bare field inside a styled search pill: the pill draws the focus edge (focus-within),
+   so no detached rectangle appears inside its rounded shape. */
+input[data-craves-bare-input]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 body .chef-panel-theme
   :is(button, a, [role="button"], [role="tab"]):focus-visible {
   border-color: var(--color-grey-400) !important;
-  outline: 2px solid var(--color-grey-400) !important;
+  outline: 2px solid #1a1a1a !important;
   outline-offset: 2px !important;
   --tw-ring-color: transparent !important;
   --tw-ring-offset-color: transparent !important;
@@ -73,18 +82,22 @@ body .chef-panel-theme
 }
 
 input.craves-otp-field,
-input.craves-otp-field:hover,
+input.craves-otp-field:hover {
+  border-color: var(--color-grey-200) !important;
+}
+
+/* The code field is the only control on its step, so focus must be visible. */
 input.craves-otp-field:focus,
 input.craves-otp-field:focus-visible {
-  border-color: var(--color-grey-200) !important;
+  border-color: #1a1a1a !important;
+  box-shadow: 0 0 0 1px #1a1a1a !important;
 }
 
 .craves-otp-slot[data-active="true"] {
   border-color: var(--color-grey-400) !important;
 }
 
-/* Customer order filters keep a neutral tactile hover. */
-nav[aria-label="Filter orders"] button:hover,
+/* Customer order filters keep a neutral tactile hover (pointer devices only). */
 nav[aria-label="Filter orders"] button:focus-visible {
   background: var(--color-grey-50) !important;
   border-color: var(--color-grey-200) !important;
@@ -93,7 +106,20 @@ nav[aria-label="Filter orders"] button:focus-visible {
   transform: translateY(-1px) !important;
 }
 
-nav[aria-label="Filter orders"] button[aria-pressed="false"]:hover::after,
 nav[aria-label="Filter orders"] button[aria-pressed="false"]:focus-visible::after {
   transform: scaleX(0) !important;
+}
+
+@media (hover: hover) {
+  nav[aria-label="Filter orders"] button:hover {
+    background: var(--color-grey-50) !important;
+    border-color: var(--color-grey-200) !important;
+    color: var(--color-black) !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07) !important;
+    transform: translateY(-1px) !important;
+  }
+
+  nav[aria-label="Filter orders"] button[aria-pressed="false"]:hover::after {
+    transform: scaleX(0) !important;
+  }
 }

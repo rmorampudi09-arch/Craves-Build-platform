@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { FormEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { phoneCodeVerifyError } from '@/features/sign-in/lib/phone-auth-errors';
 import './AuthModal.css';
 
 export type AuthRole = 'customer' | 'chef';
@@ -333,7 +334,7 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode }: AuthModalProps) => 
       }
     } catch (error) {
       if (!controller.signal.aborted && !isClosing.current) {
-        setOtpError(error instanceof Error ? error.message : 'We could not verify this code. Please check the code and try again.');
+        setOtpError(phoneCodeVerifyError(error));
       }
     } finally {
       if (!controller.signal.aborted && !isClosing.current) setRequestKind(null);

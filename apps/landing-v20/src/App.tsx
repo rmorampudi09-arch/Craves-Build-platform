@@ -13,9 +13,53 @@ import SplashScreen from './components/SplashScreen/SplashScreen';
 import { usePremiumScroll } from './hooks/usePremiumScroll';
 import './App.css';
 
+// Shared with the first-paint boot script in vite.config.ts.
+const SPLASH_SEEN_KEY = 'craves.landing.splashSeen';
+const BOOT_FADE_MS = 300;
+
+function splashSeenThisSession(): boolean {
+  try {
+    return window.sessionStorage.getItem(SPLASH_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+type BootWindow = Window & { __cravesBoot?: { stylesReady: Promise<void> } };
+
+/** Repeat visits: fade the plain boot cover away once the landing has painted. */
+function fadeOutBootCover() {
+  const release = () => document.dispatchEvent(new Event('craves:boot-release'));
+  const stylesReady = (window as BootWindow).__cravesBoot?.stylesReady ?? Promise.resolve();
+  void stylesReady.then(() => window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+    const cover = document.getElementById('craves-boot');
+    if (!cover || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      release();
+      return;
+    }
+    cover.style.transition = `opacity ${BOOT_FADE_MS}ms ease-out`;
+    cover.style.opacity = '0';
+    window.setTimeout(release, BOOT_FADE_MS);
+  })));
+}
+
 function App() {
-  const [landingReady, setLandingReady] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
+  // The splash plays once per browser session; later visits open straight onto the page.
+  const [firstVisit] = useState(() => !splashSeenThisSession());
+  const [landingReady, setLandingReady] = useState(!firstVisit);
+  const [showSplash, setShowSplash] = useState(firstVisit);
+
+  useEffect(() => {
+    if (!firstVisit) {
+      fadeOutBootCover();
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(SPLASH_SEEN_KEY, '1');
+    } catch {
+      // Without storage the splash simply plays again next time.
+    }
+  }, [firstVisit]);
 
   // Prepare scrolling during the reveal, before the splash releases its lock.
   // Wheel input stays blocked while splash-active is present.

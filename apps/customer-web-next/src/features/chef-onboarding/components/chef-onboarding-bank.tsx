@@ -266,11 +266,15 @@ export function ChefOnboardingBank({
         </Card>
       ) : null}
 
-      {unavailable || !editable ? (
+      {!bank && !unavailable ? (
+        <Note tone="neutral" role="status">
+          Checking bank account setup…
+        </Note>
+      ) : unavailable || !editable ? (
         <Note tone="neutral" role="status">
           {unavailable
             ? "We couldn’t load your bank details. Your application is still saved."
-            : "Bank setup isn’t available right now. You can save your application and come back later."}
+            : "Adding a bank account isn’t open on Craves yet, so this step can’t be finished right now. Everything else you’ve entered is saved."}
           <br />
           <button type="button" className="cob-link" disabled={busy} onClick={onRefresh}>
             <RefreshCw size={15} aria-hidden="true" />
@@ -303,6 +307,11 @@ export function ChefOnboardingBank({
                   aria-label="Bank account number"
                   className="cob-input cob-input--with-trailing-icon cob-mono"
                   autoComplete="off"
+                  // Masked, but not a password: password managers should not offer to save it.
+                  data-1p-ignore
+                  data-lpignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
                   type={showAccount ? "text" : "password"}
                   inputMode="numeric"
                   maxLength={24}

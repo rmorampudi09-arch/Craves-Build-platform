@@ -8,8 +8,8 @@ export const metadata = {
 };
 export default function ChefApplicationStatusPage() {
   return (
-    <ChefApplicationSessionBoundary authMode="login" returnTo="/chef/application/status">
-      <main className="mx-auto min-h-screen max-w-3xl px-4 py-6">
+    <ChefApplicationSessionBoundary>
+      <main className="chef-page is-narrow">
         <ChefApplicationStatus
           draftsEnabled={process.env.CRAVES_CHEF_ONBOARDING_V2_ENABLED === "true"}
         />

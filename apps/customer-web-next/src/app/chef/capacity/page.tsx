@@ -3,23 +3,21 @@ import { ChefCapacityQuickSetup } from "@/features/chef/components/chef-capacity
 import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
 
 export const metadata = {
-  title: "Subscription availability | Craves",
+  title: "Plates per day | Craves Chef",
   robots: { index: false, follow: false },
 };
 
 export default function ChefCapacityPage() {
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-4 py-6 md:px-6 md:py-8">
-      <ChefPageHeader
-        eyebrow="Subscription availability"
-        title="Choose availability only when you want to customize it"
-        description="Craves automatically creates safe missing limits when you submit a meal plan. Use this single workspace only when you want to choose specific weekdays, menu items, a calendar date, or your own limits."
-      />
-      <div className="mt-6">
-        <ChefAccessBoundary>
-          <ChefCapacityQuickSetup />
-        </ChefAccessBoundary>
-      </div>
+    <main className="chef-page is-narrow">
+      <ChefAccessBoundary>
+        <ChefPageHeader
+          title="Plates per day"
+          description="How many meal plan plates you can cook. Craves already set safe numbers for you. Change them only if you want to."
+          back={{ href: "/chef/meal-plans", label: "Meal plans" }}
+        />
+        <ChefCapacityQuickSetup />
+      </ChefAccessBoundary>
     </main>
   );
 }

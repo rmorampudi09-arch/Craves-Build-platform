@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Star } from "lucide-react";
 import { WishlistHeartButton } from "@/features/favorites/components/WishlistHeartButton";
+import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
 import type { Dish } from "@/features/dish/api/dishes";
 
 export function SimilarDishesSection({ dishes }: { dishes: Dish[] }) {
@@ -8,28 +9,26 @@ export function SimilarDishesSection({ dishes }: { dishes: Dish[] }) {
 
   return (
     <section className="mt-7">
-      <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-black text-[#1A1A1A]">Similar Dishes</h2>
-        <button type="button" className="text-sm font-black text-[#F62E18]">
-          See All
-        </button>
-      </div>
+      {/* Every similar dish is already in the row, so there is no "See all" that leads nowhere. */}
+      <h2 className="font-display text-lg font-black text-[#1A1A1A]">Similar dishes</h2>
       <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
         {dishes.map((dish, index) => (
           <Link
             key={dish.id}
             to="/dish/$id"
             params={{ id: dish.id }}
-            className="w-40 shrink-0 overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white transition hover:border-[#F62E18]/40"
+            className="w-40 shrink-0 overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white transition hover:border-[#D7DADF]"
           >
             <div className="relative aspect-square bg-[#F1F3F5]">
-              <img
+              <ProgressiveImage
                 src={dish.img}
                 alt={dish.name}
+                fill
+                sizes="160px"
                 loading={index < 3 ? "eager" : "lazy"}
-                decoding="async"
                 fetchPriority={index === 0 ? "high" : "auto"}
-                className="h-full w-full object-cover"
+                fallbackLabel="Dish photo unavailable"
+                className="object-cover"
               />
               <WishlistHeartButton
                 item={{ id: dish.id, name: dish.name, chef: dish.chef, price: dish.price, img: dish.img }}

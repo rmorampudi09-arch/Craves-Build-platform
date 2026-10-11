@@ -76,7 +76,8 @@ public class BankOnboardingService {
             return get(id);
         }
         var controls=jdbc.queryForMap("SELECT * FROM payment_schema.finance_bank_automation_control WHERE singleton=true FOR SHARE");
-        if(!Boolean.TRUE.equals(controls.get("submissions_enabled")) || !Boolean.TRUE.equals(controls.get("validation_enabled")) || !provider.ready() || !workerDeployed) throw unavailable("Bank enrollment is not enabled");
+        // Saving needs only open submissions: rows wait QUEUED until live validation is switched on (claim()).
+        if(!Boolean.TRUE.equals(controls.get("submissions_enabled")) || !cipher.ready()) throw unavailable("Bank enrollment is not enabled");
         var heads=jdbc.query("SELECT request_id FROM payment_schema.finance_bank_head WHERE chef_identity_id=? FOR UPDATE",(rs,n)->rs.getObject(1,UUID.class),chef);
         UUID current=heads.isEmpty()?null:heads.getFirst();
         if(!Objects.equals(current,request.expectedCurrentId())) throw conflict("Bank profile changed; refresh before editing");
@@ -215,7 +216,13 @@ public class BankOnboardingService {
         jdbc.update("UPDATE payment_schema.finance_bank_request SET state='APPLICANT_ACTION_REQUIRED',application_approved=false,lease_id=NULL,lease_until=NULL,last_error='APPLICANT_IDENTITY_CHANGED_OR_INELIGIBLE',updated_at=now() WHERE id=?",work.id());
         audit(work.id(),work.chefId(),"APPLICANT_ACTION_REQUIRED","SERVICE");
     }
+    /** Chefs can save bank details: encrypted storage is ready and finance opened submissions. */
     private boolean available() {
+        if(!cipher.ready())return false;
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT submissions_enabled FROM payment_schema.finance_bank_automation_control WHERE singleton=true",Boolean.class));
+    }
+    /** Saved details are being validated now: live RazorpayX credentials, the worker and the validation switch. */
+    private boolean validationLive() {
         if(!cipher.ready() || !provider.ready() || !workerDeployed)return false;
         return Boolean.TRUE.equals(jdbc.queryForObject("SELECT submissions_enabled AND validation_enabled FROM payment_schema.finance_bank_automation_control WHERE singleton=true",Boolean.class));
     }
@@ -237,9 +244,10 @@ public class BankOnboardingService {
             case "UNKNOWN" -> "Razorpay response is unconfirmed. Automatic reconciliation is running; no duplicate validation request is sent.";
             case "APPLICANT_ACTION_REQUIRED" -> "Your saved chef identity or application status changed. Update and resubmit your bank enrollment.";
             case "SUPERSEDED" -> "This is an older bank enrollment and cannot receive new payouts.";
-            default -> "Bank details saved securely. Automatic Razorpay validation is pending.";
+            default -> validationLive()?"Bank details saved securely. Automatic Razorpay validation is pending."
+                :"Bank details saved securely. We'll verify them with your bank as soon as payouts open. Nothing else is needed from you.";
         };
-        return new Status(rs.getObject("id",UUID.class),stale && available()?"VALIDATING":state,rs.getString("last_four"),rs.getString("ifsc"),
+        return new Status(rs.getObject("id",UUID.class),stale && validationLive()?"VALIDATING":state,rs.getString("last_four"),rs.getString("ifsc"),
                 rs.getBoolean("bank_validated"),rs.getBoolean("application_approved"),true,message,
                 rs.getTimestamp("updated_at").toInstant(),null,rs.getString("bank_name"),rs.getString("branch_name"));
     }

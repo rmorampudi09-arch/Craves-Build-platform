@@ -9,7 +9,6 @@ export function ChefProfileHero({ chef }: { chef: Chef }) {
           <ChefHat className="h-10 w-10" strokeWidth={2} aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">Home kitchen</p>
           <h1 className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-4xl">
             {chef.name}
           </h1>

@@ -4,8 +4,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ChefApplicationSessionBoundary } from "../components/chef-application-session-boundary";
 import { ChefApplicationWorkspace } from "../components/chef-application-workspace";
-import { captureSessionContext, getSession, invalidateSession, isSessionReady, setSessionIdentity, setSessionEmailVerification } from "../../auth/api/cravesAuth";
+import { captureSessionContext, clearSession, getSession, invalidateSession, isSessionReady, setSessionIdentity, setSessionEmailVerification } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
+import { markChefModeVerified } from "../../chef/lib/chef-mode";
+
+const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => navigation, usePathname: () => "/chef/application", useSearchParams: () => new URLSearchParams() }));
 
 let verifiedEmail = false;
 vi.mock("../../sign-in/components/EmailVerificationPanel", () => ({ EmailVerificationPanel: ({ onStateChange }: { onStateChange: (state: unknown) => void }) => {
@@ -29,8 +33,13 @@ function normal(input: RequestInfo | URL) {
   if (String(input) === "/api/auth/refresh") return Promise.resolve(Response.json({ identity: current }, { status: current ? 200 : 401 }));
   return Promise.resolve(Response.json({}, { status: 404 }));
 }
-beforeEach(() => { verifiedEmail = false; current = owner; invalidateSession(captureSessionContext()); fetcher.mockReset().mockImplementation(normal); vi.stubGlobal("fetch", fetcher); });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+beforeEach(() => {
+  verifiedEmail = false; current = owner; invalidateSession(captureSessionContext()); fetcher.mockReset().mockImplementation(normal); vi.stubGlobal("fetch", fetcher);
+  markChefModeVerified(owner.id); navigation.replace.mockReset();
+});
+// Chef error reports only fire on /chef pages, so only the return-path tests move there.
+function onApplicationStep() { window.history.replaceState(null, "", "/chef/application?step=kitchen"); }
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); window.history.replaceState(null, "", "/"); });
 
 it("waits for expired-session recovery before mounting private sections", async () => {
   const refresh = deferred<Response>(); let renewed = false;
@@ -97,7 +106,7 @@ it("discards the prior owner's private form when its pending profile fails durin
   boundary();
   fireEvent.change(await screen.findByLabelText("Private chef draft"), { target: { value: "private draft A" } });
   current = { ...owner, id: "22222222-2222-4222-8222-222222222222", displayName: "Fixture B" };
-  act(() => { setSessionIdentity(current!); });
+  act(() => { setSessionIdentity(current!); markChefModeVerified(current!.id); });
   expect(screen.queryByLabelText("Private chef draft")).toBeNull();
   await act(async () => { priorProfile.resolve(Response.json({}, { status: 503 })); });
   expect(screen.queryByLabelText("Private chef draft")).toBeNull();
@@ -206,10 +215,18 @@ it("provides retry for a failed check and never mounts the private form prematur
   await screen.findByLabelText("Private chef draft");
 });
 
-it("offers sign-in with an application return path when the session has ended", async () => {
-  current = null; boundary();
-  expect((await screen.findByRole("link", { name: "Sign in" })).getAttribute("href")).toBe("/sign-in?returnTo=/chef/application");
+it("sends a signed-out applicant to the Chef Mode sign-in with the current step as return path", async () => {
+  current = null; onApplicationStep(); boundary();
+  await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/chef/sign-in?returnTo=%2Fchef%2Fapplication%3Fstep%3Dkitchen"));
   expect(screen.queryByLabelText("Private chef draft")).toBeNull();
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("asks a signed-in customer to sign in to Chef Mode before opening the application", async () => {
+  sessionStorage.clear(); onApplicationStep(); boundary();
+  await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/chef/sign-in?returnTo=%2Fchef%2Fapplication%3Fstep%3Dkitchen"));
+  expect(screen.queryByLabelText("Private chef draft")).toBeNull();
+  expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/application")).toBe(false);
 });
 
 it("clears private drafts on account switch and keeps same-owner email updates", async () => {
@@ -217,7 +234,7 @@ it("clears private drafts on account switch and keeps same-owner email updates",
   act(() => setSessionEmailVerification(owner.id, { email: "replacement@example.invalid", emailVerified: true, emailRevision: 2, pending: null, serverTime: "2026-09-17T00:00:00Z" }));
   expect((screen.getByLabelText("Private chef draft") as HTMLInputElement).value).toBe("private draft A");
   current = { ...owner, id: "22222222-2222-4222-8222-222222222222" };
-  act(() => { setSessionIdentity(current!); });
+  act(() => { setSessionIdentity(current!); markChefModeVerified(current!.id); });
   expect(screen.queryByLabelText("Private chef draft")).toBeNull();
   expect((await screen.findByLabelText("Private chef draft") as HTMLInputElement).value).toBe("");
 });
@@ -302,4 +319,19 @@ it("keeps a successfully loaded pending application editable through the guided 
   expect(screen.getByRole("alert").textContent).toContain("First name is required");
   expect(fetcher.mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
 
+});
+
+it("keeps the application closed without an error while a sign-out settles", async () => {
+  const logout = deferred<Response>();
+  fetcher.mockImplementation(input => String(input) === "/api/auth/logout" ? logout.promise : normal(input));
+  boundary(); await screen.findByLabelText("Private chef draft");
+  let signingOut!: Promise<void>;
+  act(() => { signingOut = clearSession(); });
+  expect(screen.queryByLabelText("Private chef draft")).toBeNull();
+  await act(async () => { await Promise.resolve(); });
+  expect(screen.queryByText("We couldn’t open your application")).toBeNull();
+  expect(navigation.replace).not.toHaveBeenCalled();
+  current = null;
+  await act(async () => { logout.resolve(Response.json({ signedOut: true })); await signingOut; });
+  await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith(expect.stringMatching(/^\/chef\/sign-in\?returnTo=/)));
 });

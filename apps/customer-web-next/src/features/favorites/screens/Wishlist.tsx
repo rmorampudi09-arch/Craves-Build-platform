@@ -8,25 +8,19 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { addToCart, loadCart } from "@/features/cart/api/cravesCart";
+import { addToCart, CartKeptError, loadCart } from "@/features/cart/api/cravesCart";
 import {
   loadCustomerFavoriteIds,
+  migrateLegacyWishlist,
   removeCustomerFavorite,
 } from "@/features/favorites/api/customerFavorites";
 import { loadDish, type Dish } from "@/features/dish/api/dishes";
 import { loadSession } from "@/features/auth/api/cravesAuth";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
 import { CustomerFloatingCart } from "@/features/cart/components/CustomerFloatingCart";
-import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
-
-export const routeMeta = {
-  head: () => ({
-    meta: [
-      { title: "Saved Dishes – Craves" },
-      { name: "robots", content: "noindex" },
-    ],
-  }),
-};
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
+import { useReturnScroll } from "@/shared/lib/return-scroll";
 
 function money(amount: number, currency = "INR"): string {
   return new Intl.NumberFormat("en-IN", {
@@ -43,11 +37,13 @@ function WishlistPage() {
   const [items, setItems] = useState<Dish[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const rememberScroll = useReturnScroll(ready && !loading);
 
   const loadFavorites = useCallback(async () => {
     setLoading(true);
     setMessage(null);
     try {
+      await migrateLegacyWishlist();
       const ids = await loadCustomerFavoriteIds();
       const dishes = await Promise.all(
         Array.from(ids).map(async (id) => {
@@ -64,7 +60,7 @@ function WishlistPage() {
       setMessage(
         error instanceof Error
           ? error.message
-          : "Saved dishes are temporarily unavailable.",
+          : "We couldn’t load your saved dishes. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -99,7 +95,7 @@ function WishlistPage() {
       setMessage(
         error instanceof Error
           ? error.message
-          : "This dish could not be removed from saved dishes.",
+          : "We couldn’t remove this dish. Please try again.",
       );
     } finally {
       setBusyId(null);
@@ -124,20 +120,20 @@ function WishlistPage() {
       );
       setMessage(`${dish.name} was added to your cart.`);
     } catch (error) {
+      // Keeping the current cart is the customer's choice: nothing to report.
+      if (error instanceof CartKeptError) return;
       setMessage(
         error instanceof Error
           ? error.message
-          : "This dish could not be added to the cart.",
+          : "We couldn’t add this dish to your cart. Please try again.",
       );
     } finally {
       setBusyId(null);
     }
   }, [busyId]);
 
-  if (!ready || loading) return <CustomerPageSkeleton label="Loading saved dishes" />;
-
   return (
-    <div className="min-h-screen bg-white pb-20 text-[#1A1A1A]">
+    <div className="min-h-screen bg-white pb-20 text-[#1A1A1A]" onClickCapture={rememberScroll}>
       <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4 md:px-6">
           <Link
@@ -148,33 +144,25 @@ function WishlistPage() {
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </Link>
           <h1 className="font-display text-xl font-black tracking-[-0.03em]">
-            Saved dishes
+            Saved
           </h1>
         </div>
       </AutoHideCustomerHeader>
 
       <main className="mx-auto max-w-3xl px-4 py-6 md:px-6">
-        {loading ? (
-          <div className="space-y-3" aria-busy="true">
-            {Array.from({ length: 3 }, (_, index) => (
-              <div
-                key={index}
-                className="h-[104px] animate-pulse rounded-2xl border border-[#E5E7EB] bg-[#F1F3F5]"
-              />
-            ))}
-            <span className="sr-only" role="status">Loading saved dishes</span>
-          </div>
+        {!ready || loading ? (
+          <CustomerSectionSkeleton variant="saved" label="Loading your saved dishes" />
         ) : message && items.length === 0 ? (
           <div className="rounded-2xl border border-[#E5E7EB] bg-white px-6 py-10 text-center shadow-sm">
-            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#C4200F]">
               <AlertTriangle className="h-5 w-5" aria-hidden="true" />
             </span>
-            <h2 className="mt-4 font-display text-lg font-black">Saved dishes could not be loaded</h2>
+            <h2 className="mt-4 font-display text-lg font-black">We couldn’t load your saved dishes</h2>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">{message}</p>
             <button
               type="button"
               onClick={() => void loadFavorites()}
-              className="mt-5 min-h-10 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white"
+              className="craves-primary-action mt-5"
             >
               Try again
             </button>
@@ -188,10 +176,7 @@ function WishlistPage() {
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">
               Tap the heart on a dish to keep it here for quick access.
             </p>
-            <Link
-              to="/home"
-              className="mt-5 inline-flex min-h-10 items-center rounded-full bg-[#F62E18] px-5 text-sm font-black text-white"
-            >
+            <Link to="/home" className="craves-primary-action mt-5">
               Browse dishes
             </Link>
           </div>
@@ -211,28 +196,28 @@ function WishlistPage() {
               {items.map((item, index) => (
                 <li
                   key={item.id}
-                  className="group flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-3 shadow-[0_4px_16px_rgba(26,26,26,0.04)] transition-[border-color,box-shadow] duration-200 hover:border-[#F62E18]/25 hover:shadow-[0_9px_24px_rgba(26,26,26,0.08)]"
+                  className="group flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-3 shadow-[0_4px_16px_rgba(26,26,26,0.04)] transition-[border-color,box-shadow] duration-200 hover:border-[#D7DADF] hover:shadow-[0_9px_24px_rgba(26,26,26,0.08)]"
                 >
                   <Link
                     to="/dish/$id"
                     params={{ id: item.id }}
-                    className="shrink-0 overflow-hidden rounded-xl bg-[#F1F3F5]"
+                    className="relative h-[82px] w-[82px] shrink-0 overflow-hidden rounded-xl bg-[#F1F3F5]"
                   >
-                    <img
+                    <ProgressiveImage
                       src={item.img}
                       alt={item.name}
-                      width={82}
-                      height={82}
+                      fill
+                      sizes="82px"
                       loading={index < 4 ? "eager" : "lazy"}
-                      decoding="async"
                       fetchPriority={index < 4 ? "high" : "auto"}
-                      className="h-[82px] w-[82px] object-cover transition-transform duration-300 group-hover:scale-[1.035]"
+                      fallbackLabel="No photo"
+                      className="object-cover group-hover:scale-[1.035]"
                     />
                   </Link>
 
                   <div className="min-w-0 flex-1">
                     <Link to="/dish/$id" params={{ id: item.id }}>
-                      <h2 className="truncate font-display text-base font-black transition-colors hover:text-[#F62E18]">
+                      <h2 className="line-clamp-2 font-display text-base font-black transition-colors hover:text-[#F62E18]">
                         {item.name}
                       </h2>
                     </Link>

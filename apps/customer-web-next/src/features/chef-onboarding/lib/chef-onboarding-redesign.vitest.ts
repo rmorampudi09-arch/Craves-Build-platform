@@ -14,7 +14,7 @@ import {
 } from "../../auth/api/cravesAuth";
 
 const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
+vi.mock("next/navigation", () => ({ useRouter: () => navigation, usePathname: () => "/chef/application", useSearchParams: () => new URLSearchParams() }));
 vi.mock("../../addresses/components/AddressMapPicker", () => ({ AddressMapPicker: () => null }));
 vi.mock("../../sign-in/components/EmailVerificationPanel", () => ({
   EmailVerificationPanel: ({ onStateChange }: { onStateChange: (value: unknown) => void }) => {
@@ -124,6 +124,7 @@ beforeEach(() => {
   saved = fixture();
   setSessionIdentity(identity);
   navigation.push.mockReset();
+  navigation.replace.mockReset();
   fetcher = vi.fn<typeof fetch>(normal);
   vi.stubGlobal("fetch", fetcher);
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
@@ -196,7 +197,7 @@ describe("Redesigned Chef onboarding popup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
     await screen.findByRole("heading", { name: "Review your application" });
     expect(screen.getByText("Not added yet")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Accept terms and privacy policy"));
+    fireEvent.click(screen.getByLabelText(/I confirm these details are correct/));
     fireEvent.click(screen.getByRole("button", { name: "Submit application" }));
     await screen.findByRole("heading", { name: "FSSAI details" });
     expect((await screen.findByRole("alert")).textContent).toContain("Add your 14-digit FSSAI");
@@ -240,6 +241,62 @@ describe("Redesigned Chef onboarding popup", () => {
     await screen.findByText("Under review");
     expect(screen.getByRole("button", { name: "Refresh status" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /dashboard/i })).toBeNull();
+  });
+
+  it("names the missing address fields and goes to them instead of failing a photo upload", async () => {
+    saved.details = { ...saved.details!, kitchenName: "", city: "", postalCode: "", latitude: null, longitude: null };
+    saved.documents = saved.documents.filter((item) => !item.documentType.startsWith("KITCHEN_PHOTO"));
+    const sent: unknown[] = [];
+    vi.stubGlobal(
+      "XMLHttpRequest",
+      class {
+        upload = {};
+        open() {}
+        abort() {}
+        send(body: unknown) {
+          sent.push(body);
+        }
+      },
+    );
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: /Kitchen details/ }));
+    await screen.findByRole("heading", { name: "Your kitchen" });
+    // The photos card says what the upload waits for, in screen order, before anything is tapped.
+    expect(screen.getByText("Finish your kitchen address to add photos")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /^Go to / }).map((chip) => chip.textContent)).toEqual([
+      "Kitchen name",
+      "Map pin",
+      "PIN code",
+      "City",
+    ]);
+    expect(screen.getByLabelText(/^Street \/ area/).getAttribute("aria-required")).toBeNull();
+    expect(screen.getByLabelText("City").getAttribute("aria-required")).toBe("true");
+    // Tapping a photo tile marks every missing field and moves to the first one; nothing is sent.
+    fireEvent.click(screen.getAllByRole("button", { name: /Add photo/ })[0]!);
+    await waitFor(() => expect(window.document.activeElement?.id).toBe("chef-kitchenName"));
+    expect(screen.getByText("Add your kitchen name.")).toBeTruthy();
+    expect(screen.getByText("Add your city.")).toBeTruthy();
+    expect(screen.getByLabelText("Kitchen name").getAttribute("aria-invalid")).toBe("true");
+    expect(sent).toHaveLength(0);
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+    // A chip jumps to its field, and fixing a field clears only its own message.
+    fireEvent.click(screen.getByRole("button", { name: "Go to City" }));
+    await waitFor(() => expect(window.document.activeElement?.id).toBe("chef-city"));
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Hyderabad" } });
+    expect(screen.queryByText("Add your city.")).toBeNull();
+    expect(screen.getByText("Add your kitchen name.")).toBeTruthy();
+  });
+
+  it("shows every missing kitchen field on save and moves to the first one", async () => {
+    saved.details = { ...saved.details!, kitchenName: "", state: "" };
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: /Kitchen details/ }));
+    await screen.findByRole("heading", { name: "Your kitchen" });
+    fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
+    await waitFor(() => expect(window.document.activeElement?.id).toBe("chef-kitchenName"));
+    expect(screen.getByText("Add your kitchen name.")).toBeTruthy();
+    expect(screen.getByText("Add your state.")).toBeTruthy();
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
   });
 
   it("uploads a chosen kitchen photo without a second confirmation step", async () => {
@@ -305,7 +362,7 @@ describe("Redesigned Chef onboarding popup", () => {
     open();
     fireEvent.click(await screen.findByRole("button", { name: "Review application" }));
     await screen.findByRole("heading", { name: "Review your application" });
-    fireEvent.click(screen.getByLabelText("Accept terms and privacy policy"));
+    fireEvent.click(screen.getByLabelText(/I confirm these details are correct/));
     fireEvent.click(screen.getByRole("button", { name: "Submit application" }));
     expect((await screen.findByRole("alert")).textContent).toContain(
       "Complete the kitchen photos before submitting.",
@@ -390,7 +447,7 @@ describe("Backend gap fixes", () => {
 });
 
 describe("Become a chef entry", () => {
-  it("opens the phone-first Home Chef popup for a signed-out visitor without mounting the application", async () => {
+  it("sends a signed-out visitor to the Chef Mode sign-in without mounting the application", async () => {
     invalidateSession(captureSessionContext());
     fetcher.mockImplementation((input) =>
       String(input) === "/api/auth/me"
@@ -404,10 +461,10 @@ describe("Become a chef entry", () => {
         createElement("p", null, "Private application"),
       ),
     );
-    expect(await screen.findByText("Join Craves as a Home Chef")).toBeTruthy();
-    expect(screen.getByText("Home Chef")).toBeTruthy();
-    expect(screen.getByLabelText(/Mobile number/)).toBeTruthy();
-    expect(screen.queryByLabelText(/First name/)).toBeNull();
+    await waitFor(() =>
+      expect(navigation.replace).toHaveBeenCalledWith(expect.stringMatching(/^\/chef\/sign-in\?returnTo=/)),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByText("Private application")).toBeNull();
   });
 });

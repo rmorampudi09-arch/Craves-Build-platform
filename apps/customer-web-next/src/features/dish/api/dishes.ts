@@ -21,6 +21,8 @@ export type Dish = {
   price: number;
   rating: number;
   time: string;
+  /** Minutes the kitchen needs to cook it, when the kitchen gave one. */
+  prepMinutes?: number;
   veg: boolean;
   foodType?: "VEG" | "NON_VEG" | "EGG";
   tag?: string;
@@ -175,6 +177,7 @@ function mapNearbyItem(item: NearbyMenuItem): Dish {
     currency: item.currency,
     rating: 0,
     time: prepTimeLabel(item.preparationTimeMinutes),
+    prepMinutes: item.preparationTimeMinutes ?? undefined,
     veg: item.foodType === "VEG",
     foodType: item.foodType,
     desc: descriptionLabel(item.description, item.itemName, item.category, chef),
@@ -221,6 +224,7 @@ function mapDetail(item: PublicMenuItemDetail): Dish {
     currency: item.currency,
     rating: 0,
     time: prepTimeLabel(item.preparationTimeMinutes),
+    prepMinutes: item.preparationTimeMinutes ?? undefined,
     veg: item.foodType === "VEG",
     foodType: item.foodType,
     desc: descriptionLabel(item.description, item.itemName, item.category, chef),
@@ -357,7 +361,11 @@ export async function loadMoreDiscoveredDishes(): Promise<Dish[]> {
   return [...discoveredDishes];
 }
 
-export async function loadKitchenMenu(kitchenId: string): Promise<Dish[]> {
+/** `remember: false` reads the menu without adding it to the nearby dishes Home lists. */
+export async function loadKitchenMenu(
+  kitchenId: string,
+  { remember = true }: { remember?: boolean } = {},
+): Promise<Dish[]> {
   const response = await fetch(
     `/api/catalog/kitchens/${encodeURIComponent(kitchenId)}/menu-items`,
     {
@@ -383,6 +391,7 @@ export async function loadKitchenMenu(kitchenId: string): Promise<Dish[]> {
   }
 
   const loaded = body.map(mapDetail);
+  if (!remember) return loaded;
   const loadedIds = new Set(loaded.map((dish) => dish.id));
   discoveredDishes = [
     ...loaded,

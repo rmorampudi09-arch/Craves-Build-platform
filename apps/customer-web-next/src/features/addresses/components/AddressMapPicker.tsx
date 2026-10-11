@@ -221,7 +221,7 @@ function InteractiveAddressMap({
       className={
         "relative aspect-[4/3] w-full overflow-hidden rounded-[1.6rem] border border-[#E5E7EB] bg-[#F1F3F5] shadow-inner md:aspect-[900/520] " +
         // Map chrome in the CRAVES palette.
-        "[&_.maplibregl-canvas]:outline-none [&_.maplibregl-canvas:focus-visible]:ring-2 [&_.maplibregl-canvas:focus-visible]:ring-inset [&_.maplibregl-canvas:focus-visible]:ring-[#F62E18]/40 " +
+        "[&_.maplibregl-canvas]:outline-none [&_.maplibregl-canvas:focus-visible]:ring-2 [&_.maplibregl-canvas:focus-visible]:ring-inset [&_.maplibregl-canvas:focus-visible]:ring-[#1A1A1A]/40 " +
         "[&_.maplibregl-ctrl-attrib]:!m-2 [&_.maplibregl-ctrl-attrib]:rounded-md [&_.maplibregl-ctrl-attrib]:!bg-white/85 [&_.maplibregl-ctrl-attrib]:!px-1.5 [&_.maplibregl-ctrl-attrib]:!py-0.5 [&_.maplibregl-ctrl-attrib]:text-[9px] [&_.maplibregl-ctrl-attrib]:font-semibold [&_.maplibregl-ctrl-attrib]:text-[#6B6B6B] [&_.maplibregl-ctrl-attrib_a]:!text-[#6B6B6B]"
       }
       aria-busy={!ready}

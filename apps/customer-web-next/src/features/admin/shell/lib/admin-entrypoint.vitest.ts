@@ -44,6 +44,20 @@ describe("Legacy administrator entry points on the customer site", () => {
     expect((await proxy(new NextRequest("https://admin.craves.in/sign-in?returnTo=%2Fadmin"))).headers.get("x-middleware-next")).toBe("1");
   });
 
+  it("sends signed-in visitors from the landing page to /home without touching other paths", async () => {
+    const signedIn = { headers: { cookie: "craves_access_token=opaque-fixture" } };
+    const response = await proxy(new NextRequest("https://craves.in/?utm_source=fixture", signedIn));
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://craves.in/home?utm_source=fixture");
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    for (const path of ["/api/auth/session", "/home", "/_next/static/chunk.js"]) {
+      expect((await proxy(new NextRequest(`https://craves.in${path}`, signedIn))).headers.has("location")).toBe(false);
+    }
+    expect((await proxy(new NextRequest("https://craves.in/", { ...signedIn, method: "HEAD" }))).headers.has("location")).toBe(false);
+    vi.stubEnv("CRAVES_ADMIN_PORTAL", "true");
+    expect((await proxy(new NextRequest("https://admin.craves.in/", signedIn))).headers.get("location")).toBe("https://admin.craves.in/admin");
+  });
+
   it("keeps local development on the local app", async () => {
     vi.stubEnv("NODE_ENV", "development");
     expect((await proxy(new NextRequest("http://localhost:3000/admin"))).headers.has("location")).toBe(false);

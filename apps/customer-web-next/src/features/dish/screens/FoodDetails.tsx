@@ -1,8 +1,9 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { MapPin, Minus, Plus } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Clock3, MapPin, Minus, Plus } from "lucide-react";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 import { hasHomeReturnState } from "@/features/home/lib/home-return-state";
+import { returnToListPath } from "@/shared/lib/return-scroll";
 import type { KitchenReviewSummary } from "@/features/dish/lib/review-summary-contract";
 import { loadSelectedAddress, loadSession } from "@/features/auth/api/cravesAuth";
 import {
@@ -12,14 +13,17 @@ import {
   loadDish,
   type Dish,
 } from "@/features/dish/api/dishes";
-import { addToCart } from "@/features/cart/api/cravesCart";
+import {
+  addToCart,
+  CartKeptError,
+  setQty as setCartQuantity,
+} from "@/features/cart/api/cravesCart";
 import { loadKitchenReviewSummary } from "@/features/dish/api/reviews";
 import { DetailBrowseHeader } from "@/features/customer-shell/components/DetailBrowseHeader";
 import { DishImageHeader } from "@/features/dish/components/DishImageHeader";
 import { DishInfoSummary } from "@/features/dish/components/DishInfoSummary";
 import { ChefInfoCard } from "@/features/dish/components/ChefInfoCard";
 import { QuickInfoChips } from "@/features/dish/components/QuickInfoChips";
-import { AboutDishSection } from "@/features/dish/components/AboutDishSection";
 import { WhatsInsideCard } from "@/features/dish/components/WhatsInsideCard";
 import { CustomerReviewsSection } from "@/features/dish/components/CustomerReviewsSection";
 import { SimilarDishesSection } from "@/features/dish/components/SimilarDishesSection";
@@ -28,6 +32,7 @@ import { CravesCartIcon } from "@/features/home/components/CravesCartIcon";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import {
   CustomerFloatingCart,
+  useCartLine,
   useCustomerCartSummary,
 } from "@/features/cart/components/CustomerFloatingCart";
 
@@ -49,11 +54,11 @@ export const routeMeta = {
 
 const routeApi = getRouteApi("/dish/$id");
 
-function priceLabel(price: number, currency = "INR"): string {
+function priceLabel(price: number, currency = "INR", maximumFractionDigits = 2): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency,
-    maximumFractionDigits: 2,
+    maximumFractionDigits,
   }).format(price);
 }
 
@@ -71,10 +76,28 @@ function DishDetailPage() {
   const [qty, setQty] = useState(1);
   const [message, setMessage] = useState("");
   const [adding, setAdding] = useState(false);
-  const [messageKind, setMessageKind] = useState<"error" | "success" | null>(null);
+  const [messageKind, setMessageKind] = useState<"error" | "success" | "info" | null>(null);
   const [reviewSummary, setReviewSummary] = useState<KitchenReviewSummary | null>(null);
   const cartSummary = useCustomerCartSummary();
+  const cartLine = useCartLine(dish?.id);
   const feedbackTimerRef = useRef<number | null>(null);
+  // The bar confirms "Added" once the new line appears in the cart, then offers "View cart".
+  const awaitingCartLineRef = useRef(false);
+  const [justAdded, setJustAdded] = useState(false);
+  const hasCartLine = Boolean(cartLine);
+
+  // Layout effect: "Added" replaces "Add" before the browser paints, so "View cart" never
+  // shows for a frame in between.
+  useLayoutEffect(() => {
+    if (!hasCartLine || !awaitingCartLineRef.current) return;
+    awaitingCartLineRef.current = false;
+    setJustAdded(true);
+    const timer = window.setTimeout(() => setJustAdded(false), 900);
+    return () => {
+      window.clearTimeout(timer);
+      setJustAdded(false);
+    };
+  }, [hasCartLine]);
 
   useEffect(() => {
     let active = true;
@@ -167,11 +190,17 @@ function DishDetailPage() {
   }, []);
 
   const handleBack = () => {
-    if (
+    const canGoBack =
       typeof window !== "undefined" &&
       hasHomeReturnState() &&
-      window.history.length > 1
-    ) {
+      window.history.length > 1;
+    // Opened from saved dishes or a kitchen's menu: back goes there, to the same spot.
+    const list = canGoBack ? null : returnToListPath();
+    if (list) {
+      navigate({ to: list });
+      return;
+    }
+    if (canGoBack) {
       window.history.back();
       return;
     }
@@ -180,7 +209,7 @@ function DishDetailPage() {
   };
 
   if (loading) {
-    return <CustomerPageSkeleton label="Loading live dish details" />;
+    return <CustomerPageSkeleton variant="dish" label="Loading live dish details" />;
   }
 
   if (!dish) {
@@ -198,7 +227,7 @@ function DishDetailPage() {
               onClick={handleBack}
               className="!mt-6 !inline-flex !min-h-11 !items-center !rounded-full !bg-[#F62E18] !px-5 !text-sm !font-black !text-white"
             >
-              Back to home
+              Go back
             </button>
           </div>
         </main>
@@ -214,6 +243,7 @@ function DishDetailPage() {
     setAdding(true);
     setMessage("");
     setMessageKind(null);
+    awaitingCartLineRef.current = !cartLine;
     try {
       await addToCart(
         {
@@ -240,7 +270,9 @@ function DishDetailPage() {
         feedbackTimerRef.current = null;
       }, 1800);
     } catch (error) {
-      setMessageKind("error");
+      awaitingCartLineRef.current = false;
+      // Keeping the current cart is the customer's choice: a neutral note, not a failure.
+      setMessageKind(error instanceof CartKeptError ? "info" : "error");
       setMessage(
         error instanceof Error
           ? error.message
@@ -251,48 +283,38 @@ function DishDetailPage() {
     }
   };
 
+  const changeCartQuantity = (next: number) => {
+    if (!cartLine) return;
+    setMessage("");
+    setMessageKind(null);
+    setCartQuantity(cartLine.id, next).catch((error: unknown) => {
+      setMessageKind("error");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "The quantity didn’t change. Check your connection and try again.",
+      );
+    });
+  };
+
   const location = locationLabel(dish);
   const itemTotal = dish.price * qty;
 
   return (
-    <div className={`min-h-screen bg-white text-[#1A1A1A] ${cartSummary.itemCount > 0 ? "pb-32" : "pb-28 lg:pb-14"}`}>
+    // Room at the end for the bottom bar (phones) or the floating cart (wide screens, when it shows).
+    <div className={`min-h-screen bg-white pb-32 text-[#1A1A1A] ${cartSummary.itemCount > 0 ? "" : "lg:pb-14"}`}>
       <DetailBrowseHeader returnPath={`/dish/${id}`} onBack={handleBack} />
 
       <main className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
-        <div className="grid gap-7 lg:grid-cols-[minmax(0,1.45fr)_minmax(19rem,0.9fr)] lg:items-start lg:justify-center xl:grid-cols-[minmax(0,42rem)_24rem] xl:gap-9">
-          <div className="min-w-0">
+        {/* Phones and tablets read photo, name and price, then the rest (one description, not two).
+            Wide screens keep the summary card beside the photo and details. */}
+        <div className="grid gap-y-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(19rem,0.9fr)] lg:grid-rows-[auto_1fr] lg:items-start lg:justify-center lg:gap-x-7 lg:gap-y-3 xl:grid-cols-[minmax(0,42rem)_24rem] xl:gap-x-9">
+          <div className="min-w-0 lg:col-start-1 lg:row-start-1">
             <DishImageHeader dish={dish} />
-
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-xs font-bold text-[#6B6B6B]">
-              <span className="inline-flex items-center gap-2 text-[#1A1A1A]">
-                <span className="h-2.5 w-2.5 rounded-full bg-[#2E7D32]" aria-hidden="true" />
-                Available today
-              </span>
-              <span aria-hidden="true">·</span>
-              <span>Prepared after you order</span>
-              <span aria-hidden="true">·</span>
-              <span>{dish.time}</span>
-            </div>
-
-            <ChefInfoCard
-              chefId={dish.kitchenId}
-              chefName={dish.chef}
-              rating={reviewSummary?.overallAverage ?? dish.rating}
-              reviewCount={reviewSummary?.reviewCount ?? null}
-              distanceMeters={dish.distanceMeters}
-            />
-
-            <AboutDishSection description={dish.desc} />
-            {dish.ingredients && dish.ingredients.length > 0 ? (
-              <WhatsInsideCard ingredients={dish.ingredients} />
-            ) : null}
-            {dish.reviews && dish.reviews.length > 0 ? (
-              <CustomerReviewsSection reviews={dish.reviews} />
-            ) : null}
           </div>
 
-          <aside className="lg:sticky lg:top-[5.75rem] lg:self-start">
-            <div className="rounded-[1.8rem] border border-[#E5E7EB] bg-white p-5 shadow-[0_16px_42px_rgba(26,26,26,0.08)] sm:p-6">
+          <aside className="min-w-0 lg:sticky lg:top-[5.75rem] lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
+            <div className="lg:rounded-[1.8rem] lg:border lg:border-[#E5E7EB] lg:bg-white lg:p-6 lg:shadow-[0_16px_42px_rgba(26,26,26,0.08)]">
               <DishInfoSummary dish={dish} />
 
               <div className="mt-5 flex items-end justify-between gap-4 border-b border-[#F1F3F5] pb-5">
@@ -322,7 +344,8 @@ function DishDetailPage() {
                 </div>
               ) : null}
 
-              <div className="mt-5 rounded-2xl border border-[#E5E7EB] p-3.5">
+              {/* Phones add from the bottom bar; one add control per screen. */}
+              <div className="mt-5 hidden rounded-2xl border border-[#E5E7EB] p-3.5 lg:block">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-[0.65rem] font-black uppercase tracking-[0.1em] text-[#6B6B6B]">Quantity</p>
@@ -338,7 +361,7 @@ function DishDetailPage() {
                     >
                       <Minus className="h-4 w-4" aria-hidden="true" />
                     </button>
-                    <span className="min-w-8 text-center text-sm font-black" aria-live="polite">{qty}</span>
+                    <span className="min-w-8 text-center text-sm font-black" aria-live="polite" aria-atomic="true"><span className="sr-only">Quantity </span>{qty}</span>
                     <button
                       type="button"
                       onClick={() => setQty((value) => Math.min(50, value + 1))}
@@ -363,7 +386,7 @@ function DishDetailPage() {
                 type="button"
                 onClick={() => void handleAddToCart()}
                 disabled={adding}
-                className="!mt-4 !inline-flex !min-h-12 !w-full !items-center !justify-center !gap-2 !rounded-full !bg-[#F62E18] !px-6 !text-sm !font-black !text-white !shadow-[0_9px_24px_rgba(246,46,24,0.18)] transition-shadow hover:!shadow-[0_12px_30px_rgba(246,46,24,0.25)] disabled:cursor-wait disabled:opacity-60"
+                className="!mt-4 !inline-flex !min-h-12 !w-full !items-center !justify-center !gap-2 !rounded-full !bg-[#F62E18] !px-6 !text-sm !font-black !text-white !shadow-[0_9px_24px_rgba(26,26,26,0.14)] transition-[box-shadow,scale] duration-(--dur-micro) hover:!shadow-[0_12px_30px_rgba(26,26,26,0.14)] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 max-lg:!hidden"
               >
                 <CravesCartIcon className="h-4 w-4" />
                 {adding ? "Adding…" : "Add to cart"}
@@ -373,16 +396,46 @@ function DishDetailPage() {
             {message ? (
               <p
                 role={messageKind === "error" ? "alert" : "status"}
-                className={`mt-3 rounded-2xl border p-4 text-sm font-bold ${
-                  messageKind === "success"
-                    ? "border-[#E5E7EB] bg-[#F1F3F5] text-[#1A1A1A]"
-                    : "border-[#F62E18]/20 bg-[#F1F3F5] text-[#F62E18]"
+                className={`mt-3 hidden rounded-2xl border p-4 text-sm font-bold lg:block ${
+                  messageKind === "error"
+                    ? "border-[#E5E7EB] bg-[#F1F3F5] text-[#C4200F]"
+                    : "border-[#E5E7EB] bg-[#F1F3F5] text-[#1A1A1A]"
                 }`}
               >
                 {message}
               </p>
             ) : null}
           </aside>
+
+          <div className="min-w-0 lg:col-start-1 lg:row-start-2">
+            {/* Gaps, not dots, separate the facts, so a wrapped line never starts or ends on a stray "·". */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-xs font-bold text-[#6B6B6B]">
+              <span className="inline-flex items-center gap-2 text-[#1A1A1A]">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#2E7D32]" aria-hidden="true" />
+                Available today
+              </span>
+              <span>Prepared after you order</span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                {dish.time}
+              </span>
+            </div>
+
+            <ChefInfoCard
+              chefId={dish.kitchenId}
+              chefName={dish.chef}
+              rating={reviewSummary?.overallAverage ?? dish.rating}
+              reviewCount={reviewSummary?.reviewCount ?? null}
+              distanceMeters={dish.distanceMeters}
+            />
+
+            {dish.ingredients && dish.ingredients.length > 0 ? (
+              <WhatsInsideCard ingredients={dish.ingredients} />
+            ) : null}
+            {dish.reviews && dish.reviews.length > 0 ? (
+              <CustomerReviewsSection reviews={dish.reviews} />
+            ) : null}
+          </div>
         </div>
 
         <div className="mt-9 border-t border-[#E5E7EB] pt-1">
@@ -390,18 +443,40 @@ function DishDetailPage() {
         </div>
       </main>
 
-      {cartSummary.itemCount === 0 ? (
-        <DishBottomBar
-          price={itemTotal}
-          quantity={qty}
-          onDecrease={() => setQty((value) => Math.max(1, value - 1))}
-          onIncrease={() => setQty((value) => Math.min(50, value + 1))}
-          onAddToCart={() => void handleAddToCart()}
-          disabled={adding}
-        />
-      ) : null}
+      <DishBottomBar
+        price={cartLine ? cartLine.lineTotal : itemTotal}
+        quantity={cartLine ? cartLine.qty : qty}
+        inCart={Boolean(cartLine)}
+        justAdded={justAdded}
+        cartTotalLabel={priceLabel(cartSummary.total, cartSummary.currency, 0)}
+        onDecrease={() =>
+          cartLine
+            ? changeCartQuantity(cartLine.qty - 1)
+            : setQty((value) => Math.max(1, value - 1))
+        }
+        onIncrease={() =>
+          cartLine
+            ? changeCartQuantity(cartLine.qty + 1)
+            : setQty((value) => Math.min(50, value + 1))
+        }
+        onAddToCart={() => void handleAddToCart()}
+        onViewCart={() => navigate({ to: "/cart" })}
+        disabled={adding && !cartLine}
+        message={
+          message && messageKind !== "success"
+            ? { text: message, error: messageKind === "error" }
+            : null
+        }
+      />
+      {/* Success is shown by the bar itself; this keeps it announced on phones. */}
+      <p className="sr-only lg:hidden" role="status">
+        {messageKind === "success" ? message : ""}
+      </p>
 
-      <CustomerFloatingCart />
+      {/* Below lg the bottom bar already opens the cart. */}
+      <div className="hidden lg:contents">
+        <CustomerFloatingCart />
+      </div>
     </div>
   );
 }

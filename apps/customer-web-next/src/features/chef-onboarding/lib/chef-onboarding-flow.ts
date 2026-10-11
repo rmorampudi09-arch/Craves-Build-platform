@@ -251,6 +251,62 @@ export function kitchenAddress(details: OnboardingDetails): string {
     .join(", ");
 }
 export type ChefFieldError = { field: string; message: string };
+/**
+ * Kitchen details the server needs before it creates the application record that photos
+ * are saved to (ChefOnboardingPolicy.kitchenComplete), in the order they appear on screen.
+ */
+export const KITCHEN_REQUIRED: readonly (ChefFieldError & { label: string; noun: string })[] = [
+  { field: "kitchenName", label: "Kitchen name", noun: "kitchen name", message: "Add your kitchen name." },
+  {
+    field: "location",
+    label: "Map pin",
+    noun: "map pin",
+    message: "Search for your kitchen address or use your current location to place the pin.",
+  },
+  {
+    field: "addressLine1",
+    label: "Flat / house number / building",
+    noun: "flat or house number",
+    message: "Add your flat, house number or building.",
+  },
+  { field: "postalCode", label: "PIN code", noun: "PIN code", message: "Enter a six-digit PIN code." },
+  { field: "city", label: "City", noun: "city", message: "Add your city." },
+  { field: "state", label: "State", noun: "state", message: "Add your state." },
+];
+/** "a", "a and b", "a, b and c". */
+export function listInWords(items: readonly string[]): string {
+  return items.length < 2 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+}
+/** Required kitchen details still missing, in screen order (empty when photos can be saved). */
+export function missingKitchenFields(details: OnboardingDetails): (typeof KITCHEN_REQUIRED)[number][] {
+  const filled: Record<string, boolean> = {
+    kitchenName: Boolean(details.kitchenName.trim()),
+    location: details.latitude != null && details.longitude != null,
+    addressLine1: Boolean(details.addressLine1.trim()),
+    postalCode: /^\d{6}$/.test(details.postalCode),
+    city: Boolean(details.city.trim()),
+    state: Boolean(details.state.trim()),
+  };
+  return KITCHEN_REQUIRED.filter((item) => !filled[item.field]);
+}
+/** Every problem in a section, in screen order, so all of them can be shown at once. */
+export function validateChefSectionAll(
+  section: ChefFormSection,
+  details: OnboardingDetails,
+  state: OnboardingState,
+  emailVerified: boolean,
+): ChefFieldError[] {
+  if (section !== "kitchen") {
+    const first = validateChefSection(section, details, state, emailVerified);
+    return first ? [first] : [];
+  }
+  const errors: ChefFieldError[] = missingKitchenFields(details).map(({ field, message }) => ({ field, message }));
+  if (!evidenceComplete(state, "KITCHEN_PHOTO_1"))
+    errors.push({ field: "KITCHEN_PHOTO_1", message: "Upload an overall kitchen photo." });
+  if (!evidenceComplete(state, "KITCHEN_PHOTO_2"))
+    errors.push({ field: "KITCHEN_PHOTO_2", message: "Upload a cooking setup photo." });
+  return errors;
+}
 export function validateChefSection(
   section: ChefFormSection,
   details: OnboardingDetails,
@@ -284,27 +340,7 @@ export function validateChefSection(
     if (!emailVerified)
       return { field: "email", message: "Verify your email address before saving these details." };
   }
-  if (section === "kitchen") {
-    for (const [field, label] of [
-      ["kitchenName", "Kitchen name"],
-      ["addressLine1", "House or building"],
-      ["city", "City"],
-      ["state", "State"],
-    ] as const) {
-      if (!details[field].trim()) return { field, message: `${label} is required.` };
-    }
-    if (!/^\d{6}$/.test(details.postalCode))
-      return { field: "postalCode", message: "Enter a six-digit PIN code." };
-    if (details.latitude == null || details.longitude == null)
-      return {
-        field: "location",
-        message: "Search for your kitchen address or choose a location on the map.",
-      };
-    if (!evidenceComplete(state, "KITCHEN_PHOTO_1"))
-      return { field: "KITCHEN_PHOTO_1", message: "Upload an overall kitchen photo." };
-    if (!evidenceComplete(state, "KITCHEN_PHOTO_2"))
-      return { field: "KITCHEN_PHOTO_2", message: "Upload a cooking setup photo." };
-  }
+  if (section === "kitchen") return validateChefSectionAll(section, details, state, emailVerified)[0] ?? null;
   if (section === "fssai" && !/^[0-9]{14}$/.test(details.fssaiNumber))
     return {
       field: "fssaiNumber",

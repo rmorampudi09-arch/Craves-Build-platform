@@ -8,7 +8,7 @@ import {
   signInWithPhoneNumber,
 } from "firebase/auth";
 import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from "@/features/sign-in/lib/msg91-browser";
-import { phoneCodeRequestError } from "@/features/sign-in/lib/phone-auth-errors";
+import { phoneCodeRequestError, phoneCodeVerifyError } from "@/features/sign-in/lib/phone-auth-errors";
 import { getFirebaseBrowserClient } from "@/features/auth/lib/firebase-client";
 import {
   loadSession,
@@ -300,7 +300,7 @@ export function AuthModal({
       } | null;
       if (!currentAttempt()) return;
       if (!response.ok || !body?.identity)
-        throw new Error(body?.message ?? "Sign-in failed.");
+        throw new Error(body?.message ?? "We couldn’t sign you in. Check the code and try again, or request a new code.");
 
       let user: CravesUser;
       ownIdentityInstall.current = true;
@@ -351,7 +351,7 @@ export function AuthModal({
       reset();
       onClose();
     } catch (caught) {
-      if (currentAttempt()) setError(caught instanceof Error ? caught.message : "The verification code could not be confirmed.");
+      if (currentAttempt()) setError(phoneCodeVerifyError(caught));
     } finally {
       if (authAttempt.current === attempt) setBusy(false);
     }
@@ -427,7 +427,7 @@ export function AuthModal({
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="inline-flex rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+              className="inline-flex rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
               aria-label="Craves home"
             >
               <CravesLogo size="sm" />

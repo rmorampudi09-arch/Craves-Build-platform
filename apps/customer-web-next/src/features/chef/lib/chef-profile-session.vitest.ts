@@ -19,6 +19,7 @@ import ChefFinancePage from "../../../app/chef/finance/page";
 import ProfilePage from "../../profile/screens/Profile";
 import { captureSessionContext, clearSession, getSession, invalidateSession, setSessionEmailVerification, setSessionIdentity } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
+import { markChefModeVerified } from "./chef-mode";
 
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate, Link: ({ children }: { children: unknown }) => children }));
@@ -48,30 +49,44 @@ async function normal(input: RequestInfo | URL): Promise<Response> {
   if (url === "/api/chef-onboarding/bank") return Response.json({ id: null, state: "NOT_SUBMITTED", lastFour: null, ifsc: null, bankValidated: false, applicationApproved: true, automaticActivation: true, message: "Fixture enrollment", updatedAt: null });
   throw new Error(`Unexpected fixture route ${url}`);
 }
-beforeEach(() => { identity = a; setSessionIdentity(a); navigate.mockReset(); vi.mocked(usePathname).mockReturnValue("/profile"); fetcher = vi.fn<typeof fetch>(normal); vi.stubGlobal("fetch", fetcher); });
+beforeEach(() => { identity = a; setSessionIdentity(a); markChefModeVerified(a.id); navigate.mockReset(); vi.mocked(usePathname).mockReturnValue("/profile"); fetcher = vi.fn<typeof fetch>(normal); vi.stubGlobal("fetch", fetcher); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
-function change(owner: CravesIdentity) { identity = owner; act(() => { setSessionIdentity(owner); }); }
+// Like /chef/sign-in: a new sign-in ends Chef Mode, then the OTP-verified chef marks it again.
+function change(owner: CravesIdentity) { identity = owner; act(() => { setSessionIdentity(owner); markChefModeVerified(owner.id); }); }
+const toChefSignIn = expect.stringMatching(/^\/chef\/sign-in\?returnTo=/);
+/** Profile asks before signing out: the card opens the dialog, whose own "Sign out" confirms. */
+async function confirmSignOut() {
+  fireEvent.click(await screen.findByRole("button", { name: "Sign out" }));
+  await screen.findByRole("dialog", { name: "Sign out of Craves?" });
+  fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+}
 
 describe("Chef navigation placement", () => {
   it("keeps fixed bottom navigation outside the filtered sticky header", () => {
     vi.mocked(usePathname).mockReturnValue("/chef/menu");
     render(createElement(ChefLayout, null, createElement("main", null, "Chef fixture")));
-    const header = screen.getByRole("link", { name: "Craves home" }).closest("header")!;
+    const header = screen.getByRole("link", { name: "Craves Chef home" }).closest("header")!;
+    expect(screen.getByRole("link", { name: "Craves Chef home" }).getAttribute("href")).toBe("/chef");
+    expect(header.contains(screen.getByRole("button", { name: "Account menu" }))).toBe(true);
+    expect(screen.queryByRole("link", { name: /Back to Craves|Customer home/ })).toBeNull();
     expect(header.contains(screen.getByRole("navigation", { name: "Chef workspace" }))).toBe(true);
     expect(header.contains(screen.getByRole("navigation", { name: "Chef primary navigation" }))).toBe(false);
     expect(screen.getByRole("navigation", { name: "Chef primary navigation" }).closest(".chef-panel-theme")).toBeTruthy();
   });
-  it.each([["/chef", "Home"], ["/chef/orders/fixture", "Orders"], ["/chef/menu", "Menu"], ["/chef/earnings", "Earnings"], ["/chef/profile", "Profile"]])("keeps labeled active navigation for %s", (pathname, label) => {
+  it.each([["/chef", "Home", "page"], ["/chef/orders/fixture", "Orders", "true"], ["/chef/menu", "Menu", "page"], ["/chef/earnings", "Earnings", "page"], ["/chef/profile", "More", "page"], ["/chef/finance", "More", "true"], ["/chef/kitchen", "More", "true"]])("keeps labeled active navigation for %s", (pathname, label, current) => {
     vi.mocked(usePathname).mockReturnValue(pathname);
     render(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
     const links = screen.getAllByRole("link");
-    expect(links.map(link => link.textContent)).toEqual(["Home", "Orders", "Menu", "Earnings", "Profile"]);
-    expect(screen.getByRole("link", { name: label }).getAttribute("aria-current")).toBe("page");
+    expect(links.map(link => link.textContent)).toEqual(["Home", "Orders", "Menu", "Earnings", "More"]);
+    expect(screen.getByRole("link", { name: label }).getAttribute("aria-current")).toBe(current);
     expect(links.filter(link => link.hasAttribute("aria-current"))).toHaveLength(1);
   });
   it("retains onboarding and Chef-access visibility boundaries", () => {
     vi.mocked(usePathname).mockReturnValue("/chef/application");
     const view = render(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
+    expect(screen.queryByRole("navigation")).toBeNull();
+    vi.mocked(usePathname).mockReturnValue("/chef/sign-in");
+    view.rerender(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
     expect(screen.queryByRole("navigation")).toBeNull();
     vi.mocked(usePathname).mockReturnValue("/chef/menu");
     view.rerender(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
@@ -84,25 +99,25 @@ describe("Chef navigation placement", () => {
 describe("chef finance owner boundaries", () => {
   it("shows the authoritative verified email alongside real finance panels", async () => {
     render(createElement(ChefFinancePage));
-    await screen.findByText("Verified email: a@example.invalid");
-    await screen.findByRole("button", { name: "Request ₹11.00 available balance" });
-    expect(screen.getByText("Your dated ledger statement")).toBeTruthy();
+    await screen.findByDisplayValue("a@example.invalid");
+    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
+    expect(screen.getByText("Money summary")).toBeTruthy();
   });
 
   it("clears bank inputs and the old balance on owner change and ignores a late refresh", async () => {
     render(createElement(ChefFinancePage));
-    await screen.findByRole("button", { name: "Request ₹11.00 available balance" });
+    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
     fireEvent.change(await screen.findByLabelText("Account number"), { target: { value: "123456789" } });
     const late = deferred<Response>();
     fetcher.mockImplementation(input => String(input) === "/api/chef/finance/balance" && identity?.id === a.id ? late.promise : normal(input));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh balance and status" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check balance again" }));
     change(b);
-    expect(screen.queryByRole("button", { name: "Request ₹11.00 available balance" })).toBeNull();
-    await screen.findByRole("button", { name: "Request ₹22.00 available balance" });
+    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
+    await screen.findByRole("button", { name: "Send ₹22.00 to my bank" });
     expect((screen.getByLabelText("Account number") as HTMLInputElement).value).toBe("");
     await act(async () => { late.resolve(Response.json(balance(a))); });
-    expect(screen.queryByRole("button", { name: "Request ₹11.00 available balance" })).toBeNull();
-    expect(screen.queryByText("Verified email: a@example.invalid")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
+    expect(screen.queryByDisplayValue("a@example.invalid")).toBeNull();
   });
 
   it("preserves healthy form input on a same-owner verified email update", async () => {
@@ -119,7 +134,9 @@ describe("chef finance owner boundaries", () => {
     fireEvent.change(await screen.findByLabelText("Private form"), { target: { value: "private draft" } });
     change({ ...a, roles: ["CUSTOMER"] });
     expect(screen.queryByLabelText("Private form")).toBeNull();
-    await screen.findByText("Chef approval is still required");
+    // Still no CHEF after a token refresh: a fresh Chef Mode sign-in, never a /chef ↔ status loop.
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(toChefSignIn));
+    expect(navigate).not.toHaveBeenCalledWith("/chef/application/status");
     change(a);
     expect((await screen.findByLabelText("Private form") as HTMLInputElement).value).toBe("");
   });
@@ -130,7 +147,7 @@ describe("chef finance owner boundaries", () => {
     render(createElement(ChefAccessBoundary, null, createElement("p", null, "Private chef data")));
     await waitFor(() => expect(fetcher.mock.calls.some(([url]) => url === "/api/auth/refresh")).toBe(true));
     change({ ...b, roles: ["CUSTOMER"] });
-    await screen.findByText("Chef approval is still required");
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(toChefSignIn));
     await act(async () => { late.resolve(Response.json({ identity: a })); });
     expect(screen.queryByText("Private chef data")).toBeNull();
     expect(getSession()?.id).toBe(b.id);
@@ -138,24 +155,25 @@ describe("chef finance owner boundaries", () => {
 
   it("removes finance and gives sign-in guidance for an inactive owner", async () => {
     render(createElement(ChefFinancePage));
-    await screen.findByRole("button", { name: "Request ₹11.00 available balance" });
+    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
     change({ ...a, status: "SUSPENDED" });
-    expect(screen.queryByRole("button", { name: "Request ₹11.00 available balance" })).toBeNull();
-    await screen.findByText("Sign in again to continue");
+    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(toChefSignIn));
   });
 
   it("hides private finance immediately while sign-out is pending and after completion", async () => {
     const late = deferred<Response>();
     fetcher.mockImplementation(input => String(input) === "/api/auth/logout" ? late.promise : normal(input));
     render(createElement(ChefFinancePage));
-    await screen.findByRole("button", { name: "Request ₹11.00 available balance" });
+    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
     let signingOut!: Promise<void>;
     act(() => { signingOut = clearSession(); });
-    expect(screen.queryByRole("button", { name: "Request ₹11.00 available balance" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
     identity = null;
+    expect(navigate).not.toHaveBeenCalled();
     await act(async () => { late.resolve(Response.json({ signedOut: true })); await signingOut; });
-    await screen.findByText("Sign in again to continue");
-    expect(screen.queryByText("Verified email: a@example.invalid")).toBeNull();
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(toChefSignIn));
+    expect(screen.queryByDisplayValue("a@example.invalid")).toBeNull();
   });
 
   it("protects standalone application bank fields before CHEF role approval", async () => {
@@ -164,7 +182,7 @@ describe("chef finance owner boundaries", () => {
     fireEvent.change(await screen.findByLabelText("Account number"), { target: { value: "123456789" } });
     change({ ...b, roles: ["CUSTOMER"] });
     expect((await screen.findByLabelText("Account number") as HTMLInputElement).value).toBe("");
-    await waitFor(() => expect((screen.getByLabelText("Account holder from your saved chef application") as HTMLInputElement).value).toBe("Chef B Fixture"));
+    await waitFor(() => expect((screen.getByLabelText(/^Account holder/) as HTMLInputElement).value).toBe("Chef B Fixture"));
     identity = null;
     act(() => { invalidateSession(captureSessionContext()); });
     expect(screen.queryByLabelText("Account number")).toBeNull();
@@ -213,10 +231,10 @@ describe("profile owner privacy", () => {
     fetcher.mockImplementation(input => String(input) === "/api/auth/logout" ? late.promise : normal(input));
     render(createElement(ProfilePage));
     await screen.findByRole("heading", { name: "Chef A Fixture" });
-    fireEvent.click(await screen.findByRole("button", { name: "Sign out" }));
+    await confirmSignOut();
     expect(screen.queryByText(/Chef A private address/)).toBeNull();
     await act(async () => { late.resolve(Response.json({ signedOut: false }, { status: 503 })); });
-    await screen.findByRole("button", { name: "Retry sign out" });
+    await screen.findByRole("button", { name: "Try again" });
     expect(navigate).not.toHaveBeenCalled();
     expect(getSession()?.id).toBe(a.id);
   });
@@ -234,9 +252,9 @@ describe("profile owner privacy", () => {
       }
       return normal(input);
     });
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await confirmSignOut();
     await act(async () => { late.resolve(Response.json({ signedOut: false }, { status: 503 })); });
-    await screen.findByRole("button", { name: "Retry sign out" });
+    await screen.findByRole("button", { name: "Try again" });
     await screen.findByText("Your account details are temporarily unavailable. Sign-out controls remain available below.");
     expect(navigate).not.toHaveBeenCalled();
     expect(screen.queryByText(/Chef A private address/)).toBeNull();
@@ -245,7 +263,7 @@ describe("profile owner privacy", () => {
       if (String(input) === "/api/auth/logout") { identity = null; return Promise.resolve(Response.json({ signedOut: true })); }
       return normal(input);
     });
-    fireEvent.click(screen.getByRole("button", { name: "Retry sign out" }));
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/" }));
     expect(getSession()).toBeNull();
   });
@@ -255,11 +273,11 @@ describe("profile owner privacy", () => {
     fetcher.mockImplementation(input => String(input) === "/api/auth/logout" ? late.promise : normal(input));
     render(createElement(ProfilePage));
     await screen.findByRole("heading", { name: "Chef A Fixture" });
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await confirmSignOut();
     change(a);
-    await screen.findByRole("heading", { name: "Chef A Fixture" });
+    await screen.findByRole("heading", { name: "Chef A Fixture", hidden: true });
     await act(async () => { late.resolve(Response.json({ signedOut: false }, { status: 503 })); });
-    expect(screen.queryByRole("button", { name: "Retry sign out" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     expect(navigate).not.toHaveBeenCalled();
   });
@@ -269,15 +287,16 @@ describe("profile owner privacy", () => {
     fetcher.mockImplementation(input => String(input) === "/api/auth/logout" ? (++calls === 1 ? first.promise : second.promise) : normal(input));
     render(createElement(ProfilePage));
     await screen.findByRole("heading", { name: "Chef A Fixture" });
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await confirmSignOut();
     change(b);
-    await screen.findByRole("heading", { name: "Chef B Fixture" });
+    await screen.findByRole("heading", { name: "Chef B Fixture", hidden: true });
+    // The dialog stays open for the new owner; its "Sign out" starts their own logout.
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     await act(async () => { first.resolve(Response.json({ signedOut: false }, { status: 503 })); });
     expect((screen.getByRole("button", { name: "Signing out…" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.queryByRole("button", { name: "Retry sign out" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     await act(async () => { second.resolve(Response.json({ signedOut: false }, { status: 503 })); });
-    await screen.findByRole("button", { name: "Retry sign out" });
+    await screen.findByRole("button", { name: "Try again" });
     expect(getSession()?.id).toBe(b.id);
     expect(navigate).not.toHaveBeenCalled();
   });
@@ -315,9 +334,9 @@ describe("Chef menu save and recovery", () => {
   }
   it("saves a new dish as a draft after Currently Available is turned on and back off", async () => {
     await openNew(); fillRequired();
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish added successfully");
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({ status: "DRAFT", available: false });
@@ -326,9 +345,9 @@ describe("Chef menu save and recovery", () => {
     stored = [{ ...fixture, status, available: false }];
     render(createElement(ChefMenuManager));
     fireEvent.click(await screen.findByRole("button", { name: "Edit Fixture dish" }));
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish updated successfully");
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({ status, available: false });
@@ -345,18 +364,18 @@ describe("Chef menu save and recovery", () => {
     vi.stubGlobal("URL", class extends URL { static createObjectURL() { return "blob:fixture"; } static revokeObjectURL() {} });
     await openNew(); fillRequired();
     fireEvent.change(screen.getByLabelText(/Dish photo/), { target: { files: [new File(["fixture"], "fixture.png", { type: "image/png" })] } });
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     expect((await screen.findByRole("alert")).textContent).toContain(code);
     expect(screen.getByRole("alert").textContent?.toLowerCase()).toContain("publishing");
-    expect((screen.getByRole("button", { name: "Save Dish" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Save dish" }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByRole("button", { name: "Reload menu to check the save" })).toBeNull();
     expect((screen.getByLabelText(/Dish Name/) as HTMLInputElement).value).toBe("Fixture dish");
     expect(screen.getByRole("img", { name: "Dish preview" }).getAttribute("src")).toBe("blob:fixture");
     expect(stored).toHaveLength(0);
     // The actual finance review/authority recovery happens outside this form.
     publishingReady = true;
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish added successfully");
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({ status: "ACTIVE", available: true });
@@ -366,8 +385,8 @@ describe("Chef menu save and recovery", () => {
     expect(uploads[0][0]).toBe(`/api/chef/menu/${stored[0].id}/images`);
     expect((uploads[0][1]?.body as FormData).get("file")).toMatchObject({ name: "fixture.png" });
     cleanup(); render(createElement(ChefMenuManager));
-    await screen.findByRole("heading", { name: "Fixture dish" });
-    expect(screen.getByRole("switch", { name: "Availability for Fixture dish" }).getAttribute("aria-checked")).toBe("true");
+    await screen.findByRole("button", { name: "Edit Fixture dish" });
+    expect(screen.getByRole("switch", { name: "Fixture dish available to order" }).getAttribute("aria-checked")).toBe("true");
   });
   it("takes a new approved Chef through kitchen setup, dish creation and persisted menu changes", async () => {
     let savedKitchen: ChefKitchen | null = null;
@@ -399,23 +418,23 @@ describe("Chef menu save and recovery", () => {
     cleanup(); render(createElement(ChefKitchenForm));
     await screen.findByRole("heading", { name: "New fixture kitchen" });
     cleanup(); await openNew(); fillRequired();
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish added successfully");
     fireEvent.click(screen.getByRole("button", { name: "Edit Fixture dish" }));
     fireEvent.change(screen.getByLabelText(/Price/), { target: { value: "190" } });
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish updated successfully");
-    await waitFor(() => expect((screen.getByRole("switch", { name: "Availability for Fixture dish" }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole("switch", { name: "Availability for Fixture dish" }));
+    await waitFor(() => expect((screen.getByRole("switch", { name: "Fixture dish available to order" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("switch", { name: "Fixture dish available to order" }));
     await screen.findByText("Dish is now unavailable");
-    await waitFor(() => expect((screen.getByRole("switch", { name: "Availability for Fixture dish" }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole("switch", { name: "Availability for Fixture dish" }));
+    await waitFor(() => expect((screen.getByRole("switch", { name: "Fixture dish available to order" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("switch", { name: "Fixture dish available to order" }));
     await screen.findByText("Dish is now available");
     cleanup(); render(createElement(ChefMenuManager));
-    await screen.findByRole("heading", { name: "Fixture dish" });
+    await screen.findByRole("button", { name: "Edit Fixture dish" });
     expect(screen.getByText("₹190.00")).toBeTruthy();
-    expect(screen.getByRole("switch", { name: "Availability for Fixture dish" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("switch", { name: "Fixture dish available to order" }).getAttribute("aria-checked")).toBe("true");
   });
   it.each(["phoneNumber", "areaName", "postalCode"] as const)("focuses missing pickup %s instead of opening an unorderable kitchen", async field => {
     vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
@@ -452,7 +471,7 @@ describe("Chef menu save and recovery", () => {
       throw new Error(`Unexpected kitchen fixture route ${input}`);
     });
     render(createElement(ChefKitchenForm));
-    fireEvent.click(await screen.findByRole("button", { name: "Change kitchen details" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit kitchen details" }));
     expect((screen.getByLabelText(/Kitchen phone/) as HTMLInputElement).value).toBe(savedPhone ?? a.phoneNumber);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Yes, this is right" }));
@@ -521,67 +540,67 @@ describe("Chef menu save and recovery", () => {
     else {
       stored = [{ ...fixture }];
       render(createElement(ChefMenuManager));
-      await screen.findByRole("heading", { name: "Fixture dish" });
+      await screen.findByRole("button", { name: "Edit Fixture dish" });
       if (method === "PUT") fireEvent.click(screen.getByRole("button", { name: "Edit Fixture dish" }));
     }
     fetcher.mockResolvedValueOnce(Response.json({ code: "KITCHEN_PROFILE_REQUIRED" }, { status: 400 }));
-    fireEvent.click(screen.getByRole(method === "PATCH" ? "switch" : "button", { name: method === "PATCH" ? "Availability for Fixture dish" : "Save Dish" }));
+    fireEvent.click(screen.getByRole(method === "PATCH" ? "switch" : "button", { name: method === "PATCH" ? "Fixture dish available to order" : "Save dish" }));
     expect((await screen.findByRole("link", { name: "Set up my kitchen" })).getAttribute("href")).toBe("/chef/kitchen");
-    expect(screen.queryByRole("button", { name: "Save Dish" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save dish" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Add Dish" })).toBeNull();
     expect(screen.queryByText(/Dish (added|updated) successfully|Dish is now/)).toBeNull();
   });
   it("creates, edits, changes availability and retains the server result after remount", async () => {
     await openNew(); fillRequired();
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish added successfully");
     expect(stored[0]).toMatchObject({ status: "ACTIVE", available: true, unitPackageWeightGrams: 500, preparationTimeMinutes: null });
     fireEvent.click(screen.getByRole("button", { name: "Edit Fixture dish" }));
     fireEvent.change(screen.getByLabelText(/Price/), { target: { value: "200.50" } });
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish updated successfully");
     expect(stored[0]).toMatchObject({ status: "ACTIVE", available: false });
-    await waitFor(() => expect((screen.getByRole("switch", { name: "Availability for Fixture dish" }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole("switch", { name: "Availability for Fixture dish" }));
+    await waitFor(() => expect((screen.getByRole("switch", { name: "Fixture dish available to order" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("switch", { name: "Fixture dish available to order" }));
     await screen.findByText("Dish is now available");
-    fireEvent.click(screen.getByRole("switch", { name: "Availability for Fixture dish" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Fixture dish available to order" }));
     await screen.findByText("Dish is now unavailable");
     cleanup(); render(createElement(ChefMenuManager));
-    await screen.findByRole("heading", { name: "Fixture dish" });
+    await screen.findByRole("button", { name: "Edit Fixture dish" });
     expect(screen.getByText("₹200.50")).toBeTruthy();
-    expect(screen.getByRole("switch", { name: "Availability for Fixture dish" }).getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByRole("switch", { name: "Fixture dish available to order" }).getAttribute("aria-checked")).toBe("false");
     expect(fetcher.mock.calls.filter(([, options]) => options?.method === "POST")).toHaveLength(1);
   });
   it("focuses each missing required field and never submits fractional packed weight", async () => {
     await openNew();
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Dish Name/)));
     expect(screen.getByText("Dish name is required.")).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/Dish Name/), { target: { value: "Fixture" } });
     fireEvent.change(screen.getByLabelText(/Category/), { target: { value: "Meals" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("radio", { name: "Veg" })));
     fireEvent.click(screen.getByRole("radio", { name: "Veg" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Price/)));
     fireEvent.change(screen.getByLabelText(/Price/), { target: { value: "180" } });
     fireEvent.change(screen.getByLabelText(/Packed weight/), { target: { value: "2.5" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Packed weight/)));
     expect(fetcher.mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
   });
   it("shows server rejection codes and prevents an uncertain POST from being duplicated", async () => {
     await openNew(); fillRequired();
     fetcher.mockResolvedValueOnce(Response.json({ code: "MENU_REQUEST_FAILED" }, { status: 400 }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     expect((await screen.findByRole("alert")).textContent).toContain("MENU_REQUEST_FAILED");
     expect(screen.queryByText("Dish added successfully")).toBeNull();
     fetcher.mockResolvedValueOnce(Response.json({ code: "MENU_TIMEOUT" }, { status: 504 }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByRole("button", { name: "Reload menu to check the save" });
-    expect((screen.getByRole("button", { name: "Save Dish" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Save dish" }) as HTMLButtonElement).disabled).toBe(true);
   });
   it("keeps load errors separate from a genuinely empty menu", async () => {
     fetcher.mockResolvedValue(Response.json({ code: "MENU_UNAVAILABLE" }, { status: 503 }));
@@ -597,7 +616,7 @@ describe("Chef menu save and recovery", () => {
     fireEvent.change(screen.getByLabelText(/Dish photo/), { target: { files: [file] } });
     expect(screen.getByText("Choose a JPEG, PNG or WebP photo up to 8 MB.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Remove large.png" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish added successfully");
     expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/images"))).toBe(false);
   });
@@ -620,7 +639,7 @@ describe("Chef menu save and recovery", () => {
     expect(screen.queryByLabelText(/Add photo/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Remove b.png" }));
     expect(screen.getByText("4 of 5 photos")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish updated successfully");
     const uploads = fetcher.mock.calls.filter(([url]) => String(url).endsWith("/images"));
     expect(uploads.map(([, options]) => ((options?.body as FormData).get("file") as File).name)).toEqual(["a.png", "c.png"]);
@@ -657,11 +676,11 @@ describe("Chef menu save and recovery", () => {
     vi.stubGlobal("URL", class extends URL { static createObjectURL() { return "blob:fixture"; } static revokeObjectURL() {} });
     fetcher.mockImplementation((input, options) => String(input).endsWith("/images") ? Promise.resolve(Response.json({ code: "MENU_IMAGE_UPLOAD_FAILED" }, { status: 500 })) : original(input, options));
     fireEvent.change(screen.getByLabelText(/Dish photo/), { target: { files: [new File(["fixture"], "photo.png", { type: "image/png" })] } });
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     expect((await screen.findByRole("alert")).textContent).toContain("Dish details saved, but a photo was not confirmed");
     expect(screen.queryByText("Dish added successfully")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Remove photo.png" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish updated successfully");
     expect(stored).toHaveLength(1);
     expect(fetcher.mock.calls.filter(([url, options]) => url === "/api/chef/menu" && options?.method === "POST")).toHaveLength(1);
@@ -671,7 +690,8 @@ describe("Chef menu save and recovery", () => {
 describe("Approved Chef first step", () => {
   beforeEach(() => {
     window.localStorage.clear();
-    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    // The approval prompt is the shared Sheet, which follows the wide-screen query.
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })));
   });
   it.each([false, true])("offers the correct approval action when a saved kitchen exists: %s", async hasKitchen => {
     fetcher.mockImplementation(input => {
@@ -693,7 +713,7 @@ describe("Approved Chef first step", () => {
       return normal(input);
     });
     render(createElement(ChefModeDashboard));
-    await screen.findByRole("button", { name: "Refresh kitchen and menu" });
+    await screen.findByRole("button", { name: "Try again" });
     expect(screen.queryByRole("link", { name: "Set up my kitchen" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Name my kitchen" })).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();

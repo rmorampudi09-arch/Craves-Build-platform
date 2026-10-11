@@ -71,7 +71,9 @@ export function safeReturnPath(value: unknown): string {
   try {
     const base = "https://craves.invalid";
     const target = new URL(value, base);
-    return target.origin === base ? `${target.pathname}${target.search}${target.hash}` : "/";
+    const path = `${target.pathname}${target.search}${target.hash}`;
+    // "/a/..//evil.com" normalises to "//evil.com", which a browser reads as another host.
+    return target.origin === base && !path.startsWith("//") ? path : "/";
   } catch { return "/"; }
 }
 

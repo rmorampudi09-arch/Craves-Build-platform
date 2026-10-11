@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 
 import { CartKitchenReplacementDialogHost } from "@/features/cart/components/CartKitchenReplacementDialogHost";
 import { BottomNav } from "@/features/customer-shell/components/BottomNav";
+import { ChefModeGuard } from "@/features/chef/components/ChefModeGuard";
+import { MotionPreferences } from "@/shared/components/layout/MotionPreferences";
 import { StructuredData } from "@/features/seo/components/StructuredData";
 import { cravesLogoUrl, cravesSiteGraph, seoKeywords, siteUrl } from "@/features/seo/lib/seo-craves";
 
@@ -31,7 +33,8 @@ export const metadata: Metadata = {
   applicationName: "Craves",
   title: {
     default: "Craves — Homemade Food from Trusted Home Chefs",
-    template: "%s – Craves",
+    // Page titles already end in "| Craves"; appending again produced "… | Craves – Craves".
+    template: "%s",
   },
   description:
     "Discover homemade food, trusted home chefs, live dishes, secure checkout, and delivery-supported ordering in Hyderabad and Bangalore with Craves.",
@@ -78,12 +81,17 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${displayFont.variable} ${bodyFont.variable}`}
+      // Lets Next jump to the top on navigation instead of animating under global smooth scroll.
+      data-scroll-behavior="smooth"
     >
       <body>
         <StructuredData data={cravesSiteGraph()} />
-        {children}
-        <BottomNav />
-        <CartKitchenReplacementDialogHost />
+        <MotionPreferences>
+          {children}
+          <BottomNav />
+          <CartKitchenReplacementDialogHost />
+          <ChefModeGuard />
+        </MotionPreferences>
       </body>
     </html>
   );

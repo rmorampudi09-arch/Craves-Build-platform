@@ -59,7 +59,7 @@ test("signed-in home loads live discovery and opens customer kitchen details wit
   assert.match(contents, /<DishesGrid/);
   assert.match(contents, /<HomeSearchOverlay/);
   assert.match(contents, /<CustomerSignOutDialog/);
-  assert.match(contents, /<CartAddressAvailabilityDialog/);
+  assert.match(contents, /<CartAddressAvailabilityBanner/);
   assert.match(contents, /nearbyKitchenIds/);
   assert.match(contents, /loadKitchenMenu\(kitchenId\)/);
   assert.match(contents, /unavailableCartItems/);
@@ -80,7 +80,7 @@ test("signed-in home loads live discovery and opens customer kitchen details wit
   assert.match(returnState, /scrollY/);
   assert.match(returnState, /searchTerm/);
   assert.match(returnState, /homeCategory/);
-  assert.match(signOut, /role="dialog"/);
+  assert.match(signOut, /<Dialog/);
   assert.match(signOut, /Sign out of Craves\?/);
   assert.match(signOut, /Stay signed in/);
   assert.match(kitchensService, /export function allKitchens\(\)/);
@@ -152,6 +152,7 @@ test("dish and customer kitchen detail pages recover live data and return to sav
   assert.match(customerKitchenRoute, /ChefProfilePage/);
   assert.doesNotMatch(customerKitchenRoute, /ChefAccessBoundary|ChefWorkspaceNavigation/);
   assert.match(legacyChefRoute, /redirect\(`\/kitchen\/\$\{encodeURIComponent\(id\)\}`\)/);
+  assert.match(legacyChefRoute, /if \(!KITCHEN_ID\.test\(id\)\) notFound\(\);/);
 });
 
 test("home kitchen and dish details share one live floating cart without forcing checkout", () => {
@@ -171,7 +172,13 @@ test("home kitchen and dish details share one live floating cart without forcing
 
   assert.match(kitchen, /useCustomerCartSummary\(\)/);
   assert.match(dish, /useCustomerCartSummary\(\)/);
-  assert.match(dish, /cartSummary\.itemCount === 0 \? \(/);
+  // Phones keep one add control: the bottom bar stays mounted and turns into View cart.
+  assert.match(dish, /<DishBottomBar\s+price=/);
+  assert.doesNotMatch(dish, /cartSummary\.itemCount === 0 \? \(/);
+  assert.match(dish, /inCart=\{Boolean\(cartLine\)\}/);
+  assert.match(dish, /justAdded=\{justAdded\}/);
+  assert.match(dish, /mt-5 hidden rounded-2xl border border-\[#E5E7EB\] p-3\.5 lg:block/);
+  assert.match(dish, /max-lg:!hidden/);
   assert.match(dish, /messageKind === "success"/);
   assert.match(dish, /was added to your cart/);
   assert.doesNotMatch(dish, /navigate\(\{ to: "\/cart" \}\);/);
@@ -234,12 +241,12 @@ test("pending chef applications remain editable exactly as the backend permits",
   );
 });
 
-test("chef dashboard reuses the working Craves session for applicants and chefs", () => {
+test("chef dashboard reuses the session its access boundary confirmed", () => {
   const dashboard = source("../../chef/components/chef-mode-dashboard.tsx");
   const phoneAuth = source("../../sign-in/components/phone-auth-form.tsx");
-  assert.match(dashboard, /loadSession\(\)/);
-  assert.match(dashboard, /state === "applicant"/);
-  assert.match(dashboard, /Open chef application/);
+  assert.match(dashboard, /useSyncExternalStore\(subscribeSession, getSession/);
+  // The boundary already loaded the session and refreshed roles once; the dashboard never repeats it.
+  assert.doesNotMatch(dashboard, /loadSession|synchronizeSessionRoles/);
   assert.doesNotMatch(dashboard, /fetch\("\/api\/chef\/me"/);
   assert.match(phoneAuth, /Secure Craves access/);
   assert.doesNotMatch(phoneAuth, /Secure customer access/);
@@ -256,19 +263,21 @@ test("protected chef pages synchronize the JWT after admin grants CHEF", () => {
   const boundary = source("../../chef/components/chef-access-boundary.tsx");
   assert.match(auth, /synchronizeSessionRoles/);
   assert.match(auth, /fetch\("\/api\/auth\/refresh"/);
-  assert.match(boundary, /loadSession\(\)/);
+  assert.match(boundary, /loadSession\(/);
   assert.match(boundary, /synchronizeSessionRoles\(\)/);
+  assert.match(boundary, /isChefModeVerified\(current\.id\)/);
   // Role denial and session races are exercised by rendered components in chef-profile-session.vitest.ts.
 
   for (const page of [
     "../../../app/chef/kitchen/page.tsx",
     "../../../app/chef/menu/page.tsx",
-    "../../../app/chef/menu/media/page.tsx",
     "../../../app/chef/orders/page.tsx",
     "../../../app/chef/orders/[orderId]/page.tsx",
   ]) {
     assert.match(source(page), /ChefAccessBoundary/, page);
   }
+  // The old menu photos URL only forwards to the protected menu page.
+  assert.match(source("../../../app/chef/menu/media/page.tsx"), /redirect\("\/chef\/menu"\)/);
 });
 
 test("customer headers stay lean and share the same responsive scroll behavior", () => {
@@ -288,6 +297,8 @@ test("customer headers stay lean and share the same responsive scroll behavior",
 
   assert.doesNotMatch(homeHeader, /PersistentCustomerServiceNav/);
   assert.doesNotMatch(detailHeader, /forceServiceNav/);
+  // Chef mode lives in Profile only; no customer header carries a chef shortcut.
+  assert.doesNotMatch(detailHeader, /user=\{/);
 
   for (const surface of [
     homeHeader,
@@ -308,10 +319,11 @@ test("customer headers stay lean and share the same responsive scroll behavior",
   assert.match(autoHide, /travel >= HIDE_DELTA_PX/);
   assert.match(autoHide, /travel >= SHOW_DELTA_PX/);
   assert.match(autoHide, /requestAnimationFrame/);
-  assert.match(autoHide, /duration-\[260ms\]/);
-  assert.match(autoHide, /--craves-desktop-header-offset-md/);
-  assert.match(autoHide, /--craves-desktop-header-offset-lg/);
+  assert.match(autoHide, /\{ passive: true \}/);
+  assert.match(autoHide, /duration-\(--dur-chrome\)/);
+  assert.match(autoHide, /export function useScrollChrome\(\)/);
+  assert.match(autoHide, /export function holdScrollChrome\(/);
   assert.match(autoHide, /motion-reduce:transition-none/);
-  assert.match(autoHide, /onFocusCapture=\{\(\) => setHidden\(false\)\}/);
+  assert.match(autoHide, /onFocusCapture=\{revealScrollChrome\}/);
   assert.match(homeHeader, /<AutoHideCustomerHeader mobileStatic/);
 });

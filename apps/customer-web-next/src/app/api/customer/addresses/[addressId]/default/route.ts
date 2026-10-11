@@ -23,7 +23,7 @@ function failure(status: number, message?: string) {
           ? "Please sign in again."
           : status === 404
             ? "Address was not found."
-            : "Default address could not be updated."),
+            : "Your default address didn’t change. Try again."),
     },
     { status },
   );
@@ -93,7 +93,7 @@ export async function PUT(
     if (!updateResponse.ok) {
       return failure(
         updateResponse.status,
-        updatedBody?.message || "Default address could not be updated.",
+        updatedBody?.message || "Your default address didn’t change. Try again.",
       );
     }
 

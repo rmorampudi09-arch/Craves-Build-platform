@@ -8,7 +8,7 @@ test('an existing delivery response with null status cannot hide ready-for-picku
   const delivery = parseDeliveryStatusResponse({ orderId: '11111111-2222-4333-8444-555555555555',
     deliveryJobId: null, providerId: null, status: null, trackingUrl: null, observedAt: null, history: [] });
   const view = trackingPresentation('READY_FOR_PICKUP', delivery.status);
-  assert.equal(view.label, 'Ready For Pickup');
+  assert.equal(view.label, 'Ready for pickup');
   assert.match(view.description, /food is ready/i);
   assert.doesNotMatch(view.label, /waiting/i);
 });
@@ -17,7 +17,9 @@ test('missing tracking retains known order states without inventing rider progre
   for (const status of ['PAYMENT_PENDING', 'PAID', 'CHEF_ACCEPTANCE_PENDING', 'CHEF_ACCEPTED', 'PREPARING',
     'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CHEF_REJECTED', 'CANCELLED', 'REFUND_PENDING', 'REFUNDED', 'REFUND_FAILED']) {
     const view = trackingPresentation(status, null);
-    assert.equal(view.label.toUpperCase().replaceAll(' ', '_'), status);
+    // Every known state has its own customer label: no enum text, no generic fallback.
+    assert.doesNotMatch(view.label, /_|[A-Z]{3,}/);
+    assert.notEqual(view.label, 'Order update');
     assert.ok(view.description.length > 10);
     assert.doesNotMatch(view.description, /backend|projection|order service|delivery job/i);
   }

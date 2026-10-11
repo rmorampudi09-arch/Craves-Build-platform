@@ -45,22 +45,19 @@ export function AccountCard({
       className="overflow-hidden rounded-[1.6rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_12px_34px_rgba(26,26,26,0.07)] sm:p-5 md:rounded-[1.8rem] md:p-6"
     >
       <div className="flex items-start gap-3.5 sm:gap-4">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#FFF1EF] text-xl font-black text-[#F62E18] sm:h-20 sm:w-20 sm:text-2xl">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-xl font-black text-[#1A1A1A] sm:h-20 sm:w-20 sm:text-2xl">
           {initials(displayName)}
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">
-                Customer account
-              </p>
-              <h1
+              <h2
                 id="customer-profile-name"
                 className="mt-1.5 truncate text-xl font-black tracking-[-0.025em] text-[#1A1A1A] sm:text-2xl"
               >
                 {displayName}
-              </h1>
+              </h2>
             </div>
 
             <button

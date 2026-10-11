@@ -62,8 +62,12 @@ export function DetailBrowseHeader({ returnPath, onBack }: DetailBrowseHeaderPro
           ? "Other"
           : rawLocationType || "Location";
 
+  // Home's search opens with whatever was typed here (a tap or Enter); a stale term never carries.
   const openSearch = () => {
+    const term = searchTerm.trim();
     window.sessionStorage.setItem("craves-home-open-search", "1");
+    if (term) window.sessionStorage.setItem("craves-home-search-term", term);
+    else window.sessionStorage.removeItem("craves-home-search-term");
     navigate({ to: "/home" });
   };
 
@@ -82,10 +86,11 @@ export function DetailBrowseHeader({ returnPath, onBack }: DetailBrowseHeaderPro
       onLogout={() => void handleLogout()}
       searchTerm={searchTerm}
       onSearchTermChange={setSearchTerm}
-      onSearchFocus={openSearch}
+      onSearchActivate={openSearch}
+      onSearchSubmit={openSearch}
       returnPath={returnPath}
       onBack={onBack}
-      backLabel="Back to home"
+      backLabel="Back"
     />
   );
 }

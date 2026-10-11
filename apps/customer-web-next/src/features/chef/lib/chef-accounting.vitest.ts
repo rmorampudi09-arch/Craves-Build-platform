@@ -20,14 +20,14 @@ describe("shared chef accounting breakdown", () => {
   });
   it("does not imply fee GST is charged again or outstanding is withdrawable", () => {
     const html=renderToStaticMarkup(createElement(ChefAccountingBreakdown,{accounting}));
-    expect(html).toContain("not an extra deduction");expect(html).toContain("Customer food GST is separate");
-    expect(html).toContain("not necessarily available to withdraw");expect(html).toContain("all recorded history");
+    expect(html).toContain("not an extra deduction");expect(html).toContain("GST on customers’ food is separate");
+    expect(html).toContain("isn’t always available to withdraw");expect(html).toContain("recorded so far");
   });
   it("does not turn an absent breakdown into zero", () => {
     const html=renderToStaticMarkup(createElement(ChefAccountingBreakdown,{accounting:undefined}));
-    expect(html).toContain("unavailable");expect(html).not.toContain("₹0");
+    expect(html).toContain("couldn’t load");expect(html).not.toContain("₹0");
   });
   it("clearly excludes legacy records from new balances", () => {
-    expect(renderToStaticMarkup(createElement(ChefAccountingBreakdown,{accounting:{...accounting,legacyRecords:2}}))).toContain("not automatically added");
+    expect(renderToStaticMarkup(createElement(ChefAccountingBreakdown,{accounting:{...accounting,legacyRecords:2}}))).toContain("aren’t added to your withdrawable balance automatically");
   });
 });

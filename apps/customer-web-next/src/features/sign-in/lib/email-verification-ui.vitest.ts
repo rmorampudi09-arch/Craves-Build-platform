@@ -11,6 +11,8 @@ import { clearSession, getSession, setSessionIdentity } from "../../auth/api/cra
 import type { EmailVerificationState } from "./email-verification-contract";
 
 const phoneSignIn = vi.hoisted(() => vi.fn());
+// The chef application keeps its step in the URL through the App Router.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }), usePathname: () => "/chef/application", useSearchParams: () => new URLSearchParams() }));
 vi.mock("firebase/auth", () => ({
   RecaptchaVerifier: class { async render() { return 0; } clear() {} },
   signInWithPhoneNumber: phoneSignIn,

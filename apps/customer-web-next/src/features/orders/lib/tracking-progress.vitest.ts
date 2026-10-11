@@ -7,7 +7,6 @@ import TrackingPage from '../screens/OrderTracking';
 
 const fixture = vi.hoisted(() => ({ id: '11111111-2222-4333-8444-555555555555', navigate: vi.fn() }));
 vi.mock('@tanstack/react-router', () => ({
-  getRouteApi: () => ({ useSearch: () => ({ id: fixture.id }) }),
   useNavigate: () => fixture.navigate,
   Link: ({ children, to }: { children: ReactNode; to: string }) => createElement('a', { href: to }, children),
 }));
@@ -24,8 +23,8 @@ it('renders ready-for-pickup as the headline for a valid empty delivery projecti
   vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(url.endsWith('/delivery-status')
     ? { orderId: fixture.id, deliveryJobId: null, providerId: null, status: null, trackingUrl: null, observedAt: null, history: [] }
     : order), { status: 200, headers: { 'Content-Type': 'application/json' } })));
-  render(createElement(TrackingPage));
-  expect(await screen.findByRole('heading', { name: 'Ready For Pickup' })).toBeTruthy();
+  render(createElement(TrackingPage, { orderId: fixture.id }));
+  expect(await screen.findByRole('heading', { name: 'Ready for pickup' })).toBeTruthy();
   expect(screen.queryByRole('heading', { name: 'Waiting for delivery updates' })).toBeNull();
   expect(screen.getByText('Total')).toBeTruthy();
   expect(screen.queryByText('Backend total')).toBeNull();

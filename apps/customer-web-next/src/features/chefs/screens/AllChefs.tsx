@@ -215,13 +215,12 @@ export function AllChefsPage() {
   };
 
   if (!user) {
-    return <CustomerPageSkeleton label="Loading nearby home chefs" />;
+    return <CustomerPageSkeleton variant="chefs" label="Loading nearby home chefs" />;
   }
 
   return (
     <div className="min-h-screen bg-white pb-24 text-[#1A1A1A]">
       <BrowseHeader
-        user={user}
         locationLabel={locationLabel(address)}
         locationTypeLabel={locationTypeLabel(address)}
         onOpenLocation={openAddressManager}
@@ -230,7 +229,7 @@ export function AllChefsPage() {
         onLogout={() => setSignOutOpen(true)}
         searchTerm={searchTerm}
         onSearchTermChange={setSearchTerm}
-        onSearchFocus={() => undefined}
+        onSearchActivate={() => undefined}
         returnPath="/chefs"
       />
 

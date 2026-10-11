@@ -24,7 +24,6 @@ export function BillSummaryCard({
           <FaBagShopping className="text-lg" aria-hidden="true" />
         </span>
         <div>
-          <p className="craves-overline text-[#6B6B6B]">Current cart</p>
           <h2 className="font-display text-lg font-bold text-[#1A1A1A]">
             Bill preview
           </h2>

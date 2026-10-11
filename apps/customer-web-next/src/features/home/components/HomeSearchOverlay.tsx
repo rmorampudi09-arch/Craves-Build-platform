@@ -1,15 +1,18 @@
 import { Link } from "@tanstack/react-router";
+import { motion, useIsPresent } from "framer-motion";
 import { useEffect, useMemo, useRef } from "react";
 import {
   ArrowLeft,
   ChefHat,
+  ChevronRight,
   MapPin,
   Search,
   SearchX,
-  UtensilsCrossed,
 } from "lucide-react";
 
 import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
+import { useOverlayHistory } from "@/shared/ui/overlays/overlay";
+import { ease } from "@/shared/lib/motion";
 import type { NearbyKitchen } from "@/features/home/lib/discovery-contract";
 import type { Dish } from "@/features/dish/api/dishes";
 import styles from "@/features/home/screens/HomeReference.module.css";
@@ -47,6 +50,9 @@ export function HomeSearchOverlay({
 }: HomeSearchOverlayProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const normalized = searchTerm.trim().toLocaleLowerCase("en-IN");
+  // Phone Back closes search instead of leaving Craves; the entry goes as the fade starts.
+  const present = useIsPresent();
+  useOverlayHistory(present, onClose);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -93,8 +99,16 @@ export function HomeSearchOverlay({
   const showVegEmptyState = vegOnly && dishResults.length === 0;
 
   return (
-    <div className={`${styles.searchOverlay} fixed inset-0 z-[70] overflow-y-auto bg-white text-[#1A1A1A]`} role="dialog" aria-modal="true" aria-label="Search Craves">
-      <div className="sticky top-0 z-10 border-b border-[#E5E7EB] bg-white/95 backdrop-blur-xl">
+    <motion.div
+      className="fixed inset-0 z-[70] origin-top overflow-y-auto overscroll-contain bg-white text-[#1A1A1A]"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Search Craves"
+      initial={{ opacity: 0, scale: 0.997 }}
+      animate={{ opacity: 1, scale: 1, transition: { duration: 0.17, ease: ease.out } }}
+      exit={{ opacity: 0, transition: { duration: 0.15, ease: ease.in } }}
+    >
+      <div className="sticky top-0 z-10 border-b border-[#E5E7EB] bg-white">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-4 md:px-7">
           <button
             type="button"
@@ -105,7 +119,7 @@ export function HomeSearchOverlay({
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </button>
 
-          <label className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-[1.35rem] bg-[#F1F3F5] px-5 transition-all duration-200 hover:ring-2 hover:ring-[#F62E18]/40 hover:shadow-[0_10px_30px_rgba(246,46,24,0.16)] focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_12px_34px_rgba(246,46,24,0.18)]">
+          <label className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-[1.35rem] bg-[#F1F3F5] px-5 transition-[box-shadow] duration-200 hover:ring-2 hover:ring-[#1A1A1A]/15 hover:shadow-[0_10px_30px_rgba(26,26,26,0.14)] focus-within:ring-2 focus-within:ring-[#F62E18] focus-within:shadow-[0_12px_34px_rgba(26,26,26,0.14)]">
             <Search className="h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" />
             <span className="sr-only">Search dishes or home chefs</span>
             <input
@@ -126,10 +140,7 @@ export function HomeSearchOverlay({
 
       <main className="mx-auto max-w-5xl px-4 pb-16 pt-7 md:px-7 md:pt-9">
         <div className="mb-7">
-          <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">
-            {normalized ? "Search results" : "Explore nearby"}
-          </p>
-          <h2 className="mt-1.5 font-display text-3xl font-black tracking-[-0.04em] text-[#1A1A1A]">
+          <h2 className="font-display text-3xl font-black tracking-[-0.04em] text-[#1A1A1A]">
             {normalized ? `Results for “${searchTerm.trim()}”` : "What would you like to eat?"}
           </h2>
           <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">
@@ -149,7 +160,7 @@ export function HomeSearchOverlay({
             <button
               type="button"
               onClick={onDisableVeg}
-              className="mt-5 min-h-10 rounded-full !bg-[#F1F3F5] px-4 text-xs font-black !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
+              className="mt-5 min-h-10 rounded-full !bg-[#F1F3F5] px-4 text-xs font-black !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,translate] duration-200 hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
             >
               Turn off Veg filter
             </button>
@@ -193,7 +204,7 @@ export function HomeSearchOverlay({
                     <p className="mt-1 truncate text-xs font-semibold text-[#6B6B6B]">{dish.chef} · {dish.category}</p>
                     <p className="mt-2 text-sm font-black text-[#1A1A1A]">{priceLabel(dish.price, dish.currency)}</p>
                   </div>
-                  <UtensilsCrossed className="h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" />
+                  <ChevronRight className="h-5 w-5 shrink-0 text-[#6B6B6B]" aria-hidden="true" />
                 </Link>
               ))}
             </div>
@@ -214,7 +225,7 @@ export function HomeSearchOverlay({
                     key={kitchen.id}
                     to="/kitchen/$id"
                     params={{ id: kitchen.id }}
-                    className="group flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 transition hover:border-[#F62E18] hover:shadow-[0_8px_24px_rgba(246,46,24,0.09)]"
+                    className="group flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 transition-[border-color,box-shadow] hover:border-[#F62E18] hover:shadow-[0_8px_24px_rgba(26,26,26,0.09)]"
                   >
                     <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
                       <ChefHat className="h-6 w-6" aria-hidden="true" />
@@ -236,7 +247,7 @@ export function HomeSearchOverlay({
           </section>
         ) : null}
       </main>
-    </div>
+    </motion.div>
   );
 }
 

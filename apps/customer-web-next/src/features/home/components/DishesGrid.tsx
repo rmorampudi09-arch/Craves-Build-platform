@@ -1,36 +1,23 @@
-import * as Popover from "@radix-ui/react-popover";
+import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  ChevronDown,
   MapPin,
   RefreshCw,
   RotateCcw,
   SearchX,
-  SlidersHorizontal,
 } from "lucide-react";
 
 import { DishCard } from "@/features/home/components/DishCard";
 import skeletonStyles from "@/shared/components/loading/CustomerPageSkeleton.module.css";
 import type { DishCategory } from "@/features/home/lib/dishCategories";
-import type {
-  HomeDishSort,
-  HomeFoodPreference,
-} from "@/features/home/lib/home-return-state";
+import { DishFilterBar } from "@/features/home/components/DishFilterBar";
+import { activeFilterCount, type DishView } from "@/features/home/lib/dish-filters";
+import { AnimateCount } from "@/shared/ui/AnimateCount";
+import { listItem } from "@/shared/lib/motion";
 import type { Dish } from "@/features/dish/api/dishes";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
-
-type SortFilterOption = {
-  value: Exclude<HomeDishSort, "recommended">;
-  label: string;
-};
-
-const SORT_FILTERS: readonly SortFilterOption[] = [
-  { value: "rating", label: "Rating" },
-  { value: "price-low-high", label: "Cost: Low to High" },
-  { value: "price-high-low", label: "Cost: High to Low" },
-];
 
 const INITIAL_DISH_COUNT = 12;
 const DISH_BATCH_SIZE = 8;
@@ -41,10 +28,11 @@ interface DishesGridProps {
   searchTerm: string;
   state: DiscoveryState;
   message: string;
-  sort: HomeDishSort;
-  foodPreference: HomeFoodPreference;
-  onSortChange: (sort: HomeDishSort) => void;
-  onFoodPreferenceChange: (preference: HomeFoodPreference) => void;
+  /** Sort, filters and food type, changed together by the filter bar. */
+  view: DishView;
+  onViewChange: (next: DishView) => void;
+  /** How many loaded dishes a view would show (the filter sheet's "Show N dishes"). */
+  countFor: (view: DishView) => number;
   onRemoveFilters: () => void;
   onRetry: () => void;
   onManageAddress: () => void;
@@ -70,29 +58,15 @@ function DishSkeleton() {
   );
 }
 
-function SelectionCircle({ selected }: { selected: boolean }) {
-  return (
-    <span
-      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-200 group-hover:border-[#6B6B6B] ${
-        selected ? "border-[#1A1A1A]" : "border-[#A6A6A6]"
-      }`}
-      aria-hidden="true"
-    >
-      {selected ? <span className="h-2.5 w-2.5 rounded-full bg-[#1A1A1A]" /> : null}
-    </span>
-  );
-}
-
 export function DishesGrid({
   dishes,
   selectedCategory,
   searchTerm,
   state,
   message,
-  sort,
-  foodPreference,
-  onSortChange,
-  onFoodPreferenceChange,
+  view,
+  onViewChange,
+  countFor,
   onRemoveFilters,
   onRetry,
   onManageAddress,
@@ -100,9 +74,6 @@ export function DishesGrid({
   loadingMoreRemote = false,
   onLoadMore,
 }: DishesGridProps) {
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [draftSort, setDraftSort] = useState<HomeDishSort>(sort);
-  const [visibleCount, setVisibleCount] = useState(INITIAL_DISH_COUNT);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const normalizedSearch = searchTerm.trim();
   const dishViewKey = useMemo(
@@ -113,16 +84,15 @@ export function DishesGrid({
         .join("|"),
     [dishes],
   );
+  // Paging restarts with each new view in the same render (an effect would
+  // first shrink the page and make the browser clamp the scroll position).
+  const [paging, setPaging] = useState({ key: dishViewKey, count: INITIAL_DISH_COUNT });
+  const visibleCount = paging.key === dishViewKey ? paging.count : INITIAL_DISH_COUNT;
   const visibleDishes = useMemo(
     () => dishes.slice(0, visibleCount),
     [dishes, visibleCount],
   );
   const hasMoreDishes = visibleCount < dishes.length;
-  const initialVisibleCount = Math.min(INITIAL_DISH_COUNT, dishes.length);
-
-  useEffect(() => {
-    setVisibleCount(initialVisibleCount);
-  }, [dishViewKey, initialVisibleCount]);
 
   useEffect(() => {
     if (
@@ -141,9 +111,10 @@ export function DishesGrid({
         if (!entries[0]?.isIntersecting) return;
 
         if (hasMoreDishes) {
-          setVisibleCount((current) =>
-            Math.min(current + DISH_BATCH_SIZE, dishes.length),
-          );
+          setPaging({
+            key: dishViewKey,
+            count: Math.min(visibleCount + DISH_BATCH_SIZE, dishes.length),
+          });
           return;
         }
 
@@ -157,18 +128,26 @@ export function DishesGrid({
     observer.observe(target);
     return () => observer.disconnect();
   }, [
+    dishViewKey,
     dishes.length,
     hasMoreDishes,
     hasMoreRemote,
     loadingMoreRemote,
     onLoadMore,
     state,
+    visibleCount,
   ]);
-  const hasFilters = selectedCategory !== "All" || sort !== "recommended";
-  const activeFilterCount =
-    Number(selectedCategory !== "All") + Number(sort !== "recommended");
-  const emptyMessage =
-    foodPreference === "veg"
+  const { sort, foodPreference } = view;
+  // Veg lives in the header switch; every other narrowing shows in the filter bar.
+  const narrowing =
+    activeFilterCount({ filters: view.filters, foodPreference: foodPreference === "veg" ? "all" : foodPreference }) > 0;
+  const hasFilters = selectedCategory !== "All" || sort !== "recommended" || narrowing;
+  const heading = selectedCategory === "All" ? "Dishes near you" : selectedCategory;
+  const more = hasMoreRemote ? "+" : "";
+  const countLabel = `${dishes.length}${more} ${dishes.length === 1 && !more ? "dish" : "dishes"}`;
+  const emptyMessage = narrowing
+    ? "No dishes match these filters. Clear a filter to see more."
+    : foodPreference === "veg"
       ? normalizedSearch
         ? `No vegetarian dishes match “${normalizedSearch}”. Turn off the Veg filter to see all available dishes.`
         : "No vegetarian dishes are available for this view. Turn off the Veg filter to see all available dishes."
@@ -178,179 +157,57 @@ export function DishesGrid({
           ? message || "No active dishes are available for this delivery location yet."
           : `No active ${selectedCategory.toLowerCase()} dishes are available for this delivery location yet.`;
 
-  const scrollToDishes = () => {
-    const heading = document.getElementById("available-dishes-heading");
-    heading?.closest("section")?.scrollIntoView({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-      block: "start",
-    });
-  };
-
-  const handleFilterOpenChange = (open: boolean) => {
-    if (open) {
-      setDraftSort(sort);
-    }
-    setFiltersOpen(open);
-  };
-
-  const applyFilters = () => {
-    onSortChange(draftSort);
-    setFiltersOpen(false);
-    window.requestAnimationFrame(scrollToDishes);
-  };
-
-  const removeFilters = () => {
-    setDraftSort("recommended");
-    onRemoveFilters();
-    setFiltersOpen(false);
-    window.requestAnimationFrame(scrollToDishes);
-  };
-
   return (
     <section
-      className="mx-auto max-w-[88rem] scroll-mt-32 px-4 pb-10 pt-5 md:px-7 md:pt-6 lg:px-10 lg:pt-7"
+      className="mx-auto min-h-svh max-w-[88rem] px-4 pb-10 pt-5 md:px-7 md:pt-6 lg:px-10 lg:pt-7"
       aria-labelledby="available-dishes-heading"
     >
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#F62E18]">
-            Made close to you
-          </p>
           <h2
             id="available-dishes-heading"
+            // Focus lands here when "Clear filters" (which then disappears) is pressed.
+            tabIndex={-1}
             className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-3xl lg:text-4xl"
           >
-            {selectedCategory === "All" ? "Dishes near you" : selectedCategory}
+            {/* Heading and count change with the list in one frame: no blank fade gap. */}
+            {heading}
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
             Freshly prepared by nearby home kitchens, made with care.
           </p>
         </div>
         {state === "ready" ? (
-          <span
-            className="rounded-full bg-[#F1F3F5] px-3.5 py-2 text-xs font-black text-[#6B6B6B]"
-            aria-live="polite"
-          >
-            {dishes.length} {dishes.length === 1 ? "dish" : "dishes"}
-          </span>
+          <div className="flex items-center gap-2">
+            {/* The number rolls up or down with the change; the full count is announced once. */}
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#F1F3F5] px-3.5 py-2 text-xs font-black text-[#6B6B6B]">
+              <AnimateCount className="min-w-[1ch]" aria-hidden="true">
+                {dishes.length}
+              </AnimateCount>
+              <span aria-hidden="true">{more}{dishes.length === 1 && !more ? "dish" : "dishes"}</span>
+              <span className="sr-only" aria-live="polite">
+                {countLabel}
+              </span>
+            </span>
+            {/* Beside the count, so turning a filter on never pushes the list down. */}
+            {hasFilters ? (
+              <button
+                type="button"
+                onClick={onRemoveFilters}
+                className="inline-flex min-h-[2rem] items-center gap-1.5 rounded-full !border !border-[#E5E7EB] !bg-white px-3 text-xs font-black !text-[#1A1A1A] !shadow-none transition-[scale] duration-(--dur-micro) active:scale-[0.96]"
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                Clear filters
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
       {state === "ready" ? (
-        <div
-          className="mb-5 flex flex-wrap items-center gap-2.5 md:mb-6"
-          aria-label="Dish filters"
-        >
-          <div className="hidden flex-wrap items-center gap-2 rounded-[1.15rem] border border-[#E8EAED] bg-white p-1.5 shadow-[0_7px_22px_rgba(26,26,26,0.055)] md:flex">
-            <span className="px-2.5 text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">
-              Sort
-            </span>
-            {[
-              { value: "recommended" as HomeDishSort, label: "Recommended" },
-              ...SORT_FILTERS,
-            ].map((option) => {
-              const selected = sort === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => onSortChange(option.value)}
-                  className={[
-                    "min-h-12 rounded-[0.9rem] px-4 text-sm font-black transition-[background-color,color,box-shadow,transform] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/10",
-                    selected
-                      ? "bg-[#1A1A1A] text-white shadow-[0_4px_12px_rgba(26,26,26,0.16)]"
-                      : "bg-transparent text-[#6B6B6B] hover:bg-[#F1F3F5] hover:text-[#1A1A1A]",
-                  ].join(" ")}
-                  aria-pressed={selected}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="md:hidden">
-          <Popover.Root open={filtersOpen} onOpenChange={handleFilterOpenChange}>
-            <Popover.Trigger asChild>
-              <button
-                type="button"
-                className="inline-flex min-h-12 items-center gap-2 rounded-full !border !border-transparent !bg-[#F1F3F5] px-5 text-base font-black !text-[#1A1A1A] !shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-shadow hover:!shadow-[0_8px_20px_rgba(26,26,26,0.09)] focus-visible:!outline-none focus-visible:!ring-2 focus-visible:!ring-[#1A1A1A]/10"
-                aria-label="Open dish filters"
-              >
-                <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
-                Filters
-                {activeFilterCount > 0 ? (
-                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-[0.65rem] font-black text-[#F62E18]">
-                    {activeFilterCount}
-                  </span>
-                ) : null}
-                <ChevronDown className="h-4 w-4 text-[#6B6B6B]" aria-hidden="true" />
-              </button>
-            </Popover.Trigger>
-
-            <Popover.Portal>
-              <Popover.Content
-                sideOffset={10}
-                align="start"
-                className="z-[80] w-[22rem] max-w-[calc(100vw-2rem)] origin-top-left overflow-hidden rounded-[1.55rem] border border-[#F1F3F5] bg-white shadow-[0_24px_60px_rgba(26,26,26,0.16)] outline-none"
-                aria-label="Dish filter options"
-              >
-                <div className="px-5 py-4">
-                  <p className="text-[0.66rem] font-black uppercase tracking-[0.16em] text-[#6B6B6B]">
-                    Sorting
-                  </p>
-                  <div className="mt-2" role="radiogroup" aria-label="Dish sorting">
-                    {SORT_FILTERS.map((option) => {
-                      const selected = draftSort === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          role="radio"
-                          aria-checked={selected}
-                          onClick={() => setDraftSort(option.value)}
-                          className="group flex min-h-12 w-full items-center justify-between gap-4 rounded-xl !border-0 !bg-white px-2 py-3 text-left text-base font-bold !text-[#1A1A1A] !shadow-none transition-colors hover:!bg-[#F1F3F5]/70 active:!transform-none"
-                        >
-                          <span>{option.label}</span>
-                          <SelectionCircle selected={selected} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 border-t border-[#F1F3F5] bg-white p-3">
-                  <button
-                    type="button"
-                    onClick={removeFilters}
-                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl !border !border-transparent !bg-[#F1F3F5] px-3 text-sm font-black !text-[#1A1A1A] !shadow-none transition-shadow hover:!shadow-[0_6px_16px_rgba(26,26,26,0.08)]"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                    Remove Filters
-                  </button>
-                  <button
-                    type="button"
-                    onClick={applyFilters}
-                    className="min-h-12 rounded-xl !border !border-transparent !bg-[#F1F3F5] px-4 text-sm font-black !text-[#1A1A1A] !shadow-none transition-shadow hover:!shadow-[0_6px_16px_rgba(26,26,26,0.08)]"
-                  >
-                    Apply
-                  </button>
-                </div>
-              </Popover.Content>
-            </Popover.Portal>
-          </Popover.Root>
-          </div>
-
-          {hasFilters ? (
-            <button
-              type="button"
-              onClick={removeFilters}
-              className="inline-flex min-h-12 items-center gap-2 rounded-[0.9rem] !border !border-[#E5E7EB] !bg-white px-4 text-sm font-black !text-[#6B6B6B] !shadow-[0_4px_14px_rgba(26,26,26,0.045)] transition-[color,box-shadow,border-color] hover:!border-[#D7DADF] hover:!text-[#1A1A1A] hover:!shadow-[0_7px_18px_rgba(26,26,26,0.07)]"
-            >
-              <RotateCcw className="h-4 w-4" aria-hidden="true" />
-              Remove Filters
-            </button>
-          ) : null}
+        <div className="mb-5 md:mb-6">
+          {/* Filters, Sort and one-tap chips: a swipeable row on phones, wrapping on md+. */}
+          <DishFilterBar view={view} onViewChange={onViewChange} countFor={countFor} moreToLoad={hasMoreRemote} />
         </div>
       ) : null}
 
@@ -385,7 +242,7 @@ export function DishesGrid({
           <button
             type="button"
             onClick={onManageAddress}
-            className="mt-6 min-h-11 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white transition-shadow hover:shadow-[0_7px_18px_rgba(246,46,24,0.16)]"
+            className="mt-6 min-h-11 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white transition-shadow hover:shadow-[0_7px_18px_rgba(26,26,26,0.14)]"
           >
             Choose location
           </button>
@@ -393,7 +250,7 @@ export function DishesGrid({
       ) : null}
 
       {state === "error" ? (
-        <div className="rounded-[2rem] border border-[#F62E18]/25 bg-white p-8 text-center md:p-12">
+        <div className="rounded-[2rem] border border-[#E5E7EB] bg-white p-8 text-center md:p-12">
           <AlertTriangle
             className="mx-auto h-9 w-9 text-[#F62E18]"
             aria-hidden="true"
@@ -407,7 +264,7 @@ export function DishesGrid({
           <button
             type="button"
             onClick={onRetry}
-            className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 text-sm font-black text-[#F62E18] transition hover:bg-[#F62E18] hover:text-white"
+            className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 text-sm font-black text-[#F62E18] transition-colors hover:bg-[#F62E18] hover:text-white"
           >
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             Try again
@@ -427,16 +284,25 @@ export function DishesGrid({
           {foodPreference === "veg" ? (
             <button
               type="button"
-              onClick={() => onFoodPreferenceChange("all")}
-              className="mt-5 min-h-10 rounded-full !bg-[#F1F3F5] px-4 text-xs font-black !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
+              onClick={() => onViewChange({ ...view, foodPreference: "all" })}
+              className="mt-5 min-h-10 rounded-full !bg-[#F1F3F5] px-4 text-xs font-black !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,translate,scale] duration-200 hover:-translate-y-0.5 active:scale-[0.96] hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
             >
               Turn off Veg filter
+            </button>
+          ) : narrowing ? (
+            <button
+              type="button"
+              onClick={onRemoveFilters}
+              className="mt-5 inline-flex min-h-10 items-center gap-1.5 rounded-full !border !border-[#E5E7EB] !bg-white px-4 text-xs font-black !text-[#1A1A1A] !shadow-none"
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              Clear filters
             </button>
           ) : !normalizedSearch ? (
             <button
               type="button"
               onClick={onRetry}
-              className="mt-5 min-h-10 rounded-full border border-[#F62E18] bg-white px-4 text-xs font-black text-[#F62E18] transition hover:bg-[#F62E18] hover:text-white"
+              className="mt-5 min-h-10 rounded-full border border-[#F62E18] bg-white px-4 text-xs font-black text-[#F62E18] transition-colors hover:bg-[#F62E18] hover:text-white"
             >
               Refresh live catalog
             </button>
@@ -460,19 +326,36 @@ export function DishesGrid({
 
       {state === "ready" && dishes.length > 0 ? (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
-            {visibleDishes.map((dish, index) => (
-              <DishCard key={dish.id} dish={dish} priorityImage={index < 4} />
-            ))}
+          {/* A new view replaces the list at once (no exit phase, so no blank frames); its
+              first six cards fade and rise in on the compositor. */}
+          <div
+            key={dishViewKey}
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4"
+          >
+            {visibleDishes.map((dish, index) =>
+              index < 6 ? (
+                <motion.div key={dish.id} {...listItem(index)}>
+                  <DishCard dish={dish} priorityImage={index < 4} />
+                </motion.div>
+              ) : (
+                <DishCard key={dish.id} dish={dish} />
+              ),
+            )}
           </div>
           {hasMoreDishes || hasMoreRemote || loadingMoreRemote ? (
+            // The next row arrives as shimmer cards in the grid's own shape, not a spinner: one
+            // card per column, so the row is exactly as wide as the grid at every size.
             <div
               ref={loadMoreRef}
-              className="flex min-h-24 items-center justify-center"
+              className="mt-4 grid grid-cols-1 gap-4 sm:mt-5 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4"
               role="status"
               aria-label="Loading more nearby dishes"
             >
-              <span className="h-7 w-7 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-[#F62E18]" />
+              {["", "max-sm:hidden", "max-lg:hidden", "max-xl:hidden"].map((hide, index) => (
+                <div key={index} className={hide}>
+                  <DishSkeleton />
+                </div>
+              ))}
               <span className="sr-only">Loading more dishes</span>
             </div>
           ) : null}

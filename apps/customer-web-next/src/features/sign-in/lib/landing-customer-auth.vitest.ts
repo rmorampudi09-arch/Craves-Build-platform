@@ -46,7 +46,8 @@ beforeEach(() => {
   const browser = window;
   Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
   Object.defineProperty(browser, "matchMedia", { configurable: true, value: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }) });
-  vi.stubGlobal("window", new Proxy(browser, { get: (target, key) => key === "location" ? { assign: mocks.navigate } : Reflect.get(target, key, target) }));
+  vi.stubGlobal("window", new Proxy(browser, { get: (target, key) => key === "location" ? { assign: mocks.navigate, replace: mocks.navigate } : Reflect.get(target, key, target) }));
+  sessionStorage.clear();
   document.body.innerHTML = '<div id="root"><button id="trigger">Sign up / Sign in</button><div id="page-content">Landing</div></div>';
   document.getElementById("trigger")!.focus();
 });
@@ -147,7 +148,9 @@ it("verifies through the session API and routes only according to backend-owned 
   expect(mocks.confirm).toHaveBeenCalledWith("123456", expect.any(Function));
   expect(mocks.fetch).toHaveBeenCalledWith("/api/auth/session", expect.objectContaining({ method: "POST", credentials: "same-origin", body: JSON.stringify({ firebaseIdToken: "verified-token" }) }));
   expect(mocks.install).toHaveBeenCalledWith(identity);
-  expect(mocks.navigate).toHaveBeenCalledWith("/chef/application");
+  // The Home Chef OTP opens Chef Mode for this tab; its sign-in page picks the application or the kitchen.
+  expect(mocks.navigate).toHaveBeenCalledWith("/chef/sign-in?returnTo=/chef");
+  expect(JSON.parse(sessionStorage.getItem("craves.chef-mode") ?? "null")).toMatchObject({ userId: identity.id });
   expect(mocks.user?.roles).toEqual(["CUSTOMER"]);
 });
 
@@ -161,6 +164,7 @@ it("registers the original name fields before routing to customer home", async (
   expect(mocks.fetch).toHaveBeenCalledWith("/api/customer/profile", expect.objectContaining({ method: "PUT", body: JSON.stringify({ firstName: "Asha", lastName: "Rao" }) }));
   expect(mocks.profile).toHaveBeenCalledWith(profile, expect.any(Object));
   expect(mocks.navigate).toHaveBeenCalledWith("/home");
+  expect(sessionStorage.getItem("craves.chef-mode")).toBeNull();
 });
 
 it("starts Chef signup with phone OTP and reaches Basic details without a customer profile write", async () => {
@@ -174,7 +178,7 @@ it("starts Chef signup with phone OTP and reaches Basic details without a custom
   expect(mocks.install).toHaveBeenCalledWith(identity);
   expect(mocks.fetch.mock.calls.some(([url, options]) => url === "/api/customer/profile" && options?.method === "PUT")).toBe(false);
   expect(mocks.profile).not.toHaveBeenCalled();
-  expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/chef/application");
+  expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/chef/sign-in?returnTo=/chef");
   expect(mocks.user?.roles).toEqual(["CUSTOMER"]);
 });
 

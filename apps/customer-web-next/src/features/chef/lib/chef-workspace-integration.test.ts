@@ -6,18 +6,33 @@ function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
-test("chef workspace navigation exposes every implemented backend area", () => {
+test("chef workspace navigation and the More hub expose every implemented backend area", () => {
   const navigation = source("../components/chef-workspace-navigation.tsx");
-  for (const route of [
-    "/chef/application",
-    "/chef/kitchen",
-    "/chef/menu",
-    "/chef/orders",
-    "/chef/earnings",
-    "/chef/operations",
-  ]) {
-    assert.match(navigation, new RegExp(route.replaceAll("/", "\\/")));
+  const more = source("../../../app/chef/profile/page.tsx");
+  const earnings = source("../../../app/chef/earnings/page.tsx");
+  for (const route of ["/chef", "/chef/orders", "/chef/menu", "/chef/earnings", "/chef/profile"]) {
+    assert.match(navigation, new RegExp(`href: "${route.replaceAll("/", "\\/")}"`), route);
   }
+  assert.match(navigation, /label: "More"/);
+  for (const route of [
+    "/chef/kitchen",
+    "/chef/meal-plans",
+    "/chef/capacity",
+    "/chef/operations",
+    "/chef/earnings",
+    "/chef/finance",
+    "/chef/statements",
+    "/chef/application/status",
+    "/chef/notifications",
+    "/chef/support",
+  ]) {
+    assert.match(more, new RegExp(`href: "${route.replaceAll("/", "\\/")}"`), route);
+  }
+  assert.match(more, /Switch to customer app/);
+  assert.match(more, /Sign out/);
+  assert.doesNotMatch(more, /not available yet/i);
+  assert.match(earnings, /href="\/chef\/finance"/);
+  assert.match(earnings, /Balance &amp; payouts/);
 });
 
 test("dashboard loads only live chef service state", () => {
@@ -44,7 +59,8 @@ test("operations readiness uses supported backend controls only", () => {
   assert.match(operations, /parseChefApplicationReadiness/);
   assert.match(operations, /approvedDocumentCount/);
   assert.match(operations, /\/api\/chef\/application\/readiness/);
-  assert.match(operations, /no reviewed weekly opening-hours contract/i);
+  // No invented weekly schedule: the screen says opening hours aren't available yet.
+  assert.match(operations, /Weekly opening hours aren’t available yet/);
   assert.doesNotMatch(operations, /FSSAI.*required|commissionRate|deliveryRadius\s*=/i);
 });
 
@@ -53,7 +69,8 @@ test("chef earnings remain finance-owned and contract validated", () => {
   const route = source("../../../app/api/chef/earnings/route.ts");
   assert.match(route, /parseChefEarnings\(raw\)/);
   assert.match(route, /authenticatedApiFetch\(request, "\/chef\/earnings\?limit=200"\)/);
-  assert.match(ledger, /browser never calculates commission/i);
+  // Fees are shown from each recorded entry, never calculated in the browser.
+  assert.match(ledger, /entry\.commissionAmount/);
   assert.doesNotMatch(ledger, /commissionRate|platformCommission|initiatePayout/i);
 });
 
@@ -82,4 +99,12 @@ test("chef order actions use unique idempotency keys and strict responses", () =
   assert.match(actions, /parseChefOrderResponse\(result\)/);
   assert.match(acceptRoute, /"Idempotency-Key": actionId/);
   assert.match(rejectRoute, /"Idempotency-Key": actionId/);
+});
+
+test("chef pages render their headers only after the access check", () => {
+  for (const page of ["capacity", "meal-plans", "operations", "finance", "statements", "profile", "earnings"]) {
+    const contents = source(`../../../app/chef/${page}/page.tsx`);
+    const boundary = contents.indexOf("<ChefAccessBoundary>");
+    assert.ok(boundary >= 0 && boundary < contents.indexOf("<ChefPageHeader"), page);
+  }
 });

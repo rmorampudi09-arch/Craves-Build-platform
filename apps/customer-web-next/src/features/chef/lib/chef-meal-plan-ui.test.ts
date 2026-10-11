@@ -37,7 +37,7 @@ test("Chef meal plans communicate review, locking and capacity states", () => {
   assert.match(manager, /Subscription sales are frozen/);
   assert.match(manager, /Schedule locked/);
   assert.match(manager, /Admin review note/);
-  assert.match(manager, /Capacity matching this plan/);
+  assert.match(manager, /Plates for this plan/);
 });
 
 test("Chef meal plan controls meet the accessibility target-size baseline", () => {
@@ -48,13 +48,13 @@ test("Chef meal plan controls meet the accessibility target-size baseline", () =
   assert.match(manager, /aria-label=\{\`Remove meal/);
 });
 
-test("Chef meal plans remain reachable from Chef workspace navigation", () => {
+test("Chef meal plans remain reachable from the Chef Mode More hub", () => {
   const navigation = readFileSync(
-    new URL("../components/chef-workspace-navigation.tsx", import.meta.url),
+    new URL("../../../app/chef/profile/page.tsx", import.meta.url),
     "utf8",
   );
   assert.match(navigation, /href: "\/chef\/meal-plans"/);
-  assert.match(navigation, /label: "Meal Plans"/);
+  assert.match(navigation, /label: "Meal plans"/);
   assert.match(page, /ChefSubscriptionPlanManager/);
 });
 

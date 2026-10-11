@@ -25,7 +25,7 @@ export function AddressLabelFields({ value, onChange, disabled = false }: {
             type="button"
             aria-pressed={value.addressCategory === category}
             onClick={() => onChange({ ...value, addressCategory: category })}
-            className={`min-h-11 flex-1 rounded-xl border px-3 py-2 text-sm font-semibold ${value.addressCategory === category ? "border-[#F62E18] bg-red-50 text-[#B81F10]" : "border-slate-300 bg-white text-slate-800"}`}
+            className={`min-h-11 flex-1 rounded-xl border px-3 py-2 text-sm font-semibold ${value.addressCategory === category ? "border-[#F62E18] bg-white text-[#1A1A1A] shadow-[inset_0_0_0_1px_#F62E18]" : "border-[#D3D7DD] bg-white text-[#1A1A1A]"}`}
           >
             {category === "HOME" ? "Home" : category === "WORK" ? "Work" : "Other"}
           </button>

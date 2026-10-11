@@ -20,10 +20,11 @@ import {
   type ChefFormSection,
 } from "./chef-onboarding-flow";
 import { setSessionIdentity } from "../../auth/api/cravesAuth";
+import { markChefModeVerified } from "../../chef/lib/chef-mode";
 import type { BankStatus } from "../../admin/finance/lib/bank-onboarding-contract";
 
 const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
+vi.mock("next/navigation", () => ({ useRouter: () => navigation, usePathname: () => "/chef/application", useSearchParams: () => new URLSearchParams() }));
 vi.mock("../../addresses/components/AddressMapPicker", () => ({
   AddressMapPicker: ({ onCenterChange }: { onCenterChange: (value: unknown) => void }) =>
     createElement(
@@ -215,12 +216,23 @@ describe("Chef onboarding navigation and persistence", () => {
     fireEvent.click(primary("Submit application"));
     await screen.findByText("Accept the terms before submitting your application.");
     expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/submit"))).toBe(false);
-    fireEvent.click(screen.getByLabelText("Accept terms and privacy policy"));
+    fireEvent.click(screen.getByLabelText(/I confirm these details are correct/));
     fireEvent.click(primary("Submit application"));
     await screen.findByRole("heading", { name: "Application submitted" });
     expect(fetcher.mock.calls.some(([url]) => String(url).includes("/chef-onboarding/bank"))).toBe(false);
     expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith("/submit"))).toHaveLength(1);
     expect(screen.queryByRole("link", { name: "Go to dashboard" })).toBeNull();
+  });
+  it("lets an applicant save optional bank details early, reading bank status only when they choose to", async () => {
+    saved.bankEnrollmentRequired = false;
+    bank = { ...bankFixture, id: null, state: "NOT_SUBMITTED", lastFour: null, ifsc: null, bankValidated: false, automaticActivation: true, message: "Add your bank details once." };
+    open();
+    await review();
+    expect(screen.getByText(/one less step when payouts open/)).toBeTruthy();
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes("/chef-onboarding/bank"))).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Add or check bank details" }));
+    await screen.findByLabelText("Bank account number");
+    expect(fetcher.mock.calls.some(([url]) => String(url) === "/api/chef-onboarding/bank")).toBe(true);
   });
   it("skips deferred bank on document save and back navigation without changing other sections", async () => {
     saved.bankEnrollmentRequired = false;
@@ -357,7 +369,7 @@ describe("Chef onboarding navigation and persistence", () => {
   it("shows a backend eligibility rejection without fabricating submission", async () => {
     open();
     await review();
-    fireEvent.click(screen.getByLabelText("Accept terms and privacy policy"));
+    fireEvent.click(screen.getByLabelText(/I confirm these details are correct/));
     fetcher.mockImplementation((url, init) =>
       String(url).endsWith("/submit")
         ? Promise.resolve(
@@ -375,7 +387,7 @@ describe("Chef onboarding navigation and persistence", () => {
   it("prevents duplicate submissions and routes confirmed submissions to application status", async () => {
     open();
     await review();
-    fireEvent.click(screen.getByLabelText("Accept terms and privacy policy"));
+    fireEvent.click(screen.getByLabelText(/I confirm these details are correct/));
     let resolve!: (response: Response) => void;
     fetcher.mockImplementation((url, init) =>
       String(url).endsWith("/submit")
@@ -401,6 +413,9 @@ describe("Chef onboarding navigation and persistence", () => {
     expect(screen.getByRole("link", { name: "View application status" }).getAttribute("href")).toBe(
       "/chef/application/status",
     );
+    // Replace, so Back from the status page cannot reopen the submitted form.
+    expect(navigation.replace).toHaveBeenCalledWith("/chef/application/status");
+    expect(navigation.push).not.toHaveBeenCalledWith("/home");
     expect(screen.queryByRole("link", { name: "Go to dashboard" })).toBeNull();
   });
 });
@@ -412,6 +427,7 @@ describe("Authoritative status and bank verification", () => {
       const chef = { ...identity, roles: ["CHEF"] };
       saved.application = { ...saved.application, status: "APPROVED" };
       setSessionIdentity(chef);
+      markChefModeVerified(chef.id);
       let checks = 0;
       fetcher.mockImplementation((url, init) => {
         if (String(url) === "/api/auth/me") return Promise.resolve(Response.json(chef));
@@ -424,10 +440,12 @@ describe("Authoritative status and bank verification", () => {
         return normal(url, init);
       });
       render(createElement(ChefAccessBoundary, null, createElement("p", null, "Private operations")));
-      await screen.findByRole("button", { name: "Retry access check" });
+      await screen.findByRole("button", { name: "Try again" });
+      expect(screen.getByRole("heading", { name: "We couldn’t reach Craves" })).toBeTruthy();
+      expect(screen.queryByText(/Sign in again/)).toBeNull();
       expect(screen.queryByText("Private operations")).toBeNull();
       expect(navigation.replace).not.toHaveBeenCalled();
-      fireEvent.click(screen.getByRole("button", { name: "Retry access check" }));
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
       await screen.findByText("Private operations");
       expect(checks).toBeGreaterThanOrEqual(2);
     },
@@ -435,6 +453,7 @@ describe("Authoritative status and bank verification", () => {
   it("blocks direct operational access with a stale CHEF role when the application is pending", async () => {
     const chef = { ...identity, roles: ["CHEF"] };
     setSessionIdentity(chef);
+    markChefModeVerified(chef.id);
     fetcher.mockImplementation((url, init) =>
       String(url) === "/api/auth/me" ? Promise.resolve(Response.json(chef)) : normal(url, init),
     );
@@ -449,6 +468,16 @@ describe("Authoritative status and bank verification", () => {
     await screen.findByText("Submitted");
     expect(screen.queryByRole("link", { name: "Open Chef Dashboard" })).toBeNull();
     expect(screen.queryByRole("link", { name: /dashboard/i })).toBeNull();
+  });
+  it("explains a switched-off bank setup instead of offering a Continue that does nothing", async () => {
+    saved = { ...saved, bankEnrollmentRequired: true };
+    bank = { ...bankFixture, id: null, state: "NOT_SUBMITTED", automaticActivation: false };
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: /Bank details/ }));
+    await screen.findByRole("heading", { name: "Bank details" });
+    expect(await screen.findByText(/Adding a bank account isn’t open on Craves yet/)).toBeTruthy();
+    expect(screen.queryByLabelText("Bank account number")).toBeNull();
+    expect((primary("Continue") as HTMLButtonElement).disabled).toBe(true);
   });
   it("keeps bank re-entry in the same step, confirms masked details and retries with the same key", async () => {
     const onSaved = vi.fn(),

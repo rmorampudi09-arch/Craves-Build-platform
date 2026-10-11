@@ -2,7 +2,7 @@
 
 import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -12,9 +12,27 @@ import {
   RefreshCw,
 } from "lucide-react";
 import {
+  ChefEmpty,
+  ChefNotice,
+  ChefPageHead,
+  ChefPill,
+  ChefSection,
+  chefOrderStatus,
+  formatInr,
+  timeAgo,
+} from "@/features/chef/components/chef-ui";
+import { shortOrderNumber } from "@/shared/lib/order-number";
+import {
   parseChefOrdersResponse,
   type ChefOrder,
 } from "@/features/chef/lib/chef-order-contract";
+import { ChefOrderCard, OrderUpdateNotice, chefStatusIcon, focusOrderAfterUpdate, orderUpdateText } from "@/features/chef/components/chef-order-card";
+import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { ChefLoading } from "@/features/chef/components/chef-loading";
+
+const newestFirst = (orders: ChefOrder[]) =>
+  [...orders].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
 
 type InboxView = "NEEDS_ANSWER" | "IN_PROGRESS" | "READY" | "PREVIOUS" | "ALL";
 
@@ -29,30 +47,6 @@ const PREVIOUS = new Set([
   "DELIVERED",
 
 ]);
-
-function money(value: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 2,
-    }).format(value);
-  } catch {
-    return `${currency} ${value.toFixed(2)}`;
-  }
-}
-
-function friendlyStatus(status: string): string {
-  if (status === "CHEF_ACCEPTANCE_PENDING") return "Needs your answer";
-  if (status === "CHEF_ACCEPTED" || status === "PREPARING") return "Cooking";
-  if (status === "READY_FOR_PICKUP") return "Ready for pickup";
-  if (status === "OUT_FOR_DELIVERY") return "On the way";
-  if (status === "DELIVERED") return "Delivered";
-  if (status === "CHEF_REJECTED") return "Not taken";
-  if (status === "CANCELLED") return "Cancelled";
-  if (status.startsWith("REFUND")) return "Closed";
-  return "Order received";
-}
 
 function statusesFor(view: InboxView): Set<string> | null {
   if (view === "NEEDS_ANSWER") return NEEDS_ANSWER;
@@ -75,20 +69,13 @@ export function ChefOrderInbox() {
     else setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/chef/orders", {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
+      const response = await sessionFetch("/api/chef/orders", { cache: "no-store" });
       const raw = await response.json().catch(() => null);
       if (!response.ok) throw chefApiError(response, raw, "We couldn’t load your orders right now.");
       const parsed = parseChefOrdersResponse(raw);
       if (!parsed) throw new ChefError("We couldn’t read the latest orders. Please refresh.", "INVALID_CHEF_ORDERS_RESPONSE", response.status);
-      setOrders(
-        [...parsed].sort(
-          (left, right) =>
-            new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-        ),
-      );
+      noticeNewOrders(parsed);
+      setOrders(newestFirst(parsed));
       setLastUpdatedAt(new Date());
     } catch (caught) {
       setError(chefErrorText(caught, "We couldn’t load your orders right now."));
@@ -101,6 +88,23 @@ export function ChefOrderInbox() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // New orders arrive (and ring) on their own; a check never undoes the chef's own tap.
+  useChefOrderPolling(!loading, (incoming) => {
+    setOrders((current) => newestFirst(mergeOrders(current, incoming)));
+    setError("");
+    setLastUpdatedAt(new Date());
+  });
+
+  const [orderNotice, setOrderNotice] = useState("");
+  function updateOrder(order: ChefOrder) {
+    setOrders((current) => current.map((existing) => (existing.id === order.id ? order : existing)));
+    setOrderNotice(orderUpdateText(order));
+    // The chef's own answer takes them to where the order went (Cooking, then Ready).
+    const next = IN_PROGRESS.has(order.status) ? "IN_PROGRESS" : READY.has(order.status) ? "READY" : null;
+    if (next) setView((current) => (current === "ALL" ? current : next));
+    focusOrderAfterUpdate(order.id, "chef-order-update");
+  }
 
   const counts = useMemo(
     () => ({
@@ -118,101 +122,128 @@ export function ChefOrderInbox() {
     return statuses ? orders.filter((order) => statuses.has(order.status)) : orders;
   }, [orders, view]);
 
+  // Opens on the most urgent tab once; later checks never move the chef off the tab they chose.
+  const pickedView = useRef(false);
   useEffect(() => {
-    if (loading || orders.length === 0) return;
+    if (loading || orders.length === 0 || pickedView.current) return;
+    pickedView.current = true;
     if (counts.NEEDS_ANSWER > 0) setView("NEEDS_ANSWER");
     else if (counts.IN_PROGRESS > 0) setView("IN_PROGRESS");
     else if (counts.READY > 0) setView("READY");
     else setView("PREVIOUS");
   }, [counts.READY, counts.IN_PROGRESS, counts.NEEDS_ANSWER, loading, orders.length]);
 
+  const tabs = [
+    { view: "NEEDS_ANSWER", label: "New" },
+    { view: "IN_PROGRESS", label: "Cooking" },
+    { view: "READY", label: "Ready" },
+    { view: "PREVIOUS", label: "Done" },
+    { view: "ALL", label: "All" },
+  ] as const;
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold text-[#F62E18]">Orders</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A]">What needs your attention?</h1>
-          <p className="mt-2 text-sm text-[#6B6B6B]">New orders that need an answer always appear first.</p>
-        </div>
-        <button
-          type="button"
-          disabled={refreshing || loading}
-          onClick={() => void load(true)}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#1A1A1A] hover:border-[#F62E18] disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
-          Refresh
-        </button>
-      </div>
+    <div>
+      <ChefPageHead
+        title="Orders"
+        subtitle={lastUpdatedAt ? `Updated ${lastUpdatedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }).toLowerCase()}` : "New orders that need an answer come first."}
+        action={
+          <button type="button" disabled={refreshing || loading} onClick={() => void load(true)} className="chef-btn is-small" aria-busy={refreshing}>
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin motion-reduce:animate-none" : ""}`} aria-hidden="true" />
+            Refresh
+          </button>
+        }
+      />
 
       {loading ? (
-        <div className="space-y-3" aria-hidden="true">
-          {Array.from({ length: 3 }, (_, index) => <div key={index} className="h-40 animate-pulse rounded-2xl bg-[#F1F3F5]" />)}
-          <p className="sr-only" role="status">Loading chef orders</p>
-        </div>
+        <ChefLoading shape="orders" head={false} label="Loading chef orders" />
       ) : error && orders.length === 0 ? (
-        <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center">
-          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5]"><AlertTriangle className="h-6 w-6 text-[#F62E18]" aria-hidden="true" /></span>
-          <h2 className="mt-4 text-xl font-bold text-[#1A1A1A]">Orders couldn’t load</h2>
-          <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#6B6B6B]">{error}</p>
-          <button type="button" onClick={() => void load()} className="mt-5 min-h-12 rounded-full bg-[#F62E18] px-6 font-semibold text-white">Try again</button>
-        </section>
+        <ChefSection>
+          <ChefEmpty
+            icon={AlertTriangle}
+            title="Orders couldn’t load"
+            text={error}
+            action={<button type="button" onClick={() => void load()} className="chef-btn is-primary">Try again</button>}
+          />
+        </ChefSection>
       ) : orders.length === 0 ? (
-        <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center md:p-10">
-          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]"><ChefHat className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
-          <h2 className="mt-5 text-2xl font-bold text-[#1A1A1A]">Your first order is coming soon</h2>
-          <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#6B6B6B]">New orders will appear here when customers choose your food. You don’t need to do anything right now.</p>
-        </section>
+        <ChefSection>
+          <ChefEmpty
+            icon={ChefHat}
+            title="No orders yet"
+            text="When a customer orders from your kitchen it appears here, and you choose whether you can cook it."
+          />
+        </ChefSection>
       ) : (
-        <>
-          <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Choose which orders to see">
-            {(["NEEDS_ANSWER", "IN_PROGRESS", "READY", "PREVIOUS", "ALL"] as const).map((nextView) => {
-              const label = nextView === "NEEDS_ANSWER" ? "New" : nextView === "IN_PROGRESS" ? "Preparing" : nextView === "READY" ? "Ready" : nextView === "PREVIOUS" ? "Completed" : "All";
+        <div className="chef-stack">
+          <nav className="chef-chips" aria-label="Choose which orders to see">
+            {tabs.map(({ view: nextView, label }) => {
               const count = counts[nextView];
               return (
-                <button key={nextView} type="button" onClick={() => setView(nextView)} aria-pressed={view === nextView} className={`min-h-11 shrink-0 rounded-full border px-4 text-sm font-semibold ${view === nextView ? "border-[#F62E18] bg-[#F62E18] text-white" : "border-[#E5E7EB] bg-white text-[#1A1A1A]"}`}>
-                  {label}{count > 0 ? ` (${count})` : ""}
+                <button key={nextView} type="button" onClick={() => setView(nextView)} aria-pressed={view === nextView} className="chef-chip min-h-[40px]">
+                  {label}
+                  {nextView === "NEEDS_ANSWER" && count > 0 ? <span className="chef-chip-count">{count}</span> : nextView !== "ALL" && count > 0 ? <span className="font-medium opacity-70">{count}</span> : null}
                 </button>
               );
             })}
           </nav>
 
-          {visibleOrders.length === 0 ? (
-            <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center">
-              <CheckCircle2 className="mx-auto h-7 w-7 text-[#F62E18]" aria-hidden="true" />
-              <h2 className="mt-3 text-xl font-bold text-[#1A1A1A]">Nothing here right now</h2>
-              <p className="mt-2 text-sm text-[#6B6B6B]">Choose another view if you want to look at older orders.</p>
-            </section>
-          ) : (
-            <div key={view} className="chef-step space-y-3">
-              {visibleOrders.map((order) => {
-                const headline = order.items[0]?.itemName ?? "Food order";
-                const additional = Math.max(0, order.items.length - 1);
-                const urgent = order.status === "CHEF_ACCEPTANCE_PENDING";
-                return (
-                  <Link key={order.id} href={`/chef/orders/${order.id}`} className={`group block rounded-2xl border bg-white p-5 transition hover:border-[#F62E18]/50 ${urgent ? "border-[#F62E18]/50" : "border-[#E5E7EB]"}`}>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${urgent ? "bg-[#F62E18]/10 text-[#F62E18]" : "bg-[#F1F3F5] text-[#6B6B6B]"}`}>{friendlyStatus(order.status)}</span>
-                        <h2 className="mt-3 truncate text-xl font-bold text-[#1A1A1A]">{headline}{additional > 0 ? ` +${additional} more` : ""}</h2>
-                        <p className="mt-1 text-xs text-[#6B6B6B]">Order #{order.id.slice(-8).toUpperCase()}</p>
-                      </div>
-                      <ChevronRight className="h-5 w-5 shrink-0 text-[#6B6B6B] transition-transform group-hover:translate-x-1" aria-hidden="true" />
-                    </div>
-                    <div className="mt-4 flex flex-wrap items-end justify-between gap-4 border-t border-[#E5E7EB] pt-4">
-                      <div className="text-xs text-[#6B6B6B]"><p>{order.items.reduce((sum, item) => sum + item.quantity, 0)} item{order.items.reduce((sum, item) => sum + item.quantity, 0) === 1 ? "" : "s"}</p><p className="mt-1 inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" aria-hidden="true" />{order.prepTimeMinutes ? `${order.prepTimeMinutes} min prep` : "Prep time not chosen yet"}</p></div>
-                      <div className="text-right"><p className="text-xs text-[#6B6B6B]">Food value</p><strong className="text-lg text-[#1A1A1A]">{money(order.foodSubtotal, order.currency)}</strong></div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
+          <OrderUpdateNotice id="chef-order-update" text={orderNotice} />
 
-      {lastUpdatedAt ? <p className="text-xs text-[#6B6B6B]">Last refreshed {lastUpdatedAt.toLocaleTimeString("en-IN")}</p> : null}
-      {error && orders.length > 0 ? <p role="alert" className="rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#F62E18]">{error}</p> : null}
+          {visibleOrders.length === 0 ? (
+            <ChefSection>
+              <ChefEmpty
+                icon={CheckCircle2}
+                title={view === "NEEDS_ANSWER" ? "You’re all caught up" : "Nothing here right now"}
+                text={view === "NEEDS_ANSWER" ? "No order is waiting for your answer." : "Choose another filter to see older orders."}
+              />
+            </ChefSection>
+          ) : view === "NEEDS_ANSWER" || view === "IN_PROGRESS" ? (
+            // Orders that need the chef: big cards with the answer right on them, oldest first.
+            <div key={view} className="chef-stack chef-step">
+              {[...visibleOrders].reverse().map((order) => (
+                <ChefOrderCard key={order.id} order={order} onUpdated={updateOrder} />
+              ))}
+            </div>
+          ) : (
+            <ChefSection flush>
+              <ul key={view} className="chef-list chef-step">
+                {visibleOrders.map((order) => {
+                  const status = chefOrderStatus(order.status);
+                  const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+                  return (
+                    <li key={order.id}>
+                      <Link href={`/chef/orders/${order.id}`} className="chef-row items-start">
+                        <span className="chef-row-main">
+                          <span className="flex flex-wrap items-center gap-2">
+                            <ChefPill tone={status.tone} icon={chefStatusIcon(order.status)}>{status.label}</ChefPill>
+                            <span className="chef-row-meta !mt-0">#{shortOrderNumber(order.id)} · {timeAgo(order.createdAt)}</span>
+                          </span>
+                          <span className="chef-row-title mt-2 line-clamp-2 block">
+                            {order.items.map((item) => `${item.quantity}× ${item.itemName}`).join(", ") || "Food order"}
+                          </span>
+                          <span className="chef-row-meta mt-1 flex items-center gap-1.5">
+                            {itemCount} item{itemCount === 1 ? "" : "s"}
+                            {order.prepTimeMinutes ? (
+                              <>
+                                <span aria-hidden="true">·</span>
+                                <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                                {order.prepTimeMinutes} min prep
+                              </>
+                            ) : null}
+                          </span>
+                        </span>
+                        <span className="chef-row-value chef-amount self-center">{formatInr(order.foodSubtotal, { currency: order.currency })}</span>
+                        <ChevronRight className="chef-chevron h-5 w-5 self-center" aria-hidden="true" />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </ChefSection>
+          )}
+          {error ? <ChefNotice icon={AlertTriangle} tone="danger" role="alert">{error}</ChefNotice> : null}
+        </div>
+      )}
     </div>
   );
 }

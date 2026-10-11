@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   addressLabelDraftError,
+  addressText,
   addressLabelFromDraft,
   createAddressLabelDraft,
   displayAddressLabel,
@@ -158,4 +159,15 @@ test("validates location recommendation", () => {
   });
   assert.ok(parsed);
   assert.equal(parsed.selectedSavedAddress?.id, metadata.id);
+});
+
+test("address text shows a district that repeats the city only once", () => {
+  assert.equal(
+    addressText({ addressLine1: "Flat 302", addressLine2: null, landmark: " ", areaName: "Banjara Hills", districtName: "Hyderabad", city: "hyderabad", state: "Telangana", postalCode: "500034" }),
+    "Flat 302, Banjara Hills, Hyderabad, Telangana, 500034",
+  );
+  assert.equal(
+    addressText({ addressLine1: "4th Floor", addressLine2: null, landmark: null, areaName: "Madhapur", districtName: "Rangareddy", city: "Hyderabad", state: "Telangana", postalCode: null }),
+    "4th Floor, Madhapur, Rangareddy, Hyderabad, Telangana",
+  );
 });

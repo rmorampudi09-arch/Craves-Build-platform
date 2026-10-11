@@ -1,17 +1,22 @@
+import Link from "next/link";
 import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
 import { ChefEarningsLedger } from "@/features/chef/components/chef-earnings-ledger";
 import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
 
 export const metadata = {
-  title: "What I've earned | Craves",
+  title: "Earnings | Craves Chef",
   robots: { index: false, follow: false },
 };
 
 export default function ChefEarningsPage() {
   return (
-    <main className="mx-auto min-h-screen max-w-4xl px-4 py-6 md:px-6 md:py-8">
+    <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader eyebrow="Your earnings" title="Earnings and payment history" description="Review earnings from paid and delivered orders alongside your older manually recorded entries. Open your available balance for the full breakdown and payment requests." />
+        <ChefPageHeader
+          title="Earnings"
+          description="Money from your delivered orders."
+          action={<Link href="/chef/finance" className="chef-btn is-small">Balance &amp; payouts</Link>}
+        />
         <ChefEarningsLedger />
       </ChefAccessBoundary>
     </main>

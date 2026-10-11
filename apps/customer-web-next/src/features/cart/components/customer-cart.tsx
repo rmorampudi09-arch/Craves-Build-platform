@@ -17,23 +17,23 @@ export function CustomerCartView() {
   const load = useCallback(async () => {
     const response = await fetch("/api/cart", { cache: "no-store" });
     const body = await response.json();
-    if (!response.ok) throw new Error(body?.message || "Your cart could not be loaded.");
+    if (!response.ok) throw new Error(body?.message || "Your cart didn’t load. Check your connection and try again.");
     setCart(body);
     setMessage(body.items.length ? `${body.items.length} cart item${body.items.length === 1 ? "" : "s"}.` : "Your cart is empty.");
   }, []);
 
-  useEffect(() => { load().catch(error => setMessage(error instanceof Error ? error.message : "Your cart could not be loaded.")); }, [load]);
+  useEffect(() => { load().catch(error => setMessage(error instanceof Error ? error.message : "Your cart didn’t load. Check your connection and try again.")); }, [load]);
 
   async function mutate(url: string, method: "PUT" | "DELETE" | "POST", body?: unknown, key = "cart") {
     setBusyId(key);
     try {
       const response = await fetch(url, { method, headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined });
       const next = await response.json();
-      if (!response.ok) throw new Error(next?.message || "Cart could not be updated.");
+      if (!response.ok) throw new Error(next?.message || "Your cart didn’t update. Check your connection and try again.");
       setCart(next);
       setMessage("Cart updated.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Cart could not be updated.");
+      setMessage(error instanceof Error ? error.message : "Your cart didn’t update. Check your connection and try again.");
     } finally {
       setBusyId(null);
     }

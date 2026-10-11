@@ -80,7 +80,7 @@ const WhyCraves = () => {
                and freshness. Every meal brings you closer to home and
             </span>{' '}
             <span className="why__line">
-               supports a real kitchen in your commmunity.
+               supports a real kitchen in your community.
             </span>
           </p>
         </div>

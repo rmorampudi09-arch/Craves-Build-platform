@@ -23,7 +23,7 @@ export function CustomerCheckoutForm() {
   useEffect(() => {
     Promise.all([
       fetch("/api/cart", { cache: "no-store" }).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body?.message || "Cart could not be loaded."); return body; }),
-      fetch("/api/customer/addresses", { cache: "no-store" }).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body?.message || "Addresses could not be loaded."); return body; })
+      fetch("/api/customer/addresses", { cache: "no-store" }).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body?.message || "Your saved addresses didn’t load. Check your connection and try again."); return body; })
     ]).then(([nextCart, nextAddresses]) => {
       setCart(nextCart);
       setAddresses(nextAddresses);
@@ -43,11 +43,11 @@ export function CustomerCheckoutForm() {
       if (!validation.ok) throw new Error(validated?.message || "Cart validation failed.");
       const response = await fetch("/api/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ deliveryAddressId, note: note.trim() || null }) });
       const body = await response.json();
-      if (!response.ok) throw new Error(body?.message || "Checkout could not be created.");
+      if (!response.ok) throw new Error(body?.message || "We couldn’t start checkout. Check your cart for items that are no longer available, then try again.");
       setCheckout(body);
       setMessage("Checkout created. Review the backend-calculated totals before payment.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Checkout could not be created.");
+      setMessage(error instanceof Error ? error.message : "We couldn’t start checkout. Check your cart for items that are no longer available, then try again.");
     } finally { setBusy(false); }
   }
 
@@ -73,7 +73,7 @@ export function CustomerCheckoutForm() {
 export function CheckoutDetails({ checkoutId }: { checkoutId: string }) {
   const [checkout, setCheckout] = useState<CustomerCheckout | null>(null);
   const [message, setMessage] = useState("Loading checkout…");
-  useEffect(() => { fetch(`/api/checkout/${checkoutId}`, { cache: "no-store" }).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body?.message || "Checkout could not be loaded."); return body; }).then(value => { setCheckout(value); setMessage(""); }).catch(error => setMessage(error instanceof Error ? error.message : "Checkout could not be loaded.")); }, [checkoutId]);
+  useEffect(() => { fetch(`/api/checkout/${checkoutId}`, { cache: "no-store" }).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body?.message || "Checkout didn’t load. Go back to your cart and try again."); return body; }).then(value => { setCheckout(value); setMessage(""); }).catch(error => setMessage(error instanceof Error ? error.message : "Checkout didn’t load. Go back to your cart and try again.")); }, [checkoutId]);
   if (!checkout) return <section className="rounded-[30px] bg-[#FFF8EC] p-8 text-slate-950"><p>{message}</p></section>;
   return <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950 shadow-2xl shadow-black/20"><p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">{checkout.status.replace("_", " ")}</p><h1 className="mt-3 text-3xl font-bold">Checkout {checkout.id.slice(0, 8)}</h1><p className="mt-3 text-sm text-slate-600">{checkout.orders.length} chef-specific order{checkout.orders.length === 1 ? "" : "s"}</p><dl className="mt-6 space-y-3">{[["Food subtotal", checkout.foodSubtotal], ["Platform fee", checkout.platformFee], ["Tax", checkout.taxAmount], ["Delivery fee", checkout.deliveryFee], ["Grand total", checkout.grandTotal]].map(([label, amount]) => <div key={String(label)} className="flex justify-between border-b border-slate-200 pb-3"><dt>{label}</dt><dd className="font-bold">{formatMoney(Number(amount), checkout.currency)}</dd></div>)}</dl><div className="mt-6 flex flex-wrap gap-3"><Link href={`/checkout/${checkout.id}/payment`} className="rounded-full bg-[#6930CA] px-5 py-3 text-sm font-bold text-white">Continue to payment</Link><Link href="/orders" className="rounded-full border border-[#6930CA] px-5 py-3 text-sm font-bold text-[#6930CA]">My orders</Link></div></section>;
 }

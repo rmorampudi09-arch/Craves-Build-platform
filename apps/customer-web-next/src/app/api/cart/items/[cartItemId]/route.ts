@@ -5,8 +5,8 @@ import { isSameOrigin } from "@/shared/lib/request-security";
 import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 
 async function itemId(context: { params: Promise<{ cartItemId: string }> }) { const { cartItemId } = await context.params; return isUuid(cartItemId) ? cartItemId : null; }
-function failure(status: number) { return NextResponse.json({ error: status === 401 ? "SESSION_REQUIRED" : status === 404 ? "CART_ITEM_NOT_FOUND" : "CART_UPDATE_FAILED", message: status === 401 ? "Please sign in to use your cart." : status === 404 ? "Cart item was not found." : "Cart could not be updated." }, { status }); }
-async function responseCart(upstream: Response) { const body = await upstream.json().catch(() => null); if (!upstream.ok) return failure(upstream.status); const cart = parseCart(body); return cart ? NextResponse.json(cart, { headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ error: "INVALID_UPSTREAM_RESPONSE", message: "Cart response validation failed." }, { status: 502 }); }
+function failure(status: number) { return NextResponse.json({ error: status === 401 ? "SESSION_REQUIRED" : status === 404 ? "CART_ITEM_NOT_FOUND" : "CART_UPDATE_FAILED", message: status === 401 ? "Please sign in to use your cart." : status === 404 ? "Cart item was not found." : "Your cart didn’t update. Check your connection and try again." }, { status }); }
+async function responseCart(upstream: Response) { const body = await upstream.json().catch(() => null); if (!upstream.ok) return failure(upstream.status); const cart = parseCart(body); return cart ? NextResponse.json(cart, { headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ error: "INVALID_UPSTREAM_RESPONSE", message: "Craves sent an unexpected reply. Refresh the page and try again." }, { status: 502 }); }
 export async function PUT(request: NextRequest, context: { params: Promise<{ cartItemId: string }> }) {
   const bounded = await boundBffRequest(request);
   if (bounded instanceof NextResponse) return bounded;

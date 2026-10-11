@@ -8,7 +8,7 @@ export function QuickInfoChips({ dish }: { dish: Dish }) {
       ? { icon: Leaf, value: "Veg" }
       : foodType === "EGG"
         ? { icon: EggFried, value: "Egg" }
-        : { icon: Drumstick, value: "Non-Veg" };
+        : { icon: Drumstick, value: "Non-veg" };
 
   const chips = [
     { icon: Clock, label: "Prep time", value: dish.time },

@@ -116,6 +116,11 @@ type Props = {
   onRemove?: (id: string) => Promise<void>;
   onCancel?: () => void;
   onUpload: (type: string, file: File, progress: (value: number) => void) => Promise<void>;
+  /**
+   * Runs before a picker opens or a file is sent; returning false stops it. The section uses it
+   * to point at required fields the upload depends on instead of failing on the server.
+   */
+  beforePick?: () => boolean;
 };
 
 export function ChefOnboardingUpload({
@@ -130,6 +135,7 @@ export function ChefOnboardingUpload({
   onUpload,
   onRemove,
   onCancel,
+  beforePick,
 }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
@@ -187,8 +193,14 @@ export function ChefOnboardingUpload({
       if (mounted.current) setBusy(false);
     }
   }
+  /** Opens a picker only when the screen is ready for this file (see beforePick). */
+  function pick(input: HTMLInputElement | null) {
+    if (beforePick && !beforePick()) return;
+    input?.click();
+  }
   async function choose(selected: File | undefined) {
     if (!selected || disabled || busy || locked) return;
+    if (beforePick && !beforePick()) return;
     setError("");
     let prepared: File;
     try {
@@ -292,13 +304,12 @@ export function ChefOnboardingUpload({
           {thumb}
           <div className="cob-file-text">
             <strong>{name}</strong>
-            <span role="status">
+            <span>
               {meta}
-              {progress >= 100
-                ? " · Confirming"
-                : progress > 0
-                  ? ` · ${progress}%`
-                  : " · Preparing"}
+              <span role="status">
+                {progress >= 100 ? " · Confirming" : progress > 0 ? " · Uploading" : " · Preparing"}
+              </span>
+              {progress > 0 && progress < 100 ? <span aria-hidden="true"> {progress}%</span> : null}
             </span>
             <div className="cob-progress" aria-hidden="true">
               <span style={{ width: `${Math.max(4, progress)}%` }} />
@@ -323,7 +334,7 @@ export function ChefOnboardingUpload({
           <span
             className="cob-thumb"
             aria-hidden="true"
-            style={{ background: "#FEEDEA", color: "#C4200F" }}
+            style={{ background: "#F1F3F5", color: "#C4200F" }}
           >
             <AlertCircle size={24} />
           </span>
@@ -337,7 +348,7 @@ export function ChefOnboardingUpload({
             type="button"
             className="cob-link"
             disabled={disabled || busy}
-            onClick={() => file && void upload(file)}
+            onClick={() => file && (!beforePick || beforePick()) && void upload(file)}
           >
             <RefreshCw size={16} aria-hidden="true" />
             Retry
@@ -346,7 +357,7 @@ export function ChefOnboardingUpload({
             type="button"
             className="cob-link"
             disabled={disabled || busy}
-            onClick={() => picker.current?.click()}
+            onClick={() => pick(picker.current)}
           >
             Choose another file
           </button>
@@ -402,7 +413,7 @@ export function ChefOnboardingUpload({
               className="cob-link"
               disabled={disabled || busy}
               aria-label={`Replace ${label.toLowerCase()}`}
-              onClick={() => picker.current?.click()}
+              onClick={() => pick(picker.current)}
             >
               <RefreshCw size={16} aria-hidden="true" />
               Replace
@@ -434,7 +445,7 @@ export function ChefOnboardingUpload({
           data-drag={dragging}
           disabled={disabled || busy}
           aria-describedby={helper ? `chef-${type}-helper` : undefined}
-          onClick={() => picker.current?.click()}
+          onClick={() => pick(picker.current)}
           onDragOver={(event) => {
             event.preventDefault();
             setDragging(true);
@@ -458,7 +469,7 @@ export function ChefOnboardingUpload({
               type="button"
               className="cob-link"
               disabled={disabled || busy}
-              onClick={() => camera.current?.click()}
+              onClick={() => pick(camera.current)}
             >
               <Camera size={16} aria-hidden="true" />
               Use camera

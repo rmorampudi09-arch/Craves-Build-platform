@@ -26,11 +26,11 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({ checkoutId: input.checkoutId, customerName: identity.displayName || "Craves Customer", customerEmail: identity.email, customerPhone: identity.phoneNumber, returnUrl: `${origin}/checkout` }),
     }, 20_000);
     const body = await upstream.json().catch(() => null);
-    if (!upstream.ok) return NextResponse.json({ error: upstream.status === 401 ? "SESSION_REQUIRED" : "PAYMENT_CREATE_FAILED", message: upstream.status === 401 ? "Please sign in again." : upstream.status === 400 ? "Checkout is not ready for payment." : "Payment order could not be created." }, { status: upstream.status });
+    if (!upstream.ok) return NextResponse.json({ error: upstream.status === 401 ? "SESSION_REQUIRED" : "PAYMENT_CREATE_FAILED", message: upstream.status === 401 ? "Please sign in again." : upstream.status === 400 ? "Checkout is not ready for payment." : "We couldn’t start the payment. You haven’t been charged. Try again." }, { status: upstream.status });
     const session = parsePaymentSession(body);
     if (!session) {
       return NextResponse.json(
-        { error: "INVALID_UPSTREAM_RESPONSE", message: "Payment response validation failed." },
+        { error: "INVALID_UPSTREAM_RESPONSE", message: "Craves sent an unexpected payment reply. Don’t pay again; check Your orders." },
         { status: 502 },
       );
     }

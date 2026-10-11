@@ -39,7 +39,7 @@ const UPLOAD_ERRORS: Record<string, string> = {
   DOCUMENT_SIZE_LIMIT_INVALID: "Document uploads are temporarily unavailable. Please contact support.",
   DOCUMENT_UPLOAD_FAILED: "Craves could not store your document. Please try again later or contact support.",
   DOCUMENT_UPLOAD_UNAVAILABLE: "Craves document storage is temporarily unavailable. Please try again later.",
-  CHEF_APPLICATION_REQUIRED: "Save your Chef application details before uploading identity documents.",
+  CHEF_APPLICATION_REQUIRED: "Save your Chef application details, including your kitchen address, before uploading photos or documents.",
   CHEF_DOCUMENT_TYPE_NOT_ALLOWED: "Choose one of the documents required for your saved Chef application.",
   CHEF_DOCUMENT_ALREADY_APPROVED: "This document is already approved and cannot be replaced.",
   CHEF_ALREADY_APPROVED: "Your Chef application is approved, so its documents cannot be replaced.",

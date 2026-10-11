@@ -5,9 +5,12 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Fo
 import { z } from "zod";
 import { bankConsentVersion, bankStatusSchema, bankSubmissionSchema, type BankStatus } from "@/features/admin/finance/lib/bank-onboarding-contract";
 import { captureSessionContext, isSessionReady, loadSession, subscribeSession } from "@/features/auth/api/cravesAuth";
+import { ChevronDown, Info, Landmark, RefreshCw } from "lucide-react";
+import { ChefNotice, ChefPill, ChefSection, ChefSkeleton, type ChefTone } from "@/features/chef/components/chef-ui";
+import { RequiredMark } from "@/shared/ui/forms/required-mark";
 
 const applicantSchema = z.object({firstName: z.string().nullable().optional(), lastName: z.string().nullable().optional(), status: z.string()});
-const inputClass = "mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-950";
+const inputClass = "mt-2 block min-h-12 w-full rounded-xl border bg-white px-4 text-base text-[#1A1A1A]";
 
 function bankOwnerScope(): string {
   const context = captureSessionContext();
@@ -15,12 +18,36 @@ function bankOwnerScope(): string {
 }
 const serverBankScope = () => "server";
 
+// Chef-facing words for the bank enrollment states (never the raw enum).
+const BANK_STATE_LABEL: Record<string, string> = {
+  NOT_SUBMITTED: "Not added yet",
+  QUEUED: "Saved",
+  SUBMITTING: "Verifying",
+  VALIDATING: "Verifying",
+  UNKNOWN: "Checking with the bank",
+  WAITING_APPROVAL: "Verified, waiting for approval",
+  VERIFIED: "Verified",
+  VALIDATION_FAILED: "Couldn’t verify",
+  NAME_MISMATCH: "Name doesn’t match",
+  APPLICANT_ACTION_REQUIRED: "Needs your attention",
+  SUPERSEDED: "Replaced",
+};
+const BANK_STATE_TONE: Record<string, ChefTone> = {
+  VERIFIED: "success",
+  WAITING_APPROVAL: "success",
+  VALIDATION_FAILED: "danger",
+  NAME_MISMATCH: "danger",
+  APPLICANT_ACTION_REQUIRED: "danger",
+  NOT_SUBMITTED: "muted",
+  SUPERSEDED: "muted",
+};
+
 export function ChefBankOnboardingPanel() {
   const scope = useSyncExternalStore(subscribeSession, bankOwnerScope, serverBankScope);
   // The application page also hosts this panel before CHEF role approval.
   // Establish Auth ownership without treating business approval as bank approval.
   useEffect(() => { void loadSession().catch(() => null); }, []);
-  if (!isSessionReady()) return <section className="rounded-2xl border border-slate-200 bg-white p-6"><p role="status">Sign in to view or update your payout bank account.</p></section>;
+  if (!isSessionReady()) return <ChefSection title="Bank account"><p role="status" className="text-[0.9375rem] text-[#6B6B6B]">Sign in to view or update your payout bank account.</p></ChefSection>;
   return <ChefBankOnboardingContent key={scope} />;
 }
 
@@ -38,28 +65,38 @@ function ChefBankOnboardingContent() {
   const pending = useRef<z.infer<typeof bankSubmissionSchema> | null>(null);
   const mounted = useRef(true);
   const loading = useRef(false);
-  const refresh = useCallback(async () => {
+  const bankRef = useRef<BankStatus | null>(null);
+  useEffect(() => {
+    bankRef.current = bank;
+  }, [bank]);
+  // A background check (every 15 s or on focus) never wipes the form or a message the chef is
+  // reading: it keeps the last known status when it fails and leaves messages alone.
+  const refresh = useCallback(async (quiet = false) => {
     if (loading.current) return;
     loading.current = true;
     try {
       const [profileResponse, bankResponse] = await Promise.all([
         fetch("/api/chef/application", {cache: "no-store"}), fetch("/api/chef-onboarding/bank", {cache: "no-store"}),
       ]);
-      if (!profileResponse.ok || !bankResponse.ok) throw new Error("Bank enrollment is not available yet. Your existing application has not been changed.");
+      if (!profileResponse.ok || !bankResponse.ok) throw new Error("Bank account setup isn’t available yet. Your application hasn’t changed.");
       const profile = applicantSchema.parse(await profileResponse.json());
       const status = bankStatusSchema.parse(await bankResponse.json());
       if (mounted.current) {
         setName([profile.firstName, profile.lastName].filter(Boolean).join(" "));
-        setRegistered(["PENDING", "APPROVED"].includes(profile.status)); setBank(status);setAvailabilityError(false);setMessage("");
+        setRegistered(["PENDING", "APPROVED"].includes(profile.status)); setBank(status);setAvailabilityError(false);if (!quiet) setMessage("");
       }
-    } catch (error) {if (mounted.current) {setBank(null);setAvailabilityError(true);setMessage(chefErrorText(error, "Bank profile unavailable"));}}
+    } catch (error) {
+      if (!mounted.current || (quiet && bankRef.current)) return;
+      setBank(null);setAvailabilityError(true);setMessage(chefErrorText(error, "Bank profile unavailable"));
+    }
     finally {loading.current = false;}
   }, []);
   useEffect(() => {
     mounted.current = true; void refresh();
-    const timer = setInterval(() => {if (document.visibilityState === "visible") void refresh();}, 15000);
-    window.addEventListener("focus", refresh);
-    return () => {mounted.current = false;clearInterval(timer);window.removeEventListener("focus", refresh);};
+    const quietly = () => void refresh(true);
+    const timer = setInterval(() => {if (document.visibilityState === "visible") quietly();}, 15000);
+    window.addEventListener("focus", quietly);
+    return () => {mounted.current = false;clearInterval(timer);window.removeEventListener("focus", quietly);};
   }, [refresh]);
   function edit(action: () => void) {pending.current = null; action();}
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -68,35 +105,47 @@ function ChefBankOnboardingContent() {
       accountHolderName: name, accountNumber: account, accountNumberConfirmation: confirmation, ifsc,
       consent, consentVersion: bankConsentVersion};
     const parsed = bankSubmissionSchema.safeParse(value);
-    if (!parsed.success) {setMessage("Enter matching account numbers, a valid IFSC and consent to automatic Razorpay validation.");return;}
+    if (!parsed.success) {setMessage("Check that both account numbers match, the IFSC has 11 characters, and the consent box is ticked.");return;}
     pending.current = parsed.data; setBusy(true);setMessage("");
     try {
       const response = await fetch("/api/chef-onboarding/bank", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(pending.current)});
       if (!response.ok) throw new Error(response.status === 409
-        ? "The bank profile changed or a payout is pending. Refresh before changing details; an existing payout cannot be redirected."
-        : response.status === 429 ? "The bank-change limit has been reached. Retry after the stated 24-hour window."
-        : "Bank submission was not confirmed. Keep this page open and refresh status; retry uses the same request identity.");
+        ? "Your bank details changed or a payout is in progress. Refresh before changing them; a payout already on its way can’t be redirected."
+        : response.status === 429 ? "You’ve changed your bank account too often today. Try again after 24 hours."
+        : "We couldn’t confirm your bank details were saved. Keep this page open and tap Check again. Trying again won’t create a duplicate.");
       const result = bankStatusSchema.parse(await response.json());
       setBank(result); setAccount("");setConfirmation("");setIfsc("");setConsent(false);pending.current = null;
-      setMessage(result.automaticActivation ? "Bank details saved securely. Automatic Razorpay validation remains subject to the reported status." : "Bank details were saved. Automatic validation is currently unavailable; refresh status before taking further action.");
+      setMessage("Bank details saved securely. The status above shows what happens next.");
     } catch (error) {setMessage(chefErrorText(error, "Bank submission not confirmed"));}
     finally {setBusy(false);}
   }
-  return <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 text-slate-900">
-    <div><p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Payout onboarding</p><h2 className="mt-2 text-2xl font-bold">Your payout bank account</h2>
-      <p className="mt-3 text-sm text-slate-600">{bank?.automaticActivation ? "Automatic bank enrollment is available. You can securely add your own bank account here." : bank ? "Automatic bank enrollment is currently unavailable. Your finance balance shows your current payout options." : availabilityError ? "Bank enrollment availability could not be confirmed." : "Checking bank enrollment availability…"}</p></div>
-    {message && <p role="status" className="rounded-xl bg-slate-50 p-4 text-sm">{message}</p>}
-    {bank?.automaticActivation && <div className="rounded-xl border p-4"><p className="font-semibold">{bank.state.replaceAll("_", " ")}{bank.lastFour ? ` · account ending ${bank.lastFour}` : ""}</p><p className="mt-2 text-sm">{bank.message}</p></div>}
-    {!bank ? <p className="rounded-xl bg-slate-50 p-4 text-sm">{availabilityError ? "Refresh to confirm current bank enrollment availability. No submission can be made until it is confirmed." : "Checking current bank enrollment availability…"}</p> : !bank.automaticActivation ? <p className="rounded-xl bg-slate-50 p-4 text-sm">Automatic bank submission is unavailable. Check your finance balance for eligible payout options.</p> : !registered ? <p className="text-sm">Complete and submit the chef application first. This section refreshes automatically while the page is open.</p> : <form onSubmit={save} className="space-y-4" autoComplete="off">
-      <label className="block text-sm font-medium">Account holder from your saved chef application<input className={inputClass} value={name} readOnly aria-readonly="true" /></label>
-      <p className="text-xs text-slate-600">Use your own account with this name. Joint accounts, different business names or unmatched initials are not automatically approved by this personal-chef flow.</p>
-      <div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-medium">Account number<input className={inputClass} inputMode="numeric" type="password" autoComplete="new-password" maxLength={24} value={account} disabled={busy} onChange={event => edit(() => setAccount(event.target.value))} required /></label>
-        <label className="text-sm font-medium">Confirm account number<input className={inputClass} inputMode="numeric" autoComplete="off" maxLength={24} value={confirmation} disabled={busy} onChange={event => edit(() => setConfirmation(event.target.value))} required /></label></div>
-      <label className="block text-sm font-medium">IFSC<input className={inputClass} maxLength={11} value={ifsc} disabled={busy} onChange={event => edit(() => setIfsc(event.target.value.toUpperCase()))} required /></label>
-      <label className="flex items-start gap-3 text-sm"><input className="mt-1 h-5 w-5" type="checkbox" checked={consent} disabled={busy} onChange={event => edit(() => setConsent(event.target.checked))} required /><span>I confirm this is my bank account and consent to Craves sharing these details and my saved contact information with Razorpay for account validation and eligible chef payouts.</span></label>
-      <button type="submit" disabled={busy || !bank?.automaticActivation} className="rounded-xl bg-slate-900 px-5 py-3 font-semibold text-white disabled:opacity-40">{busy ? "Saving securely…" : "Save and validate automatically"}</button>
-    </form>}
-    <button type="button" onClick={() => void refresh()} disabled={busy} className="rounded-xl border px-4 py-2 text-sm">Refresh bank status</button>
-    <p className="text-xs text-slate-500">Account numbers are not saved in browser storage. Changing an account creates a new version. Failed, unmatched or uncertain validation cannot authorize a payout.</p>
-  </section>;
+  const intro = bank?.automaticActivation ? "Craves sends your money to this account." : bank ? "Adding a bank account here isn’t available right now. Your balance shows how money is sent." : availabilityError ? "We couldn’t check your bank account." : "Checking your bank account…";
+  return <ChefSection title="Bank account" note={intro} labelledBy="chef-bank">
+    <div className="grid gap-4">
+      {message ? <ChefNotice icon={Info} role="status">{message}</ChefNotice> : null}
+      {bank?.automaticActivation ? <div className="flex items-start gap-3 rounded-xl bg-[#F1F3F5] p-4">
+        <span className="chef-row-icon !bg-white"><Landmark className="h-5 w-5" aria-hidden="true" /></span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><p className="font-semibold">{bank.lastFour ? `Account ending ${bank.lastFour}` : "No bank account yet"}</p><ChefPill tone={BANK_STATE_TONE[bank.state] ?? "warning"}>{BANK_STATE_LABEL[bank.state] ?? "Checking"}</ChefPill></div>
+          {bank.message ? <p className="mt-1 text-[0.875rem] leading-5 text-[#6B6B6B]">{bank.message}</p> : null}
+        </div>
+      </div> : null}
+      {!bank ? (availabilityError ? <p className="text-[0.875rem] text-[#6B6B6B]">Tap Check again. You can add an account once this loads.</p> : <ChefSkeleton className="h-16" />)
+      : !bank.automaticActivation ? null
+      : !registered ? <p className="text-[0.875rem] text-[#6B6B6B]">Submit your chef application first. This section updates by itself while the page is open.</p>
+      : <details className="group" open={!bank.lastFour}>
+          <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 font-semibold text-[#1A1A1A] [&::-webkit-details-marker]:hidden">{bank.lastFour ? "Change bank account" : "Add bank account"}<ChevronDown className="h-4 w-4 text-[#6B6B6B] transition-transform group-open:rotate-180" aria-hidden="true" /></summary>
+          <form onSubmit={save} className="mt-3 grid gap-4" autoComplete="off">
+            <label className="block text-sm font-semibold">Account holder<input className={`${inputClass} bg-[#F7F8FA]`} value={name} readOnly aria-readonly="true" /><span className="mt-1.5 block text-[0.8125rem] font-normal leading-5 text-[#6B6B6B]">Taken from your chef application. Use your own account in this name; joint accounts, business names or different initials aren’t approved automatically.</span></label>
+            <div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-semibold">Account number<RequiredMark /><input className={inputClass} inputMode="numeric" type="password" autoComplete="off" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other" maxLength={24} value={account} disabled={busy} onChange={event => edit(() => setAccount(event.target.value))} required /></label>
+              <label className="text-sm font-semibold">Confirm account number<RequiredMark /><input className={inputClass} inputMode="numeric" autoComplete="off" maxLength={24} value={confirmation} disabled={busy} onChange={event => edit(() => setConfirmation(event.target.value))} required /></label></div>
+            <label className="block text-sm font-semibold">IFSC<RequiredMark /><input className={`${inputClass} uppercase`} maxLength={11} value={ifsc} disabled={busy} onChange={event => edit(() => setIfsc(event.target.value.toUpperCase()))} required /></label>
+            <label className="flex items-start gap-3 text-[0.875rem] leading-6"><input className="mt-1 h-5 w-5 shrink-0 accent-[#1A1A1A]" type="checkbox" checked={consent} disabled={busy} onChange={event => edit(() => setConsent(event.target.checked))} required /><span>I confirm this is my bank account and consent to Craves sharing these details and my saved contact information with Razorpay for account validation and eligible chef payouts.</span></label>
+            <button type="submit" aria-busy={busy} disabled={busy || !bank?.automaticActivation} className="chef-btn is-primary is-block">{busy ? "Saving securely…" : "Save bank details"}</button>
+          </form>
+        </details>}
+      <p className="text-[0.8125rem] leading-5 text-[#6B6B6B]">Money goes only to a bank account that has been checked. Your account number isn’t kept on this phone.</p>
+      {bank?.state === "VERIFIED" ? null : <button type="button" onClick={() => void refresh()} disabled={busy} className="chef-btn is-small w-fit"><RefreshCw className="h-4 w-4" aria-hidden="true" />Check again</button>}
+    </div>
+  </ChefSection>;
 }

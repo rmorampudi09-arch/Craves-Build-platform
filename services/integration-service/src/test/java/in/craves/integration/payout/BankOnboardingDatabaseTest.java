@@ -141,20 +141,40 @@ class BankOnboardingDatabaseTest {
         submit();banks.configure(f.admin,new BankOnboardingService.ControlChange(1,true,false,3,"Pause automatic validation"));
         assertFalse(banks.processOne());verify(provider,never()).create(any(),any());assertEquals("QUEUED",banks.status(f.chef).state());
     }
-    @Test void unavailableProviderIsShownAsUnavailableWithoutAcceptingBankDetails() {
-        when(provider.ready()).thenReturn(false);assertFalse(banks.status(f.chef).automaticActivation());
+    @Test void savesBankDetailsBeforeRazorpayXIsLiveAndValidatesThemLater() {
+        // RazorpayX not live yet: finance opens submissions only. Details are stored encrypted and wait.
+        when(provider.ready()).thenReturn(false);
+        banks.configure(f.admin,new BankOnboardingService.ControlChange(1,true,false,3,"Save bank details before RazorpayX activation"));
+        assertTrue(banks.status(f.chef).automaticActivation());
+        var saved=submit();assertEquals("QUEUED",saved.state());assertTrue(saved.automaticActivation());
+        assertTrue(saved.message().contains("as soon as payouts open"));
+        assertFalse(banks.processOne());verify(provider,never()).create(any(),any());
+        assertEquals(1,f.count("finance_bank_request"));
+        // RazorpayX goes live: the saved row is validated without the chef doing anything.
+        when(provider.ready()).thenReturn(true);
+        banks.configure(f.admin,new BankOnboardingService.ControlChange(2,true,true,3,"RazorpayX live"));
+        when(provider.create(eq(saved.id()),any())).thenReturn(success("later"));
+        due();assertTrue(banks.processOne());
+        var verified=banks.status(f.chef);assertEquals("VERIFIED",verified.state());assertEquals(saved.id(),verified.id());
+        verify(provider,times(1)).create(eq(saved.id()),any());
+    }
+    @Test void closedSubmissionsRejectBankDetails() {
+        banks.configure(f.admin,new BankOnboardingService.ControlChange(1,false,false,3,"Close bank submissions"));
+        assertFalse(banks.status(f.chef).automaticActivation());
         assertEquals("NOT_SUBMITTED",banks.status(f.chef).state());assertThrows(RuntimeException.class,this::submit);
         assertEquals(0,f.count("finance_bank_request"));verifyNoInteractions(identities);verify(provider,never()).create(any(),any());
     }
-    @Test void pausedValidationDisablesNewEnrollmentAndRetainsHistoricalStatus() {
+    @Test void pausedValidationKeepsHistoryAndQueuesNewDetailsWithoutProviderCalls() {
         var original=verified();banks.configure(f.admin,new BankOnboardingService.ControlChange(1,true,false,3,"TEST pause"));
-        var status=banks.status(f.chef);assertFalse(status.automaticActivation());assertTrue(status.bankValidated());assertEquals(original.id(),status.id());
-        assertThrows(RuntimeException.class,()->banks.submit(f.chef,request(UUID.randomUUID(),original.id(),"001234567899")));
-        assertEquals(1,f.count("finance_bank_request"));
+        var status=banks.status(f.chef);assertTrue(status.automaticActivation());assertTrue(status.bankValidated());assertEquals(original.id(),status.id());
+        var changed=banks.submit(f.chef,request(UUID.randomUUID(),original.id(),"001234567899"));
+        assertEquals("QUEUED",changed.state());assertEquals(2,f.count("finance_bank_request"));
+        assertFalse(banks.processOne());verify(provider,times(1)).create(any(),any());
     }
-    @Test void missingWorkerDisablesSubmissionEvenWhenProviderConfigured() {
+    @Test void missingWorkerStillSavesDetailsForLaterValidation() {
         var stopped=new BankOnboardingService(f.jdbc,cipher,identities,provider,new DataSourceTransactionManager(f.jdbc.getDataSource()),branches,false);
-        assertFalse(stopped.status(f.chef).automaticActivation());assertThrows(RuntimeException.class,()->stopped.submit(f.chef,request(UUID.randomUUID(),null,"001234567890")));
-        assertEquals(0,f.count("finance_bank_request"));verifyNoInteractions(identities);
+        assertTrue(stopped.status(f.chef).automaticActivation());
+        assertEquals("QUEUED",stopped.submit(f.chef,request(UUID.randomUUID(),null,"001234567890")).state());
+        assertEquals(1,f.count("finance_bank_request"));verify(provider,never()).create(any(),any());
     }
 }

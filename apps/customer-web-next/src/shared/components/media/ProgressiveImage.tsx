@@ -2,7 +2,7 @@
 
 import Image, { type ImageProps } from "next/image";
 import { ImageOff } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 type ProgressiveImageProps = Omit<ImageProps, "onLoad" | "onError"> & {
   fallbackLabel?: string;
@@ -19,24 +19,33 @@ export function ProgressiveImage({
   fallbackLabel = "Image unavailable",
   ...imageProps
 }: ProgressiveImageProps) {
+  const imageRef = useRef<HTMLImageElement>(null);
   const [status, setStatus] = useState<"loading" | "loaded" | "error">(
     "loading",
   );
+  // A photo already in the browser cache is complete before the first paint:
+  // show it at once, without the placeholder flash or a fade.
+  const [instant, setInstant] = useState(false);
 
-  useEffect(() => {
-    setStatus("loading");
+  useLayoutEffect(() => {
+    const image = imageRef.current;
+    const cached = Boolean(image?.complete && image.naturalWidth > 0);
+    setInstant(cached);
+    setStatus(cached ? "loaded" : "loading");
   }, [src]);
 
   return (
     <>
-      <span
-        aria-hidden="true"
-        className={`absolute inset-0 bg-[#F1F3F5] transition-opacity duration-200 motion-reduce:transition-none ${
-          status === "loading" ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        <span className="absolute inset-0 animate-pulse bg-[linear-gradient(110deg,transparent_20%,rgba(255,255,255,0.72)_42%,transparent_64%)] bg-[length:220%_100%] motion-reduce:animate-none" />
-      </span>
+      {instant ? null : (
+        <span
+          aria-hidden="true"
+          className={`absolute inset-0 bg-[#F1F3F5] transition-opacity duration-200 motion-reduce:transition-none ${
+            status === "loading" ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <span className="absolute inset-0 animate-pulse bg-[linear-gradient(110deg,transparent_20%,rgba(255,255,255,0.72)_42%,transparent_64%)] bg-[length:220%_100%] motion-reduce:animate-none" />
+        </span>
+      )}
 
       {status === "error" ? (
         <span className="absolute inset-0 flex items-center justify-center bg-[#F1F3F5] text-[#6B6B6B]">
@@ -49,6 +58,7 @@ export function ProgressiveImage({
 
       <Image
         {...imageProps}
+        ref={imageRef}
         src={src}
         alt={alt}
         loading={loading}
@@ -67,7 +77,10 @@ export function ProgressiveImage({
             .then(() => setStatus("loaded"));
         }}
         onError={() => setStatus("error")}
-        className={`${className} transition-opacity duration-200 ease-out motion-reduce:transition-none ${
+        // Names scale too, so a caller's hover zoom animates with the fade.
+        className={`${className} ${
+          instant ? "transition-[scale]" : "transition-[opacity,scale]"
+        } duration-200 ease-out motion-reduce:transition-none ${
           status === "loaded" ? "opacity-100" : "opacity-0"
         }`}
       />

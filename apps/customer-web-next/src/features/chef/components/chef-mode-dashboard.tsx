@@ -2,22 +2,24 @@
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";
-import { Button } from "@/shared/ui/buttons/button";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   AlertTriangle,
-  BadgeIndianRupee,
-  ChefHat,
-  CheckCircle2,
-  ChevronRight,
-  ClipboardCheck,
-  ClipboardList,
-  Bell,
+  BellRing,
   RefreshCw,
-  ShieldCheck,
   Store,
   Utensils,
 } from "lucide-react";
+import {
+  ChefEmpty,
+  ChefNotice,
+  ChefSection,
+  formatInr,
+} from "@/features/chef/components/chef-ui";
+import { ChefOrderCard, OrderUpdateNotice, focusOrderAfterUpdate, orderUpdateText } from "@/features/chef/components/chef-order-card";
+import { ChefKitchenSwitch } from "@/features/chef/components/chef-kitchen-switch";
+import { ChefOrderAlerts } from "@/features/chef/components/chef-order-alerts";
+import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
 import {
   parseChefApplication,
   type ChefApplication,
@@ -33,19 +35,12 @@ import {
   parseChefEarnings,
   type ChefEarning,
 } from "@/features/chef/lib/chef-earnings-contract";
-import {
-  loadSession,
-  synchronizeSessionRoles,
-  type CravesUser,
-} from "@/features/auth/api/cravesAuth";
+import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
+import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
+import { ChefLoading } from "@/features/chef/components/chef-loading";
 
-type DashboardState =
-  | "loading"
-  | "signed-out"
-  | "applicant"
-  | "verification"
-  | "approved"
-  | "error";
+type DashboardState = "loading" | "approved" | "error";
 
 type Snapshot = {
   application: ChefApplication | null;
@@ -59,13 +54,12 @@ type Snapshot = {
 };
 
 type PriorityAction = {
-  eyebrow: string;
   title: string;
   description: string;
   action: string;
   href?: string;
   refresh?: boolean;
-  icon: typeof ChefHat;
+  icon: typeof Store;
 };
 
 const EMPTY: Snapshot = {
@@ -77,36 +71,6 @@ const EMPTY: Snapshot = {
   unavailable: [],
   details: [],
 };
-
-function hasChefRole(user: CravesUser | null): boolean {
-  return Boolean(user?.roles.some((role) => role.toUpperCase() === "CHEF"));
-}
-
-function hasRequiredEvidence(application: ChefApplication): boolean {
-  const types = new Set(application.documents.filter(document => document.status === "UPLOADED" || document.status === "APPROVED").map((document) => document.documentType));
-  const modernEvidence =
-    types.has("APPLICANT_PHOTO") &&
-    types.has("GOVERNMENT_ID_FRONT") &&
-    types.has("GOVERNMENT_ID_BACK") &&
-    types.has("TAX_ID_CARD");
-  return modernEvidence;
-}
-
-async function responseBody(response: Response): Promise<unknown> {
-  return response.json().catch(() => null);
-}
-
-function money(value: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch {
-    return `${currency} ${value.toFixed(0)}`;
-  }
-}
 
 function isThisWeek(value: string): boolean {
   const date = new Date(value);
@@ -122,55 +86,10 @@ function isThisWeek(value: string): boolean {
   return date >= start && date < end;
 }
 
-function applicantCopy(application: ChefApplication | null) {
-  if (!application || application.status === "NOT_SUBMITTED") {
-    return {
-      eyebrow: "Become a Craves chef",
-      title: "Cook from home with Craves",
-      description:
-        "Tell us who you are, where you cook, and share a few clear photos. We’ll guide you one thing at a time.",
-      action: "Apply to become a chef",
-    };
-  }
-  if (application.status === "PENDING" && !hasRequiredEvidence(application)) {
-    return {
-      eyebrow: "Application in progress",
-      title: "Finish your chef application",
-      description:
-        "Your details are saved. Add the remaining photos so Craves can review your application.",
-      action: "Continue application",
-    };
-  }
-  if (application.status === "PENDING") {
-    return {
-      eyebrow: "Application status",
-      title: "Application under review",
-      description:
-        "Your details and photos are with Craves. There’s nothing else you need to do unless we ask for an update.",
-      action: "View application status",
-    };
-  }
-  if (application.status === "REJECTED") {
-    return {
-      eyebrow: "Application update",
-      title: "We need one more thing",
-      description:
-        application.rejectionReason?.trim() ||
-        "One part of your application needs another look. Everything else is still saved.",
-      action: "Fix this now",
-    };
-  }
-  return {
-    eyebrow: "Chef Mode",
-    title: "You’re approved",
-    description: "Your chef access is ready. Continue to Chef Mode.",
-    action: "Continue",
-  };
-}
-
 export function ChefModeDashboard() {
   const [state, setState] = useState<DashboardState>("loading");
-  const [user, setUser] = useState<CravesUser | null>(null);
+  // ChefAccessBoundary only renders the dashboard for a confirmed, approved chef session.
+  const user = useSyncExternalStore(subscribeSession, getSession, () => null);
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY);
   const [message, setMessage] = useState("Loading your kitchen…");
   const [refreshTick, setRefreshTick] = useState(0);
@@ -180,8 +99,8 @@ export function ChefModeDashboard() {
   useEffect(() => {
     let active = true;
 
-    async function loadApprovedSnapshot(current: CravesUser) {
-      const kitchenRequest = fetch("/api/chef/kitchen", {
+    async function loadApprovedSnapshot() {
+      const kitchenRequest = sessionFetch("/api/chef/kitchen", {
         cache: "no-store",
         credentials: "same-origin",
       });
@@ -189,20 +108,20 @@ export function ChefModeDashboard() {
         if (!response.ok) return null;
         const raw = await response.clone().json().catch(() => undefined);
         if (raw === null || !parseChefKitchen(raw)) return null;
-        return fetch("/api/chef/menu", { cache: "no-store", credentials: "same-origin" });
+        return sessionFetch("/api/chef/menu", { cache: "no-store", credentials: "same-origin" });
       });
       const requests = await Promise.allSettled([
-        fetch("/api/chef/application", {
+        sessionFetch("/api/chef/application", {
           cache: "no-store",
           credentials: "same-origin",
         }),
         kitchenRequest,
         menuRequest,
-        fetch("/api/chef/orders", {
+        sessionFetch("/api/chef/orders", {
           cache: "no-store",
           credentials: "same-origin",
         }),
-        fetch("/api/chef/earnings", {
+        sessionFetch("/api/chef/earnings", {
           cache: "no-store",
           credentials: "same-origin",
         }),
@@ -258,10 +177,11 @@ export function ChefModeDashboard() {
       }
 
       if (!active) return;
-      setUser(current);
+      // Orders already waiting when Chef Mode opens are on screen; only later ones ring.
+      if (!unavailable.includes("orders")) noticeNewOrders(orders);
       setSnapshot({ application, kitchen, menu, orders, earnings, unavailable, details });
       if (application?.status === "APPROVED" && !unavailable.includes("kitchen")) {
-        const noticeKey = `craves-chef-approved:${application.id ?? current.id}:${application.reviewedAt ?? "approved"}`;
+        const noticeKey = `craves-chef-approved:${application.id ?? getSession()?.id}:${application.reviewedAt ?? "approved"}`;
         setApprovalNoticeKey(noticeKey);
         try {
           if (!window.localStorage.getItem(noticeKey)) setShowApprovalNotice(true);
@@ -273,67 +193,7 @@ export function ChefModeDashboard() {
       setMessage("");
     }
 
-    void (async () => {
-      const current = await loadSession();
-      if (!active) return;
-      setUser(current);
-      if (!current) {
-        setState("signed-out");
-        setMessage("Sign in to continue to Chef Mode.");
-        return;
-      }
-
-      if (!hasChefRole(current)) {
-        const response = await fetch("/api/chef/application", {
-          cache: "no-store",
-          credentials: "same-origin",
-        });
-        if (!active) return;
-        if (!response.ok) {
-          if (response.status === 401) {
-            setState("signed-out");
-            setMessage("Your session expired. Sign in to continue to Chef Mode.");
-          } else {
-            setState("error");
-            setMessage("We couldn’t check your chef application right now.");
-          }
-          return;
-        }
-        const application = parseChefApplication(await responseBody(response));
-        if (!application) {
-          setState("error");
-          setMessage("Craves returned an invalid chef application response.");
-          return;
-        }
-        setSnapshot({ ...EMPTY, application });
-
-        if (application.status !== "APPROVED") {
-          setState("applicant");
-          setMessage("");
-          return;
-        }
-
-        setMessage("Activating your approved Chef access…");
-        const synchronized = await synchronizeSessionRoles();
-        if (!active) return;
-        if (!hasChefRole(synchronized)) {
-          setState("verification");
-          setMessage("Your chef application is approved. Verify your mobile number once so your secure Chef session can be refreshed.");
-          return;
-        }
-        await loadApprovedSnapshot(synchronized!);
-        return;
-      }
-
-      const synchronized = await synchronizeSessionRoles();
-      if (!active) return;
-      if (!hasChefRole(synchronized)) {
-        setState("verification");
-        setMessage("Verify your mobile number once to refresh secure Chef access.");
-        return;
-      }
-      await loadApprovedSnapshot(synchronized!);
-    })().catch(() => {
+    loadApprovedSnapshot().catch(() => {
       if (!active) return;
       setState("error");
       setMessage("We couldn’t load Chef Mode right now. Please try again.");
@@ -344,15 +204,35 @@ export function ChefModeDashboard() {
     };
   }, [refreshTick]);
 
+  // New orders appear (and ring) without a refresh; a check never undoes the chef's own tap.
+  useChefOrderPolling(state === "approved", (orders) =>
+    setSnapshot((current) => ({
+      ...current,
+      orders: mergeOrders(current.orders, orders),
+      unavailable: current.unavailable.filter((label) => label !== "orders"),
+      details: current.details.filter((detail) => !detail.startsWith("Orders:")),
+    })),
+  );
+
+  const [orderNotice, setOrderNotice] = useState("");
+  function updateOrder(order: ChefOrder) {
+    setSnapshot((current) => ({
+      ...current,
+      orders: current.orders.map((existing) => (existing.id === order.id ? order : existing)),
+    }));
+    setOrderNotice(orderUpdateText(order));
+    focusOrderAfterUpdate(order.id, "chef-order-update");
+  }
+
   const stats = useMemo(() => {
-    const actionOrders = snapshot.orders.filter(
+    // Oldest first: the order that has waited longest gets answered first.
+    const byAge = [...snapshot.orders].sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
+    const actionOrders = byAge.filter(
       (order) => order.status === "CHEF_ACCEPTANCE_PENDING",
     );
-    const activeOrders = snapshot.orders.filter((order) =>
-      ["CHEF_ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY"].includes(
-        order.status,
-      ),
-    );
+    // Still in the kitchen: what's cooking (the next tap) first, then what waits for the rider.
+    const cookingOrders = byAge.filter((order) => ["CHEF_ACCEPTED", "PREPARING"].includes(order.status));
+    const activeOrders = [...cookingOrders, ...byAge.filter((order) => order.status === "READY_FOR_PICKUP")];
     const availableMenu = snapshot.menu.filter(
       (item) => item.status === "ACTIVE" && item.available,
     );
@@ -365,7 +245,7 @@ export function ChefModeDashboard() {
     const weekAmount = weekEntries.reduce((sum, entry) => sum + entry.netPayable, 0);
     const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
     const todayOrders = snapshot.orders.filter(order => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(order.createdAt)) === todayKey).length;
-    return { actionOrders, activeOrders, availableMenu, weekAmount, weekCurrency, todayOrders };
+    return { actionOrders, activeOrders, cookingCount: cookingOrders.length, availableMenu, weekAmount, weekCurrency, todayOrders };
   }, [snapshot]);
 
   function dismissApprovalNotice() {
@@ -379,122 +259,38 @@ export function ChefModeDashboard() {
     setShowApprovalNotice(false);
   }
 
-  if (state === "loading") {
-    return (
-      <div className="space-y-4" aria-hidden="true">
-        <div className="h-56 animate-pulse rounded-3xl bg-[#F1F3F5]" />
-        <div className="grid gap-4 sm:grid-cols-3">
-          {Array.from({ length: 3 }, (_, index) => (
-            <div key={index} className="h-32 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-          ))}
-        </div>
-        <p className="sr-only" role="status">Loading Chef Mode</p>
-      </div>
-    );
-  }
-
-  if (state === "signed-out") {
-    return <div className="chef-step mx-auto max-w-6xl space-y-6 md:space-y-10">
-      <section className="relative isolate overflow-hidden rounded-3xl bg-[#F1F3F5]">
-        <div className="grid md:min-h-[480px] md:grid-cols-2">
-          <div className="order-2 flex flex-col justify-center p-6 md:order-1 md:p-10 lg:p-12">
-            <p className="text-sm font-semibold uppercase tracking-wider text-[var(--color-flame-red)]">Your kitchen. Your story.</p>
-            <h1 className="mt-3 text-3xl font-bold leading-tight tracking-tight md:text-4xl lg:text-5xl">Share your homemade food with thousands of customers</h1>
-            <p className="mt-5 text-base leading-7 text-[#6B6B6B]">Build your kitchen on Craves, serve nearby customers, and manage orders in one place. Turn the food you love making into an income of your own.</p>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row md:flex-col lg:flex-row">
-              <Button asChild><Link href="/sign-in?returnTo=/chef/application">Become a Chef <ChevronRight aria-hidden="true" /></Link></Button>
-              <Button asChild variant="outline"><Link href="/sign-in?returnTo=/chef">Already a Chef? Login</Link></Button>
-            </div>
-          </div>
-          <div className="relative order-1 overflow-hidden md:order-2"><img src="/home/cravings/craves-home-banner.webp" alt="A home chef preparing fresh homemade food" className="aspect-[16/10] h-full w-full origin-right scale-[1.12] object-cover object-right md:absolute md:inset-0" fetchPriority="high" /></div>
-        </div>
-      </section>
-      <section aria-label="Why cook with Craves" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[{icon:BadgeIndianRupee,title:"Earn from your cooking",text:"Bring your signature dishes to a local audience."},{icon:Store,title:"Reach nearby customers",text:"Connect your home kitchen with your neighbourhood."},{icon:Utensils,title:"Manage your kitchen easily",text:"Keep dishes, availability and orders together."},{icon:ShieldCheck,title:"Build a trusted Chef profile",text:"Share your story and complete your verification."}].map(({icon:Icon,title,text}) => <article key={title} className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)]"><span className="inline-flex rounded-xl bg-[var(--color-flame-red)]/10 p-3 text-[var(--color-flame-red)]"><Icon className="h-5 w-5" aria-hidden="true" /></span><h2 className="mt-4 text-base font-bold">{title}</h2><p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{text}</p></article>)}
-      </section>
-    </div>;
-  }
-
-  if (state === "verification") {
-    return (
-      <section className="mx-auto max-w-2xl rounded-3xl border border-[#E5E7EB] bg-white p-7 shadow-[0_6px_24px_rgba(0,0,0,0.08)] md:p-10">
-        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]">
-          <ShieldCheck className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
-        </span>
-        <p className="mt-5 text-sm font-semibold text-[#F62E18]">Chef Mode</p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A]">One quick verification</h1>
-        <p className="mt-3 max-w-xl text-base leading-7 text-[#6B6B6B]">{message}</p>
-        <Link href="/sign-in?returnTo=/chef" className="mt-7 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto">
-          Verify and continue
-        </Link>
-        <div className="mt-3">
-          <Link href="/home" className="inline-flex min-h-11 items-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">Switch to Customer Mode</Link>
-        </div>
-      </section>
-    );
-  }
-
-  if (state === "applicant") {
-    const copy = applicantCopy(snapshot.application);
-    return (
-      <section className="mx-auto max-w-2xl rounded-3xl border border-[#E5E7EB] bg-white p-6 shadow-[0_2px_10px_rgba(0,0,0,0.06)] md:p-9">
-        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]">
-          <ClipboardCheck className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
-        </span>
-        <p className="mt-5 text-sm font-semibold text-[#F62E18]">{copy.eyebrow}</p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A]">{copy.title}</h1>
-        <p className="mt-3 text-base leading-7 text-[#6B6B6B]">{copy.description}</p>
-        {message ? (
-          <p role="status" className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">{message}</p>
-        ) : null}
-        <Link
-          href="/chef/application"
-          aria-label="Open chef application"
-          className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white"
-        >
-          {copy.action}
-          <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        </Link>
-        <div className="mt-3 text-center">
-          <Link href="/home" className="inline-flex min-h-11 items-center rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]">Switch to Customer Mode</Link>
-        </div>
-      </section>
-    );
-  }
+  if (state === "loading") return <ChefLoading shape="dashboard" label="Loading Chef Mode" />;
 
   if (state === "error") {
     return (
-      <section className="mx-auto max-w-2xl rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center">
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]">
-          <AlertTriangle className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
-        </span>
-        <h1 className="mt-5 text-2xl font-bold text-[#1A1A1A]">Chef Mode couldn’t load</h1>
-        <p className="mt-2 text-sm text-[#6B6B6B]">{message}</p>
-        <button
-          type="button"
-          onClick={() => setRefreshTick((value) => value + 1)}
-          className="mt-6 inline-flex min-h-12 items-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white"
-        >
-          <RefreshCw className="h-4 w-4" aria-hidden="true" />
-          Try again
-        </button>
-      </section>
+      <ChefSection>
+        <ChefEmpty
+          icon={AlertTriangle}
+          title="Chef Mode couldn’t load"
+          text={message}
+          action={
+            <button type="button" onClick={() => setRefreshTick((value) => value + 1)} className="chef-btn is-primary">
+              <RefreshCw className="h-5 w-5" aria-hidden="true" />
+              Try again
+            </button>
+          }
+        />
+      </ChefSection>
     );
   }
 
-  let priority: PriorityAction;
+  // Setup comes first; with the kitchen ready, the orders below are the whole job.
+  let priority: PriorityAction | null = null;
   if (snapshot.unavailable.includes("kitchen") || snapshot.unavailable.includes("menu")) {
     priority = {
-      eyebrow: "Try again",
       title: "Check your kitchen and menu",
-      description: "We couldn’t verify your saved kitchen or dishes. Refresh before continuing setup.",
-      action: "Refresh kitchen and menu",
+      description: "We couldn’t check your saved kitchen or dishes. Try again before you carry on.",
+      action: "Try again",
       refresh: true,
       icon: RefreshCw,
     };
   } else if (!snapshot.kitchen) {
     priority = {
-      eyebrow: "You’re approved",
       title: "Give your kitchen a name",
       description: "This is what customers will know your home kitchen by.",
       action: "Name my kitchen",
@@ -503,169 +299,177 @@ export function ChefModeDashboard() {
     };
   } else if (snapshot.menu.length === 0) {
     priority = {
-      eyebrow: "Next step",
       title: "Add your first dish",
       description: "Add one dish so customers can see what you cook.",
       action: "Add a dish",
       href: "/chef/menu",
       icon: Utensils,
     };
-  } else if (stats.actionOrders.length > 0) {
-    const first = stats.actionOrders[0]!;
-    priority = {
-      eyebrow: "Needs your answer",
-      title: `${stats.actionOrders.length} new order${stats.actionOrders.length === 1 ? "" : "s"} waiting`,
-      description: "Open the order and tell us if you can cook it now.",
-      action: "See the order",
-      href: `/chef/orders/${first.id}`,
-      icon: ClipboardList,
-    };
-  } else if (stats.activeOrders.length > 0) {
-    const first = stats.activeOrders[0]!;
-    priority = {
-      eyebrow: "Cooking now",
-      title: "You have an order in progress",
-      description: "Open it when you’re ready to continue or mark the food packed.",
-      action: "Continue order",
-      href: `/chef/orders/${first.id}`,
-      icon: ChefHat,
-    };
-  } else {
-    priority = {
-      eyebrow: "Today",
-      title: "No orders yet — you’re all set",
-      description: "Your menu is ready. New orders will appear here when customers choose your food.",
-      action: "Refresh",
-      refresh: true,
-      icon: ChefHat,
-    };
   }
 
-  const kitchenOpen = snapshot.kitchen?.status === "ACTIVE";
-  const menuSummary = snapshot.menu.length
-    ? `${snapshot.menu.length} dish${snapshot.menu.length === 1 ? "" : "es"}`
-    : "Add your first dish";
-  const earningsSummary = stats.weekAmount > 0
-    ? money(stats.weekAmount, stats.weekCurrency)
-    : "Appears after your first earning";
+  const kitchenName = snapshot.kitchen?.kitchenName || "Your Craves kitchen";
+  const firstName = user?.firstName || user?.username || "Chef";
+  const ordersUnknown = snapshot.unavailable.includes("orders");
+  const newOrders = stats.actionOrders;
+  const activeOrders = stats.activeOrders;
+  const quiet = !priority && newOrders.length === 0 && activeOrders.length === 0;
 
   return (
     <>
-      {showApprovalNotice ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4" role="presentation">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="chef-approved-title"
-            className="w-full max-w-lg rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center shadow-[0_18px_50px_rgba(0,0,0,0.18)] md:p-9"
-          >
-            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F1F3F5]">
-              <CheckCircle2 className="h-8 w-8 text-[#F62E18]" aria-hidden="true" />
-            </span>
-            <p className="mt-5 text-sm font-semibold text-[#F62E18]">You’re approved</p>
-            <h2 id="chef-approved-title" className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A]">Congratulations! You’re now a Craves chef</h2>
-            <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">{snapshot.kitchen ? "Your Chef Mode is ready. Add your first dish so customers can discover what you cook." : "Your Chef Mode is ready. Save your kitchen name and pickup address, then add your first dish."}</p>
+      {/* The shared sheet: focus moves in and back, Esc and Back close it, phones get a bottom sheet. */}
+      <Sheet
+        open={showApprovalNotice}
+        onOpenChange={(open) => {
+          if (!open) dismissApprovalNotice();
+        }}
+        title="You’re a Craves chef"
+        description={
+          snapshot.kitchen
+            ? "Your kitchen is set up. Add your first dish so customers can find what you cook."
+            : "Save your kitchen name and pickup address, then add your first dish."
+        }
+        footer={
+          <>
+            <button type="button" onClick={dismissApprovalNotice} className={secondaryActionClass}>
+              Not now
+            </button>
             <Link
               href={snapshot.kitchen ? "/chef/menu" : "/chef/kitchen"}
               onClick={dismissApprovalNotice}
-              className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white"
+              className="craves-primary-action w-full sm:w-auto"
             >
               {snapshot.kitchen ? "Add my first dish" : "Set up my kitchen"}
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </Link>
-            <button
-              type="button"
-              onClick={dismissApprovalNotice}
-              className="mt-3 min-h-11 w-full rounded-full bg-[#F1F3F5] px-5 text-sm font-semibold text-[#1A1A1A] transition hover:bg-[#E5E7EB]"
-            >
-              Go to Chef home
-            </button>
-          </section>
-        </div>
-      ) : null}
+          </>
+        }
+      />
 
-      <div className="space-y-5">
-        <div>
-          <p className="text-sm font-semibold text-[#F62E18]">Chef Mode</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#1A1A1A] md:text-4xl">
-            Hello, {user?.firstName || user?.username || "Chef"}
-          </h1>
-          <div className="mt-3 flex flex-wrap items-center gap-3"><span className="rounded-full bg-[#F1F3F5] px-3 py-2 text-sm font-semibold">{snapshot.kitchen?.kitchenName || "Your Craves kitchen"}</span><span className="inline-flex items-center gap-1 text-sm text-primary"><ShieldCheck className="h-4 w-4" />Approved Chef</span><Button asChild variant="ghost" size="icon"><Link href="/notifications" aria-label="Chef notifications"><Bell className="h-5 w-5" /></Link></Button></div>
-        </div>
+      <div className="chef-stack">
+        <header className="min-w-0">
+          <h1 className="chef-page-title">{greeting()}, {firstName}</h1>
+          <p className="mt-1 truncate text-[0.9375rem] font-semibold text-[#6B6B6B]">{kitchenName}</p>
+        </header>
 
         {snapshot.unavailable.length > 0 ? (
-          <p role="status" className="rounded-2xl bg-[#F1F3F5] px-4 py-3 text-sm text-[#6B6B6B]">
-            Some information couldn’t refresh. You can still use the parts shown below.
-            {snapshot.details.map((detail) => <span key={detail} className="mt-1 block">{detail}</span>)}
-          </p>
+          <ChefNotice icon={AlertTriangle} role="status">
+            <p>Some information couldn’t refresh. Everything else below is up to date.</p>
+            {snapshot.details.map((detail) => <p key={detail} className="mt-1 text-[#6B6B6B]">{detail}</p>)}
+          </ChefNotice>
         ) : null}
 
-        <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 md:p-8">
-          <div className="flex items-start gap-4">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5]">
-              <priority.icon className="h-7 w-7 text-[#F62E18]" aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-[#F62E18]">{priority.eyebrow}</p>
-              <h2 className="mt-1 text-2xl font-bold text-[#1A1A1A] md:text-3xl">{priority.title}</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B6B6B]">{priority.description}</p>
-            </div>
+        {snapshot.kitchen ? (
+          <ChefKitchenSwitch
+            kitchen={snapshot.kitchen}
+            onChange={(kitchen) => setSnapshot((current) => ({ ...current, kitchen }))}
+          />
+        ) : null}
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-5">
+          <div className="chef-stack">
+            {priority ? (
+              <ChefSection>
+                <div className="flex items-start gap-4">
+                  <span className="chef-row-icon"><priority.icon className="h-5 w-5" aria-hidden="true" /></span>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="chef-section-title">{priority.title}</h2>
+                    <p className="mt-1 text-[0.9375rem] leading-6 text-[#6B6B6B]">{priority.description}</p>
+                    {priority.href ? (
+                      <Link href={priority.href} className="chef-btn is-primary is-tall mt-4 w-full sm:w-auto">
+                        {priority.action}
+                      </Link>
+                    ) : (
+                      <button type="button" onClick={() => setRefreshTick((value) => value + 1)} className="chef-btn mt-4 w-full sm:w-auto">
+                        <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                        {priority.action}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </ChefSection>
+            ) : null}
+
+            <OrderUpdateNotice id="chef-order-update" text={orderNotice} />
+
+            {newOrders.length > 0 ? (
+              <section className="chef-stack" aria-labelledby="chef-new-orders">
+                <h2 id="chef-new-orders" className="chef-group-title is-attention">
+                  <BellRing className="h-5 w-5" aria-hidden="true" />
+                  {newOrders.length === 1 ? "New order: answer now" : `${newOrders.length} new orders: answer now`}
+                </h2>
+                {newOrders.map((order) => (
+                  <ChefOrderCard key={order.id} order={order} onUpdated={updateOrder} />
+                ))}
+              </section>
+            ) : null}
+
+            {activeOrders.length > 0 ? (
+              <section className="chef-stack" aria-labelledby="chef-active-orders">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 id="chef-active-orders" className="chef-group-title">In your kitchen</h2>
+                  <Link href="/chef/orders" className="chef-btn is-small">All orders</Link>
+                </div>
+                {activeOrders.map((order) => (
+                  <ChefOrderCard key={order.id} order={order} onUpdated={updateOrder} />
+                ))}
+              </section>
+            ) : null}
+
+            {quiet ? (
+              <ChefSection>
+                <ChefEmpty
+                  icon={BellRing}
+                  title={ordersUnknown ? "Orders couldn’t load" : "No orders right now"}
+                  text={
+                    ordersUnknown
+                      ? "We’ll keep trying every few seconds. You can also check now."
+                      : "Keep Craves open. Your phone rings and the order shows here as soon as a customer orders."
+                  }
+                  action={
+                    <button type="button" onClick={() => setRefreshTick((value) => value + 1)} className="chef-btn">
+                      <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                      Check now
+                    </button>
+                  }
+                />
+              </ChefSection>
+            ) : null}
           </div>
-          {priority.href ? (
-            <Link href={priority.href} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto">
-              {priority.action}
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
-          ) : (
-            <button
-              type="button"
-              onClick={() => priority.refresh && setRefreshTick((value) => value + 1)}
-              className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#F62E18] px-6 font-semibold text-white sm:w-auto"
-            >
-              <RefreshCw className="h-4 w-4" aria-hidden="true" />
-              {priority.action}
-            </button>
-          )}
-        </section>
 
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Kitchen summary">
-          <Link href="/chef/orders" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)]"><ClipboardList className="h-5 w-5 text-primary" /><p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Today’s orders</p><p className="mt-1 text-2xl font-bold">{snapshot.unavailable.includes("orders") ? "—" : stats.todayOrders}</p></Link>
-          <Link href="/chef/kitchen" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
-              <Store className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-            </span>
-            <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Your kitchen</p>
-            <p className="mt-1 font-bold text-[#1A1A1A]">{kitchenOpen ? "Accepting orders" : "Not accepting orders"}</p>
-          </Link>
-          <Link href="/chef/menu" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
-              <Utensils className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-            </span>
-            <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">Your menu</p>
-            <p className="mt-1 font-bold text-[#1A1A1A]">{menuSummary}</p>
-          </Link>
-          <Link href="/chef/earnings" className="rounded-2xl border border-[#E5E7EB] bg-white p-5 transition hover:border-[#F62E18]/40">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5]">
-              <BadgeIndianRupee className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
-            </span>
-            <p className="mt-4 text-xs font-semibold text-[#6B6B6B]">This week</p>
-            <p className="mt-1 font-bold text-[#1A1A1A]">{earningsSummary}</p>
-          </Link>
-        </section>
-
-        {snapshot.orders.length > 0 ? (
-          <details className="rounded-2xl border border-[#E5E7EB] bg-white p-5">
-            <summary className="cursor-pointer font-semibold text-[#1A1A1A]">More options</summary>
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              <Link href="/chef/application" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">Your details</Link>
-              <Link href="/chef/orders" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">Previous orders</Link>
-              <Link href="/chef/earnings" className="rounded-xl bg-[#F1F3F5] px-4 py-3 text-sm font-semibold text-[#1A1A1A]">What you’ve earned</Link>
-            </div>
-          </details>
-        ) : null}
+          <div className="chef-stack">
+            <ChefSection title="Today" flush labelledBy="chef-today">
+              <div className="chef-stats mt-1 border-t border-[#E3E6EA]">
+                <Link href="/chef/orders" className="chef-stat">
+                  <p className="chef-stat-label">Orders today</p>
+                  <p className="chef-stat-value">{ordersUnknown ? "—" : stats.todayOrders}</p>
+                </Link>
+                <Link href="/chef/orders" className="chef-stat">
+                  <p className="chef-stat-label">Cooking now</p>
+                  <p className="chef-stat-value">{ordersUnknown ? "—" : stats.cookingCount}</p>
+                </Link>
+                <Link href="/chef/menu" className="chef-stat">
+                  <p className="chef-stat-label">Dishes on today</p>
+                  <p className="chef-stat-value">{snapshot.menu.length ? `${stats.availableMenu.length} of ${snapshot.menu.length}` : "0"}</p>
+                </Link>
+                <Link href="/chef/earnings" className="chef-stat">
+                  <p className="chef-stat-label">Earned this week</p>
+                  <p className="chef-stat-value">{stats.weekAmount > 0 ? formatInr(stats.weekAmount, { currency: stats.weekCurrency, decimals: 0 }) : "₹0"}</p>
+                </Link>
+              </div>
+            </ChefSection>
+            <ChefOrderAlerts />
+          </div>
+        </div>
       </div>
     </>
   );
+}
+
+/** Good morning/afternoon/evening in India time. */
+function greeting(): string {
+  const hour = Number(new Intl.DateTimeFormat("en-IN", { hour: "numeric", hourCycle: "h23", timeZone: "Asia/Kolkata" }).format(new Date()));
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
 }
 
 export default ChefModeDashboard;

@@ -21,13 +21,15 @@ test("chef workspace uses the Customer Flame Red, white and neutral palette", ()
     assert.match(theme, new RegExp(color, "i"));
   }
   assert.doesNotMatch(theme, /#261a15/i);
-  assert.match(pageHeader, /bg-white/);
-  assert.match(pageHeader, /text-\[#1A1A1A\]/i);
-  assert.match(pageHeader, /text-\[var\(--color-flame-red\)\]/i);
+  // Page titles carry no eyebrow; colours come from the chef tokens below.
+  assert.match(pageHeader, /ChefPageHead/);
+  assert.doesNotMatch(pageHeader, /\{eyebrow\}/);
+  assert.match(chefTheme, /--chef-surface:\s*#ffffff/i);
+  assert.match(chefTheme, /--chef-text:\s*#1a1a1a/i);
+  assert.match(chefTheme, /--chef-page:\s*#f1f3f5/i);
   assert.match(chefTheme, /--chef-action:\s*var\(--color-flame-red\)/i);
   assert.match(chefTheme, /--chef-action-hover:\s*var\(--color-contrast-red\)/i);
-  assert.match(dashboard, /#F1F3F5/i);
-  assert.match(dashboard, /#1A1A1A/i);
+  // The neutral surface comes from --chef-page and the shared Sheet (approval prompt).
   assert.match(dashboard, /#6B6B6B/i);
   assert.doesNotMatch(
     `${pageHeader}\n${dashboard}`,

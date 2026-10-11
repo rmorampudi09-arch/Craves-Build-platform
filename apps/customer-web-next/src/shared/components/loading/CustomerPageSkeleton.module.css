@@ -3,10 +3,17 @@
   100% { transform: translateX(220%); }
 }
 
+/* Fast loads show no placeholder at all: blocks appear only once a wait passes 300 ms. */
+@keyframes cravesSkeletonReveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .block {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(180deg, #eceff1 0%, #e4e7ea 100%);
+  background: #e5e7eb;
+  animation: cravesSkeletonReveal 200ms ease-out 300ms both;
 }
 
 .block::after {
@@ -27,7 +34,7 @@
 }
 
 .soft {
-  background: linear-gradient(180deg, #f2f4f5 0%, #e9ecef 100%);
+  background: #f1f3f5;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -3,7 +3,7 @@
   --landing-red-hover: #df2412;
   --landing-ink: #111111;
   --landing-muted: #5f6064;
-  --landing-soft: #fff5f3;
+  --landing-soft: #F1F3F5;
   --landing-line: #eadfdd;
   background: #ffffff;
   color: var(--landing-ink);
@@ -437,7 +437,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: #fff0ed;
+  background: #F1F3F5;
   color: var(--landing-red);
 }
 
@@ -533,7 +533,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: #fff0ed;
+  background: #F1F3F5;
   color: var(--landing-red);
   font-size: 1.25rem;
   font-weight: 900;
@@ -549,8 +549,8 @@
   width: 3.6rem;
   height: 3.6rem;
   margin: 0 auto 0.65rem;
-  border: 1px solid #f6d9d5;
-  background: #fff8f6;
+  border: 1px solid #E5E7EB;
+  background: #F1F3F5;
 }
 
 .referenceHowCard h3,
@@ -591,7 +591,7 @@
   align-items: center;
   gap: 1.4rem;
   border-radius: 1.2rem;
-  background: #fff8f6;
+  background: #F1F3F5;
   padding: 1.3rem 2rem;
   color: var(--landing-red);
 }
@@ -768,7 +768,7 @@
 .referencePrimaryButton:focus-visible,
 .referenceWatchButton:focus-visible,
 .referenceLocationButton:focus-visible {
-  outline: 3px solid rgba(246, 46, 24, 0.32);
+  outline: 3px solid #1a1a1a;
   outline-offset: 3px;
 }
 

@@ -1,18 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { motion } from "framer-motion";
 import {
   FaArrowLeft,
   FaBagShopping,
   FaBell,
   FaCalendarDays,
+  FaCheck,
+  FaChevronRight,
   FaTrashCan,
 } from "react-icons/fa6";
 import { GiChefToque } from "react-icons/gi";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
-import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { UndoToast } from "@/shared/ui/overlays/undo-toast";
+import { spring } from "@/shared/lib/motion";
 import type { CustomerNotification } from "@/features/notifications/lib/notification-contract";
 import { loadSession } from "@/features/auth/api/cravesAuth";
 
@@ -38,14 +43,68 @@ function notificationGroup(createdAt: string): NotificationGroup {
   return "Earlier";
 }
 
-function notificationTimestamp(createdAt: string) {
-  return new Date(createdAt).toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+/** "1:31 pm" today, "Sat, 1:31 pm" this week, "3 Oct, 12:05 pm" before that. */
+function notificationTimestamp(createdAt: string, group: NotificationGroup) {
+  const created = new Date(createdAt);
+  const time = created.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }).toLowerCase();
+  if (group === "Today") return time;
+  const day = group === "This week"
+    ? created.toLocaleDateString("en-IN", { weekday: "short" })
+    : created.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        ...(created.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+      });
+  return `${day}, ${time}`;
+}
+
+type NoticeAudience = "customer" | "chef";
+// Sent to customers despite the CHEF_ prefix: "the chef accepted/declined your order".
+const CUSTOMER_CHEF_TYPES = new Set(["CHEF_ACCEPTED_ORDER", "CHEF_REJECTED_ORDER"]);
+
+function isKitchenNotice(notice: CustomerNotification): boolean {
+  const type = notice.noticeType.toUpperCase();
+  return (type.startsWith("CHEF_") && !CUSTOMER_CHEF_TYPES.has(type)) ||
+    (notice.targetType ?? "").toUpperCase().startsWith("CHEF_");
+}
+
+/** About food the person bought; Chef Mode leaves these to the customer app. Unknown types show in both. */
+function isOwnOrderNotice(notice: CustomerNotification): boolean {
+  const type = notice.noticeType.toUpperCase();
+  return !isKitchenNotice(notice) && (CUSTOMER_CHEF_TYPES.has(type) || /^(ORDER|PAYMENT|DELIVERY|REFUND)_/.test(type));
+}
+
+/** Where a notice leads: the order to answer or track, or the chef application. */
+function noticeLink(notice: CustomerNotification, audience: NoticeAudience): { to: string; label: string } | null {
+  const target = (notice.targetType ?? "").toUpperCase();
+  if (audience === "chef") {
+    if ((target === "ORDER" || target === "CHEF_ORDER") && notice.targetId) return { to: `/chef/orders/${notice.targetId}`, label: "Open order" };
+    if (target === "CHEF_APPLICATION") return { to: "/chef/application/status", label: "See application" };
+    return null;
+  }
+  if (target === "ORDER" && notice.targetId && !isKitchenNotice(notice)) return { to: `/orders/${notice.targetId}`, label: "View order" };
+  return null;
+}
+
+function clearedKey(identityId: string): string {
+  return "craves.notifications.cleared:" + identityId;
+}
+
+function persistCleared(identityId: string, ids: string[]) {
+  if (!identityId || ids.length === 0) return;
+  let current: string[] = [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(clearedKey(identityId)) || "[]");
+    current = Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string")
+      : [];
+  } catch {
+    current = [];
+  }
+  window.localStorage.setItem(
+    clearedKey(identityId),
+    JSON.stringify(Array.from(new Set([...current, ...ids])).slice(-250)),
+  );
 }
 
 function NotificationTypeIcon({ notice }: { notice: CustomerNotification }) {
@@ -61,13 +120,24 @@ function NotificationTypeIcon({ notice }: { notice: CustomerNotification }) {
   return <Icon className="text-lg" aria-hidden="true" />;
 }
 
-export default function NotificationsPage() {
+export default function NotificationsPage({ audience = "customer" }: { audience?: NoticeAudience }) {
   const navigate = useNavigate();
   const [notices, setNotices] = useState<CustomerNotification[]>([]);
   const [filter, setFilter] = useState<NotificationFilter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [identityId, setIdentityId] = useState("");
+  const [pendingClear, setPendingClear] = useState<{ id: number; ids: string[] } | null>(null);
+  const [markingRead, setMarkingRead] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const clearCount = useRef(0);
+  const unmountCommit = useRef({ identityId: "", ids: [] as string[] });
+
+  // Leaving the page while Undo is still offered keeps the clear.
+  useEffect(() => {
+    unmountCommit.current = { identityId, ids: pendingClear?.ids ?? [] };
+  });
+  useEffect(() => () => persistCleared(unmountCommit.current.identityId, unmountCommit.current.ids), []);
 
   useEffect(() => {
     let active = true;
@@ -81,7 +151,7 @@ export default function NotificationsPage() {
       if (!active) return;
       setIdentityId(session.id);
 
-      const dismissedKey = "craves.notifications.cleared:" + session.id;
+      const dismissedKey = clearedKey(session.id);
       let dismissed = new Set<string>();
       try {
         const saved = JSON.parse(window.localStorage.getItem(dismissedKey) || "[]");
@@ -98,12 +168,12 @@ export default function NotificationsPage() {
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(body?.message || "Notifications could not be loaded.");
+        throw new Error(body?.message || "Notifications didn’t load. Check your connection and try again.");
       }
       if (!active) return;
 
       const loadedNotices = (body as CustomerNotification[]).filter(
-        (notice) => !dismissed.has(notice.id),
+        (notice) => !dismissed.has(notice.id) && !(audience === "chef" && isOwnOrderNotice(notice)),
       );
       setNotices(loadedNotices);
       setLoading(false);
@@ -112,7 +182,7 @@ export default function NotificationsPage() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Notifications could not be loaded.",
+          : "Notifications didn’t load. Check your connection and try again.",
       );
       setLoading(false);
     });
@@ -120,46 +190,63 @@ export default function NotificationsPage() {
     return () => {
       active = false;
     };
-  }, [navigate]);
+  }, [audience, navigate]);
 
-  function persistCleared(ids: string[]) {
-    if (!identityId || ids.length === 0) return;
-    const key = "craves.notifications.cleared:" + identityId;
-    let current: string[] = [];
-    try {
-      const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
-      current = Array.isArray(parsed)
-        ? parsed.filter((value): value is string => typeof value === "string")
-        : [];
-    } catch {
-      current = [];
-    }
-    window.localStorage.setItem(
-      key,
-      JSON.stringify(Array.from(new Set([...current, ...ids])).slice(-250)),
-    );
+  // Opening a notice's order counts as reading it; the list catches up even if the request fails.
+  function openNotice(notice: CustomerNotification) {
+    if (notice.readAt) return;
+    const readAt = new Date().toISOString();
+    setNotices((current) => current.map((item) => (item.id === notice.id ? { ...item, readAt } : item)));
+    void fetch(`/api/notifications/in-app/${notice.id}/read`, { method: "PATCH", credentials: "same-origin" }).catch(() => undefined);
   }
 
+  function commitClear(ids: string[]) {
+    persistCleared(identityId, ids);
+    setNotices((current) => current.filter((notice) => !ids.includes(notice.id)));
+  }
+
+  // Clearing hides at once but only saves once the Undo toast has expired.
   function clearNotices(ids: string[]) {
     if (ids.length === 0) return;
-    persistCleared(ids);
-    setNotices((current) =>
-      current.filter((notice) => !ids.includes(notice.id)),
-    );
+    if (pendingClear) commitClear(pendingClear.ids);
+    clearCount.current += 1;
+    setPendingClear({ id: clearCount.current, ids });
   }
 
-  const unreadCount = notices.filter((notice) => !notice.readAt).length;
-  const readCount = notices.length - unreadCount;
+  async function markAllRead() {
+    setMarkingRead(true);
+    setActionError("");
+    try {
+      const response = await fetch("/api/notifications/in-app/read-all", {
+        method: "PATCH",
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error("read-all failed");
+      const readAt = new Date().toISOString();
+      setNotices((current) => current.map((notice) => notice.readAt ? notice : { ...notice, readAt }));
+    } catch {
+      setActionError("We couldn’t mark your notifications as read. Please try again.");
+    } finally {
+      setMarkingRead(false);
+    }
+  }
+
+  const visibleNotices = useMemo(
+    () => (pendingClear ? notices.filter((notice) => !pendingClear.ids.includes(notice.id)) : notices),
+    [notices, pendingClear],
+  );
+  const unreadCount = visibleNotices.filter((notice) => !notice.readAt).length;
+  const readCount = visibleNotices.length - unreadCount;
 
   const filteredNotices = useMemo(() => {
     if (filter === "unread") {
-      return notices.filter((notice) => !notice.readAt);
+      return visibleNotices.filter((notice) => !notice.readAt);
     }
     if (filter === "read") {
-      return notices.filter((notice) => Boolean(notice.readAt));
+      return visibleNotices.filter((notice) => Boolean(notice.readAt));
     }
-    return notices;
-  }, [filter, notices]);
+    return visibleNotices;
+  }, [filter, visibleNotices]);
 
   const groupedNotices = useMemo(() => {
     const groups = new Map<NotificationGroup, CustomerNotification[]>();
@@ -173,51 +260,53 @@ export default function NotificationsPage() {
     })).filter((group) => group.notices.length > 0);
   }, [filteredNotices]);
 
-  if (loading) return <CustomerPageSkeleton label="Loading notifications" />;
-
   return (
     <div className="min-h-screen bg-white pb-12 text-[#1A1A1A]">
       <AutoHideCustomerHeader className="border-b border-border bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
-        <div className="relative mx-auto flex max-w-4xl items-start justify-center px-4 pb-5 pt-6 md:px-6 md:pb-6 md:pt-8">
+        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-4 md:px-6 md:py-5">
           <Link
             to="/home"
-            className="absolute left-4 top-6 flex h-11 w-11 items-center justify-center rounded-full !bg-white !text-[#1A1A1A] transition-colors hover:!bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30 md:left-6 md:top-8"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full !bg-white !text-[#1A1A1A] transition-colors hover:!bg-[#F1F3F5]"
             aria-label="Back to home"
           >
             <FaArrowLeft className="text-lg" aria-hidden="true" />
           </Link>
-
-          <Link
-            to="/home"
-            className="flex flex-col items-center rounded-xl text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
-            aria-label="Craves home"
-          >
+          <Link to="/home" className="shrink-0 rounded-lg" aria-label="Craves home">
             <CravesLogo size="sm" decorative />
-            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#F62E18]">
-              Stay updated
-            </p>
-            <span className="mt-1 block text-3xl font-semibold leading-tight text-[#1A1A1A]">
-              Notifications
-            </span>
           </Link>
+          <h1 className="text-xl font-semibold leading-tight text-[#1A1A1A]">
+            Notifications
+          </h1>
         </div>
       </AutoHideCustomerHeader>
 
       <main className="mx-auto max-w-4xl px-4 pb-8 pt-3 md:px-6 md:pb-10 md:pt-4">
-        {!loading && notices.length > 0 ? (
+        {!loading && visibleNotices.length > 0 ? (
           <div className="mb-6">
             <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+              {unreadCount > 0 ? (
+                <button
+                  type="button"
+                  disabled={markingRead}
+                  aria-busy={markingRead}
+                  onClick={() => void markAllRead()}
+                  className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#1A1A1A]"
+                >
+                  <FaCheck aria-hidden="true" />
+                  {markingRead ? "Marking as read…" : "Mark all as read"}
+                </button>
+              ) : null}
               {readCount > 0 ? (
                 <button
                   type="button"
                   onClick={() =>
                     clearNotices(
-                      notices
+                      visibleNotices
                         .filter((notice) => Boolean(notice.readAt))
                         .map((notice) => notice.id),
                     )
                   }
-                  className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#1A1A1A] transition hover:border-[#F62E18]/25 hover:text-[#F62E18]"
+                  className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#1A1A1A]"
                 >
                   <FaTrashCan aria-hidden="true" />
                   Clear read
@@ -225,8 +314,8 @@ export default function NotificationsPage() {
               ) : null}
               <button
                 type="button"
-                onClick={() => clearNotices(notices.map((notice) => notice.id))}
-                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#6B6B6B] transition hover:border-[#F62E18]/25 hover:text-[#F62E18]"
+                onClick={() => clearNotices(visibleNotices.map((notice) => notice.id))}
+                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3 text-xs font-bold text-[#1A1A1A]"
               >
                 <FaTrashCan aria-hidden="true" />
                 Clear all
@@ -234,11 +323,12 @@ export default function NotificationsPage() {
             </div>
             <div
               className="flex gap-7 border-b border-[#E5E7EB] sm:gap-9"
+              role="group"
               aria-label="Notification filters"
             >
               {(
                 [
-                  ["all", "All", notices.length],
+                  ["all", "All", visibleNotices.length],
                   ["unread", "Unread", unreadCount],
                   ["read", "Read", readCount],
                 ] as const
@@ -250,40 +340,42 @@ export default function NotificationsPage() {
                     type="button"
                     onClick={() => setFilter(value)}
                     aria-pressed={active}
-                    className={`group relative min-h-11 appearance-none border-0 !bg-transparent px-3 pb-2 pt-2 text-sm font-semibold shadow-none outline-none transition-colors duration-200 hover:!bg-transparent focus:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent ${
-                      active
-                        ? "after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:rounded-full after:bg-[#F62E18]"
-                        : "after:absolute after:inset-x-2 after:bottom-[-1px] after:h-0.5 after:origin-center after:scale-x-0 after:rounded-full after:bg-[#F62E18]"
-                    }`}
+                    className="group relative min-h-11 appearance-none border-0 !bg-transparent px-3 pb-2 pt-2 text-sm font-semibold shadow-none outline-none transition-colors duration-200 hover:!bg-transparent focus:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent"
                   >
-                    <span className="text-[#1A1A1A] transition-colors duration-200 group-hover:text-[#F62E18] group-focus-visible:text-[#F62E18]">
+                    {/* One underline glides to the chosen filter (Material tabs); reduced motion jumps. */}
+                    {active ? (
+                      <motion.span
+                        layoutId="notification-filter-indicator"
+                        aria-hidden="true"
+                        className="absolute inset-x-0 bottom-[-1px] h-0.5 rounded-full bg-[#F62E18]"
+                        transition={spring.ui}
+                      />
+                    ) : null}
+                    <span className="text-[#1A1A1A] transition-colors duration-200 group-hover:text-[#C4200F] group-focus-visible:text-[#C4200F]">
                       {label} ({count})
                     </span>
                   </button>
                 );
               })}
             </div>
+            {actionError ? (
+              <p role="alert" className="mt-3 rounded-xl bg-[#F1F3F5] p-3 text-sm font-medium text-[#C4200F]">
+                {actionError}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
         {loading ? (
-          <div aria-busy="true" className="space-y-3">
-            <span className="sr-only">Loading notifications</span>
-            {[0, 1, 2].map((item) => (
-              <div
-                key={item}
-                className="h-28 animate-pulse rounded-2xl border border-[#E5E7EB] bg-[#F1F3F5]"
-              />
-            ))}
-          </div>
+          <CustomerSectionSkeleton variant="notifications" label="Loading notifications" />
         ) : error ? (
           <div
             role="alert"
-            className="rounded-2xl border border-[#F62E18]/20 bg-white p-5 text-sm text-[#C92716] shadow-sm"
+            className="rounded-2xl bg-[#F1F3F5] p-5 text-sm font-medium text-[#C4200F]"
           >
             {error}
           </div>
-        ) : notices.length === 0 ? (
+        ) : visibleNotices.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-[#E5E7EB] bg-white p-10 text-center">
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
               <FaBell className="text-xl" aria-hidden="true" />
@@ -322,6 +414,7 @@ export default function NotificationsPage() {
                 <ul className="space-y-3">
                   {group.notices.map((notice) => {
                     const unread = !notice.readAt;
+                    const link = noticeLink(notice, audience);
                     return (
                       <li key={notice.id}>
                         <article className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:px-5">
@@ -348,11 +441,20 @@ export default function NotificationsPage() {
                               <p className="mt-1 text-sm leading-6 text-[#6B6B6B]">
                                 {notice.body}
                               </p>
+                              {link ? (
+                                <Link
+                                  to={link.to}
+                                  onClick={() => openNotice(notice)}
+                                  className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-full border border-[#D3D7DD] bg-white px-4 text-sm font-semibold text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]"
+                                >
+                                  {link.label}
+                                  <FaChevronRight className="text-xs" aria-hidden="true" />
+                                </Link>
+                              ) : null}
                               <div className="mt-2 flex items-center justify-between gap-3">
                                 <p className="text-xs text-[#6B6B6B]">
-                                  {notificationTimestamp(notice.createdAt)}
-                                  <span aria-hidden="true"> · </span>
-                                  <span>{unread ? "Unread" : "Read"}</span>
+                                  {notificationTimestamp(notice.createdAt, group.label)}
+                                  <span className="sr-only">{unread ? ", unread" : ", read"}</span>
                                 </p>
                                 {!unread ? (
                                   <button
@@ -382,6 +484,22 @@ export default function NotificationsPage() {
           </div>
         )}
       </main>
+
+      <UndoToast
+        toast={
+          pendingClear
+            ? {
+                id: pendingClear.id,
+                message: `${pendingClear.ids.length} notification${pendingClear.ids.length === 1 ? "" : "s"} cleared`,
+              }
+            : null
+        }
+        onUndo={() => setPendingClear(null)}
+        onExpire={() => {
+          if (pendingClear) commitClear(pendingClear.ids);
+          setPendingClear(null);
+        }}
+      />
     </div>
   );
 }

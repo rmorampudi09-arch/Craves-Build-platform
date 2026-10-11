@@ -136,7 +136,7 @@ export default async function ProductsPricingPage() {
               ))}
             </div>
           ) : (
-            <div className="rounded-3xl border border-[#F62E18]/20 bg-[#FFF5F3] p-6">
+            <div className="rounded-3xl border border-[#E5E7EB] bg-[#F1F3F5] p-6">
               <h2 className="font-display text-2xl font-bold">Live pricing is temporarily unavailable.</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-black/65">
                 Please try again shortly, or explore the marketplace for dishes available near you. You can review the full order total before payment.

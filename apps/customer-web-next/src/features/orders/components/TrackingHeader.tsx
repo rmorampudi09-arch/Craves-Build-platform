@@ -5,6 +5,8 @@ import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideC
 
 interface TrackingHeaderProps {
   orderId: string;
+  /** The page's one h1. */
+  title?: string;
   onBack: () => void;
   onRefresh: () => void;
   refreshing?: boolean;
@@ -12,6 +14,7 @@ interface TrackingHeaderProps {
 
 export function TrackingHeader({
   orderId,
+  title = "Track order",
   onBack,
   onRefresh,
   refreshing = false,
@@ -30,7 +33,7 @@ export function TrackingHeader({
 
         <Link
           to="/home"
-          className="shrink-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/30"
+          className="shrink-0 rounded-xl"
           aria-label="Craves home"
         >
           <CravesLogo size="sm" decorative />
@@ -38,7 +41,7 @@ export function TrackingHeader({
 
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold tracking-[-0.03em] text-[#1A1A1A]">
-            Track order
+            {title}
           </h1>
           <p className="mt-0.5 truncate text-xs text-[#6B6B6B]">
             Order #{orderId.slice(-8).toUpperCase()}

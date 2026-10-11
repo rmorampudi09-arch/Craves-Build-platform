@@ -161,7 +161,7 @@ export function StaticAddressMapPicker({
         }}
         onPointerUp={(event) => finishDrag(event)}
         onPointerCancel={(event) => finishDrag(event, true)}
-        className="relative aspect-[900/520] w-full touch-none overflow-hidden rounded-[1.6rem] border border-[#E5E7EB] bg-[#F1F3F5] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-[#F62E18]/35"
+        className="relative aspect-[900/520] w-full touch-none overflow-hidden rounded-[1.6rem] border border-[#E5E7EB] bg-[#F1F3F5] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/35"
       >
         {!imageFailed ? (
           // Static Ola Maps bytes come from our same-origin BFF (the key stays server-side),

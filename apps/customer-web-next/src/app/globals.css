@@ -16,6 +16,8 @@ html {
   background: var(--craves-white);
   scroll-behavior: smooth;
   scroll-padding-top: 6rem;
+  /* Focused fields never end up hidden behind the fixed bottom tab bars on phones. */
+  scroll-padding-bottom: 6rem;
 }
 body {
   min-height: 100vh;
@@ -25,7 +27,7 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 button, a, input { outline-offset: 3px; }
-::selection { background: rgba(246, 46, 24, 0.18); }
+::selection { background: rgba(26,26,26,0.14); }
 
 
 @media (prefers-reduced-motion: reduce) {

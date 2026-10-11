@@ -1,6 +1,5 @@
 import type {CheckoutSession} from '../checkout/domain/checkoutTypes';
-import type {CartSnapshot} from './domain/cartTypes';
-import type {CartBillPreview} from './api/cartBillPreviewApi';
+import type {CartLine, CartSnapshot} from './domain/cartTypes';
 
 export interface CartLineInteractionState {
   checkoutBusy: boolean;
@@ -55,25 +54,21 @@ export function recoveredCheckoutMatchesCurrentCart(
   });
 }
 
-export function getCartCheckoutActionLabel(
-  checkoutBusy: boolean,
-  paymentRecoveryActive: boolean,
-  staleRecoveredCheckout = false,
-): string {
-  if (checkoutBusy) return 'Please wait…';
-  if (staleRecoveredCheckout) return 'Check previous payment';
-  if (paymentRecoveryActive) return 'Continue payment';
-  return 'Continue to Payment';
-}
+type DishQuantity = Pick<CartLine, 'menuItemId' | 'quantity'>;
 
-/** Skip repeat review only when every amount and the delivery address agree. */
-export function checkoutMatchesDisplayedBill(
-  checkout: CheckoutSession,
-  preview: CartBillPreview | null,
-): boolean {
-  if (!preview || checkout.deliveryAddressId !== preview.deliveryAddressId) return false;
-  return (['foodSubtotal', 'platformFee', 'deliveryFee', 'taxAmount', 'grandTotal'] as const)
-    .every(field => checkout[field].currency === preview[field].currency &&
-      canonicalDecimal(checkout[field].amount) !== null &&
-      canonicalDecimal(checkout[field].amount) === canonicalDecimal(preview[field].amount));
+/**
+ * Creating a checkout empties the server cart. Leaving Checkout puts back only
+ * what is still missing, so a cart that was partly refilled never doubles up.
+ */
+export function cartItemsToRestore(
+  checkoutItems: readonly DishQuantity[],
+  current: {lines: readonly DishQuantity[]} | null,
+): DishQuantity[] {
+  const inCart = new Map<string, number>();
+  current?.lines.forEach(line =>
+    inCart.set(line.menuItemId, (inCart.get(line.menuItemId) ?? 0) + line.quantity),
+  );
+  return checkoutItems
+    .map(item => ({menuItemId: item.menuItemId, quantity: item.quantity - (inCart.get(item.menuItemId) ?? 0)}))
+    .filter(item => item.quantity > 0);
 }

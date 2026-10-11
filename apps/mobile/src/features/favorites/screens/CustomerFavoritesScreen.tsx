@@ -1,7 +1,7 @@
 import React from 'react';
+import {askKitchenSwitch} from '../../cart/components/KitchenSwitchDialog';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -52,9 +52,11 @@ import {
 } from '../presentation/favoriteHomePresentation';
 import {
   canAddSavedDish,
+  savedDishDisplayName,
   savedKitchenDisplayName,
   type SavedAvailabilityTone,
 } from '../presentation/savedCatalogPresentation';
+import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
 import {
   useCustomerFavoritesQuery,
   useCustomerFavoritesQueueState,
@@ -325,36 +327,32 @@ export function CustomerFavoritesScreen() {
       );
       if (otherKitchen) {
         const expectedSnapshot = snapshot;
-        Alert.alert(
-          'Replace current cart?',
-          `Your cart has food from ${otherKitchen.kitchenName}. To add ${savedKitchenDisplayName(
-            dish,
-          )}, Craves must replace the cart you are reviewing now.`,
-          [
-            {text: 'Keep cart', style: 'cancel'},
-            {
-              text: 'Replace & add',
-              style: 'destructive',
-              onPress: () => {
-                dispatch(
-                  switchCartKitchen({
-                    expectedSnapshot,
-                    menuItemId: dish.menuItemId,
-                    quantity: 1,
-                    expectedKitchenId: dish.kitchenId!,
-                  }),
-                )
-                  .then(outcome => handleCartOutcome(dish.menuItemId, outcome))
-                  .catch(() =>
-                    setCartError(
-                      dish.menuItemId,
-                      'We couldn’t confirm the cart change. Check your cart before trying again.',
-                    ),
-                  );
-              },
-            },
-          ],
-        );
+        askKitchenSwitch({
+          cartLines: expectedSnapshot.lines,
+          newDish: {
+            name: savedDishDisplayName(dish),
+            kitchenName: savedKitchenDisplayName(dish),
+            priceLabel:
+              dish.price == null ? '' : formatDishDetailPrice(dish.price, dish.currency ?? 'INR'),
+          },
+          onReplace: () => {
+            dispatch(
+              switchCartKitchen({
+                expectedSnapshot,
+                menuItemId: dish.menuItemId,
+                quantity: 1,
+                expectedKitchenId: dish.kitchenId!,
+              }),
+            )
+              .then(outcome => handleCartOutcome(dish.menuItemId, outcome))
+              .catch(() =>
+                setCartError(
+                  dish.menuItemId,
+                  'We couldn’t confirm the cart change. Check your cart before trying again.',
+                ),
+              );
+          },
+        });
         return;
       }
 

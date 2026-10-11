@@ -19,6 +19,45 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.27.3 - White backgrounds and kitchen-switch popup, 2026-10-11
+
+- Cart, Checkout and Discover home chefs page backgrounds are white instead of grey
+  (1.27.2). Cards keep their borders.
+- Adding a dish from another kitchen now opens a Craves popup instead of a system
+  alert. The popup shows "Replace your cart?", the dishes in the cart (two shown, then
+  "+ N more"), the dish that would replace them, and Keep cart / Replace buttons.
+  `askKitchenSwitch()` lives in `features/cart/components/KitchenSwitchDialog.tsx`,
+  and `KitchenSwitchHost` is mounted once in `CustomerRootNavigator`.
+- Used by the kitchen page, kitchen dishes, dish popup and favourites (each keeps its
+  existing `switchCartKitchen` call). Home's Add button previously had no check (the
+  server rejection showed as a warning above the dishes) and now asks too.
+- Checks: tsc and eslint clean; Jest 226 suites / 1,388 tests. Installed on
+  GURKT4DYYPUW7DX8 (code 63). APK in artifacts. Uncommitted. The popup was not
+  opened on the phone because the cart was empty at the time.
+
+### Version 1.27.1 - Cart then Checkout redesign (Option A), 2026-10-11
+
+- Cart page: dishes grouped in a kitchen card (open kitchen, "Add more from this
+  kitchen"), delivery card, bottom bar "Item total" + Proceed to Checkout. No bill,
+  no Offers card, no location bar or bell (removed in 1.26.4).
+- Proceed creates the server checkout (the server empties the cart at this point) and
+  shows the Checkout page: address, Your order with Edit, bill details, Razorpay note,
+  bar "To pay" + Continue to Payment. Razorpay only opens from the Checkout page.
+- Back, Edit or Change on Checkout puts the missing dishes back with add-to-cart
+  (`cartItemsToRestore`). A started payment is dropped only if the server still
+  reports it unpaid.
+- The broken read-only bill preview (`/api/v1/cart/bill-preview`, body-less 403
+  from order-service) is no longer called. `CartBillPreviewSync` was unmounted and the
+  module was left unused.
+- 1.26.2–1.26.4 on the same day: the preview error code was shown in the banner, a
+  failed preview no longer blocked checkout, and the "Check previous payment" loop
+  after a Razorpay cancel plus a cart change was fixed.
+- Design: `Downloads\Craves-Build-platform-KUSHIRAVI-app-build\design-review\cart\board.html`.
+- Checks: tsc and eslint clean; Jest 225 suites / 1,386 tests (before the 1.27.1 polish;
+  cart suites re-run after it). APK `C:\mscratch\artifacts\KUSHIRAVI-app-v1.27.1.apk`,
+  installed on GURKT4DYYPUW7DX8 (code 61). Uncommitted. The Checkout page itself was
+  not exercised on the phone: tapping Proceed creates a real checkout.
+
 ### Version 1.26.0 - Meal Plan Redesign, 2026-10-11
 
 - User approved the meal-plan redesign (board `design-review/meal-plans/board.html`

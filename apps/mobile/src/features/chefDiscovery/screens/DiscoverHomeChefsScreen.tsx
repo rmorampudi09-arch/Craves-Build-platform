@@ -537,7 +537,7 @@ const styles = StyleSheet.create({
   listContent: {
     flexGrow: 1,
     paddingBottom: spacing.xxl,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.white,
   },
   topPanel: {
     paddingBottom: spacing.md,

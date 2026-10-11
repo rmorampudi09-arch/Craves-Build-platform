@@ -1,7 +1,7 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
+import {askKitchenSwitch} from '../../cart/components/KitchenSwitchDialog';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   FlatList,
   Image,
@@ -273,35 +273,33 @@ export function CustomerDishDetailScreen() {
           : null;
       if (otherKitchen && cartSnapshot) {
         const expectedSnapshot = cartSnapshot;
-        Alert.alert(
-          'Replace current cart?',
-          `Your cart has food from ${otherKitchen.kitchenName}. To add ${latestDish.itemName}, Craves must replace the cart you are reviewing now.`,
-          [
-            {text: 'Keep cart', style: 'cancel'},
-            {
-              text: 'Replace & add',
-              style: 'destructive',
-              onPress: () => {
-                dispatch(
-                  switchCartKitchen({
-                    expectedSnapshot,
-                    menuItemId: latestDish.id,
-                    quantity: 1,
-                    expectedKitchenId: latestDish.kitchen.id,
-                  }),
-                )
-                  .then(outcome =>
-                    handleCartOutcome(outcome, latestDish.price.amount),
-                  )
-                  .catch(() =>
-                    setPurchaseMessage(
-                      'We couldn’t confirm the cart change. Check your cart before trying again.',
-                    ),
-                  );
-              },
-            },
-          ],
-        );
+        askKitchenSwitch({
+          cartLines: expectedSnapshot.lines,
+          newDish: {
+            name: latestDish.itemName,
+            kitchenName: latestDish.kitchen.displayName ?? latestDish.kitchen.kitchenName,
+            priceLabel: formatDishDetailPrice(latestDish.price.amount, latestDish.price.currency),
+            imageUrl: (latestDish.images.find(image => image.primary) ?? latestDish.images[0])?.url,
+          },
+          onReplace: () => {
+            dispatch(
+              switchCartKitchen({
+                expectedSnapshot,
+                menuItemId: latestDish.id,
+                quantity: 1,
+                expectedKitchenId: latestDish.kitchen.id,
+              }),
+            )
+              .then(outcome =>
+                handleCartOutcome(outcome, latestDish.price.amount),
+              )
+              .catch(() =>
+                setPurchaseMessage(
+                  'We couldn’t confirm the cart change. Check your cart before trying again.',
+                ),
+              );
+          },
+        });
         return;
       }
 

@@ -10,8 +10,8 @@ import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {bottomMenu, fontWeight, typography} from '../../design/tokens';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
+import {KitchenSwitchHost} from '../../features/cart/components/KitchenSwitchDialog';
 import {refreshCartSnapshot} from '../../features/cart/state/cartRefresh';
-import {CartBillPreviewSync} from '../../features/cart/query/useCartBillPreview';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
 import {customerAddressesApi} from '../../features/customerAddresses/api/customerAddressesApi';
 import {
@@ -527,8 +527,8 @@ export function CustomerRootNavigator() {
     <CustomerBottomNavVisibilityProvider>
       <CustomerLaunchLocationResolver />
       <CustomerLaunchCartResolver />
-      <CartBillPreviewSync />
       <CustomerTabsNavigator />
+      <KitchenSwitchHost />
     </CustomerBottomNavVisibilityProvider>
   );
 }

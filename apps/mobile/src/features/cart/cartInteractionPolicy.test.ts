@@ -1,5 +1,5 @@
 import {
-  getCartCheckoutActionLabel,
+  cartItemsToRestore,
   isCartLineInteractionDisabled,
   recoveredCheckoutMatchesCurrentCart,
 } from './cartInteractionPolicy';
@@ -78,15 +78,11 @@ describe('cartInteractionPolicy', () => {
     ).toBe(false);
   });
 
-  it('uses an explicit continuation label for a recovered pending payment', () => {
-    expect(getCartCheckoutActionLabel(false, false)).toBe('Continue to Payment');
-    expect(getCartCheckoutActionLabel(false, false, false)).toBe(
-      'Continue to Payment',
-    );
-    expect(getCartCheckoutActionLabel(false, true)).toBe('Continue payment');
-    expect(getCartCheckoutActionLabel(false, true, true)).toBe(
-      'Check previous payment',
-    );
-    expect(getCartCheckoutActionLabel(true, true, true)).toBe('Please wait…');
+  it('restores only the dishes the checkout took out of the cart', () => {
+    const line = (menuItemId: string, quantity: number) => ({menuItemId, quantity});
+    expect(cartItemsToRestore([line('a', 2), line('b', 1)], null)).toEqual([line('a', 2), line('b', 1)]);
+    // One biriyani is already back and pulavu is fully back: add only the missing biriyani.
+    expect(cartItemsToRestore([line('a', 2), line('b', 1)], {lines: [line('a', 1), line('b', 3)]}))
+      .toEqual([line('a', 1)]);
   });
 });

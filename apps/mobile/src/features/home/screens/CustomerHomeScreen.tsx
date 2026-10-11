@@ -43,13 +43,16 @@ import {
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {getDisplayAvailabilityCount} from '../../../shared/menuAvailability';
+import {askKitchenSwitch} from '../../cart/components/KitchenSwitchDialog';
 import type {CartLine} from '../../cart/domain/cartTypes';
 import {
   addCartItem,
   removeCartItem,
   setCartItemQuantity,
+  switchCartKitchen,
   type CartMutationOutcome,
 } from '../../cart/state/cartMutations';
+import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
 import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
 import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmptyStateAdapters';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
@@ -529,6 +532,32 @@ export function CustomerHomeScreen() {
 
   const handleAdd = (dishId: string) => {
     setMutationError(null);
+    const dish = dishes.find(candidate => candidate.id === dishId);
+    const otherKitchen =
+      dish && cartSnapshot?.lines.find(line => line.kitchenId !== dish.kitchenId);
+    if (dish && otherKitchen && cartSnapshot) {
+      const expectedSnapshot = cartSnapshot;
+      askKitchenSwitch({
+        cartLines: expectedSnapshot.lines,
+        newDish: {
+          name: dish.itemName,
+          kitchenName: dish.kitchenDisplayName ?? dish.kitchenName,
+          priceLabel: formatDishDetailPrice(dish.price, dish.currency),
+          imageUrl: dish.primaryImageUrl,
+        },
+        onReplace: () => {
+          dispatch(
+            switchCartKitchen({
+              expectedSnapshot,
+              menuItemId: dish.id,
+              quantity: 1,
+              expectedKitchenId: dish.kitchenId,
+            }),
+          ).then(handleMutationOutcome);
+        },
+      });
+      return;
+    }
     dispatch(addCartItem({menuItemId: dishId, quantity: 1})).then(handleMutationOutcome);
   };
 

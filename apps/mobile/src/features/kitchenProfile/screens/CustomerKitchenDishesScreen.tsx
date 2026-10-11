@@ -1,6 +1,6 @@
 import React, {useCallback, useMemo, useRef, useState} from 'react';
+import {askKitchenSwitch} from '../../cart/components/KitchenSwitchDialog';
 import {
-  Alert,
   FlatList,
   Pressable,
   ScrollView,
@@ -219,33 +219,31 @@ export function CustomerKitchenDishesScreen() {
             : null;
         if (otherKitchen && cartSnapshot) {
           const expectedSnapshot = cartSnapshot;
-          Alert.alert(
-            'Replace current cart?',
-            `Your cart has food from ${otherKitchen.kitchenName}. To add ${latest.itemName}, Craves must replace the cart you are reviewing now.`,
-            [
-              {text: 'Keep cart', style: 'cancel'},
-              {
-                text: 'Replace & add',
-                style: 'destructive',
-                onPress: () => {
-                  dispatch(
-                    switchCartKitchen({
-                      expectedSnapshot,
-                      menuItemId: latest.id,
-                      quantity: 1,
-                      expectedKitchenId: refreshed.data.id,
-                    }),
-                  )
-                    .then(handleCartOutcome)
-                    .catch(() =>
-                      setInteractionNotice(
-                        'We couldn’t confirm the cart change. Check your cart before trying again.',
-                      ),
-                    );
-                },
-              },
-            ],
-          );
+          askKitchenSwitch({
+            cartLines: expectedSnapshot.lines,
+            newDish: {
+              name: latest.itemName,
+              kitchenName: refreshed.data.displayName ?? refreshed.data.kitchenName,
+              priceLabel: formatDishDetailPrice(latest.price.amount, latest.price.currency),
+              imageUrl: (latest.images.find(image => image.primary) ?? latest.images[0])?.url,
+            },
+            onReplace: () => {
+              dispatch(
+                switchCartKitchen({
+                  expectedSnapshot,
+                  menuItemId: latest.id,
+                  quantity: 1,
+                  expectedKitchenId: refreshed.data.id,
+                }),
+              )
+                .then(handleCartOutcome)
+                .catch(() =>
+                  setInteractionNotice(
+                    'We couldn’t confirm the cart change. Check your cart before trying again.',
+                  ),
+                );
+            },
+          });
           return;
         }
         const outcome = currentLine

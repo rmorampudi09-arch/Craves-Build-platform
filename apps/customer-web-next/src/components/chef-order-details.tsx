@@ -24,13 +24,26 @@ import {
 } from "@/components/chef-ui";
 import { shortOrderNumber } from "@/lib/order-number";
 import { ChefOrderActions } from "@/components/chef-order-actions";
+import { ChefOrderProgress, HearOrderButton, chefStatusIcon } from "@/components/chef-order-card";
+import { useChefOrderPolling } from "@/lib/chef-order-alert";
 import {
   parseChefOrderResponse,
   type ChefOrder,
 } from "@/lib/chef-order-contract";
 
+const FOOD_TYPE: Record<string, string> = { VEG: "Veg", NON_VEG: "Non-veg", EGG: "Egg" };
+/** Orders on the normal path show the picture steps; declined or refunded ones don't. */
+const PROGRESS_STATES = {
+  CHEF_ACCEPTANCE_PENDING: true,
+  CHEF_ACCEPTED: true,
+  PREPARING: true,
+  READY_FOR_PICKUP: true,
+  OUT_FOR_DELIVERY: true,
+  DELIVERED: true,
+};
+
 function itemMetadata(item: ChefOrder["items"][number]): string {
-  return [item.category, item.foodType?.replaceAll("_", " ")]
+  return [item.category, item.foodType ? FOOD_TYPE[item.foodType] ?? item.foodType : null]
     .filter((value): value is string => Boolean(value))
     .join(" · ");
 }
@@ -74,6 +87,16 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The order moves on by itself (picked up, delivered): keep it current without a refresh.
+  useChefOrderPolling(Boolean(order), (orders) => {
+    const fresh = orders.find((candidate) => candidate.id.toLowerCase() === orderId.toLowerCase());
+    if (!fresh) return;
+    setOrder((current) =>
+      current && Date.parse(current.updatedAt) > Date.parse(fresh.updatedAt) ? current : fresh,
+    );
+    setLastUpdatedAt(new Date());
+  });
 
   if (loading) {
     return (
@@ -137,13 +160,18 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
         }
         subtitle={
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <ChefPill tone={status.tone}>{status.label}</ChefPill>
+            <ChefPill tone={status.tone} icon={chefStatusIcon(order.status)}>{status.label}</ChefPill>
             <span>Placed {dateTime(order.createdAt)}{order.prepTimeMinutes ? ` · ${order.prepTimeMinutes} min prep` : ""}</span>
           </span>
         }
       />
 
       <div className="chef-stack">
+        {order.status in PROGRESS_STATES ? (
+          <section className="chef-section px-2 py-4" aria-label="Where this order is">
+            <ChefOrderProgress status={order.status} />
+          </section>
+        ) : null}
         <ChefSection
           title={`${itemCount} item${itemCount === 1 ? "" : "s"} to cook`}
           flush
@@ -158,13 +186,16 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
                   <span className="chef-amount grid h-9 min-w-9 shrink-0 place-items-center rounded-xl bg-[#F1F3F5] px-2 text-[0.9375rem] font-bold text-[#1A1A1A]">{item.quantity}×</span>
                   <span className="chef-row-main">
                     <span className="chef-row-title block text-base">{item.itemName}</span>
-                    {metadata ? <span className="chef-row-meta block capitalize">{metadata.toLowerCase()}</span> : null}
+                    {metadata ? <span className="chef-row-meta block">{metadata}</span> : null}
                   </span>
                   <span className="chef-row-value chef-amount text-[0.9375rem] font-semibold">{formatInr(item.lineTotal, currency)}</span>
                 </li>
               );
             })}
           </ul>
+          <div className="border-t border-[#E3E6EA] px-4 py-3 empty:hidden md:px-5">
+            <HearOrderButton order={order} />
+          </div>
         </ChefSection>
 
         <ChefOrderActions order={order} onUpdated={setOrder} />
@@ -172,7 +203,10 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
         {order.deliveryAddress && address ? (
           <ChefSection title="Delivery" labelledBy="chef-order-delivery">
             <p className="font-semibold text-[#1A1A1A]">{order.deliveryAddress.recipientName}</p>
-            <p className="mt-1 flex items-center gap-2 text-[0.9375rem] text-[#6B6B6B]"><Phone className="h-4 w-4" aria-hidden="true" />{order.deliveryAddress.contactPhoneNumber}</p>
+            <a href={`tel:${order.deliveryAddress.contactPhoneNumber.replace(/[^\d+]/g, "")}`} className="chef-btn is-small mt-2">
+              <Phone className="h-4 w-4" aria-hidden="true" />
+              Call {order.deliveryAddress.contactPhoneNumber}
+            </a>
             <p className="mt-2 flex gap-2 text-[0.9375rem] leading-6 text-[#6B6B6B]"><MapPin className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />{address}</p>
           </ChefSection>
         ) : null}

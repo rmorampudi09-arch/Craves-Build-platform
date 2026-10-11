@@ -6,7 +6,7 @@ import { z } from "zod";
 import { bankConsentVersion, bankStatusSchema, bankSubmissionSchema, type BankStatus } from "@/lib/bank-onboarding-contract";
 import { captureSessionContext, isSessionReady, loadSession, subscribeSession } from "@/services/auth/cravesAuth";
 import { ChevronDown, Info, Landmark, RefreshCw } from "lucide-react";
-import { ChefNotice, ChefSection, ChefSkeleton } from "@/components/chef-ui";
+import { ChefNotice, ChefPill, ChefSection, ChefSkeleton, type ChefTone } from "@/components/chef-ui";
 import { RequiredMark } from "@/components/ui/forms/required-mark";
 
 const applicantSchema = z.object({firstName: z.string().nullable().optional(), lastName: z.string().nullable().optional(), status: z.string()});
@@ -31,6 +31,15 @@ const BANK_STATE_LABEL: Record<string, string> = {
   NAME_MISMATCH: "Name doesn’t match",
   APPLICANT_ACTION_REQUIRED: "Needs your attention",
   SUPERSEDED: "Replaced",
+};
+const BANK_STATE_TONE: Record<string, ChefTone> = {
+  VERIFIED: "success",
+  WAITING_APPROVAL: "success",
+  VALIDATION_FAILED: "danger",
+  NAME_MISMATCH: "danger",
+  APPLICANT_ACTION_REQUIRED: "danger",
+  NOT_SUBMITTED: "muted",
+  SUPERSEDED: "muted",
 };
 
 export function ChefBankOnboardingPanel() {
@@ -103,22 +112,25 @@ function ChefBankOnboardingContent() {
       if (!response.ok) throw new Error(response.status === 409
         ? "Your bank details changed or a payout is in progress. Refresh before changing them; a payout already on its way can’t be redirected."
         : response.status === 429 ? "You’ve changed your bank account too often today. Try again after 24 hours."
-        : "We couldn’t confirm your bank details were saved. Keep this page open and tap Refresh status. Trying again won’t create a duplicate.");
+        : "We couldn’t confirm your bank details were saved. Keep this page open and tap Check again. Trying again won’t create a duplicate.");
       const result = bankStatusSchema.parse(await response.json());
       setBank(result); setAccount("");setConfirmation("");setIfsc("");setConsent(false);pending.current = null;
       setMessage("Bank details saved securely. The status above shows what happens next.");
     } catch (error) {setMessage(chefErrorText(error, "Bank submission not confirmed"));}
     finally {setBusy(false);}
   }
-  const intro = bank?.automaticActivation ? "Add your own bank account to receive payouts." : bank ? "Adding a bank account here isn’t available right now. Your balance shows how payouts are sent." : availabilityError ? "We couldn’t check bank account setup." : "Checking bank account setup…";
-  return <ChefSection title="Bank account" note={intro} labelledBy="chef-bank" action={<button type="button" onClick={() => void refresh()} disabled={busy} className="chef-btn is-small"><RefreshCw className="h-4 w-4" aria-hidden="true" />Refresh status</button>}>
+  const intro = bank?.automaticActivation ? "Craves sends your money to this account." : bank ? "Adding a bank account here isn’t available right now. Your balance shows how money is sent." : availabilityError ? "We couldn’t check your bank account." : "Checking your bank account…";
+  return <ChefSection title="Bank account" note={intro} labelledBy="chef-bank">
     <div className="grid gap-4">
       {message ? <ChefNotice icon={Info} role="status">{message}</ChefNotice> : null}
-      {bank?.automaticActivation ? <div className="flex items-center gap-3 rounded-xl bg-[#F1F3F5] p-4">
+      {bank?.automaticActivation ? <div className="flex items-start gap-3 rounded-xl bg-[#F1F3F5] p-4">
         <span className="chef-row-icon !bg-white"><Landmark className="h-5 w-5" aria-hidden="true" /></span>
-        <div className="min-w-0"><p className="font-semibold">{BANK_STATE_LABEL[bank.state] ?? "Bank account"}{bank.lastFour ? ` · account ending ${bank.lastFour}` : ""}</p>{bank.message ? <p className="mt-0.5 text-[0.875rem] text-[#6B6B6B]">{bank.message}</p> : null}</div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><p className="font-semibold">{bank.lastFour ? `Account ending ${bank.lastFour}` : "No bank account yet"}</p><ChefPill tone={BANK_STATE_TONE[bank.state] ?? "warning"}>{BANK_STATE_LABEL[bank.state] ?? "Checking"}</ChefPill></div>
+          {bank.message ? <p className="mt-1 text-[0.875rem] leading-5 text-[#6B6B6B]">{bank.message}</p> : null}
+        </div>
       </div> : null}
-      {!bank ? (availabilityError ? <p className="text-[0.875rem] text-[#6B6B6B]">Tap Refresh status to check again. You can’t add an account until it’s confirmed.</p> : <ChefSkeleton className="h-16" />)
+      {!bank ? (availabilityError ? <p className="text-[0.875rem] text-[#6B6B6B]">Tap Check again. You can add an account once this loads.</p> : <ChefSkeleton className="h-16" />)
       : !bank.automaticActivation ? null
       : !registered ? <p className="text-[0.875rem] text-[#6B6B6B]">Submit your chef application first. This section updates by itself while the page is open.</p>
       : <details className="group" open={!bank.lastFour}>
@@ -132,7 +144,8 @@ function ChefBankOnboardingContent() {
             <button type="submit" aria-busy={busy} disabled={busy || !bank?.automaticActivation} className="chef-btn is-primary is-block">{busy ? "Saving securely…" : "Save bank details"}</button>
           </form>
         </details>}
-      <p className="text-[0.8125rem] leading-5 text-[#6B6B6B]">Account numbers are never stored in your browser. Changing your account creates a new version, and payouts go only to an account that passed verification.</p>
+      <p className="text-[0.8125rem] leading-5 text-[#6B6B6B]">Money goes only to a bank account that has been checked. Your account number isn’t kept on this phone.</p>
+      {bank?.state === "VERIFIED" ? null : <button type="button" onClick={() => void refresh()} disabled={busy} className="chef-btn is-small w-fit"><RefreshCw className="h-4 w-4" aria-hidden="true" />Check again</button>}
     </div>
   </ChefSection>;
 }

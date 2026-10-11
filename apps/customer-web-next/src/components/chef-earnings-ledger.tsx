@@ -45,7 +45,7 @@ export function ChefEarningsLedger() {
         credentials: "same-origin",
       });
       const raw = await response.json().catch(() => null);
-      if (!response.ok) throw chefApiError(response, raw, "Chef earnings are temporarily unavailable.");
+      if (!response.ok) throw chefApiError(response, raw, "We couldn’t load your earnings. Try again.");
       const parsed = parseChefEarnings(raw);
       if (!parsed) throw new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, "INVALID_CHEF_EARNINGS_RESPONSE", response.status);
       setEntries(
@@ -57,7 +57,7 @@ export function ChefEarningsLedger() {
       setLastUpdatedAt(new Date());
     } catch (caught) {
       setError(
-        chefErrorText(caught, "Chef earnings are temporarily unavailable."),
+        chefErrorText(caught, "We couldn’t load your earnings. Try again."),
       );
     } finally {
       setLoading(false);
@@ -104,25 +104,25 @@ export function ChefEarningsLedger() {
       <ChefSection flush>
         <div className="chef-stats is-three">
           <div className="chef-stat">
-            <p className="chef-stat-label">Earned</p>
+            <p className="chef-stat-label">You earned</p>
             <p className="chef-stat-value">{loading ? "—" : formatInr(approvedPayable, { currency })}</p>
           </div>
           <div className="chef-stat">
-            <p className="chef-stat-label">Waiting for payout</p>
+            <p className="chef-stat-label">Coming to your bank</p>
             <p className="chef-stat-value">{loading ? "—" : formatInr(pendingPayable, { currency })}</p>
           </div>
           <div className="chef-stat">
-            <p className="chef-stat-label">Paid out</p>
+            <p className="chef-stat-label">Paid to your bank</p>
             <p className="chef-stat-value">{loading ? "—" : formatInr(settledPayable, { currency })}</p>
           </div>
         </div>
         <p className="border-t border-[#E3E6EA] px-4 py-3 text-[0.8125rem] leading-5 text-[#6B6B6B] md:px-5">
-          Totals of the earnings listed below. Refunds, holds and later adjustments are included in your available balance under Balance &amp; payouts.
+          These add up the orders below. Refunds and other changes are counted in Balance &amp; payouts, where you take out your money.
         </p>
       </ChefSection>
 
       <ChefSection
-        title="Earnings by order"
+        title="Money from each order"
         flush
         labelledBy="chef-earnings-list"
         action={
@@ -155,10 +155,10 @@ export function ChefEarningsLedger() {
           <ChefEmpty
             icon={BadgeIndianRupee}
             title="No earnings yet"
-            text="Your earning for an order appears here after it is paid and delivered. Nothing is estimated from unfinished orders."
+            text="Money from an order shows here after the customer gets their food."
           />
         ) : visibleEntries.length === 0 ? (
-          <ChefEmpty icon={BadgeIndianRupee} title="Nothing in this filter" text="Choose All to see every earning." />
+          <ChefEmpty icon={BadgeIndianRupee} title="Nothing here" text="Tap All to see every order." />
         ) : (
           <ul className="chef-list mt-3 border-t border-[#E3E6EA]">
             {visibleEntries.map((entry) => (
@@ -197,11 +197,11 @@ export function ChefEarningsLedger() {
 }
 
 const STATUS_LABEL: Record<ChefEarningStatus, string> = {
-  DRAFT: "Being recorded",
-  APPROVED: "Approved",
-  SETTLEMENT_PENDING: "Payout pending",
-  SETTLED: "Paid out",
-  REVERSED: "Reversed",
+  DRAFT: "Being added",
+  APPROVED: "Confirmed",
+  SETTLEMENT_PENDING: "Coming to bank",
+  SETTLED: "Paid to bank",
+  REVERSED: "Taken back",
 };
 const STATUS_TONE: Record<ChefEarningStatus, ChefTone> = {
   DRAFT: "muted",

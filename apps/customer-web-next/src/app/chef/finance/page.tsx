@@ -8,8 +8,9 @@ export const metadata = {title: "Balance and payouts | Craves Chef", robots: {in
 export default function ChefFinancePage() {
   return <main className="chef-page is-narrow">
     <ChefAccessBoundary>
-      <ChefPageHeader title="Balance & payouts" description="What you can withdraw, where it’s paid and your payout history." back={{href: "/chef/earnings", label: "Earnings"}} />
-      <div className="chef-stack"><ChefWithdrawalPanel /><ChefBankOnboardingPanel /><EmailVerificationPanel required /><ChefLedgerStatementPanel /></div>
+      <ChefPageHeader title="Balance & payouts" description="Take out your money, and see your bank account." back={{href: "/chef/earnings", label: "Earnings"}} />
+      {/* The short email form: a signed-in chef only needs to see it's verified, or fix it. */}
+      <div className="chef-stack"><ChefWithdrawalPanel /><ChefBankOnboardingPanel /><EmailVerificationPanel required compact /><ChefLedgerStatementPanel /></div>
     </ChefAccessBoundary>
   </main>;
 }

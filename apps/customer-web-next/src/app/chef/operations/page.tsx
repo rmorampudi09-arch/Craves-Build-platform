@@ -3,18 +3,15 @@ import { ChefOperationsWorkspace } from "@/components/chef-operations-workspace"
 import { ChefPageHeader } from "@/components/chef-page-header";
 
 export const metadata = {
-  title: "Chef operations | Craves",
+  title: "Can customers find you? | Craves Chef",
   robots: { index: false, follow: false },
 };
 
 export default function ChefOperationsPage() {
   return (
-    <main className="chef-page">
+    <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader
-          title="Kitchen status"
-          description="What customers need before they can find and order from your kitchen: your approval, documents, location, menu and photos."
-        />
+        <ChefPageHeader title="Can customers find you?" back={{ href: "/chef/profile", label: "More" }} />
         <ChefOperationsWorkspace />
       </ChefAccessBoundary>
     </main>

@@ -15,7 +15,7 @@ export default function ChefNotificationsPage() {
       <ChefAccessBoundary>
         <ChefPageHead title="Notifications" back={{ href: "/chef", label: "Home" }} />
         <ContextualBackBoundary destination="/chef/notifications" fallback="/chef">
-          <NotificationsPage />
+          <NotificationsPage audience="chef" />
         </ContextualBackBoundary>
       </ChefAccessBoundary>
     </div>

@@ -92,10 +92,10 @@ export function ChefSignIn({ returnTo, centralOtp }: { returnTo: string | null; 
             aria-busy="true"
             className="w-full rounded-3xl border border-[#E5E7EB] bg-white p-6 text-[#1A1A1A] sm:p-8"
           >
-            <h1 className="text-3xl font-bold tracking-tight">Sign in to Chef Mode</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Sign in to your kitchen</h1>
             <p role="status" className="mt-4 flex items-center gap-3 text-sm text-[#6B6B6B]">
               <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-[#F62E18] motion-reduce:animate-none" aria-hidden="true" />
-              {view.phase === "opening" ? "Opening Chef Mode…" : "Checking your sign-in…"}
+              {view.phase === "opening" ? "Opening your kitchen…" : "Checking your sign-in…"}
             </p>
           </section>
         )}

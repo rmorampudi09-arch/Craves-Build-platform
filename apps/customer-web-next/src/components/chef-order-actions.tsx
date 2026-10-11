@@ -31,12 +31,44 @@ const DECLINE_REASONS = [
 const tile =
   "relative flex cursor-pointer items-center rounded-xl border text-[#1A1A1A] transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[#1A1A1A]";
 
+/** The step's own box on the order page; on an order card (inline) just a heading and note. */
+function Frame({
+  inline,
+  title,
+  note,
+  action,
+  children,
+}: {
+  inline: boolean;
+  title: ReactNode;
+  note?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  if (!inline) return <ChefSection title={title} note={note} action={action}>{children}</ChefSection>;
+  return (
+    <div className="chef-order-step">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="chef-order-step-title">{title}</h3>
+          {note ? <p className="chef-section-note mt-0.5">{note}</p> : null}
+        </div>
+        {action}
+      </div>
+      <div className="mt-3">{children}</div>
+    </div>
+  );
+}
+
 export function ChefOrderActions({
   order,
   onUpdated,
+  inline = false,
 }: {
   order: ChefOrder;
   onUpdated(order: ChefOrder): void;
+  /** On an order card: no box of its own, and nothing shown once the order needs nothing. */
+  inline?: boolean;
 }) {
   const standardInitial = PREP_CHOICES.includes(order.prepTimeMinutes as (typeof PREP_CHOICES)[number]);
   const [decisionStep, setDecisionStep] = useState<DecisionStep>("choose");
@@ -62,7 +94,7 @@ export function ChefOrderActions({
   useEffect(() => {
     if (!stepChanged.current) return;
     stepChanged.current = false;
-    const heading = stepRef.current?.querySelector<HTMLElement>("h2");
+    const heading = stepRef.current?.querySelector<HTMLElement>("h2, h3");
     heading?.setAttribute("tabindex", "-1");
     heading?.focus();
   }, [decisionStep]);
@@ -137,22 +169,22 @@ export function ChefOrderActions({
   let content: ReactNode;
   if (order.status === "CHEF_ACCEPTANCE_PENDING" && decisionStep === "choose") {
     content = (
-      <ChefSection title="Can you cook this now?" note="If you accept, you’ll choose how long it takes.">
+      <Frame inline={inline} title="Can you cook this now?" note="If you accept, you’ll choose how long it takes.">
         <div className="grid gap-2 sm:grid-cols-2">
-          <button type="button" {...busyProps("")} onClick={() => goTo("accept")} className="chef-btn is-primary">
-            <CheckCircle2 className="h-5 w-5" aria-hidden="true" /> Accept order
+          <button type="button" {...busyProps("")} onClick={() => goTo("accept")} className="chef-btn is-go is-tall">
+            <CheckCircle2 className="h-6 w-6" aria-hidden="true" /> Accept order
           </button>
-          <button type="button" {...busyProps("")} onClick={() => goTo("decline")} className="chef-btn is-danger">
-            <XCircle className="h-5 w-5" aria-hidden="true" /> Can’t take it
+          <button type="button" {...busyProps("")} onClick={() => goTo("decline")} className="chef-btn is-danger is-tall">
+            <XCircle className="h-6 w-6" aria-hidden="true" /> Can’t take it
           </button>
         </div>
-      </ChefSection>
+      </Frame>
     );
   } else if (order.status === "CHEF_ACCEPTANCE_PENDING" && decisionStep === "accept") {
     const prep = Number(prepTimeMinutes);
     const validPrep = Number.isInteger(prep) && prep >= 1 && prep <= 1_440;
     content = (
-      <ChefSection title="How long will it take?" note="Time to cook and pack the whole order." action={backButton}>
+      <Frame inline={inline} title="How long will it take?" note="Time to cook and pack the whole order." action={backButton}>
         <div className="chef-step">
           <fieldset>
             <legend className="sr-only">Cooking time</legend>
@@ -209,14 +241,14 @@ export function ChefOrderActions({
           <p className="mt-4 text-[0.9375rem] text-[#6B6B6B]">The customer will see <strong className="text-[#1A1A1A]">Ready in about {validPrep ? prep : "—"} minutes</strong>.</p>
           {!validPrep ? <p id={`prep-error-${order.id}`} className="chef-field-error">Enter a cooking time from 1 to 1,440 minutes, or pick one above.</p> : null}
           {feedback}
-          <button type="button" {...busyProps("accept")} disabled={!validPrep} onClick={() => void act("accept", { prepTimeMinutes: prep, note: note.trim() || null, actionId: crypto.randomUUID() })} className="chef-btn is-primary is-block mt-5">{busyAction === "accept" ? <LoaderCircle className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Check className="h-5 w-5" aria-hidden="true" />}{busyAction === "accept" ? "Saving…" : "Start cooking"}</button>
+          <button type="button" {...busyProps("accept")} disabled={!validPrep} onClick={() => void act("accept", { prepTimeMinutes: prep, note: note.trim() || null, actionId: crypto.randomUUID() })} className="chef-btn is-go is-tall is-block mt-5">{busyAction === "accept" ? <LoaderCircle className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Check className="h-5 w-5" aria-hidden="true" />}{busyAction === "accept" ? "Saving…" : "Start cooking"}</button>
         </div>
-      </ChefSection>
+      </Frame>
     );
   } else if (order.status === "CHEF_ACCEPTANCE_PENDING") {
     const reason = selectedReason === "Something else" ? customReason.trim() : selectedReason;
     content = (
-      <ChefSection title="Why can’t you take it?" note="Pick the closest reason. The customer will see that your kitchen couldn’t take this order." action={backButton}>
+      <Frame inline={inline} title="Why can’t you take it?" note="Pick the closest reason. The customer will see that your kitchen couldn’t take this order." action={backButton}>
         <div className="chef-step">
           <fieldset className="grid gap-2">
             <legend className="sr-only">Reason</legend>
@@ -250,15 +282,17 @@ export function ChefOrderActions({
           <button type="button" {...busyProps("reject")} disabled={reason.length < 3} onClick={() => void act("reject", { reason, actionId: crypto.randomUUID() })} className="chef-btn is-primary is-block mt-5">{busyAction === "reject" ? <LoaderCircle className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}{busyAction === "reject" ? "Saving…" : "Decline order"}</button>
           {reason.length < 3 ? <p className="mt-2 text-[0.8125rem] text-[#6B6B6B]">Choose a reason to decline.</p> : null}
         </div>
-      </ChefSection>
+      </Frame>
     );
   } else if (order.status === "CHEF_ACCEPTED" || order.status === "PREPARING") {
     content = (
-      <ChefSection title="Is everything packed?" note="Mark it ready only when every item in this order is cooked and packed.">
+      <Frame inline={inline} title="Is everything packed?" note="Tap only when every item is cooked and packed.">
         {feedback}
-        <button type="button" {...busyProps("ready-for-pickup")} onClick={() => void act("ready-for-pickup")} className="chef-btn is-primary is-block mt-1">{busyAction ? <LoaderCircle className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <PackageCheck className="h-5 w-5" aria-hidden="true" />}{busyAction ? "Saving…" : "Food is ready for pickup"}</button>
-      </ChefSection>
+        <button type="button" {...busyProps("ready-for-pickup")} onClick={() => void act("ready-for-pickup")} className="chef-btn is-go is-tall is-block mt-1">{busyAction ? <LoaderCircle className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <PackageCheck className="h-5 w-5" aria-hidden="true" />}{busyAction ? "Saving…" : "Food is ready for pickup"}</button>
+      </Frame>
     );
+  } else if (inline) {
+    content = null;
   } else {
     content = (
       <ChefNotice icon={CheckCircle2}>

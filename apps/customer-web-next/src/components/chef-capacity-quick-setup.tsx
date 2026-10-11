@@ -21,6 +21,7 @@ const DAYS = [
   [7, "Sunday"],
 ] as const;
 
+const FOOD_TYPE: Record<string, string> = { VEG: "Veg", NON_VEG: "Non-veg", EGG: "Egg" };
 const SLOTS = [
   ["BREAKFAST", "Breakfast"],
   ["LUNCH", "Lunch"],
@@ -47,7 +48,7 @@ export function ChefCapacityQuickSetup() {
   const [subscriptionOverride, setSubscriptionOverride] = useState("");
   const [useSpecificDate, setUseSpecificDate] = useState(false);
   const [specificDate, setSpecificDate] = useState("");
-  const [message, setMessage] = useState("Loading your subscription availability…");
+  const [message, setMessage] = useState("Loading your plates…");
   const [busy, setBusy] = useState(false);
 
   const activeMenu = useMemo(
@@ -66,7 +67,7 @@ export function ChefCapacityQuickSetup() {
     ]);
 
     if (!capacityResponse.ok) {
-      throw chefApiError(capacityResponse, capacityRaw, "Subscription availability could not be loaded.");
+      throw chefApiError(capacityResponse, capacityRaw, "We couldn’t load your plates. Try again.");
     }
     if (!menuResponse.ok) {
       throw chefApiError(menuResponse, menuRaw, "Your menu could not be loaded.");
@@ -89,7 +90,7 @@ export function ChefCapacityQuickSetup() {
 
   useEffect(() => {
     void load().catch(error => {
-      setMessage(chefErrorText(error, "Subscription availability is unavailable."));
+      setMessage(chefErrorText(error, "We couldn’t load your plates. Try again."));
     });
   }, [load]);
 
@@ -134,29 +135,29 @@ export function ChefCapacityQuickSetup() {
     });
     const body = await response.json().catch(() => null);
     if (!response.ok) {
-      throw chefApiError(response, body, "Subscription availability could not be saved.");
+      throw chefApiError(response, body, "We couldn’t save your plates. Try again.");
     }
   }
 
   async function saveAll() {
     if (selectedDays.length === 0) {
-      setMessage("Select at least one weekday.");
+      setMessage("Pick at least one day.");
       return;
     }
     if (selectedMenuItems.length === 0) {
-      setMessage("Select at least one active menu item.");
+      setMessage("Pick at least one dish.");
       return;
     }
     if (!positiveWholeNumber(dishLimit)) {
-      setMessage("Dish subscription limit must be a positive whole number.");
+      setMessage("Plates for each dish must be a whole number above 0.");
       return;
     }
     if (subscriptionUnits > totalUnits) {
-      setMessage("Subscription meals cannot be greater than total kitchen meals.");
+      setMessage("Plates for meal plans can’t be more than all the plates you can cook.");
       return;
     }
     if (useSpecificDate && !specificDate) {
-      setMessage("Choose the calendar date you want to override.");
+      setMessage("Choose the date you want to change.");
       return;
     }
 
@@ -213,7 +214,7 @@ export function ChefCapacityQuickSetup() {
         `Each selected dish allows up to ${itemLimit} subscription unit(s).`,
       );
     } catch (error) {
-      setMessage(chefErrorText(error, "Subscription availability could not be saved."));
+      setMessage(chefErrorText(error, "We couldn’t save your plates. Try again."));
     } finally {
       setBusy(false);
     }
@@ -227,21 +228,21 @@ export function ChefCapacityQuickSetup() {
     <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-3xl">
-                    <h2 className="mt-1 font-display text-2xl font-bold text-ink">Choose when and what you can serve</h2>
+          <h2 className="mt-1 font-display text-2xl font-bold text-ink">Change your plates</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Everything below is optional. When you submit a meal plan, Craves now fills any missing capacity automatically from that plan.
-            The safe default is <strong className="text-ink">5 subscription units per selected dish</strong>.
+            You don’t have to do anything here. When you send a meal plan, Craves sets{" "}
+            <strong className="text-ink">5 plates for each dish</strong>.
           </p>
         </div>
         <span className="rounded-full bg-success/10 px-3 py-2 text-xs font-bold text-success">
-          Automatic defaults are on
+          Craves numbers are on
         </span>
       </div>
 
       <div className="mt-5 rounded-2xl bg-secondary p-4">
         <div className="grid gap-4 lg:grid-cols-3">
           <label className="text-sm font-semibold text-ink">
-            Meal slot
+            Meal
             <select
               value={slot}
               onChange={event => setSlot(event.target.value)}
@@ -252,7 +253,7 @@ export function ChefCapacityQuickSetup() {
           </label>
 
           <label className="text-sm font-semibold text-ink">
-            Default limit for each selected dish
+            Plates for each dish
             <input
               type="number"
               min="1"
@@ -260,15 +261,15 @@ export function ChefCapacityQuickSetup() {
               onChange={event => setDishLimit(event.target.value)}
               className="mt-2 min-h-11 w-full rounded-xl border border-border bg-white px-3"
             />
-            <span className="mt-1 block text-xs font-normal text-muted-foreground">Default: 5</span>
+            <span className="mt-1 block text-xs font-normal text-muted-foreground">Craves uses 5</span>
           </label>
 
           <div className="text-sm font-semibold text-ink">
-            Calculated meal-slot allowance
+            Total plates for this meal
             <div className="mt-2 min-h-11 rounded-xl border border-border bg-white px-3 py-3">
-              {derivedSlotLimit} subscription units
+              {derivedSlotLimit} plates
             </div>
-            <span className="mt-1 block text-xs font-normal text-muted-foreground">Based on selected dishes × dish limit.</span>
+            <span className="mt-1 block text-xs font-normal text-muted-foreground">Dishes picked × plates for each dish.</span>
           </div>
         </div>
       </div>
@@ -277,8 +278,8 @@ export function ChefCapacityQuickSetup() {
         <div className="rounded-2xl border border-border p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-display text-lg font-bold text-ink">Weekdays</h3>
-              <p className="mt-1 text-xs text-muted-foreground">Monthly plans normally use all seven days.</p>
+              <h3 className="font-display text-lg font-bold text-ink">Days</h3>
+              <p className="mt-1 text-xs text-muted-foreground">Monthly plans usually use every day.</p>
             </div>
             <label className="flex items-center gap-2 text-sm font-semibold text-ink">
               <input
@@ -302,8 +303,8 @@ export function ChefCapacityQuickSetup() {
         <div className="rounded-2xl border border-border p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-display text-lg font-bold text-ink">Menu items</h3>
-              <p className="mt-1 text-xs text-muted-foreground">All active, available dishes are selected automatically.</p>
+              <h3 className="font-display text-lg font-bold text-ink">Dishes</h3>
+              <p className="mt-1 text-xs text-muted-foreground">Dishes that are on are picked for you.</p>
             </div>
             <label className="flex items-center gap-2 text-sm font-semibold text-ink">
               <input
@@ -316,7 +317,7 @@ export function ChefCapacityQuickSetup() {
             </label>
           </div>
           {activeMenu.length === 0 ? (
-            <p className="mt-4 rounded-xl bg-[#F1F3F5] p-3 text-sm text-[#1A1A1A]">No active and available dishes were found.</p>
+            <p className="mt-4 rounded-xl bg-[#F1F3F5] p-3 text-sm text-[#1A1A1A]">No dishes are on. Turn a dish on in Menu first.</p>
           ) : (
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {activeMenu.map(item => (
@@ -327,7 +328,7 @@ export function ChefCapacityQuickSetup() {
                     checked={selectedMenuItems.includes(item.id)}
                     onChange={() => toggleMenuItem(item.id)}
                   />
-                  <span><strong>{item.itemName}</strong><span className="mt-1 block text-xs text-muted-foreground">{item.category} · {item.foodType.replaceAll("_", " ")}</span></span>
+                  <span><strong>{item.itemName}</strong><span className="mt-1 block text-xs text-muted-foreground">{item.category} · {FOOD_TYPE[item.foodType] ?? item.foodType}</span></span>
                 </label>
               ))}
             </div>
@@ -344,8 +345,8 @@ export function ChefCapacityQuickSetup() {
             onChange={event => setUseSpecificDate(event.target.checked)}
           />
           <span>
-            Add a calendar-date override
-            <span className="mt-1 block text-xs font-normal text-muted-foreground">Use this only when a particular date needs the same availability settings.</span>
+            Only for one date
+            <span className="mt-1 block text-xs font-normal text-muted-foreground">Use this when one date needs these numbers, not every week.</span>
           </span>
         </label>
         {useSpecificDate && (
@@ -360,23 +361,23 @@ export function ChefCapacityQuickSetup() {
       </div>
 
       <details className="mt-5 rounded-2xl border border-border p-4">
-        <summary className="cursor-pointer text-sm font-bold text-ink">Optional advanced slot totals</summary>
-        <p className="mt-2 text-xs text-muted-foreground">Leave these empty to let Craves calculate them from the selected dishes.</p>
+        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-bold text-ink">More settings</summary>
+        <p className="mt-2 text-xs text-muted-foreground">Leave these empty and Craves works them out from the dishes you picked.</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <label className="text-sm font-semibold text-ink">Total kitchen units
+          <label className="text-sm font-semibold text-ink">All plates you can cook
             <input type="number" min="1" value={totalOverride} onChange={event => setTotalOverride(event.target.value)} placeholder={String(derivedSlotLimit)} className="mt-2 min-h-11 w-full rounded-xl border border-border px-3" />
           </label>
-          <label className="text-sm font-semibold text-ink">Units available to subscriptions
+          <label className="text-sm font-semibold text-ink">Plates for meal plans
             <input type="number" min="1" value={subscriptionOverride} onChange={event => setSubscriptionOverride(event.target.value)} placeholder={String(derivedSlotLimit)} className="mt-2 min-h-11 w-full rounded-xl border border-border px-3" />
           </label>
         </div>
       </details>
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
-        <button type="button" disabled={busy || activeMenu.length === 0} onClick={() => void saveAll()} className="btn-primary disabled:opacity-50">
-          {busy ? "Saving…" : "Save all selected availability"}
+        <button type="button" disabled={busy || activeMenu.length === 0} aria-busy={busy} onClick={() => void saveAll()} className="chef-btn is-primary">
+          {busy ? "Saving…" : "Save plates"}
         </button>
-        <p className="text-xs text-muted-foreground">You may skip this completely. Meal-plan submission now creates missing defaults on the server.</p>
+        <p className="text-xs text-muted-foreground">You can skip this. Craves fills in the numbers when you send a meal plan.</p>
       </div>
 
       {message && <p role="status" className="mt-4 rounded-xl border border-border bg-white p-3 text-sm text-ink">{message}</p>}
@@ -384,17 +385,17 @@ export function ChefCapacityQuickSetup() {
       <div className="mt-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="font-display text-lg font-bold text-ink">{slotLabel} readiness</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Existing recurring rules currently stored for this slot.</p>
+            <h3 className="font-display text-lg font-bold text-ink">{slotLabel} every week</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Plates set for each day.</p>
           </div>
-          <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold">{readyCount}/7 ready</span>
+          <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold">{readyCount} of 7 days set</span>
         </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
           {readiness.map(item => (
             <div key={item.day} className={`rounded-xl border p-3 ${item.ready ? "border-success/20 bg-success/5" : "border-[#E3E6EA] bg-[#F1F3F5]"}`}>
               <p className="font-bold text-ink">{item.label.slice(0, 3)}</p>
-              <p className="mt-1 text-xs">{item.ready ? "Ready ✓" : "Server default on submit"}</p>
-              {item.rule && <p className="mt-1 text-xs text-muted-foreground">{item.rule.subscriptionCapacityUnits} limit · {item.rule.recurringAvailableUnits} free</p>}
+              <p className="mt-1 text-xs">{item.ready ? "Set" : "Craves sets it"}</p>
+              {item.rule && <p className="mt-1 text-xs text-muted-foreground">{item.rule.subscriptionCapacityUnits} plates · {item.rule.recurringAvailableUnits} free</p>}
             </div>
           ))}
         </div>

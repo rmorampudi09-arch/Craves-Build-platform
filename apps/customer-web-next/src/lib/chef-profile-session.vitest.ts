@@ -99,25 +99,25 @@ describe("Chef navigation placement", () => {
 describe("chef finance owner boundaries", () => {
   it("shows the authoritative verified email alongside real finance panels", async () => {
     render(createElement(ChefFinancePage));
-    await screen.findByText("Verified email: a@example.invalid");
-    await screen.findByRole("button", { name: "Request ₹11.00" });
-    expect(screen.getByText("Statement for a period")).toBeTruthy();
+    await screen.findByDisplayValue("a@example.invalid");
+    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
+    expect(screen.getByText("Money summary")).toBeTruthy();
   });
 
   it("clears bank inputs and the old balance on owner change and ignores a late refresh", async () => {
     render(createElement(ChefFinancePage));
-    await screen.findByRole("button", { name: "Request ₹11.00" });
+    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
     fireEvent.change(await screen.findByLabelText("Account number"), { target: { value: "123456789" } });
     const late = deferred<Response>();
     fetcher.mockImplementation(input => String(input) === "/api/chef/finance/balance" && identity?.id === a.id ? late.promise : normal(input));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh balance" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check balance again" }));
     change(b);
-    expect(screen.queryByRole("button", { name: "Request ₹11.00" })).toBeNull();
-    await screen.findByRole("button", { name: "Request ₹22.00" });
+    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
+    await screen.findByRole("button", { name: "Send ₹22.00 to my bank" });
     expect((screen.getByLabelText("Account number") as HTMLInputElement).value).toBe("");
     await act(async () => { late.resolve(Response.json(balance(a))); });
-    expect(screen.queryByRole("button", { name: "Request ₹11.00" })).toBeNull();
-    expect(screen.queryByText("Verified email: a@example.invalid")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
+    expect(screen.queryByDisplayValue("a@example.invalid")).toBeNull();
   });
 
   it("preserves healthy form input on a same-owner verified email update", async () => {
@@ -155,9 +155,9 @@ describe("chef finance owner boundaries", () => {
 
   it("removes finance and gives sign-in guidance for an inactive owner", async () => {
     render(createElement(ChefFinancePage));
-    await screen.findByRole("button", { name: "Request ₹11.00" });
+    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
     change({ ...a, status: "SUSPENDED" });
-    expect(screen.queryByRole("button", { name: "Request ₹11.00" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
     await waitFor(() => expect(navigate).toHaveBeenCalledWith(toChefSignIn));
   });
 
@@ -165,15 +165,15 @@ describe("chef finance owner boundaries", () => {
     const late = deferred<Response>();
     fetcher.mockImplementation(input => String(input) === "/api/auth/logout" ? late.promise : normal(input));
     render(createElement(ChefFinancePage));
-    await screen.findByRole("button", { name: "Request ₹11.00" });
+    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
     let signingOut!: Promise<void>;
     act(() => { signingOut = clearSession(); });
-    expect(screen.queryByRole("button", { name: "Request ₹11.00" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
     identity = null;
     expect(navigate).not.toHaveBeenCalled();
     await act(async () => { late.resolve(Response.json({ signedOut: true })); await signingOut; });
     await waitFor(() => expect(navigate).toHaveBeenCalledWith(toChefSignIn));
-    expect(screen.queryByText("Verified email: a@example.invalid")).toBeNull();
+    expect(screen.queryByDisplayValue("a@example.invalid")).toBeNull();
   });
 
   it("protects standalone application bank fields before CHEF role approval", async () => {
@@ -334,9 +334,9 @@ describe("Chef menu save and recovery", () => {
   }
   it("saves a new dish as a draft after Currently Available is turned on and back off", async () => {
     await openNew(); fillRequired();
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish added successfully");
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({ status: "DRAFT", available: false });
@@ -345,9 +345,9 @@ describe("Chef menu save and recovery", () => {
     stored = [{ ...fixture, status, available: false }];
     render(createElement(ChefMenuManager));
     fireEvent.click(await screen.findByRole("button", { name: "Edit Fixture dish" }));
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish updated successfully");
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({ status, available: false });
@@ -364,18 +364,18 @@ describe("Chef menu save and recovery", () => {
     vi.stubGlobal("URL", class extends URL { static createObjectURL() { return "blob:fixture"; } static revokeObjectURL() {} });
     await openNew(); fillRequired();
     fireEvent.change(screen.getByLabelText(/Dish photo/), { target: { files: [new File(["fixture"], "fixture.png", { type: "image/png" })] } });
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     expect((await screen.findByRole("alert")).textContent).toContain(code);
     expect(screen.getByRole("alert").textContent?.toLowerCase()).toContain("publishing");
-    expect((screen.getByRole("button", { name: "Save Dish" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Save dish" }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByRole("button", { name: "Reload menu to check the save" })).toBeNull();
     expect((screen.getByLabelText(/Dish Name/) as HTMLInputElement).value).toBe("Fixture dish");
     expect(screen.getByRole("img", { name: "Dish preview" }).getAttribute("src")).toBe("blob:fixture");
     expect(stored).toHaveLength(0);
     // The actual finance review/authority recovery happens outside this form.
     publishingReady = true;
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish added successfully");
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({ status: "ACTIVE", available: true });
@@ -418,12 +418,12 @@ describe("Chef menu save and recovery", () => {
     cleanup(); render(createElement(ChefKitchenForm));
     await screen.findByRole("heading", { name: "New fixture kitchen" });
     cleanup(); await openNew(); fillRequired();
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish added successfully");
     fireEvent.click(screen.getByRole("button", { name: "Edit Fixture dish" }));
     fireEvent.change(screen.getByLabelText(/Price/), { target: { value: "190" } });
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish updated successfully");
     await waitFor(() => expect((screen.getByRole("switch", { name: "Fixture dish available to order" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("switch", { name: "Fixture dish available to order" }));
@@ -544,22 +544,22 @@ describe("Chef menu save and recovery", () => {
       if (method === "PUT") fireEvent.click(screen.getByRole("button", { name: "Edit Fixture dish" }));
     }
     fetcher.mockResolvedValueOnce(Response.json({ code: "KITCHEN_PROFILE_REQUIRED" }, { status: 400 }));
-    fireEvent.click(screen.getByRole(method === "PATCH" ? "switch" : "button", { name: method === "PATCH" ? "Fixture dish available to order" : "Save Dish" }));
+    fireEvent.click(screen.getByRole(method === "PATCH" ? "switch" : "button", { name: method === "PATCH" ? "Fixture dish available to order" : "Save dish" }));
     expect((await screen.findByRole("link", { name: "Set up my kitchen" })).getAttribute("href")).toBe("/chef/kitchen");
-    expect(screen.queryByRole("button", { name: "Save Dish" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save dish" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Add Dish" })).toBeNull();
     expect(screen.queryByText(/Dish (added|updated) successfully|Dish is now/)).toBeNull();
   });
   it("creates, edits, changes availability and retains the server result after remount", async () => {
     await openNew(); fillRequired();
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish added successfully");
     expect(stored[0]).toMatchObject({ status: "ACTIVE", available: true, unitPackageWeightGrams: 500, preparationTimeMinutes: null });
     fireEvent.click(screen.getByRole("button", { name: "Edit Fixture dish" }));
     fireEvent.change(screen.getByLabelText(/Price/), { target: { value: "200.50" } });
-    fireEvent.click(screen.getByRole("switch", { name: /Currently Available/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish updated successfully");
     expect(stored[0]).toMatchObject({ status: "ACTIVE", available: false });
     await waitFor(() => expect((screen.getByRole("switch", { name: "Fixture dish available to order" }) as HTMLButtonElement).disabled).toBe(false));
@@ -575,32 +575,32 @@ describe("Chef menu save and recovery", () => {
   });
   it("focuses each missing required field and never submits fractional packed weight", async () => {
     await openNew();
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Dish Name/)));
     expect(screen.getByText("Dish name is required.")).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/Dish Name/), { target: { value: "Fixture" } });
     fireEvent.change(screen.getByLabelText(/Category/), { target: { value: "Meals" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("radio", { name: "Veg" })));
     fireEvent.click(screen.getByRole("radio", { name: "Veg" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Price/)));
     fireEvent.change(screen.getByLabelText(/Price/), { target: { value: "180" } });
     fireEvent.change(screen.getByLabelText(/Packed weight/), { target: { value: "2.5" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Packed weight/)));
     expect(fetcher.mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
   });
   it("shows server rejection codes and prevents an uncertain POST from being duplicated", async () => {
     await openNew(); fillRequired();
     fetcher.mockResolvedValueOnce(Response.json({ code: "MENU_REQUEST_FAILED" }, { status: 400 }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     expect((await screen.findByRole("alert")).textContent).toContain("MENU_REQUEST_FAILED");
     expect(screen.queryByText("Dish added successfully")).toBeNull();
     fetcher.mockResolvedValueOnce(Response.json({ code: "MENU_TIMEOUT" }, { status: 504 }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByRole("button", { name: "Reload menu to check the save" });
-    expect((screen.getByRole("button", { name: "Save Dish" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Save dish" }) as HTMLButtonElement).disabled).toBe(true);
   });
   it("keeps load errors separate from a genuinely empty menu", async () => {
     fetcher.mockResolvedValue(Response.json({ code: "MENU_UNAVAILABLE" }, { status: 503 }));
@@ -616,7 +616,7 @@ describe("Chef menu save and recovery", () => {
     fireEvent.change(screen.getByLabelText(/Dish photo/), { target: { files: [file] } });
     expect(screen.getByText("Choose a JPEG, PNG or WebP photo up to 8 MB.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Remove large.png" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish added successfully");
     expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/images"))).toBe(false);
   });
@@ -639,7 +639,7 @@ describe("Chef menu save and recovery", () => {
     expect(screen.queryByLabelText(/Add photo/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Remove b.png" }));
     expect(screen.getByText("4 of 5 photos")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish updated successfully");
     const uploads = fetcher.mock.calls.filter(([url]) => String(url).endsWith("/images"));
     expect(uploads.map(([, options]) => ((options?.body as FormData).get("file") as File).name)).toEqual(["a.png", "c.png"]);
@@ -676,11 +676,11 @@ describe("Chef menu save and recovery", () => {
     vi.stubGlobal("URL", class extends URL { static createObjectURL() { return "blob:fixture"; } static revokeObjectURL() {} });
     fetcher.mockImplementation((input, options) => String(input).endsWith("/images") ? Promise.resolve(Response.json({ code: "MENU_IMAGE_UPLOAD_FAILED" }, { status: 500 })) : original(input, options));
     fireEvent.change(screen.getByLabelText(/Dish photo/), { target: { files: [new File(["fixture"], "photo.png", { type: "image/png" })] } });
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     expect((await screen.findByRole("alert")).textContent).toContain("Dish details saved, but a photo was not confirmed");
     expect(screen.queryByText("Dish added successfully")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Remove photo.png" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Dish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish updated successfully");
     expect(stored).toHaveLength(1);
     expect(fetcher.mock.calls.filter(([url, options]) => url === "/api/chef/menu" && options?.method === "POST")).toHaveLength(1);
@@ -713,7 +713,7 @@ describe("Approved Chef first step", () => {
       return normal(input);
     });
     render(createElement(ChefModeDashboard));
-    await screen.findByRole("button", { name: "Refresh kitchen and menu" });
+    await screen.findByRole("button", { name: "Try again" });
     expect(screen.queryByRole("link", { name: "Set up my kitchen" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Name my kitchen" })).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();

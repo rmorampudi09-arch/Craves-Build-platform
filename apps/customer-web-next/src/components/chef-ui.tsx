@@ -60,7 +60,7 @@ export type ChefTone = "attention" | "active" | "success" | "warning" | "muted" 
 export function chefOrderStatus(status: string): { label: string; tone: ChefTone } {
   switch (status) {
     case "CHEF_ACCEPTANCE_PENDING":
-      return { label: "New · needs answer", tone: "attention" };
+      return { label: "New order", tone: "attention" };
     case "CHEF_ACCEPTED":
     case "PREPARING":
       return { label: "Cooking", tone: "active" };
@@ -77,12 +77,28 @@ export function chefOrderStatus(status: string): { label: string; tone: ChefTone
     default:
       return status.startsWith("REFUND")
         ? { label: "Refunded", tone: "muted" }
-        : { label: "Paid · waiting", tone: "muted" };
+        : { label: "Waiting", tone: "muted" };
   }
 }
 
-export function ChefPill({ tone = "muted", children, plain = false }: { tone?: ChefTone; children: ReactNode; plain?: boolean }) {
-  return <span className={`chef-pill is-${tone}${plain ? " is-plain" : ""}`}>{children}</span>;
+export function ChefPill({
+  tone = "muted",
+  children,
+  plain = false,
+  icon: Icon,
+}: {
+  tone?: ChefTone;
+  children: ReactNode;
+  plain?: boolean;
+  /** A picture in place of the dot, so the state reads without the words. */
+  icon?: ComponentType<{ className?: string }>;
+}) {
+  return (
+    <span className={`chef-pill is-${tone}${plain || Icon ? " is-plain" : ""}`}>
+      {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+      {children}
+    </span>
+  );
 }
 
 /** Page title block: no eyebrow, one h1, an optional single action. */

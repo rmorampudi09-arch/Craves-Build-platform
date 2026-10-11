@@ -14,7 +14,7 @@ export default function ChefEarningsPage() {
       <ChefAccessBoundary>
         <ChefPageHeader
           title="Earnings"
-          description="What you earned from paid and delivered orders."
+          description="Money from your delivered orders."
           action={<Link href="/chef/finance" className="chef-btn is-small">Balance &amp; payouts</Link>}
         />
         <ChefEarningsLedger />

@@ -21,6 +21,9 @@
   --chef-border: var(--chef-line);
   --chef-input: #f1f3f5;
   --chef-accent-text: #c4200f;
+  /* Yes, open, ready: the green of the customer View cart button (5:1 with white). */
+  --chef-go: #17803d;
+  --chef-go-hover: #12692f;
   --chef-success: #0e6b4c;
   --chef-warning: #8a5300;
   --chef-error: #c4200f;
@@ -296,7 +299,7 @@ a.chef-row:active,
 button.chef-row:active { background: var(--chef-input); }
 .chef-row-main { min-width: 0; flex: 1; }
 .chef-row-title { font-size: 0.9375rem; font-weight: 600; line-height: 1.35; color: var(--chef-text); }
-.chef-row-meta { margin-top: 0.125rem; color: var(--chef-muted); font-size: 0.8125rem; line-height: 1.4; }
+.chef-row-meta { margin-top: 0.125rem; color: var(--chef-muted); font-size: 0.8125rem; font-weight: 400; line-height: 1.4; }
 .chef-row-value { flex-shrink: 0; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 .chef-row-icon {
   display: grid;
@@ -388,6 +391,9 @@ body .chef-panel-theme .chef-btn.is-quiet { border-color: transparent !important
 /* ---------- Filter chips ---------- */
 .chef-chips { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.25rem; scrollbar-width: none; }
 .chef-chips::-webkit-scrollbar { display: none; }
+/* Choices (not filters) wrap so every option stays in view. */
+.chef-chips.is-wrap { flex-wrap: wrap; overflow: visible; padding-bottom: 0; }
+.chef-field-label { display: block; margin: 0; padding: 0; font-size: 0.9375rem; font-weight: 600; color: var(--chef-text); }
 .chef-panel-theme .chef-chip {
   display: inline-flex;
   min-height: 2.5rem;
@@ -532,6 +538,274 @@ body .chef-panel-theme .chef-primary-action { border-color: var(--chef-action) !
   .chef-panel-theme .chef-primary-action:not(:disabled):hover { background: var(--chef-action-hover) !important; }
 }
 .chef-panel-theme :is(button, a)[class~="bg-[#F62E18]"]:active { scale: 0.98; }
+
+/* ---------- Simple mode: big yes buttons, order cards, picture steps ---------- */
+/* Green means yes / open / ready; red means no or "needs you now". Never a tinted fill. */
+.chef-panel-theme .chef-btn.is-go {
+  background: var(--chef-go);
+  color: #fff;
+  font-size: 1.1875rem;
+  font-weight: 700;
+}
+body .chef-panel-theme .chef-btn.is-go { border-color: var(--chef-go) !important; }
+@media (hover: hover) {
+  .chef-panel-theme .chef-btn.is-go:not(:disabled):hover { background: var(--chef-go-hover); }
+  body .chef-panel-theme .chef-btn.is-go:not(:disabled):hover { border-color: var(--chef-go-hover) !important; }
+}
+.chef-panel-theme .chef-btn.is-go[aria-busy="true"]:disabled { opacity: 1; cursor: progress; }
+/* Decisions a busy hand must not miss: 56 px tall. */
+.chef-panel-theme .chef-btn.is-tall { min-height: 3.5rem; font-size: 1.125rem; }
+.chef-panel-theme .chef-btn.is-go.is-tall { font-size: 1.1875rem; }
+/* A main button that can't be used yet goes grey, never pale red or pale green. */
+.chef-panel-theme .chef-btn:is(.is-primary, .is-go):disabled:not([aria-busy="true"]) {
+  background: var(--chef-input);
+  color: var(--chef-placeholder);
+  opacity: 1;
+}
+body .chef-panel-theme .chef-btn:is(.is-primary, .is-go):disabled:not([aria-busy="true"]) { border-color: var(--chef-line) !important; }
+
+.chef-pill.is-plain svg { flex-shrink: 0; }
+
+.chef-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-family: var(--font-display-family);
+  font-size: 1.1875rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--chef-text);
+}
+.chef-group-title.is-attention { color: var(--chef-accent-text); }
+
+.chef-order-card {
+  border: 1px solid var(--chef-line);
+  border-radius: var(--chef-radius);
+  background: var(--chef-surface);
+  box-shadow: var(--chef-shadow);
+  padding: 1rem;
+}
+@media (min-width: 768px) { .chef-order-card { padding: 1.25rem; } }
+/* A waiting order is outlined in the brand's deep red: the one thing on screen that needs the chef. */
+.chef-order-card.is-new { border-color: var(--chef-accent-text); box-shadow: 0 0 0 1px var(--chef-accent-text); }
+.chef-order-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.chef-order-card-title {
+  margin: 0.625rem 0 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--chef-text);
+}
+.chef-order-items { display: grid; gap: 0.5rem; margin: 0.75rem 0 0; padding: 0; list-style: none; }
+.chef-order-items > li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--chef-text);
+}
+.chef-order-qty {
+  display: grid;
+  min-width: 2.75rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: var(--chef-radius-sm);
+  background: var(--chef-input);
+  padding: 0 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.chef-order-card-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.875rem; }
+/* Links and buttons share one height and split the row, so both read as equal choices. */
+.chef-panel-theme .chef-order-card-tools .chef-btn { flex: 1 1 auto; min-height: 3rem; }
+.chef-order-step { margin-top: 1rem; border-top: 1px solid var(--chef-line); padding-top: 1rem; }
+.chef-order-step-title {
+  margin: 0;
+  font-family: var(--font-display-family);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--chef-text);
+}
+
+/* Order progress: five picture steps with a line between them. */
+.chef-progress { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.chef-progress-step { position: relative; display: grid; justify-items: center; gap: 0.375rem; text-align: center; }
+.chef-progress-step + .chef-progress-step::before {
+  content: "";
+  position: absolute;
+  top: 1rem;
+  right: calc(50% + 1.125rem);
+  left: calc(-50% + 1.125rem);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--chef-line-strong);
+}
+.chef-progress-step.is-done + .chef-progress-step::before { background: var(--chef-go); }
+.chef-progress-dot {
+  display: grid;
+  height: 2rem;
+  width: 2rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--chef-input);
+  color: var(--chef-placeholder);
+}
+.chef-progress-step.is-done .chef-progress-dot { background: var(--chef-go); color: #fff; }
+.chef-progress-step.is-now .chef-progress-dot { background: var(--chef-text); color: #fff; box-shadow: 0 0 0 4px var(--chef-input); }
+.chef-progress-label { font-size: 0.75rem; font-weight: 600; line-height: 1.2; color: var(--chef-muted); }
+.chef-progress-step.is-now .chef-progress-label { font-weight: 800; color: var(--chef-text); }
+
+/* Kitchen open/closed: the day's on/off switch. */
+.chef-kitchen-switch {
+  border: 1px solid var(--chef-line);
+  border-radius: var(--chef-radius);
+  background: var(--chef-surface);
+  box-shadow: var(--chef-shadow);
+  padding: 1rem;
+}
+@media (min-width: 768px) { .chef-kitchen-switch { padding: 1.25rem; } }
+.chef-kitchen-switch-icon {
+  display: grid;
+  height: 3rem;
+  width: 3rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--chef-input);
+  color: var(--chef-muted);
+}
+.chef-kitchen-switch.is-open .chef-kitchen-switch-icon { color: var(--chef-go); }
+.chef-kitchen-switch-title {
+  margin: 0;
+  font-family: var(--font-display-family);
+  font-size: 1.1875rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--chef-text);
+}
+
+.chef-setting-row { display: flex; min-height: 3.5rem; align-items: center; gap: 0.875rem; padding: 0.375rem 0; }
+.chef-setting-row + .chef-setting-row { border-top: 1px solid var(--chef-line); }
+.chef-setting-title { font-size: 1rem; font-weight: 600; color: var(--chef-text); }
+
+/* ---------- Checklist: a tick for done, an empty ring for to do ---------- */
+.chef-check-hero {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--chef-line);
+  border-radius: var(--chef-radius);
+  background: var(--chef-surface);
+  padding: 1.125rem 1rem;
+}
+@media (min-width: 768px) { .chef-check-hero { padding: 1.25rem; } }
+.chef-check-hero-icon {
+  display: grid;
+  height: 3.5rem;
+  width: 3.5rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--chef-input);
+  color: var(--chef-warning);
+}
+.chef-check-hero.is-live .chef-check-hero-icon { background: var(--chef-go); color: #fff; }
+.chef-check-hero-title {
+  margin: 0;
+  font-family: var(--font-display-family);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--chef-text);
+}
+.chef-check-hero-text { margin: 0.25rem 0 0; color: var(--chef-muted); font-size: 0.9375rem; line-height: 1.45; }
+.chef-checklist { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--chef-line); }
+.chef-check { display: flex; align-items: flex-start; gap: 0.875rem; padding: 1rem; }
+@media (min-width: 768px) { .chef-check { padding-inline: 1.25rem; } }
+.chef-check + .chef-check { border-top: 1px solid var(--chef-line); }
+.chef-check-mark {
+  display: grid;
+  height: 1.75rem;
+  width: 1.75rem;
+  flex-shrink: 0;
+  place-items: center;
+  border: 2px solid var(--chef-line-strong);
+  border-radius: 999px;
+  color: #fff;
+}
+.chef-check.is-done .chef-check-mark { border-color: var(--chef-go); background: var(--chef-go); }
+.chef-check-title { margin: 0.125rem 0 0; font-size: 1rem; font-weight: 600; line-height: 1.35; color: var(--chef-text); }
+.chef-check-detail { margin: 0.25rem 0 0; color: var(--chef-muted); font-size: 0.9375rem; line-height: 1.45; overflow-wrap: anywhere; }
+.chef-check-docs { display: grid; gap: 0.375rem; margin: 0.75rem 0 0; padding: 0; list-style: none; }
+.chef-check-docs li {
+  display: flex;
+  min-height: 2.5rem;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: var(--chef-radius-sm);
+  background: var(--chef-sunken);
+  padding: 0.375rem 0.75rem;
+  font-size: 0.9375rem;
+  color: var(--chef-text);
+}
+.chef-check-docs li > svg { flex-shrink: 0; color: var(--chef-warning); }
+.chef-check-docs li.is-approved > svg { color: var(--chef-go); }
+.chef-check-docs li.is-rejected > svg,
+.chef-check-docs li.is-missing > svg { color: var(--chef-accent-text); }
+.chef-check-doc-state { flex-shrink: 0; color: var(--chef-muted); font-size: 0.8125rem; font-weight: 600; }
+.chef-check-docs li.is-rejected .chef-check-doc-state { color: var(--chef-accent-text); }
+
+/* ---------- New order bar on pages that don't list orders ---------- */
+.chef-order-banner-wrap {
+  position: fixed;
+  right: 0.75rem;
+  bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  left: 0.75rem;
+  z-index: 45;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+@media (min-width: 1024px) { .chef-order-banner-wrap { bottom: 1.5rem; } }
+.chef-order-banner {
+  display: flex;
+  width: 100%;
+  max-width: 30rem;
+  min-height: 3.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: var(--chef-radius);
+  background: var(--chef-accent-text);
+  padding: 0.5rem 0.5rem 0.5rem 1rem;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 10px 30px rgba(26, 26, 26, 0.22);
+  pointer-events: auto;
+}
+.chef-order-banner:focus-visible { outline: 2px solid var(--chef-text); outline-offset: 2px; }
+.chef-order-banner-cta {
+  display: inline-flex;
+  margin-left: auto;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  background: #fff;
+  padding: 0.5rem 0.875rem;
+  color: var(--chef-accent-text);
+  font-size: 0.9375rem;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .chef-order-banner { animation: chefBannerIn 260ms var(--chef-ease); }
+}
+@keyframes chefBannerIn { from { opacity: 0; transform: translateY(12px); } }
 
 /* ---------- Motion ---------- */
 .chef-step { animation: chefStepIn 200ms var(--chef-ease) both; }

@@ -35,22 +35,22 @@ const BUTTON_ROW = "chef-row !rounded-none !border-0 !bg-transparent disabled:op
 function groups(kitchen: Kitchen | null): { title: string; items: Item[] }[] {
   return [
     { title: "Kitchen", items: [
-      { href: "/chef/kitchen", icon: Store, label: "Kitchen details", description: kitchen?.kitchenName || "Name, description and pickup address" },
-      { href: "/chef/meal-plans", icon: CalendarDays, label: "Meal plans", description: "Weekly and monthly plans from your dishes" },
-      { href: "/chef/capacity", icon: Gauge, label: "Capacity", description: "How many plan meals you can cook" },
-      { href: "/chef/operations", icon: ShieldCheck, label: "Kitchen status", description: "What customers need to find your kitchen" },
+      { href: "/chef/kitchen", icon: Store, label: "Kitchen details", description: kitchen?.kitchenName || "Name, address and phone" },
+      { href: "/chef/operations", icon: ShieldCheck, label: "Can customers find you?", description: "See what’s done and what’s left" },
+      { href: "/chef/meal-plans", icon: CalendarDays, label: "Meal plans", description: "Plans customers buy for a week or month" },
+      { href: "/chef/capacity", icon: Gauge, label: "Plates per day", description: "How many meal plan plates you can cook" },
     ] },
     { title: "Money", items: [
-      { href: "/chef/earnings", icon: BadgeIndianRupee, label: "Earnings", description: "What you earned from completed orders" },
-      { href: "/chef/finance", icon: Landmark, label: "Finance & payouts", description: "Available balance, bank details and payout requests" },
-      { href: "/chef/statements", icon: FileText, label: "Statements", description: "Dated PDF statements of orders and earnings" },
+      { href: "/chef/earnings", icon: BadgeIndianRupee, label: "Earnings", description: "Money from your orders" },
+      { href: "/chef/finance", icon: Landmark, label: "Balance & payouts", description: "Take out money, and your bank account" },
+      { href: "/chef/statements", icon: FileText, label: "Statements", description: "PDF records to keep or share" },
     ] },
     { title: "Account", items: [
-      { href: "/chef/application/status", icon: FileCheck2, label: "Your application", description: "Status and the details you submitted" },
-      { href: "/chef/notifications", icon: Bell, label: "Notifications", description: "Orders, payments and account updates" },
-      { href: "/chef/support", icon: LifeBuoy, label: "Help & support", description: "Chat with Craves support about orders, payouts or your kitchen" },
-      { action: "switch", icon: ArrowLeftRight, label: "Switch to customer app", description: "Order food as a customer" },
-      { action: "sign-out", icon: LogOut, label: "Sign out", description: "Sign out of Craves on this device" },
+      { href: "/chef/application/status", icon: FileCheck2, label: "Your application", description: "What you sent to Craves" },
+      { href: "/chef/notifications", icon: Bell, label: "Notifications", description: "Messages from Craves" },
+      { href: "/chef/support", icon: LifeBuoy, label: "Get help", description: "Talk to Craves about an order or money" },
+      { action: "switch", icon: ArrowLeftRight, label: "Switch to customer app", description: "Order food for yourself" },
+      { action: "sign-out", icon: LogOut, label: "Sign out", description: "Sign out on this phone" },
     ] },
   ];
 }
@@ -59,7 +59,7 @@ function RowContent({ item, label }: { item: Item; label: string }) {
   const Icon = item.icon;
   return <>
     <span className="chef-row-icon"><Icon className="h-5 w-5" aria-hidden="true"/></span>
-    <span className="chef-row-main"><span className={`chef-row-title block ${"action" in item && item.action === "sign-out" ? "!text-[#C4200F]" : ""}`}>{label}</span><span className="chef-row-meta block truncate">{item.description}</span></span>
+    <span className="chef-row-main"><span className={`chef-row-title block ${"action" in item && item.action === "sign-out" ? "!text-[#C4200F]" : ""}`}>{label}</span><span className="chef-row-meta block">{item.description}</span></span>
     {"href" in item ? <ChevronRight className="chef-chevron h-5 w-5" aria-hidden="true"/> : null}
   </>;
 }

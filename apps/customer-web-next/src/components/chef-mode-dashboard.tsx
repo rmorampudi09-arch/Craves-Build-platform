@@ -5,8 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   AlertTriangle,
-  ChefHat,
-  ChevronRight,
+  BellRing,
   RefreshCw,
   Store,
   Utensils,
@@ -14,14 +13,14 @@ import {
 import {
   ChefEmpty,
   ChefNotice,
-  ChefPill,
   ChefSection,
   ChefSkeleton,
-  chefOrderStatus,
   formatInr,
-  timeAgo,
 } from "@/components/chef-ui";
-import { shortOrderNumber } from "@/lib/order-number";
+import { ChefOrderCard } from "@/components/chef-order-card";
+import { ChefKitchenSwitch } from "@/components/chef-kitchen-switch";
+import { ChefOrderAlerts } from "@/components/chef-order-alerts";
+import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/lib/chef-order-alert";
 import {
   parseChefApplication,
   type ChefApplication,
@@ -54,13 +53,12 @@ type Snapshot = {
 };
 
 type PriorityAction = {
-  eyebrow: string;
   title: string;
   description: string;
   action: string;
   href?: string;
   refresh?: boolean;
-  icon: typeof ChefHat;
+  icon: typeof Store;
 };
 
 const EMPTY: Snapshot = {
@@ -178,6 +176,8 @@ export function ChefModeDashboard() {
       }
 
       if (!active) return;
+      // Orders already waiting when Chef Mode opens are on screen; only later ones ring.
+      if (!unavailable.includes("orders")) noticeNewOrders(orders);
       setSnapshot({ application, kitchen, menu, orders, earnings, unavailable, details });
       if (application?.status === "APPROVED" && !unavailable.includes("kitchen")) {
         const noticeKey = `craves-chef-approved:${application.id ?? getSession()?.id}:${application.reviewedAt ?? "approved"}`;
@@ -203,15 +203,32 @@ export function ChefModeDashboard() {
     };
   }, [refreshTick]);
 
+  // New orders appear (and ring) without a refresh; a check never undoes the chef's own tap.
+  useChefOrderPolling(state === "approved", (orders) =>
+    setSnapshot((current) => ({
+      ...current,
+      orders: mergeOrders(current.orders, orders),
+      unavailable: current.unavailable.filter((label) => label !== "orders"),
+      details: current.details.filter((detail) => !detail.startsWith("Orders:")),
+    })),
+  );
+
+  function updateOrder(order: ChefOrder) {
+    setSnapshot((current) => ({
+      ...current,
+      orders: current.orders.map((existing) => (existing.id === order.id ? order : existing)),
+    }));
+  }
+
   const stats = useMemo(() => {
-    const actionOrders = snapshot.orders.filter(
+    // Oldest first: the order that has waited longest gets answered first.
+    const byAge = [...snapshot.orders].sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
+    const actionOrders = byAge.filter(
       (order) => order.status === "CHEF_ACCEPTANCE_PENDING",
     );
-    const activeOrders = snapshot.orders.filter((order) =>
-      ["CHEF_ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY"].includes(
-        order.status,
-      ),
-    );
+    // Still in the kitchen: what's cooking (the next tap) first, then what waits for the rider.
+    const cookingOrders = byAge.filter((order) => ["CHEF_ACCEPTED", "PREPARING"].includes(order.status));
+    const activeOrders = [...cookingOrders, ...byAge.filter((order) => order.status === "READY_FOR_PICKUP")];
     const availableMenu = snapshot.menu.filter(
       (item) => item.status === "ACTIVE" && item.available,
     );
@@ -224,7 +241,7 @@ export function ChefModeDashboard() {
     const weekAmount = weekEntries.reduce((sum, entry) => sum + entry.netPayable, 0);
     const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
     const todayOrders = snapshot.orders.filter(order => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(order.createdAt)) === todayKey).length;
-    return { actionOrders, activeOrders, availableMenu, weekAmount, weekCurrency, todayOrders };
+    return { actionOrders, activeOrders, cookingCount: cookingOrders.length, availableMenu, weekAmount, weekCurrency, todayOrders };
   }, [snapshot]);
 
   function dismissApprovalNotice() {
@@ -267,19 +284,18 @@ export function ChefModeDashboard() {
     );
   }
 
-  let priority: PriorityAction;
+  // Setup comes first; with the kitchen ready, the orders below are the whole job.
+  let priority: PriorityAction | null = null;
   if (snapshot.unavailable.includes("kitchen") || snapshot.unavailable.includes("menu")) {
     priority = {
-      eyebrow: "Try again",
       title: "Check your kitchen and menu",
-      description: "We couldn’t verify your saved kitchen or dishes. Refresh before continuing setup.",
-      action: "Refresh kitchen and menu",
+      description: "We couldn’t check your saved kitchen or dishes. Try again before you carry on.",
+      action: "Try again",
       refresh: true,
       icon: RefreshCw,
     };
   } else if (!snapshot.kitchen) {
     priority = {
-      eyebrow: "You’re approved",
       title: "Give your kitchen a name",
       description: "This is what customers will know your home kitchen by.",
       action: "Name my kitchen",
@@ -288,39 +304,20 @@ export function ChefModeDashboard() {
     };
   } else if (snapshot.menu.length === 0) {
     priority = {
-      eyebrow: "Next step",
       title: "Add your first dish",
       description: "Add one dish so customers can see what you cook.",
       action: "Add a dish",
       href: "/chef/menu",
       icon: Utensils,
     };
-  } else if (stats.activeOrders.length > 0) {
-    const first = stats.activeOrders[0]!;
-    priority = {
-      eyebrow: "Cooking now",
-      title: "You have an order in progress",
-      description: "Open it when you’re ready to continue or mark the food packed.",
-      action: "Continue order",
-      href: `/chef/orders/${first.id}`,
-      icon: ChefHat,
-    };
-  } else {
-    priority = {
-      eyebrow: "Today",
-      title: "No new orders right now",
-      description: "Your menu is live. New orders show up here and in Orders as soon as customers choose your food.",
-      action: "Check for new orders",
-      refresh: true,
-      icon: ChefHat,
-    };
   }
 
-  const kitchenOpen = snapshot.kitchen?.status === "ACTIVE";
   const kitchenName = snapshot.kitchen?.kitchenName || "Your Craves kitchen";
   const firstName = user?.firstName || user?.username || "Chef";
   const ordersUnknown = snapshot.unavailable.includes("orders");
   const newOrders = stats.actionOrders;
+  const activeOrders = stats.activeOrders;
+  const quiet = !priority && newOrders.length === 0 && activeOrders.length === 0;
 
   return (
     <>
@@ -353,51 +350,28 @@ export function ChefModeDashboard() {
       />
 
       <div className="chef-stack">
-        <header className="flex flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="chef-page-title">{greeting()}, {firstName}</h1>
-            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.9375rem] text-[#6B6B6B]">
-              <span className="truncate font-semibold text-[#1A1A1A]">{kitchenName}</span>
-              <ChefPill tone={kitchenOpen ? "success" : "muted"}>{kitchenOpen ? "Accepting orders" : "Not accepting orders"}</ChefPill>
-            </p>
-          </div>
+        <header className="min-w-0">
+          <h1 className="chef-page-title">{greeting()}, {firstName}</h1>
+          <p className="mt-1 truncate text-[0.9375rem] font-semibold text-[#6B6B6B]">{kitchenName}</p>
         </header>
 
         {snapshot.unavailable.length > 0 ? (
           <ChefNotice icon={AlertTriangle} role="status">
-            <p>Some information couldn’t refresh. Everything shown below is up to date.</p>
+            <p>Some information couldn’t refresh. Everything else below is up to date.</p>
             {snapshot.details.map((detail) => <p key={detail} className="mt-1 text-[#6B6B6B]">{detail}</p>)}
           </ChefNotice>
         ) : null}
 
+        {snapshot.kitchen ? (
+          <ChefKitchenSwitch
+            kitchen={snapshot.kitchen}
+            onChange={(kitchen) => setSnapshot((current) => ({ ...current, kitchen }))}
+          />
+        ) : null}
+
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-5">
           <div className="chef-stack">
-            {newOrders.length > 0 ? (
-              <ChefSection
-                title={`${newOrders.length} new order${newOrders.length === 1 ? "" : "s"} waiting`}
-                note="Tell the customer you can cook it. Waiting orders show here first."
-                flush
-                labelledBy="chef-new-orders"
-              >
-                <ul className="chef-list border-t border-[#E3E6EA]">
-                  {newOrders.map((order) => (
-                    <li key={order.id}>
-                      <Link href={`/chef/orders/${order.id}`} className="chef-row">
-                        <span className="chef-row-main">
-                          <span className="flex flex-wrap items-center gap-2">
-                            <ChefPill tone="attention">New</ChefPill>
-                            <span className="chef-row-meta !mt-0">#{shortOrderNumber(order.id)} · {timeAgo(order.createdAt)}</span>
-                          </span>
-                          <span className="chef-row-title mt-1.5 line-clamp-2 block">{itemSummary(order)}</span>
-                        </span>
-                        <span className="chef-row-value chef-amount">{formatInr(order.foodSubtotal, { currency: order.currency })}</span>
-                        <ChevronRight className="chef-chevron h-5 w-5" aria-hidden="true" />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </ChefSection>
-            ) : (
+            {priority ? (
               <ChefSection>
                 <div className="flex items-start gap-4">
                   <span className="chef-row-icon"><priority.icon className="h-5 w-5" aria-hidden="true" /></span>
@@ -405,11 +379,11 @@ export function ChefModeDashboard() {
                     <h2 className="chef-section-title">{priority.title}</h2>
                     <p className="mt-1 text-[0.9375rem] leading-6 text-[#6B6B6B]">{priority.description}</p>
                     {priority.href ? (
-                      <Link href={priority.href} className="chef-btn is-primary mt-4 w-full sm:w-auto">
+                      <Link href={priority.href} className="chef-btn is-primary is-tall mt-4 w-full sm:w-auto">
                         {priority.action}
                       </Link>
                     ) : (
-                      <button type="button" onClick={() => priority.refresh && setRefreshTick((value) => value + 1)} className="chef-btn mt-4 w-full sm:w-auto">
+                      <button type="button" onClick={() => setRefreshTick((value) => value + 1)} className="chef-btn mt-4 w-full sm:w-auto">
                         <RefreshCw className="h-4 w-4" aria-hidden="true" />
                         {priority.action}
                       </button>
@@ -417,58 +391,76 @@ export function ChefModeDashboard() {
                   </div>
                 </div>
               </ChefSection>
-            )}
+            ) : null}
 
-            {stats.activeOrders.length > 0 ? (
-              <ChefSection
-                title="In progress"
-                flush
-                labelledBy="chef-active-orders"
-                action={<Link href="/chef/orders" className="chef-btn is-small">All orders</Link>}
-              >
-                <ul className="chef-list border-t border-[#E3E6EA]">
-                  {stats.activeOrders.map((order) => {
-                    const status = chefOrderStatus(order.status);
-                    return (
-                      <li key={order.id}>
-                        <Link href={`/chef/orders/${order.id}`} className="chef-row">
-                          <span className="chef-row-main">
-                            <span className="flex flex-wrap items-center gap-2">
-                              <ChefPill tone={status.tone}>{status.label}</ChefPill>
-                              <span className="chef-row-meta !mt-0">#{shortOrderNumber(order.id)}{order.prepTimeMinutes ? ` · ${order.prepTimeMinutes} min prep` : ""}</span>
-                            </span>
-                            <span className="chef-row-title mt-1.5 line-clamp-2 block">{itemSummary(order)}</span>
-                          </span>
-                          <ChevronRight className="chef-chevron h-5 w-5" aria-hidden="true" />
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
+            {newOrders.length > 0 ? (
+              <section className="chef-stack" aria-labelledby="chef-new-orders">
+                <h2 id="chef-new-orders" className="chef-group-title is-attention">
+                  <BellRing className="h-5 w-5" aria-hidden="true" />
+                  {newOrders.length === 1 ? "New order: answer now" : `${newOrders.length} new orders: answer now`}
+                </h2>
+                {newOrders.map((order) => (
+                  <ChefOrderCard key={order.id} order={order} onUpdated={updateOrder} />
+                ))}
+              </section>
+            ) : null}
+
+            {activeOrders.length > 0 ? (
+              <section className="chef-stack" aria-labelledby="chef-active-orders">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 id="chef-active-orders" className="chef-group-title">In your kitchen</h2>
+                  <Link href="/chef/orders" className="chef-btn is-small">All orders</Link>
+                </div>
+                {activeOrders.map((order) => (
+                  <ChefOrderCard key={order.id} order={order} onUpdated={updateOrder} />
+                ))}
+              </section>
+            ) : null}
+
+            {quiet ? (
+              <ChefSection>
+                <ChefEmpty
+                  icon={BellRing}
+                  title={ordersUnknown ? "Orders couldn’t load" : "No orders right now"}
+                  text={
+                    ordersUnknown
+                      ? "We’ll keep trying every few seconds. You can also check now."
+                      : "Keep Craves open. Your phone rings and the order shows here as soon as a customer orders."
+                  }
+                  action={
+                    <button type="button" onClick={() => setRefreshTick((value) => value + 1)} className="chef-btn">
+                      <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                      Check now
+                    </button>
+                  }
+                />
               </ChefSection>
             ) : null}
           </div>
 
-          <ChefSection title="Today" flush labelledBy="chef-today">
-            <div className="chef-stats mt-1 border-t border-[#E3E6EA]">
-              <Link href="/chef/orders" className="chef-stat">
-                <p className="chef-stat-label">Orders today</p>
-                <p className="chef-stat-value">{ordersUnknown ? "—" : stats.todayOrders}</p>
-              </Link>
-              <Link href="/chef/orders" className="chef-stat">
-                <p className="chef-stat-label">Cooking now</p>
-                <p className="chef-stat-value">{ordersUnknown ? "—" : stats.activeOrders.length}</p>
-              </Link>
-              <Link href="/chef/menu" className="chef-stat">
-                <p className="chef-stat-label">Dishes available</p>
-                <p className="chef-stat-value">{snapshot.menu.length ? `${stats.availableMenu.length} of ${snapshot.menu.length}` : "0"}</p>
-              </Link>
-              <Link href="/chef/earnings" className="chef-stat">
-                <p className="chef-stat-label">Earned this week</p>
-                <p className="chef-stat-value">{stats.weekAmount > 0 ? formatInr(stats.weekAmount, { currency: stats.weekCurrency, decimals: 0 }) : "₹0"}</p>
-              </Link>
-            </div>
-          </ChefSection>
+          <div className="chef-stack">
+            <ChefSection title="Today" flush labelledBy="chef-today">
+              <div className="chef-stats mt-1 border-t border-[#E3E6EA]">
+                <Link href="/chef/orders" className="chef-stat">
+                  <p className="chef-stat-label">Orders today</p>
+                  <p className="chef-stat-value">{ordersUnknown ? "—" : stats.todayOrders}</p>
+                </Link>
+                <Link href="/chef/orders" className="chef-stat">
+                  <p className="chef-stat-label">Cooking now</p>
+                  <p className="chef-stat-value">{ordersUnknown ? "—" : stats.cookingCount}</p>
+                </Link>
+                <Link href="/chef/menu" className="chef-stat">
+                  <p className="chef-stat-label">Dishes on today</p>
+                  <p className="chef-stat-value">{snapshot.menu.length ? `${stats.availableMenu.length} of ${snapshot.menu.length}` : "0"}</p>
+                </Link>
+                <Link href="/chef/earnings" className="chef-stat">
+                  <p className="chef-stat-label">Earned this week</p>
+                  <p className="chef-stat-value">{stats.weekAmount > 0 ? formatInr(stats.weekAmount, { currency: stats.weekCurrency, decimals: 0 }) : "₹0"}</p>
+                </Link>
+              </div>
+            </ChefSection>
+            <ChefOrderAlerts />
+          </div>
         </div>
       </div>
     </>
@@ -481,10 +473,6 @@ function greeting(): string {
   if (hour < 12) return "Good morning";
   if (hour < 17) return "Good afternoon";
   return "Good evening";
-}
-
-function itemSummary(order: ChefOrder): string {
-  return order.items.map((item) => `${item.quantity}× ${item.itemName}`).join(", ") || "Food order";
 }
 
 export default ChefModeDashboard;

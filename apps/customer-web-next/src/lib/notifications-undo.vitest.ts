@@ -85,3 +85,46 @@ describe("notifications", () => {
       .toEqual(["33333333-3333-4333-8333-333333333333"]);
   });
 });
+
+describe("who a notice is for, and where it leads", () => {
+  const ORDER = "44444444-4444-4444-8444-444444444444";
+  const notices = [
+    { id: "55555555-5555-4555-8555-555555555555", title: "New order received", body: "A paid Craves order is waiting.", noticeType: "CHEF_ORDER_AWAITING_ACCEPTANCE",
+      targetType: "ORDER", targetId: ORDER, readAt: null, createdAt: new Date().toISOString() },
+    { id: "66666666-6666-4666-8666-666666666666", title: "Chef accepted your order", body: "We'll keep you updated.", noticeType: "CHEF_ACCEPTED_ORDER",
+      targetType: "ORDER", targetId: ORDER, readAt: null, createdAt: new Date().toISOString() },
+    { id: "77777777-7777-4777-8777-777777777777", title: "Payment received", body: "Thanks.", noticeType: "PAYMENT_SUCCEEDED",
+      targetType: "ORDER", targetId: ORDER, readAt: null, createdAt: new Date().toISOString() },
+    { id: "88888888-8888-4888-8888-888888888888", title: "Welcome to Craves", body: "Hello.", noticeType: "ACCOUNT",
+      targetType: null, targetId: null, readAt: null, createdAt: new Date().toISOString() },
+  ];
+  function stub() {
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => init?.method === "PATCH" ? new Response(null, { status: 204 }) : Response.json(notices));
+    vi.stubGlobal("fetch", fetch);
+    return fetch;
+  }
+
+  it("shows a chef only kitchen notices, and opening one marks it read", async () => {
+    const fetch = stub();
+    render(createElement(NotificationsPage, { audience: "chef" }));
+    const open = await screen.findByRole("link", { name: "Open order" });
+    expect(open.getAttribute("href")).toBe(`/chef/orders/${ORDER}`);
+    expect(screen.queryByText("Chef accepted your order")).toBeNull();
+    expect(screen.queryByText("Payment received")).toBeNull();
+    expect(screen.getByText("Welcome to Craves")).toBeTruthy();
+    fireEvent.click(open);
+    expect(fetch).toHaveBeenCalledWith(`/api/notifications/in-app/${notices[0].id}/read`, expect.objectContaining({ method: "PATCH" }));
+    expect(screen.getByRole("button", { name: /^Unread \(1\)/ })).toBeTruthy();
+  });
+
+  it("links a customer's own orders and never a kitchen's order", async () => {
+    stub();
+    render(createElement(NotificationsPage));
+    await screen.findByText("Payment received");
+    const links = screen.getAllByRole("link", { name: "View order" });
+    expect(links).toHaveLength(2);
+    expect(links.every((link) => link.getAttribute("href") === `/orders/${ORDER}`)).toBe(true);
+    expect(screen.getByText("New order received")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Open order" })).toBeNull();
+  });
+});

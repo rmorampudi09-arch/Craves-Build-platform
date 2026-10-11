@@ -918,7 +918,6 @@ function BrowseFoodsPage() {
 
       <main>
         <WelcomeBanner
-          firstName={user.firstName || user.username.split(" ")[0] || "there"}
           dishCount={nearbyDishes.length}
           radiusLabel={radiusLabel}
           defaultAddressLabel={locationLabel}

@@ -27,6 +27,11 @@ import {
   parseChefOrdersResponse,
   type ChefOrder,
 } from "@/lib/chef-order-contract";
+import { ChefOrderCard, chefStatusIcon } from "@/components/chef-order-card";
+import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/lib/chef-order-alert";
+
+const newestFirst = (orders: ChefOrder[]) =>
+  [...orders].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
 
 type InboxView = "NEEDS_ANSWER" | "IN_PROGRESS" | "READY" | "PREVIOUS" | "ALL";
 
@@ -71,12 +76,8 @@ export function ChefOrderInbox() {
       if (!response.ok) throw chefApiError(response, raw, "We couldn’t load your orders right now.");
       const parsed = parseChefOrdersResponse(raw);
       if (!parsed) throw new ChefError("We couldn’t read the latest orders. Please refresh.", "INVALID_CHEF_ORDERS_RESPONSE", response.status);
-      setOrders(
-        [...parsed].sort(
-          (left, right) =>
-            new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-        ),
-      );
+      noticeNewOrders(parsed);
+      setOrders(newestFirst(parsed));
       setLastUpdatedAt(new Date());
     } catch (caught) {
       setError(chefErrorText(caught, "We couldn’t load your orders right now."));
@@ -89,6 +90,16 @@ export function ChefOrderInbox() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // New orders arrive (and ring) on their own; a check never undoes the chef's own tap.
+  useChefOrderPolling(!loading, (incoming) => {
+    setOrders((current) => newestFirst(mergeOrders(current, incoming)));
+    setLastUpdatedAt(new Date());
+  });
+
+  function updateOrder(order: ChefOrder) {
+    setOrders((current) => current.map((existing) => (existing.id === order.id ? order : existing)));
+  }
 
   const counts = useMemo(
     () => ({
@@ -118,7 +129,7 @@ export function ChefOrderInbox() {
     { view: "NEEDS_ANSWER", label: "New" },
     { view: "IN_PROGRESS", label: "Cooking" },
     { view: "READY", label: "Ready" },
-    { view: "PREVIOUS", label: "Completed" },
+    { view: "PREVIOUS", label: "Done" },
     { view: "ALL", label: "All" },
   ] as const;
 
@@ -180,6 +191,13 @@ export function ChefOrderInbox() {
                 text={view === "NEEDS_ANSWER" ? "No order is waiting for your answer." : "Choose another filter to see older orders."}
               />
             </ChefSection>
+          ) : view === "NEEDS_ANSWER" || view === "IN_PROGRESS" ? (
+            // Orders that need the chef: big cards with the answer right on them, oldest first.
+            <div key={view} className="chef-stack chef-step">
+              {[...visibleOrders].reverse().map((order) => (
+                <ChefOrderCard key={order.id} order={order} onUpdated={updateOrder} />
+              ))}
+            </div>
           ) : (
             <ChefSection flush>
               <ul key={view} className="chef-list chef-step">
@@ -191,7 +209,7 @@ export function ChefOrderInbox() {
                       <Link href={`/chef/orders/${order.id}`} className="chef-row items-start">
                         <span className="chef-row-main">
                           <span className="flex flex-wrap items-center gap-2">
-                            <ChefPill tone={status.tone}>{status.label}</ChefPill>
+                            <ChefPill tone={status.tone} icon={chefStatusIcon(order.status)}>{status.label}</ChefPill>
                             <span className="chef-row-meta !mt-0">#{shortOrderNumber(order.id)} · {timeAgo(order.createdAt)}</span>
                           </span>
                           <span className="chef-row-title mt-2 line-clamp-2 block">

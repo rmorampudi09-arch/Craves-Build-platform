@@ -48,7 +48,7 @@ afterEach(() => {
 it("shows the signed-in number and opens the application after a fresh OTP", async () => {
   render(createElement(ChefSignIn, { returnTo: "/chef/earnings", centralOtp: true }));
   expect(await screen.findByText("+919876543210")).toBeTruthy();
-  expect(screen.getByRole("heading", { name: "Sign in to Chef Mode" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Sign in to your kitchen" })).toBeTruthy();
   expect(screen.getByText(/keeps your orders, menu and earnings safe/)).toBeTruthy();
   expect(isChefModeVerified(customer.id)).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Send OTP" }));

@@ -37,7 +37,7 @@ test("Chef meal plans communicate review, locking and capacity states", () => {
   assert.match(manager, /Subscription sales are frozen/);
   assert.match(manager, /Schedule locked/);
   assert.match(manager, /Admin review note/);
-  assert.match(manager, /Capacity matching this plan/);
+  assert.match(manager, /Plates for this plan/);
 });
 
 test("Chef meal plan controls meet the accessibility target-size baseline", () => {

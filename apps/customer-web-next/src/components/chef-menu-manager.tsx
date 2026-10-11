@@ -9,6 +9,8 @@ import { FaPepperHot } from "react-icons/fa";
 import { Button } from "@/components/ui/buttons/button";
 import { Input } from "@/components/ui/forms/input";
 import { Switch } from "@/components/ui/forms/switch";
+// In Chef Mode "on" is green, like the Kitchen open switch: red reads as stop to most chefs.
+const GO_SWITCH = "data-[state=checked]:border-[#17803D]! data-[state=checked]:bg-[#17803D]!";
 import { parseChefKitchen } from "@/lib/chef-kitchen-contract";
 import { chefMenuFailure } from "@/lib/chef-menu-errors";
 import {
@@ -485,6 +487,7 @@ export function ChefMenuManager() {
                       </span>
                     </button>
                     <Switch
+                      className={GO_SWITCH}
                       aria-label={`${item.itemName} available to order`}
                       checked={live}
                       disabled={busy || item.status !== "ACTIVE"}
@@ -496,7 +499,7 @@ export function ChefMenuManager() {
             </ul>
           ) : null}
           {items.some((item) => item.status !== "ACTIVE") ? (
-            <p className="text-[0.8125rem] leading-5 text-[#6B6B6B]">To publish a draft dish, open it and turn on “Currently available”.</p>
+            <p className="text-[0.8125rem] leading-5 text-[#6B6B6B]">To put a draft dish on your menu, open it and turn on “Customers can order it”.</p>
           ) : null}
         </div>
       </div>
@@ -842,17 +845,18 @@ export function ChefMenuManager() {
             <span>
               <span className="block font-medium">Thermal box needed</span>
               <span className="mt-1 block text-sm text-muted-foreground">
-                Enable if this dish needs insulated delivery.
+                Turn on if this dish must stay hot or cold on the way.
               </span>
             </span>
             <Switch
+              className={GO_SWITCH}
               checked={form.thermoboxRequired}
               onCheckedChange={(value) => update("thermoboxRequired", value)}
             />
           </label>
           <label className="mt-4 flex min-h-12 items-center justify-between gap-4 border-t border-border pt-4">
             <span>
-              <span className="block font-medium">Currently Available</span>
+              <span className="block font-medium">Customers can order it</span>
               <span className="mt-1 block text-sm text-muted-foreground">
                 {form.available
                   ? "Publish this dish and make it available to order."
@@ -862,6 +866,7 @@ export function ChefMenuManager() {
               </span>
             </span>
             <Switch
+              className={GO_SWITCH}
               checked={form.available}
               onCheckedChange={(value) => {
                 update("available", value);
@@ -872,7 +877,7 @@ export function ChefMenuManager() {
         </section>
         <div className="flex flex-wrap gap-3 pb-4">
           <Button type="submit" className="flex-1" disabled={busy || uncertainSave}>
-            {busy ? "Saving…" : "Save Dish"}
+            {busy ? "Saving…" : "Save dish"}
           </Button>
           <Button type="button" variant="outline" disabled={busy} onClick={() => setEditing(false)}>
             Cancel

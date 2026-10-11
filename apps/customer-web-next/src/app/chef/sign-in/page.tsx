@@ -4,7 +4,7 @@ import { safeChefReturnTo } from "@/lib/chef-mode";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Sign in to Chef Mode | Craves",
+  title: "Chef sign in | Craves",
   robots: { index: false, follow: false },
 };
 

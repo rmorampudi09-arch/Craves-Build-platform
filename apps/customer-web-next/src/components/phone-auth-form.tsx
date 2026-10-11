@@ -177,7 +177,7 @@ export function PhoneAuthForm({
       };
       if (!response.ok) throw new Error(body.message ?? "We couldn’t sign you in. Check the code and try again, or request a new code.");
       setStage("done");
-      setMessage(chefJourney ? "Verified. Opening Chef Mode…" : "Signed in successfully.");
+      setMessage(chefJourney ? "Verified. Opening your kitchen…" : "Signed in successfully.");
       if (onSignedIn) {
         if (!body.identity?.id) throw new Error("Sign-in failed. Please try again.");
         await onSignedIn(body.identity);
@@ -217,11 +217,11 @@ export function PhoneAuthForm({
         <p className="text-sm font-semibold text-[#C4200F]">Secure Craves access</p>
       )}
       <h1 className={`text-3xl font-bold tracking-tight text-[#1A1A1A] ${chefJourney ? "" : "mt-2"}`}>
-        {chefJourney ? "Sign in to Chef Mode" : "Sign in with mobile OTP"}
+        {chefJourney ? "Sign in to your kitchen" : "Sign in with mobile OTP"}
       </h1>
       <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">
         {chefJourney
-          ? "Confirm your phone number to open your kitchen. This keeps your orders, menu and earnings safe."
+          ? "We’ll send a code to your phone. This keeps your orders, menu and earnings safe."
           : "Use one mobile number for both customer and chef mode."}
       </p>
 

@@ -7,11 +7,12 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
-  CircleDollarSign,
   Clock3,
   FileText,
   Gauge,
+  IndianRupee,
   Info,
   LockKeyhole,
   Plus,
@@ -152,15 +153,15 @@ function statusMeta(status: ChefMealPlan["status"]) {
 function statusDescription(status: ChefMealPlan["status"]): string {
   switch (status) {
     case "ACTIVE":
-      return "Approved and currently available to customers.";
+      return "Approved. Customers can buy this plan.";
     case "PENDING_APPROVAL":
       return "Your plan is locked while Craves reviews it.";
     case "REJECTED":
-      return "Review the Admin note, make the requested changes, then resubmit.";
+      return "Read the note from Craves, make the changes, then send it again.";
     case "INACTIVE":
-      return "This plan is not currently available to customers.";
+      return "Customers can’t buy this plan right now.";
     default:
-      return "Keep editing until the plan is ready to submit.";
+      return "Keep editing until the plan is ready to send.";
   }
 }
 
@@ -226,9 +227,11 @@ function StepIndicator({ current }: { current: number }) {
           >
             <span
               className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                active || complete
-                  ? "bg-[var(--color-flame-red)] text-white"
-                  : "bg-[#E5E7EB] text-[#6B6B6B]"
+                complete
+                  ? "bg-[#17803D] text-white"
+                  : active
+                    ? "bg-[var(--color-flame-red)] text-white"
+                    : "bg-[#E5E7EB] text-[#6B6B6B]"
               }`}
             >
               {complete ? <Check className="h-4 w-4" aria-hidden="true" /> : number}
@@ -956,10 +959,10 @@ export function ChefSubscriptionPlanManager() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-[#1A1A1A]">
-            Build once, then let Craves manage recurring fulfillment.
+            Make a plan once. Customers get the meals every week or month.
           </p>
           <p className="mt-1 text-xs text-[#6B6B6B]">
-            Your meal plan controls the meals and schedule. Capacity controls how many recurring commitments you can safely accept.
+            Your plan says which meals and when. Plates per day says how many you can cook.
           </p>
         </div>
         <button
@@ -1071,7 +1074,7 @@ export function ChefSubscriptionPlanManager() {
 
           <section className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[var(--shadow-card)]">
             <div className="flex items-center gap-2">
-              <CircleDollarSign
+              <IndianRupee
                 className="h-5 w-5 text-[var(--color-flame-red)]"
                 aria-hidden="true"
               />
@@ -1080,7 +1083,7 @@ export function ChefSubscriptionPlanManager() {
               </h2>
             </div>
             <p className="mt-2 text-xs leading-5 text-[#6B6B6B]">
-              The plan price is the recurring subscription amount. Use the description to explain what meals and value the customer receives.
+              The plan price is what customers pay each week or month. Use the description to say which meals they get.
             </p>
           </section>
 
@@ -1088,17 +1091,17 @@ export function ChefSubscriptionPlanManager() {
             <div className="flex items-center gap-2">
               <Gauge className="h-5 w-5 text-[var(--color-flame-red)]" aria-hidden="true" />
               <h2 className="text-sm font-bold text-[#1A1A1A]">
-                Capacity is separate
+                Plates per day
               </h2>
             </div>
             <p className="mt-2 text-xs leading-5 text-[#6B6B6B]">
-              Your plan defines the recurring meals. Capacity protects your kitchen from taking more subscription commitments than you can serve.
+              Stops your kitchen from taking more plans than you can cook. Craves sets safe numbers for you.
             </p>
             <Link
               href="/chef/capacity"
               className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[var(--color-flame-red)] underline-offset-4 hover:underline"
             >
-              Open advanced capacity
+              Set plates per day
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           </section>
@@ -1234,9 +1237,9 @@ export function ChefSubscriptionPlanManager() {
 
                   <div className="rounded-2xl bg-[#F1F3F5] px-5 py-4 text-right">
                     <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
-                      Recurring price
+                      Price
                     </p>
-                    <p className="mt-1 text-2xl font-bold text-[var(--color-flame-red)]">
+                    <p className="mt-1 text-2xl font-bold text-[#1A1A1A]">
                       {money(selected.amount, selected.currency)}
                     </p>
                     <p className="mt-1 text-xs text-[#6B6B6B]">
@@ -1380,12 +1383,12 @@ export function ChefSubscriptionPlanManager() {
                         Build the meal schedule
                       </h3>
                       <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6B6B6B]">
-                        Choose dishes from your active menu and tell Craves when each meal should be prepared.
+                        Pick dishes from your menu and the days to cook them.
                       </p>
                     </div>
                   </div>
                   <span className="inline-flex min-h-8 items-center rounded-full bg-[#F1F3F5] px-3 text-xs font-bold text-[#4B5563]">
-                    {rows.length} meal{rows.length === 1 ? "" : "s"} configured
+                    {rows.length} meal{rows.length === 1 ? "" : "s"} added
                   </span>
                 </div>
 
@@ -1709,13 +1712,13 @@ export function ChefSubscriptionPlanManager() {
                     </span>
                     <div>
                       <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
-                        Capacity
+                        Plates per day
                       </p>
                       <h3 className="mt-1 text-xl font-bold text-[#1A1A1A]">
-                        Protect your recurring availability
+                        How many plates you can cook
                       </h3>
                       <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6B6B6B]">
-                        Capacity is Chef-level and separate from the meal plan. Craves also fills missing safe defaults when you submit a plan.
+                        This is for all your plans together. Craves sets safe numbers when you send a plan.
                       </p>
                     </div>
                   </div>
@@ -1723,7 +1726,7 @@ export function ChefSubscriptionPlanManager() {
                     href="/chef/capacity"
                     className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#D8DEE3] bg-white px-4 text-sm font-bold text-[var(--color-flame-red)] hover:border-[var(--color-flame-red)] hover:bg-[#F7F8FA]"
                   >
-                    Advanced capacity
+                    Change plates per day
                     <ChevronRight className="h-4 w-4" aria-hidden="true" />
                   </Link>
                 </div>
@@ -1748,18 +1751,10 @@ export function ChefSubscriptionPlanManager() {
                   </div>
                 ) : null}
 
-                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="mt-5 grid grid-cols-2 gap-3">
                   <div className="rounded-xl bg-[#F8F9FA] p-4">
                     <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
-                      Slot rules
-                    </p>
-                    <p className="mt-1 text-2xl font-bold text-[#1A1A1A]">
-                      {capacity?.slotRules.length ?? "—"}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-[#F8F9FA] p-4">
-                    <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
-                      Available units
+                      Plates still free
                     </p>
                     <p className="mt-1 text-2xl font-bold text-[#1A1A1A]">
                       {capacity
@@ -1772,7 +1767,7 @@ export function ChefSubscriptionPlanManager() {
                   </div>
                   <div className="rounded-xl bg-[#F8F9FA] p-4">
                     <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">
-                      Open incidents
+                      Problems to fix
                     </p>
                     <p
                       className={`mt-1 text-2xl font-bold ${
@@ -1789,7 +1784,7 @@ export function ChefSubscriptionPlanManager() {
                 {matchingCapacityRules.length > 0 ? (
                   <div className="mt-5 rounded-xl border border-[#BBE8D0] bg-[#F3FBF6] p-4">
                     <p className="text-sm font-bold text-[#1A1A1A]">
-                      Capacity matching this plan
+                      Plates for this plan
                     </p>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {matchingCapacityRules.map((rule) => (
@@ -1802,9 +1797,9 @@ export function ChefSubscriptionPlanManager() {
                             {rule.mealSlotCode.toLowerCase()}
                           </p>
                           <p className="mt-1 text-xs text-[#6B6B6B]">
-                            {rule.subscriptionCapacityUnits} subscription units ·{" "}
-                            {rule.recurringReservedUnits} reserved ·{" "}
-                            {rule.recurringAvailableUnits} available
+                            {rule.subscriptionCapacityUnits} plates ·{" "}
+                            {rule.recurringReservedUnits} taken ·{" "}
+                            {rule.recurringAvailableUnits} free
                           </p>
                         </div>
                       ))}
@@ -1812,18 +1807,18 @@ export function ChefSubscriptionPlanManager() {
                   </div>
                 ) : (
                   <div className="mt-5 rounded-xl border border-[#E5E7EB] bg-[#F8F9FA] p-4 text-sm leading-6 text-[#6B6B6B]">
-                    No explicit capacity rule matches the schedule yet. That is
-                    allowed: Craves can create safe missing defaults when the
-                    plan is submitted.
+                    No plates are set for these meals yet. That’s fine: Craves
+                    sets safe numbers when you send the plan.
                   </div>
                 )}
 
-                <div className="mt-5 border-t border-[#E5E7EB] pt-5">
-                  <p className="text-sm font-bold text-[#1A1A1A]">
-                    Quick slot override
-                  </p>
+                <details className="group mt-5 border-t border-[#E5E7EB] pt-3">
+                  <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-[#1A1A1A] [&::-webkit-details-marker]:hidden">
+                    Change plates for one day
+                    <ChevronDown className="h-5 w-5 text-[#6B6B6B] transition-transform group-open:rotate-180" aria-hidden="true" />
+                  </summary>
                   <p className="mt-1 text-xs leading-5 text-[#6B6B6B]">
-                    Use this only when you want to override the automatic capacity for one recurring weekday and meal slot.
+                    Only if the numbers Craves set don’t suit one day and meal.
                   </p>
 
                   <div className="mt-4 grid gap-3 md:grid-cols-4">
@@ -1845,7 +1840,7 @@ export function ChefSubscriptionPlanManager() {
                     </label>
 
                     <label className="text-sm font-semibold text-[#1A1A1A]">
-                      Meal slot
+                      Meal
                       <select
                         value={capacitySlot}
                         onChange={(event) =>
@@ -1862,7 +1857,7 @@ export function ChefSubscriptionPlanManager() {
                     </label>
 
                     <label className="text-sm font-semibold text-[#1A1A1A]">
-                      Total kitchen units
+                      All plates you can cook
                       <input
                         type="number"
                         min="0"
@@ -1875,7 +1870,7 @@ export function ChefSubscriptionPlanManager() {
                     </label>
 
                     <label className="text-sm font-semibold text-[#1A1A1A]">
-                      Subscription units
+                      Plates for meal plans
                       <input
                         type="number"
                         min="0"
@@ -1899,10 +1894,10 @@ export function ChefSubscriptionPlanManager() {
                     />
                     <span>
                       <span className="block font-bold">
-                        Accept new subscription commitments for this slot
+                        Take new meal plans for this meal
                       </span>
                       <span className="mt-1 block text-xs leading-5 text-[#6B6B6B]">
-                        Turn this off when you want to stop new recurring reservations without changing the plan itself.
+                        Turn this off to stop new plans for this meal. Plans you already have don’t change.
                       </span>
                     </span>
                   </label>
@@ -1914,9 +1909,9 @@ export function ChefSubscriptionPlanManager() {
                     className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--color-flame-red)] bg-white px-4 text-sm font-bold text-[var(--color-flame-red)] hover:bg-[#F7F8FA] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Gauge className="h-4 w-4" aria-hidden="true" />
-                    Save capacity
+                    Save plates
                   </button>
-                </div>
+                </details>
               </section>
 
               <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[var(--shadow-card)] md:p-6">
@@ -1932,7 +1927,7 @@ export function ChefSubscriptionPlanManager() {
                       Review & submit
                     </h3>
                     <p className="mt-1 text-sm leading-6 text-[#6B6B6B]">
-                      Check the plan before sending it to Craves Admin.
+                      Check your plan, then send it to Craves to check.
                     </p>
                   </div>
                 </div>
@@ -1967,7 +1962,7 @@ export function ChefSubscriptionPlanManager() {
                         <span
                           className={`mt-0.5 flex h-6 w-6 items-center justify-center rounded-full ${
                             ready
-                              ? "bg-[var(--color-flame-red)] text-white"
+                              ? "bg-[#17803D] text-white"
                               : "bg-[#E5E7EB] text-[#6B6B6B]"
                           }`}
                         >
@@ -2048,7 +2043,7 @@ export function ChefSubscriptionPlanManager() {
                       />
                       <div>
                         <p className="text-sm font-bold text-[#1A1A1A]">
-                          Submission controls are locked
+                          Already sent to Craves
                         </p>
                         <p className="mt-1 text-sm leading-6 text-[#6B6B6B]">
                           {statusDescription(selected.status)}

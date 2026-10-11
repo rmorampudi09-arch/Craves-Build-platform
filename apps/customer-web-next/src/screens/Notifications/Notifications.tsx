@@ -9,6 +9,7 @@ import {
   FaBell,
   FaCalendarDays,
   FaCheck,
+  FaChevronRight,
   FaTrashCan,
 } from "react-icons/fa6";
 import { GiChefToque } from "react-icons/gi";
@@ -42,14 +43,47 @@ function notificationGroup(createdAt: string): NotificationGroup {
   return "Earlier";
 }
 
-function notificationTimestamp(createdAt: string) {
-  return new Date(createdAt).toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+/** "1:31 pm" today, "Sat, 1:31 pm" this week, "3 Oct, 12:05 pm" before that. */
+function notificationTimestamp(createdAt: string, group: NotificationGroup) {
+  const created = new Date(createdAt);
+  const time = created.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }).toLowerCase();
+  if (group === "Today") return time;
+  const day = group === "This week"
+    ? created.toLocaleDateString("en-IN", { weekday: "short" })
+    : created.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        ...(created.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+      });
+  return `${day}, ${time}`;
+}
+
+type NoticeAudience = "customer" | "chef";
+// Sent to customers despite the CHEF_ prefix: "the chef accepted/declined your order".
+const CUSTOMER_CHEF_TYPES = new Set(["CHEF_ACCEPTED_ORDER", "CHEF_REJECTED_ORDER"]);
+
+function isKitchenNotice(notice: CustomerNotification): boolean {
+  const type = notice.noticeType.toUpperCase();
+  return (type.startsWith("CHEF_") && !CUSTOMER_CHEF_TYPES.has(type)) ||
+    (notice.targetType ?? "").toUpperCase().startsWith("CHEF_");
+}
+
+/** About food the person bought; Chef Mode leaves these to the customer app. Unknown types show in both. */
+function isOwnOrderNotice(notice: CustomerNotification): boolean {
+  const type = notice.noticeType.toUpperCase();
+  return !isKitchenNotice(notice) && (CUSTOMER_CHEF_TYPES.has(type) || /^(ORDER|PAYMENT|DELIVERY|REFUND)_/.test(type));
+}
+
+/** Where a notice leads: the order to answer or track, or the chef application. */
+function noticeLink(notice: CustomerNotification, audience: NoticeAudience): { to: string; label: string } | null {
+  const target = (notice.targetType ?? "").toUpperCase();
+  if (audience === "chef") {
+    if ((target === "ORDER" || target === "CHEF_ORDER") && notice.targetId) return { to: `/chef/orders/${notice.targetId}`, label: "Open order" };
+    if (target === "CHEF_APPLICATION") return { to: "/chef/application/status", label: "See application" };
+    return null;
+  }
+  if (target === "ORDER" && notice.targetId && !isKitchenNotice(notice)) return { to: `/orders/${notice.targetId}`, label: "View order" };
+  return null;
 }
 
 function clearedKey(identityId: string): string {
@@ -86,7 +120,7 @@ function NotificationTypeIcon({ notice }: { notice: CustomerNotification }) {
   return <Icon className="text-lg" aria-hidden="true" />;
 }
 
-export default function NotificationsPage() {
+export default function NotificationsPage({ audience = "customer" }: { audience?: NoticeAudience }) {
   const navigate = useNavigate();
   const [notices, setNotices] = useState<CustomerNotification[]>([]);
   const [filter, setFilter] = useState<NotificationFilter>("all");
@@ -139,7 +173,7 @@ export default function NotificationsPage() {
       if (!active) return;
 
       const loadedNotices = (body as CustomerNotification[]).filter(
-        (notice) => !dismissed.has(notice.id),
+        (notice) => !dismissed.has(notice.id) && !(audience === "chef" && isOwnOrderNotice(notice)),
       );
       setNotices(loadedNotices);
       setLoading(false);
@@ -156,7 +190,15 @@ export default function NotificationsPage() {
     return () => {
       active = false;
     };
-  }, [navigate]);
+  }, [audience, navigate]);
+
+  // Opening a notice's order counts as reading it; the list catches up even if the request fails.
+  function openNotice(notice: CustomerNotification) {
+    if (notice.readAt) return;
+    const readAt = new Date().toISOString();
+    setNotices((current) => current.map((item) => (item.id === notice.id ? { ...item, readAt } : item)));
+    void fetch(`/api/notifications/in-app/${notice.id}/read`, { method: "PATCH", credentials: "same-origin" }).catch(() => undefined);
+  }
 
   function commitClear(ids: string[]) {
     persistCleared(identityId, ids);
@@ -382,6 +424,7 @@ export default function NotificationsPage() {
                 <ul className="space-y-3">
                   {group.notices.map((notice) => {
                     const unread = !notice.readAt;
+                    const link = noticeLink(notice, audience);
                     return (
                       <li key={notice.id}>
                         <article className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:px-5">
@@ -408,11 +451,20 @@ export default function NotificationsPage() {
                               <p className="mt-1 text-sm leading-6 text-[#6B6B6B]">
                                 {notice.body}
                               </p>
+                              {link ? (
+                                <Link
+                                  to={link.to}
+                                  onClick={() => openNotice(notice)}
+                                  className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-full border border-[#D3D7DD] bg-white px-4 text-sm font-semibold text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]"
+                                >
+                                  {link.label}
+                                  <FaChevronRight className="text-xs" aria-hidden="true" />
+                                </Link>
+                              ) : null}
                               <div className="mt-2 flex items-center justify-between gap-3">
                                 <p className="text-xs text-[#6B6B6B]">
-                                  {notificationTimestamp(notice.createdAt)}
-                                  <span aria-hidden="true"> · </span>
-                                  <span>{unread ? "Unread" : "Read"}</span>
+                                  {notificationTimestamp(notice.createdAt, group.label)}
+                                  <span className="sr-only">{unread ? ", unread" : ", read"}</span>
                                 </p>
                                 {!unread ? (
                                   <button

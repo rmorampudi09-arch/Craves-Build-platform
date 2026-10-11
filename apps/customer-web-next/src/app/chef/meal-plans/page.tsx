@@ -15,16 +15,16 @@ export default function ChefMealPlansPage() {
       <ChefAccessBoundary>
         <ChefPageHeader
           title="Meal plans"
-          description="Weekly or monthly plans built from dishes on your menu. Craves reviews each plan before customers can subscribe."
+          description="Plans customers buy for a week or a month. Craves checks each plan before customers see it."
           action={
             <div className="flex flex-wrap gap-2">
               <Link href="/chef/menu" className="chef-btn is-small">
                 <UtensilsCrossed className="h-4 w-4" aria-hidden="true" />
-                Manage dishes
+                Go to menu
               </Link>
               <Link href="/chef/capacity" className="chef-btn is-small">
                 <Gauge className="h-4 w-4" aria-hidden="true" />
-                Capacity
+                Plates per day
               </Link>
             </div>
           }

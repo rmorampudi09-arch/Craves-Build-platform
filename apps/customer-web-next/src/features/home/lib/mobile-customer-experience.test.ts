@@ -55,7 +55,12 @@ test("mobile discovery keeps search, veg and cravings accessible while scrolling
   assert.match(autoHide, /static md:sticky md:top-0/);
   assert.match(header, /mobileCompact/);
   assert.match(header, /fixed inset-x-0 top-0 z-50/);
-  // The rail sticks below the compact bar via its sticky top (never slides over content).
+  // The big photo rail scrolls away with the page; once it is gone a slim pill row (one 56 px
+  // line) sticks below the header. It takes no space in the flow, and is inert and click-through
+  // while hidden, so it never stacks a second tall bar over the dishes.
+  assert.match(cravings, /"pointer-events-none sticky z-30 -mb-14 h-14"/);
+  assert.match(cravings, /inert=\{!stuck\}/);
+  assert.match(cravings, /rootMargin: "-80px 0px 0px 0px"/);
   assert.match(cravings, /compact \? "top-\[3\.75rem\]" : "top-0"/);
   assert.match(cravings, /hidden \? "md:top-0" : "md:top-\[4\.25rem\] lg:top-\[4\.65rem\]"/);
   assert.doesNotMatch(cravings, /translate-y-\[var\(--craves-mobile-search-offset/);

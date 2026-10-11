@@ -1,5 +1,6 @@
 import { FaMinus, FaPlus, FaTrashCan } from "react-icons/fa6";
 import { AnimateCount } from "@/shared/ui/AnimateCount";
+import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
 import type { CartItem } from "@/features/cart/api/cravesCart";
 
 interface CartItemRowProps {
@@ -28,19 +29,21 @@ export function CartItemRow({
   return (
     <article className="grid grid-cols-[4.75rem_minmax(0,1fr)] gap-3 bg-white py-4 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-center">
       <div className="relative flex aspect-square w-[4.75rem] items-center justify-center overflow-hidden rounded-[8px] bg-[#F1F3F5] sm:w-[5.5rem]">
-        <img
-          src={item.img}
-          alt={item.imageIsPlaceholder ? "" : item.name}
-          aria-hidden={item.imageIsPlaceholder || undefined}
-          loading={priorityImage ? "eager" : "lazy"}
-          decoding="async"
-          fetchPriority={priorityImage ? "high" : "auto"}
-          className={
-            item.imageIsPlaceholder
-              ? "h-14 w-14 object-contain opacity-70"
-              : "h-full w-full object-cover"
-          }
-        />
+        {item.imageIsPlaceholder ? (
+          <img src={item.img} alt="" aria-hidden="true" decoding="async" className="h-14 w-14 object-contain opacity-70" />
+        ) : (
+          // A photo that fails to load shows a calm "No photo" tile, never the dish name as broken alt text.
+          <ProgressiveImage
+            src={item.img}
+            alt={item.name}
+            fill
+            sizes="88px"
+            loading={priorityImage ? "eager" : "lazy"}
+            fetchPriority={priorityImage ? "high" : "auto"}
+            fallbackLabel="No photo"
+            className="object-cover"
+          />
+        )}
       </div>
 
       <div className="min-w-0">

@@ -24,7 +24,6 @@ import { DishImageHeader } from "@/features/dish/components/DishImageHeader";
 import { DishInfoSummary } from "@/features/dish/components/DishInfoSummary";
 import { ChefInfoCard } from "@/features/dish/components/ChefInfoCard";
 import { QuickInfoChips } from "@/features/dish/components/QuickInfoChips";
-import { AboutDishSection } from "@/features/dish/components/AboutDishSection";
 import { WhatsInsideCard } from "@/features/dish/components/WhatsInsideCard";
 import { CustomerReviewsSection } from "@/features/dish/components/CustomerReviewsSection";
 import { SimilarDishesSection } from "@/features/dish/components/SimilarDishesSection";
@@ -306,42 +305,15 @@ function DishDetailPage() {
       <DetailBrowseHeader returnPath={`/dish/${id}`} onBack={handleBack} />
 
       <main className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
-        <div className="grid gap-7 lg:grid-cols-[minmax(0,1.45fr)_minmax(19rem,0.9fr)] lg:items-start lg:justify-center xl:grid-cols-[minmax(0,42rem)_24rem] xl:gap-9">
-          <div className="min-w-0">
+        {/* Phones and tablets read photo, name and price, then the rest (one description, not two).
+            Wide screens keep the summary card beside the photo and details. */}
+        <div className="grid gap-y-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(19rem,0.9fr)] lg:grid-rows-[auto_1fr] lg:items-start lg:justify-center lg:gap-x-7 lg:gap-y-3 xl:grid-cols-[minmax(0,42rem)_24rem] xl:gap-x-9">
+          <div className="min-w-0 lg:col-start-1 lg:row-start-1">
             <DishImageHeader dish={dish} />
-
-            {/* Gaps, not dots, separate the facts, so a wrapped line never starts or ends on a stray "·". */}
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-xs font-bold text-[#6B6B6B]">
-              <span className="inline-flex items-center gap-2 text-[#1A1A1A]">
-                <span className="h-2.5 w-2.5 rounded-full bg-[#2E7D32]" aria-hidden="true" />
-                Available today
-              </span>
-              <span>Prepared after you order</span>
-              <span className="inline-flex items-center gap-1.5">
-                <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-                {dish.time}
-              </span>
-            </div>
-
-            <ChefInfoCard
-              chefId={dish.kitchenId}
-              chefName={dish.chef}
-              rating={reviewSummary?.overallAverage ?? dish.rating}
-              reviewCount={reviewSummary?.reviewCount ?? null}
-              distanceMeters={dish.distanceMeters}
-            />
-
-            <AboutDishSection description={dish.desc} />
-            {dish.ingredients && dish.ingredients.length > 0 ? (
-              <WhatsInsideCard ingredients={dish.ingredients} />
-            ) : null}
-            {dish.reviews && dish.reviews.length > 0 ? (
-              <CustomerReviewsSection reviews={dish.reviews} />
-            ) : null}
           </div>
 
-          <aside className="lg:sticky lg:top-[5.75rem] lg:self-start">
-            <div className="rounded-[1.8rem] border border-[#E5E7EB] bg-white p-5 shadow-[0_16px_42px_rgba(26,26,26,0.08)] sm:p-6">
+          <aside className="min-w-0 lg:sticky lg:top-[5.75rem] lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
+            <div className="lg:rounded-[1.8rem] lg:border lg:border-[#E5E7EB] lg:bg-white lg:p-6 lg:shadow-[0_16px_42px_rgba(26,26,26,0.08)]">
               <DishInfoSummary dish={dish} />
 
               <div className="mt-5 flex items-end justify-between gap-4 border-b border-[#F1F3F5] pb-5">
@@ -433,6 +405,36 @@ function DishDetailPage() {
               </p>
             ) : null}
           </aside>
+
+          <div className="min-w-0 lg:col-start-1 lg:row-start-2">
+            {/* Gaps, not dots, separate the facts, so a wrapped line never starts or ends on a stray "·". */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-xs font-bold text-[#6B6B6B]">
+              <span className="inline-flex items-center gap-2 text-[#1A1A1A]">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#2E7D32]" aria-hidden="true" />
+                Available today
+              </span>
+              <span>Prepared after you order</span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                {dish.time}
+              </span>
+            </div>
+
+            <ChefInfoCard
+              chefId={dish.kitchenId}
+              chefName={dish.chef}
+              rating={reviewSummary?.overallAverage ?? dish.rating}
+              reviewCount={reviewSummary?.reviewCount ?? null}
+              distanceMeters={dish.distanceMeters}
+            />
+
+            {dish.ingredients && dish.ingredients.length > 0 ? (
+              <WhatsInsideCard ingredients={dish.ingredients} />
+            ) : null}
+            {dish.reviews && dish.reviews.length > 0 ? (
+              <CustomerReviewsSection reviews={dish.reviews} />
+            ) : null}
+          </div>
         </div>
 
         <div className="mt-9 border-t border-[#E5E7EB] pt-1">

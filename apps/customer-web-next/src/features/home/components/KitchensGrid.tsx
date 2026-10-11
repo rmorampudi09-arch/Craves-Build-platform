@@ -98,9 +98,11 @@ function KitchenDishPreview({
   autoplay?: boolean;
   order?: number;
 }) {
+  // A photo that fails to load leaves the slideshow instead of showing a broken image.
+  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const usable = useMemo(
-    () => Array.from(new Set(images.filter(Boolean))).slice(0, 5),
-    [images],
+    () => Array.from(new Set(images.filter((src) => src && !failed.has(src)))).slice(0, 5),
+    [images, failed],
   );
   const count = usable.length;
   const stripRef = useRef<HTMLDivElement>(null);
@@ -212,6 +214,7 @@ function KitchenDishPreview({
             fetchPriority={priority && index === 0 ? "high" : "auto"}
             draggable={false}
             onLoad={index === 0 ? () => setFirstShown(true) : undefined}
+            onError={() => setFailed((current) => new Set(current).add(src))}
             className={
               index === 0
                 ? `${slide} transition-opacity duration-300 ${firstShown ? "opacity-100" : "opacity-0"}`

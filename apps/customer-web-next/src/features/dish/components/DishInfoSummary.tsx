@@ -1,4 +1,5 @@
-import { Star } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, Star } from "lucide-react";
 import type { Dish } from "@/features/dish/api/dishes";
 
 function foodMeta(dish: Dish) {
@@ -14,6 +15,8 @@ function foodMeta(dish: Dish) {
 
 export function DishInfoSummary({ dish }: { dish: Dish }) {
   const food = foodMeta(dish);
+  const [expanded, setExpanded] = useState(false);
+  const long = dish.desc.length > 160;
 
   return (
     <div>
@@ -30,9 +33,21 @@ export function DishInfoSummary({ dish }: { dish: Dish }) {
       <h1 className="mt-4 font-display text-3xl font-black leading-[1.05] tracking-[-0.045em] text-[#1A1A1A] md:text-4xl">
         {dish.name}
       </h1>
-      <p className="mt-3 text-sm leading-6 text-[#6B6B6B] sm:text-[0.95rem]">
+      {/* Chefs can write up to 2,000 characters: long ones fold to three lines so the price stays in view. */}
+      <p className={`mt-3 max-w-prose text-sm leading-6 text-[#6B6B6B] sm:text-[0.95rem] ${long && !expanded ? "line-clamp-3" : ""}`}>
         {dish.desc}
       </p>
+      {long ? (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+          className="!mt-1 !inline-flex !min-h-11 !items-center !gap-1 !rounded-none !border-0 !bg-transparent !p-0 !text-sm !font-black !text-[#C4200F] !shadow-none"
+        >
+          {expanded ? "Read less" : "Read more"}
+          <ChevronDown className={`h-4 w-4 transition-transform duration-(--dur-micro) ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
+        </button>
+      ) : null}
 
       {dish.rating > 0 ? (
         <p className="mt-3 flex items-center gap-1.5 text-sm text-[#1A1A1A]">

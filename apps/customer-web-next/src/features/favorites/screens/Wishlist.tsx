@@ -19,6 +19,7 @@ import { loadSession } from "@/features/auth/api/cravesAuth";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
 import { CustomerFloatingCart } from "@/features/cart/components/CustomerFloatingCart";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
 import { useReturnScroll } from "@/shared/lib/return-scroll";
 
 function money(amount: number, currency = "INR"): string {
@@ -200,17 +201,17 @@ function WishlistPage() {
                   <Link
                     to="/dish/$id"
                     params={{ id: item.id }}
-                    className="shrink-0 overflow-hidden rounded-xl bg-[#F1F3F5]"
+                    className="relative h-[82px] w-[82px] shrink-0 overflow-hidden rounded-xl bg-[#F1F3F5]"
                   >
-                    <img
+                    <ProgressiveImage
                       src={item.img}
                       alt={item.name}
-                      width={82}
-                      height={82}
+                      fill
+                      sizes="82px"
                       loading={index < 4 ? "eager" : "lazy"}
-                      decoding="async"
                       fetchPriority={index < 4 ? "high" : "auto"}
-                      className="h-[82px] w-[82px] object-cover transition-transform duration-300 group-hover:scale-[1.035]"
+                      fallbackLabel="No photo"
+                      className="object-cover group-hover:scale-[1.035]"
                     />
                   </Link>
 

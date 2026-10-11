@@ -118,10 +118,17 @@ function DishBody() {
   return (
     <>
       <div className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
-        <div className="grid gap-7 lg:grid-cols-[minmax(0,1.45fr)_minmax(19rem,0.9fr)]">
-          <div>
-            <SkeletonBlock className="aspect-[4/3] w-full rounded-[1.65rem] md:aspect-[16/10] md:rounded-[2rem]" />
-            <SkeletonBlock className="mt-3 h-11 w-full rounded-2xl" soft />
+        {/* Same order as the page: photo, name and price, then the kitchen (side by side on wide screens). */}
+        <div className="grid gap-y-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(19rem,0.9fr)] lg:grid-rows-[auto_1fr] lg:gap-x-7 lg:gap-y-3">
+          <SkeletonBlock className="aspect-[4/3] w-full rounded-[1.65rem] md:aspect-[16/10] md:rounded-[2rem] lg:col-start-1 lg:row-start-1" />
+          <div className="space-y-3 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start lg:rounded-[1.8rem] lg:border lg:border-[#E5E7EB] lg:p-6">
+            <SkeletonBlock className="h-7 w-3/4 rounded-full" />
+            <SkeletonBlock className="h-3.5 w-full rounded-full" soft />
+            <SkeletonBlock className="h-3.5 w-5/6 rounded-full" soft />
+            <SkeletonBlock className="mt-4 h-9 w-28 rounded-full" />
+          </div>
+          <div className="lg:col-start-1 lg:row-start-2">
+            <SkeletonBlock className="h-11 w-full rounded-2xl" soft />
             <div className="mt-5 flex items-center gap-3">
               <SkeletonBlock className="h-12 w-12 shrink-0 rounded-full" />
               <div className="flex-1 space-y-2">
@@ -129,12 +136,6 @@ function DishBody() {
                 <SkeletonBlock className="h-3 w-1/3 rounded-full" soft />
               </div>
             </div>
-          </div>
-          <div className="space-y-3 rounded-[1.8rem] border border-[#E5E7EB] p-5">
-            <SkeletonBlock className="h-7 w-3/4 rounded-full" />
-            <SkeletonBlock className="h-3.5 w-full rounded-full" soft />
-            <SkeletonBlock className="h-3.5 w-5/6 rounded-full" soft />
-            <SkeletonBlock className="mt-4 h-9 w-28 rounded-full" />
           </div>
         </div>
       </div>

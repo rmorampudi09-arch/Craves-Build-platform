@@ -23,7 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class SubscriptionPaymentStatusService {
     private static final String EVENT_TYPE = "SUBSCRIPTION_PAYMENT_STATUS_CHANGED";
     private static final String PAUSE_VOIDED = SubscriptionBillingRepository.PAUSE_VOIDED;
-    private static final String PAID_AFTER_VOID = "PAYMENT_RECEIVED_FOR_VOIDED_CYCLE";
+    private static final String PAID_AFTER_VOID = SubscriptionBillingRepository.PAID_AFTER_VOID;
     private static final Set<String> STATUSES = Set.of("PAYMENT_PENDING", "PAID", "FAILED", "CANCELLED");
 
     private final JdbcTemplate jdbcTemplate;

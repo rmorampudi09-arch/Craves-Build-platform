@@ -243,19 +243,22 @@ public class SubscriptionRepository {
     }
 
     @Transactional
-    public SubscriptionResponse updateSubscriptionStatus(UUID id, String newStatus, String reason, UUID actorIdentityId) {
-        SubscriptionResponse existing = findSubscriptionById(id)
-            .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
+    public SubscriptionResponse updateSubscriptionStatus(UUID id, String expectedStatus, String newStatus, String reason, UUID actorIdentityId) {
+        // Only from the status the caller read, so two concurrent changes (e.g. two resumes) cannot both apply.
         int updated = jdbcTemplate.update(
-            "UPDATE subscription_schema.customer_subscription SET status = ?, updated_at = now() WHERE id = ?",
+            "UPDATE subscription_schema.customer_subscription SET status = ?, updated_at = now() WHERE id = ? AND status = ?",
             newStatus,
-            id
+            id,
+            expectedStatus
         );
         if (updated == 0) {
-            throw ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found");
+            if (findSubscriptionById(id).isEmpty()) {
+                throw ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found");
+            }
+            throw ApiException.conflict("SUBSCRIPTION_STATE_CHANGED", "Subscription status changed before this update could be applied");
         }
-        if (!existing.status().equals(newStatus)) {
-            insertHistory(id, existing.status(), newStatus, reason, actorIdentityId);
+        if (!expectedStatus.equals(newStatus)) {
+            insertHistory(id, expectedStatus, newStatus, reason, actorIdentityId);
         }
         return findSubscriptionById(id)
             .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));

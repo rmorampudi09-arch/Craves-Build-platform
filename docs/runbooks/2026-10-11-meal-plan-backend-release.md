@@ -30,9 +30,10 @@ Branch `feat/meal-plan-backend`. It backs the redesigned meal-plan screens in ap
 
 ## Pause and resume billing (fixed 2026-10-12, branch fix/meal-plan-pause-credit)
 
-- **Paused paid days carry forward.** On resume (customer or admin) the paid days lost to the pause are recorded as a ₹0 PAID invoice with `provider_reference = 'PAUSE_CREDIT'` after the last standing cycle, and `next_billing_date` moves past it.
-- **Unpaid cycles that started during a pause are voided** (`status = 'CANCELLED'`, `failure_code = 'PAUSED_CYCLE_VOIDED'`), so they cannot be paid or billed again.
-- **A payment that still arrives for a voided cycle** is kept with `failure_code = 'PAYMENT_RECEIVED_FOR_VOIDED_CYCLE'` for a manual refund; it never reactivates or fails the plan. Admin pause, cancel and expire now also stop queued meals, as the customer paths do.
+- **Paused paid days carry forward.** On resume (customer or admin) the paid days inside the pause, counted from the day after the last meal already sent to the chef, are recorded as a ₹0 PAID invoice with `provider_reference = 'PAUSE_CREDIT'` after the last standing cycle, and `next_billing_date` moves past it. An earlier credit that has not started yet is laid out again with the new one, so no unpaid gap is left before it.
+- **Unpaid cycles that started before the resume are voided** (`status = 'CANCELLED'`, `failure_code = 'PAUSED_CYCLE_VOIDED'`), so they are not billed again. Integration Service is not told: its payment intent stays payable, and the app keeps offering it as the latest invoice until a newer one is raised. Fix that in Integration Service before switching billing on.
+- **A payment that still arrives for a voided cycle** is kept with `failure_code = 'PAYMENT_RECEIVED_FOR_VOIDED_CYCLE'` for a manual refund; it never reactivates or fails the plan. Find them with `SELECT id, subscription_id, amount, paid_at FROM subscription_schema.subscription_invoice WHERE failure_code = 'PAYMENT_RECEIVED_FOR_VOIDED_CYCLE';`
+- **Admin status changes** apply only from the status the admin screen read (a concurrent change returns 409 `SUBSCRIPTION_STATE_CHANGED`), and admin pause, cancel and expire stop queued meals, as the customer paths do.
 
 ## Before merge
 

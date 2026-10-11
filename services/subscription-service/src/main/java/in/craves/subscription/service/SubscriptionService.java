@@ -188,7 +188,9 @@ public class SubscriptionService {
         } else if (Set.of("PAYMENT_FAILED", "EXPIRED", "CANCELLED").contains(normalized)) {
             capacityService.releaseForPauseOrTerminal(subscription, LocalDate.now(BUSINESS_ZONE), "Administrator moved subscription to " + normalized + ": " + reason.trim());
         }
-        SubscriptionResponse updated = repository.updateSubscriptionStatus(subscription.id(), normalized, reason.trim(), user.identityId());
+        SubscriptionResponse updated = repository.updateSubscriptionStatus(
+            subscription.id(), subscription.status(), normalized, reason.trim(), user.identityId()
+        );
         if (Set.of("PAUSED", "CANCELLED", "EXPIRED").contains(normalized)) {
             // The order worker sends every queued meal without checking the plan, so stop them here as the customer paths do.
             lifecycleRepository.cancelUndispatchedOccurrences(subscription.id(), user.identityId(), "ADMIN_STATUS_CHANGE");

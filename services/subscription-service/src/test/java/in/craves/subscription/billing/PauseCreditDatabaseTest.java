@@ -67,6 +67,59 @@ class PauseCreditDatabaseTest {
         assertEquals("PAID",invoiceRow(paid).get("status"));
     }
 
+    void pausedAgainAt(String instant){db.update("INSERT INTO subscription_schema.subscription_status_history(subscription_id,old_status,new_status,reason,created_at) VALUES (?,'ACTIVE','PAUSED','Again',CAST(? AS timestamptz))",subscription,instant);}
+    void credit(UUID id,LocalDate start,LocalDate end){db.update("INSERT INTO subscription_schema.subscription_invoice(id,subscription_id,plan_id,customer_identity_id,chef_identity_id,cycle_start,cycle_end,amount,currency,status,provider_reference,paid_at) VALUES (?,?,?,?,?,?,?,0,'INR','PAID','PAUSE_CREDIT',now())",id,subscription,plan,customer,chef,start,end);}
+    void mealSentToChef(LocalDate serviceDate){db.update("INSERT INTO subscription_schema.subscription_occurrence(id,subscription_id,plan_id,customer_identity_id,chef_identity_id,delivery_address_id,service_date,service_at,schedule_version,status,meal_slot_code) VALUES (?,?,?,?,?,?,?,CAST(? AS timestamptz),1,'ORDER_CREATED','LUNCH')",UUID.randomUUID(),subscription,plan,customer,chef,UUID.randomUUID(),serviceDate,serviceDate+"T06:30:00Z");}
+
+    @Test void secondPauseLaysTheUnstartedCreditOutAgainWithoutAGap() {
+        UUID earlier=UUID.randomUUID();credit(earlier,d("10-19"),d("10-21"));
+        db.update("UPDATE subscription_schema.customer_subscription SET next_billing_date=? WHERE id=?",d("10-21"),subscription);
+        pausedAgainAt("2026-10-10T04:00:00Z");
+
+        // 2 paid days paused (10-10, 10-11) + the 2 unstarted credit days, laid out from the resume.
+        assertEquals(new PauseCredit(d("10-15"),4,d("10-19")),resume(d("10-15")));
+
+        assertEquals("PAUSED_CYCLE_VOIDED",invoiceRow(open).get("failure_code"));
+        assertEquals(List.of(Map.of("id",earlier,"cycle_start",java.sql.Date.valueOf(d("10-15")),"cycle_end",java.sql.Date.valueOf(d("10-19")))),
+            db.queryForList("SELECT id,cycle_start,cycle_end FROM subscription_schema.subscription_invoice WHERE provider_reference='PAUSE_CREDIT'"));
+        assertEquals(d("10-19"),nextBilling());
+    }
+
+    @Test void unpaidGapInsideThePauseIsNotCredited() {
+        db.update("UPDATE subscription_schema.subscription_invoice SET status='FAILED' WHERE id=?",open);
+        invoice(UUID.randomUUID(),d("10-19"),d("10-26"),"PAID");
+        db.update("UPDATE subscription_schema.customer_subscription SET next_billing_date=? WHERE id=?",d("10-26"),subscription);
+        pausedAgainAt("2026-10-14T04:00:00Z");
+
+        assertEquals(new PauseCredit(d("10-26"),3,d("10-29")),resume(d("10-22")));
+        assertEquals("PAUSED_CYCLE_VOIDED",invoiceRow(open).get("failure_code"));
+    }
+
+    @Test void refundFlagSurvivesALaterResume() {
+        db.update("UPDATE subscription_schema.subscription_invoice SET status='CANCELLED',failure_code='PAYMENT_RECEIVED_FOR_VOIDED_CYCLE' WHERE id=?",open);
+
+        assertEquals(new PauseCredit(d("10-25"),5,d("10-30")),resume(d("10-25")));
+
+        assertEquals("PAYMENT_RECEIVED_FOR_VOIDED_CYCLE",invoiceRow(open).get("failure_code"));
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM subscription_schema.subscription_invoice_history WHERE invoice_id=?",Integer.class,open));
+    }
+
+    @Test void creditStartsAfterTheLastMealStillSentToTheChef() {
+        // Paused on 10-07 but the 10-07 and 10-08 meals had already gone to the chef and were delivered.
+        mealSentToChef(d("10-07"));mealSentToChef(d("10-08"));
+
+        assertEquals(new PauseCredit(d("10-14"),3,d("10-17")),resume(d("10-14")));
+    }
+
+    @Test void adminStatusChangeFromAStaleStatusIsRejected() {
+        var subscriptions=new in.craves.subscription.repository.SubscriptionRepository(db);
+        // Someone else already resumed it: the admin screen still thinks it is PAUSED.
+        var error=assertThrows(in.craves.subscription.exception.ApiException.class,
+            ()->subscriptions.updateSubscriptionStatus(subscription,"PAUSED","ACTIVE","Customer asked by phone",UUID.randomUUID()));
+        assertEquals("SUBSCRIPTION_STATE_CHANGED",error.getCode());
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM subscription_schema.subscription_status_history WHERE subscription_id=? AND new_status='ACTIVE'",Integer.class,subscription));
+    }
+
     @Test void keepsOpenInvoiceThatStartsAfterResume() {
         assertEquals(new PauseCredit(d("10-19"),2,d("10-21")),resume(d("10-09")));
 

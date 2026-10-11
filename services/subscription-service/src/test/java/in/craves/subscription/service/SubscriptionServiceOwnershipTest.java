@@ -194,6 +194,8 @@ class SubscriptionServiceOwnershipTest {
 
         // With no next service date the admin resume starts today.
         verify(billingRepository).applyPauseCredit(SUBSCRIPTION_ID, TODAY);
+        // The status change only applies if nobody changed the plan since it was read.
+        verify(repository).updateSubscriptionStatus(SUBSCRIPTION_ID, "PAUSED", "ACTIVE", "Customer asked by phone", ADMIN.identityId());
     }
 
     @Test

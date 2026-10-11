@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 
 import { LocalDiscoveryPage } from "@/features/seo/components/LocalDiscoveryPage";
 import {
+  areaBySlug,
+  areaSlug,
+  cityAreaUrl,
   cityBySlug,
   cityFoodUrl,
   foodBySlug,
@@ -11,21 +14,44 @@ import {
   seoKeywords,
 } from "@/features/seo/lib/seo-craves";
 
+// The second segment is either a food intent (/hyderabad/biryani) or a neighborhood (/hyderabad/gachibowli).
 type CityFoodPageProps = {
   params: Promise<{ city: string; food: string }>;
 };
 
 export function generateStaticParams() {
-  return launchCities.flatMap((city) =>
-    foodIntents.map((food) => ({ city: city.slug, food: food.slug })),
-  );
+  return launchCities.flatMap((city) => [
+    ...foodIntents.map((food) => ({ city: city.slug, food: food.slug })),
+    ...city.neighborhoods.map((area) => ({ city: city.slug, food: areaSlug(area) })),
+  ]);
 }
 
 export async function generateMetadata({ params }: CityFoodPageProps): Promise<Metadata> {
-  const { city: citySlug, food: foodSlug } = await params;
+  const { city: citySlug, food: slug } = await params;
   const city = cityBySlug(citySlug);
-  const food = foodBySlug(foodSlug);
-  if (!city || !food) return {};
+  if (!city) return {};
+
+  const area = areaBySlug(city, slug);
+  if (area) {
+    const url = cityAreaUrl(city, area);
+    return {
+      title: `Homemade Food in ${area}, ${city.name} – Home Chefs & Delivery | Craves`,
+      description: `Looking for food in ${area}, ${city.name}? Order fresh homemade meals, biryani, tiffin and home-cooked lunch & dinner from trusted home chefs near ${area} on Craves.`,
+      keywords: seoKeywords(city, undefined, area),
+      alternates: { canonical: url },
+      openGraph: {
+        title: `Homemade food in ${area}, ${city.name} | Craves`,
+        description: `Fresh home-cooked meals from trusted home chefs near ${area}, ${city.name}.`,
+        url,
+        siteName: "Craves",
+        locale: "en_IN",
+        type: "website",
+      },
+    };
+  }
+
+  const food = foodBySlug(slug);
+  if (!food) return {};
 
   return {
     title: `${food.name} in ${city.searchName} | Craves`,
@@ -43,10 +69,15 @@ export async function generateMetadata({ params }: CityFoodPageProps): Promise<M
 }
 
 export default async function CityFoodPage({ params }: CityFoodPageProps) {
-  const { city: citySlug, food: foodSlug } = await params;
+  const { city: citySlug, food: slug } = await params;
   const city = cityBySlug(citySlug);
-  const food = foodBySlug(foodSlug);
-  if (!city || !food) notFound();
+  if (!city) notFound();
+
+  const area = areaBySlug(city, slug);
+  if (area) return <LocalDiscoveryPage city={city} area={area} mode="city-area" />;
+
+  const food = foodBySlug(slug);
+  if (!food) notFound();
 
   return <LocalDiscoveryPage city={city} food={food} mode="city-food" />;
 }

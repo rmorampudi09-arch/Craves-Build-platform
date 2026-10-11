@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { StructuredData } from "@/features/seo/components/StructuredData";
 import {
+  areaSlug,
   cityFoodUrl,
   cityStructuredData,
   foodIntents,
@@ -13,18 +14,23 @@ import {
 type LocalDiscoveryPageProps = {
   city?: LaunchCity;
   food?: FoodIntent;
-  mode: "city" | "city-food" | "food";
+  area?: string;
+  mode: "city" | "city-food" | "city-area" | "food";
 };
 
-export function LocalDiscoveryPage({ city, food, mode }: LocalDiscoveryPageProps) {
+export function LocalDiscoveryPage({ city, food, area, mode }: LocalDiscoveryPageProps) {
   const title =
-    mode === "city-food" && city && food
+    mode === "city-area" && city && area
+      ? `Homemade food in ${area}, ${city.name}`
+      : mode === "city-food" && city && food
       ? `${food.name} in ${city.searchName}`
       : mode === "food" && food
         ? `${food.name} from Craves home chefs`
         : `Homemade food in ${city?.searchName ?? "your city"}`;
   const intro =
-    mode === "city-food" && city && food
+    mode === "city-area" && city && area
+      ? `Craves brings fresh homemade food from trusted home chefs to ${area}, ${city.name}. Browse nearby kitchens, order biryani, tiffin, breakfast, lunch and dinner cooked at home, pay securely, and track your delivery.`
+      : mode === "city-food" && city && food
       ? `${food.description} ${city.searchName} is a primary Craves launch market, so this page helps customers and search engines connect that food intent with Craves.`
       : mode === "food" && food
         ? `${food.description} Craves connects food intent to live home-chef discovery, checkout, payments, and delivery-supported ordering.`
@@ -32,7 +38,7 @@ export function LocalDiscoveryPage({ city, food, mode }: LocalDiscoveryPageProps
 
   return (
     <main className="min-h-screen bg-white text-[#2B1A12]">
-      {city ? <StructuredData data={cityStructuredData(city, food)} /> : null}
+      {city ? <StructuredData data={cityStructuredData(city, food, area)} /> : null}
       <header className="border-b border-black/5">
         <div className="mx-auto flex min-h-20 max-w-6xl items-center justify-between px-4 md:px-6">
           <Link href="/" className="font-display text-2xl font-black text-[#F62E18]">
@@ -79,12 +85,18 @@ export function LocalDiscoveryPage({ city, food, mode }: LocalDiscoveryPageProps
         {city ? (
           <section className="mt-10 rounded-3xl bg-[#F1F3F5] p-7">
             <h2 className="font-display text-2xl font-bold">
-              Areas Craves is preparing for in {city.searchName}
+              Homemade food across {city.name}
             </h2>
             <ul className="mt-4 flex flex-wrap gap-2">
-              {city.neighborhoods.map((area) => (
-                <li key={area} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black/70">
-                  {area}
+              {city.neighborhoods.map((item) => (
+                <li key={item}>
+                  <Link
+                    href={`/${city.slug}/${areaSlug(item)}`}
+                    aria-current={item === area ? "page" : undefined}
+                    className="inline-block rounded-full bg-white px-4 py-2 text-sm font-semibold text-black/70 hover:text-[#F62E18]"
+                  >
+                    {item}
+                  </Link>
                 </li>
               ))}
             </ul>

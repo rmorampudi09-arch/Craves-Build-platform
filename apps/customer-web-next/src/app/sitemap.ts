@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import {
+  cityAreaUrl,
   cityFoodUrl,
   cityUrl,
   foodIntents,
@@ -39,6 +40,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: food.slug === "homemade-food" ? 0.85 : 0.75,
     })),
   );
+  const cityAreaRoutes = launchCities.flatMap((city) =>
+    city.neighborhoods.map((area) => ({
+      url: cityAreaUrl(city, area),
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.8,
+    })),
+  );
   const foodRoutes = foodIntents.map((food) => ({
     url: foodUrl(food),
     lastModified: now,
@@ -55,6 +64,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     })),
     ...cityRoutes,
     ...cityFoodRoutes,
+    ...cityAreaRoutes,
     ...foodRoutes,
   ];
 }

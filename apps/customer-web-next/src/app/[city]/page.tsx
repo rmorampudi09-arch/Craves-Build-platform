@@ -18,8 +18,8 @@ export async function generateMetadata({ params }: CityPageProps): Promise<Metad
   if (!city) return {};
 
   return {
-    title: `Homemade food in ${city.searchName} | Craves`,
-    description: `Find Craves homemade food, trusted home chefs, live dishes, secure checkout, and delivery-supported ordering in ${city.searchName}.`,
+    title: `Best Homemade Food in ${city.name} – Order from Home Chefs | Craves`,
+    description: `Order homemade food anywhere in ${city.searchName}: biryani, tiffin, breakfast, lunch and dinner from trusted home chefs near you, with secure checkout and delivery on Craves.`,
     keywords: seoKeywords(city),
     alternates: { canonical: cityUrl(city) },
     openGraph: {

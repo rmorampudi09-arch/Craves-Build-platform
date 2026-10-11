@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     template: "%s",
   },
   description:
-    "Discover homemade food, trusted home chefs, live dishes, secure checkout, and delivery-supported ordering in Hyderabad and Bangalore with Craves.",
+    "Order fresh homemade food from trusted home chefs anywhere in Hyderabad and Bangalore. Home-style biryani, tiffin, breakfast, lunch, dinner and meal subscriptions, with secure checkout and delivery on Craves.",
   keywords: seoKeywords(),
   authors: [{ name: "Craves" }],
   robots: { index: true, follow: true },

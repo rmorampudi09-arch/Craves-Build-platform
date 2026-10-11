@@ -23,7 +23,9 @@ public class OrderLifecycleService {
     }
     public void delivered(JsonNode body) {
         Json.fields(body,"chefOrderId","version","deliveredAt","sourceSnapshotHash");
-        UUID order=Json.uuid(body,"chefOrderId"); Map<String,Object> state=locks.lockOrder(order);
+        UUID order=Json.uuid(body,"chefOrderId");
+        if(excluded(order)) return;
+        Map<String,Object> state=locks.lockOrder(order);
         Map<String,Object> snapshot=locks.snapshot(order);
         require(snapshot.get("source_hash").equals(ProgramService.hash(body,"sourceSnapshotHash",true)),409,"SOURCE_SNAPSHOT_MISMATCH");
         int version=Json.integer(body,"version",1,Integer.MAX_VALUE); String hash=Json.hash(body);
@@ -36,7 +38,9 @@ public class OrderLifecycleService {
     public void financeConfirmed(JsonNode body) {
         Json.fields(body,"chefOrderId","version","sourceSnapshotHash","verifiedCapture","capturedCheckoutPaise",
             "commissionBudgetPaise","cumulativeFoodRefundPaise","observedAt","evidenceRef","currency","paidAt");
-        UUID order=Json.uuid(body,"chefOrderId"); Map<String,Object> state=locks.lockOrder(order);
+        UUID order=Json.uuid(body,"chefOrderId");
+        if(excluded(order)) return;
+        Map<String,Object> state=locks.lockOrder(order);
         Map<String,Object> snapshot=locks.snapshot(order), checkout=locks.checkout(uuid(snapshot,"checkout_id"));
         int version=Json.integer(body,"version",1,Integer.MAX_VALUE); String hash=Json.hash(body);
         if(!locks.newVersion(state,"finance",version,hash)) return;
@@ -65,7 +69,9 @@ public class OrderLifecycleService {
     }
     public void refunded(JsonNode body) {
         Json.fields(body,"chefOrderId","version","cumulativeFoodRefundPaise","fullCheckoutRefund","reasonRef");
-        UUID order=Json.uuid(body,"chefOrderId"); Map<String,Object> state=locks.lockOrder(order);
+        UUID order=Json.uuid(body,"chefOrderId");
+        if(excluded(order)) return;
+        Map<String,Object> state=locks.lockOrder(order);
         Map<String,Object> snapshot=locks.snapshot(order);
         int version=Json.integer(body,"version",1,Integer.MAX_VALUE); String hash=Json.hash(body);
         if(!locks.newVersion(state,"refund",version,hash)) return;
@@ -78,5 +84,9 @@ public class OrderLifecycleService {
             db.update("UPDATE referral_schema.checkout SET full_refund=true WHERE checkout_id=?",checkout);
             reversals.fullCheckout(checkout,"full-refund:"+order+":"+version,reason);
         } else reversals.order(order,"refund:"+order+":"+version,reason);
+    }
+    /** An order whose seller never enrolled was recorded as not applicable; its events change nothing. */
+    private boolean excluded(UUID order) {
+        return db.count("SELECT count(*) FROM referral_schema.order_exclusion WHERE order_id=?",order)>0;
     }
 }

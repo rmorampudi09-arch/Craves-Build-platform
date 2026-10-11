@@ -38,7 +38,21 @@ public class OrderBindingService {
         if(!existing.isEmpty()) {
             ProgramService.same(existing.getFirst().get("binding_hash"),bindingHash,"ORDER_BINDING_CONFLICT"); return;
         }
+        List<Map<String,Object>> excluded=db.rows("SELECT binding_hash FROM referral_schema.order_exclusion WHERE order_id=?",order);
+        if(!excluded.isEmpty()) {
+            ProgramService.same(excluded.getFirst().get("binding_hash"),bindingHash,"ORDER_BINDING_CONFLICT"); return;
+        }
         Map<String,Object> policy=program.policyAt(created);
+        if(in.craves.referral.core.ChefReferralPolicy.VERSION.equals(policy.get("program_kind"))
+                && db.count("SELECT count(*) FROM referral_schema.member WHERE user_id=?",seller)==0) {
+            // An accepted but unapplied registration is uncertainty, not absence: retry later.
+            require(db.count("SELECT count(*) FROM referral_schema.inbox WHERE source='auth' AND aggregate_id=? AND status<>'APPLIED'",seller)==0,
+                409,"SOURCE_DEPENDENCY_MISSING");
+            db.update("INSERT INTO referral_schema.order_exclusion(order_id,checkout_id,seller_id,policy_id,reason,binding_hash) VALUES (?,?,?,?,'SELLER_NOT_ENROLLED',?)",
+                order,checkout,seller,number(policy,"id"),bindingHash);
+            db.audit("source:order","ORDER_EXCLUDED",order.toString(),Map.of("checkoutId",checkout.toString(),"reason","SELLER_NOT_ENROLLED"));
+            return;
+        }
         Map<String,Object> sellingMember=db.one("SELECT * FROM referral_schema.member WHERE user_id=?",seller);
         require(!instant(sellingMember,"registered_at").isAfter(created),422,"ORDER_PRECEDES_ACCOUNT");
         if(!in.craves.referral.core.ChefReferralPolicy.VERSION.equals(policy.get("program_kind"))) {
@@ -75,6 +89,9 @@ public class OrderBindingService {
     public void firstCheckout(JsonNode body) {
         Json.fields(body,"checkoutId","buyerUserId","firstQualifyingDelivered","confirmedAt","evidenceRef");
         UUID id=Json.uuid(body,"checkoutId"), buyer=Json.uuid(body,"buyerUserId");
+        // Every chef order of this checkout was excluded: nothing here can earn a reward.
+        if(db.count("SELECT count(*) FROM referral_schema.checkout WHERE checkout_id=?",id)==0
+                && db.count("SELECT count(*) FROM referral_schema.order_exclusion WHERE checkout_id=?",id)>0) return;
         Map<String,Object> checkout=locks.lockCheckout(id);
         require(Json.bool(body,"firstQualifyingDelivered"),422,"AUTHORITATIVE_FIRST_ORDER_REQUIRED");
         require(uuid(checkout,"buyer_id").equals(buyer),409,"BUYER_MISMATCH");

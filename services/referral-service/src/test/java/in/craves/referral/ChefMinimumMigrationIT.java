@@ -23,7 +23,7 @@ class ChefMinimumMigrationIT {
         assertTrue(before.contains("snapshot.food_paise<=25000"));
         var upgraded=Flyway.configure().dataSource(ds).schemas("referral_schema")
             .defaultSchema("referral_schema").table("referral_flyway_history")
-            .locations("classpath:db/referral_migration").cleanDisabled(true).load();
+            .locations("classpath:db/referral_migration").cleanDisabled(true).target("11").load();
         assertEquals(1,upgraded.migrate().migrationsExecuted);
         upgraded.validate();
         assertEquals(history,jdbc.queryForList("SELECT version,script,checksum FROM referral_schema.referral_flyway_history WHERE type='SQL' AND version<>'11' ORDER BY installed_rank"));

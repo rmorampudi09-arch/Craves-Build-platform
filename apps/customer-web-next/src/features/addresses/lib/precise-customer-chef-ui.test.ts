@@ -21,7 +21,7 @@ const landing = source("../../landing/screens/LandingPage.tsx");
 const home = source("../../home/screens/BrowseFoods.tsx");
 const welcome = source("../../home/components/WelcomeBanner.tsx");
 const floatingCart = source("../../home/components/FloatingCartBar.module.css");
-const cartAddressDialog = source("../../home/components/CartAddressAvailabilityDialog.tsx");
+const cartAddressBanner = source("../../home/components/CartAddressAvailabilityBanner.tsx");
 const addresses = source("../screens/Addresses.tsx");
 const checkout = source("../../checkout/screens/Checkout.tsx");
 const orders = source("../../orders/screens/OrderHistory.tsx");
@@ -182,14 +182,14 @@ test("address manager owns default selection and the shared location-first edito
 });
 
 test("home rechecks cart availability after default-address changes", () => {
-  assert.match(home, /CartAddressAvailabilityDialog/);
+  assert.match(home, /CartAddressAvailabilityBanner/);
   assert.match(home, /loadKitchenMenu/);
   assert.match(home, /unavailableCartItems/);
   assert.match(home, /removeFromCart/);
   assert.match(home, /clearCart/);
-  assert.match(cartAddressDialog, /Choose another address/);
-  assert.match(cartAddressDialog, /Remove unavailable items/);
-  assert.match(cartAddressDialog, /Clear cart & browse here/);
+  assert.match(cartAddressBanner, /Choose another address/);
+  assert.match(cartAddressBanner, /Remove unavailable items/);
+  assert.match(cartAddressBanner, /Clear cart & browse here/);
 });
 
 test("home cart bar uses a balanced true frosted-glass blur", () => {

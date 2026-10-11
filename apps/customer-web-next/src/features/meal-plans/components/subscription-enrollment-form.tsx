@@ -9,6 +9,7 @@ import {
   type PublicSubscriptionPlan,
 } from "@/features/meal-plans/lib/subscription-contract";
 import { RequiredMark } from "@/shared/ui/forms/required-mark";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 
 function newIdempotencyKey(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -17,6 +18,8 @@ function newIdempotencyKey(): string {
   return `subscription:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 }
 
+const LOADING_PLAN = "Loading your meal plan…";
+
 export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
   const router = useRouter();
   const [plan, setPlan] = useState<PublicSubscriptionPlan | null>(null);
@@ -24,7 +27,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
   const [addressId, setAddressId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [notes, setNotes] = useState("");
-  const [message, setMessage] = useState("Loading your meal plan…");
+  const [message, setMessage] = useState(LOADING_PLAN);
   const [busy, setBusy] = useState(false);
   const idempotencyKey = useRef("");
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -105,6 +108,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
     "mt-2 min-h-12 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-base text-[#1A1A1A]";
 
   if (!plan) {
+    if (message === LOADING_PLAN) return <CustomerSectionSkeleton variant="plan-form" label={LOADING_PLAN} />;
     return (
       <p role="status" className="rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]">
         {message}

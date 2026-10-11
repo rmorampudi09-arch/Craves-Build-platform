@@ -1,7 +1,7 @@
 "use client";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
-import { ChefEmpty, ChefSection, ChefSkeleton, clockTime, dateTime } from "@/features/chef/components/chef-ui";
+import { ChefEmpty, ChefSection, clockTime, dateTime } from "@/features/chef/components/chef-ui";
 import { ChefKitchenSwitch } from "@/features/chef/components/chef-kitchen-switch";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -20,6 +20,7 @@ import {
   parseChefMenuItems,
   type ChefMenuItem,
 } from "@/features/chef/lib/chef-menu-contract";
+import { ChefLoading } from "@/features/chef/components/chef-loading";
 
 type LoadState = "loading" | "ready" | "error";
 type DocumentState = ChefApplicationReadiness["documents"][number]["status"];
@@ -172,16 +173,7 @@ export function ChefOperationsWorkspace() {
     };
   }, [menu]);
 
-  if (state === "loading") {
-    return (
-      <div className="chef-stack" aria-busy="true">
-        <ChefSkeleton className="h-24" />
-        <ChefSkeleton className="h-20" />
-        <ChefSkeleton className="h-80" />
-        <p className="sr-only" role="status">Checking your kitchen</p>
-      </div>
-    );
-  }
+  if (state === "loading") return <ChefLoading shape="checklist" head={false} label="Checking your kitchen" />;
 
   if (state === "error") {
     return (

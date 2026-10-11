@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeftRight, Bell, CalendarDays, ChevronDown } from "lucide-react";
+import { Bell, CalendarDays, ChevronDown } from "lucide-react";
 import {
   FaArrowLeft,
   FaMapMarkerAlt,
@@ -17,10 +17,8 @@ import {
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
 import { rememberReturnRoute, toCustomerReturnRoute } from "@/shared/lib/return-navigation";
 import type { HomeFoodPreference } from "@/features/home/lib/home-return-state";
-import type { CravesUser } from "@/features/auth/api/cravesAuth";
 
 interface BrowseHeaderProps {
-  user?: CravesUser;
   locationLabel: string;
   locationTypeLabel?: string;
   onOpenLocation: () => void;
@@ -90,7 +88,6 @@ function FoodPreferenceQuickToggles({
 }
 
 export function BrowseHeader({
-  user,
   locationLabel,
   locationTypeLabel = "Location",
   onOpenLocation,
@@ -111,11 +108,6 @@ export function BrowseHeader({
     onOpenLocation();
   };
 
-  const isChef = Boolean(
-    user?.roles.some((role) => role.toUpperCase() === "CHEF"),
-  );
-  const chefDestination = isChef ? "/chef" : "/chef/application";
-  const chefActionLabel = isChef ? "Switch to chef mode" : "Open chef application";
   // Compact search bar slides in while scrolling back up (shared chrome controller).
   const { compact: mobileCompact } = useScrollChrome();
   const submitSearch = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -225,14 +217,6 @@ export function BrowseHeader({
             <FaUser className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
           </Link>
 
-          <Link
-            to={chefDestination}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F62E18] lg:h-10 lg:w-10 text-white shadow-[0_8px_18px_rgba(26,26,26,0.14)] transition-[translate,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(26,26,26,0.14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/35 motion-reduce:transform-none"
-            aria-label={chefActionLabel}
-            title={chefActionLabel}
-          >
-            <ArrowLeftRight className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
-          </Link>
 
           <button
             type="button"
@@ -289,14 +273,6 @@ export function BrowseHeader({
               <Bell className="h-[1.08rem] w-[1.08rem]" aria-hidden="true" />
             </Link>
 
-            <Link
-              to={chefDestination}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F62E18] text-white shadow-[0_7px_16px_rgba(26,26,26,0.14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/35"
-              aria-label={chefActionLabel}
-              title={chefActionLabel}
-            >
-              <ArrowLeftRight className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
-            </Link>
           </div>
 
           <div className="mt-2 flex items-stretch gap-2">

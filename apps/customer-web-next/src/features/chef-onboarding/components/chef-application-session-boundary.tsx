@@ -77,14 +77,14 @@ export function ChefApplicationSessionBoundary({ children }: { children: ReactNo
   const unavailable = check.scope === scope;
   return (
     <section className="cob cob-page-state" aria-busy={!unavailable}>
-      <span className="cob-icon-well cob-icon-well--neutral cob-icon-well--round">
+      <span className={`cob-icon-well cob-icon-well--round${unavailable ? " cob-icon-well--neutral" : ""}`}>
         {unavailable ? <ChefHat size={20} aria-hidden="true" /> : <Spinner red />}
       </span>
-      <h2>{unavailable ? "We couldn’t open your application" : "Opening your chef application…"}</h2>
+      <h2>{unavailable ? "We couldn’t open your application" : "Opening your application"}</h2>
       <p role="status">
         {unavailable
           ? "Check your connection and try again. If your session has ended, sign in to continue."
-          : "Checking your sign-in before loading your saved details."}
+          : "Loading your saved details…"}
       </p>
       {unavailable ? (
         <div className="cob-page-actions">

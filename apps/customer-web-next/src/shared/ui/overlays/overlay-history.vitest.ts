@@ -12,7 +12,7 @@ afterEach(cleanup);
 
 const nextTick = () => act(() => new Promise((resolve) => setTimeout(resolve, 20)));
 
-function Harness({ kind = "dialog", outside = true }: { kind?: "dialog" | "sheet"; outside?: boolean }) {
+function Harness({ kind = "dialog", outside = true, unsaved = false }: { kind?: "dialog" | "sheet"; outside?: boolean; unsaved?: boolean }) {
   const [open, setOpen] = useState(false);
   const Overlay = kind === "sheet" ? Sheet : Dialog;
   return createElement("div", null,
@@ -23,6 +23,7 @@ function Harness({ kind = "dialog", outside = true }: { kind?: "dialog" | "sheet
       onOpenChange: setOpen,
       title: "Pause meal plan?",
       closeOnOutsideTap: outside,
+      unsavedChanges: unsaved,
       footer: createElement("button", { type: "button", onClick: () => setOpen(false) }, "Keep plan"),
     }),
   );
@@ -129,6 +130,41 @@ describe("customer overlays", () => {
     tapOutside();
     expect(state()).toBe("closed");
     await nextTick();
+  });
+
+  it("asks before throwing away typed changes: Back and the close button keep the form, Discard closes it", async () => {
+    const routerPopState = vi.fn();
+    window.addEventListener("popstate", routerPopState);
+    render(createElement(Harness, { kind: "sheet", unsaved: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Open" }));
+    const entry = (window.history.state as Record<string, unknown>).cravesOverlay;
+
+    // Phone Back: the sheet stays and asks, and its history entry is back for the next Back.
+    await act(async () => {
+      window.history.back();
+    });
+    await screen.findByRole("alertdialog", { name: "Discard your changes?" });
+    expect(state()).toBe("open");
+    await waitFor(() => expect((window.history.state as Record<string, unknown> | null)?.cravesOverlay).toBe(entry));
+    expect(routerPopState).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Keep editing" }));
+
+    // Keep editing brings the form's own actions back.
+    fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByRole("button", { name: "Keep plan" })).toBeTruthy();
+
+    // The close button asks too; Escape while asking keeps editing; Discard closes.
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "Pause meal plan?" }), { key: "Escape" });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(state()).toBe("open");
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(state()).toBe("closed");
+    await nextTick();
+    window.removeEventListener("popstate", routerPopState);
   });
 
   // Last: it leaves a pop that never lands (history.back is stubbed).

@@ -14,7 +14,6 @@ import {
   ChefEmpty,
   ChefNotice,
   ChefSection,
-  ChefSkeleton,
   formatInr,
 } from "@/features/chef/components/chef-ui";
 import { ChefOrderCard, OrderUpdateNotice, focusOrderAfterUpdate, orderUpdateText } from "@/features/chef/components/chef-order-card";
@@ -39,6 +38,7 @@ import {
 import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
+import { ChefLoading } from "@/features/chef/components/chef-loading";
 
 type DashboardState = "loading" | "approved" | "error";
 
@@ -259,16 +259,7 @@ export function ChefModeDashboard() {
     setShowApprovalNotice(false);
   }
 
-  if (state === "loading") {
-    return (
-      <div className="chef-stack" aria-busy="true">
-        <ChefSkeleton className="h-16 w-2/3" />
-        <ChefSkeleton className="h-44" />
-        <ChefSkeleton className="h-40" />
-        <p className="sr-only" role="status">Loading Chef Mode</p>
-      </div>
-    );
-  }
+  if (state === "loading") return <ChefLoading shape="dashboard" label="Loading Chef Mode" />;
 
   if (state === "error") {
     return (

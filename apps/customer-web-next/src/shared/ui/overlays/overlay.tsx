@@ -15,7 +15,9 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
 import {
   useEffect,
+  useId,
   useRef,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
@@ -60,7 +62,11 @@ function popEntry(url: string, onPopped: () => void) {
   window.history.back();
 }
 
-export function useOverlayHistory(open: boolean, onBack: () => void) {
+/**
+ * `onBack` may return false to stay open (it is asking "Discard your changes?" first):
+ * the overlay's entry is put back, so the next Back is handled here again.
+ */
+export function useOverlayHistory(open: boolean, onBack: () => void | boolean) {
   const onBackRef = useRef(onBack);
   const entry = useRef<HistoryEntry | null>(null);
 
@@ -97,7 +103,12 @@ export function useOverlayHistory(open: boolean, onBack: () => void) {
       if (historyEntryId() === id || window.location.href !== url) return;
       // Same page underneath: closing is all Back should do here.
       event.stopImmediatePropagation();
-      onBackRef.current();
+      if (onBackRef.current() === false) {
+        window.history.pushState(
+          { ...(window.history.state as object | null), [HISTORY_KEY]: id },
+          "",
+        );
+      }
     };
     window.addEventListener("popstate", onPopState, true);
 
@@ -138,9 +149,46 @@ export type OverlayProps = {
   footer?: ReactNode;
   /** Pass false once something has been typed, so a stray tap can't discard it. */
   closeOnOutsideTap?: boolean;
-  /** Keeps the overlay open (Esc, outside tap, close button) while an action runs. */
+  /** Keeps the overlay open (Esc, outside tap, close button, Back) while an action runs. */
   busy?: boolean;
+  /** Something was typed: the close button, Esc and Back ask "Discard your changes?" first. */
+  unsavedChanges?: boolean;
 };
+
+/**
+ * Asked in place of the footer before a half-filled form is thrown away. Keep editing is the
+ * safe default and takes focus; Esc or Back while asking also keeps editing.
+ */
+export function DiscardChangesPrompt({ onKeep, onDiscard }: { onKeep: () => void; onDiscard: () => void }) {
+  const keep = useRef<HTMLButtonElement>(null);
+  const id = useId();
+  useEffect(() => {
+    keep.current?.focus();
+  }, []);
+  return (
+    <div
+      role="alertdialog"
+      aria-labelledby={`${id}-title`}
+      aria-describedby={`${id}-text`}
+      className="mt-6 rounded-2xl bg-[#F1F3F5] p-4"
+    >
+      <p id={`${id}-title`} className="text-base font-bold text-[#1A1A1A]">
+        Discard your changes?
+      </p>
+      <p id={`${id}-text`} className="mt-1 text-sm leading-6 text-[#6B6B6B]">
+        What you typed here will be lost.
+      </p>
+      <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" onClick={onDiscard} className={secondaryActionClass + " sm:!bg-white"}>
+          Discard
+        </button>
+        <button ref={keep} type="button" onClick={onKeep} className="craves-primary-action w-full sm:w-auto">
+          Keep editing
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function Overlay({
   kind,
@@ -152,13 +200,35 @@ function Overlay({
   footer,
   closeOnOutsideTap = true,
   busy = false,
+  unsavedChanges = false,
   closeLabel = "Close",
 }: OverlayProps & { kind: "sheet" | "dialog"; closeLabel?: string }) {
   const reduceMotion = useReducedMotion();
   const wide = useSyncExternalStore(subscribeWide, isWide, () => false);
   const returnFocus = useRef<HTMLElement | null>(null);
   const bottomSheet = kind === "sheet" && !wide;
-  useOverlayHistory(open, () => onOpenChange(false));
+  const [asking, setAsking] = useState(false);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    // Closed some other way (saved, navigated): the next opening starts without the question.
+    setWasOpen(open);
+    if (!open) setAsking(false);
+  }
+  /** Every way of closing comes here; false means the overlay stays open. */
+  const requestClose = (): boolean => {
+    if (busy) return false;
+    if (asking) {
+      setAsking(false); // Esc or Back while asking: keep editing.
+      return false;
+    }
+    if (unsavedChanges) {
+      setAsking(true);
+      return false;
+    }
+    onOpenChange(false);
+    return true;
+  };
+  useOverlayHistory(open, requestClose);
 
   const hidden = reduceMotion
     ? { opacity: 0 }
@@ -171,8 +241,8 @@ function Overlay({
     <RadixDialog.Root
       open={open}
       onOpenChange={(next) => {
-        if (!next && busy) return;
-        onOpenChange(next);
+        if (next) onOpenChange(true);
+        else requestClose();
       }}
     >
       <AnimatePresence>
@@ -246,7 +316,15 @@ function Overlay({
                     ) : null}
                   </div>
                   {children}
-                  {footer ? (
+                  {asking ? (
+                    <DiscardChangesPrompt
+                      onKeep={() => setAsking(false)}
+                      onDiscard={() => {
+                        setAsking(false);
+                        onOpenChange(false);
+                      }}
+                    />
+                  ) : footer ? (
                     <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                       {footer}
                     </div>

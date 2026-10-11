@@ -321,7 +321,7 @@
   animation: cob-spin 700ms linear infinite;
 }
 .cob-spinner--red {
-  border-color: #f2d3cf;
+  border-color: #e5e7eb;
   border-top-color: var(--cob-red);
 }
 

@@ -9,7 +9,7 @@ import { getSession, setSessionIdentity } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
 const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
+vi.mock("next/navigation", () => ({ useRouter: () => navigation, usePathname: () => "/chef/earnings" }));
 
 const customer: CravesIdentity = { id: "51111111-1111-4111-8111-111111111111", phoneNumber: "+910000000001", displayName: "Fixture", email: null, emailVerified: false, status: "ACTIVE", roles: ["CUSTOMER"] };
 const chef: CravesIdentity = { ...customer, roles: ["CUSTOMER", "CHEF"] };

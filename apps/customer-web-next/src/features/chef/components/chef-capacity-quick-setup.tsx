@@ -10,6 +10,7 @@ import {
   parseChefMenuItems,
   type ChefMenuItem,
 } from "@/features/chef/lib/chef-menu-contract";
+import { ChefLoading } from "@/features/chef/components/chef-loading";
 
 const DAYS = [
   [1, "Monday"],
@@ -37,6 +38,8 @@ function positiveWholeNumber(value: string): number | null {
   return Number.isInteger(parsed) && parsed > 0 && parsed <= 100000 ? parsed : null;
 }
 
+const LOADING_PLATES = "Loading your plates…";
+
 export function ChefCapacityQuickSetup() {
   const [summary, setSummary] = useState<ChefCapacitySummary | null>(null);
   const [menu, setMenu] = useState<ChefMenuItem[]>([]);
@@ -48,7 +51,7 @@ export function ChefCapacityQuickSetup() {
   const [subscriptionOverride, setSubscriptionOverride] = useState("");
   const [useSpecificDate, setUseSpecificDate] = useState(false);
   const [specificDate, setSpecificDate] = useState("");
-  const [message, setMessage] = useState("Loading your plates…");
+  const [message, setMessage] = useState(LOADING_PLATES);
   const [busy, setBusy] = useState(false);
 
   const activeMenu = useMemo(
@@ -223,6 +226,9 @@ export function ChefCapacityQuickSetup() {
   const slotLabel = SLOTS.find(([value]) => value === slot)?.[1] ?? slot;
   // Today in India: the UTC date is still yesterday until 5:30 am.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+
+  // Until plates and dishes load, the form's defaults and "No dishes are on" would be false.
+  if (message === LOADING_PLATES) return <ChefLoading shape="form" head={false} label={LOADING_PLATES} />;
 
   return (
     <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] md:p-6">

@@ -112,6 +112,7 @@ export function EditProfileModal({
       }}
       busy={busy}
       closeOnOutsideTap={!typed}
+      unsavedChanges={typed}
       title="Edit profile"
       closeLabel="Close profile editor"
       footer={

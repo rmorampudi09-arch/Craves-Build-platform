@@ -15,7 +15,7 @@ import {
 import { GiChefToque } from "react-icons/gi";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
-import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { UndoToast } from "@/shared/ui/overlays/undo-toast";
 import { spring } from "@/shared/lib/motion";
 import type { CustomerNotification } from "@/features/notifications/lib/notification-contract";
@@ -260,8 +260,6 @@ export default function NotificationsPage({ audience = "customer" }: { audience?
     })).filter((group) => group.notices.length > 0);
   }, [filteredNotices]);
 
-  if (loading) return <CustomerPageSkeleton label="Loading notifications" />;
-
   return (
     <div className="min-h-screen bg-white pb-12 text-[#1A1A1A]">
       <AutoHideCustomerHeader className="border-b border-border bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
@@ -369,15 +367,7 @@ export default function NotificationsPage({ audience = "customer" }: { audience?
         ) : null}
 
         {loading ? (
-          <div aria-busy="true" className="space-y-3">
-            <span className="sr-only">Loading notifications</span>
-            {[0, 1, 2].map((item) => (
-              <div
-                key={item}
-                className="h-28 animate-pulse rounded-2xl border border-[#E5E7EB] bg-[#F1F3F5]"
-              />
-            ))}
-          </div>
+          <CustomerSectionSkeleton variant="notifications" label="Loading notifications" />
         ) : error ? (
           <div
             role="alert"

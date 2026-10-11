@@ -59,7 +59,7 @@ test("signed-in home loads live discovery and opens customer kitchen details wit
   assert.match(contents, /<DishesGrid/);
   assert.match(contents, /<HomeSearchOverlay/);
   assert.match(contents, /<CustomerSignOutDialog/);
-  assert.match(contents, /<CartAddressAvailabilityDialog/);
+  assert.match(contents, /<CartAddressAvailabilityBanner/);
   assert.match(contents, /nearbyKitchenIds/);
   assert.match(contents, /loadKitchenMenu\(kitchenId\)/);
   assert.match(contents, /unavailableCartItems/);
@@ -297,8 +297,8 @@ test("customer headers stay lean and share the same responsive scroll behavior",
 
   assert.doesNotMatch(homeHeader, /PersistentCustomerServiceNav/);
   assert.doesNotMatch(detailHeader, /forceServiceNav/);
-  // Approved chefs see "Switch to chef mode" on dish and kitchen pages too.
-  assert.match(detailHeader, /user=\{getSession\(\) \?\? undefined\}/);
+  // Chef mode lives in Profile only; no customer header carries a chef shortcut.
+  assert.doesNotMatch(detailHeader, /user=\{/);
 
   for (const surface of [
     homeHeader,

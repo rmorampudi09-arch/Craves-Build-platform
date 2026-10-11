@@ -17,7 +17,6 @@ import {
   ChefPageHead,
   ChefPill,
   ChefSection,
-  ChefSkeleton,
   chefOrderStatus,
   dateTime,
   formatInr,
@@ -31,6 +30,7 @@ import {
   parseChefOrderResponse,
   type ChefOrder,
 } from "@/features/chef/lib/chef-order-contract";
+import { ChefLoading } from "@/features/chef/components/chef-loading";
 
 const FOOD_TYPE: Record<string, string> = { VEG: "Veg", NON_VEG: "Non-veg", EGG: "Egg" };
 /** Orders on the normal path show the picture steps; declined or refunded ones don't. */
@@ -96,16 +96,7 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
     setLastUpdatedAt(new Date());
   });
 
-  if (loading) {
-    return (
-      <div className="chef-stack" aria-busy="true">
-        <ChefSkeleton className="h-16 w-1/2" />
-        <ChefSkeleton className="h-48" />
-        <ChefSkeleton className="h-56" />
-        <p className="sr-only" role="status">Loading chef order</p>
-      </div>
-    );
-  }
+  if (loading) return <ChefLoading shape="order" label="Loading chef order" />;
 
   if (!order) {
     return (

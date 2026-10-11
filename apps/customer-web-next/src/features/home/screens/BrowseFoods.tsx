@@ -15,7 +15,7 @@ import {
 
 import { BrowseHeader } from "@/features/home/components/BrowseHeader";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
-import { CartAddressAvailabilityDialog } from "@/features/home/components/CartAddressAvailabilityDialog";
+import { CartAddressAvailabilityBanner } from "@/features/home/components/CartAddressAvailabilityBanner";
 import { CustomerSignOutDialog } from "@/features/home/components/CustomerSignOutDialog";
 import { DishesGrid } from "@/features/home/components/DishesGrid";
 import { CustomerFloatingCart } from "@/features/cart/components/CustomerFloatingCart";
@@ -933,7 +933,6 @@ function BrowseFoodsPage() {
       onClickCapture={handleDetailNavigationCapture}
     >
       <BrowseHeader
-        user={user}
         locationLabel={locationLabel}
         locationTypeLabel={locationTypeLabel}
         onOpenLocation={openAddressManager}
@@ -949,6 +948,27 @@ function BrowseFoodsPage() {
       />
 
       <main>
+        <CartAddressAvailabilityBanner
+          open={cartAvailabilityOpen}
+          addressLabel={locationLabel}
+          unavailableItems={unavailableCartItems}
+          totalCartItems={cartItems.length}
+          busy={cartRepairBusy}
+          error={cartRepairError}
+          onResolve={() => void resolveUnavailableCartItems()}
+          onChooseAddress={openAddressManager}
+          onClose={() => {
+            if (cartAvailabilityKey) {
+              setDismissedCartAvailabilityKey(cartAvailabilityKey);
+              try {
+                window.sessionStorage.setItem(CART_AVAILABILITY_DISMISSED_KEY, cartAvailabilityKey);
+              } catch {
+                // Private mode: the dismissal still holds for this page view.
+              }
+            }
+          }}
+        />
+
         <WelcomeBanner
           dishCount={nearbyDishes.length}
           radiusLabel={radiusLabel}
@@ -1016,27 +1036,6 @@ function BrowseFoodsPage() {
       </main>
 
       <CustomerFloatingCart />
-
-      <CartAddressAvailabilityDialog
-        open={cartAvailabilityOpen}
-        addressLabel={locationLabel}
-        unavailableItems={unavailableCartItems}
-        totalCartItems={cartItems.length}
-        busy={cartRepairBusy}
-        error={cartRepairError}
-        onResolve={() => void resolveUnavailableCartItems()}
-        onChooseAddress={openAddressManager}
-        onClose={() => {
-          if (cartAvailabilityKey) {
-            setDismissedCartAvailabilityKey(cartAvailabilityKey);
-            try {
-              window.sessionStorage.setItem(CART_AVAILABILITY_DISMISSED_KEY, cartAvailabilityKey);
-            } catch {
-              // Private mode: the dismissal still holds for this page view.
-            }
-          }
-        }}
-      />
 
       <AnimatePresence>
         {searchOpen && HomeSearchOverlay ? (

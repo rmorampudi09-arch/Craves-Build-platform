@@ -23,6 +23,7 @@ import type {
 import { reverseGeocodeCurrentLocation } from "@/features/addresses/api/reverseGeocode";
 import { captureSessionContext, getSession, isSessionContextCurrent } from "@/features/auth/api/cravesAuth";
 import { RequiredMark } from "@/shared/ui/forms/required-mark";
+import { ChefLoading } from "@/features/chef/components/chef-loading";
 
 type FormState = Record<
   keyof Omit<ChefKitchenInput, "latitude" | "longitude" | "status">,
@@ -384,7 +385,7 @@ export function ChefKitchenForm() {
   const mapped = Boolean(form.latitude.trim()) && Boolean(form.longitude.trim());
 
   if (!loaded) {
-    return <div className="h-72 animate-pulse rounded-3xl bg-[#F1F3F5]" aria-label="Loading your kitchen" />;
+    return <ChefLoading shape="kitchen" label="Loading your kitchen" />;
   }
 
   if (!kitchen && message && !form.kitchenName && !form.addressLine1) {

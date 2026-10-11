@@ -201,7 +201,7 @@ test("overlays enter and leave smoothly and hand focus back", () => {
   const header = source("../components/BrowseHeader.tsx");
   const search = source("../components/HomeSearchOverlay.tsx");
   const replacement = source("../../cart/components/CartKitchenReplacementDialogHost.tsx");
-  const availability = source("../components/CartAddressAvailabilityDialog.tsx");
+  const availability = source("../components/CartAddressAvailabilityBanner.tsx");
   const addressEditor = source("../../addresses/components/AddressEditorFlow.tsx");
 
   // Search: the chunk loads at idle or as the finger lands, opens without a Suspense
@@ -231,8 +231,11 @@ test("overlays enter and leave smoothly and hand focus back", () => {
   assert.match(replacement, /settle\(false\);\s*\}, \[pathname, settle\]\)/);
   assert.match(replacement, /event\.key === "Escape"/);
 
-  assert.match(availability, /<AnimatePresence>/);
-  assert.match(availability, /exit=\{\{ opacity: 0, y: 12/);
+  // Cart-vs-address notice: an inline banner at the top of Home, not a pop-up that blocks browsing.
+  assert.match(home, /<main>\s*<CartAddressAvailabilityBanner/);
+  assert.doesNotMatch(availability, /role="dialog"|aria-modal|fixed inset-0/);
+  assert.match(availability, /aria-live="polite"/);
+  assert.match(availability, /exit=\{\{ opacity: 0, y: -8/);
   assert.doesNotMatch(availability, /bg-\[#F62E18\]\/10|backdrop-blur/);
 
   // Address sheet: animates in and out, steps overlap instead of leaving a blank gap.
@@ -243,4 +246,14 @@ test("overlays enter and leave smoothly and hand focus back", () => {
   assert.match(addressEditor, /overscroll-contain/);
   assert.doesNotMatch(addressEditor, /h-1 w-10 shrink-0 rounded-full bg-\[#D7DADF\]/);
   assert.doesNotMatch(addressEditor, /bg-\[#F62E18\]\/10/);
+});
+
+test("the Home header has no chef button; Profile is the one way into chef mode or the chef application", () => {
+  const header = source("../components/BrowseHeader.tsx");
+  const profile = source("../../profile/screens/Profile.tsx");
+
+  assert.doesNotMatch(header, /to="\/chef|to=\{chefDestination\}|ArrowLeftRight|chef mode|chef application/i);
+  // Profile covers every case: chefs switch to chef mode, everyone else becomes a home chef.
+  assert.match(profile, /title: "Switch to Chef mode"/);
+  assert.match(profile, /title: "Become a home chef"/);
 });

@@ -7,6 +7,7 @@ import type { SubscriptionOccurrence, SubscriptionPlanPolicy } from "@/features/
 import type { PublicSubscriptionSchedule } from "@/features/meal-plans/lib/subscription-schedule-contract";
 import { changeDeadline, MEAL_PLAN_STATUS, MEAL_STATUS, noticeLength, planDay } from "@/features/meal-plans/lib/meal-plan-copy";
 import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 
 type Action = "pause" | "resume" | "skip" | "cancel";
 
@@ -49,12 +50,14 @@ const ACTION_COPY: Record<Action, { title: string; confirm: string; busy: string
   cancel: { title: "Cancel your meal plan?", confirm: "Cancel meal plan", busy: "Cancelling…", keep: "Keep my plan", reasonLabel: "Tell us why (optional)" },
 };
 
+const LOADING_PLAN = "Loading your meal plan…";
+
 export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string }) {
   const [item, setItem] = useState<CustomerSubscription | null>(null);
   const [policy, setPolicy] = useState<SubscriptionPlanPolicy | null>(null);
   const [schedule, setSchedule] = useState<PublicSubscriptionSchedule | null>(null);
   const [occurrences, setOccurrences] = useState<SubscriptionOccurrence[]>([]);
-  const [message, setMessage] = useState("Loading your meal plan…");
+  const [message, setMessage] = useState(LOADING_PLAN);
   const [busy, setBusy] = useState(false);
   const [sheet, setSheet] = useState<{ action: Action; step: 1 | 2 } | null>(null);
   const [sheetDate, setSheetDate] = useState("");
@@ -144,6 +147,7 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
     return [...groups.entries()];
   }, [schedule]);
 
+  if (!item && message === LOADING_PLAN) return <CustomerSectionSkeleton variant="plan-details" label={LOADING_PLAN} />;
   if (!item) return <p role="status" className="rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]">{message}</p>;
   const today = new Date().toISOString().slice(0, 10);
   const deadline = policy?.customerSkipEnabled ? changeDeadline(occurrences, policy.skipCutoffMinutes) : null;

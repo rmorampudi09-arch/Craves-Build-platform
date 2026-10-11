@@ -17,7 +17,6 @@ import {
   ChefPageHead,
   ChefPill,
   ChefSection,
-  ChefSkeleton,
   chefOrderStatus,
   formatInr,
   timeAgo,
@@ -30,6 +29,7 @@ import {
 import { ChefOrderCard, OrderUpdateNotice, chefStatusIcon, focusOrderAfterUpdate, orderUpdateText } from "@/features/chef/components/chef-order-card";
 import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { ChefLoading } from "@/features/chef/components/chef-loading";
 
 const newestFirst = (orders: ChefOrder[]) =>
   [...orders].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
@@ -155,11 +155,7 @@ export function ChefOrderInbox() {
       />
 
       {loading ? (
-        <div className="chef-stack" aria-busy="true">
-          <ChefSkeleton className="h-10 w-3/4" />
-          <ChefSkeleton className="h-64" />
-          <p className="sr-only" role="status">Loading chef orders</p>
-        </div>
+        <ChefLoading shape="orders" head={false} label="Loading chef orders" />
       ) : error && orders.length === 0 ? (
         <ChefSection>
           <ChefEmpty

@@ -33,6 +33,7 @@ import type {
   ChefMealPlanPeriod,
   ChefMealSchedule,
 } from "@/features/chef/lib/chef-subscription-plan-contract";
+import { ChefLoading } from "@/features/chef/components/chef-loading";
 
 type PlanForm = {
   name: string;
@@ -265,6 +266,8 @@ export function ChefSubscriptionPlanManager() {
     "Loading your meal-plan workspace…",
   );
   const [messageTone, setMessageTone] = useState<MessageTone>("info");
+  // Until the first load ends, counts and "No meal plans yet" would be false: show the shape instead.
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [capacityDay, setCapacityDay] = useState("1");
@@ -450,7 +453,8 @@ export function ChefSubscriptionPlanManager() {
           chefErrorText(error, "Meal plans are unavailable."),
         );
         setMessageTone("error");
-      });
+      })
+      .finally(() => setLoaded(true));
   }, [load]);
 
   useEffect(() => {
@@ -901,6 +905,8 @@ export function ChefSubscriptionPlanManager() {
       : messageTone === "error"
         ? "border-[#E3E6EA] bg-[#F1F3F5] text-[#C4200F]"
         : "border-[#D8DEE3] bg-[#F8F9FA] text-[#1A1A1A]";
+
+  if (!loaded) return <ChefLoading shape="plans" head={false} label="Loading your meal plans" />;
 
   return (
     <div className="space-y-6">

@@ -38,6 +38,7 @@ import { getAddress } from "@/features/auth/api/cravesAuth";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import { duration, ease } from "@/shared/lib/motion";
 import { RequiredMark } from "@/shared/ui/forms/required-mark";
+import { DiscardChangesPrompt, useOverlayHistory } from "@/shared/ui/overlays/overlay";
 
 type Step = "locate" | "details";
 
@@ -250,6 +251,9 @@ export function AddressEditorFlow({
 }: AddressEditorFlowProps) {
   const [step, setStep] = useState<Step>("locate");
   const [draft, setDraft] = useState<AddressDraft>(EMPTY_DRAFT);
+  // What the editor opened with, so closing can ask before a changed address is thrown away.
+  const [openedDraft, setOpenedDraft] = useState<AddressDraft>(EMPTY_DRAFT);
+  const [asking, setAsking] = useState(false);
   const [targetAddressId, setTargetAddressId] = useState<string | null>(null);
   const [resolvedAddress, setResolvedAddress] = useState("");
   const [locating, setLocating] = useState(false);
@@ -279,6 +283,8 @@ export function AddressEditorFlow({
         };
 
     setDraft(nextDraft);
+    setOpenedDraft(nextDraft);
+    setAsking(false);
     setTargetAddressId(initialAddress?.id ?? null);
     setResolvedAddress(initialAddress ? addressText(initialAddress) : "");
     setMessage(null);
@@ -536,11 +542,29 @@ export function AddressEditorFlow({
   const actionClass =
     "transition-[background-color,box-shadow,translate,scale] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none";
 
+  const changed = (Object.keys(draft) as Array<keyof AddressDraft>).some((key) => draft[key] !== openedDraft[key]);
+  /** ×, Esc, a tap outside and phone Back come here; Cancel is an explicit discard. */
+  const requestClose = (): boolean => {
+    if (busy) return false;
+    if (asking) {
+      setAsking(false); // Esc or Back while asking: keep editing.
+      return false;
+    }
+    if (changed) {
+      setAsking(true);
+      return false;
+    }
+    onClose();
+    return true;
+  };
+  // Phone Back closes the editor instead of leaving the page underneath.
+  useOverlayHistory(open, requestClose);
+
   return (
     <Dialog.Root
       open={open}
       onOpenChange={(nextOpen) => {
-        if (!nextOpen && !busy) onClose();
+        if (!nextOpen) requestClose();
       }}
     >
       <Dialog.Portal>
@@ -593,7 +617,7 @@ export function AddressEditorFlow({
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => requestClose()}
               disabled={busy}
               className={
                 "flex h-10 w-10 shrink-0 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#1A1A1A] " +
@@ -1013,7 +1037,17 @@ export function AddressEditorFlow({
             </AnimatePresence>
           </div>
 
-          {step === "details" ? (
+          {asking ? (
+            <div className="border-t border-[#F1F3F5] bg-white px-5 pb-4 md:px-7">
+              <DiscardChangesPrompt
+                onKeep={() => setAsking(false)}
+                onDiscard={() => {
+                  setAsking(false);
+                  onClose();
+                }}
+              />
+            </div>
+          ) : step === "details" ? (
             <div className="grid grid-cols-[0.7fr_1.3fr] gap-3 border-t border-[#F1F3F5] bg-white px-5 py-4 md:px-7">
               <button
                 type="button"

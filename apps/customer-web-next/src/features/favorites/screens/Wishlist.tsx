@@ -18,7 +18,7 @@ import { loadDish, type Dish } from "@/features/dish/api/dishes";
 import { loadSession } from "@/features/auth/api/cravesAuth";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
 import { CustomerFloatingCart } from "@/features/cart/components/CustomerFloatingCart";
-import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { useReturnScroll } from "@/shared/lib/return-scroll";
 
 function money(amount: number, currency = "INR"): string {
@@ -131,8 +131,6 @@ function WishlistPage() {
     }
   }, [busyId]);
 
-  if (!ready || loading) return <CustomerPageSkeleton label="Loading your saved dishes" />;
-
   return (
     <div className="min-h-screen bg-white pb-20 text-[#1A1A1A]" onClickCapture={rememberScroll}>
       <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
@@ -151,16 +149,8 @@ function WishlistPage() {
       </AutoHideCustomerHeader>
 
       <main className="mx-auto max-w-3xl px-4 py-6 md:px-6">
-        {loading ? (
-          <div className="space-y-3" aria-busy="true">
-            {Array.from({ length: 3 }, (_, index) => (
-              <div
-                key={index}
-                className="h-[104px] animate-pulse rounded-2xl border border-[#E5E7EB] bg-[#F1F3F5]"
-              />
-            ))}
-            <span className="sr-only" role="status">Loading saved dishes</span>
-          </div>
+        {!ready || loading ? (
+          <CustomerSectionSkeleton variant="saved" label="Loading your saved dishes" />
         ) : message && items.length === 0 ? (
           <div className="rounded-2xl border border-[#E5E7EB] bg-white px-6 py-10 text-center shadow-sm">
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#C4200F]">

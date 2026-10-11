@@ -66,7 +66,8 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(cravings, /ring-2 ring-\[#F62E18\] ring-offset-2/);
   assert.match(cravings, /md:left-4 md:top-\[3\.75rem\] md:flex/);
   assert.doesNotMatch(cravings, /rgba\(246,46,24,0\.12\)|backdrop-blur/);
-  assert.match(header, /hover:-translate-y-0\.5/);
+  // No chef shortcut in the Home header: Profile is the way into chef mode.
+  assert.doesNotMatch(header, /to="\/chef/);
   assert.match(header, /focus-within:bg-white/);
   assert.match(header, /mobileCompact/);
   assert.match(header, /<CravesLogo size="md" \/>/);
@@ -190,6 +191,33 @@ test("navigation shows page-shaped skeletons the moment a dish, kitchen or cart 
   // The dish skeleton reserves the action bar so the tab bar does not flash in and out.
   assert.match(skeleton, /data-craves-action-bar/);
   assert.match(kitchens, /\$\{skeletonStyles\.block\} aspect-\[16\/9\]/);
+});
+
+test("every page loads in its own shape under its own header, and quick loads show nothing", () => {
+  for (const [screen, variant] of [
+    ["../features/profile/screens/Profile.tsx", "profile"],
+    ["../features/notifications/screens/Notifications.tsx", "notifications"],
+    ["../features/favorites/screens/Wishlist.tsx", "saved"],
+    ["../features/checkout/screens/Checkout.tsx", "checkout"],
+    ["../features/meal-plans/components/subscription-plan-browser.tsx", "plans"],
+    ["../features/meal-plans/components/subscription-enrollment-form.tsx", "plan-form"],
+    ["../features/meal-plans/components/subscription-details.tsx", "plan-details"],
+  ] as const) {
+    const contents = source(screen);
+    assert.match(contents, new RegExp(`<CustomerSectionSkeleton variant="${variant}"`), screen);
+    // Never Home's shape (the default variant) on a page that is not Home.
+    assert.doesNotMatch(contents, /<CustomerPageSkeleton(?![^>]*variant=)/, screen);
+  }
+  // Blocks fade in only after 300 ms, so fast loads and quick revisits never flash a skeleton.
+  assert.match(source("../shared/components/loading/CustomerPageSkeleton.module.css"), /cravesSkeletonReveal 200ms ease-out 300ms both/);
+  assert.match(source("../features/chef/styles/chef-mode.css"), /chefSkeletonReveal 200ms ease-out 300ms both/);
+  // Chef access check: the page's own shape, never invisible grey slabs; no false empty states.
+  const boundary = source("../features/chef/components/chef-access-boundary.tsx");
+  assert.match(boundary, /<ChefLoading shape=\{loadingShape\}/);
+  assert.doesNotMatch(boundary, /animate-pulse/);
+  assert.match(source("../features/chef/components/chef-subscription-plan-manager.tsx"), /if \(!loaded\) return <ChefLoading shape="plans"/);
+  assert.match(source("../features/chef/components/chef-capacity-quick-setup.tsx"), /if \(message === LOADING_PLATES\) return <ChefLoading/);
+  assert.doesNotMatch(source("../features/chef-onboarding/styles/chef-onboarding.css"), /#f2d3cf/i);
 });
 
 test("photos show instantly from cache and dish photos swipe natively", () => {

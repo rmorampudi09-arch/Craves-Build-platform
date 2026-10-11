@@ -1,9 +1,10 @@
 "use client";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { parseChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
 import { clearChefMode, isChefModeVerified } from "@/features/chef/lib/chef-mode";
+import { ChefLoading, chefLoadingShapeFor } from "@/features/chef/components/chef-loading";
 import { Fragment, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   AuthenticationRequiredError,
@@ -59,6 +60,7 @@ const serverScope = () => "server";
  */
 export function ChefAccessBoundary({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const loadingShape = chefLoadingShapeFor(usePathname());
   const navigation = useRef(router);
   useEffect(() => {
     navigation.current = router;
@@ -174,11 +176,5 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
     );
   }
 
-  return (
-    <div className="space-y-4" aria-busy="true">
-      <div className="h-32 animate-pulse rounded-3xl bg-[#F1F3F5] motion-reduce:animate-none" />
-      <div className="h-64 animate-pulse rounded-3xl bg-[#F1F3F5] motion-reduce:animate-none" />
-      <p className="sr-only" role="status">Opening Chef Mode</p>
-    </div>
-  );
+  return <ChefLoading shape={loadingShape} label="Opening Chef Mode" head={loadingShape !== "chat"} />;
 }

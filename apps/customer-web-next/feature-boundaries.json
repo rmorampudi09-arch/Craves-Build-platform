@@ -29,7 +29,7 @@
     "addresses -> src/features/chefs/api/kitchens.ts",
     "addresses -> src/features/dish/api/dishes.ts",
     "addresses -> src/features/home/components/BrowseHeader.tsx",
-    "addresses -> src/features/home/components/CartAddressAvailabilityDialog.tsx",
+    "addresses -> src/features/home/components/CartAddressAvailabilityBanner.tsx",
     "addresses -> src/features/home/components/FloatingCartBar.module.css",
     "addresses -> src/features/home/components/WelcomeBanner.tsx",
     "addresses -> src/features/home/screens/BrowseFoods.tsx",

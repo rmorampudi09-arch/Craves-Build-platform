@@ -44,7 +44,7 @@ import {
   type CheckoutPaymentFailure,
 } from "@/features/checkout/components/CheckoutPaymentButton";
 import { AddressEditorFlow } from "@/features/addresses/components/AddressEditorFlow";
-import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 
 const ADDRESS_KEY = "craves.checkout.addressId";
 const CHECKOUT_ID_KEY = "craves.checkout.id";
@@ -598,10 +598,6 @@ export default function CheckoutPage() {
     error || (paymentFailure?.section === "address" ? paymentFailure.message : "");
   const cartProblem = paymentFailure?.section === "cart" ? paymentFailure.message : "";
 
-  if (loading) {
-    return <CustomerPageSkeleton label="Preparing your checkout" />;
-  }
-
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-36 text-[#1A1A1A] lg:pb-12">
       <CheckoutHeader
@@ -612,11 +608,7 @@ export default function CheckoutPage() {
 
       <main className="mx-auto max-w-[1180px] px-4 py-5 md:px-6 md:py-8 lg:px-8 lg:py-9">
         {loading ? (
-          <div className="space-y-4" aria-hidden="true">
-            <div className="h-64 animate-pulse rounded-[1.25rem] bg-[#F1F3F5]" />
-            <div className="h-28 animate-pulse rounded-[1.25rem] bg-[#F1F3F5]" />
-            <div className="h-52 animate-pulse rounded-[1.25rem] bg-[#F1F3F5]" />
-          </div>
+          <CustomerSectionSkeleton variant="checkout" label="Preparing your checkout" />
         ) : error && !hasCheckoutContext ? (
           <section className="rounded-[1.25rem] border border-[#E5E7EB] bg-white p-8 text-center shadow-[0_3px_12px_rgba(0,0,0,0.06)]">
             <AlertTriangle className="mx-auto h-9 w-9 text-[#C4200F]" aria-hidden="true" />

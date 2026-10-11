@@ -503,11 +503,13 @@ a.chef-stat { transition: background-color 150ms var(--chef-ease); }
 .chef-empty-text { max-width: 26rem; color: var(--chef-muted); font-size: 0.9375rem; line-height: 1.5; }
 .chef-skeleton {
   border-radius: var(--chef-radius);
-  background: linear-gradient(90deg, #e9ecef 0%, #f3f5f7 45%, #e9ecef 90%);
+  background: linear-gradient(90deg, #e3e6ea 0%, #eceef1 45%, #e3e6ea 90%);
   background-size: 200% 100%;
-  animation: chefShimmer 1.4s ease-in-out infinite;
+  /* Quick loads show nothing: blocks fade in only once a wait passes 300 ms. */
+  animation: chefShimmer 1.4s ease-in-out infinite, chefSkeletonReveal 200ms ease-out 300ms both;
 }
 @keyframes chefShimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes chefSkeletonReveal { from { opacity: 0; } to { opacity: 1; } }
 
 /* ---------- Forms ---------- */
 .chef-panel-theme :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]), select, textarea) {

@@ -21,7 +21,7 @@ import { EditProfileModal } from "@/features/profile/components/EditProfileModal
 import { CustomerSignOutDialog } from "@/features/home/components/CustomerSignOutDialog";
 import { ProfileHeader } from "@/features/profile/components/ProfileHeader";
 import { ProfileLinkCard } from "@/features/profile/components/ProfileLinkCard";
-import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import type { CustomerAddress } from "@/features/addresses/lib/address-contract";
 import type { ChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
 import type { CustomerOrder } from "@/features/orders/lib/order-contract";
@@ -335,25 +335,22 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
   }, [navigate]);
 
   if (loading) {
-    return <CustomerPageSkeleton label="Loading your Craves profile" />;
+    return (
+      <div className="min-h-screen bg-[#FAFAFA] pb-8 text-[#1A1A1A] md:pb-12">
+        <ProfileHeader />
+        <main className="mx-auto max-w-5xl px-4 pb-8 pt-4 md:px-6 md:pt-6">
+          <CustomerSectionSkeleton variant="profile" label="Loading your Craves profile" />
+        </main>
+      </div>
+    );
   }
 
   if (!user) {
     return (
       <div className="min-h-screen bg-white">
         <ProfileHeader />
-        <main
-          aria-busy={loading}
-          className="mx-auto max-w-5xl space-y-4 px-4 py-5 md:px-6 md:py-7"
-        >
-          {loading ? (
-            <>
-              <span className="sr-only">Loading profile</span>
-              <div className="h-56 animate-pulse rounded-[1.6rem] bg-[#F1F3F5]" />
-              <div className="h-28 animate-pulse rounded-[1.6rem] bg-[#F1F3F5]" />
-              <div className="h-48 animate-pulse rounded-[1.6rem] bg-[#F1F3F5]" />
-            </>
-          ) : error ? (
+        <main className="mx-auto max-w-5xl space-y-4 px-4 py-5 md:px-6 md:py-7">
+          {error ? (
             <p
               role="alert"
               className="rounded-xl bg-[#F1F3F5] p-4 text-sm font-medium text-[#C4200F]"

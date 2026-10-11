@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { PublicSubscriptionPlan } from "@/features/meal-plans/lib/subscription-contract";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 
 function money(value: number, currency: string): string {
   try {
@@ -14,7 +15,8 @@ function money(value: number, currency: string): string {
 
 export function SubscriptionPlanBrowser() {
   const [plans, setPlans] = useState<PublicSubscriptionPlan[]>([]);
-  const [message, setMessage] = useState("Loading meal plans…");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -27,11 +29,13 @@ export function SubscriptionPlanBrowser() {
         setPlans(items);
         setMessage(items.length === 0 ? "No meal plans are available near you yet." : "");
       })
-      .catch(error => active && setMessage(error instanceof Error ? error.message : "We couldn’t load meal plans. Please try again shortly."));
+      .catch(error => active && setMessage(error instanceof Error ? error.message : "We couldn’t load meal plans. Please try again shortly."))
+      .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, []);
 
   return <section>
+    {loading ? <CustomerSectionSkeleton variant="plans" label="Loading meal plans" /> : null}
     {message && <p className="rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]" role="status">{message}</p>}
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {plans.map(plan => <article key={plan.id} className="flex flex-col rounded-2xl border border-[#E5E7EB] bg-white p-5">

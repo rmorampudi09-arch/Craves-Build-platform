@@ -221,7 +221,6 @@ export function AllChefsPage() {
   return (
     <div className="min-h-screen bg-white pb-24 text-[#1A1A1A]">
       <BrowseHeader
-        user={user}
         locationLabel={locationLabel(address)}
         locationTypeLabel={locationTypeLabel(address)}
         onOpenLocation={openAddressManager}

@@ -1,15 +1,10 @@
 import React from 'react';
-import {Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {Linking, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {CustomerMealPlanStackParamList} from '../../../app/navigation/types';
-import {resolveReducedMotionAnimation} from '../../../design/motion';
-import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {
   colors,
-  elevation,
   fontWeight,
-  radius,
   spacing,
   textDefaults,
   touchTarget,
@@ -22,13 +17,13 @@ import {billingUnit, formatMealCount} from '../../mealPlans/domain/mealPlanSched
 import {
   BottomPriceBar,
   CardSection,
+  DateSheet,
   InfoRow,
   MealPlanHeader,
   MealPlanPhoto,
   PlanRating,
   PlanRulesList,
   PlanUnavailable,
-  RadioMark,
 } from '../components/MealPlanUi';
 import {
   addressAreaLine,
@@ -48,64 +43,6 @@ import {
 } from '../state/MealPlanCheckoutContext';
 
 type Props = NativeStackScreenProps<CustomerMealPlanStackParamList, 'MealPlanReview'>;
-
-function StartDateSheet({
-  dates,
-  selected,
-  onSelect,
-  onClose,
-}: {
-  dates: string[];
-  selected: string;
-  onSelect: (date: string) => void;
-  onClose: () => void;
-}) {
-  const insets = useSafeAreaInsets();
-  const reduceMotion = useReducedMotionPreference();
-  return (
-    <Modal
-      animationType={resolveReducedMotionAnimation('slide' as const, reduceMotion)}
-      onRequestClose={onClose}
-      transparent
-      visible>
-      <View style={styles.backdrop}>
-        <Pressable
-          accessible={false}
-          importantForAccessibility="no-hide-descendants"
-          onPress={onClose}
-          style={StyleSheet.absoluteFill}
-        />
-        <View
-          accessibilityViewIsModal
-          onAccessibilityEscape={onClose}
-          style={[styles.sheet, {paddingBottom: Math.max(insets.bottom, spacing.md)}]}>
-          <View style={styles.handle} />
-          <Text
-            accessibilityRole="header"
-            allowFontScaling={textDefaults.allowFontScaling}
-            style={styles.sheetTitle}>
-            Choose a start date
-          </Text>
-          <View accessibilityRole="radiogroup">
-            {dates.map(date => (
-              <Pressable
-                key={date}
-                accessibilityRole="radio"
-                accessibilityState={{checked: date === selected}}
-                onPress={() => onSelect(date)}
-                style={({pressed}) => [styles.dateRow, pressed && styles.pressed]}>
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.dateText}>
-                  {formatMealPlanDate(date, 'long')}
-                </Text>
-                <RadioMark checked={date === selected} />
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
 
 export function MealPlanReviewScreen({navigation, route}: Props) {
   const {planId} = route.params;
@@ -247,7 +184,8 @@ export function MealPlanReviewScreen({navigation, route}: Props) {
       />
 
       {sheetOpen ? (
-        <StartDateSheet
+        <DateSheet
+          title="Choose a start date"
           dates={dates}
           selected={start}
           onClose={() => setSheetOpen(false)}
@@ -298,34 +236,4 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
   pressed: {opacity: 0.7},
-  backdrop: {flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay},
-  sheet: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    backgroundColor: colors.white,
-    ...elevation.card,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 42,
-    height: 4,
-    marginBottom: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.borderStrong,
-  },
-  sheetTitle: {
-    marginBottom: spacing.xs,
-    color: colors.textPrimary,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  dateRow: {
-    minHeight: touchTarget.minimum,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  dateText: {color: colors.textPrimary, fontSize: typography.body},
 });

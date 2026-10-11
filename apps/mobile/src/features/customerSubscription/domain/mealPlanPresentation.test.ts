@@ -12,8 +12,11 @@ import {
   nextOccurrence,
   occurrenceDishNames,
   occurrenceStatusPresentation,
+  orderTrackerStep,
   planRules,
+  resumeDateFor,
   shortSubscriptionId,
+  skippableDates,
   subscriptionStatusPresentation,
   upcomingStartDates,
   weekOccurrences,
@@ -356,5 +359,58 @@ describe('firstScheduledItem', () => {
     expect(firstScheduledItem(items, '2026-10-12')?.sequenceNumber).toBe(2);
     expect(firstScheduledItem(items, '2026-10-30')?.sequenceNumber).toBe(1);
     expect(firstScheduledItem([], '2026-10-12')).toBeNull();
+  });
+});
+
+describe('resumeDateFor', () => {
+  const morning = new Date(2026, 9, 11, 10, 0);
+  const afternoon = new Date(2026, 9, 11, 13, 0);
+
+  it('picks the first date whose meal is more than the lead away', () => {
+    expect(resumeDateFor(morning, 0, '12:30:00')).toBe('2026-10-12');
+    expect(resumeDateFor(morning, 1440, '12:30:00')).toBe('2026-10-12'); // 26.5 h away
+    expect(resumeDateFor(afternoon, 1440, '12:30:00')).toBe('2026-10-13'); // tomorrow is 23.5 h away
+  });
+
+  it('adds a day per full day of lead without a service time', () => {
+    expect(resumeDateFor(morning, 600, null)).toBe('2026-10-12');
+    expect(resumeDateFor(morning, 1440, null)).toBe('2026-10-13');
+  });
+});
+
+describe('skippableDates', () => {
+  it('lists unique upcoming dates outside the cutoff, skipping skipped and cancelled', () => {
+    const now = new Date('2026-10-14T00:00:00Z');
+    const result = skippableDates(
+      [
+        occ('soon', '2026-10-14', 'READY_FOR_ORDER', '06:30:00Z'),
+        occ('b', '2026-10-16'),
+        occ('a-lunch', '2026-10-15'),
+        occ('a-dinner', '2026-10-15', 'READY_FOR_ORDER', '14:30:00Z'),
+        occ('skipped', '2026-10-17', 'SKIPPED'),
+        occ('cancelled', '2026-10-18', 'CANCELLED'),
+      ],
+      now,
+      1440,
+    );
+    expect(result).toEqual(['2026-10-15', '2026-10-16']);
+  });
+});
+
+describe('orderTrackerStep', () => {
+  it.each([
+    ['PAID', 0],
+    ['CHEF_ACCEPTANCE_PENDING', 0],
+    ['CHEF_ACCEPTED', 0],
+    ['PREPARING', 0],
+    ['READY_FOR_PICKUP', 1],
+    ['OUT_FOR_DELIVERY', 1],
+    ['DELIVERED', 2],
+    ['CHEF_REJECTED', null],
+    ['CANCELLED', null],
+    ['REFUND_PENDING', null],
+    ['REFUNDED', null],
+  ])('%s -> %s', (status, step) => {
+    expect(orderTrackerStep(status)).toBe(step);
   });
 });

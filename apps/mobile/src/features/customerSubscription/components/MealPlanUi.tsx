@@ -1,6 +1,8 @@
 import React from 'react';
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Image, Modal, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {resolveReducedMotionAnimation} from '../../../design/motion';
+import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {
   borderWidth,
   colors,
@@ -22,7 +24,7 @@ import {
   type IconName,
 } from '../../../shared/components';
 import type {MealPlanFoodType} from '../../mealPlans/domain/mealPlanSchedule';
-import type {PlanRule} from '../domain/mealPlanPresentation';
+import {formatMealPlanDate, type PlanRule} from '../domain/mealPlanPresentation';
 import type {KitchenRating} from '../query/mealPlanQueries';
 
 export interface MealPlanHeaderProps {
@@ -279,6 +281,67 @@ export function RadioMark({checked}: {checked: boolean}) {
   );
 }
 
+/** Bottom sheet listing dates. With `selected` the rows are radios; without, plain buttons. */
+export function DateSheet({
+  title,
+  dates,
+  selected,
+  onSelect,
+  onClose,
+}: {
+  title: string;
+  dates: string[];
+  selected?: string;
+  onSelect: (date: string) => void;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotionPreference();
+  return (
+    <Modal
+      animationType={resolveReducedMotionAnimation('slide' as const, reduceMotion)}
+      onRequestClose={onClose}
+      transparent
+      visible>
+      <View style={styles.backdrop}>
+        <Pressable
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          onPress={onClose}
+          style={StyleSheet.absoluteFill}
+        />
+        <View
+          accessibilityViewIsModal
+          onAccessibilityEscape={onClose}
+          style={[styles.sheet, {paddingBottom: Math.max(insets.bottom, spacing.md)}]}>
+          <View style={styles.handle} />
+          <Text
+            accessibilityRole="header"
+            allowFontScaling={textDefaults.allowFontScaling}
+            style={styles.sheetTitle}>
+            {title}
+          </Text>
+          <View accessibilityRole={selected === undefined ? undefined : 'radiogroup'}>
+            {dates.map(date => (
+              <Pressable
+                key={date}
+                accessibilityRole={selected === undefined ? 'button' : 'radio'}
+                accessibilityState={selected === undefined ? undefined : {checked: date === selected}}
+                onPress={() => onSelect(date)}
+                style={({pressed}) => [styles.dateRow, pressed && styles.pressed]}>
+                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.dateText}>
+                  {formatMealPlanDate(date, 'long')}
+                </Text>
+                {selected === undefined ? null : <RadioMark checked={date === selected} />}
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 /** Body for a plan screen while its plan is not in the public list: skeleton, retry, or gone. */
 export function PlanUnavailable({
   loading,
@@ -492,4 +555,34 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.small,
   },
+  backdrop: {flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay},
+  sheet: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    backgroundColor: colors.white,
+    ...elevation.card,
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 42,
+    height: 4,
+    marginBottom: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.borderStrong,
+  },
+  sheetTitle: {
+    marginBottom: spacing.xs,
+    color: colors.textPrimary,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
+  },
+  dateRow: {
+    minHeight: touchTarget.minimum,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateText: {color: colors.textPrimary, fontSize: typography.body},
 });

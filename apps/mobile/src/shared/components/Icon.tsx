@@ -54,7 +54,11 @@ export type IconName =
   | 'calendar'
   | 'calendar-check'
   | 'location-outline'
-  | 'meal';
+  | 'meal'
+  | 'play'
+  | 'renew'
+  | 'calendar-remove'
+  | 'receipt';
 
 interface Props {
   name: IconName;
@@ -116,6 +120,10 @@ const GLYPHS: Record<IconName, string> = {
   'calendar-check': 'calendar-check-outline',
   'location-outline': 'map-marker-outline',
   meal: 'silverware-fork-knife',
+  play: 'play',
+  renew: 'autorenew',
+  'calendar-remove': 'calendar-remove-outline',
+  receipt: 'receipt-text-outline',
 };
 
 export function Icon({

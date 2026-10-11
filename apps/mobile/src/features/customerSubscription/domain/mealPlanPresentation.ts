@@ -1,6 +1,7 @@
 // Pure presentation helpers for the customer meal-plan screens.
 // No Intl and no React: Hermes' Intl support is unreliable, so money and dates are formatted by hand.
 import {
+  formatServiceTime,
   sortScheduleItems,
   titleCaseCode,
   type ScheduleItemLike,
@@ -78,6 +79,69 @@ export function upcomingStartDates(today: Date, count = 7): string[] {
   return Array.from({length: count}, (_, i) =>
     toIsoDate(calendarDay(today, i + 1)),
   );
+}
+
+export function todayIso(now: Date): string {
+  return toIsoDate(calendarDay(now));
+}
+
+/** An occurrence's `serviceAt` instant as a device-local "12:30 PM". */
+export function occurrenceTimeLabel(serviceAt: string): string {
+  const at = new Date(serviceAt);
+  return formatServiceTime(`${at.getHours()}:${pad2(at.getMinutes())}`);
+}
+
+/**
+ * First date from tomorrow whose meal is more than `leadMinutes` away, the rule the server
+ * enforces on resume. Without a service time: tomorrow, plus a day per full day of lead.
+ */
+export function resumeDateFor(
+  now: Date,
+  leadMinutes: number,
+  serviceTime: string | null,
+): string {
+  const dates = upcomingStartDates(now, 30);
+  const time = serviceTime ? /^(\d{1,2}):(\d{2})/.exec(serviceTime) : null;
+  if (!time) {
+    return dates[Math.min(Math.floor(leadMinutes / 1440), dates.length - 1)];
+  }
+  return (
+    dates.find(iso => {
+      const [y, m, d] = iso.split('-').map(Number);
+      const serviceAt = new Date(y, m - 1, d, Number(time[1]), Number(time[2]));
+      return serviceAt.getTime() - now.getTime() > leadMinutes * 60_000;
+    }) ?? dates[dates.length - 1]
+  );
+}
+
+/** Dates the customer can still skip: not skipped or cancelled, and more than the cutoff away. */
+export function skippableDates(
+  occs: readonly CustomerSubscriptionOccurrence[],
+  now: Date,
+  cutoffMinutes: number,
+): string[] {
+  const dates = occs
+    .filter(
+      o =>
+        o.status !== 'SKIPPED' &&
+        o.status !== 'CANCELLED' &&
+        Date.parse(o.serviceAt) - now.getTime() > cutoffMinutes * 60_000,
+    )
+    .map(o => o.serviceDate);
+  return [...new Set(dates)].sort();
+}
+
+/** Preparing (0) → Out for delivery (1) → Delivered (2); null once the order is cancelled or refunded. */
+export function orderTrackerStep(status: string): 0 | 1 | 2 | null {
+  if (status === 'DELIVERED') {
+    return 2;
+  }
+  if (status === 'READY_FOR_PICKUP' || status === 'OUT_FOR_DELIVERY') {
+    return 1;
+  }
+  return status === 'CHEF_REJECTED' || status === 'CANCELLED' || status.startsWith('REFUND')
+    ? null
+    : 0;
 }
 
 const SUBSCRIPTION_STATUS: Record<string, {label: string; tone: Tone}> = {
@@ -203,11 +267,11 @@ export function nextOccurrence(
   occs: readonly CustomerSubscriptionOccurrence[],
   today: Date,
 ): CustomerSubscriptionOccurrence | null {
-  const todayIso = toIsoDate(calendarDay(today));
+  const from = todayIso(today);
   return (
     sortOccurrences(occs).find(
       o =>
-        o.serviceDate >= todayIso &&
+        o.serviceDate >= from &&
         o.status !== 'SKIPPED' &&
         o.status !== 'CANCELLED',
     ) ?? null

@@ -6,9 +6,11 @@ import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {MealPlanActivatedScreen} from '../screens/MealPlanActivatedScreen';
 import {MealPlanAddressScreen} from '../screens/MealPlanAddressScreen';
 import {MealPlanDetailScreen} from '../screens/MealPlanDetailScreen';
+import {MealPlanMealScreen} from '../screens/MealPlanMealScreen';
 import {MealPlanPaymentScreen} from '../screens/MealPlanPaymentScreen';
 import {MealPlanReviewScreen} from '../screens/MealPlanReviewScreen';
 import {MealPlansScreen} from '../screens/MealPlansScreen';
+import {MyMealPlanScreen} from '../screens/MyMealPlanScreen';
 import {MealPlanCheckoutProvider} from '../state/MealPlanCheckoutContext';
 
 const Stack = createNativeStackNavigator<CustomerMealPlanStackParamList>();
@@ -26,9 +28,6 @@ function useMealPlanStackScreenOptions() {
   );
 }
 
-// Task 6 replaces these placeholders with the real screens.
-const renderNothing = () => null;
-
 export function CustomerMealPlanNavigator() {
   const screenOptions = useMealPlanStackScreenOptions();
   return (
@@ -45,8 +44,8 @@ export function CustomerMealPlanNavigator() {
           component={MealPlanActivatedScreen}
           options={{gestureEnabled: false}}
         />
-        <Stack.Screen name="MyMealPlan" component={renderNothing} />
-        <Stack.Screen name="MealPlanMeal" component={renderNothing} />
+        <Stack.Screen name="MyMealPlan" component={MyMealPlanScreen} />
+        <Stack.Screen name="MealPlanMeal" component={MealPlanMealScreen} />
       </Stack.Navigator>
     </MealPlanCheckoutProvider>
   );

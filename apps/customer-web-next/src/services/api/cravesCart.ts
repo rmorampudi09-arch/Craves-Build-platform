@@ -4,7 +4,7 @@ import type { CustomerCart, ServerCartItem } from "@/lib/cart-contract";
 import { requestCartKitchenReplacement } from "@/lib/cart-kitchen-replacement";
 import type { CustomerOrder } from "@/lib/order-contract";
 import { sessionFetch } from "@/services/auth/sessionFetch";
-import { getDish, loadDish } from "./dishes";
+import { getDish, loadDish, loadKitchenMenu } from "./dishes";
 
 export type CartItem = {
   id: string;
@@ -83,7 +83,7 @@ let intentSeq = 0;
 let queue: Promise<unknown> = Promise.resolve();
 
 function mapItem(item: ServerCartItem): CartItem {
-  const dish = getDish(item.menuItemId);
+  const dish = getDish(item.menuItemId) ?? cartPhotos.get(item.menuItemId);
   return {
     id: item.id,
     menuItemId: item.menuItemId,
@@ -97,6 +97,34 @@ function mapItem(item: ServerCartItem): CartItem {
     currency: item.currency,
     lineTotal: item.lineTotal,
   };
+}
+
+/** Photos for cart lines whose dish isn't in the browse cache (this page load), by menu item. */
+const cartPhotos = new Map<string, { img: string; imageIsPlaceholder?: boolean }>();
+/** Kitchens whose menu is being, or was, read for cart photos: when a read may next be tried. */
+const photoKitchens = new Map<string, number>();
+const PHOTO_RETRY_MS = 60_000;
+
+/**
+ * A cart opened straight from a link (new tab, reload) has no dish photos cached: read each
+ * kitchen's menu once and redraw. The menu stays out of the browse cache (Home must not list a
+ * far kitchen's dishes). Photos are an enhancement: a failed read keeps the neutral placeholder,
+ * never touches the cart and is tried again on a cart load a minute later.
+ */
+function loadMissingPhotos(items: ServerCartItem[]) {
+  for (const { menuItemId, kitchenId } of items) {
+    if (!kitchenId || (photoKitchens.get(kitchenId) ?? 0) > Date.now()) continue;
+    if (getDish(menuItemId) || cartPhotos.has(menuItemId)) continue;
+    photoKitchens.set(kitchenId, Number.POSITIVE_INFINITY);
+    loadKitchenMenu(kitchenId, { remember: false }).then(
+      (menu) => {
+        for (const dish of menu) cartPhotos.set(dish.id, { img: dish.img, imageIsPlaceholder: dish.imageIsPlaceholder });
+        // Not while the cart holds none of this kitchen's lines (a kitchen swap in flight).
+        if (cart?.items.some((line) => line.kitchenId === kitchenId)) render();
+      },
+      () => photoKitchens.set(kitchenId, Date.now() + PHOTO_RETRY_MS),
+    );
+  }
 }
 
 function withQty(line: CartItem, qty: number): CartItem {
@@ -335,7 +363,10 @@ async function send(
     );
   }
   cart = body;
-  if (!quiet) render();
+  if (!quiet) {
+    render();
+    loadMissingPhotos(body.items);
+  }
   return body;
 }
 

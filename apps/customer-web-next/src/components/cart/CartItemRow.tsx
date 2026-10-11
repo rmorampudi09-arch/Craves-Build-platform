@@ -1,4 +1,4 @@
-import { FaImage, FaMinus, FaPlus, FaTrashCan } from "react-icons/fa6";
+import { FaMinus, FaPlus, FaTrashCan } from "react-icons/fa6";
 import { AnimateCount } from "@/components/ui/AnimateCount";
 import type { CartItem } from "@/services/api/cravesCart";
 
@@ -41,14 +41,6 @@ export function CartItemRow({
               : "h-full w-full object-cover"
           }
         />
-        {item.imageIsPlaceholder && (
-          <span
-            className="absolute bottom-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-white text-[#6B6B6B]"
-            title="Image not uploaded"
-          >
-            <FaImage className="text-[10px]" aria-hidden="true" />
-          </span>
-        )}
       </div>
 
       <div className="min-w-0">

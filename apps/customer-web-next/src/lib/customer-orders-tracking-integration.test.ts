@@ -18,7 +18,8 @@ test("each order links to its own tracking identity, active orders first", () =>
   const page = source("../screens/OrderHistory/OrderHistory.tsx");
   assert.match(page, /`\/orders\/\$\{order\.id\}\/tracking`/);
   assert.match(page, /title: "In progress"[\s\S]{0,200}title: "Past orders"/);
-  assert.match(page, /order\.items\.reduce/);
+  // Items read like the order page: "2 × Hyderabadi Chicken Dum Biryani".
+  assert.match(page, /order\.items\.map\(\(item\) => `\$\{item\.quantity\} × \$\{item\.itemName\}`\)/);
 });
 
 test("tracking validates both order and delivery projections", () => {

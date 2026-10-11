@@ -19,12 +19,16 @@ const ids = {
 const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
   replace: vi.fn(async () => true),
+  /** The dish cache: empty, as on a cart opened straight from a link. */
+  dishes: new Map<string, { img: string }>(),
+  menu: vi.fn<(kitchenId: string, options?: { remember?: boolean }) => Promise<unknown[]>>(async () => []),
 }));
 vi.mock("@/services/auth/sessionFetch", () => ({ sessionFetch: mocks.fetch }));
 vi.mock("@/lib/cart-kitchen-replacement", () => ({ requestCartKitchenReplacement: mocks.replace }));
 vi.mock("@/services/api/dishes", () => ({
-  getDish: () => undefined,
+  getDish: (id: string) => mocks.dishes.get(id),
   loadDish: async () => { throw new Error("offline"); },
+  loadKitchenMenu: mocks.menu,
 }));
 
 let server: Line[] = [];
@@ -50,6 +54,8 @@ const body = () => ({ id: ids.cart, currency: "INR", items: server, foodSubtotal
 beforeEach(() => {
   vi.useFakeTimers();
   vi.resetModules();
+  mocks.dishes.clear();
+  mocks.menu.mockReset().mockResolvedValue([]);
   server = [line(ids.dosa, ids.kitchenA, 1, 120, ids.lineDosa)];
   calls = [];
   gate = null;
@@ -86,6 +92,55 @@ async function loadedCart() {
 }
 
 describe("optimistic cart", () => {
+  it("loads dish photos for a cart opened straight from a link, once per kitchen", async () => {
+    mocks.menu.mockResolvedValue([{ id: ids.dosa, img: "/dosa.jpg" }]);
+    const cart = await import("@/services/api/cravesCart");
+    await cart.loadCart();
+    await flushMicrotasks();
+    // Read without adding that kitchen's menu to the dishes Home lists.
+    expect(mocks.menu.mock.calls).toEqual([[ids.kitchenA, { remember: false }]]);
+    expect(cart.getCart()[0]).toMatchObject({ img: "/dosa.jpg", imageIsPlaceholder: false });
+    await cart.loadCart();
+    await flushMicrotasks();
+    expect(mocks.menu).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the neutral placeholder and the cart when the menu can't load, and tries again a minute later", async () => {
+    mocks.menu.mockRejectedValueOnce(new Error("offline")).mockResolvedValue([{ id: ids.dosa, img: "/dosa.jpg" }]);
+    const cart = await import("@/services/api/cravesCart");
+    await cart.loadCart();
+    await flushMicrotasks();
+    expect(cart.getCart()[0]).toMatchObject({ qty: 1, imageIsPlaceholder: true });
+    await cart.loadCart();
+    await flushMicrotasks();
+    expect(mocks.menu).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(61_000);
+    await cart.loadCart();
+    await flushMicrotasks();
+    expect(mocks.menu).toHaveBeenCalledTimes(2);
+    expect(cart.getCart()[0]).toMatchObject({ img: "/dosa.jpg", imageIsPlaceholder: false });
+  });
+
+  it("never shows the emptied cart when photos land in the middle of a kitchen swap", async () => {
+    let landMenu!: (menu: unknown[]) => void;
+    mocks.menu.mockImplementation(() => new Promise<unknown[]>((resolve) => { landMenu = resolve; }));
+    const cart = await loadedCart();
+    const counts: number[] = [];
+    cart.subscribeCart(() => counts.push(cart.cartCount()));
+    // The old kitchen's photos arrive after the cart was emptied, before the new dish lands.
+    const serve = mocks.fetch.getMockImplementation()!;
+    mocks.fetch.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        landMenu([{ id: ids.dosa, img: "/dosa.jpg" }]);
+        await flushMicrotasks();
+      }
+      return serve(path, init);
+    });
+    await cart.addToCart({ id: ids.cake, name: "Cake", chef: "Bake", price: 300, img: "", kitchenId: ids.kitchenB }, 1);
+    expect(counts.length).toBeGreaterThan(0);
+    expect(counts).not.toContain(0);
+  });
+
   it("shows each tap at once and sends one write with the final quantity", async () => {
     const cart = await loadedCart();
     void cart.setQty(ids.lineDosa, 2);

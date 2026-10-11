@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeftRight, Bell, CalendarDays, ChevronDown } from "lucide-react";
 import {
@@ -28,7 +29,10 @@ interface BrowseHeaderProps {
   onLogout: () => void;
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
-  onSearchFocus: () => void;
+  /** A click or tap on a search field. Keyboard focus alone opens nothing (WCAG 3.2.1). */
+  onSearchActivate: () => void;
+  /** Enter in a search field. */
+  onSearchSubmit?: () => void;
   /** Pointer down on a search field: a chance to fetch the search UI before focus. */
   onSearchIntent?: () => void;
   foodPreference?: HomeFoodPreference;
@@ -93,7 +97,8 @@ export function BrowseHeader({
   onLogout,
   searchTerm,
   onSearchTermChange,
-  onSearchFocus,
+  onSearchActivate,
+  onSearchSubmit,
   onSearchIntent,
   foodPreference,
   onFoodPreferenceChange,
@@ -113,6 +118,11 @@ export function BrowseHeader({
   const chefActionLabel = isChef ? "Switch to chef mode" : "Open chef application";
   // Compact search bar slides in while scrolling back up (shared chrome controller).
   const { compact: mobileCompact } = useScrollChrome();
+  const submitSearch = (event: KeyboardEvent<HTMLInputElement>) => {
+    // Not the Enter that ends an IME composition (Telugu, Hindi…); Safari reports it as 229.
+    if (event.key !== "Enter" || event.nativeEvent.isComposing || event.keyCode === 229) return;
+    onSearchSubmit?.();
+  };
 
   return (
     <>
@@ -165,13 +175,15 @@ export function BrowseHeader({
             <input
               value={searchTerm}
               onPointerDown={onSearchIntent}
-              onFocus={onSearchFocus}
+              onClick={onSearchActivate}
+              onKeyDown={submitSearch}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search homemade dishes or kitchens"
               data-craves-bare-input
               className="w-full appearance-none border-0 bg-transparent p-0 text-xs font-semibold text-[#1A1A1A] lg:text-sm shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
               type="text"
               inputMode="search"
+              enterKeyHint="search"
               autoComplete="off"
               aria-label="Search homemade dishes or home kitchens"
             />
@@ -294,13 +306,15 @@ export function BrowseHeader({
               <input
                 value={searchTerm}
                 onPointerDown={onSearchIntent}
-                onFocus={onSearchFocus}
+                onClick={onSearchActivate}
+                onKeyDown={submitSearch}
                 onChange={(event) => onSearchTermChange(event.target.value)}
                 placeholder="Search dishes, kitchens"
                 data-craves-bare-input
                 className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-[#1A1A1A] shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
                 type="text"
                 inputMode="search"
+                enterKeyHint="search"
                 autoComplete="off"
                 aria-label="Search homemade dishes or home kitchens"
               />
@@ -336,13 +350,15 @@ export function BrowseHeader({
             <input
               value={searchTerm}
               onPointerDown={onSearchIntent}
-              onFocus={onSearchFocus}
+              onClick={onSearchActivate}
+              onKeyDown={submitSearch}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="Search dishes or kitchens"
               data-craves-bare-input
               className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-[#1A1A1A] shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
               type="text"
               inputMode="search"
+              enterKeyHint="search"
               autoComplete="off"
               aria-label="Search homemade dishes or home kitchens"
             />

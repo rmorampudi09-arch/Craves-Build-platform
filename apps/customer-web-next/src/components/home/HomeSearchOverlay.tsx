@@ -1,16 +1,17 @@
 import { Link } from "@tanstack/react-router";
-import { motion } from "framer-motion";
+import { motion, useIsPresent } from "framer-motion";
 import { useEffect, useMemo, useRef } from "react";
 import {
   ArrowLeft,
   ChefHat,
+  ChevronRight,
   MapPin,
   Search,
   SearchX,
-  UtensilsCrossed,
 } from "lucide-react";
 
 import { ProgressiveImage } from "@/components/media/ProgressiveImage";
+import { useOverlayHistory } from "@/components/ui/overlays/overlay";
 import { ease } from "@/lib/motion";
 import type { NearbyKitchen } from "@/lib/discovery-contract";
 import type { Dish } from "@/services/api/dishes";
@@ -49,6 +50,9 @@ export function HomeSearchOverlay({
 }: HomeSearchOverlayProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const normalized = searchTerm.trim().toLocaleLowerCase("en-IN");
+  // Phone Back closes search instead of leaving Craves; the entry goes as the fade starts.
+  const present = useIsPresent();
+  useOverlayHistory(present, onClose);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -200,7 +204,7 @@ export function HomeSearchOverlay({
                     <p className="mt-1 truncate text-xs font-semibold text-[#6B6B6B]">{dish.chef} · {dish.category}</p>
                     <p className="mt-2 text-sm font-black text-[#1A1A1A]">{priceLabel(dish.price, dish.currency)}</p>
                   </div>
-                  <UtensilsCrossed className="h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" />
+                  <ChevronRight className="h-5 w-5 shrink-0 text-[#6B6B6B]" aria-hidden="true" />
                 </Link>
               ))}
             </div>

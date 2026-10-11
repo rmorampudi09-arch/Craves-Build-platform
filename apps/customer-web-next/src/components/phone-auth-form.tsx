@@ -110,8 +110,8 @@ export function PhoneAuthForm({
           ? "Sending a new OTP…"
           : "Sending your OTP…"
         : isResend
-          ? "Requesting a new verification code..."
-          : "Requesting your verification code...",
+          ? "Requesting a new verification code…"
+          : "Requesting your verification code…",
     );
     try {
       if (isResend && confirmation.current?.resend) {
@@ -161,7 +161,7 @@ export function PhoneAuthForm({
     }
     setBusy(true);
     setStage("creating-session");
-    setMessage(chefJourney ? "Checking your OTP…" : "Verifying OTP and creating your Craves session...");
+    setMessage(chefJourney ? "Checking your OTP…" : "Verifying OTP and creating your Craves session…");
     try {
       const credential = await confirmation.current.confirm(otp);
       const firebaseIdToken = await credential.user.getIdToken(true);
@@ -306,7 +306,7 @@ export function PhoneAuthForm({
               aria-busy={busy}
               disabled={busy || stage === "done"}
             >
-              {busy ? "Signing in..." : "Verify OTP"}
+              {busy ? "Signing in…" : "Verify OTP"}
             </button>
             <button
               type="button"
@@ -327,7 +327,7 @@ export function PhoneAuthForm({
           </>
         ) : (
           <button className="craves-primary-action w-full" aria-busy={busy} disabled={busy}>
-            {busy ? "Requesting OTP..." : "Send OTP"}
+            {busy ? "Requesting OTP…" : "Send OTP"}
           </button>
         )}
       </form>

@@ -220,7 +220,8 @@ export function ChefCapacityQuickSetup() {
   }
 
   const slotLabel = SLOTS.find(([value]) => value === slot)?.[1] ?? slot;
-  const today = new Date().toISOString().slice(0, 10);
+  // Today in India: the UTC date is still yesterday until 5:30 am.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
 
   return (
     <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] md:p-6">

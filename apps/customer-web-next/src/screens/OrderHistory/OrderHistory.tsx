@@ -20,6 +20,7 @@ import { addToCart, CartKeptError, loadCart } from "@/services/api/cravesCart";
 import { loadKitchenMenu } from "@/services/api/dishes";
 import { CravesLogo } from "@/components/brand/CravesLogo";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
+import { useReturnScroll } from "@/lib/return-scroll";
 
 // Read and cleared by the cart page, which shows it once (same key as checkout uses).
 const CART_NOTICE_KEY = "craves.cart.notice";
@@ -49,32 +50,25 @@ function money(amount: number, currency: string): string {
   }
 }
 
-function formatOrderDate(value: string): string {
+/** "Sat, 10 Oct · 12:42 pm": the day first, so past orders are easy to tell apart; the year only when it isn't this one. */
+export function formatOrderDate(value: string, now = new Date()): string {
   const date = new Date(value);
-  const datePart = date.toLocaleDateString("en-IN", {
+  if (Number.isNaN(date.getTime())) return "";
+  const day = date.toLocaleDateString("en-IN", {
     weekday: "short",
-    day: "2-digit",
+    day: "numeric",
     month: "short",
-    year: "numeric",
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
   });
-  const timePart = date
-    .toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    })
-    .replace(/\b(am|pm)\b/i, (period) => period.toUpperCase());
-
-  return `${datePart} • ${timePart}`;
+  const time = date
+    .toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true })
+    .toLowerCase();
+  return `${day} · ${time}`;
 }
 
 function itemSummary(order: CustomerOrder): string {
   if (order.items.length === 0) return "Order items unavailable";
-  return order.items.reduce(
-    (summary, item, index) =>
-      `${summary}${index === 0 ? "" : ", "}${item.itemName} x ${item.quantity}`,
-    "",
-  );
+  return order.items.map((item) => `${item.quantity} × ${item.itemName}`).join(", ");
 }
 
 function statusClass(status: string): string {
@@ -158,6 +152,7 @@ export default function OrdersPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const rememberScroll = useReturnScroll(!loading);
 
   const load = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
@@ -254,7 +249,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white pb-20 text-ink">
+    <div className="min-h-screen bg-white pb-20 text-ink" onClickCapture={rememberScroll}>
       <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-4 md:px-6 md:py-5">
           <Link
@@ -382,8 +377,13 @@ export default function OrdersPage() {
                                       {order.kitchenName}
                                     </Link>
                                   </h3>
+                                  {/* Date and order number on their own lines on phones, one line from 640 px. */}
                                   <p className="mt-1 text-[13px] text-[#6B6B6B]">
-                                    Order #{shortOrderNumber(order.id)} · {formatOrderDate(order.createdAt)}
+                                    <time dateTime={order.createdAt} className="block sm:inline">
+                                      {formatOrderDate(order.createdAt)}
+                                    </time>
+                                    <span className="hidden sm:inline"> · </span>
+                                    <span className="block sm:inline">Order #{shortOrderNumber(order.id)}</span>
                                   </p>
                                 </div>
                                 <span

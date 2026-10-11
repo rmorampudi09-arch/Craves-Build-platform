@@ -1,7 +1,7 @@
 "use client";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/lib/chef-errors";
-import { sentenceCase } from "@/components/chef-ui";
+import { clockTime, dateTime, sentenceCase } from "@/components/chef-ui";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -239,7 +239,7 @@ export function ChefOperationsWorkspace() {
           </p>
           {application?.reviewedAt && (
             <p className="mt-3 text-xs text-muted-foreground">
-              Reviewed {new Date(application.reviewedAt).toLocaleString("en-IN")}
+              Reviewed {dateTime(application.reviewedAt)}
             </p>
           )}
           {application?.rejectionReason && (
@@ -384,7 +384,7 @@ export function ChefOperationsWorkspace() {
 
       {lastUpdatedAt && (
         <p className="text-xs text-muted-foreground">
-          Last refreshed {lastUpdatedAt.toLocaleString("en-IN")}
+          Last refreshed {clockTime(lastUpdatedAt.toISOString())}
         </p>
       )}
     </div>

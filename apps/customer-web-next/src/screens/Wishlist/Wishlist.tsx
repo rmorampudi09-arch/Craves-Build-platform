@@ -19,6 +19,7 @@ import { loadSession } from "@/services/auth/cravesAuth";
 import { AutoHideCustomerHeader } from "@/components/navigation/AutoHideCustomerHeader";
 import { CustomerFloatingCart } from "@/components/cart/CustomerFloatingCart";
 import { CustomerPageSkeleton } from "@/components/loading/CustomerPageSkeleton";
+import { useReturnScroll } from "@/lib/return-scroll";
 
 function money(amount: number, currency = "INR"): string {
   return new Intl.NumberFormat("en-IN", {
@@ -35,6 +36,7 @@ function WishlistPage() {
   const [items, setItems] = useState<Dish[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const rememberScroll = useReturnScroll(ready && !loading);
 
   const loadFavorites = useCallback(async () => {
     setLoading(true);
@@ -132,7 +134,7 @@ function WishlistPage() {
   if (!ready || loading) return <CustomerPageSkeleton label="Loading your saved dishes" />;
 
   return (
-    <div className="min-h-screen bg-white pb-20 text-[#1A1A1A]">
+    <div className="min-h-screen bg-white pb-20 text-[#1A1A1A]" onClickCapture={rememberScroll}>
       <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4 md:px-6">
           <Link

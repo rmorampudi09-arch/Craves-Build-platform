@@ -207,6 +207,15 @@ test("overlays enter and leave smoothly and hand focus back", () => {
   // Search: the chunk loads at idle or as the finger lands, opens without a Suspense
   // reveal delay (kept in state, not behind next/dynamic), and the overlay fades out.
   assert.match(home, /onSearchIntent=\{preloadHomeSearchOverlay\}/);
+  // A tap or click opens search (anywhere on the pill: the label forwards the click); Tab
+  // landing on the field does not (WCAG 3.2.1); typing does. Phone Back closes it.
+  assert.match(home, /onSearchActivate=\{openSearchOnTap\}/);
+  assert.match(home, /onSearchTermChange=\{typeInSearch\}/);
+  assert.match(header, /onClick=\{onSearchActivate\}/);
+  assert.doesNotMatch(header, /onFocus=/);
+  assert.match(search, /useOverlayHistory\(present, onClose\)/);
+  // Only Back onto search's own entry reopens it with the old words.
+  assert.match(home, /const backToSearch = restored\.searchOpen && returnedToOverlayEntry\(\)/);
   assert.match(header, /onPointerDown=\{onSearchIntent\}/);
   assert.match(home, /window\.requestIdleCallback\(preloadHomeSearchOverlay/);
   assert.match(home, /<AnimatePresence>\s*\{searchOpen && HomeSearchOverlay \? \(/);

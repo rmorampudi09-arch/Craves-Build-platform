@@ -3,7 +3,7 @@ import { createElement, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MotionGlobalConfig } from "framer-motion";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { Dialog, Sheet } from "@/components/ui/overlays/overlay";
+import { Dialog, Sheet, useOverlayHistory } from "@/components/ui/overlays/overlay";
 
 beforeAll(() => {
   MotionGlobalConfig.skipAnimations = true;
@@ -70,6 +70,41 @@ describe("customer overlays", () => {
     back.mockRestore();
   });
 
+  it("takes over an entry an earlier overlay left behind instead of stacking a second one", async () => {
+    // A dish opened from search, then Back: the page underneath reopens its overlay on that entry.
+    window.history.pushState({ ...(window.history.state as object | null), cravesOverlay: 9_999 }, "");
+    const routerPopState = vi.fn();
+    window.addEventListener("popstate", routerPopState);
+    render(createElement(Harness));
+    const before = window.history.length;
+
+    fireEvent.click(screen.getByRole("button", { name: "Open" }));
+    expect(window.history.length).toBe(before);
+    expect((window.history.state as Record<string, unknown>).cravesOverlay).toBe(9_999);
+
+    await act(async () => {
+      window.history.back();
+    });
+    await waitFor(() => expect(state()).toBe("closed"));
+    expect(routerPopState).not.toHaveBeenCalled();
+    window.removeEventListener("popstate", routerPopState);
+  });
+
+  it("still gives an overlay opened over another open one its own entry", async () => {
+    function Probe({ open }: { open: boolean }) {
+      useOverlayHistory(open, () => undefined);
+      return null;
+    }
+    const probes = (second: boolean) =>
+      createElement("div", null, createElement(Probe, { open: true }), createElement(Probe, { open: second }));
+    const view = render(probes(false));
+    const before = window.history.length;
+    view.rerender(probes(true));
+    expect(window.history.length).toBe(before + 1);
+    view.unmount();
+    await nextTick();
+  });
+
   it("closes on Escape", async () => {
     render(createElement(Harness, { kind: "sheet" }));
     fireEvent.click(screen.getByRole("button", { name: "Open" }));
@@ -94,5 +129,30 @@ describe("customer overlays", () => {
     tapOutside();
     expect(state()).toBe("closed");
     await nextTick();
+  });
+
+  // Last: it leaves a pop that never lands (history.back is stubbed).
+  it("never adopts the entry of an overlay whose pop is still on its way", async () => {
+    function Probe({ open }: { open: boolean }) {
+      useOverlayHistory(open, () => undefined);
+      return null;
+    }
+    const back = vi.spyOn(window.history, "back").mockImplementation(() => undefined);
+    const view = render(createElement(Probe, { open: false }));
+    await act(async () => {
+      view.rerender(createElement(Probe, { open: true }));
+    });
+    const afterOpen = window.history.length;
+    await act(async () => {
+      view.rerender(createElement(Probe, { open: false }));
+    });
+    // Separate act: the close's 0 ms timer runs and calls history.back(), whose popstate is pending.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+    expect(back).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      view.rerender(createElement(Probe, { open: true }));
+    });
+    expect(window.history.length).toBe(afterOpen + 1);
+    back.mockRestore();
   });
 });

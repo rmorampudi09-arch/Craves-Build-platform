@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { MapPin, Minus, Plus } from "lucide-react";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/lib/catalog-discovery-policy";
 import { hasHomeReturnState } from "@/lib/home-return-state";
+import { returnToListPath } from "@/lib/return-scroll";
 import type { KitchenReviewSummary } from "@/lib/review-summary-contract";
 import { loadSelectedAddress, loadSession } from "@/services/auth/cravesAuth";
 import {
@@ -190,11 +191,17 @@ function DishDetailPage() {
   }, []);
 
   const handleBack = () => {
-    if (
+    const canGoBack =
       typeof window !== "undefined" &&
       hasHomeReturnState() &&
-      window.history.length > 1
-    ) {
+      window.history.length > 1;
+    // Opened from saved dishes or a kitchen's menu: back goes there, to the same spot.
+    const list = canGoBack ? null : returnToListPath();
+    if (list) {
+      navigate({ to: list });
+      return;
+    }
+    if (canGoBack) {
       window.history.back();
       return;
     }
@@ -221,7 +228,7 @@ function DishDetailPage() {
               onClick={handleBack}
               className="!mt-6 !inline-flex !min-h-11 !items-center !rounded-full !bg-[#F62E18] !px-5 !text-sm !font-black !text-white"
             >
-              Back to home
+              Go back
             </button>
           </div>
         </main>

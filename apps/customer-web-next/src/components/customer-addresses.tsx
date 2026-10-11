@@ -86,7 +86,7 @@ export function CustomerAddresses() {
     ).length;
     setMessage(
       incomplete
-        ? `${body.length} saved address${body.length === 1 ? "" : "es"}; ${incomplete} need completion before checkout.`
+        ? `${body.length} saved address${body.length === 1 ? "" : "es"}; ${incomplete} ${incomplete === 1 ? "needs" : "need"} a few details before checkout.`
         : body.length
           ? `${body.length} saved address${body.length === 1 ? "" : "es"}.`
           : "No saved addresses yet.",

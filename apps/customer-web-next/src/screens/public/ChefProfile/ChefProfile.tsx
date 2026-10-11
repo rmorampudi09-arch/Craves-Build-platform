@@ -1,7 +1,7 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  Images,
+  ChefHat,
   MapPin,
   PackageCheck,
   Star,
@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/lib/catalog-discovery-policy";
 import { hasHomeReturnState } from "@/lib/home-return-state";
+import { useReturnScroll } from "@/lib/return-scroll";
 import type { KitchenReviewSummary } from "@/lib/review-summary-contract";
 import {
   getChef,
@@ -57,16 +58,15 @@ function ChefProfilePage() {
   const [chef, setChef] = useState<Chef | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
-  const [photoNotice, setPhotoNotice] = useState(false);
   const [reviewSummary, setReviewSummary] = useState<KitchenReviewSummary | null>(null);
   const cartSummary = useCustomerCartSummary();
+  const rememberScroll = useReturnScroll(!loading);
 
   useEffect(() => {
     let active = true;
     setChef(undefined);
     setLoading(true);
     setMessage("");
-    setPhotoNotice(false);
     setReviewSummary(null);
 
     void (async () => {
@@ -183,7 +183,10 @@ function ChefProfilePage() {
     : "Explore the home-cooked dishes currently available from this kitchen on Craves.";
 
   return (
-    <div className={`min-h-screen bg-white text-[#1A1A1A] ${cartSummary.itemCount > 0 ? "pb-32" : "pb-14"}`}>
+    <div
+      className={`min-h-screen bg-white text-[#1A1A1A] ${cartSummary.itemCount > 0 ? "pb-32" : "pb-14"}`}
+      onClickCapture={rememberScroll}
+    >
       <DetailBrowseHeader returnPath={`/kitchen/${id}`} onBack={handleBack} />
 
       <main className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
@@ -202,24 +205,6 @@ function ChefProfilePage() {
               <p className="mt-4 max-w-2xl text-sm leading-6 text-[#6B6B6B] sm:text-[0.95rem]">
                 {chef.bio || fallbackDescription}
               </p>
-
-              <button
-                type="button"
-                onClick={() => setPhotoNotice((visible) => !visible)}
-                className="!mt-5 !inline-flex !min-h-11 !items-center !gap-2 !rounded-full !border !border-[#E5E7EB] !bg-white !px-4 !text-sm !font-black !text-[#1A1A1A] !shadow-[0_5px_14px_rgba(26,26,26,0.05)] transition-[border-color,color,box-shadow] hover:!border-[#D7DADF] hover:!text-[#F62E18]"
-                aria-expanded={photoNotice}
-              >
-                <Images className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
-                Kitchen photos
-              </button>
-              {photoNotice ? (
-                <p
-                  role="status"
-                  className="mt-2 max-w-md rounded-2xl bg-[#F1F3F5] px-3.5 py-2.5 text-xs font-semibold leading-5 text-[#6B6B6B]"
-                >
-                  Kitchen photos are not available from this kitchen yet.
-                </p>
-              ) : null}
             </div>
 
             <div className="grid shrink-0 grid-cols-2 gap-2.5 lg:w-[27rem]">
@@ -233,13 +218,15 @@ function ChefProfilePage() {
                 <p className="mt-2 text-sm font-black text-[#1A1A1A]">Made to order</p>
                 <p className="mt-1 text-[0.68rem] font-bold text-[#6B6B6B]">Prepared after you order</p>
               </div>
-              <div className="col-span-2 rounded-2xl bg-[#F1F3F5] p-3.5 sm:col-span-1">
-                <p className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#F62E18]">Menu</p>
+              {/* Full width only when it is the odd tile out (no reviews yet), so the grid has no hole. */}
+              <div className={`${reviewSummary ? "" : "col-span-2 "}rounded-2xl bg-[#F1F3F5] p-3.5`}>
+                <ChefHat className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
                 <p className="mt-2 text-sm font-black text-[#1A1A1A]">
                   {chef.specialties.length > 0
                     ? chef.specialties.slice(0, 2).join(" · ")
                     : "Home-cooked dishes"}
                 </p>
+                <p className="mt-1 text-[0.68rem] font-bold text-[#6B6B6B]">Specialities</p>
               </div>
               {reviewSummary ? (
                 <div className="rounded-2xl bg-[#F1F3F5] p-3.5">

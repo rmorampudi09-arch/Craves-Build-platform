@@ -502,7 +502,7 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
             />
             <ProfileLinkCard
               icon={FaGift}
-              title="Referral to friend"
+              title="Refer a friend"
               subtitle="Invite friends and earn rewards"
               badge="Soon"
               disabled

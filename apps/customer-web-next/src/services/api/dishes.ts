@@ -357,7 +357,11 @@ export async function loadMoreDiscoveredDishes(): Promise<Dish[]> {
   return [...discoveredDishes];
 }
 
-export async function loadKitchenMenu(kitchenId: string): Promise<Dish[]> {
+/** `remember: false` reads the menu without adding it to the nearby dishes Home lists. */
+export async function loadKitchenMenu(
+  kitchenId: string,
+  { remember = true }: { remember?: boolean } = {},
+): Promise<Dish[]> {
   const response = await fetch(
     `/api/catalog/kitchens/${encodeURIComponent(kitchenId)}/menu-items`,
     {
@@ -383,6 +387,7 @@ export async function loadKitchenMenu(kitchenId: string): Promise<Dish[]> {
   }
 
   const loaded = body.map(mapDetail);
+  if (!remember) return loaded;
   const loadedIds = new Set(loaded.map((dish) => dish.id));
   discoveredDishes = [
     ...loaded,

@@ -9,7 +9,7 @@ function foodMeta(dish: Dish) {
   if (type === "EGG") {
     return { label: "Egg", dot: "bg-[#D99A00]" };
   }
-  return { label: "Non-Veg", dot: "bg-[#F62E18]" };
+  return { label: "Non-veg", dot: "bg-[#7B3F00]" };
 }
 
 export function DishInfoSummary({ dish }: { dish: Dish }) {

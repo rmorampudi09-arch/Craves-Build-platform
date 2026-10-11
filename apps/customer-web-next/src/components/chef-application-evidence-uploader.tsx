@@ -2,6 +2,7 @@
 
 import { CheckCircle2, CircleAlert, FileUp, ShieldCheck, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/buttons/button";
+import { dateTime } from "@/components/chef-ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -272,7 +273,7 @@ export function ChefApplicationEvidenceUploader({
                     <h3 className="font-bold">{requirement.title} <span className="text-red-600">*</span></h3>
                     <p className="mt-1 text-xs leading-5 text-slate-500">{requirement.helper}</p>
                     {uploaded && <p className={`mt-2 break-words text-xs font-semibold ${approved ? "text-emerald-700" : rejected ? "text-red-700" : "text-primary"}`}>{uploaded.originalFileName} · {formatBytes(uploaded.fileSizeBytes)}</p>}
-                    {uploaded?.reviewedAt && <p className="mt-1 text-[11px] text-slate-500">Reviewed {new Date(uploaded.reviewedAt).toLocaleString("en-IN")}</p>}
+                    {uploaded?.reviewedAt && <p className="mt-1 text-[11px] text-slate-500">Reviewed {dateTime(uploaded.reviewedAt)}</p>}
                   </div>
                 </div>
                 <span className={`rounded-full px-3 py-1 text-xs font-bold ${statusClasses(uploaded)}`}>{statusLabel(uploaded)}</span>

@@ -20,6 +20,7 @@ import {
   type CustomerOrder,
 } from "@/lib/order-contract";
 import { shortOrderNumber } from "@/lib/order-number";
+import { returnToListPath } from "@/lib/return-scroll";
 
 interface TimelineStep {
   key: string;
@@ -277,7 +278,7 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
     <TrackingHeader
       title="Order status"
       orderId={shortOrderNumber(orderId)}
-      onBack={() => router.push("/orders")}
+      onBack={() => router.push(returnToListPath() ?? "/orders")}
       onRefresh={() => void refresh(true)}
       refreshing={refreshing || (loading && !order)}
     />

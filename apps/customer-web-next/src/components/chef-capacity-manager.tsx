@@ -141,7 +141,8 @@ export function ChefCapacityManager() {
   }
 
   const menuNames = useMemo(() => new Map(menu.map(item => [item.id, item.itemName])), [menu]);
-  const today = new Date().toISOString().slice(0, 10);
+  // Today in India: the UTC date is still yesterday until 5:30 am.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
 
   return <div className="space-y-6">
     {summary?.adminSalesFrozen && <section className="rounded-2xl border border-[#E3E6EA] bg-[#F1F3F5] p-5 text-[#C4200F]"><div className="flex gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" /><div><h2 className="font-bold">New subscription sales are frozen by Craves operations</h2><p className="mt-1 text-sm">{summary.freezeReason ?? "Contact support before changing subscription availability."}</p></div></div></section>}

@@ -59,7 +59,7 @@ const MAX_PHOTOS = 5;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const FOOD_TYPES = [
   { value: "VEG", label: "Veg", color: "bg-[#2E7D32]" },
-  { value: "NON_VEG", label: "Non-Veg", color: "bg-[#F62E18]" },
+  { value: "NON_VEG", label: "Non-veg", color: "bg-[#7B3F00]" },
   { value: "EGG", label: "Egg", color: "bg-[#D99A00]" },
 ] as const;
 const SECTION = "chef-section p-4 md:p-5";
@@ -215,7 +215,7 @@ export function ChefMenuManager() {
     const next: Partial<Record<Field, string>> = {};
     if (!form.itemName.trim()) next.itemName = "Dish name is required.";
     if (!form.category.trim()) next.category = "Choose or enter a category.";
-    if (!form.foodType) next.foodType = "Please select Veg, Non-Veg, or Egg.";
+    if (!form.foodType) next.foodType = "Choose Veg, Non-veg or Egg.";
     if (
       !/^\d+(\.\d{1,2})?$/.test(form.price.trim()) ||
       Number(form.price) < 0.01 ||

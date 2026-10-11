@@ -230,7 +230,7 @@ export function AllChefsPage() {
         onLogout={() => setSignOutOpen(true)}
         searchTerm={searchTerm}
         onSearchTermChange={setSearchTerm}
-        onSearchFocus={() => undefined}
+        onSearchActivate={() => undefined}
         returnPath="/chefs"
       />
 

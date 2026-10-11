@@ -29,7 +29,10 @@ const ENTER = { duration: 0.32, ease: [0.22, 1, 0.36, 1] } as const;
 const EXIT = { duration: 0.22, ease: [0.4, 0, 1, 1] } as const;
 const WIDE_QUERY = "(min-width: 640px)";
 
-let entryCount = 0;
+// Seeded from the clock: entry ids stay unique across reloads, whose history keeps old ids.
+let entryCount = Date.now();
+/** Entries owned by an overlay that is open (or still popping); an entry can outlive its overlay. */
+const liveEntries = new Set<number>();
 
 type HistoryEntry = { id: number; url: string; popTimer: number };
 
@@ -37,10 +40,20 @@ function historyEntryId(): unknown {
   return (window.history.state as Record<string, unknown> | null)?.[HISTORY_KEY];
 }
 
+/**
+ * True when the current history entry belongs to an overlay that is no longer open: the
+ * person came Back to a page they had left with an overlay open (a dish opened from search).
+ */
+export function returnedToOverlayEntry(): boolean {
+  const id = historyEntryId();
+  return typeof id === "number" && !liveEntries.has(id);
+}
+
 /** Steps back over our own entry without the router treating it as navigation. */
-function popEntry(url: string) {
+function popEntry(url: string, onPopped: () => void) {
   const swallow = (event: PopStateEvent) => {
     window.removeEventListener("popstate", swallow, true);
+    onPopped();
     if (window.location.href === url) event.stopImmediatePropagation();
   };
   window.addEventListener("popstate", swallow, true);
@@ -63,13 +76,20 @@ export function useOverlayHistory(open: boolean, onBack: () => void) {
       window.clearTimeout(current.popTimer);
       current.popTimer = 0;
     } else {
-      current = { id: ++entryCount, url: window.location.href, popTimer: 0 };
+      if (returnedToOverlayEntry()) {
+        // Back landed on an entry an earlier overlay left behind (a dish opened from
+        // search, then Back): own it instead of stacking a second one on top.
+        current = { id: historyEntryId() as number, url: window.location.href, popTimer: 0 };
+      } else {
+        current = { id: ++entryCount, url: window.location.href, popTimer: 0 };
+        // Keep the router's own state so a later Forward lands on a valid entry.
+        window.history.pushState(
+          { ...(window.history.state as object | null), [HISTORY_KEY]: current.id },
+          "",
+        );
+      }
+      liveEntries.add(current.id);
       entry.current = current;
-      // Keep the router's own state so a later Forward lands on a valid entry.
-      window.history.pushState(
-        { ...(window.history.state as object | null), [HISTORY_KEY]: current.id },
-        "",
-      );
     }
 
     const { id, url } = current;
@@ -87,11 +107,14 @@ export function useOverlayHistory(open: boolean, onBack: () => void) {
       if (!closing || historyEntryId() !== id) {
         // Back already removed it, or the app navigated on top of it.
         entry.current = null;
+        liveEntries.delete(id);
         return;
       }
       closing.popTimer = window.setTimeout(() => {
         entry.current = null;
-        if (historyEntryId() === id) popEntry(url);
+        // The id stays live until the pop lands, so an overlay opened meanwhile never adopts it.
+        if (historyEntryId() === id) popEntry(url, () => liveEntries.delete(id));
+        else liveEntries.delete(id);
       }, 0);
     };
   }, [open]);

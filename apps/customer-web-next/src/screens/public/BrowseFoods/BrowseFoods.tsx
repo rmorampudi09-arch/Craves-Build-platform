@@ -25,6 +25,7 @@ import {
 import { KitchensGrid } from "@/components/home/KitchensGrid";
 import { WelcomeBanner } from "@/components/home/WelcomeBanner";
 import { holdScrollChrome } from "@/components/navigation/AutoHideCustomerHeader";
+import { returnedToOverlayEntry } from "@/components/ui/overlays/overlay";
 import { ALL_DISHES_CATEGORY } from "@/constants/dishCategories";
 import {
   DEFAULT_DISCOVERY_RADIUS_METERS,
@@ -185,6 +186,28 @@ function BrowseFoodsPage() {
         // Offline or a stale deploy: the next tap on search tries again.
         searchOverlayModule = null;
       });
+  }, []);
+  // Search opens on a tap or click, or on typing; never because Tab landed on the field (WCAG 3.2.1).
+  // The field a keyboard user typed into gets focus back when search closes.
+  const searchOpenerRef = useRef<HTMLElement | null>(null);
+  const openSearchOnTap = useCallback(() => {
+    preloadHomeSearchOverlay();
+    searchOpenerRef.current = null;
+    setSearchOpen(true);
+  }, [preloadHomeSearchOverlay]);
+  const typeInSearch = useCallback((value: string) => {
+    setSearchTerm(value);
+    if (searchOpen) return;
+    preloadHomeSearchOverlay();
+    searchOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSearchOpen(true);
+  }, [preloadHomeSearchOverlay, searchOpen]);
+  const closeSearch = useCallback(() => {
+    setSearchTerm("");
+    setSearchOpen(false);
+    const opener = searchOpenerRef.current;
+    searchOpenerRef.current = null;
+    if (opener?.isConnected) window.requestAnimationFrame(() => opener.focus({ preventScroll: true }));
   }, []);
   const [cartItemCount, setCartItemCount] = useState(() => cartCount());
   const [cartItems, setCartItems] = useState<CartItem[]>(() => getCart());
@@ -356,21 +379,25 @@ function BrowseFoodsPage() {
     );
     setDishSort(restored.dishSort);
     setFoodPreference(restored.foodPreference === "veg" ? "veg" : "all");
-    setSearchTerm("");
-    setSearchOpen(false);
-  }, []);
+    // Back from a dish or kitchen opened in search lands on search's history entry and shows the
+    // same results; any other way back to Home (tab, logo) starts with search closed.
+    const backToSearch = restored.searchOpen && returnedToOverlayEntry();
+    setSearchTerm(backToSearch ? restored.searchTerm : "");
+    setSearchOpen(backToSearch);
+    if (backToSearch) preloadHomeSearchOverlay();
+  }, [preloadHomeSearchOverlay]);
 
   const rememberHomeView = useCallback(() => {
     window.history.scrollRestoration = "manual";
     saveHomeReturnState({
       scrollY: window.scrollY,
-      searchTerm: "",
-      searchOpen: false,
+      searchTerm: searchOpen ? searchTerm : "",
+      searchOpen,
       homeCategory,
       dishSort,
       foodPreference,
     });
-  }, [dishSort, foodPreference, homeCategory]);
+  }, [dishSort, foodPreference, homeCategory, searchOpen, searchTerm]);
 
   // The search overlay is its own chunk: fetch it once the page is idle, so the first tap
   // on search opens it at once instead of waiting for the download.
@@ -480,8 +507,13 @@ function BrowseFoodsPage() {
   useEffect(() => {
     if (window.sessionStorage.getItem("craves-home-open-search") !== "1") return;
     window.sessionStorage.removeItem("craves-home-open-search");
+    // Words typed in a dish or kitchen page's search field (Enter) carry over.
+    const term = window.sessionStorage.getItem("craves-home-search-term");
+    window.sessionStorage.removeItem("craves-home-search-term");
+    if (term) setSearchTerm(term);
+    preloadHomeSearchOverlay();
     setSearchOpen(true);
-  }, []);
+  }, [preloadHomeSearchOverlay]);
 
   useEffect(() => {
     let active = true;
@@ -877,11 +909,8 @@ function BrowseFoodsPage() {
         onOpenCart={() => navigate({ to: "/cart" })}
         onLogout={() => setSignOutOpen(true)}
         searchTerm={searchTerm}
-        onSearchTermChange={setSearchTerm}
-        onSearchFocus={() => {
-          preloadHomeSearchOverlay();
-          setSearchOpen(true);
-        }}
+        onSearchTermChange={typeInSearch}
+        onSearchActivate={openSearchOnTap}
         onSearchIntent={preloadHomeSearchOverlay}
         foodPreference={foodPreference}
         onFoodPreferenceChange={changeFoodPreference}
@@ -988,10 +1017,7 @@ function BrowseFoodsPage() {
             vegOnly={foodPreference === "veg"}
             onSearchTermChange={setSearchTerm}
             onDisableVeg={() => setFoodPreference("all")}
-            onClose={() => {
-              setSearchTerm("");
-              setSearchOpen(false);
-            }}
+            onClose={closeSearch}
           />
         ) : null}
       </AnimatePresence>

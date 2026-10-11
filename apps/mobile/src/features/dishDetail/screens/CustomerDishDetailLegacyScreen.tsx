@@ -227,6 +227,7 @@ export function CustomerDishDetailScreen() {
   const handleCartOutcome = (
     outcome: CartMutationOutcome,
     refreshedPrice: number,
+    closeWhenAdded = false,
   ) => {
     if (outcome.status === 'FAILED') {
       setPurchaseMessage(outcome.error.message);
@@ -244,6 +245,8 @@ export function CustomerDishDetailScreen() {
       return;
     }
     setPurchaseMessage(null);
+    // A first Add closes the popup; − / + on a dish already in the cart keeps it open.
+    if (closeWhenAdded) navigation.goBack();
   };
 
   const revalidateAndIncrease = async () => {
@@ -291,7 +294,7 @@ export function CustomerDishDetailScreen() {
               }),
             )
               .then(outcome =>
-                handleCartOutcome(outcome, latestDish.price.amount),
+                handleCartOutcome(outcome, latestDish.price.amount, true),
               )
               .catch(() =>
                 setPurchaseMessage(
@@ -313,7 +316,7 @@ export function CustomerDishDetailScreen() {
         : await dispatch(
             addCartItem({menuItemId: latestDish.id, quantity: 1}),
           );
-      handleCartOutcome(outcome, latestDish.price.amount);
+      handleCartOutcome(outcome, latestDish.price.amount, cartLine == null);
     } finally {
       setRevalidating(false);
     }

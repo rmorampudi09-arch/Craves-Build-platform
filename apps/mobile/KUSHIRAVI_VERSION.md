@@ -19,6 +19,15 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.28.1 - Glass buttons on the kitchen page, popup closes on Add, 2026-10-11
+
+- Kitchen page: the back arrow and kitchen heart in the top bar, and the heart on every
+  dish photo, use the Home liquid glass (`LiquidGlassSurface appearance="home"`; dish
+  hearts sample their photo through a `BlurTargetView`, like the Home kitchen cards).
+- Dish popup: a successful first Add (including Replace in the kitchen-switch popup)
+  closes the popup. It stays open on a failure or a price-change message, and − / + on
+  a dish already in the cart keeps it open.
+
 ### Version 1.28.0 - Kitchen page with the full menu, 2026-10-11
 
 - The kitchen page now holds the whole menu (design Option A in

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, {useRef} from 'react';
 import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {BlurTargetView} from 'expo-blur';
 import {
   colors,
   elevation,
@@ -9,6 +10,7 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
+import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface';
 import type {CartLine} from '../../cart/domain/cartTypes';
 import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
 import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
@@ -66,6 +68,7 @@ export function CustomerKitchenMenuCard({
   onDecrease,
 }: CustomerKitchenMenuCardProps) {
   const image = getCustomerKitchenMenuImage(item);
+  const photoTarget = useRef<View | null>(null);
   const meta = [
     item.preparationTimeMinutes ? `${item.preparationTimeMinutes} min` : null,
     item.servesCount ? `Serves ${item.servesCount}` : null,
@@ -105,12 +108,14 @@ export function CustomerKitchenMenuCard({
           onPress={() => onOpen(item.id)}
           style={({pressed}) => [styles.photo, pressed && styles.pressed]}>
           {image ? (
-            <Image
-              accessibilityIgnoresInvertColors
-              resizeMode="cover"
-              source={{uri: image.url}}
-              style={styles.photoImage}
-            />
+            <BlurTargetView ref={photoTarget} style={styles.photoImage}>
+              <Image
+                accessibilityIgnoresInvertColors
+                resizeMode="cover"
+                source={{uri: image.url}}
+                style={styles.photoImage}
+              />
+            </BlurTargetView>
           ) : (
             <View style={styles.photoFallback}>
               <Icon name="meal" size={28} color={colors.textSecondary} surface={false} />
@@ -118,15 +123,20 @@ export function CustomerKitchenMenuCard({
           )}
         </Pressable>
 
-        <CustomerFavoriteHeartButton
-          favorite={favorite}
-          pending={favoritePending}
-          disabled={favoriteDisabled}
-          inactiveColor={colors.white}
-          itemLabel={item.itemName}
-          onToggle={() => onFavoriteToggle(item.id, favorite)}
-          style={[styles.favoriteButton, favorite && styles.favoriteButtonOn]}
-        />
+        <LiquidGlassSurface
+          appearance="home"
+          blurTarget={image ? photoTarget : undefined}
+          style={styles.favoriteGlass}>
+          <CustomerFavoriteHeartButton
+            favorite={favorite}
+            pending={favoritePending}
+            disabled={favoriteDisabled}
+            inactiveColor={image ? colors.white : colors.espressoBrown}
+            itemLabel={item.itemName}
+            onToggle={() => onFavoriteToggle(item.id, favorite)}
+            style={styles.favoriteControl}
+          />
+        </LiquidGlassSurface>
 
         {cartLine ? (
           <View style={[styles.cartControl, styles.stepper]}>
@@ -263,17 +273,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  favoriteButton: {
+  favoriteGlass: {
     position: 'absolute',
-    top: spacing.xxs,
-    right: spacing.xxs,
-    width: 36,
-    height: 36,
+    top: spacing.xs - 2,
+    right: spacing.xs - 2,
+    width: 40,
+    height: 40,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(24, 24, 24, 0.32)',
+    overflow: 'hidden',
   },
-  favoriteButtonOn: {
-    backgroundColor: colors.white,
+  favoriteControl: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'transparent',
   },
   cartControl: {
     position: 'absolute',

@@ -31,6 +31,7 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
+import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface';
 import {
   OfflineNotice,
   RecoverableErrorBanner,
@@ -443,13 +444,15 @@ export function CustomerKitchenProfileScreen() {
       testID="customer-kitchen-profile">
       <View style={styles.screen}>
         <View style={styles.header}>
-          <Pressable
-            accessibilityLabel="Back"
-            accessibilityRole="button"
-            onPress={() => navigation.goBack()}
-            style={({pressed}) => [styles.headerAction, pressed && styles.pressed]}>
-            <Icon name="arrow-left" />
-          </Pressable>
+          <LiquidGlassSurface appearance="home" style={styles.headerGlass}>
+            <Pressable
+              accessibilityLabel="Back"
+              accessibilityRole="button"
+              onPress={() => navigation.goBack()}
+              style={({pressed}) => [styles.headerGlassControl, pressed && styles.pressed]}>
+              <Icon name="arrow-left" surface={false} />
+            </Pressable>
+          </LiquidGlassSurface>
           <View style={styles.headerTitleRow}>
             {headerTitleVisible ? (
               <>
@@ -462,14 +465,16 @@ export function CustomerKitchenProfileScreen() {
               </>
             ) : null}
           </View>
-          <CustomerFavoriteHeartButton
-            favorite={kitchenFavorite}
-            pending={toggleFavoriteKitchen.isPending}
-            disabled={!favoriteKitchens.identityId}
-            itemLabel={kitchenName}
-            onToggle={handleKitchenFavorite}
-            style={styles.headerFavorite}
-          />
+          <LiquidGlassSurface appearance="home" style={styles.headerGlass}>
+            <CustomerFavoriteHeartButton
+              favorite={kitchenFavorite}
+              pending={toggleFavoriteKitchen.isPending}
+              disabled={!favoriteKitchens.identityId}
+              itemLabel={kitchenName}
+              onToggle={handleKitchenFavorite}
+              style={styles.headerGlassControl}
+            />
+          </LiquidGlassSurface>
         </View>
         {interactionNotice ? (
           <RecoverableErrorBanner message={interactionNotice} style={styles.pinnedNotice} />
@@ -785,11 +790,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     backgroundColor: colors.white,
   },
-  headerAction: {
+  headerGlass: {
     width: touchTarget.minimum,
     height: touchTarget.minimum,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+  },
+  headerGlassControl: {
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'transparent',
   },
   headerTitleRow: {
     flex: 1,
@@ -816,9 +828,6 @@ const styles = StyleSheet.create({
     color: colors.espressoBrown,
     fontSize: typography.button,
     fontWeight: fontWeight.bold,
-  },
-  headerFavorite: {
-    backgroundColor: colors.surfaceMuted,
   },
   pinnedNotice: {
     marginHorizontal: spacing.md,

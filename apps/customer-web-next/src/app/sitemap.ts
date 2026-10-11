@@ -7,13 +7,12 @@ import {
   foodIntents,
   foodUrl,
   launchCities,
+  seoContentUpdated,
   siteUrl,
 } from "@/features/seo/lib/seo-craves";
 
 const publicRoutes = [
   "",
-  "/home",
-  "/discover",
   "/chefs",
   "/subscriptions/plans",
   "/products-pricing",
@@ -25,7 +24,7 @@ const publicRoutes = [
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const now = new Date();
+  const now = seoContentUpdated;
   const cityRoutes = launchCities.map((city) => ({
     url: cityUrl(city),
     lastModified: now,

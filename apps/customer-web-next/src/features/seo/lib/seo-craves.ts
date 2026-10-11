@@ -1,5 +1,8 @@
 export const siteUrl = "https://craves.in";
 export const cravesLogoUrl = `${siteUrl}/brand/craves-logo-20260805.png`;
+export const socialProfiles = ["https://www.instagram.com/craves.in_/"];
+// Bump when SEO page copy changes; a lastmod that changes on every request is ignored by search engines.
+export const seoContentUpdated = new Date("2026-10-11");
 // Served by app/opengraph-image.tsx; child pages that set openGraph must list it or they lose the preview image.
 export const shareImage = {
   url: `${siteUrl}/opengraph-image`,
@@ -170,6 +173,20 @@ export const foodIntents: FoodIntent[] = [
     description: "Tiffin-style food and daily meal options prepared by home chefs.",
   },
   {
+    slug: "andhra-meals",
+    name: "Andhra meals",
+    category: "South Indian",
+    phrases: ["andhra meals", "andhra home food", "telugu home style meals"],
+    description: "Andhra and Telugu home-style meals, pappu, curries and rice plates from home kitchens.",
+  },
+  {
+    slug: "north-indian-meals",
+    name: "North Indian meals",
+    category: "Indian meals",
+    phrases: ["north indian home food", "dal roti sabzi", "punjabi home food"],
+    description: "Dal, roti, sabzi and North Indian home-style thalis from home chefs.",
+  },
+  {
     slug: "veg-meals",
     name: "Veg meals",
     category: "Dietary",
@@ -312,7 +329,15 @@ export function cravesSiteGraph() {
             addressCountry: city.country,
           },
         })),
-        sameAs: [siteUrl],
+        sameAs: socialProfiles,
+        email: "support@craves.in",
+        contactPoint: {
+          "@type": "ContactPoint",
+          contactType: "customer support",
+          email: "support@craves.in",
+          telephone: "+91-8367366787",
+          areaServed: "IN",
+        },
         description:
           "Craves is a homemade food marketplace connecting customers with trusted home chefs for fresh home-cooked meals, biryani, tiffin, and meal subscriptions across Hyderabad and Bangalore.",
         knowsAbout: ["Homemade food", "Home chefs", "Home-cooked meals", "Hyderabadi biryani", "Tiffin service", "Meal subscriptions"],

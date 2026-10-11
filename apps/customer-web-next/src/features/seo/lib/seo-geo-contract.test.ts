@@ -69,6 +69,26 @@ test("static homepage ships SEO head and crawlable content", () => {
   assert.match(landing, /<div id="root">.*<h1>.*href="\/hyderabad\/gachibowli"/s);
 });
 
+test("homepage JSON-LD is the same graph every Next page ships", async () => {
+  const { cravesSiteGraph } = await import("./seo-craves.ts");
+  const landing = source("../../../../public/landing-v20/index.html");
+  const json = landing.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)?.[1];
+  assert.ok(json, "homepage JSON-LD missing");
+  // Regenerate with: node --experimental-strip-types -e 'import("./src/features/seo/lib/seo-craves.ts").then(m=>console.log(JSON.stringify(m.cravesSiteGraph())))'
+  assert.deepEqual(JSON.parse(json), cravesSiteGraph());
+});
+
+test("sitemap skips sign-in-only pages and IndexNow key file matches the submit script", async () => {
+  const { readdirSync } = await import("node:fs");
+  const sitemap = source("../../../app/sitemap.ts");
+  assert.doesNotMatch(sitemap, /"\/home"|"\/discover"/);
+  const script = source("../../../../scripts/indexnow-submit.mjs");
+  const key = script.match(/const key = "([0-9a-f]{32})"/)?.[1];
+  assert.ok(key, "IndexNow key missing");
+  assert.ok(readdirSync(new URL("../../../../public/", import.meta.url)).includes(`${key}.txt`));
+  assert.equal(source(`../../../../public/${key}.txt`), key);
+});
+
 test("ai search crawler files advertise Craves facts without exposing private routes", () => {
   const robots = source("../../../../public/robots.txt");
   const llms = source("../../../../public/llms.txt");

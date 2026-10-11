@@ -9,7 +9,7 @@ import ChefLayout from "../../../app/chef/layout";
 import ChefMorePage from "../../../app/chef/profile/page";
 import ChefNotificationsPage from "../../../app/chef/notifications/page";
 import LegacyChefProfilePage from "../../../app/chef/[id]/page";
-import { isChefModeVerified, markChefModeVerified } from "./chef-mode";
+import { clearCustomerMode, isChefModeVerified, markChefModeVerified, markCustomerModeVerified } from "./chef-mode";
 import { captureSessionContext, getSession, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
@@ -120,12 +120,22 @@ describe("More hub", () => {
     expect(screen.queryByText(/not available yet/i)).toBeNull();
   });
 
-  it("switches to the customer app only by leaving Chef Mode", async () => {
+  it("switches to the customer app only by leaving Chef Mode, once this device passed a customer OTP", async () => {
+    markCustomerModeVerified(chef.id);
     render(createElement(ChefMorePage));
     fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
     expect(isChefModeVerified(chef.id)).toBe(false);
     expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/home");
     expect(getSession()?.id).toBe(chef.id);
+    clearCustomerMode();
+  });
+
+  it("asks for a customer OTP before opening the customer app, keeping Chef Mode until it succeeds", async () => {
+    clearCustomerMode();
+    render(createElement(ChefMorePage));
+    fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
+    expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/sign-in?returnTo=%2Fhome&confirm=customer");
+    expect(isChefModeVerified(chef.id)).toBe(true);
   });
 
   it("signs out of Craves and Chef Mode and leaves no chef page behind", async () => {

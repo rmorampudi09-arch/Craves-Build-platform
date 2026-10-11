@@ -3,7 +3,12 @@ import test from "node:test";
 import {
   CHEF_MODE_KEY,
   CHEF_MODE_MAX_AGE_MS,
+  CUSTOMER_MODE_KEY,
+  CUSTOMER_MODE_MAX_AGE_MS,
   clearChefMode,
+  clearCustomerMode,
+  isCustomerModeVerified,
+  markCustomerModeVerified,
   isChefModeVerified,
   markChefModeVerified,
   resolveChefDestination,
@@ -45,6 +50,31 @@ test("chef mode is verified only for the user who signed in to it in this tab", 
     assert.equal(isChefModeVerified(owner), false);
     items.set(CHEF_MODE_KEY, JSON.stringify({ userId: owner, verifiedAt: Date.now() - 60_000 }));
     assert.equal(isChefModeVerified(owner), true);
+  } finally {
+    Reflect.deleteProperty(globalThis, "window");
+  }
+});
+
+test("the customer side is verified on this device for its own user while the sign-in lasts", () => {
+  const device = new Map<string, string>();
+  const localStorage = {
+    getItem: (key: string) => device.get(key) ?? null,
+    setItem: (key: string, value: string) => void device.set(key, value),
+    removeItem: (key: string) => void device.delete(key),
+  };
+  Object.assign(globalThis, { window: { sessionStorage, localStorage } });
+  try {
+    assert.equal(isCustomerModeVerified(owner), false);
+    markCustomerModeVerified(owner);
+    assert.equal(JSON.parse(device.get(CUSTOMER_MODE_KEY) ?? "null").userId, owner);
+    assert.equal(isCustomerModeVerified(owner), true);
+    assert.equal(isCustomerModeVerified("22222222-2222-4222-8222-222222222222"), false);
+    // Thirty days, like the sign-in itself; then the switch from Chef Mode asks for an OTP again.
+    device.set(CUSTOMER_MODE_KEY, JSON.stringify({ userId: owner, verifiedAt: Date.now() - CUSTOMER_MODE_MAX_AGE_MS - 1 }));
+    assert.equal(isCustomerModeVerified(owner), false);
+    markCustomerModeVerified(owner);
+    clearCustomerMode();
+    assert.equal(isCustomerModeVerified(owner), false);
   } finally {
     Reflect.deleteProperty(globalThis, "window");
   }

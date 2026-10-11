@@ -8,7 +8,6 @@ import { BEFORE_SIGN_IN_EVENT, sessionFetch } from "@/features/auth/api/sessionF
 import { useStepHistory } from "@/features/chef-onboarding/lib/use-step-history";
 import { bankStatusSchema, type BankStatus } from "@/features/admin/finance/lib/bank-onboarding-contract";
 import { chefEmailEligible, type EmailVerificationState } from "@/features/sign-in/lib/email-verification-contract";
-import { parseCustomerProfile } from "@/features/profile/lib/profile-contract";
 import {
   EMPTY_ONBOARDING,
   parseOnboardingState,
@@ -246,21 +245,8 @@ export function useChefOnboarding() {
       setCallback(next.callbackRequest ?? null);
       setSignedOut(false);
       setUnavailable(false);
+      // A chef application starts from what the chef enters: nothing is copied from the customer profile.
       let nextDetails = next.details ?? { ...EMPTY_ONBOARDING };
-      if (!next.details && !next.legacy && next.enabled) {
-        try {
-          const profile = parseCustomerProfile(await chefOnboardingApi("/api/customer/profile"));
-          if (profile)
-            nextDetails = {
-              ...nextDetails,
-              firstName: profile.firstName,
-              lastName: profile.lastName,
-              email: profile.email ?? "",
-            };
-        } catch {
-          /* Optional profile hydration must not block a phone-authenticated applicant. */
-        }
-      }
       if (!current()) return;
       // Back from "Sign in again": what was typed before comes back, still to be saved.
       const unsaved = editable(next) ? takeUnsaved(owner.current.identityId, next.version) : null;

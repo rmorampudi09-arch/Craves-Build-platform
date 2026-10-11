@@ -49,6 +49,50 @@ export function clearChefMode(): void {
   }
 }
 
+/**
+ * The customer side has its own check: a phone OTP on a customer sign-in marks this device for
+ * the customer app while that sign-in lasts (30 days). Switching from Chef Mode to the customer
+ * app without it asks for an OTP first, so one side never opens the other on its own.
+ */
+export const CUSTOMER_MODE_KEY = "craves.customer-mode";
+export const CUSTOMER_MODE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+function deviceStorage(): Storage | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function markCustomerModeVerified(userId: string): void {
+  try {
+    deviceStorage()?.setItem(CUSTOMER_MODE_KEY, JSON.stringify({ userId, verifiedAt: Date.now() } satisfies ChefModeMarker));
+  } catch {
+    // Blocked storage: the next switch from Chef Mode asks for an OTP again.
+  }
+}
+
+export function isCustomerModeVerified(userId: string | null | undefined): boolean {
+  if (!userId) return false;
+  try {
+    const marker = JSON.parse(deviceStorage()?.getItem(CUSTOMER_MODE_KEY) ?? "null") as Partial<ChefModeMarker> | null;
+    if (marker?.userId !== userId || typeof marker.verifiedAt !== "number") return false;
+    const age = Date.now() - marker.verifiedAt;
+    return age < CUSTOMER_MODE_MAX_AGE_MS && age > -60_000;
+  } catch {
+    return false;
+  }
+}
+
+export function clearCustomerMode(): void {
+  try {
+    deviceStorage()?.removeItem(CUSTOMER_MODE_KEY);
+  } catch {
+    // Nothing stored means nothing to clear.
+  }
+}
+
 /** A same-origin path inside Chef Mode, never the sign-in page itself (that would loop). */
 export function safeChefReturnTo(value: unknown): string | null {
   if (typeof value !== "string") return null;

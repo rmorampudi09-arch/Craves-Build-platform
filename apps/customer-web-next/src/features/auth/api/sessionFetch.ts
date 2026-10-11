@@ -95,7 +95,7 @@ export async function sessionFetch(
   }
 
   // Guests get this too; the prompt only shows for someone who was signed in.
-  if (refreshResult === "rejected") window.dispatchEvent(new Event(SESSION_ENDED_EVENT));
+  if (refreshResult === "rejected" && typeof window !== "undefined") window.dispatchEvent(new Event(SESSION_ENDED_EVENT));
 
   if (refreshResult === "unavailable") {
     return new Response(

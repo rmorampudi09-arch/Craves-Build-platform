@@ -5,7 +5,7 @@ import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from 
 import { phoneCodeRequestError } from "@/features/sign-in/lib/phone-auth-errors";
 import type { CravesIdentity } from "@/features/auth/lib/auth-contract";
 import { parseCustomerProfile } from "@/features/profile/lib/profile-contract";
-import { markChefModeVerified } from "@/features/chef/lib/chef-mode";
+import { markChefModeVerified, markCustomerModeVerified } from "@/features/chef/lib/chef-mode";
 import { CUSTOMERS_LAUNCHING_SOON } from "@/features/sign-in/lib/customer-launch";
 import {
   captureSessionContext,
@@ -126,6 +126,7 @@ function CustomerAuth({ onClose }: { onClose: () => void }) {
     // This OTP was the Home Chef sign-in, so Chef Mode opens without a second code. The chef sign-in
     // page then picks the kitchen, the application or its status; role choice never grants Chef permission.
     if (request.role === "chef") markChefModeVerified(user.id);
+    else markCustomerModeVerified(user.id);
     // Replace, so Back never returns to this sign-in popup.
     window.location.replace(request.role === "chef" ? "/chef/sign-in?returnTo=/chef" : "/home");
   }

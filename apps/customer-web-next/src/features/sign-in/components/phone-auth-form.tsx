@@ -10,6 +10,7 @@ import { phoneCodeRequestError, phoneCodeVerifyError } from "@/features/sign-in/
 import { getFirebaseBrowserClient } from "@/features/auth/lib/firebase-client";
 import { safeReturnPath, type CravesIdentity } from "@/features/auth/lib/auth-contract";
 import { CodeSlots, type CodeSlotsStatus } from "@/shared/ui/forms/code-slots";
+import { markCustomerModeVerified } from "@/features/chef/lib/chef-mode";
 
 type Stage = "phone" | "otp" | "creating-session" | "done";
 type RecaptchaMode = "visible" | "invisible";
@@ -32,6 +33,7 @@ export function PhoneAuthForm({
   centralOtp = true,
   initialPhone,
   onSignedIn,
+  heading,
 }: {
   returnTo?: string;
   centralOtp?: boolean;
@@ -39,6 +41,8 @@ export function PhoneAuthForm({
   initialPhone?: string;
   /** Takes over once the session exists (Chef Mode) instead of opening returnTo. */
   onSignedIn?: (identity: CravesIdentity) => Promise<void> | void;
+  /** Replaces the title and line under it, for example when switching over from Chef Mode. */
+  heading?: { title: string; text: string };
 }) {
   const destination = safeReturnPath(returnTo);
   const chefJourney = destination.startsWith("/chef");
@@ -191,6 +195,8 @@ export function PhoneAuthForm({
       if (!response.ok) throw new Error(body.message ?? "We couldn’t sign you in. Check the code and try again, or request a new code.");
       setStage("done");
       setOtpStatus("success");
+      // A customer OTP opens the customer app on this device; Chef Mode keeps its own check.
+      if (!chefJourney && body.identity?.id) markCustomerModeVerified(body.identity.id);
       setMessage(chefJourney ? "Verified. Opening your kitchen…" : "Signed in successfully.");
       // Let the accepted wave finish before the page changes.
       if (!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)
@@ -239,12 +245,13 @@ export function PhoneAuthForm({
         <p className="text-sm font-semibold text-[#C4200F]">Secure Craves access</p>
       )}
       <h1 className={`text-3xl font-bold tracking-tight text-[#1A1A1A] ${chefJourney ? "" : "mt-2"}`}>
-        {chefJourney ? "Sign in to your kitchen" : "Sign in with mobile OTP"}
+        {heading?.title ?? (chefJourney ? "Sign in to your kitchen" : "Sign in with mobile OTP")}
       </h1>
       <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">
-        {chefJourney
-          ? "We’ll send a code to your phone. This keeps your orders, menu and earnings safe."
-          : "Use one mobile number for both customer and chef mode."}
+        {heading?.text ??
+          (chefJourney
+            ? "We’ll send a code to your phone. This keeps your orders, menu and earnings safe."
+            : "Use one mobile number for both customer and chef mode.")}
       </p>
 
       <form

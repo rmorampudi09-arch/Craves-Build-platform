@@ -8,12 +8,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/shared/ui/overlays/dropdown-menu";
-import { clearChefMode } from "@/features/chef/lib/chef-mode";
+import { clearChefMode, isCustomerModeVerified } from "@/features/chef/lib/chef-mode";
 import { getChefName, subscribeChefName, type ChefName } from "@/features/chef/lib/chef-name";
 import { clearSession, getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 
-/** The only way from Chef Mode to customer screens; the full load leaves no chef state behind. */
+/**
+ * The only way from Chef Mode to customer screens; the full load leaves no chef state behind.
+ * The customer app opens straight away only if this device signed in on the customer side during
+ * this sign-in; otherwise an OTP confirms it first (Chef Mode stays on until that succeeds).
+ */
 export function switchToCustomerApp() {
+  if (!isCustomerModeVerified(getSession()?.id)) {
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the sign-in page starts clean
+    window.location.assign("/sign-in?returnTo=%2Fhome&confirm=customer");
+    return;
+  }
   clearChefMode();
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full load drops every chef screen
   window.location.assign("/home");

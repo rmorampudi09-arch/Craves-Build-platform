@@ -4,11 +4,14 @@ import { createElement } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ChefSignIn } from "../components/chef-sign-in";
-import { isChefModeVerified, markChefModeVerified } from "./chef-mode";
+import { ChefAccessBoundary } from "../components/chef-access-boundary";
+import { isChefModeTab, isChefModeVerified, markChefModeVerified } from "./chef-mode";
 import { captureSessionContext, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
 const mocks = vi.hoisted(() => ({ msg91: vi.fn(), navigate: vi.fn() }));
+// The kitchen opens with a client-side navigation (router.replace), not a full reload.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: mocks.navigate, push: mocks.navigate }), usePathname: () => "/chef/earnings" }));
 vi.mock("firebase/auth", () => ({ RecaptchaVerifier: class { render = vi.fn(); clear = vi.fn(); }, signInWithPhoneNumber: vi.fn() }));
 vi.mock("@/features/auth/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
 vi.mock("@/features/sign-in/lib/msg91-browser", () => ({ beginMsg91PhoneSignIn: mocks.msg91, parkMsg91Captcha: vi.fn() }));
@@ -22,6 +25,7 @@ let fetcher: ReturnType<typeof vi.fn<typeof fetch>>;
 
 beforeEach(() => {
   sessionStorage.clear();
+  localStorage.clear();
   application = { status: "NOT_SUBMITTED", documents: [] };
   refreshed = customer;
   setSessionIdentity(customer);
@@ -35,7 +39,8 @@ beforeEach(() => {
   });
   vi.stubGlobal("fetch", fetcher);
   const browser = window;
-  vi.stubGlobal("window", new Proxy(browser, { get: (target, key) => key === "location" ? { replace: mocks.navigate, assign: mocks.navigate } : Reflect.get(target, key, target) }));
+  // next/image reads location.href; navigation itself goes through the mocks.
+  vi.stubGlobal("window", new Proxy(browser, { get: (target, key) => key === "location" ? { href: browser.location.href, replace: mocks.navigate, assign: mocks.navigate } : Reflect.get(target, key, target) }));
   mocks.navigate.mockReset();
   mocks.msg91.mockReset().mockResolvedValue({ confirm: vi.fn().mockResolvedValue({ user: { getIdToken: vi.fn().mockResolvedValue("t".repeat(120)) } }) });
 });
@@ -47,7 +52,7 @@ afterEach(() => {
 
 it("shows the signed-in number and opens the application after a fresh OTP", async () => {
   render(createElement(ChefSignIn, { returnTo: "/chef/earnings", centralOtp: true }));
-  expect(await screen.findByText("+919876543210")).toBeTruthy();
+  expect(await screen.findByText("+91 98765 43210")).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Sign in to your kitchen" })).toBeTruthy();
   expect(screen.getByText(/keeps your orders, menu and earnings safe/)).toBeTruthy();
   expect(isChefModeVerified(customer.id)).toBe(false);
@@ -62,20 +67,31 @@ it("shows the signed-in number and opens the application after a fresh OTP", asy
 it("lets a signed-in customer verify another number", async () => {
   render(createElement(ChefSignIn, { returnTo: null, centralOtp: true }));
   fireEvent.click(await screen.findByRole("button", { name: "Use another number" }));
+  // +91 is a fixed part of the field; only the 10 digits are typed.
   const input = screen.getByLabelText("Mobile number") as HTMLInputElement;
-  expect(input.value).toBe("+91");
+  expect(input.value).toBe("");
+  expect(screen.getByText("+91").getAttribute("for")).toBe(input.id);
   expect(screen.getByRole("link", { name: "New here? Apply to cook on Craves" }).getAttribute("href")).toBe("/chef/application");
   expect(screen.getByRole("link", { name: "Back to Craves" }).getAttribute("href")).toBe("/home");
 });
 
-it("goes straight in for a tab that already verified Chef Mode and refreshes a new approval once", async () => {
+it("goes straight in on a device that already verified Chef Mode, even in a new tab, and refreshes a new approval once", async () => {
   markChefModeVerified(customer.id);
+  // A new tab, a notification click or a restarted browser: empty sessionStorage, same localStorage.
+  sessionStorage.clear();
   application = { status: "APPROVED", documents: [] };
   refreshed = { ...customer, roles: ["CUSTOMER", "CHEF"] };
   render(createElement(ChefSignIn, { returnTo: "/chef/earnings", centralOtp: true }));
   await waitFor(() => expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/chef/earnings"));
   expect(screen.queryByRole("button", { name: "Send OTP" })).toBeNull();
   expect(fetcher.mock.calls.filter(([url]) => url === "/api/auth/refresh")).toHaveLength(1);
+  expect(isChefModeTab(customer.id)).toBe(true);
+  // Access was confirmed here, so the kitchen page renders at once without checking it again.
+  cleanup();
+  const requests = fetcher.mock.calls.length;
+  render(createElement(ChefAccessBoundary, null, createElement("p", null, "Kitchen")));
+  expect(screen.getByText("Kitchen")).toBeTruthy();
+  expect(fetcher.mock.calls.length).toBe(requests);
 });
 
 it("sends an approved account whose session still lacks CHEF to the status page, never back to /chef", async () => {

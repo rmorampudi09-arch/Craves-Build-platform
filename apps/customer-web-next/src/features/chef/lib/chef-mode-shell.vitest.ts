@@ -9,7 +9,7 @@ import ChefLayout from "../../../app/chef/layout";
 import ChefMorePage from "../../../app/chef/profile/page";
 import ChefNotificationsPage from "../../../app/chef/notifications/page";
 import LegacyChefProfilePage from "../../../app/chef/[id]/page";
-import { clearCustomerMode, isChefModeVerified, markChefModeVerified, markCustomerModeVerified, rememberChefAccount } from "./chef-mode";
+import { chefDeviceAccount, isChefModeTab, isChefModeVerified, markChefModeVerified, markCustomerModeVerified, rememberChefAccount } from "./chef-mode";
 import { captureSessionContext, getSession, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
@@ -33,6 +33,7 @@ beforeEach(() => {
   me = chef;
   launch.soon = false;
   sessionStorage.clear();
+  localStorage.clear();
   setSessionIdentity(chef);
   markChefModeVerified(chef.id);
   for (const mock of Object.values(mocks)) mock.mockReset();
@@ -89,18 +90,18 @@ describe("Chef Mode guard", () => {
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
-  it("asks a chef to confirm the customer side before customer screens open in a new tab", async () => {
+  it("leaves a new tab's customer screens alone after the launch, while the device still opens the kitchen", () => {
     sessionStorage.clear();
-    clearCustomerMode();
     vi.mocked(usePathname).mockReturnValue("/cart");
     render(createElement(ChefModeGuard));
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?confirm=customer&returnTo=%2Fcart"));
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(isChefModeTab(chef.id)).toBe(false);
+    expect(isChefModeVerified(chef.id)).toBe(true);
   });
 
   it("shows that chef the launching-soon note instead while customers wait", async () => {
     launch.soon = true;
     sessionStorage.clear();
-    clearCustomerMode();
     vi.mocked(usePathname).mockReturnValue("/cart");
     render(createElement(ChefModeGuard));
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?from=chef"));
@@ -112,29 +113,26 @@ describe("Chef Mode guard", () => {
     render(createElement(ChefModeGuard));
     cleanup();
     sessionStorage.clear();
-    clearCustomerMode();
     setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
     vi.mocked(usePathname).mockReturnValue("/home");
     render(createElement(ChefModeGuard));
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?from=chef"));
   });
 
-  it("leaves customers alone while customers wait: no Chef Mode on this device, or the private link", () => {
+  it("leaves customers alone while customers wait when this device never used Chef Mode for them", () => {
     launch.soon = true;
     sessionStorage.clear();
     localStorage.clear();
     setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
     render(createElement(ChefModeGuard));
     cleanup();
-    rememberChefAccount(chef.id);
-    markCustomerModeVerified(chef.id);
+    rememberChefAccount("71111111-1111-4111-8111-111111111111");
     render(createElement(ChefModeGuard));
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
   it("never asks a customer without the chef role", () => {
     sessionStorage.clear();
-    clearCustomerMode();
     setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
     render(createElement(ChefModeGuard));
     expect(mocks.replace).not.toHaveBeenCalled();
@@ -177,41 +175,39 @@ describe("More hub", () => {
     expect(screen.queryByText(/not available yet/i)).toBeNull();
   });
 
-  it("switches to the customer app only by leaving Chef Mode, once this device passed a customer OTP", async () => {
-    // A customer sign-in earlier on this device, then this tab's Chef Mode sign-in.
-    markCustomerModeVerified(chef.id);
-    markChefModeVerified(chef.id);
+  it("switches to the customer app at once: only this tab leaves Chef Mode, the device keeps the kitchen", async () => {
     render(createElement(ChefMorePage));
     fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
-    expect(isChefModeVerified(chef.id)).toBe(false);
+    expect(isChefModeTab(chef.id)).toBe(false);
+    expect(isChefModeVerified(chef.id)).toBe(true);
     expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/home");
     expect(getSession()?.id).toBe(chef.id);
-    clearCustomerMode();
-  });
-
-  it("asks for a customer OTP before opening the customer app, keeping Chef Mode until it succeeds", async () => {
-    clearCustomerMode();
-    render(createElement(ChefMorePage));
-    fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
-    expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/sign-in?returnTo=%2Fhome&confirm=customer");
-    expect(isChefModeVerified(chef.id)).toBe(true);
   });
 
   it("keeps the chef in Chef Mode and shows the launching-soon note while customers wait", async () => {
     launch.soon = true;
     render(createElement(ChefMorePage));
     fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
-    expect(isChefModeVerified(chef.id)).toBe(true);
+    expect(isChefModeTab(chef.id)).toBe(true);
     expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/sign-in?from=chef");
     expect(isOpenInChefMode("/sign-in")).toBe(true);
   });
 
-  it("signs out of Craves and Chef Mode and leaves no chef page behind", async () => {
+  it("signs out of Craves and makes this device forget Chef Mode, leaving no chef page behind", async () => {
     render(createElement(ChefMorePage));
     fireEvent.click(await screen.findByRole("button", { name: /^Sign out/ }));
     await waitFor(() => expect(mocks.locationReplace).toHaveBeenCalledExactlyOnceWith("/"));
     expect(isChefModeVerified(chef.id)).toBe(false);
+    expect(chefDeviceAccount()).toBeNull();
     expect(getSession()).toBeNull();
+  });
+
+  it("keeps the kitchen on this device when the sign-in ends by itself", () => {
+    invalidateSession(captureSessionContext());
+    expect(getSession()).toBeNull();
+    expect(isChefModeTab(chef.id)).toBe(false);
+    expect(isChefModeVerified(chef.id)).toBe(true);
+    expect(chefDeviceAccount()).toBe(chef.id);
   });
 });
 

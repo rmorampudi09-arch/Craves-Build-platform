@@ -1,3 +1,5 @@
+import { withSessionRefreshLock } from "../../../auth/lib/session-refresh-lock.ts";
+
 export type SessionState = "checking" | "ready" | "reconnecting" | "ended";
 type Timing = { accessExpiresAt: number; sessionExpiresAt: number };
 type Dependencies = { fetcher: typeof fetch; now: () => number; lock: <T>(work: () => Promise<T>) => Promise<T>; notify: (state: SessionState) => void; receipt?: { get: () => string | null; set: (value: string) => void; clear: () => void } };
@@ -117,7 +119,8 @@ let client: ReturnType<typeof createAdminRenewal> | null = null;
 function instance() {
   if (!client) {
     client = createAdminRenewal({ fetcher: (...args) => fetch(...args), now: Date.now,
-      lock: async work => typeof navigator !== "undefined" && navigator.locks ? await navigator.locks.request("craves-admin-session", work) : await work(),
+      // The same lock as customer and chef tabs: they all rotate the one refresh cookie.
+      lock: withSessionRefreshLock,
       notify: state => { for (const listener of listeners) listener(state); },
       receipt: {
         get: () => sharedReceipt,

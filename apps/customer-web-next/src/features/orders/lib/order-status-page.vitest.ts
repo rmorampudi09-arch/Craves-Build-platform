@@ -59,10 +59,9 @@ function order(status: string, overrides: Record<string, unknown> = {}) {
 }
 
 function serve(body: unknown, status = 200) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } })),
-  );
+  const fetch = vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
+  vi.stubGlobal("fetch", fetch);
+  return fetch;
 }
 
 afterEach(() => {
@@ -119,6 +118,56 @@ describe("order status after payment", () => {
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
     expect(await screen.findByRole("heading", { name: /couldn’t take this order/ })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Browse dishes" }).getAttribute("href")).toBe("/home");
+  });
+
+  it("says an unpaid order from a while ago never reached the kitchen, offers help and stops checking", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const fetch = serve(order("PAYMENT_PENDING", { createdAt: new Date(Date.now() - 45 * 60_000).toISOString() }));
+      render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
+      expect(await screen.findByRole("heading", { name: "Payment not completed" })).toBeTruthy();
+      expect(
+        screen.getByText(
+          "This order wasn’t paid, so it wasn’t sent to the kitchen. If money left your account, contact support with this order number.",
+        ),
+      ).toBeTruthy();
+      expect(screen.getByRole("link", { name: /Get help/ }).getAttribute("href")).toBe(`/support?orderId=${fixture.id}`);
+      expect(screen.getByText("Order total")).toBeTruthy();
+      expect(screen.queryByText(/Razorpay is confirming/)).toBeNull();
+      await vi.advanceTimersByTimeAsync(45_000);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still says the payment is being confirmed within the first half hour", async () => {
+    serve(order("PAYMENT_PENDING", { createdAt: new Date(Date.now() - 5 * 60_000).toISOString() }));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
+    expect(await screen.findByRole("heading", { name: "Confirming your payment" })).toBeTruthy();
+    expect(screen.getByText("To pay")).toBeTruthy();
+  });
+
+  it("stops checking once an order can't change, and keeps checking while it moves", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      for (const [status, heading, calls] of [
+        ["DELIVERED", "Delivered", 1],
+        ["REFUNDED", "Refunded", 1],
+        ["PREPARING", /is cooking/, 2],
+        // A rejected order still moves on to its refund.
+        ["CHEF_REJECTED", /couldn’t take this order/, 2],
+      ] as const) {
+        const fetch = serve(order(status));
+        render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
+        await screen.findByRole("heading", { name: heading });
+        await vi.advanceTimersByTimeAsync(15_000);
+        expect(fetch, status).toHaveBeenCalledTimes(calls);
+        cleanup();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("explains a failed load and keeps a way out", async () => {

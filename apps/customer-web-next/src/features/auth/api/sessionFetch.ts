@@ -1,6 +1,6 @@
 "use client";
 
-type RefreshResult = "refreshed" | "rejected" | "unavailable";
+type RefreshResult = "refreshed" | "superseded" | "rejected" | "unavailable";
 
 let refreshInFlight: Promise<RefreshResult> | null = null;
 // The session store (cravesAuth) lends its refresh, which runs once per sign-in at a time. A refresh
@@ -28,6 +28,8 @@ async function refreshSession(): Promise<RefreshResult> {
         }).catch(() => null));
 
       if (response?.ok) return "refreshed";
+      // Another tab renewed the sign-in a moment earlier; its new cookies are already in this browser.
+      if (response?.status === 409) return "superseded";
       if (
         response &&
         (response.status === 400 ||
@@ -59,11 +61,18 @@ export async function refreshSessionCookies(): Promise<boolean> {
 }
 
 // A chef approved after this access token was signed still carries the old roles, and a refresh
-// re-reads them. Once per page load: a second refresh can't add a role the first didn't find.
-let roleRefreshTried = false;
+// re-reads them. Every chef request refused that way within a minute shares one refresh and then
+// retries once: a second refresh so soon can't add a role the first didn't find.
+const ROLE_REFRESH_MS = 60_000;
+let roleRefresh: { at: number; result: Promise<RefreshResult> } | null = null;
+function refreshRoles(): Promise<RefreshResult> {
+  if (!roleRefresh || Date.now() - roleRefresh.at >= ROLE_REFRESH_MS)
+    roleRefresh = { at: Date.now(), result: refreshSession() };
+  return roleRefresh.result;
+}
 
 async function lacksFreshChefRole(input: RequestInfo | URL, response: Response): Promise<boolean> {
-  if (response.status !== 403 || roleRefreshTried) return false;
+  if (response.status !== 403) return false;
   const url = input instanceof Request ? input.url : String(input);
   if (!new URL(url, "http://same-origin.invalid").pathname.startsWith("/api/chef/")) return false;
   const body = (await response.clone().json().catch(() => null)) as { code?: unknown } | null;
@@ -88,14 +97,20 @@ export async function sessionFetch(
 
   let response = await fetch(input, requestInit);
   if (await lacksFreshChefRole(input, response)) {
-    roleRefreshTried = true;
-    return (await refreshSession()) === "refreshed" ? fetch(input, requestInit) : response;
+    const roles = await refreshRoles();
+    return roles === "refreshed" || roles === "superseded" ? fetch(input, requestInit) : response;
   }
   if (response.status !== 401 || String(input) === "/api/auth/refresh") {
     return response;
   }
 
-  const refreshResult = await refreshSession();
+  let refreshResult = await refreshSession();
+  if (refreshResult === "superseded") {
+    // The other tab's cookies may already open this request; if not, renew with them once.
+    response = await fetch(input, requestInit);
+    if (response.status !== 401) return response;
+    refreshResult = await refreshSession();
+  }
   if (refreshResult === "refreshed") {
     response = await fetch(input, requestInit);
     return response;

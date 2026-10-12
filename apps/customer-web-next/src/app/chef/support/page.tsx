@@ -1,6 +1,7 @@
 import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
 import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
 import { SupportChat } from "@/features/support/components/SupportChat";
+import { shortOrderNumber } from "@/shared/lib/order-number";
 import { isUuid } from "@/shared/lib/server-api";
 
 export const metadata = {
@@ -15,14 +16,16 @@ export default async function ChefSupportPage({
 }) {
   const { orderId } = await searchParams;
   const order = typeof orderId === "string" && isUuid(orderId) ? orderId : undefined;
+  const number = order ? shortOrderNumber(order) : null;
   return (
-    <main className="mx-auto min-h-screen max-w-4xl px-4 py-6 md:px-6 md:py-8">
+    <main className="chef-page is-narrow">
+      {/* Opened from an order, Back returns to that order; otherwise to More, where Get help lives. */}
       <ChefPageHeader
-        eyebrow="Help"
-        title="Support"
-        description={order ? `Get help with order #${order.slice(-8).toUpperCase()}.` : "Ask about your kitchen, orders or payouts. Our team picks up anything the assistant can't solve."}
+        title="Get help"
+        description={number ? `About order #${number}.` : "Ask about your kitchen, orders or money. A person from Craves helps with anything the assistant can’t."}
+        back={order ? { href: `/chef/orders/${order}`, label: `Order #${number}` } : { href: "/chef/profile", label: "More" }}
       />
-      <section className="mt-6 flex h-[70dvh] flex-col rounded-3xl border border-[#E5E7EB] bg-white px-4 pb-4 sm:px-6">
+      <section className="chef-section chef-support-chat">
         <ChefAccessBoundary>
           <SupportChat contextRole="CHEF" orderId={order} />
         </ChefAccessBoundary>

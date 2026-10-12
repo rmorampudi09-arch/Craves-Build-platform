@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 import { BadgeIndianRupee, ClipboardList, House, LayoutGrid, Utensils } from "lucide-react";
-import { isChefModeVerified } from "@/features/chef/lib/chef-mode";
+import { chefDeviceAccount, isChefModeVerified } from "@/features/chef/lib/chef-mode";
 import { getSession, subscribeSession, type CravesUser } from "@/features/auth/api/cravesAuth";
 
 // The same five tabs on phones and desktop; every other chef page is listed in More (/chef/profile).
@@ -16,8 +16,12 @@ const primaryLinks = [
   { href: "/chef/profile", label: "More", icon: LayoutGrid },
 ] as const;
 
-function activeHref(pathname: string): string {
+/** The tab a page belongs to; Notifications has none (the header bell marks it). */
+function activeHref(pathname: string): string | null {
   if (pathname === "/chef") return "/chef";
+  if (pathname === "/chef/notifications") return null;
+  // Money pages open from Earnings.
+  if (/^\/chef\/(?:finance|statements|bank)(?:\/|$)/.test(pathname)) return "/chef/earnings";
   const tab = primaryLinks.find(
     ({ href }) => href !== "/chef" && (pathname === href || pathname.startsWith(`${href}/`)),
   );
@@ -28,18 +32,30 @@ function hasChefRole(user: CravesUser | null) {
   return Boolean(user?.roles.some((role) => role.toUpperCase() === "CHEF"));
 }
 
-export function ChefWorkspaceNavigation({ placement }: { placement: "header" | "bottom" }) {
+/**
+ * Whether the tabs and the bell show: for a chef in Chef Mode. A device that remembers a kitchen
+ * shows them at once (`pending`), before the session check answers; the answer keeps them, or hides
+ * them for an account without CHEF or another account. The server render has neither, so hydration
+ * matches. Applicants never get tabs, so application pages wait for the answer.
+ */
+export function useChefWorkspace(): { workspace: boolean; pending: boolean } {
   const pathname = usePathname();
   const user = useSyncExternalStore(subscribeSession, getSession, () => null);
+  const device = useSyncExternalStore(subscribeSession, chefDeviceAccount, () => null);
+  const applying = pathname.startsWith("/chef/application");
+  if (pathname === "/chef/sign-in" || (applying && pathname !== "/chef/application/status"))
+    return { workspace: false, pending: false };
+  if (user) return { workspace: hasChefRole(user) && isChefModeVerified(user.id), pending: false };
+  const pending = device !== null && !applying;
+  return { workspace: pending, pending };
+}
+
+export function ChefWorkspaceNavigation({ placement }: { placement: "header" | "bottom" }) {
+  const pathname = usePathname();
+  const { workspace } = useChefWorkspace();
 
   // Applicants and the sign-in page get no workspace tabs; the header keeps their account menu.
-  if (
-    pathname === "/chef/sign-in" ||
-    pathname.startsWith("/chef/application") ||
-    !hasChefRole(user) ||
-    !isChefModeVerified(user?.id)
-  )
-    return null;
+  if (!workspace) return null;
   const current = activeHref(pathname);
   const links = primaryLinks.map((link) => {
     const active = link.href === current;

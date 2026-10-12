@@ -32,6 +32,14 @@ describe("real refresh BFF responses", () => {
     expect(cookies).toContain("Max-Age=0");
     expect(cookies).not.toContain("Domain=");
   });
+  it("answers an already-rotated refresh cookie with 409 and keeps the cookies another tab may have just renewed", async () => {
+    vi.stubEnv("CRAVES_API_BASE_URL", "https://api.example.com/api/v1");
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ code: "REFRESH_TOKEN_REVOKED", message: "Refresh token has been revoked" }, { status: 401 })));
+    const result = await POST(request());
+    expect(result.status).toBe(409);
+    expect((await result.json()).code).toBe("REFRESH_SUPERSEDED");
+    expect(result.headers.get("set-cookie")).toBeNull();
+  });
   it("rejects cross-origin renewal without contacting Auth", async () => {
     const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
     expect((await POST(request("https://untrusted.example"))).status).toBe(403);

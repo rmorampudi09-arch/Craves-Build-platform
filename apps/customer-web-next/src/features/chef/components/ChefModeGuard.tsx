@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { isChefAccountOnDevice, isChefModeVerified, isCustomerModeVerified, rememberChefAccount } from "@/features/chef/lib/chef-mode";
+import { isChefAccountOnDevice, isChefModeTab, isChefModeVerified, rememberChefAccount } from "@/features/chef/lib/chef-mode";
 import { CUSTOMERS_LAUNCHING_SOON } from "@/features/sign-in/lib/customer-launch";
 import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 
@@ -27,8 +27,8 @@ export function isOpenInChefMode(pathname: string): boolean {
 /**
  * While this tab is in Chef Mode, customer screens are replaced with the chef home, so browser
  * Back never lands on them. Leaving is explicit: "Switch to customer app" or "Sign out".
- * A chef reaches customer screens (a new tab, or after Chef Mode ends) only once the customer side
- * is confirmed with an OTP on this device, as the switch asks.
+ * Other tabs keep the customer app, even on a device that remembers the kitchen. Until the
+ * customer launch, chefs (and applicants who used Chef Mode here) see the launching-soon note instead.
  */
 export function ChefModeGuard() {
   const pathname = usePathname();
@@ -36,14 +36,12 @@ export function ChefModeGuard() {
   const user = useSyncExternalStore(subscribeSession, getSession, () => null);
   const [, setRestored] = useState(0);
   const customerScreen = user && !isOpenInChefMode(pathname) ? user : null;
-  const leave = Boolean(customerScreen && isChefModeVerified(customerScreen.id));
+  const leave = Boolean(customerScreen && isChefModeTab(customerScreen.id));
   const confirm = Boolean(
-    customerScreen &&
+    CUSTOMERS_LAUNCHING_SOON &&
+      customerScreen &&
       !leave &&
-      (customerScreen.roles.some((role) => role.toUpperCase() === "CHEF") ||
-        // Until the customer launch, an applicant who used Chef Mode on this device counts as a chef too.
-        (CUSTOMERS_LAUNCHING_SOON && isChefAccountOnDevice(customerScreen.id))) &&
-      !isCustomerModeVerified(customerScreen.id),
+      (customerScreen.roles.some((role) => role.toUpperCase() === "CHEF") || isChefAccountOnDevice(customerScreen.id)),
   );
 
   useEffect(() => {
@@ -52,11 +50,9 @@ export function ChefModeGuard() {
 
   useEffect(() => {
     if (leave) router.replace("/chef");
-    // Until the customer launch, the same launching-soon note as "Switch to customer app" (customer-launch.ts).
-    else if (confirm && CUSTOMERS_LAUNCHING_SOON) router.replace("/sign-in?from=chef");
-    else if (confirm)
-      router.replace(`/sign-in?confirm=customer&returnTo=${encodeURIComponent(`${pathname}${window.location.search}`)}`);
-  }, [leave, confirm, pathname, router]);
+    // The same launching-soon note as "Switch to customer app" (customer-launch.ts).
+    else if (confirm) router.replace("/sign-in?from=chef");
+  }, [leave, confirm, router]);
   useEffect(() => {
     // Back can restore a customer page from the browser's page cache; check it again when it shows.
     const restored = (event: PageTransitionEvent) => {

@@ -26,6 +26,12 @@ it("shows customers the launching-soon note unless the private link is used", as
   expect(await page({ access: "test-key", returnTo: "/home" })).toContain("phone-auth-form");
 });
 
+it("shows the rider illustration on the note, resized by the image optimizer", async () => {
+  const note = await page({});
+  expect(note).toContain("/_next/image?url=%2Flanding-v20%2Fimages%2Frider-delivery.png");
+  expect(note).toContain('alt="Crayon drawing of a smiling Craves rider on a red motorbike');
+});
+
 it("sends a chef who tried to switch to the customer app back to their kitchen", async () => {
   const chef = await page({ from: "chef" });
   expect(chef).toContain("Craves is launching soon for customers");

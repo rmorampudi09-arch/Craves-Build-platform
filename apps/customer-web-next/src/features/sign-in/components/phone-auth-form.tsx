@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
@@ -19,10 +19,31 @@ const RESEND_DELAY_SECONDS = 30;
 // Unlayered theme rules style every <button>; ! keeps these neutral actions on the brand palette.
 const SECONDARY_BUTTON =
   "min-h-12 w-full rounded-full !border !border-[#E5E7EB] !bg-white px-5 font-semibold !text-[#1A1A1A] disabled:opacity-50";
-const TERTIARY_BUTTON =
-  "min-h-12 w-full rounded-full !border-0 !bg-[#F1F3F5] px-5 font-semibold !text-[#1A1A1A] !shadow-none disabled:opacity-50";
+const TEXT_BUTTON =
+  "min-h-11 shrink-0 rounded-full !border-0 !bg-transparent px-3 text-sm font-semibold !text-[#C4200F] !shadow-none hover:underline disabled:opacity-50";
 const FIELD =
   "min-h-12 w-full rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10";
+
+/** The 10 national digits of a typed, pasted or autofilled number: "+91 98765 43210", "09876543210", "(98765) 43210". */
+function nationalDigits(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  return (/^(?:0{0,2}91)?0?(\d{10})$/.exec(digits)?.[1] ?? digits).slice(0, 10);
+}
+
+/** "9876543210" → "98765 43210", also while it is typed. */
+const groupDigits = (national: string) => national.replace(/^(\d{5})(?=\d)/, "$1 ");
+
+/** "+919876543210" → "+91 98765 43210"; other numbers stay as they are. */
+const showPhone = (e164: string) => e164.replace(/^\+91(\d{5})(\d{5})$/, "+91 $1 $2");
+
+/** Why this number can't get an OTP, or "" when it can. Central OTP serves Indian mobiles only. */
+function phoneProblem(e164: string, indian: boolean): string {
+  if (!indian)
+    return /^\+[1-9]\d{7,14}$/.test(e164) ? "" : "Enter the mobile number with country code, for example +919876543210.";
+  const national = e164.startsWith("+91") ? e164.slice(3) : "";
+  if (!/^\d{10}$/.test(national)) return "Enter a 10-digit mobile number.";
+  return /^[6-9]/.test(national) ? "" : "Indian mobile numbers start with 6, 7, 8 or 9.";
+}
 
 /**
  * Phone OTP sign-in shared by /sign-in, the admin portal and Chef Mode.
@@ -31,12 +52,15 @@ const FIELD =
 export function PhoneAuthForm({
   returnTo,
   centralOtp = true,
+  anyCountry = false,
   initialPhone,
   onSignedIn,
   heading,
 }: {
   returnTo?: string;
   centralOtp?: boolean;
+  /** Admin portal only: any country code. Chefs and customers type a +91 mobile, whichever OTP service runs. */
+  anyCountry?: boolean;
   /** The signed-in customer's number; shown with "Use another number". */
   initialPhone?: string;
   /** Takes over once the session exists (Chef Mode) instead of opening returnTo. */
@@ -46,7 +70,9 @@ export function PhoneAuthForm({
 }) {
   const destination = safeReturnPath(returnTo);
   const chefJourney = destination.startsWith("/chef");
+  // E.164 (+919876543210); the +91 field edits only the national digits after the prefix.
   const [phone, setPhone] = useState(initialPhone ?? "+91");
+  const [phoneError, setPhoneError] = useState("");
   const [prefilled, setPrefilled] = useState(Boolean(initialPhone));
   const [otp, setOtp] = useState("");
   const [otpStatus, setOtpStatus] = useState<CodeSlotsStatus>("idle");
@@ -103,10 +129,10 @@ export function PhoneAuthForm({
 
   async function sendOtp(isResend: boolean) {
     const normalized = phone.replace(/[\s()-]/g, "");
-    if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
-      setMessage(
-        "Enter the mobile number with country code, for example +919876543210.",
-      );
+    const problem = phoneProblem(normalized, !anyCountry);
+    if (problem) {
+      setPhoneError(problem);
+      phoneInput.current?.focus();
       return;
     }
 
@@ -198,9 +224,7 @@ export function PhoneAuthForm({
       // A customer OTP opens the customer app on this device; Chef Mode keeps its own check.
       if (!chefJourney && body.identity?.id) markCustomerModeVerified(body.identity.id);
       setMessage(chefJourney ? "Verified. Opening your kitchen…" : "Signed in successfully.");
-      // Let the accepted wave finish before the page changes.
-      if (!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)
-        await new Promise((resolve) => window.setTimeout(resolve, 450));
+      // No wait: the next page starts loading now and the accepted wave plays meanwhile.
       if (onSignedIn) {
         if (!body.identity?.id) throw new Error("Sign-in failed. Please try again.");
         await onSignedIn(body.identity);
@@ -229,12 +253,32 @@ export function PhoneAuthForm({
     setPrefilled(false);
     setStage("phone");
     setMessage("Request a new OTP.");
+    requestAnimationFrame(() => phoneInput.current?.focus());
   }
 
   function enterAnotherNumber() {
     setPrefilled(false);
     setPhone("+91");
+    setPhoneError("");
     requestAnimationFrame(() => phoneInput.current?.focus());
+  }
+
+  /** Keeps `phone` as +91 and the national digits, shown as "98765 43210". */
+  function changeNationalNumber(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const typed = input.value.replace(/\D/g, "");
+    const next = nationalDigits(input.value);
+    // The caret stays after the same digit as the space comes and goes; a stripped +91/0 prefix or a
+    // dropped 11th digit puts it at the end. Delete on the space steps over it instead of sticking.
+    const before = typed === next
+      ? input.value.slice(0, input.selectionStart ?? undefined).replace(/\D/g, "").length
+      : next.length;
+    const forward = (event.nativeEvent as InputEvent).inputType === "deleteContentForward";
+    const caret = before + (before > 5 || (forward && before === 5 && next.length > 5) ? 1 : 0);
+    input.value = groupDigits(next);
+    input.setSelectionRange(caret, caret);
+    setPhone(`+91${next}`);
+    setPhoneError("");
   }
 
   const otpStage = stage !== "phone";
@@ -254,18 +298,36 @@ export function PhoneAuthForm({
             : "Use one mobile number for both customer and chef mode.")}
       </p>
 
+      {/* noValidate: the number and the code are checked here, with the reason shown under the field. */}
       <form
         className="mt-7 space-y-4"
+        noValidate
         onSubmit={otpStage ? verifyOtp : requestOtp}
       >
         {otpStage ? (
           <>
-            <label
-              className="block text-left text-sm font-semibold text-[#1A1A1A]"
-              htmlFor="otp"
-            >
-              Six-digit OTP
-            </label>
+            <div>
+              <label
+                className="block text-left text-sm font-semibold text-[#1A1A1A]"
+                htmlFor="otp"
+              >
+                Six-digit OTP
+              </label>
+              <div className="flex items-center justify-between gap-3">
+                <p id="otp-sent-to" className="min-w-0 text-left text-sm text-[#6B6B6B]">
+                  Sent to <span className="font-semibold tabular-nums text-[#1A1A1A]">{showPhone(phone)}</span>
+                </p>
+                <button
+                  type="button"
+                  className={`${TEXT_BUTTON} -my-2 -mr-3`}
+                  aria-label="Change mobile number"
+                  disabled={busy || stage === "done"}
+                  onClick={useAnotherNumber}
+                >
+                  Change
+                </button>
+              </div>
+            </div>
             <CodeSlots
               id="otp"
               length={6}
@@ -276,10 +338,10 @@ export function PhoneAuthForm({
                 if (otpStatus !== "verifying" && otpStatus !== "success") setOtpStatus("idle");
               }}
               onComplete={(code) => void verifyCode(code)}
-              // Read-only while checking, never disabled: the field keeps focus and the keypad stays up.
+              // Read-only while checking, never disabled: on touch the field keeps focus and the keypad stays up.
               readOnly={busy}
               disabled={stage === "done"}
-              aria-describedby={otpStatus === "error" ? "otp-error" : undefined}
+              aria-describedby={otpStatus === "error" ? "otp-sent-to otp-error" : "otp-sent-to"}
               // Mounts only after "Send OTP", replacing the focused phone field.
               autoFocus
               required
@@ -295,11 +357,11 @@ export function PhoneAuthForm({
           <div className="flex min-h-12 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-2xl bg-[#F1F3F5] py-2 pl-4 pr-2">
             <span className="min-w-0">
               <span className="block text-xs font-semibold text-[#6B6B6B]">Signed in as</span>
-              <strong className="block text-base tabular-nums text-[#1A1A1A]">{phone}</strong>
+              <strong className="block text-base tabular-nums text-[#1A1A1A]">{showPhone(phone)}</strong>
             </span>
             <button
               type="button"
-              className="shrink-0 rounded-full !border-0 !bg-transparent px-3 text-sm font-semibold !text-[#C4200F] !shadow-none hover:underline"
+              className={TEXT_BUTTON}
               disabled={busy}
               onClick={enterAnotherNumber}
             >
@@ -314,18 +376,59 @@ export function PhoneAuthForm({
             >
               Mobile number
             </label>
-            <input
-              id="phone"
-              ref={phoneInput}
-              className={FIELD}
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-              autoComplete="tel"
-              inputMode="tel"
-              required
-            />
+            {!anyCountry ? (
+              // Indian mobiles: +91 is fixed and only the 10 digits are typed.
+              <div
+                className={`flex h-14 items-center overflow-hidden rounded-2xl border bg-white transition-[border-color,box-shadow] duration-150 focus-within:outline-hidden focus-within:ring-4 focus-within:ring-[#1A1A1A]/10 motion-reduce:transition-none ${phoneError ? "border-[#C4200F]" : "border-[#E5E7EB] focus-within:border-[#F62E18]"}`}
+              >
+                <label
+                  htmlFor="phone"
+                  className="flex h-full shrink-0 items-center pl-4 pr-3 text-xl font-semibold tabular-nums text-[#1A1A1A]"
+                >
+                  +91
+                </label>
+                <span aria-hidden="true" className="h-6 w-px shrink-0 bg-[#E5E7EB]" />
+                {/* Theme rules paint every input; ! keeps this one borderless inside the field. */}
+                <input
+                  id="phone"
+                  ref={phoneInput}
+                  name="phone"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  placeholder="10-digit number"
+                  className="h-full min-w-0 flex-1 !border-0 bg-transparent pl-3 pr-4 text-xl font-semibold tabular-nums tracking-[0.02em] text-[#1A1A1A] !outline-none placeholder:text-base placeholder:font-normal placeholder:tracking-normal placeholder:text-[#6B6B6B]"
+                  value={groupDigits(phone.slice(3))}
+                  onChange={changeNationalNumber}
+                  aria-invalid={phoneError ? true : undefined}
+                  aria-describedby={phoneError ? "phone-error" : undefined}
+                  required
+                />
+              </div>
+            ) : (
+              <input
+                id="phone"
+                ref={phoneInput}
+                className={FIELD}
+                value={phone}
+                onChange={(event) => {
+                  setPhone(event.target.value);
+                  setPhoneError("");
+                }}
+                autoComplete="tel"
+                inputMode="tel"
+                aria-invalid={phoneError ? true : undefined}
+                aria-describedby={phoneError ? "phone-error" : undefined}
+                required
+              />
+            )}
           </>
         )}
+        {!otpStage && phoneError ? (
+          <p id="phone-error" role="alert" className="text-left text-sm font-medium text-[#C4200F]">
+            {phoneError}
+          </p>
+        ) : null}
 
         {!otpStage && (
           <div
@@ -341,12 +444,13 @@ export function PhoneAuthForm({
 
         {otpStage ? (
           <>
+            {/* "Opening…" holds while the next page loads, so the button never looks ready again. */}
             <button
               className="craves-primary-action w-full"
-              aria-busy={busy}
+              aria-busy={busy || stage === "done"}
               disabled={busy || stage === "done"}
             >
-              {busy ? "Signing in…" : "Verify OTP"}
+              {stage === "done" ? "Opening…" : busy ? "Signing in…" : "Verify OTP"}
             </button>
             <button
               type="button"
@@ -355,14 +459,6 @@ export function PhoneAuthForm({
               onClick={() => void resendOtp()}
             >
               {resendIn > 0 ? `Resend OTP in ${resendIn}s` : "Resend OTP"}
-            </button>
-            <button
-              type="button"
-              className={TERTIARY_BUTTON}
-              disabled={busy}
-              onClick={useAnotherNumber}
-            >
-              Use another number
             </button>
           </>
         ) : (

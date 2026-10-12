@@ -54,7 +54,7 @@ function foodIndicator(dish: Dish): {
   if (foodType === "EGG") {
     return { label: "Egg", dotClass: "bg-[#D99A00]" };
   }
-  return { label: "Non-veg", dotClass: "bg-[#7B3F00]" };
+  return { label: "Non-veg", dotClass: "bg-[#D92D20]" };
 }
 
 // Memoised: a filter tap re-renders the home page with the same dishes first, and

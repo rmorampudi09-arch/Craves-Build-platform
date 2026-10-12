@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PhoneAuthForm } from "@/features/sign-in/components/phone-auth-form";
@@ -36,6 +37,15 @@ export default async function SignInPage({ searchParams }: {
       <Link href="/" aria-label="Craves home"><CravesLogo size="lg" priority/></Link>
       <h1 className="mt-6 text-3xl font-bold tracking-tight">{CUSTOMERS_LAUNCHING_SOON_COPY.title}</h1>
       <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">{CUSTOMERS_LAUNCHING_SOON_COPY.body}</p>
+      <Image
+        src="/landing-v20/images/rider-delivery.png"
+        alt="Crayon drawing of a smiling Craves rider on a red motorbike, carrying a red Craves delivery box through the city"
+        width={1448}
+        height={1086}
+        sizes="320px"
+        preload
+        className="mx-auto mt-6 h-auto w-full max-w-[320px]"
+      />
       <div className="mt-6 flex flex-wrap gap-3">{query.from === "chef"
         ? <Link href="/chef" className="inline-flex min-h-12 items-center rounded-full bg-[#F62E18] px-6 text-sm font-semibold text-white">{CUSTOMERS_LAUNCHING_SOON_COPY.backToKitchen}</Link>
         : <>
@@ -56,7 +66,7 @@ export default async function SignInPage({ searchParams }: {
     </section>
     <div className="cr-login-form-area">
       <div className="cr-login-form-heading"><span className="cr-badge">Administrator access</span><p>Use your approved admin mobile number. Signing in does not grant administrator privileges.</p></div>
-      <div className="cr-login-auth"><PhoneAuthForm returnTo={returnTo} centralOtp={centralOtp}/></div>
+      <div className="cr-login-auth"><PhoneAuthForm returnTo={returnTo} centralOtp={centralOtp} anyCountry/></div>
       <p className="cr-footnote">Access is verified by Craves. Existing session, OTP and security policies remain in effect.</p>
     </div>
   </main>;

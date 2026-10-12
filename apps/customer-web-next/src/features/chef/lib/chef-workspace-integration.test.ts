@@ -35,6 +35,21 @@ test("chef workspace navigation and the More hub expose every implemented backen
   assert.doesNotMatch(more, /not available yet/i);
   assert.match(earnings, /href="\/chef\/finance"/);
   assert.match(earnings, /Balance &amp; payouts/);
+  // Earnings leads to every money page, and each money page leads back to it.
+  assert.match(earnings, /href: "\/chef\/statements"/);
+  assert.match(earnings, /href: "\/chef\/bank"/);
+  for (const page of ["finance", "statements", "bank"]) {
+    assert.match(source(`../../../app/chef/${page}/page.tsx`), /back=\{\{\s*href: "\/chef\/earnings", label: "Earnings"\s*\}\}/, page);
+  }
+});
+
+test("pages that are not tabs keep an obvious way back", () => {
+  for (const [page, href] of [["operations", "/chef/profile"], ["meal-plans", "/chef/profile"], ["capacity", "/chef/meal-plans"], ["notifications", "/chef"]]) {
+    assert.match(source(`../../../app/chef/${page}/page.tsx`), new RegExp(`back=\\{\\{\\s*href: "${href.replaceAll("/", "\\/")}"`), page);
+  }
+  assert.match(source("../../../app/chef/support/page.tsx"), /\{ href: "\/chef\/profile", label: "More" \}/);
+  assert.match(source("../components/chef-kitchen-form.tsx"), /PAGE_BACK = \{ href: "\/chef\/profile", label: "More" \}/);
+  assert.match(source("../components/chef-order-details.tsx"), /back=\{\{ href: "\/chef\/orders", label: "Orders" \}\}/);
 });
 
 test("dashboard loads only live chef service state", () => {

@@ -127,6 +127,9 @@ test("BFF only clears cookies on definitive auth rejection", () => {
   for (const status of [429, 500, 502, 503, 504, 200, 400]) assert.equal(refreshFailure(status).terminal, false);
   for (const status of [401, 403]) assert.equal(refreshFailure(status).terminal, true);
   assert.equal(refreshFailure(429, "99999").retryAfter, "300");
+  // A cookie another tab already rotated is not a sign-out: that tab's newer cookie may already be set.
+  assert.deepEqual(refreshFailure(401, null, "REFRESH_TOKEN_REVOKED"), { status: 409, code: "REFRESH_SUPERSEDED", terminal: false });
+  assert.equal(refreshFailure(401, null, "REFRESH_TOKEN_EXPIRED").terminal, true);
 });
 
 test("client clock skew and clock jumps cannot independently expire a server-valid session", async () => {

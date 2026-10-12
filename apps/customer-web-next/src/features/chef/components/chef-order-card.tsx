@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import {
   Bell,
   Bike,
@@ -13,7 +13,7 @@ import {
   Volume2,
   XCircle,
 } from "lucide-react";
-import { ChefPill, chefOrderStatus, formatInr, timeAgo } from "@/features/chef/components/chef-ui";
+import { ChefFlash, ChefPill, chefOrderStatus, formatInr, timeAgo } from "@/features/chef/components/chef-ui";
 import { ChefOrderActions } from "@/features/chef/components/chef-order-actions";
 import { canSpeak, speakOrder } from "@/features/chef/lib/chef-order-alert";
 import { shortOrderNumber } from "@/shared/lib/order-number";
@@ -69,18 +69,10 @@ export function focusOrderAfterUpdate(orderId: string, noticeId: string): void {
   });
 }
 
-/** Always in the page, so screen readers announce each answer; shows the latest one. */
+/** Always in the page, so screen readers announce each answer; the latest shows for a moment. */
 export function OrderUpdateNotice({ id, text }: { id: string; text: string }) {
-  return (
-    <div id={id} role="status" className="outline-none empty:hidden">
-      {text ? (
-        <p className="chef-notice">
-          <CheckCircle2 aria-hidden="true" />
-          <span className="min-w-0">{text}</span>
-        </p>
-      ) : null}
-    </div>
-  );
+  const [closed, setClosed] = useState("");
+  return <ChefFlash id={id} message={text === closed ? "" : text} onClose={() => setClosed(text)} />;
 }
 
 /** Reads the order out loud, for chefs who'd rather listen than read. Hidden where the phone can't speak. */

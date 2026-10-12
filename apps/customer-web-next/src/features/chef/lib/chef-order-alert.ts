@@ -212,6 +212,7 @@ export async function fetchChefOrders(): Promise<ChefOrder[] | null> {
       void loadSession().catch(() => null);
       return null;
     }
+    // 409 (another tab renewed the sign-in) or 503 (reconnecting) never ends Chef Mode: the next check tries again.
     if (!response.ok) return null;
     return parseChefOrdersResponse(await response.json().catch(() => null));
   } catch {

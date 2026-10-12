@@ -2,6 +2,7 @@ package in.craves.order.service;
 
 import in.craves.order.security.CravesPrincipal;
 import in.craves.order.web.ApiDtos.ChefAcceptRequest;
+import in.craves.order.web.ApiDtos.OrderResponse;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -31,34 +32,55 @@ public class ChefAcceptanceInitialNotificationService {
         this.chefAcceptanceService = chefAcceptanceService;
     }
 
+    /** Records the chef's new-order notification; false when the order is no longer waiting or was already recorded. */
+    @Transactional
+    public boolean record(UUID orderId, UUID chefIdentityId) {
+        InitialNotificationOrder order = lockPendingOrder(orderId, chefIdentityId);
+        if (order == null) {
+            return false;
+        }
+        saveNotification(order, chefIdentityId, false);
+        return true;
+    }
+
     /**
-     * Records the chef's new-order notification. With autoAcceptPrepMinutes the order is first accepted through the
-     * chef's accept service in the same transaction, so a failed accept rolls everything back and the caller can
-     * fall back to the plain notification with the order still pending.
+     * Accepts the order through the chef's accept service and records the notification in one transaction, so a
+     * failed accept rolls everything back and the caller can fall back to {@link #record} with the order still
+     * pending. Returns the accepted order, or null when the order is no longer waiting or was already recorded.
      */
     @Transactional
-    public boolean record(UUID orderId, UUID chefIdentityId, Integer autoAcceptPrepMinutes) {
+    public OrderResponse recordAutoAccepted(UUID orderId, UUID chefIdentityId, int prepMinutes) {
+        InitialNotificationOrder order = lockPendingOrder(orderId, chefIdentityId);
+        if (order == null) {
+            return null;
+        }
+        OrderResponse accepted = chefAcceptanceService.accept(
+            new CravesPrincipal(chefIdentityId, "", Set.of("CHEF")),
+            orderId,
+            new ChefAcceptRequest(prepMinutes, null),
+            null,
+            "auto-accept:" + orderId,
+            "Accepted automatically"
+        );
+        saveNotification(order, chefIdentityId, true);
+        return accepted;
+    }
+
+    private InitialNotificationOrder lockPendingOrder(UUID orderId, UUID chefIdentityId) {
         if (chefIdentityId == null) {
-            return false;
+            return null;
         }
         InitialNotificationOrder order = lockOrder(orderId);
         if (!"CHEF_ACCEPTANCE_PENDING".equals(order.status())
             || order.recordedAt() != null
             || order.expiresAt() == null
             || !order.databaseNow().isBefore(order.expiresAt())) {
-            return false;
+            return null;
         }
-        boolean auto = autoAcceptPrepMinutes != null;
-        if (auto) {
-            chefAcceptanceService.accept(
-                new CravesPrincipal(chefIdentityId, "", Set.of("CHEF")),
-                orderId,
-                new ChefAcceptRequest(autoAcceptPrepMinutes, null),
-                null,
-                "auto-accept:" + orderId
-            );
-        }
+        return order;
+    }
 
+    private void saveNotification(InitialNotificationOrder order, UUID chefIdentityId, boolean auto) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("orderId", order.orderId().toString());
         payload.put("checkoutId", Objects.toString(order.checkoutId(), null));
@@ -88,9 +110,8 @@ public class ChefAcceptanceInitialNotificationService {
 
         jdbcTemplate.update(
             "UPDATE order_schema.customer_order SET chef_acceptance_initial_recorded_at = now(), updated_at = now() WHERE id = ?",
-            orderId
+            order.orderId()
         );
-        return true;
     }
 
     private InitialNotificationOrder lockOrder(UUID orderId) {

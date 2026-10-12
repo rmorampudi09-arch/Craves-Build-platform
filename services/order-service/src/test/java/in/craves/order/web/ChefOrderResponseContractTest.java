@@ -37,10 +37,11 @@ class ChefOrderResponseContractTest {
     }
 
     @Test
-    void ordersWithoutChefDetailsSerializeExactlyAsBefore() throws Exception {
+    void ordersWithoutChefDetailsSerializeAsBeforeExceptForANullChefHandedOverAt() throws Exception {
         JsonNode node = json.readTree(json.writeValueAsString(plainOrder()));
 
         CHEF_ONLY_KEYS.forEach(key -> assertThat(node.has(key)).as(key).isFalse());
+        assertThat(node.get("chefHandedOverAt").isNull()).isTrue();
         assertThat(node.has("chefResponseNote")).isTrue();
     }
 

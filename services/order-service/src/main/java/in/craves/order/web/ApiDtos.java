@@ -212,7 +212,8 @@ public final class ApiDtos {
         List<OrderItemResponse> items,
         Instant createdAt,
         Instant updatedAt,
-        // Chef-only additions: absent (not null) on every customer and admin view, so those stay byte-identical.
+        // Chef-only additions: omitted when empty, so customer and admin views stay as before; the one difference is
+        // chefHandedOverAt, which is always present (null until handed over) on every order view.
         @JsonInclude(JsonInclude.Include.NON_NULL) Instant chefAcceptanceExpiresAt,
         @JsonInclude(JsonInclude.Include.NON_NULL) String customerNote,
         @JsonInclude(JsonInclude.Include.NON_NULL) List<OrderStatusHistoryEntry> statusHistory,

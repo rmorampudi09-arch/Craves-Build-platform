@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -44,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +58,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -168,9 +171,9 @@ class ChefAutoAcceptDatabaseTest {
         assertEquals(acceptedAt.plus(Duration.ofMinutes(35)), ((Timestamp) row.get("ready_at")).toInstant());
         assertNotNull(row.get("chef_acceptance_initial_recorded_at"));
         // Same audit row and delivery event a manual accept writes, attributed to the kitchen's chef.
-        assertEquals(List.of(Map.of("old_status", "CHEF_ACCEPTANCE_PENDING", "new_status", "CHEF_ACCEPTED", "actor_identity_id", chef)),
-            jdbc.queryForList("SELECT old_status, new_status, actor_identity_id FROM order_schema.order_status_history "
-                + "WHERE order_id = ? AND new_status = 'CHEF_ACCEPTED'", id));
+        // The audit row says it was automatic; chef_response_note (the customer-visible note) stays empty.
+        assertEquals(List.of(Map.of("old_status", "CHEF_ACCEPTANCE_PENDING", "new_status", "CHEF_ACCEPTED",
+            "actor_identity_id", chef, "reason", "Accepted automatically")), history(id));
         assertEquals(List.of("CHEF_ACCEPTED_ORDER"), jdbc.queryForList(
             "SELECT event_type FROM order_schema.domain_event_outbox WHERE aggregate_id = ?", String.class, id));
         // The chef is told about it, and the customer hears "chef accepted" exactly like a manual accept.
@@ -205,8 +208,14 @@ class ChefAutoAcceptDatabaseTest {
         for (String column : List.of("status", "prep_time_minutes", "chef_response_note")) {
             assertEquals(order(hand).get(column), order(auto).get(column), column);
         }
-        assertEquals(history(hand), history(auto));
         assertEquals(1, history(auto).size());
+        assertEquals(1, history(hand).size());
+        for (String column : List.of("old_status", "new_status", "actor_identity_id")) {
+            assertEquals(history(hand).getFirst().get(column), history(auto).getFirst().get(column), column);
+        }
+        // The one intended difference: the audit reason. A manual accept without a note keeps its null reason.
+        assertEquals("Accepted automatically", history(auto).getFirst().get("reason"));
+        assertNull(history(hand).getFirst().get("reason"));
         assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM order_schema.domain_event_outbox WHERE aggregate_id = ?",
             Integer.class, hand));
         assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM order_schema.domain_event_outbox WHERE aggregate_id = ?",
@@ -287,15 +296,43 @@ class ChefAutoAcceptDatabaseTest {
     }
 
     @Test
-    void dishLookupFailingKeepsTheOrderPendingButTheChefStillGetsTheNotification() {
-        UUID id = paidOrder(menu);
+    void dishLookupFailingStillAutoAcceptsWithTheKitchenDefaultThenFifteen() {
+        UUID withDefault = paidOrder(menu);
+        UUID withoutDefault = paidOrder(menu);
         doThrow(new ResourceAccessException("catalog timeout")).when(catalog).getActiveMenuItem(menu);
+
+        kitchenSettings(true, 25);
+        assertTrue(autoAccept.recordNewOrder(withDefault, catalog.getKitchen(kitchen)));
+        kitchenSettings(true, null);
+        assertTrue(autoAccept.recordNewOrder(withoutDefault, catalog.getKitchen(kitchen)));
+
+        assertEquals("CHEF_ACCEPTED", order(withDefault).get("status"));
+        assertEquals(25, order(withDefault).get("prep_time_minutes"));
+        assertEquals("CHEF_ACCEPTED", order(withoutDefault).get("status"));
+        assertEquals(15, order(withoutDefault).get("prep_time_minutes"));
+        assertEquals(AUTO_TITLE, notification("chef-new-order-" + withDefault).get("title"));
+    }
+
+    @Test
+    void bothCustomerNotificationsGoOutEvenIfTheCatalogFailsOnceTheAcceptIsCommitted() {
+        UUID id = paidOrder(menu);
+        CatalogKitchen kitchenNow = catalog.getKitchen(kitchen);
+        // The worker's own lookup is the only call allowed outside a transaction; any later one (such as a re-read
+        // of the order after the commit) fails.
+        AtomicInteger outsideTransaction = new AtomicInteger();
+        doAnswer(call -> {
+            if (!TransactionSynchronizationManager.isActualTransactionActive() && outsideTransaction.incrementAndGet() > 1) {
+                throw new ResourceAccessException("catalog timeout");
+            }
+            return kitchenNow;
+        }).when(catalog).getKitchen(kitchen);
 
         worker.process();
 
-        assertEquals("CHEF_ACCEPTANCE_PENDING", order(id).get("status"));
-        assertEquals(MANUAL_TITLE, notification("chef-new-order-" + id).get("title"));
-        assertEquals(0, count("domain_event_outbox"));
+        assertEquals("CHEF_ACCEPTED", order(id).get("status"));
+        assertEquals(1, outsideTransaction.get());
+        assertEquals("Chef accepted your order", notification("chef-accepted-order-" + id).get("title"));
+        verify(directClient, times(1)).chefAcceptedOrder(any());
     }
 
     @Test
@@ -347,6 +384,7 @@ class ChefAutoAcceptDatabaseTest {
         worker.process();
         assertEquals(30, order(id).get("prep_time_minutes"));
         assertEquals("On it", order(id).get("chef_response_note"));
+        assertEquals("On it", history(id).getFirst().get("reason"));
         assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM order_schema.domain_event_outbox WHERE aggregate_id = ?",
             Integer.class, id));
         assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM order_schema.notification_outbox "

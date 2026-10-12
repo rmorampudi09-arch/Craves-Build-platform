@@ -1,8 +1,10 @@
 package in.craves.subscription.service;
 
 import in.craves.subscription.billing.SubscriptionBillingProperties;
+import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
+import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository;
 import in.craves.subscription.plan.PlanImageRepository;
 import in.craves.subscription.plan.PlanImageRepository.PlanImage;
 import in.craves.subscription.repository.SubscriptionRepository;
@@ -35,17 +37,23 @@ public class SubscriptionService {
     private final CapacityService capacityService;
     private final PlanImageRepository planImages;
     private final SubscriptionBillingProperties billing;
+    private final SubscriptionBillingRepository billingRepository;
+    private final SubscriptionLifecycleRepository lifecycleRepository;
 
     public SubscriptionService(
         SubscriptionRepository repository,
         CapacityService capacityService,
         PlanImageRepository planImages,
-        SubscriptionBillingProperties billing
+        SubscriptionBillingProperties billing,
+        SubscriptionBillingRepository billingRepository,
+        SubscriptionLifecycleRepository lifecycleRepository
     ) {
         this.repository = repository;
         this.capacityService = capacityService;
         this.planImages = planImages;
         this.billing = billing;
+        this.billingRepository = billingRepository;
+        this.lifecycleRepository = lifecycleRepository;
     }
 
     public List<PublicPlanResponse> listActivePlans() {
@@ -170,6 +178,8 @@ public class SubscriptionService {
                     ? LocalDate.now(BUSINESS_ZONE)
                     : subscription.nextServiceDate().isBefore(LocalDate.now(BUSINESS_ZONE)) ? LocalDate.now(BUSINESS_ZONE) : subscription.nextServiceDate();
                 capacityService.reacquireForResume(subscription, resumeDate);
+                // Before the status update so the returned subscription already shows the moved billing date.
+                billingRepository.applyPauseCredit(subscription.id(), resumeDate);
             } else {
                 capacityService.commitForActivation(subscription);
             }
@@ -178,7 +188,14 @@ public class SubscriptionService {
         } else if (Set.of("PAYMENT_FAILED", "EXPIRED", "CANCELLED").contains(normalized)) {
             capacityService.releaseForPauseOrTerminal(subscription, LocalDate.now(BUSINESS_ZONE), "Administrator moved subscription to " + normalized + ": " + reason.trim());
         }
-        return repository.updateSubscriptionStatus(subscription.id(), normalized, reason.trim(), user.identityId());
+        SubscriptionResponse updated = repository.updateSubscriptionStatus(
+            subscription.id(), subscription.status(), normalized, reason.trim(), user.identityId()
+        );
+        if (Set.of("PAUSED", "CANCELLED", "EXPIRED").contains(normalized)) {
+            // The order worker sends every queued meal without checking the plan, so stop them here as the customer paths do.
+            lifecycleRepository.cancelUndispatchedOccurrences(subscription.id(), user.identityId(), "ADMIN_STATUS_CHANGE");
+        }
+        return updated;
     }
 
     private SubscriptionResponse getOwnedSubscription(UUID subscriptionId, CurrentUser user) {

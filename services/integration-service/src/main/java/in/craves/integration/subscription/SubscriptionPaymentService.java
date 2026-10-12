@@ -11,6 +11,7 @@ import in.craves.integration.payment.RazorpayPaymentClient;
 import in.craves.integration.payment.RazorpayRequestSafety;
 import in.craves.integration.subscription.SubscriptionPaymentModels.CreateSubscriptionPaymentOrderRequest;
 import in.craves.integration.subscription.SubscriptionPaymentModels.EventEnvelope;
+import in.craves.integration.subscription.SubscriptionPaymentModels.InvoiceVoidedData;
 import in.craves.integration.subscription.SubscriptionPaymentModels.PaymentRequestedData;
 import in.craves.integration.subscription.SubscriptionPaymentModels.StatusChangedData;
 import in.craves.integration.subscription.SubscriptionPaymentModels.SubscriptionPaymentResponse;
@@ -74,6 +75,13 @@ public class SubscriptionPaymentService {
     public boolean acceptRequested(String rawPayload) {
         try {
             JsonNode raw = objectMapper.readTree(rawPayload);
+            // Voids share this Service Bus subscription with the payment requests.
+            if (SubscriptionPaymentModels.INVOICE_VOIDED.equals(raw.path("eventType").asText())) {
+                EventEnvelope<InvoiceVoidedData> voided = objectMapper.readerFor(objectMapper.getTypeFactory()
+                    .constructParametricType(EventEnvelope.class, InvoiceVoidedData.class)).readValue(raw);
+                validateVoided(voided);
+                return repository.acceptVoided(voided, raw);
+            }
             JavaType type = objectMapper.getTypeFactory().constructParametricType(
                 EventEnvelope.class,
                 PaymentRequestedData.class
@@ -110,6 +118,7 @@ public class SubscriptionPaymentService {
         if ("PAID".equals(intent.status())) {
             return repository.response(intent);
         }
+        refuseVoided(intent);
         if ("PAYMENT_PENDING".equals(intent.status())) {
             return repository.response(reconcilePending(intent));
         }
@@ -184,6 +193,7 @@ public class SubscriptionPaymentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay verification details are invalid");
         }
         if ("PAID".equals(intent.status())) return repository.response(intent);
+        refuseVoided(intent);
         RazorpayPaymentClient.VerifiedPayment verified = razorpayClient.verifyCheckout(
             intent.providerOrderId(), request.providerPaymentId(), request.providerSignature(),
             intent.amount(), intent.currency()
@@ -320,7 +330,8 @@ public class SubscriptionPaymentService {
     }
 
     private PaymentIntent reconcileRazorpay(PaymentIntent intent) {
-        if (!("PAYMENT_PENDING".equals(intent.status()) || "FAILED".equals(intent.status()))
+        // A voided (CANCELLED) bill's existing order may still have been paid; that money must be recorded.
+        if (!("PAYMENT_PENDING".equals(intent.status()) || "FAILED".equals(intent.status()) || "CANCELLED".equals(intent.status()))
             || !StringUtils.hasText(intent.providerOrderId()) || !StringUtils.hasText(intent.checkoutKeyId())) {
             return intent;
         }
@@ -440,6 +451,23 @@ public class SubscriptionPaymentService {
             || !data.cycleEnd().isAfter(data.cycleStart()) || data.amount() == null || data.amount().signum() <= 0
             || !StringUtils.hasText(data.currency()) || data.currency().length() != 3) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Subscription payment event data is incomplete");
+        }
+    }
+
+    private static void validateVoided(EventEnvelope<InvoiceVoidedData> event) {
+        InvoiceVoidedData data = event == null ? null : event.data();
+        if (event == null || event.eventId() == null || event.correlationId() == null || data == null
+            || !SUPPORTED_EVENT_VERSIONS.contains(event.eventVersion())
+            || data.invoiceId() == null || !data.invoiceId().equals(event.subject())
+            || !StringUtils.hasText(data.reason()) || data.reason().length() > 200) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Subscription invoice void event is incomplete");
+        }
+    }
+
+    /** A bill voided by a resume is never paid through the app; a capture on its existing order is still recorded. */
+    private static void refuseVoided(PaymentIntent intent) {
+        if ("CANCELLED".equals(intent.status())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This bill was cancelled when the plan was resumed");
         }
     }
 

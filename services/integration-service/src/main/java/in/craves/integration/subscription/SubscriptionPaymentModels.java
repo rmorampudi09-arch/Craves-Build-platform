@@ -11,6 +11,8 @@ import java.util.UUID;
 public final class SubscriptionPaymentModels {
     public static final String PAYMENT_REQUESTED = "SUBSCRIPTION_PAYMENT_REQUESTED";
     public static final String PAYMENT_STATUS_CHANGED = "SUBSCRIPTION_PAYMENT_STATUS_CHANGED";
+    /** subscription-service voided an unpaid bill when a paused plan resumed; it must never be paid. */
+    public static final String INVOICE_VOIDED = "SUBSCRIPTION_INVOICE_VOIDED";
 
     private SubscriptionPaymentModels() {
     }
@@ -37,6 +39,13 @@ public final class SubscriptionPaymentModels {
         LocalDate cycleEnd,
         BigDecimal amount,
         String currency
+    ) {
+    }
+
+    public record InvoiceVoidedData(
+        UUID invoiceId,
+        UUID subscriptionId,
+        String reason
     ) {
     }
 

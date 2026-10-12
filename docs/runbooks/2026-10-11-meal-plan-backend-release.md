@@ -28,9 +28,13 @@ Branch `feat/meal-plan-backend`. It backs the redesigned meal-plan screens in ap
 - **V18 sets `lock_timeout` to 5 s.** If a long transaction holds `subscription_plan`, the migration fails, the new revision does not become healthy, and the old revision keeps serving. Retry the deploy.
 - **Customer web (`apps/customer-web-next`, same branch):** a 0-minute cutoff reads "any time before a meal" instead of "up to 0 minutes", and a subscription to a plan that is no longer listed (closed to new subscribers) shows its own `planName` instead of "Meal plan". Both are backward compatible.
 
-## Known issue: fix before turning on automatic billing
+## Pause and resume billing (fixed 2026-10-12, branch fix/meal-plan-pause-credit)
 
-Pause and resume do not move `next_billing_date`. With `CRAVES_SUBSCRIPTION_BILLING_GENERATOR_ENABLED=true`, a customer who pauses past a cycle and then resumes would be invoiced for the paused cycles (one invoice per cycle, from the old date). Billing is off in production today (handover notes), so nothing is charged now. Do not enable the billing generator until resume shifts `next_billing_date` (decide whether paused days are credited).
+- **Paused paid days carry forward.** On resume (customer or admin) the paid days inside the pause, counted from the day after the last meal already sent to the chef, are recorded as a ₹0 PAID invoice with `provider_reference = 'PAUSE_CREDIT'` after the last standing cycle, and `next_billing_date` moves past it. An earlier credit that has not started yet is laid out again with the new one, so no unpaid gap is left before it.
+- **Unpaid cycles that started before the resume are voided** (`status = 'CANCELLED'`, `failure_code = 'PAUSED_CYCLE_VOIDED'`), so they are not billed again. Each void also publishes `SUBSCRIPTION_INVOICE_VOIDED`; Integration Service then marks the payment intent CANCELLED, refuses `/orders` and `/verify` with 409, and stops returning it as the latest bill. **Deploy order:** Integration Service first, then widen the `integration-service-subscription-payment-requested` rule to `event_type = 'SUBSCRIPTION_PAYMENT_REQUESTED' OR eventType = 'SUBSCRIPTION_PAYMENT_REQUESTED' OR event_type = 'SUBSCRIPTION_INVOICE_VOIDED' OR eventType = 'SUBSCRIPTION_INVOICE_VOIDED'`, then Subscription Service. Voids published before the rule is widened are dropped.
+- **A payment that still arrives for a voided cycle** is kept with `failure_code = 'PAYMENT_RECEIVED_FOR_VOIDED_CYCLE'` for a manual refund; it never reactivates or fails the plan. Find them with `SELECT id, subscription_id, amount, paid_at FROM subscription_schema.subscription_invoice WHERE failure_code = 'PAYMENT_RECEIVED_FOR_VOIDED_CYCLE';`
+- **Meals a pause cancelled come back after the resume.** When the meal generator reaches such a date, it restores the cancelled meal (fresh items, schedule and paid/unpaid status) instead of skipping the date.
+- **Admin status changes** apply only from the status the admin screen read (a concurrent change returns 409 `SUBSCRIPTION_STATE_CHANGED`), and admin pause, cancel and expire stop queued meals, as the customer paths do.
 
 ## Before merge
 

@@ -185,7 +185,7 @@ update_app() {
 snapshot
 
 ensure_subscription_rule "$PAYMENT_REQUEST_SUB" subscription-payment-requested \
-  "event_type = 'SUBSCRIPTION_PAYMENT_REQUESTED' OR eventType = 'SUBSCRIPTION_PAYMENT_REQUESTED'"
+  "event_type = 'SUBSCRIPTION_PAYMENT_REQUESTED' OR eventType = 'SUBSCRIPTION_PAYMENT_REQUESTED' OR event_type = 'SUBSCRIPTION_INVOICE_VOIDED' OR eventType = 'SUBSCRIPTION_INVOICE_VOIDED'"
 ensure_subscription_rule "$PAYMENT_STATUS_SUB" subscription-payment-status \
   "event_type = 'SUBSCRIPTION_PAYMENT_STATUS_CHANGED' OR eventType = 'SUBSCRIPTION_PAYMENT_STATUS_CHANGED'"
 ensure_subscription_rule "$ORDER_REQUEST_SUB" subscription-order-requested \

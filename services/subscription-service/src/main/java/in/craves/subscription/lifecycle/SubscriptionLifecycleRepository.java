@@ -273,7 +273,7 @@ public class SubscriptionLifecycleRepository {
         );
     }
 
-    private void cancelUndispatchedOccurrences(UUID subscriptionId, UUID actorIdentityId, String source) {
+    public void cancelUndispatchedOccurrences(UUID subscriptionId, UUID actorIdentityId, String source) {
         List<OccurrenceState> candidates = jdbcTemplate.query(
             "SELECT id, status FROM subscription_schema.subscription_occurrence WHERE subscription_id = ? " +
                 "AND status IN ('BILLING_PENDING', 'PAYMENT_PENDING', 'READY_FOR_ORDER') FOR UPDATE",

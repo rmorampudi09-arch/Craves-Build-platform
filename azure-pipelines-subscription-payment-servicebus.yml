@@ -47,7 +47,7 @@ steps:
             az servicebus topic subscription rule create \
               -g "$rg" --namespace-name "$ns" --topic-name "$topic" \
               --subscription-name "$sub" -n subscription-payment-requested \
-              --filter-sql-expression "event_type = 'SUBSCRIPTION_PAYMENT_REQUESTED' OR eventType = 'SUBSCRIPTION_PAYMENT_REQUESTED'" -o none
+              --filter-sql-expression "event_type = 'SUBSCRIPTION_PAYMENT_REQUESTED' OR eventType = 'SUBSCRIPTION_PAYMENT_REQUESTED' OR event_type = 'SUBSCRIPTION_INVOICE_VOIDED' OR eventType = 'SUBSCRIPTION_INVOICE_VOIDED'" -o none
           fi
 
           az servicebus topic subscription rule delete \

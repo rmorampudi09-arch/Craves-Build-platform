@@ -234,7 +234,13 @@ GET  /api/v1/chef/orders/{orderId}
 POST /api/v1/chef/orders/{orderId}/accept
 POST /api/v1/chef/orders/{orderId}/reject
 POST /api/v1/chef/orders/{orderId}/ready-for-pickup
+POST /api/v1/chef/orders/{orderId}/handed-over
 ```
+
+Chef order responses also carry `chefAcceptanceExpiresAt`, `customerNote`, `deliveryPartner` and `chefHandedOverAt`
+(each omitted when empty); `GET /api/v1/chef/orders/{orderId}` adds `statusHistory` (oldest first). Customer and admin
+responses do not include these fields. `handed-over` needs no body, works only in `READY_FOR_PICKUP` (otherwise 409
+`ORDER_STATUS_CONFLICT`), does not change the order status and keeps the first timestamp when repeated.
 
 ## Database migration
 

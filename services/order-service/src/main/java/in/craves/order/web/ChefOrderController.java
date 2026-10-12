@@ -47,7 +47,7 @@ public class ChefOrderController {
 
     @GetMapping("/{orderId}")
     public OrderResponse getChefOrder(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID orderId) {
-        return orderService.getOrderForChef(principal, orderId);
+        return orderService.getChefOrderDetail(principal, orderId);
     }
 
     @PostMapping("/{orderId}/accept")
@@ -91,5 +91,10 @@ public class ChefOrderController {
             correlationId,
             idempotencyKey
         );
+    }
+
+    @PostMapping("/{orderId}/handed-over")
+    public OrderResponse handedOver(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID orderId) {
+        return orderService.markHandedOver(principal, orderId);
     }
 }

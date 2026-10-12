@@ -17,10 +17,12 @@ import in.craves.order.web.ApiDtos.CheckoutStatus;
 import in.craves.order.web.ApiDtos.ChefAcceptRequest;
 import in.craves.order.web.ApiDtos.ChefRejectRequest;
 import in.craves.order.web.ApiDtos.CustomerAddressSnapshotResponse;
+import in.craves.order.web.ApiDtos.DeliveryPartnerResponse;
 import in.craves.order.web.ApiDtos.KitchenPickupSnapshotResponse;
 import in.craves.order.web.ApiDtos.OrderItemResponse;
 import in.craves.order.web.ApiDtos.OrderResponse;
 import in.craves.order.web.ApiDtos.OrderStatus;
+import in.craves.order.web.ApiDtos.OrderStatusHistoryEntry;
 import in.craves.order.web.ApiDtos.UpdateCartItemRequest;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -45,6 +47,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class OrderService {
     private static final String INR = "INR";
+    private static final int MAX_NOTE_LENGTH = 500;
     private static final String DELIVERY_ADDRESS_REQUIRED_MESSAGE =
         "Save the current location or select a saved delivery address before placing the order.";
 
@@ -275,6 +278,7 @@ public class OrderService {
         if (request == null || request.deliveryAddressId() == null) {
             throw OrderApiException.badRequest("DELIVERY_ADDRESS_REQUIRED", DELIVERY_ADDRESS_REQUIRED_MESSAGE);
         }
+        String customerNote = checkoutNote(request.note());
 
         CustomerAddress customerAddress = customerAddressClient.getActiveOwnedAddress(
             principal.identityId(),
@@ -391,11 +395,13 @@ public class OrderService {
                         pickup_phone_number, pickup_email, pickup_address_line1, pickup_address_line2,
                         pickup_landmark, pickup_area_name, pickup_city, pickup_state,
                         pickup_postal_code, pickup_latitude, pickup_longitude,
+                        customer_note,
                         created_at, updated_at
                     ) VALUES (
                         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        ?,
                         now(), now()
                     )
                     """,
@@ -435,7 +441,8 @@ public class OrderService {
                 pickup.state(),
                 pickup.postalCode(),
                 pickup.latitude(),
-                pickup.longitude()
+                pickup.longitude(),
+                customerNote
             );
             addStatusHistory(orderId, null, OrderStatus.PAYMENT_PENDING, principal.identityId(), "Checkout created");
             for (CartItemResponse cartItem : pending.items()) {
@@ -502,7 +509,7 @@ public class OrderService {
         requireChef(principal);
         List<OrderResponse> allRecent = jdbcTemplate.query(
             "SELECT * FROM order_schema.customer_order ORDER BY created_at DESC LIMIT 100",
-            this::mapOrder
+            this::mapChefOrder
         );
         return allRecent.stream()
             .filter(order -> catalogClient.getKitchen(order.kitchenId()).identityId().equals(principal.identityId()))
@@ -541,16 +548,50 @@ public class OrderService {
 
     public OrderResponse getOrderForChef(CravesPrincipal principal, UUID orderId) {
         requireChef(principal);
-        List<OrderResponse> rows = jdbcTemplate.query("SELECT * FROM order_schema.customer_order WHERE id = ?", this::mapOrder, orderId);
-        if (rows.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order was not found");
-        }
-        OrderResponse order = rows.getFirst();
+        OrderResponse order = findChefOrder(orderId);
         CatalogKitchen kitchen = catalogClient.getKitchen(order.kitchenId());
         if (!kitchen.identityId().equals(principal.identityId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chef cannot access this order");
         }
         return order;
+    }
+
+    /** The chef order plus its status history (oldest first); only the detail route carries the history. */
+    public OrderResponse getChefOrderDetail(CravesPrincipal principal, UUID orderId) {
+        OrderResponse order = getOrderForChef(principal, orderId);
+        return order.withStatusHistory(jdbcTemplate.query(
+            "SELECT new_status, created_at FROM order_schema.order_status_history WHERE order_id = ? ORDER BY created_at ASC, id ASC",
+            (rs, rowNum) -> new OrderStatusHistoryEntry(OrderStatus.valueOf(rs.getString("new_status")), instant(rs, "created_at")),
+            orderId
+        ));
+    }
+
+    /** Records when the chef handed the food over. Status is untouched (the provider moves it on); repeats keep the first time. */
+    @Transactional
+    public OrderResponse markHandedOver(CravesPrincipal principal, UUID orderId) {
+        OrderResponse order = getOrderForChef(principal, orderId);
+        if (order.chefHandedOverAt() != null) {
+            return order;
+        }
+        int updated = jdbcTemplate.update(
+            "UPDATE order_schema.customer_order SET chef_handed_over_at = now(), updated_at = now() "
+                + "WHERE id = ? AND status = ? AND chef_handed_over_at IS NULL",
+            orderId, OrderStatus.READY_FOR_PICKUP.name()
+        );
+        order = findChefOrder(orderId);
+        // updated == 0 can also mean a concurrent request just won; that one is a success, not a conflict.
+        if (updated == 0 && order.chefHandedOverAt() == null) {
+            throw OrderApiException.conflict("ORDER_STATUS_CONFLICT", "The order can be handed over only while it is ready for pickup.");
+        }
+        return order;
+    }
+
+    private OrderResponse findChefOrder(UUID orderId) {
+        List<OrderResponse> rows = jdbcTemplate.query("SELECT * FROM order_schema.customer_order WHERE id = ?", this::mapChefOrder, orderId);
+        if (rows.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order was not found");
+        }
+        return rows.getFirst();
     }
 
     public ChargePolicyResponse currentChargePolicy() {
@@ -715,6 +756,21 @@ public class OrderService {
         );
     }
 
+    /** The chef's view: {@link #mapOrder} plus the fields only the owning chef may see. */
+    private OrderResponse mapChefOrder(ResultSet rs, int rowNum) throws SQLException {
+        String partnerName = rs.getString("delivery_partner_name");
+        String partnerPhone = rs.getString("delivery_partner_phone");
+        String partnerPhotoUrl = rs.getString("delivery_partner_photo_url");
+        Instant partnerPickupEtaAt = instant(rs, "delivery_partner_pickup_eta_at");
+        boolean hasPartner = partnerName != null || partnerPhone != null || partnerPhotoUrl != null || partnerPickupEtaAt != null;
+        return mapOrder(rs, rowNum).withChefDetails(
+            instant(rs, "chef_acceptance_expires_at"),
+            rs.getString("customer_note"),
+            hasPartner ? new DeliveryPartnerResponse(partnerName, partnerPhone, partnerPhotoUrl, partnerPickupEtaAt) : null,
+            instant(rs, "chef_handed_over_at")
+        );
+    }
+
     private CustomerAddressSnapshotResponse mapDropoffSnapshot(ResultSet rs) throws SQLException {
         UUID sourceAddressId = rs.getObject("delivery_address_id", UUID.class);
         if (sourceAddressId == null) {
@@ -836,6 +892,15 @@ public class OrderService {
 
     private static BigDecimal zeroIfNull(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** Trimmed checkout note; blank becomes null. Rejects over {@value #MAX_NOTE_LENGTH} characters (the column size). */
+    private static String checkoutNote(String value) {
+        String note = value == null ? "" : value.trim();
+        if (note.codePointCount(0, note.length()) > MAX_NOTE_LENGTH) {
+            throw OrderApiException.badRequest("CHECKOUT_NOTE_TOO_LONG", "A note can be at most " + MAX_NOTE_LENGTH + " characters.");
+        }
+        return note.isEmpty() ? null : note;
     }
 
     private static String safeReason(String value) {

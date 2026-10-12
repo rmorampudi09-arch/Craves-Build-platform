@@ -178,6 +178,7 @@ describe("Orders screen", () => {
   it("never moves the chef off the tab they chose when new orders arrive", async () => {
     render(createElement(ChefOrderInbox));
     await screen.findByRole("heading", { name: /Order #000101/ });
+    await act(async () => {});
     fireEvent.click(screen.getByRole("button", { name: /^All/ }));
     list = [order(C, "CHEF_ACCEPTANCE_PENDING"), ...list];
     await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });

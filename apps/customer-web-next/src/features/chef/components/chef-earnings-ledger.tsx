@@ -2,7 +2,7 @@
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   BadgeIndianRupee,
@@ -25,10 +25,12 @@ import {
   type ChefTone,
 } from "@/features/chef/components/chef-ui";
 import { shortOrderNumber } from "@/shared/lib/order-number";
+import { ChefSkeletonRow } from "@/features/chef/components/chef-loading";
 
 type LedgerView = "ALL" | ChefEarningStatus;
 
-export function ChefEarningsLedger() {
+/** `children` sit between the totals and the list of orders (the page's money links). */
+export function ChefEarningsLedger({ children }: { children?: ReactNode }) {
   const [entries, setEntries] = useState<ChefEarning[]>([]);
   const [view, setView] = useState<LedgerView>("ALL");
   const [loading, setLoading] = useState(true);
@@ -103,24 +105,30 @@ export function ChefEarningsLedger() {
   return (
     <div className="chef-stack">
       <ChefSection flush>
-        <div className="chef-stats is-three">
-          <div className="chef-stat">
-            <p className="chef-stat-label">You earned</p>
-            <p className="chef-stat-value">{loading ? "—" : formatInr(approvedPayable, { currency })}</p>
-          </div>
-          <div className="chef-stat">
-            <p className="chef-stat-label">Coming to your bank</p>
-            <p className="chef-stat-value">{loading ? "—" : formatInr(pendingPayable, { currency })}</p>
-          </div>
-          <div className="chef-stat">
-            <p className="chef-stat-label">Paid to your bank</p>
-            <p className="chef-stat-value">{loading ? "—" : formatInr(settledPayable, { currency })}</p>
-          </div>
+        <div className="chef-stats is-three" aria-busy={loading}>
+          {(
+            [
+              ["You earned", approvedPayable],
+              ["Coming to your bank", pendingPayable],
+              ["Paid to your bank", settledPayable],
+            ] as const
+          ).map(([label, amount]) => (
+            <div key={label} className="chef-stat">
+              <p className="chef-stat-label">{label}</p>
+              {loading ? (
+                <ChefSkeleton className="mt-1.5 h-6 w-24 !rounded-md" />
+              ) : (
+                <p className="chef-stat-value">{formatInr(amount, { currency })}</p>
+              )}
+            </div>
+          ))}
         </div>
         <p className="border-t border-[#E3E6EA] px-4 py-3 text-[0.8125rem] leading-5 text-[#6B6B6B] md:px-5">
           These add up the orders below. Refunds and other changes are counted in Balance &amp; payouts, where you take out your money.
         </p>
       </ChefSection>
+
+      {children}
 
       <ChefSection
         title="Money from each order"
@@ -142,8 +150,11 @@ export function ChefEarningsLedger() {
         </div>
 
         {loading ? (
-          <div className="grid gap-2 p-4 md:p-5" aria-busy="true">
-            {Array.from({ length: 4 }, (_, index) => <ChefSkeleton key={index} className="h-14" />)}
+          // Shaped like the rows below: order and date on the left, the amount on the right.
+          <div className="chef-list mt-3 border-t border-[#E3E6EA]" aria-busy="true">
+            {[0, 1, 2, 3].map((row) => (
+              <ChefSkeletonRow key={row} media="none" trailing="value" />
+            ))}
           </div>
         ) : error && entries.length === 0 ? (
           <ChefEmpty

@@ -1,6 +1,8 @@
 export type RefreshFailure = { status: number; code: string; terminal: boolean; retryAfter?: string };
 
-export function refreshFailure(status: number, retryAfter: string | null = null): RefreshFailure {
+export function refreshFailure(status: number, retryAfter: string | null = null, code?: string): RefreshFailure {
+  // Already rotated, usually by another tab a moment ago: the browser may hold its newer cookie, so keep the cookies.
+  if (status === 401 && code === "REFRESH_TOKEN_REVOKED") return { status: 409, code: "REFRESH_SUPERSEDED", terminal: false };
   if (status === 401 || status === 403) return { status, code: status === 403 ? "ADMIN_ACCESS_REVOKED" : "SESSION_EXPIRED", terminal: true };
   if (status === 429) return { status: 429, code: "REFRESH_THROTTLED", terminal: false,
     retryAfter: retryAfter && /^\d{1,5}$/.test(retryAfter) ? String(Math.min(300, Number(retryAfter))) : "30" };

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ChefHat, RefreshCw } from "lucide-react";
 import { Spinner } from "@/features/chef-onboarding/components/chef-onboarding-ui";
-import { isChefModeVerified } from "@/features/chef/lib/chef-mode";
+import { enterChefMode, isChefModeVerified } from "@/features/chef/lib/chef-mode";
 import {
   AuthenticationRequiredError,
   captureSessionContext,
@@ -24,8 +24,8 @@ const serverScope = () => "server";
 type Check = { scope: string; state: "ready" | "unavailable"; signInHref?: string };
 
 /**
- * Applicant pages need a current account that signed in to Chef Mode in this tab, not an approved
- * CHEF role. Anyone else goes to /chef/sign-in and comes back here afterwards.
+ * Applicant pages need a current account whose device (or tab) confirmed Chef Mode with a phone OTP,
+ * not an approved CHEF role. Anyone else goes to /chef/sign-in and comes back here afterwards.
  */
 export function ChefApplicationSessionBoundary({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -53,8 +53,9 @@ export function ChefApplicationSessionBoundary({ children }: { children: ReactNo
       .then((user) => {
         if (!active) return;
         if (user && isSessionReady() && getSession()?.id === user.id) {
-          if (isChefModeVerified(user.id)) setCheck({ scope: sessionScope(), state: "ready" });
-          else signIn();
+          if (!isChefModeVerified(user.id)) return signIn();
+          enterChefMode(user.id);
+          setCheck({ scope: sessionScope(), state: "ready" });
         } else if (!user && !getSession()) signIn();
         // No identity while one is still held and not ready: a sign-out is settling and navigates on its own.
         else if (user || isSessionReady()) setCheck({ scope, state: "unavailable", signInHref });

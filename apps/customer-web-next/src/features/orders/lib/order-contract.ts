@@ -12,3 +12,6 @@ export function parseCustomerOrders(value: unknown): CustomerOrder[] | null { if
 const STATUS_LABELS: Record<string, string> = { PAYMENT_PENDING: "Awaiting payment", PAID: "Payment received", CHEF_ACCEPTANCE_PENDING: "Waiting for the chef", CHEF_ACCEPTED: "Chef accepted", PREPARING: "Cooking", READY_FOR_PICKUP: "Ready for pickup", OUT_FOR_DELIVERY: "On the way", DELIVERED: "Delivered", CHEF_REJECTED: "Chef couldn't take this order", CANCELLED: "Cancelled", REFUND_PENDING: "Refund in progress", REFUNDED: "Refunded", REFUND_FAILED: "Refund delayed, we're on it" };
 /** Customer-facing words for an order status; never the raw enum. */
 export function formatOrderStatus(status: string): string { return STATUS_LABELS[status] ?? "Order update"; }
+/** Every checkout creates its order unpaid and nothing on the server expires it, so after this long an unpaid order was abandoned and never reached the kitchen. */
+const ABANDONED_UNPAID_ORDER_MS = 30 * 60_000;
+export function isAbandonedUnpaidOrder(order: Pick<CustomerOrder, "status" | "createdAt">, now: number): boolean { return order.status === "PAYMENT_PENDING" && now - Date.parse(order.createdAt) > ABANDONED_UNPAID_ORDER_MS; }

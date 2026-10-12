@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { CustomerAddress } from "@/features/addresses/lib/address-contract";
 import type { CustomerCart } from "@/features/cart/lib/cart-contract";
 import type { CustomerCheckout } from "@/features/checkout/lib/checkout-contract";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 
 function formatMoney(amount: number, currency: string): string {
   try { return new Intl.NumberFormat("en-IN", { style: "currency", currency }).format(amount); }
@@ -72,8 +73,9 @@ export function CustomerCheckoutForm() {
 
 export function CheckoutDetails({ checkoutId }: { checkoutId: string }) {
   const [checkout, setCheckout] = useState<CustomerCheckout | null>(null);
-  const [message, setMessage] = useState("Loading checkout…");
+  const [message, setMessage] = useState("");
   useEffect(() => { fetch(`/api/checkout/${checkoutId}`, { cache: "no-store" }).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body?.message || "Checkout didn’t load. Go back to your cart and try again."); return body; }).then(value => { setCheckout(value); setMessage(""); }).catch(error => setMessage(error instanceof Error ? error.message : "Checkout didn’t load. Go back to your cart and try again.")); }, [checkoutId]);
+  if (!checkout && !message) return <CustomerSectionSkeleton variant="checkout-details" label="Loading checkout" />;
   if (!checkout) return <section className="rounded-[30px] bg-[#FFF8EC] p-8 text-slate-950"><p>{message}</p></section>;
   return <section className="rounded-[30px] bg-[#FFF8EC] p-7 text-slate-950 shadow-2xl shadow-black/20"><p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">{checkout.status.replace("_", " ")}</p><h1 className="mt-3 text-3xl font-bold">Checkout {checkout.id.slice(0, 8)}</h1><p className="mt-3 text-sm text-slate-600">{checkout.orders.length} chef-specific order{checkout.orders.length === 1 ? "" : "s"}</p><dl className="mt-6 space-y-3">{[["Food subtotal", checkout.foodSubtotal], ["Platform fee", checkout.platformFee], ["Tax", checkout.taxAmount], ["Delivery fee", checkout.deliveryFee], ["Grand total", checkout.grandTotal]].map(([label, amount]) => <div key={String(label)} className="flex justify-between border-b border-slate-200 pb-3"><dt>{label}</dt><dd className="font-bold">{formatMoney(Number(amount), checkout.currency)}</dd></div>)}</dl><div className="mt-6 flex flex-wrap gap-3"><Link href={`/checkout/${checkout.id}/payment`} className="rounded-full bg-[#6930CA] px-5 py-3 text-sm font-bold text-white">Continue to payment</Link><Link href="/orders" className="rounded-full border border-[#6930CA] px-5 py-3 text-sm font-bold text-[#6930CA]">My orders</Link></div></section>;
 }

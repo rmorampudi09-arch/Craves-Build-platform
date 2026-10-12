@@ -6,12 +6,11 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BellRing,
-  LogIn,
   RefreshCw,
   Store,
   Utensils,
 } from "lucide-react";
-import { signInToChefModeAgain } from "@/features/chef/components/chef-account-menu";
+import { ChefAccessRetry } from "@/features/chef/components/chef-account-menu";
 import { createKitchenFromApplication } from "@/features/chef/lib/chef-kitchen-handoff";
 import {
   ChefEmpty,
@@ -54,7 +53,7 @@ type Snapshot = {
   unavailable: string[];
   /** Why each unavailable part failed, as shown to the chef. */
   details: string[];
-  /** A part failed because this sign-in's chef access is out of date: a fresh sign-in fixes it. */
+  /** A part failed because Craves couldn’t confirm chef access, even after re-reading it once. */
   accessProblem?: boolean;
 };
 
@@ -370,10 +369,11 @@ export function ChefModeDashboard() {
           <ChefNotice icon={AlertTriangle} role="status">
             {snapshot.accessProblem ? (
               <>
-                <p className="font-semibold">Sign in again to load your orders</p>
+                <p className="font-semibold">Your orders couldn’t load</p>
                 <p className="mt-1 text-[#6B6B6B]">
-                  Craves couldn’t confirm your chef access, so new orders won’t show or ring. If this stays after you
-                  sign in again, the problem is on our side, not yours: tell us in More → Get help.
+                  Craves couldn’t confirm your chef access just now, so new orders won’t show or ring. We already tried
+                  again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in Get help. You don’t
+                  need to sign in again.
                 </p>
               </>
             ) : (
@@ -381,10 +381,9 @@ export function ChefModeDashboard() {
             )}
             {snapshot.details.map((detail) => <p key={detail} className="mt-1 text-[#6B6B6B]">{detail}</p>)}
             {snapshot.accessProblem ? (
-              <button type="button" onClick={signInToChefModeAgain} className="chef-btn is-primary mt-3 w-full sm:w-auto">
-                <LogIn className="h-4 w-4" aria-hidden="true" />
-                Sign in again
-              </button>
+              <div className="mt-3">
+                <ChefAccessRetry onRetry={() => setRefreshTick((value) => value + 1)} />
+              </div>
             ) : null}
           </ChefNotice>
         ) : null}
@@ -420,6 +419,7 @@ export function ChefModeDashboard() {
               </ChefSection>
             ) : null}
 
+            {/* Times itself out (ChefFlash), paused while pointed at or focused. */}
             <OrderUpdateNotice id="chef-order-update" text={orderNotice} />
 
             {newOrders.length > 0 ? (
@@ -454,7 +454,7 @@ export function ChefModeDashboard() {
                   text={
                     ordersUnknown
                       ? snapshot.accessProblem
-                        ? "They show here once you sign in again."
+                        ? "They show here as soon as Craves confirms your chef access."
                         : "We’ll keep trying every few seconds. You can also check now."
                       : "Keep Craves open. Your phone rings and the order shows here as soon as a customer orders."
                   }

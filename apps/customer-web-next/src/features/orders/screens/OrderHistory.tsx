@@ -11,6 +11,7 @@ import {
 } from "react-icons/fa6";
 import {
   formatOrderStatus,
+  isAbandonedUnpaidOrder,
   parseCustomerOrders,
   type CustomerOrder,
 } from "@/features/orders/lib/order-contract";
@@ -19,6 +20,7 @@ import { loadSession } from "@/features/auth/api/cravesAuth";
 import { addToCart, CartKeptError, loadCart } from "@/features/cart/api/cravesCart";
 import { loadKitchenMenu } from "@/features/dish/api/dishes";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
 import { useReturnScroll } from "@/shared/lib/return-scroll";
 
@@ -36,6 +38,11 @@ const ACTIVE_STATUSES = new Set([
   "OUT_FOR_DELIVERY",
   "REFUND_PENDING",
 ]);
+
+/** Still on its way. An abandoned unpaid checkout is history, not progress. */
+function inProgress(order: CustomerOrder, now: number): boolean {
+  return ACTIVE_STATUSES.has(order.status) && !isAbandonedUnpaidOrder(order, now);
+}
 
 function money(amount: number, currency: string): string {
   try {
@@ -131,19 +138,6 @@ function CutleryIcon() {
   );
 }
 
-function OrderSkeleton() {
-  return (
-    <div className="space-y-3" aria-hidden="true">
-      {Array.from({ length: 4 }, (_, index) => (
-        <div
-          key={index}
-          className="h-40 animate-pulse rounded-2xl border border-[#E5E7EB] bg-[#F1F3F5]"
-        />
-      ))}
-    </div>
-  );
-}
-
 export default function OrdersPage() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
@@ -210,14 +204,16 @@ export default function OrdersPage() {
     };
   }, [load, navigate]);
 
+  // Ages are measured from the moment this list loaded, so a render never changes them.
+  const now = lastUpdatedAt?.getTime() ?? 0;
   // Orders that are still on their way come first, then everything else.
   const sections = useMemo(
     () =>
       [
-        { title: "In progress", orders: orders.filter((order) => ACTIVE_STATUSES.has(order.status)) },
-        { title: "Past orders", orders: orders.filter((order) => !ACTIVE_STATUSES.has(order.status)) },
+        { title: "In progress", orders: orders.filter((order) => inProgress(order, now)) },
+        { title: "Past orders", orders: orders.filter((order) => !inProgress(order, now)) },
       ].filter((section) => section.orders.length > 0),
-    [orders],
+    [now, orders],
   );
 
   async function orderAgain(order: CustomerOrder) {
@@ -297,12 +293,7 @@ export default function OrdersPage() {
       <main className="mx-auto max-w-4xl px-4 pb-8 pt-4 md:px-6 md:pb-10 md:pt-5">
         <section aria-live="polite">
           {loading ? (
-            <>
-              <OrderSkeleton />
-              <p className="sr-only" role="status">
-                Loading your orders
-              </p>
-            </>
+            <CustomerSectionSkeleton variant="orders" label="Loading your orders" />
           ) : error && orders.length === 0 ? (
             <div className="rounded-2xl border border-[#D8DADD] bg-white p-8 text-center shadow-[0_3px_10px_rgba(0,0,0,0.07)] md:p-10">
               <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#C4200F]">
@@ -352,7 +343,9 @@ export default function OrdersPage() {
                   </h2>
                   <ul className="space-y-3">
                     {section.orders.map((order) => {
-                      const active = ACTIVE_STATUSES.has(order.status);
+                      const active = inProgress(order, now);
+                      const unpaid = order.status === "PAYMENT_PENDING";
+                      const abandoned = unpaid && !active;
                       const reordering = reorder?.orderId === order.id ? reorder : null;
                       return (
                         <li
@@ -387,9 +380,9 @@ export default function OrdersPage() {
                                   </p>
                                 </div>
                                 <span
-                                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-4 ${statusClass(order.status)}`}
+                                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-4 ${abandoned ? "bg-[#F1F3F5] text-[#6B6B6B]" : statusClass(order.status)}`}
                                 >
-                                  {formatOrderStatus(order.status)}
+                                  {abandoned ? "Payment not completed" : formatOrderStatus(order.status)}
                                 </span>
                               </div>
 
@@ -400,7 +393,7 @@ export default function OrdersPage() {
                               <div className="mt-3 flex min-h-11 items-center justify-between gap-4 border-t border-[#E5E7EB] pt-3">
                                 <p className="text-sm font-semibold text-[#1A1A1A]">
                                   {money(order.grandTotal, order.currency)}
-                                  <span className="font-normal text-[#6B6B6B]"> total paid</span>
+                                  <span className="font-normal text-[#6B6B6B]">{unpaid ? " total" : " total paid"}</span>
                                 </p>
                                 {order.status === "DELIVERED" ? (
                                   <button

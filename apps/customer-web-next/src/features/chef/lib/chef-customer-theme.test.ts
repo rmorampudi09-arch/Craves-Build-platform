@@ -111,6 +111,21 @@ for (const width of [390, 768, 1440]) {
   });
 }
 
+test("action messages leave by themselves after 3.5 s, wait while held, and skip the slide for reduced motion", () => {
+  const rules = new Map<string, string>();
+  chefTheme.walkRules(rule => rule.walkDecls(declaration => {
+    const media = rule.parent?.type === "atrule" ? `@${(rule.parent as postcss.AtRule).params} ` : "";
+    rules.set(`${media}${rule.selector} ${declaration.prop}`, declaration.value);
+  }));
+  assert.equal(rules.get(".chef-flash.is-success animation"), "chefFlash 3.5s linear both");
+  assert.equal(rules.get(".chef-flash:is(:hover, :focus-within) animation-play-state"), "paused");
+  assert.equal(rules.get("@(prefers-reduced-motion: reduce) .chef-panel-theme .chef-flash.is-success animation-name"), "chefFlashStay");
+  assert.equal(rules.get("@(prefers-reduced-motion: reduce) .chef-panel-theme .chef-flash.is-success animation-duration"), "3.5s");
+  // A message floats over the tab bar like the new-order bar, and moves above that bar when both show.
+  assert.match(rules.get(".chef-order-banner-wrap,\n.chef-flash-region bottom") ?? "", /safe-area-inset-bottom/);
+  assert.equal(rules.get(".chef-panel-theme:has(.chef-order-banner) .chef-flash-region translate"), "0 -4.25rem");
+});
+
 test("chef dashboard keeps daily actions visible and defers advanced areas", () => {
   for (const route of dailyDashboardRoutes) {
     assert.match(dashboard, new RegExp(route.replaceAll("/", "\\/")));

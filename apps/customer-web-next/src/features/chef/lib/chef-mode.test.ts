@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  CHEF_DEVICE_KEY,
   CHEF_MODE_KEY,
   CHEF_MODE_MAX_AGE_MS,
-  CUSTOMER_MODE_KEY,
-  CUSTOMER_MODE_MAX_AGE_MS,
+  chefDeviceAccount,
   clearChefMode,
-  clearCustomerMode,
-  isCustomerModeVerified,
+  enterChefMode,
+  forgetChefDevice,
+  isChefModeTab,
   markCustomerModeVerified,
   isChefModeVerified,
   markChefModeVerified,
@@ -43,7 +44,7 @@ test("chef mode is verified only for the user who signed in to it in this tab", 
     markChefModeVerified(owner);
     clearChefMode();
     assert.equal(isChefModeVerified(owner), false);
-    // A verification older than a working day (or dated in the future) no longer counts.
+    // A verification older than 30 days (or dated in the future) no longer counts.
     items.set(CHEF_MODE_KEY, JSON.stringify({ userId: owner, verifiedAt: Date.now() - CHEF_MODE_MAX_AGE_MS - 1 }));
     assert.equal(isChefModeVerified(owner), false);
     items.set(CHEF_MODE_KEY, JSON.stringify({ userId: owner, verifiedAt: Date.now() + 10 * 60_000 }));
@@ -55,7 +56,7 @@ test("chef mode is verified only for the user who signed in to it in this tab", 
   }
 });
 
-test("the customer side is verified on this device for its own user while the sign-in lasts", () => {
+test("a device remembers Chef Mode for its account until sign-out, renewed by each visit", () => {
   const device = new Map<string, string>();
   const localStorage = {
     getItem: (key: string) => device.get(key) ?? null,
@@ -64,20 +65,36 @@ test("the customer side is verified on this device for its own user while the si
   };
   Object.assign(globalThis, { window: { sessionStorage, localStorage } });
   try {
-    assert.equal(isCustomerModeVerified(owner), false);
+    items.clear();
     markChefModeVerified(owner);
+    assert.equal(JSON.parse(device.get(CHEF_DEVICE_KEY) ?? "null").userId, owner);
+    assert.equal(chefDeviceAccount(), owner);
+    // A new tab (empty sessionStorage, same device) opens the kitchen without an OTP, then joins Chef Mode.
+    items.clear();
+    assert.equal(isChefModeVerified(owner), true);
+    assert.equal(isChefModeTab(owner), false);
+    assert.equal(isChefModeVerified("22222222-2222-4222-8222-222222222222"), false);
+    enterChefMode(owner);
+    assert.equal(isChefModeTab(owner), true);
+    // A customer sign-in (or "Switch to customer app") leaves Chef Mode in this tab only.
     markCustomerModeVerified(owner);
-    // A customer-side sign-in ends Chef Mode in this tab, or the guard would send the chef straight back.
+    assert.equal(isChefModeTab(owner), false);
+    assert.equal(isChefModeVerified(owner), true);
+    // Thirty idle days end it; a visit within them starts the thirty days again.
+    device.set(CHEF_DEVICE_KEY, JSON.stringify({ userId: owner, verifiedAt: Date.now() - CHEF_MODE_MAX_AGE_MS + 60_000 }));
+    enterChefMode(owner);
+    assert.ok(Date.now() - JSON.parse(device.get(CHEF_DEVICE_KEY) ?? "null").verifiedAt < 1_000);
+    device.set(CHEF_DEVICE_KEY, JSON.stringify({ userId: owner, verifiedAt: Date.now() - CHEF_MODE_MAX_AGE_MS - 1 }));
+    clearChefMode();
     assert.equal(isChefModeVerified(owner), false);
-    assert.equal(JSON.parse(device.get(CUSTOMER_MODE_KEY) ?? "null").userId, owner);
-    assert.equal(isCustomerModeVerified(owner), true);
-    assert.equal(isCustomerModeVerified("22222222-2222-4222-8222-222222222222"), false);
-    // Thirty days, like the sign-in itself; then the switch from Chef Mode asks for an OTP again.
-    device.set(CUSTOMER_MODE_KEY, JSON.stringify({ userId: owner, verifiedAt: Date.now() - CUSTOMER_MODE_MAX_AGE_MS - 1 }));
-    assert.equal(isCustomerModeVerified(owner), false);
-    markCustomerModeVerified(owner);
-    clearCustomerMode();
-    assert.equal(isCustomerModeVerified(owner), false);
+    assert.equal(chefDeviceAccount(), null);
+    enterChefMode(owner);
+    assert.equal(isChefModeVerified(owner), false);
+    // "Sign out" forgets the device as well as the tab.
+    markChefModeVerified(owner);
+    forgetChefDevice();
+    assert.equal(isChefModeVerified(owner), false);
+    assert.equal(device.has(CHEF_DEVICE_KEY), false);
   } finally {
     Reflect.deleteProperty(globalThis, "window");
   }

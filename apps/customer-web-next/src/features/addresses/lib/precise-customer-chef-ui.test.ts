@@ -158,7 +158,7 @@ test("address manager owns default selection and the shared location-first edito
   assert.match(addresses, /clearKitchenDiscoveryCache/);
   assert.match(addresses, /<AddressEditorFlow/);
   assert.match(addresses, /initialLoadState/);
-  assert.match(addresses, /aria-label="Loading saved addresses"/);
+  assert.match(addresses, /<CustomerSectionSkeleton variant="addresses" label="Loading saved addresses"/);
   assert.match(
     addresses,
     /initialLoadState === "ready" && addresses\.length === 0/,
@@ -181,12 +181,18 @@ test("address manager owns default selection and the shared location-first edito
   assert.doesNotMatch(addressEditor, /Add later/);
 });
 
-test("home rechecks cart availability after default-address changes", () => {
+test("home, the cart and checkout recheck cart availability for the delivery address", () => {
+  // One check (useCartAddressAvailability) for all three; its removal and clearing are tested in home/lib.
   assert.match(home, /CartAddressAvailabilityBanner/);
   assert.match(home, /loadKitchenMenu/);
   assert.match(home, /unavailableCartItems/);
-  assert.match(home, /removeFromCart/);
-  assert.match(home, /clearCart/);
+  assert.match(home, /useCartAddressAvailability\(/);
+  assert.match(cart, /<CartAddressAvailabilityBanner/);
+  assert.match(cart, /useCartAddressAvailability\(\{ items, address \}\)/);
+  assert.match(checkout, /useCartAddressAvailability\(/);
+  // Pay waits only when nothing can reach the address, and the address can't change mid-payment.
+  assert.match(checkout, /noItemReachesAddress \|\|/);
+  assert.match(checkout, /disabled=\{addressChangeBusy \|\| paymentLocked\}/);
   assert.match(cartAddressBanner, /Choose another address/);
   assert.match(cartAddressBanner, /Remove unavailable items/);
   assert.match(cartAddressBanner, /Clear cart & browse here/);

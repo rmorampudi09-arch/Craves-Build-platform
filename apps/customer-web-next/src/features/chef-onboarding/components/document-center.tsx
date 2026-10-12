@@ -5,7 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Download, FileText, Info, Mail, RefreshCw } from "lucide-react";
 import { documentCapabilitiesSchema, documentEmailSchema, documentError, documentLabels, documentPageSchema, documentRequestSchema, documentSummarySchema, type DocumentCapabilities, type DocumentSummary, type DocumentType } from "@/features/chef-onboarding/lib/document-contract";
 import { readDocumentBytes } from "@/shared/lib/document-transport";
-import { ChefChoiceChips, ChefEmpty, ChefNotice, ChefPill, ChefSection, dateTime, type ChefTone } from "@/features/chef/components/chef-ui";
+import { ChefChoiceChips, ChefEmpty, ChefFlash, ChefNotice, ChefPill, ChefSection, dateTime, type ChefTone } from "@/features/chef/components/chef-ui";
+import { ChefLoading } from "@/features/chef/components/chef-loading";
 import { STATEMENT_PRESETS, dayAfter, indiaDate, periodLabel, presetPeriod, referencePeriodLabel, type StatementPreset } from "@/features/chef/lib/statement-periods";
 
 type OrderOption = { id: string; kitchenName: string; currency: string };
@@ -58,6 +59,9 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
   const [cursor, setCursor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  // Chef mode: "done" messages show for a moment; advice ("still being made") stays in `message`.
+  const [notice, setNotice] = useState("");
+  const [historyReady, setHistoryReady] = useState(false);
   const [error, setError] = useState("");
   const [emailState, setEmailState] = useState<Record<string, string>>({});
   const lifetime = useRef<AbortController | null>(null);
@@ -95,12 +99,14 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
   useEffect(() => {
     historyEpoch.current += 1;
     if (!capabilities?.enabled) return;
-    void loadHistory().catch((caught) => { if (!lifetime.current?.signal.aborted) setError(chefErrorText(caught, "Document history is unavailable.")); });
+    void loadHistory()
+      .catch((caught) => { if (!lifetime.current?.signal.aborted) setError(chefErrorText(caught, "Document history is unavailable.")); })
+      .finally(() => setHistoryReady(true));
   }, [capabilities?.enabled, loadHistory]);
 
   async function action(work: () => Promise<void>) {
     if (busy || !lifetime.current) return;
-    setBusy(true); setError(""); setMessage("");
+    setBusy(true); setError(""); setMessage(""); setNotice("");
     try { await work(); } catch (caught) {
       if (!lifetime.current?.signal.aborted) setError(chefErrorText(caught, "The document operation failed."));
     } finally { setBusy(false); }
@@ -114,7 +120,12 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
       latest = fresh;
       setItems((old) => old.map((item) => item.id === fresh.id ? fresh : item));
     }
-    setMessage(latest.status === "READY" ? "Your PDF is ready to download or email." : latest.status === "FAILED" ? "We couldn’t make this PDF. Try again, or ask Craves for help." : "Your PDF is still being made. Tap Refresh in a minute instead of making another one.");
+    if (latest.status === "READY") done("Your PDF is ready to download or email.");
+    else setMessage(latest.status === "FAILED" ? "We couldn’t make this PDF. Try again, or ask Craves for help." : "Your PDF is still being made. Tap Refresh in a minute instead of making another one.");
+  }
+  function done(text: string) {
+    if (mode === "chef") setNotice(text);
+    else setMessage(text);
   }
   async function generate() {
     const signal = lifetime.current!.signal;
@@ -136,13 +147,13 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
     const url = URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer], { type: "application/pdf" }));
     const link = document.createElement("a"); link.href = url; link.download = `craves-${item.id}.pdf`; document.body.appendChild(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-    setMessage("PDF downloaded.");
+    done("PDF downloaded.");
   }
   async function email(item: DocumentSummary) {
     const signal = lifetime.current!.signal;
     const result = documentEmailSchema.parse(await jsonRequest(`/api/documents/${item.id}/email`, signal, { method: "POST", headers: { "Idempotency-Key": keyFor(`email:${item.id}`) } }));
     setEmailState((old) => ({ ...old, [item.id]: result.status }));
-    setMessage(mode === "chef" ? "We’re emailing a copy to your Craves email." : "Email copy queued for your current verified account email. Provider acceptance is not confirmation of inbox delivery.");
+    done(mode === "chef" ? "We’re emailing a copy to your Craves email." : "Email copy queued for your current verified account email. Provider acceptance is not confirmation of inbox delivery.");
   }
   async function refresh() {
     await loadHistory();
@@ -158,6 +169,8 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
   if (capabilities && !capabilities.enabled) return mode === "customer" ? null : <ChefSection><ChefEmpty icon={FileText} title="PDFs aren’t switched on yet" text="Craves will turn them on soon. Your earnings and payouts are still in Earnings." /></ChefSection>;
   if (mode === "customer" && !orders.length) return null;
   if (mode === "chef") {
+    // Until PDFs are known to be on and the first list is in, the form could vanish and "No PDFs yet" be untrue.
+    if (!error && (!capabilities || !historyReady)) return <ChefLoading shape="statements" head={false} label="Loading your statements" />;
     const periodReady = documentRequestSchema.safeParse({ type, ...period, timezone, currency }).success;
     const typeLabel = CHEF_TYPES.find((option) => option.type === type)?.label ?? documentLabels[type];
     return (
@@ -188,8 +201,8 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
           <div aria-live="polite" className="mt-4 grid gap-3 empty:hidden">
             {error ? <ChefNotice icon={AlertTriangle} tone="danger" role="alert">{error}</ChefNotice> : null}
             {message ? <ChefNotice icon={Info}>{message}</ChefNotice> : null}
-            {!capabilities && !error ? <p className="chef-section-note">Checking…</p> : null}
           </div>
+          <ChefFlash message={notice} onClose={() => setNotice("")} />
         </ChefSection>
 
         <ChefSection

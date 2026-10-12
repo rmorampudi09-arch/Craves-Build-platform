@@ -18,6 +18,7 @@ import {
 import { loadSession } from "@/features/auth/api/cravesAuth";
 import { trackingPresentation } from "@/features/orders/lib/tracking-presentation";
 import { shortOrderNumber } from "@/shared/lib/order-number";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { TrackingHeader } from "@/features/orders/components/TrackingHeader";
 import { CurrentStatusCard } from "@/features/orders/components/CurrentStatusCard";
 import { OrderTimeline } from "@/features/orders/components/OrderTimeline";
@@ -207,20 +208,7 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
 
       <main className="mx-auto max-w-5xl px-4 py-5 md:px-6 md:py-6">
         {loading ? (
-          <div
-            className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]"
-            aria-hidden="true"
-          >
-            <div className="space-y-5">
-              <div className="h-40 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-              <div className="h-72 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-              <div className="h-40 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-            </div>
-            <div className="space-y-5">
-              <div className="h-72 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-              <div className="h-40 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-            </div>
-          </div>
+          <CustomerSectionSkeleton variant="tracking" label="Loading order tracking" />
         ) : !order ? (
           <section className="rounded-2xl border border-[#E5E7EB] bg-white p-8 text-center shadow-[0_3px_10px_rgba(0,0,0,0.05)] md:p-12">
             <AlertTriangle

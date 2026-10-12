@@ -2,7 +2,7 @@
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { ChefError, chefApiError, chefErrorText, isChefAccessText } from "@/features/chef/lib/chef-errors";
-import { signInToChefModeAgain } from "@/features/chef/components/chef-account-menu";
+import { ChefAccessRetry } from "@/features/chef/components/chef-account-menu";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -19,11 +19,12 @@ import {
 import {
   ChefChoiceChips,
   ChefEmpty,
+  ChefFlash,
   ChefPageHead,
   ChefPill,
   ChefSection,
-  ChefSkeleton,
 } from "@/features/chef/components/chef-ui";
+import { ChefMenuSkeleton } from "@/features/chef/components/chef-loading";
 import { ChefCategoryPicker } from "@/features/chef/components/chef-category-picker";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
 import { Dialog, secondaryActionClass, useOverlayHistory } from "@/shared/ui/overlays/overlay";
@@ -80,7 +81,7 @@ const MAX_PHOTOS = 5;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const FOOD_TYPES = [
   { value: "VEG", label: "Veg", color: "bg-[#2E7D32]", border: "border-[#2E7D32]" },
-  { value: "NON_VEG", label: "Non-veg", color: "bg-[#7B3F00]", border: "border-[#7B3F00]" },
+  { value: "NON_VEG", label: "Non-veg", color: "bg-[#D92D20]", border: "border-[#D92D20]" },
   { value: "EGG", label: "Egg", color: "bg-[#D99A00]", border: "border-[#D99A00]" },
 ] as const;
 const SPICE_LEVELS = [
@@ -491,7 +492,7 @@ export function ChefMenuManager() {
         setImageFiles((current) => current.filter((entry) => entry !== file));
       }
       setEditing(false);
-      setNotice(creating ? "Dish added successfully" : "Dish updated successfully");
+      setNotice(creating ? "Dish added" : "Changes saved");
       await load();
     } catch (error) {
       const detail = chefErrorText(
@@ -545,7 +546,7 @@ export function ChefMenuManager() {
           0,
         );
       upsert(updated);
-      setNotice(updated.available ? "Dish is now available" : "Dish is now unavailable");
+      setNotice(updated.available ? "Dish turned on" : "Dish turned off");
     } catch (error) {
       setMessage(
         chefErrorText(error, "Availability could not be confirmed. Reload the menu to check it."),
@@ -581,7 +582,7 @@ export function ChefMenuManager() {
           0,
         );
       upsert(updated);
-      setNotice(action === "remove" ? "Photo removed" : "Cover photo updated");
+      setNotice(action === "remove" ? "Photo removed" : "Cover photo changed");
     } catch (error) {
       setMessage(
         chefErrorText(
@@ -596,18 +597,12 @@ export function ChefMenuManager() {
   }
   const existingPhotos = savedImages(items.find((item) => item.id === form.id));
   const photoSlots = MAX_PHOTOS - existingPhotos.length - imageFiles.length;
+  // They float above the tab bar (or the Save bar), so one pair serves the list and the dish form,
+  // and "Dish added" is still read out when saving closes the form.
   const feedback = (
     <>
-      {notice ? (
-        <p role="status" className="chef-notice">
-          {notice}
-        </p>
-      ) : null}
-      {message ? (
-        <p role="alert" className="chef-notice is-danger !text-[#C4200F]">
-          {message}
-        </p>
-      ) : null}
+      <ChefFlash message={notice} onClose={() => setNotice("")} />
+      <ChefFlash message={message} tone="danger" onClose={() => setMessage("")} />
     </>
   );
 
@@ -659,7 +654,9 @@ export function ChefMenuManager() {
   const food = FOOD_TYPES.find((option) => option.value === form.foodType);
 
   // The list comes back as it was; the dish form slides up as its own screen.
-  return !editing ? (
+  return (
+    <>
+    {!editing ? (
     <div className="mx-auto w-full max-w-3xl">
       <ChefPageHead
         title="Menu"
@@ -682,7 +679,6 @@ export function ChefMenuManager() {
         }
       />
       <div className="chef-stack">
-        {feedback}
         {loadError ? (
           <ChefSection>
             <ChefEmpty
@@ -691,9 +687,7 @@ export function ChefMenuManager() {
               text={loadError}
               action={
                 isChefAccessText(loadError) ? (
-                  <button type="button" className="chef-btn is-primary" onClick={signInToChefModeAgain}>
-                    Sign in again
-                  </button>
+                  <ChefAccessRetry onRetry={() => void load(true)} />
                 ) : (
                   <button
                     type="button"
@@ -709,21 +703,18 @@ export function ChefMenuManager() {
           </ChefSection>
         ) : null}
         {loading ? (
-          <div aria-label="Loading menu" role="status" className="chef-section chef-list">
-            {[1, 2, 3, 4].map((key) => (
-              <div key={key} className="chef-row">
-                <ChefSkeleton className="h-[4.5rem] w-[4.5rem] !rounded-[14px]" />
-                <div className="grid flex-1 gap-2">
-                  <ChefSkeleton className="h-4 w-2/3" />
-                  <ChefSkeleton className="h-3 w-1/3" />
-                </div>
-              </div>
-            ))}
+          <div aria-label="Loading menu" role="status">
+            <ChefMenuSkeleton />
           </div>
         ) : !loadError && items.length === 0 ? (
           <ChefSection>
             <ChefEmpty
-              icon={UtensilsCrossed}
+              image={{
+                src: "/landing-v20/images/story-grid/cook-fresh-pot.png",
+                alt: "A home chef tipping chopped vegetables from a board into a pot on the stove",
+                width: 1696,
+                height: 954,
+              }}
               title="Add your first dish"
               text="Start with something you cook often. A photo, a price and the packed weight are all customers need."
               action={
@@ -866,7 +857,6 @@ export function ChefMenuManager() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start lg:gap-6">
         <div className="chef-stack">
-          {feedback}
           <fieldset disabled={busy || uncertainSave} className="chef-stack min-w-0">
             <ChefSection title="Photos" note="The first photo is the one customers see. Up to 5.">
               <ul
@@ -1311,5 +1301,8 @@ export function ChefMenuManager() {
         }
       />
     </motion.form>
+    )}
+    {feedback}
+    </>
   );
 }

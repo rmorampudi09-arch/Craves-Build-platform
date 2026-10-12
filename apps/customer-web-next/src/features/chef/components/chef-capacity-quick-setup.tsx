@@ -12,6 +12,7 @@ import {
   type ChefMenuItem,
 } from "@/features/chef/lib/chef-menu-contract";
 import { ChefLoading } from "@/features/chef/components/chef-loading";
+import { ChefFlash } from "@/features/chef/components/chef-ui";
 
 const DAYS = [
   [1, "Monday"],
@@ -53,6 +54,7 @@ export function ChefCapacityQuickSetup() {
   const [useSpecificDate, setUseSpecificDate] = useState(false);
   const [specificDate, setSpecificDate] = useState("");
   const [message, setMessage] = useState(LOADING_PLATES);
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
   const activeMenu = useMemo(
@@ -167,6 +169,7 @@ export function ChefCapacityQuickSetup() {
 
     setBusy(true);
     setMessage("");
+    setNotice("");
     try {
       for (const isoDayOfWeek of selectedDays) {
         await put("/api/chef/subscription-capacity/rules/slots", {
@@ -213,10 +216,8 @@ export function ChefCapacityQuickSetup() {
       }
 
       await load();
-      setMessage(
-        `Saved ${slot} availability for ${selectedDays.length} weekday(s) and ${selectedMenuItems.length} dish(es). ` +
-        `Each selected dish allows up to ${itemLimit} subscription unit(s).`,
-      );
+      // The week below shows what changed.
+      setNotice("Plates saved");
     } catch (error) {
       setMessage(chefErrorText(error, "We couldn’t save your plates. Try again."));
     } finally {
@@ -407,6 +408,7 @@ export function ChefCapacityQuickSetup() {
           ))}
         </div>
       </div>
+      <ChefFlash message={notice} onClose={() => setNotice("")} />
     </section>
   );
 }

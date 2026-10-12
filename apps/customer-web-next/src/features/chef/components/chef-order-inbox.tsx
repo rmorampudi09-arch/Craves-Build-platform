@@ -1,13 +1,12 @@
 "use client";
 
 import { ChefError, chefApiError, chefErrorText, isChefAccessText } from "@/features/chef/lib/chef-errors";
-import { signInToChefModeAgain } from "@/features/chef/components/chef-account-menu";
+import { ChefAccessRetry } from "@/features/chef/components/chef-account-menu";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
-  ChefHat,
   ChevronRight,
   Clock3,
   RefreshCw,
@@ -165,7 +164,7 @@ export function ChefOrderInbox() {
             text={error}
             action={
               isChefAccessText(error) ? (
-                <button type="button" onClick={signInToChefModeAgain} className="chef-btn is-primary">Sign in again</button>
+                <ChefAccessRetry onRetry={() => void load()} />
               ) : (
                 <button type="button" onClick={() => void load()} className="chef-btn is-primary">Try again</button>
               )
@@ -175,8 +174,13 @@ export function ChefOrderInbox() {
       ) : orders.length === 0 ? (
         <ChefSection>
           <ChefEmpty
-            icon={ChefHat}
-            title="No orders yet"
+            image={{
+              src: "/landing-v20/images/story-grid/cook-pot.png",
+              alt: "A home chef stirring a pot of vegetable curry on the stove",
+              width: 1760,
+              height: 990,
+            }}
+            title="No orders right now"
             text="When a customer orders from your kitchen it appears here, and you choose whether you can cook it."
           />
         </ChefSection>

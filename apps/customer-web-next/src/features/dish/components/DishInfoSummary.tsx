@@ -10,7 +10,7 @@ function foodMeta(dish: Dish) {
   if (type === "EGG") {
     return { label: "Egg", dot: "bg-[#D99A00]" };
   }
-  return { label: "Non-veg", dot: "bg-[#7B3F00]" };
+  return { label: "Non-veg", dot: "bg-[#D92D20]" };
 }
 
 export function DishInfoSummary({ dish }: { dish: Dish }) {
@@ -21,7 +21,7 @@ export function DishInfoSummary({ dish }: { dish: Dish }) {
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-[#F1F3F5] px-3 py-1.5 text-[0.66rem] font-black uppercase tracking-[0.12em] text-[#261A15]">
+        <span className="rounded-full bg-[#F1F3F5] px-3 py-1.5 text-[0.66rem] font-black uppercase tracking-[0.12em] text-[#1A1A1A]">
           {dish.category}
         </span>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F1F3F5] px-3 py-1.5 text-xs font-black text-[#1A1A1A]">

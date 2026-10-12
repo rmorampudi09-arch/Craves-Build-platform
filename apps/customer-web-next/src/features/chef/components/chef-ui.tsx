@@ -1,6 +1,7 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ComponentType, ReactNode } from "react";
-import { ArrowLeft } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, X } from "lucide-react";
 
 /** ₹1,234.50 — amounts arrive as numbers or as decimal strings ("2384.76") from finance. */
 export function formatInr(
@@ -166,23 +167,74 @@ export function ChefSection({
 
 export function ChefEmpty({
   icon: Icon,
+  image,
   title,
   text,
   action,
 }: {
-  icon: ComponentType<{ className?: string }>;
+  icon?: ComponentType<{ className?: string }>;
+  /** A drawing of the work this screen is about, shown in place of the icon. */
+  image?: { src: string; alt: string; width: number; height: number };
   title: ReactNode;
   text?: ReactNode;
   action?: ReactNode;
 }) {
   return (
     <div className="chef-empty">
-      <span className="chef-empty-icon">
-        <Icon className="h-6 w-6" aria-hidden="true" />
-      </span>
+      {image ? (
+        <Image src={image.src} alt={image.alt} width={image.width} height={image.height} sizes="20rem" className="chef-empty-image" />
+      ) : Icon ? (
+        <span className="chef-empty-icon">
+          <Icon className="h-6 w-6" aria-hidden="true" />
+        </span>
+      ) : null}
       <h2 className="chef-empty-title">{title}</h2>
       {text ? <p className="chef-empty-text">{text}</p> : null}
       {action ? <div className="mt-3">{action}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * The short message after an action, floating above the tab bar. Success leaves by itself after
+ * 3.5 s and waits while it is pointed at or focused: CSS times it (.chef-flash), so it needs no
+ * timer here. An error stays until it is closed or the next action clears it. Keep it rendered
+ * with an empty message: its live region must exist before the words arrive.
+ */
+export function ChefFlash({
+  message,
+  tone = "success",
+  onClose,
+  announce = true,
+  id,
+}: {
+  message: string;
+  tone?: "success" | "danger";
+  onClose(): void;
+  /** False when the screen already reads the words out from its own live region. */
+  announce?: boolean;
+  /** For a screen that moves focus here after an action. */
+  id?: string;
+}) {
+  const Icon = tone === "danger" ? AlertTriangle : CheckCircle2;
+  return (
+    <div id={id} className="chef-flash-region" role={announce && tone === "success" ? "status" : undefined}>
+      {message ? (
+        <div
+          key={message}
+          role={tone === "danger" ? "alert" : undefined}
+          className={`chef-flash is-${tone}`}
+          onAnimationEnd={(event) => {
+            if (tone === "success" && event.target === event.currentTarget) onClose();
+          }}
+        >
+          <Icon aria-hidden="true" />
+          <p>{message}</p>
+          <button type="button" className="chef-flash-close" aria-label="Close message" onClick={onClose}>
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

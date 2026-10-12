@@ -103,6 +103,8 @@ interface CheckoutPaymentButtonProps {
   failure: CheckoutPaymentFailure;
   ensureCheckout: () => Promise<CustomerCheckout>;
   onFailure: (failure: CheckoutPaymentFailure) => void;
+  /** True while a payment is being opened, paid or confirmed: checkout then keeps its address. */
+  onPaymentLockChange?: (locked: boolean) => void;
 }
 
 function money(amount: number, currency: string): string {
@@ -187,6 +189,7 @@ export function CheckoutPaymentButton({
   failure,
   ensureCheckout,
   onFailure,
+  onPaymentLockChange,
 }: CheckoutPaymentButtonProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -194,6 +197,11 @@ export function CheckoutPaymentButton({
   const [checking, setChecking] = useState(false);
   const [checkProblem, setCheckProblem] = useState("");
   const [notice, setNotice] = useState("");
+
+  const paymentLocked = busy || pending !== null;
+  useEffect(() => {
+    onPaymentLockChange?.(paymentLocked);
+  }, [onPaymentLockChange, paymentLocked]);
 
   const finishConfirmedOrder = useCallback(async (currentCheckout: CustomerCheckout) => {
     const orderId = currentCheckout.orders[0]?.id;

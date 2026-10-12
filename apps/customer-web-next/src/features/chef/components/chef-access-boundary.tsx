@@ -1,9 +1,10 @@
 "use client";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { parseChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
-import { clearChefMode, isChefModeVerified } from "@/features/chef/lib/chef-mode";
+import { enterChefMode, isChefModeVerified } from "@/features/chef/lib/chef-mode";
 import { rememberChefName } from "@/features/chef/lib/chef-name";
 import { ChefLoading, chefLoadingShapeFor } from "@/features/chef/components/chef-loading";
 import { Fragment, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -20,11 +21,18 @@ import {
 } from "@/features/auth/api/cravesAuth";
 
 const ACCESS_UNAVAILABLE = "Check your connection and try again.";
+const ROLE_PENDING =
+  "Your kitchen is approved, but Craves hasn’t switched on your chef access yet. Try again in a minute. If it stays, contact Craves support — it’s on our side, and you don’t need to sign in again.";
 const READY_FOR_MS = 5 * 60_000;
 type AccessState = "checking" | "ready" | "unavailable";
 
 // One confirmed result per session: switching chef tabs renders at once instead of re-checking access.
 let confirmed: { userId: string; generation: number; at: number } | null = null;
+
+/** /chef/sign-in just confirmed an approved chef: the first chef page opens without checking again. */
+export function primeChefAccess(userId: string): void {
+  confirmed = { userId, generation: captureSessionContext().generation, at: Date.now() };
+}
 
 function hasChefRole(user: CravesUser | null): boolean {
   return Boolean(
@@ -56,8 +64,9 @@ function accessScope(): string {
 const serverScope = () => "server";
 
 /**
- * Chef workspace pages open only for an approved chef who signed in to Chef Mode in this tab.
- * Anyone else goes to /chef/sign-in (returning here afterwards) or to their application status.
+ * Chef workspace pages open only for an approved chef whose device (or tab) confirmed Chef Mode
+ * with a phone OTP. Anyone else goes to /chef/sign-in (returning here afterwards) or to their
+ * application status.
  */
 export function ChefAccessBoundary({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -121,23 +130,19 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
       }
 
       let chef = current;
-      if (hasChefRole(current)) {
-        // One background token refresh keeps the signed roles current without delaying the page.
-        void synchronizeSessionRoles().catch(() => null);
-      } else {
+      if (!hasChefRole(current)) {
         // Auth /me only reports roles the current token carries; a refresh re-reads them, so an
         // application approved after the last sign-in needs exactly one rotation.
         const synchronized = await synchronizeSessionRoles();
         if (!active || getSession()?.id !== current.id) return;
         if (!synchronized) return unavailable(ACCESS_UNAVAILABLE);
-        if (!hasChefRole(synchronized)) {
-          // A fresh OTP sign-in reads the roles again; never loop between /chef and the status page.
-          clearChefMode();
-          return signIn();
-        }
+        // A new OTP would read the same roles: say so, and never loop between /chef and the status page.
+        if (!hasChefRole(synchronized)) return unavailable(ROLE_PENDING);
         chef = synchronized;
       }
-      confirmed = { userId: chef.id, generation: captureSessionContext().generation, at: Date.now() };
+      primeChefAccess(chef.id);
+      // This tab joins Chef Mode, and the device's 30 days start again.
+      enterChefMode(chef.id);
       setAccess({ scope: accessScope(), state: "ready" });
     })().catch((error: unknown) => {
       if (!active) return;
@@ -158,22 +163,34 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
   }
 
   if (state === "unavailable") {
+    const rolePending = access.detail === ROLE_PENDING;
     return (
       <section className="rounded-3xl border border-[#E5E7EB] bg-white p-6 text-[#1A1A1A] md:p-8">
-        <h2 className="text-2xl font-bold">We couldn’t reach Craves</h2>
+        <h2 className="text-2xl font-bold">{rolePending ? "Your chef access is on its way" : "We couldn’t reach Craves"}</h2>
         <p role="alert" className="mt-2 text-sm leading-6 text-[#6B6B6B]">
           {access.detail || ACCESS_UNAVAILABLE}
         </p>
-        <button
-          type="button"
-          className="craves-primary-action mt-6 w-full sm:w-auto"
-          onClick={() => {
-            setAccess({ scope, state: "checking" });
-            setAttempt((value) => value + 1);
-          }}
-        >
-          Try again
-        </button>
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            className="craves-primary-action w-full sm:w-auto"
+            onClick={() => {
+              setAccess({ scope, state: "checking" });
+              setAttempt((value) => value + 1);
+            }}
+          >
+            Try again
+          </button>
+          {rolePending ? (
+            // Chef support sits behind this same check; the open contact page always works.
+            <Link
+              href="/contact"
+              className="inline-flex min-h-12 w-full items-center justify-center rounded-full border border-[#E5E7EB] px-6 text-sm font-semibold text-[#1A1A1A] sm:w-auto"
+            >
+              Contact support
+            </Link>
+          ) : null}
+        </div>
       </section>
     );
   }

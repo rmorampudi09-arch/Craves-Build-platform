@@ -2,7 +2,8 @@ import { SubscriptionPlanBrowser } from "@/features/meal-plans/components/subscr
 import { MealPlanPage } from "../meal-plan-page";
 
 export const metadata = {
-  title: "Meal plans | Craves",
+  title: "Homemade Meal Plans & Tiffin Subscriptions in Hyderabad | Craves",
+  description: "Weekly and monthly homemade meal plans from trusted home chefs. Daily lunch and dinner tiffin subscriptions in Hyderabad and Bangalore on Craves.",
   robots: { index: true, follow: true },
 };
 

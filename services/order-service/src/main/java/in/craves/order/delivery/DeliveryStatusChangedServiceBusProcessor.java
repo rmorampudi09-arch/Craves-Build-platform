@@ -85,7 +85,7 @@ public class DeliveryStatusChangedServiceBusProcessor {
         );
     }
 
-    private void processMessage(ServiceBusReceivedMessageContext context) {
+    void processMessage(ServiceBusReceivedMessageContext context) {
         try {
             String rawPayload = context.getMessage().getBody().toString();
             JavaType eventType = objectMapper.getTypeFactory().constructParametricType(

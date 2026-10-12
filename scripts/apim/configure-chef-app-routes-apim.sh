@@ -145,11 +145,11 @@ done
 
 # One listing of every API (name, path) answers both "who owns this path" and "is this api id already taken".
 API_LIST=$(az apim api list -g "$RG" --service-name "$APIM" --query '[].[name,path]' -o tsv --only-show-errors)
-declare -A API_ID OPS CREATE COVERED
+declare -A API_ID OPS CREATE
 declare -a COVER_OP
 for ROW in "${APIS[@]}"; do
   IFS='|' read -r KEY PATH_PART NEW_ID NAME BACKEND HOW FIX <<<"$ROW"
-  mapfile -t MATCHES < <(awk -F'\t' -v p="$PATH_PART" '$2==p {print $1}' <<<"$API_LIST")
+  mapfile -t MATCHES < <(awk -F'\t' -v p="$PATH_PART" '$1!="" && $2==p {print $1}' <<<"$API_LIST")
   (( ${#MATCHES[@]} <= 1 )) || fail "Ambiguous APIM path $PATH_PART; no update applied."
   if (( ${#MATCHES[@]} == 1 )); then
     API_ID[$KEY]="${MATCHES[0]}"
@@ -162,9 +162,16 @@ for ROW in "${APIS[@]}"; do
   else
     # No API of its own. APIM serves a request from the LONGEST matching API path, so only the longest strict parent
     # (path equal to a leading run of whole segments, or an empty path) can serve this prefix.
-    PARENT=$(awk -F'\t' -v pp="$PATH_PART" 'BEGIN{best=-1} $2!=pp && ($2=="" || index(pp,$2"/")==1) && length($2)>best {best=length($2); line=$1"\t"$2; f=1} END{if(f) print line}' <<<"$API_LIST")
+    PARENT=$(awk -F'\t' -v pp="$PATH_PART" 'BEGIN{best=-1} $1!="" && $2!=pp && ($2=="" || index(pp,$2"/")==1) && length($2)>best {best=length($2); line=$1"\t"$2; f=1} END{if(f) print line}' <<<"$API_LIST")
     if [[ -n "$PARENT" ]]; then
       IFS=$'\t' read -r P_ID P_PATH <<<"$PARENT"
+      [[ $(az apim api show -g "$RG" --service-name "$APIM" --api-id "$P_ID" --query subscriptionRequired -o tsv --only-show-errors) == [Ff]alse ]] ||
+        fail "Parent API $P_ID (/$P_PATH) requires a subscription key; the mobile app sends none. No update applied."
+      HINT=''
+      if [[ "$HOW" == new ]]; then :
+      elif [[ "$FIX" == - ]]; then HINT=" No script in this repo publishes this prefix; add wildcard operations to the parent or create its API by hand."
+      else HINT=" Either publish its own API first with scripts/apim/$FIX (APIM=$APIM) or add wildcard operations to the parent."
+      fi
       # Wildcard = an operation whose urlTemplate has `*` (`/*`, `/me/*`, `/{*rest}`); the text before it must prefix the
       # route path relative to the parent, and the method must match. Nothing is created beneath a parent either way.
       P_OPS=$(az apim api operation list -g "$RG" --service-name "$APIM" --api-id "$P_ID" --query '[].[name,method,urlTemplate]' -o tsv --only-show-errors)
@@ -174,13 +181,13 @@ for ROW in "${APIS[@]}"; do
         RTARGET=$(target_path "$KEY" "$RTEMPLATE"); REL="$RTARGET"; [[ -z "$P_PATH" ]] || REL="${RTARGET#"/$P_PATH"}"
         WILD=$(awk -F'\t' -v m="$RMETHOD" -v rel="$REL" 'toupper($2)==m { t=$3; i=index(t,"*"); if (i==0) next; lit=substr(t,1,i-1)
           if (substr(lit,length(lit))=="{") lit=substr(lit,1,length(lit)-1); if (index(rel,lit)==1) { print $1; exit } }' <<<"$P_OPS")
-        [[ -n "$WILD" ]] || fail "Refusing to create /$PATH_PART under parent API $P_ID (/$P_PATH): it would shadow the parent's routes; the parent has no wildcard operation for $RMETHOD $RTARGET. No update applied."
+        [[ -n "$WILD" ]] || fail "Refusing to create /$PATH_PART under parent API $P_ID (/$P_PATH): it would shadow the parent's routes; the parent has no wildcard operation for $RMETHOD $RTARGET.$HINT No update applied."
         COVER_OP[$I]="$P_ID/$WILD"
       done
-      API_ID[$KEY]="$P_ID"; COVERED[$KEY]=1; OPS[$KEY]=''
+      API_ID[$KEY]="$P_ID"; OPS[$KEY]=''
       echo "API $KEY: /$PATH_PART has no API of its own; covered by wildcard operations of parent $P_ID (/$P_PATH), nothing created"
     elif [[ "$HOW" == new ]]; then
-      TAKEN=$(awk -F'\t' -v id="$NEW_ID" '$1==id {print $2}' <<<"$API_LIST")
+      TAKEN=$(awk -F'\t' -v id="$NEW_ID" '$1!="" && $1==id {print $2}' <<<"$API_LIST")
       [[ -z "$TAKEN" ]] || fail "API id $NEW_ID already exists with path /$TAKEN, not /$PATH_PART; refusing to re-path it. No update applied."
       API_ID[$KEY]="$NEW_ID"; CREATE[$KEY]=1; OPS[$KEY]=''
       echo "API $KEY: $NEW_ID (/$PATH_PART) will be created"

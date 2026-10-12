@@ -50,7 +50,7 @@ class PauseCreditDatabaseTest {
     List<Map<String,Object>> creditRows(){return db.queryForList("SELECT amount,status,cycle_start,cycle_end,paid_at IS NOT NULL AS paid FROM subscription_schema.subscription_invoice WHERE provider_reference='PAUSE_CREDIT'");}
     LocalDate nextBilling(){return db.queryForObject("SELECT next_billing_date FROM subscription_schema.customer_subscription WHERE id=?",LocalDate.class,subscription);}
 
-    @Test void voidsUnpaidCycleInsidePauseAndCarriesPaidDaysForward() {
+    @Test void voidsUnpaidCycleInsidePauseAndCarriesPaidDaysForward() throws Exception {
         assertEquals(new PauseCredit(d("10-25"),5,d("10-30")),resume(d("10-25")));
 
         assertEquals(Map.of("status","CANCELLED","failure_code","PAUSED_CYCLE_VOIDED"),invoiceRow(open));
@@ -65,7 +65,24 @@ class PauseCreditDatabaseTest {
         assertEquals(true,credit.get(0).get("paid"));
         assertEquals(d("10-30"),nextBilling());
         assertEquals("PAID",invoiceRow(paid).get("status"));
+
+        // Integration-service is told, so the voided bill can no longer be paid.
+        List<Map<String,Object>> outbox=voidedOutbox();
+        assertEquals(1,outbox.size());
+        Map<String,Object> row=outbox.get(0);
+        assertEquals("SUBSCRIPTION_INVOICE_VOIDED:"+open,row.get("event_key"));
+        assertEquals(List.of(open,open,"v1","PENDING"),List.of(row.get("aggregate_id"),row.get("correlation_id"),row.get("event_version"),row.get("status")));
+        var event=new com.fasterxml.jackson.databind.ObjectMapper().readTree((String)row.get("payload"));
+        assertEquals(row.get("id").toString(),event.path("eventId").asText());
+        assertEquals("SUBSCRIPTION_INVOICE_VOIDED",event.path("eventType").asText());
+        assertEquals("v1",event.path("eventVersion").asText());
+        assertDoesNotThrow(()->java.time.Instant.parse(event.path("occurredAt").asText()));
+        assertEquals(List.of(open.toString(),subscription.toString(),open.toString()),
+            List.of(event.path("correlationId").asText(),event.path("causationId").asText(),event.path("subject").asText()));
+        assertEquals(Map.of("invoiceId",open.toString(),"subscriptionId",subscription.toString(),"reason","PAUSED_CYCLE_VOIDED"),
+            new com.fasterxml.jackson.databind.ObjectMapper().convertValue(event.path("data"),Map.class));
     }
+    List<Map<String,Object>> voidedOutbox(){return db.queryForList("SELECT id,event_key,aggregate_id,correlation_id,event_version,status,payload::text AS payload FROM subscription_schema.subscription_payment_outbox WHERE event_type='SUBSCRIPTION_INVOICE_VOIDED'");}
 
     void pausedAgainAt(String instant){db.update("INSERT INTO subscription_schema.subscription_status_history(subscription_id,old_status,new_status,reason,created_at) VALUES (?,'ACTIVE','PAUSED','Again',CAST(? AS timestamptz))",subscription,instant);}
     void credit(UUID id,LocalDate start,LocalDate end){db.update("INSERT INTO subscription_schema.subscription_invoice(id,subscription_id,plan_id,customer_identity_id,chef_identity_id,cycle_start,cycle_end,amount,currency,status,provider_reference,paid_at) VALUES (?,?,?,?,?,?,?,0,'INR','PAID','PAUSE_CREDIT',now())",id,subscription,plan,customer,chef,start,end);}
@@ -93,6 +110,7 @@ class PauseCreditDatabaseTest {
 
         assertEquals(new PauseCredit(d("10-26"),3,d("10-29")),resume(d("10-22")));
         assertEquals("PAUSED_CYCLE_VOIDED",invoiceRow(open).get("failure_code"));
+        assertEquals(List.of("SUBSCRIPTION_INVOICE_VOIDED:"+open),voidedOutbox().stream().map(r->r.get("event_key")).toList());
     }
 
     @Test void refundFlagSurvivesALaterResume() {
@@ -102,6 +120,7 @@ class PauseCreditDatabaseTest {
 
         assertEquals("PAYMENT_RECEIVED_FOR_VOIDED_CYCLE",invoiceRow(open).get("failure_code"));
         assertEquals(0,db.queryForObject("SELECT count(*) FROM subscription_schema.subscription_invoice_history WHERE invoice_id=?",Integer.class,open));
+        assertEquals(List.of(),voidedOutbox());
     }
 
     @Test void creditStartsAfterTheLastMealStillSentToTheChef() {
@@ -126,6 +145,7 @@ class PauseCreditDatabaseTest {
         Map<String,Object> stillOpen=invoiceRow(open);
         assertEquals("PAYMENT_REQUESTED",stillOpen.get("status"));
         assertNull(stillOpen.get("failure_code"));
+        assertEquals(List.of(),voidedOutbox());
         List<Map<String,Object>> credit=creditRows();
         assertEquals(1,credit.size());
         assertEquals(java.sql.Date.valueOf(d("10-19")),credit.get(0).get("cycle_start"));

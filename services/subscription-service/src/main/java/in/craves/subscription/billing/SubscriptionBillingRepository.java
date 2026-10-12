@@ -1,7 +1,10 @@
 package in.craves.subscription.billing;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -16,6 +19,8 @@ public class SubscriptionBillingRepository {
     public static final String PAUSE_VOIDED = "PAUSED_CYCLE_VOIDED";
     /** failure_code of a voided invoice that was paid anyway; the money waits for a manual refund. */
     public static final String PAID_AFTER_VOID = "PAYMENT_RECEIVED_FOR_VOIDED_CYCLE";
+    /** Outbox event telling integration-service a bill was voided, so its payment intent stops being payable. */
+    public static final String INVOICE_VOIDED = "SUBSCRIPTION_INVOICE_VOIDED";
     /** Invoices a resume has not voided (voided ones, paid or not, no longer cover or block anything). */
     private static final String STANDING =
         "(failure_code IS NULL OR failure_code NOT IN ('" + PAUSE_VOIDED + "', '" + PAID_AFTER_VOID + "'))";
@@ -162,6 +167,27 @@ public class SubscriptionBillingRepository {
                     "(id, invoice_id, old_status, new_status, reason, created_at) " +
                     "VALUES (?, ?, ?, 'CANCELLED', 'Unpaid billing cycle started during a pause', now())",
                 UUID.randomUUID(), invoice.id(), invoice.status()
+            );
+            // Tells integration-service, so the voided bill's payment intent can no longer be paid.
+            UUID outboxId = UUID.randomUUID();
+            ObjectNode data = JsonNodeFactory.instance.objectNode()
+                .put("invoiceId", invoice.id().toString())
+                .put("subscriptionId", subscriptionId.toString())
+                .put("reason", PAUSE_VOIDED);
+            ObjectNode event = JsonNodeFactory.instance.objectNode()
+                .put("eventId", outboxId.toString())
+                .put("eventType", INVOICE_VOIDED)
+                .put("eventVersion", "v1")
+                .put("occurredAt", Instant.now().toString())
+                .put("correlationId", invoice.id().toString())
+                .put("causationId", subscriptionId.toString())
+                .put("subject", invoice.id().toString());
+            event.set("data", data);
+            jdbcTemplate.update(
+                "INSERT INTO subscription_schema.subscription_payment_outbox " +
+                    "(id, event_key, aggregate_id, event_type, event_version, correlation_id, payload, status, created_at, updated_at) " +
+                    "VALUES (?, ?, ?, ?, 'v1', ?, CAST(? AS jsonb), 'PENDING', now(), now())",
+                outboxId, INVOICE_VOIDED + ":" + invoice.id(), invoice.id(), INVOICE_VOIDED, invoice.id(), event.toString()
             );
         }
 

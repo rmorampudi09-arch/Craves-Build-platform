@@ -23,6 +23,7 @@ Release order and why: merge to main, then catalog, notification, subscription, 
 | `<MERGED_SHA>` | full 40-character SHA of the merge commit on main that contains this branch |
 | `<PG_HOST>` | Postgres FQDN; normally `pg-craves-prodlow-kmqgfy.postgres.database.azure.com` (unverified; look it up with the command in Step 0) |
 | `<PREV_CATALOG_IMAGE>`, `<PREV_NOTIFICATION_IMAGE>`, `<PREV_SUBSCRIPTION_IMAGE>`, `<PREV_ORDER_IMAGE>` | the image each app runs today, recorded in Step 0 BEFORE any deploy |
+| `<PREV_SHA>` | the main commit the image currently running for that service was built from (its tag or your release notes; images built by the repo's pipelines carry the label `org.opencontainers.image.revision`). Used only for the ride-along review in 0.8 and in each step |
 | `<API_ID>`, `<OP_ID>` | only in the APIM undo commands: an API id or operation id printed by the APIM script |
 | `<KITCHEN_ID>` | any live kitchen id, for the optional public read check |
 | `<REGRESSION_RUN_ID>` | only for the Azure DevOps route: a successful `launch-regression-ci.yml` run id for `<MERGED_SHA>` |
@@ -35,10 +36,10 @@ Set the shell variables once per Cloud Shell session (re-run this if the session
 export RG=rg-craves-prodlow-centralindia ACR=cravesrm09prodlow6bf632 APIM=apim-craves-prodlow-kmqgfy CATALOG_APP=ca-craves-catalog-service-prodlo NOTIF_APP=ca-craves-notification-service-p SUB_APP=ca-craves-subscription-service-p ORDER_APP=ca-craves-order-service-prodlow SHA=<MERGED_SHA> PGH=<PG_HOST> PGDB=craves_business_db; export TAG=chefapp-${SHA:0:9}
 ```
 
-Read-only database helper (reads `pg-pass` from Key Vault, never prints or changes it). Defined once per session:
+Read-only database helper (reads `pg-pass` from Key Vault, never prints or changes it; the session is also forced read-only with `default_transaction_read_only=on`, so a typo cannot write). Defined once per session:
 
 ```bash
-psqlro() { PGPASSWORD="$(az keyvault secret show --vault-name kvcravesprodlowkmqgfy -n pg-pass --query value -o tsv)" PGSSLMODE=require psql -h "$PGH" -U cravesadmin -d "$PGDB" -c "$1"; }
+psqlro() { PGPASSWORD="$(az keyvault secret show --vault-name kvcravesprodlowkmqgfy -n pg-pass --query value -o tsv)" PGSSLMODE=require PGOPTIONS='-c default_transaction_read_only=on' psql -h "$PGH" -U cravesadmin -d "$PGDB" -c "$1"; }
 ```
 
 Gateway probe helper for unauthenticated checks (prints the HTTP status, method and path; a route is fine when the status is 401):
@@ -88,7 +89,7 @@ for a in $CATALOG_APP $NOTIF_APP $SUB_APP $ORDER_APP; do echo "$a $(az container
 for a in $CATALOG_APP $NOTIF_APP $SUB_APP $ORDER_APP; do echo "== $a"; az containerapp revision list -g $RG -n $a --query "[?properties.active].{name:name,created:properties.createdTime,traffic:properties.trafficWeight,image:properties.template.containers[0].image}" -o table; done
 ```
 
-0.6 Migration state before (read-only). Order must show V34 applied (checksum `1014493939`, from the prod image that holds the handoff code) and V35 applied or absent, V36 applied or pending (it applies with this deploy), V37 absent, and no row with `success = f`. Catalog must show V8 as the latest.
+0.6 Migration state before (read-only). Order must show V34 applied with checksum `1014493939` and V35 applied with checksum `-1559739371` (both from the prod image that holds the handoff code; if V35 is absent that is also fine, it then applies from main), V36 applied or pending (it applies with this deploy), V37 absent, and no row with `success = f`. Catalog must show V8 as the latest. **If catalog shows V7 as the latest, V8 (`V8__admin_home_banners.sql`, new home-banner tables from a different change set) has not been applied in prod and this deploy applies it first, together with V9: read that file and the ride-along log in 0.8 before going on.**
 
 ```bash
 psqlro "SELECT installed_rank, version, description, checksum, success FROM order_schema.flyway_schema_history ORDER BY installed_rank DESC LIMIT 6;"
@@ -96,9 +97,16 @@ psqlro "SELECT installed_rank, version, description, checksum, success FROM orde
 ```bash
 psqlro "SELECT installed_rank, version, description, success FROM catalog_schema.flyway_schema_history ORDER BY installed_rank DESC LIMIT 3;"
 ```
-If prod order shows V34 with a different checksum, or any failed row, stop and look at it before Step 4 (a checksum mismatch crash-looped a previous order deploy).
+If prod order shows V34 or V35 with a different checksum, or any failed row, stop and look at it before Step 4 (a checksum mismatch crash-looped a previous order deploy).
 
 0.7 Do not overlap another Craves release (pipelines, other Cloud Shell sessions) while this runs.
+
+0.8 Ride-along review. Deploying a service from main ships every commit that touched it since the image prod runs now, not only this branch. For each service, before building it, list what else goes out. The checkout in `~/c8` is shallow, so fetch the full history once (or run the same `git log` lines in a full local clone):
+
+```bash
+cd ~/c8 && git fetch -q --unshallow https://github.com/rmorampudi09-arch/Craves-Build-platform.git $SHA
+```
+Each step has its own line of the form `git log --oneline <PREV_SHA>..$SHA -- services/<svc>`. Anything that is not from this branch (see "What ships") needs a look: new migrations, new env vars it expects, behaviour changes. If `<PREV_SHA>` is not an ancestor of `$SHA` (the running image was built from a branch), the list is meaningless: ask Claude before deploying that service.
 
 ## Step 1. catalog-service (migration V9)
 
@@ -110,39 +118,51 @@ Applies V9: seven additive columns on `catalog_schema.kitchen_profile` (`chef_ph
 az containerapp show -g $RG -n $CATALOG_APP --query "properties.template.containers[0].env[?name=='CRAVES_STORAGE_ENDPOINT_VALUE' || name=='CRAVES_STORAGE_MEDIA_CONTAINER' || name=='CRAVES_MEDIA_PUBLIC_BASE_URL'].{Name:name,Value:value,SecretRef:secretRef}" -o table
 ```
 
-1.2 Baseline for a route prod may depend on. order-service calls `POST /internal/menu-items/resolve` on the catalog (cart preflight) and main's catalog does not serve it (it existed on older branches, commit `1ef06939c`). If prod's catalog image still serves it, this deploy would remove it. Record the status now (403 means the route exists and is guarded; 404 or 405 means it is not served):
+1.2 **GO / NO-GO GATE, do this before building or deploying anything.** order-service calls `POST /internal/menu-items/resolve` on the catalog (cart preflight) and main's catalog does not serve it (it existed on older branches, commit `1ef06939c`). If prod's catalog image still serves it, deploying catalog from main would remove it and break cart preflight. Probe the catalog app itself (not api.craves.in, which can answer for other reasons). First see how order-service reaches the catalog (if its `CRAVES_CATALOG_BASE_URL` is a secretRef or blank it uses the default `https://api.craves.in/api/v1/catalog`):
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' --max-time 30 -X POST -H 'Content-Type: application/json' -H 'X-Craves-Internal-Key: probe' --data '{"menuItemIds":["00000000-0000-0000-0000-000000000000"]}' https://api.craves.in/api/v1/catalog/internal/menu-items/resolve
+az containerapp show -g $RG -n $ORDER_APP --query "properties.template.containers[0].env[?name=='CRAVES_CATALOG_BASE_URL'].[value,secretRef]" -o tsv
 ```
+```bash
+export CATALOG_FQDN=$(az containerapp show -g $RG -n $CATALOG_APP --query properties.configuration.ingress.fqdn -o tsv); echo $CATALOG_FQDN
+```
+```bash
+curl -s -w '\nHTTP %{http_code}\n' --max-time 30 -X POST -H 'Content-Type: application/json' -H 'X-Craves-Internal-Key: probe' --data '{"menuItemIds":["00000000-0000-0000-0000-000000000000"]}' https://$CATALOG_FQDN/api/v1/catalog/internal/menu-items/resolve
+```
+Read the result:
+- `HTTP 404`: the app does not serve the route. **GO**, continue with 1.3. (Write the status in the release log.)
+- Anything else (403 guarded, 503 internal access not configured, 405, 400, 5xx, no answer): **NO-GO. STOP. Do not build or deploy catalog.** A 403 or 503 means the prod catalog serves the route and main's catalog would remove it; a 405 may only be Spring answering an unmapped POST, but do not guess. Send the status line and the response body to Claude and wait. Nothing has been changed at this point.
 
-1.3 Build:
+The route needs the internal key and carries no secret here (`probe` is not a key), so the probe cannot read data.
 
+1.3 Ride-along review and build. List what else goes out with this catalog image besides this branch (see 0.8), then build:
+
+```bash
+cd ~/c8 && git log --oneline <PREV_SHA>..$SHA -- services/catalog-service
+```
 ```bash
 cd ~/c8 && az acr build -r $ACR -t craves/catalog-service:$TAG services/catalog-service
 ```
 
-1.4 Deploy. Catalog carries a plain app secret (`media-storage`), so the preserve-runtime script will most likely refuse it with "is not Key Vault-backed". Run the preflight (read-only) to find out:
-
-```bash
-cd ~/c8 && DEPLOY_PREFLIGHT_ONLY=true bash scripts/release/deploy-single-service-preserve-runtime.sh $RG $CATALOG_APP $ACR.azurecr.io/craves/catalog-service:$TAG catalog
-```
-Route A, preflight printed SUCCESS (the script preserves runtime config, health-checks, and auto-rolls back):
-
-```bash
-cd ~/c8 && READY_ATTEMPTS=150 READY_SLEEP_SECONDS=10 bash scripts/release/deploy-single-service-preserve-runtime.sh $RG $CATALOG_APP $ACR.azurecr.io/craves/catalog-service:$TAG catalog
-```
-Route B, preflight refused (image-only update; secrets and env are untouched; no automatic rollback, so verify in 1.5):
+1.4 Deploy. Catalog's media connection is stored as a plain (non Key Vault) app secret named `media-storage` (`scripts/release/chef_onboarding_release.py:18-21,262-273`; if 1.1 shows `CRAVES_STORAGE_ENDPOINT_VALUE` with a secretRef, it is in use), and `deploy-single-service-preserve-runtime.sh` refuses any plain secret that an env var references ("is not Key Vault-backed"), so **Route A will most likely refuse. Lead with Route B (image-only)**: it changes only the image, secrets and env stay as they are, but it has no automatic rollback, so verify in 1.5. Check no rollout is running:
 
 ```bash
 az containerapp show -g $RG -n $CATALOG_APP --query "{latest:properties.latestRevisionName,ready:properties.latestReadyRevisionName,mode:properties.configuration.activeRevisionsMode}" -o jsonc
 ```
-Proceed only when `latest` equals `ready` and mode is `Single`, then:
+Route B, proceed only when `latest` equals `ready` and mode is `Single`, then:
 
 ```bash
 az containerapp update -g $RG -n $CATALOG_APP --image $ACR.azurecr.io/craves/catalog-service:$TAG
 ```
-Route C (alternative to A or B): Azure DevOps pipeline `Craves (14)` (definition 14, `azure-pipelines-chef-onboarding-release.yml`) with `operation=catalog`, `releaseSha=<MERGED_SHA>`, `regressionRunId=<REGRESSION_RUN_ID>`, `confirmDeploy=true`. It does an image-only swap and restores the previous image if the revision does not settle. Confirm the definition's `operation` list includes `catalog` first (an older copy of the YAML may not).
+Route A (optional, only if its read-only preflight prints SUCCESS; it preserves runtime config, health-checks and auto-rolls back):
+
+```bash
+cd ~/c8 && DEPLOY_PREFLIGHT_ONLY=true bash scripts/release/deploy-single-service-preserve-runtime.sh $RG $CATALOG_APP $ACR.azurecr.io/craves/catalog-service:$TAG catalog
+```
+```bash
+cd ~/c8 && READY_ATTEMPTS=150 READY_SLEEP_SECONDS=10 bash scripts/release/deploy-single-service-preserve-runtime.sh $RG $CATALOG_APP $ACR.azurecr.io/craves/catalog-service:$TAG catalog
+```
+Route C (alternative to A or B; the 1.2 gate still comes first): Azure DevOps pipeline `Craves (14)` (definition 14, `azure-pipelines-chef-onboarding-release.yml`) with `operation=catalog`, `releaseSha=<MERGED_SHA>`, `regressionRunId=<REGRESSION_RUN_ID>`, `confirmDeploy=true`. It does an image-only swap and restores the previous image if the revision does not settle. Confirm the definition's `operation` list includes `catalog` first (an older copy of the YAML may not).
 
 1.5 Verify (re-run the first command until the new image is Healthy with traffic 100; if it is not healthy within about 5 minutes, roll back, see 1.7):
 
@@ -157,7 +177,7 @@ A migration problem shows here (for example `canceling statement due to lock tim
 ```bash
 psqlro "SELECT installed_rank, version, description, success FROM catalog_schema.flyway_schema_history ORDER BY installed_rank DESC LIMIT 3;"
 ```
-Expect `9 | kitchen_storefront_and_chef_settings | t`. Re-run the 1.2 probe: it must return the same status as the baseline. **If it flipped from 403 to 404/405, roll back catalog now (1.7).** This is safe only while no dish has been archived, which cannot happen until the APIM step publishes the DELETE route.
+Expect `9 | kitchen_storefront_and_chef_settings | t` (and `8 | admin_home_banners | t` just below it if V8 was pending, see 0.6). The 1.2 gate guaranteed prod did not serve the resolve route, so nothing is lost there; re-running the 1.2 probe should still say 404.
 
 Optional public read check (new keys present, settings keys never public):
 
@@ -166,7 +186,7 @@ curl -s https://api.craves.in/api/v1/catalog/kitchens/<KITCHEN_ID> | jq 'keys'
 ```
 Expect `chefPhotoUrl`, `kitchenPhotoUrl`, `cuisines`, `serviceAreas`, `socialLinks`; and no `autoAcceptOrders` or `defaultPrepMinutes`.
 
-1.6 Smoke: the kitchen routes are not on the gateway until Step 6, so here only health, the migration row and the probe above. Customer discovery and menu in the live customer app must still load.
+1.6 Smoke: the kitchen routes are not on the gateway until Step 6, so here only health, the migration row and the optional public read above. Customer discovery and menu in the live customer app must still load. Rolling catalog back (1.7) is safe while no dish has been archived, which cannot happen until Step 6 publishes the DELETE route.
 
 1.7 Rollback catalog (image only; V9 columns stay, which is harmless):
 
@@ -181,20 +201,17 @@ psqlro "SELECT count(*) AS archived_dishes FROM catalog_schema.menu_item WHERE s
 
 ## Step 2. notification-service (no migration)
 
-Adds the optional `role` filter. No schema change. Its ACS secret is a plain app secret, so expect the preserve-runtime script to refuse it and use Route B (the repo's own release script says the same). An older notification image silently ignores `role`, so the app would show customer and chef notices mixed until this is live.
+Adds the optional `role` filter. No schema change. Its ACS secret (email verification codes) is a plain app secret (`scripts/release/chef_onboarding_release.py:14-15,238`), and `deploy-single-service-preserve-runtime.sh` refuses plain secrets, so **Route A will most likely refuse. Lead with Route B (image-only)**: only the image changes, secrets and env stay, no automatic rollback, so verify below. An older notification image silently ignores `role`, so the app would show customer and chef notices mixed until this is live.
 
+Ride-along review (see 0.8) and build:
+
+```bash
+cd ~/c8 && git log --oneline <PREV_SHA>..$SHA -- services/notification-service
+```
 ```bash
 cd ~/c8 && az acr build -r $ACR -t craves/notification-service:$TAG services/notification-service
 ```
-```bash
-cd ~/c8 && DEPLOY_PREFLIGHT_ONLY=true bash scripts/release/deploy-single-service-preserve-runtime.sh $RG $NOTIF_APP $ACR.azurecr.io/craves/notification-service:$TAG notification
-```
-Route A (only if the preflight printed SUCCESS):
-
-```bash
-cd ~/c8 && READY_ATTEMPTS=150 READY_SLEEP_SECONDS=10 bash scripts/release/deploy-single-service-preserve-runtime.sh $RG $NOTIF_APP $ACR.azurecr.io/craves/notification-service:$TAG notification
-```
-Route B (preflight refused). Check no rollout is running (`latest` equals `ready`, mode `Single`), then update:
+Route B. Check no rollout is running (`latest` equals `ready`, mode `Single`), then update:
 
 ```bash
 az containerapp show -g $RG -n $NOTIF_APP --query "{latest:properties.latestRevisionName,ready:properties.latestReadyRevisionName,mode:properties.configuration.activeRevisionsMode}" -o jsonc
@@ -202,16 +219,25 @@ az containerapp show -g $RG -n $NOTIF_APP --query "{latest:properties.latestRevi
 ```bash
 az containerapp update -g $RG -n $NOTIF_APP --image $ACR.azurecr.io/craves/notification-service:$TAG
 ```
+Route A (optional, only if its read-only preflight prints SUCCESS):
+
+```bash
+cd ~/c8 && DEPLOY_PREFLIGHT_ONLY=true bash scripts/release/deploy-single-service-preserve-runtime.sh $RG $NOTIF_APP $ACR.azurecr.io/craves/notification-service:$TAG notification
+```
+```bash
+cd ~/c8 && READY_ATTEMPTS=150 READY_SLEEP_SECONDS=10 bash scripts/release/deploy-single-service-preserve-runtime.sh $RG $NOTIF_APP $ACR.azurecr.io/craves/notification-service:$TAG notification
+```
 Verify (Healthy, traffic 100, new image):
 
 ```bash
 az containerapp revision list -g $RG -n $NOTIF_APP --query "[?properties.active].{name:name,health:properties.healthState,running:properties.runningState,traffic:properties.trafficWeight,image:properties.template.containers[0].image}" -o table
 ```
-Smoke: `/in-app` routes are already on the gateway, so unauthenticated calls must answer 401, and the app's Notifications screen must still load:
+Smoke: only probe the notification routes known to be live today. Unauthenticated calls must answer 401, and the app's Notifications screen must still load:
 
 ```bash
-gw "GET /api/v1/notifications/in-app/unread-count?role=CHEF" "GET /api/v1/notifications/in-app/page?role=CHEF"
+gw "GET /api/v1/notifications/in-app?role=CHEF" "PATCH /api/v1/notifications/in-app/probe/read"
 ```
+`GET /api/v1/notifications/in-app/page`, `/in-app/unread-count` and `PATCH /in-app/read-all` are NOT expected to answer 401 yet: they are published by the APIM script in Step 6, so a 404 from the gateway for those three is normal until then (the backend already serves them; the role filter reaches the app through those routes only after Step 6).
 Rollback (no data change, safe at any time):
 
 ```bash
@@ -223,6 +249,11 @@ Behaviour to know: `role=` empty or any value other than CHEF/CUSTOMER (includin
 
 Adds `activeSubscriberCount` (one correlated COUNT inside the existing plan SELECT; ACTIVE only). The preserve-runtime route worked for this service on 2026-10-12 (V18).
 
+Ride-along review (see 0.8) and build:
+
+```bash
+cd ~/c8 && git log --oneline <PREV_SHA>..$SHA -- services/subscription-service
+```
 ```bash
 cd ~/c8 && az acr build -r $ACR -t craves/subscription-service:$TAG services/subscription-service
 ```
@@ -253,6 +284,11 @@ Applies V37: six nullable columns on `order_schema.customer_order` (`customer_no
 
 order-service has two plain secrets (`finance-internal`, `referral-source-hmac`), so `deploy-single-service-preserve-runtime.sh` refuses it. Use the image-only update (it keeps secrets and env, including the handoff flags). Re-check the V34 to V37 guard in 0.3 and the 0.6 order SELECT first.
 
+Ride-along review (see 0.8). Caution: prod's order image (186 as of 2026-10-12) was built outside GitHub and holds the handoff code that PR #489 restored, so it has no source commit on main; if the 0.5 image is still that one, there is no `<PREV_SHA>`: ask Claude for the last main commit known to be in it. Expect at least PR #487 (V36 and the subscription chef-declined callback) in the list; anything else needs a look. Then build:
+
+```bash
+cd ~/c8 && git log --oneline <PREV_SHA>..$SHA -- services/order-service
+```
 ```bash
 cd ~/c8 && az acr build -r $ACR -t craves/order-service:$TAG services/order-service
 ```
@@ -311,15 +347,45 @@ Refund deploy scripts reset it to false (`azure-pipelines-refund-combined-deploy
 
 Only after Steps 1 to 4 are healthy. The script (`scripts/apim/configure-chef-app-routes-apim.sh`) pins the subscription, tenant, RG and APIM `apim-craves-prodlow-kmqgfy`, runs a read-only Phase 1 (apps Running and `/actuator/health` UP, API owners by path, subscription key not required, which operations already exist), and only then Phase 2 writes: it creates missing APIs and missing operations and never touches an existing operation or its policy. It then reads back every operation and sends an unauthenticated probe that must answer 401.
 
-6.1 Prerequisites (read-only). These API paths must already exist on kmqgfy: `api/v1/kitchens/me`, `api/v1/chef/orders`, `api/v1/notifications` (the script stops before any write and names the script to run if one is missing). Created if absent: `api/v1/chef/scheduled-orders`, `api/v1/chef/reviews`, `api/v1/support`.
+6.1 Prerequisites (all read-only; nothing here is a go-ahead to publish until every item is clean).
+
+The script's Phase 1 needs all four backends Running, latest revision equal to latest ready revision, and a public `/actuator/health` answering UP: catalog (`ca-craves-catalog-service-prodlo`), order (`ca-craves-order-service-prodlow`), notification (`ca-craves-notification-service-p`) and user-chef (`ca-craves-user-chef-service-prod`, which backs `/api/v1/support/cases`). User-chef is not deployed by this release, so check it separately; if any of them is not ready the script stops before writing anything.
+
+(a) What the gateway has today. List every API under the prefixes this release touches, then its operations, then anything that owns a shorter path covering them (read-only):
 
 ```bash
-az apim api list -g $RG --service-name $APIM --query "[?path=='api/v1/kitchens/me' || path=='api/v1/chef/orders' || path=='api/v1/notifications' || path=='api/v1/chef/scheduled-orders' || path=='api/v1/chef/reviews' || path=='api/v1/support'].[name,path,subscriptionRequired]" -o tsv
+az apim api list -g $RG --service-name $APIM --query "[?starts_with(path,'api/v1/kitchens') || starts_with(path,'api/v1/chef') || starts_with(path,'api/v1/notifications') || starts_with(path,'api/v1/support')].{name:name,path:path}" -o table
 ```
-If `kitchens/me` or `chef/orders` is missing, run `scripts/apim/configure-chef-kitchen-profile-apim.sh` / `configure-chef-order-read-apim.sh` with `APIM=apim-craves-prodlow-kmqgfy` (these older scripts default to the deleted `l3ing6`; read each one first for its own confirm flag). No script in the repo publishes `api/v1/notifications`; if it is missing, stop and ask. The script does not publish: kitchen `GET/PUT /kitchens/me`, menu items, per-dish availability, image upload, chef order list/get/accept/reject/ready, chef subscription plans, chef application and finance (older scripts own them; run those with `APIM=apim-craves-prodlow-kmqgfy`). Check they are live (expect 401, a 404 means not published):
+```bash
+for id in $(az apim api list -g $RG --service-name $APIM --query "[?starts_with(path,'api/v1/kitchens') || starts_with(path,'api/v1/chef') || starts_with(path,'api/v1/notifications') || starts_with(path,'api/v1/support')].name" -o tsv); do echo "== $id"; az apim api operation list -g $RG --service-name $APIM --api-id $id --query "[].[method,urlTemplate]" -o tsv; done
+```
+```bash
+az apim api list -g $RG --service-name $APIM --query "[?path=='api/v1' || path=='api' || path==''].{name:name,path:path}" -o table
+```
+The script must find these paths: `api/v1/kitchens/me`, `api/v1/chef/orders`, `api/v1/notifications` (must already exist, never created) and, if absent, creates `api/v1/chef/scheduled-orders`, `api/v1/chef/reviews`, `api/v1/support`. APIM serves a request from the API with the LONGEST matching path, so a new longer-path API created beneath an existing API that owns a SHORTER path (`api/v1`, `api/v1/kitchens` with wildcard operations, `api/v1/chef`, ...) would shadow every route of that parent which the new API does not define. The first version of the script matched paths exactly and could not see this; a fix is in the branch working tree (the run then prints `covered by wildcard operations of parent ...` and creates nothing when the parent has a wildcard operation for every needed method, and stops when it does not). Confirm the checked-out version has the fix (a count above 0):
 
 ```bash
-gw "GET /api/v1/kitchens/me" "PUT /api/v1/kitchens/me" "GET /api/v1/kitchens/me/menu-items" "PUT /api/v1/kitchens/me/menu-items/probe" "PATCH /api/v1/kitchens/me/menu-items/probe/availability" "POST /api/v1/kitchens/me/menu-items/probe/images" "GET /api/v1/chef/orders" "GET /api/v1/chef/orders/probe" "POST /api/v1/chef/orders/probe/accept" "POST /api/v1/chef/orders/probe/reject" "POST /api/v1/chef/orders/probe/ready-for-pickup" "GET /api/v1/chef/subscription-plans" "PATCH /api/v1/notifications/in-app/probe/read"
+cd ~/c8 && grep -c COVERED scripts/apim/configure-chef-app-routes-apim.sh
+```
+**If any wildcard or shorter-path owner shows up in the listings for any of the six prefixes, do NOT let a longer-path API be created: STOP and send the three listings to Claude, even if the script has the fix.** If the count is 0 and any such owner exists, do not run the script at all.
+
+(b) If `api/v1/kitchens/me`, `api/v1/chef/orders` or `api/v1/notifications` is missing: **do not run `configure-chef-kitchen-profile-apim.sh` or `configure-chef-order-read-apim.sh` to fill the gap.** They have no dry run and no confirm flag: they create the API if absent and immediately write operations and policies to the gateway (and can overwrite the policy of an operation that already exists), and they default to the deleted `apim-craves-prodlow-l3ing6`. No script in the repo publishes `api/v1/notifications`. STOP and send the listings to Claude.
+
+(c) The script does not publish these older routes (older scripts own them): kitchen `GET/PUT /kitchens/me`, menu items, per-dish availability, image upload, chef order list/get/accept/reject/ready-for-pickup, chef subscription plans, notification `GET /in-app` and `PATCH /in-app/{id}/read`. The app needs them, so check they are live (expect 401; a 404 means not published, then stop and report, do not publish them blindly):
+
+```bash
+gw "GET /api/v1/kitchens/me" "PUT /api/v1/kitchens/me" "GET /api/v1/kitchens/me/menu-items" "PUT /api/v1/kitchens/me/menu-items/probe" "PATCH /api/v1/kitchens/me/menu-items/probe/availability" "POST /api/v1/kitchens/me/menu-items/probe/images" "GET /api/v1/chef/orders" "GET /api/v1/chef/orders/probe" "POST /api/v1/chef/orders/probe/accept" "POST /api/v1/chef/orders/probe/reject" "POST /api/v1/chef/orders/probe/ready-for-pickup" "GET /api/v1/chef/subscription-plans" "GET /api/v1/notifications/in-app" "PATCH /api/v1/notifications/in-app/probe/read"
+```
+
+(d) Support routes live on user-chef, which this release does not deploy. Before publishing `/api/v1/support/cases`, check the user-chef app itself answers on that path (unauthenticated, directly, not through the gateway). Expect 401 (or 403: this service only has an explicit 401 entry point for one readiness route, so Spring's default 403 is likely); a 404 or no answer means the app does not serve it, so do not publish the support routes, STOP and report to Claude:
+
+```bash
+export UC_FQDN=$(az containerapp show -g $RG -n ca-craves-user-chef-service-prod --query properties.configuration.ingress.fqdn -o tsv); curl -s -o /dev/null -w 'HTTP %{http_code}\n' --max-time 30 https://$UC_FQDN/api/v1/support/cases
+```
+Limit of this check: that service authenticates every path except a few health and internal ones, so an unmapped path would also answer 401 or 403; it proves the app is up and guarded, not that the controller is mapped. The stronger proof is the same call with a real chef token in `CHEF_TOKEN` (never paste it into chat or a file); it must answer 200, otherwise do not publish the support routes:
+
+```bash
+curl -s -o /dev/null -w 'HTTP %{http_code}\n' --max-time 30 -H "Authorization: Bearer $CHEF_TOKEN" https://$UC_FQDN/api/v1/support/cases
 ```
 
 6.2 Validate the assets (real `xmllint` was not available when the script was written; run where it exists) and preview the route table. The dry run makes no Azure call:
@@ -332,7 +398,7 @@ cd ~/c8 && DRY_RUN=true bash scripts/apim/configure-chef-app-routes-apim.sh
 ```
 Expect 28 operations on 6 APIs.
 
-6.3 Run it (Enter is yours; this writes to the live gateway). Read the Phase 1 lines first: which APIs "exist" and which "will be created", then KEEP/CREATE per route and 28 `OK ... (401 unauthenticated)` lines. The real `az` and `jq` calls had only been exercised through stubs, so Phase 1 is the first real test; any failure there wrote nothing.
+6.3 Run it (Enter is yours; this writes to the live gateway). Read the Phase 1 lines first: which APIs "exist", which are "covered by wildcard operations of parent" and which "will be created" (a prefix that has a parent API in your 6.1 listing must never say "will be created": settle 6.1 before you run, do not rely on interrupting the run), then KEEP/COVERED/CREATE per route and 28 `OK ... (401 unauthenticated)` lines. The real `az` and `jq` calls had only been exercised through stubs, so Phase 1 is the first real test; any failure there wrote nothing.
 
 ```bash
 cd ~/c8 && CONFIRM_APIM_WRITE=true bash scripts/apim/configure-chef-app-routes-apim.sh
@@ -400,7 +466,7 @@ Flyway migrations V9 (catalog) and V37 (order) are additive: rollback is the pre
 
 Decisions and gaps you should know before releasing:
 
-- **Possible cause of the cart bill-preview 403 (finding).** order-service `CatalogClient` calls `POST /internal/menu-items/resolve` (cart preflight, through `CRAVES_CATALOG_BASE_URL`, default `https://api.craves.in/api/v1/catalog`). Catalog on main does not serve it (added in `1ef06939c`, later dropped). This release does not fix it; Step 1.2 tells you whether prod serves it today and whether the catalog deploy removed it. If it is served by a prod-only patch, archived dishes could also pass cart preflight (it needs the same `status = 'ACTIVE'` filter).
+- **Possible cause of the cart bill-preview 403 (finding).** order-service `CatalogClient` calls `POST /internal/menu-items/resolve` (cart preflight, through `CRAVES_CATALOG_BASE_URL`, default `https://api.craves.in/api/v1/catalog`). Catalog on main does not serve it (added in `1ef06939c`, later dropped). This release does not fix it. Step 1.2 is a go/no-go gate on the catalog app itself: if prod's catalog serves the route (anything but a 404 from the app), the catalog deploy stops, because main's catalog would remove it. If it is served by a prod-only patch, archived dishes could also pass cart preflight (it needs the same `status = 'ACTIVE'` filter). If the gate says 404, prod's catalog does not serve it either, so this is a plausible cause of the existing bill-preview 403 and still open after this release.
 - **Meal plans using a dish the chef later archives fail at their next subscription order** (`PlanCatalogClient` reads `GET /menu-items/{id}`). Not handled. Tell chefs not to archive a dish that is in an active plan, or accept the failure.
 - **Archived dishes in a customer's saved or favourite items now read as MISSING.**
 - **Auto-accept needs the worker flag** and that flag also enables auto-reject with refund and reminders (Step 5). A kitchen whose catalog image predates V9 returns no settings, so auto-accept stays off (safe), which is why catalog goes first. Auto-accept happens on the next 30 s tick, tries once (if the dish lookup fails it uses the kitchen default prep then 15 minutes; if the accept itself fails the order stays pending and the chef is notified normally), and its history reason "Accepted automatically" is free text a chef could also type. The customer notification after the commit can be lost if the process dies at that moment (the order status is still correct). Each auto-accept makes about 4+N catalog calls on the single scheduler thread and the catalog client has no timeouts, so a slow catalog can stall that worker (timeouts and reminders included). A failing `order_source` read propagates and the worker retries on the next tick.
@@ -411,10 +477,10 @@ Decisions and gaps you should know before releasing:
 - **Catalog edges:** the `socialLinks` object replaces all four links (the app must always send all four); `https://user:pw@host` is accepted; internationalised and underscore hostnames are rejected. A kitchen photo blob can be orphaned if the DB update fails after upload; no test asserts the real blob path; `updateAvailability` can race and set `is_available` on an `ARCHIVED` row (invisible to customers).
 - **Notifications:** `role=` empty is a 400; rows with NULL `recipient_role` drop out of role-filtered lists; the service README does not mention `role`; no EXPLAIN was run on real volumes (role is a residual filter on one user's rows).
 - **Subscriber count:** counts ACTIVE only (PAUSED, PENDING_PAYMENT and the rest excluded); it uses a correlated COUNT, not a literal GROUP BY; no HTTP-layer assertion.
-- **APIM:** a new operation id (`chef-app-*`) is not checked against an operation with a different method or template, so a PUT could overwrite (unlikely); existing operations keep their policy and do not get the new no-store header; the three older scripts for `kitchens/me`, `chef/orders` (and the unscripted `notifications`) must already be live.
+- **APIM:** a new operation id (`chef-app-*`) is not checked against an operation with a different method or template, so a PUT could overwrite (unlikely); existing operations keep their policy and do not get the new no-store header; `kitchens/me`, `chef/orders` and `notifications` must already be live on kmqgfy, and the older scripts that publish them write to the gateway at once with no confirm flag and can overwrite policies, so a gap means stop and report (6.1b). The script matches paths exactly and cannot see a wildcard owner at a shorter path (6.1a). The support routes depend on the user-chef app, which this release does not deploy (6.1d).
 - **Follow-up, referral routes are not published** because the live APIM API `craves-referral-members-v1` points at the wrong backend (`docs/referrals/CHEF_ACTIVATION_20261012.md`). The app needs, once that is fixed: `GET /api/v1/referrals/me`, `/me/code`, `/me/code/qr`, `/me/chef-earnings`, `/me/rewards` and `POST /api/v1/auth/referrals/enroll`.
 - **Excluded by design:** auth-service ("Log out other devices") and integration-service (live courier data) stay "Coming soon".
-- **Unverified by me:** everything in this file was written from the repo only. Not checked against Azure: the Postgres FQDN, the catalog database name, whether catalog and notification really hold plain secrets (the preflight will tell you), whether prod serves the internal resolve route, the current value of the worker flag, Flyway tolerating applied-newer migrations on rollback, and the real `az`/`jq`/`xmllint` behaviour of the APIM script.
+- **Unverified by me:** everything in this file was written from the repo only. Not checked against Azure: the Postgres FQDN, the catalog database name, whether catalog and notification really hold plain secrets (the preflight will tell you), whether prod serves the internal resolve route (the 1.2 gate answers that), the current value of the worker flag, Flyway tolerating applied-newer migrations on rollback, the prod checksums of V34 and V35 (taken from earlier sessions, not re-read), what an unauthenticated call to the user-chef app returns (read from its `SecurityConfig`, not run), `PGOPTIONS` being accepted by the Postgres server, the `git fetch --unshallow` of a bare SHA in Cloud Shell, and the real `az`/`jq`/`xmllint` behaviour of the APIM script.
 
 ## Release log (fill in as you go)
 
@@ -427,7 +493,8 @@ Decisions and gaps you should know before releasing:
 | Subscription deployed | |
 | Order deployed | |
 | Flyway: catalog V9 `t`, order V37 `t` | |
-| Internal resolve probe: before / after | |
+| 1.2 gate: resolve probe status on the catalog app (must be 404 to go) | |
+| 6.1 prerequisites clean (listings, wildcard owners, user-chef support check) | |
 | Worker flag decision (value before / after) | |
 | APIM run (kept / created / probes OK) | |
 | App 1.31.0 smoke result | |

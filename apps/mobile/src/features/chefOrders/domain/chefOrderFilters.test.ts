@@ -143,6 +143,8 @@ describe('Past orders', () => {
     expect(chefOrderStatusChip('DELIVERED')).toEqual({label: 'Delivered', tone: 'ready'});
     expect(chefOrderStatusChip('CHEF_REJECTED')).toEqual({label: 'Rejected', tone: 'done'});
     expect(chefOrderStatusChip('CANCELLED')).toEqual({label: 'Cancelled', tone: 'cancelled'});
+    expect(chefOrderStatusChip('PAID')).toEqual({label: 'Paid', tone: 'info'});
+    expect(chefOrderStatusChip('PAYMENT_PENDING')).toEqual({label: 'Waiting for payment', tone: 'info'});
   });
 
   it('filters by chip', () => {

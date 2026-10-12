@@ -89,6 +89,7 @@ import {
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
 import {useQueryClient} from '@tanstack/react-query';
 import {homeBannerQueryKey} from '../query/homeBannerQueries';
+import {menuCategoryLabel} from '../../../shared/catalog/menuCategories';
 
 const HOME_RADIUS_METERS = 10_000;
 const HOME_PAGE_SIZE = 20;
@@ -178,7 +179,7 @@ function DishCard({
               />
             ) : (
               <View style={styles.imageFallback}>
-                <Text style={styles.imageFallbackText}>{dish.category}</Text>
+                <Text style={styles.imageFallbackText}>{menuCategoryLabel(dish.category)}</Text>
               </View>
             )}
           </Pressable>

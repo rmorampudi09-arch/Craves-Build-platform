@@ -200,7 +200,8 @@ export type ChefProductStackParamList = {
   ChefTabs: NavigatorScreenParams<ChefTabParamList> | undefined;
   ChefOrderDetail: ChefOrderDetailRouteParams;
   ChefMenuItemDetail: ChefMenuItemDetailRouteParams;
-  ChefAddMenuItem: undefined;
+  /** `copyOfMenuItemId`: open the form pre-filled from that dish ("Duplicate dish"). */
+  ChefAddMenuItem: {copyOfMenuItemId?: string} | undefined;
   ChefEditMenuItem: ChefMenuItemEditRouteParams;
   ChefMealPlanEditor: {planId?: string};
   ChefNotifications: undefined;

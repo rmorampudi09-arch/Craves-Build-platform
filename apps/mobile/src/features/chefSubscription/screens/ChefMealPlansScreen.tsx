@@ -205,7 +205,17 @@ function PlanCard({
   );
 }
 
-export function ChefMealPlansScreen({headerAccessory}: {headerAccessory?: React.ReactNode}) {
+/**
+ * `hideHeader`: the Menu tab already draws the header, the Dishes / Meal plans toggle and the "New plan" button
+ * above this list, so the list leaves out its own header. `headerAccessory` stays for a caller that has no tab screen.
+ */
+export function ChefMealPlansScreen({
+  headerAccessory,
+  hideHeader = false,
+}: {
+  headerAccessory?: React.ReactNode;
+  hideHeader?: boolean;
+}) {
   const navigation = useNavigation<ChefMealPlansNavigation>();
   const queryClient = useQueryClient();
   const plansQuery = useChefMealPlansQuery();
@@ -294,7 +304,7 @@ export function ChefMealPlansScreen({headerAccessory}: {headerAccessory?: React.
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-      <ChefHeader title="Menu" />
+      {hideHeader ? null : <ChefHeader title="Menu" />}
       <FlatList
         contentContainerStyle={styles.listContent}
         data={initialLoading || initialError ? [] : filteredPlans}

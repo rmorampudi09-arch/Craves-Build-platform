@@ -101,6 +101,8 @@ export function chefOrderStatusChip(status: ChefOperationalOrderStatus): {label:
     case 'REFUNDED':
     case 'REFUND_FAILED':
       return {label: 'Cancelled', tone: 'cancelled'};
+    case 'PAID':
+      return {label: 'Paid', tone: 'info'};
     default:
       return {label: 'Waiting for payment', tone: 'info'};
   }

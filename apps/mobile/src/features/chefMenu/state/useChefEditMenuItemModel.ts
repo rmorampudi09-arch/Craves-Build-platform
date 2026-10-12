@@ -3,8 +3,10 @@ import {useQueryClient} from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
 import {AppApiError} from '../../../core/http/apiError';
+import {isRouteNotPublished} from '../../../core/http/routeAvailability';
 import {chefMenuApi, type ChefMenuItem} from '../api/chefMenuApi';
 import {
+  buildChefMenuPublishRequest,
   buildChefMenuReplacementRequest,
   type ChefMenuFormValues,
 } from '../domain/chefMenuForm';
@@ -14,10 +16,15 @@ export interface ChefEditMenuItemModel {
   submitState: 'idle' | 'submitting' | 'error' | 'success';
   errorMessage: string | null;
   errorDetails: readonly string[];
+  /** Saves the form. With `publish`, a draft goes live (ACTIVE and on) in the same save. */
   submit: (
     values: ChefMenuFormValues,
     existingItem: ChefMenuItem,
+    publish?: boolean,
   ) => Promise<ChefMenuItem | null>;
+  deleting: boolean;
+  /** Deletes (archives) the dish. null when a delete is already running. */
+  remove: (item: ChefMenuItem) => Promise<'deleted' | 'coming-soon' | 'failed' | null>;
   clearError: () => void;
 }
 
@@ -29,7 +36,7 @@ function publicSubmitFailure(cause: unknown): {
     return {message: cause.message, details: cause.details};
   }
   return {
-    message: 'The menu item could not be updated. Check your details and try again.',
+    message: 'The dish could not be saved. Check your details and try again.',
     details: [],
   };
 }
@@ -45,14 +52,14 @@ export function useChefEditMenuItemModel(): ChefEditMenuItemModel {
   const [errorDetails, setErrorDetails] = React.useState<readonly string[]>([]);
 
   const submit = React.useCallback(
-    async (values: ChefMenuFormValues, existingItem: ChefMenuItem) => {
+    async (values: ChefMenuFormValues, existingItem: ChefMenuItem, publish = false) => {
       if (activeSubmission.current) {
         return null;
       }
       if (!identityId) {
         setSubmitState('error');
         setErrorMessage(
-          'Your Chef session is unavailable. Sign in again before updating an item.',
+          'Your Chef session is unavailable. Sign in again before saving a dish.',
         );
         setErrorDetails([]);
         return null;
@@ -66,7 +73,9 @@ export function useChefEditMenuItemModel(): ChefEditMenuItemModel {
       try {
         const updated = await chefMenuApi.replaceItem(
           existingItem.id,
-          buildChefMenuReplacementRequest(values, existingItem),
+          publish
+            ? buildChefMenuPublishRequest(values, existingItem)
+            : buildChefMenuReplacementRequest(values, existingItem),
         );
         const menuQueryKey = createChefMenuItemsQueryKey(identityId);
         const dashboardMenuQueryKey = createPrivateQueryKey('chef-dashboard-menu', {
@@ -98,11 +107,43 @@ export function useChefEditMenuItemModel(): ChefEditMenuItemModel {
     [identityId, queryClient],
   );
 
+  const [deleting, setDeleting] = React.useState(false);
+  const activeDelete = React.useRef(false);
+  const remove = React.useCallback(
+    async (item: ChefMenuItem) => {
+      if (activeDelete.current || !identityId) {
+        return null;
+      }
+      activeDelete.current = true;
+      setDeleting(true);
+      try {
+        await chefMenuApi.deleteItem(item.id);
+        const dashboardMenuQueryKey = createPrivateQueryKey('chef-dashboard-menu', {
+          userId: identityId,
+          role: 'CHEF',
+        });
+        for (const key of [createChefMenuItemsQueryKey(identityId), dashboardMenuQueryKey]) {
+          queryClient.setQueryData<ChefMenuItem[]>(key, current => current?.filter(dish => dish.id !== item.id));
+          void queryClient.invalidateQueries({queryKey: key});
+        }
+        return 'deleted' as const;
+      } catch (cause) {
+        return isRouteNotPublished(cause) ? ('coming-soon' as const) : ('failed' as const);
+      } finally {
+        activeDelete.current = false;
+        setDeleting(false);
+      }
+    },
+    [identityId, queryClient],
+  );
+
   return {
     submitState,
     errorMessage,
     errorDetails,
     submit,
+    deleting,
+    remove,
     clearError: React.useCallback(() => {
       setErrorMessage(null);
       setErrorDetails([]);

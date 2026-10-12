@@ -11,6 +11,7 @@ import {
   textDefaults,
   typography,
 } from '../../../../design/tokens';
+import type {IconName} from '../../../../shared/components/Icon';
 import {IconButton} from '../../../../shared/components/IconButton';
 import {chefCounterBadgeLabel} from '../../domain/chefOperationalCounters';
 import {useChefOperationalState} from '../../state/ChefOperationalProvider';
@@ -19,16 +20,20 @@ export interface ChefTopBarProps {
   title: string;
   subtitle?: string;
   onBack?: () => void;
+  /** The arrow by default; a form that closes rather than goes back shows an X. */
+  backIcon?: Extract<IconName, 'arrow-left' | 'close'>;
   /** Extra control shown before the bell (a button, a status pill). */
   right?: React.ReactNode;
   showBell?: boolean;
 }
 
 /** White header: optional back arrow, title block, `right`, and the notification bell with its unread count. */
-export function ChefTopBar({title, subtitle, onBack, right, showBell = true}: ChefTopBarProps) {
+export function ChefTopBar({title, subtitle, onBack, backIcon = 'arrow-left', right, showBell = true}: ChefTopBarProps) {
   return (
     <View style={styles.bar}>
-      {onBack ? <IconButton icon="arrow-left" accessibilityLabel="Go back" onPress={onBack} /> : null}
+      {onBack ? (
+        <IconButton icon={backIcon} accessibilityLabel={backIcon === 'close' ? 'Close' : 'Go back'} onPress={onBack} />
+      ) : null}
       <View style={styles.titleBlock}>
         <Text
           accessibilityRole="header"

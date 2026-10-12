@@ -70,6 +70,7 @@ import {
 import {useCustomerKitchenProfileQuery} from '../../kitchenProfile/query/kitchenProfileQueries';
 import {kitchenNavigationAction} from '../dishDetailNavigation';
 import {useCustomerDishDetailQuery} from '../query/dishDetailQueries';
+import {menuCategoryLabel} from '../../../shared/catalog/menuCategories';
 
 type DishDetailRoute = RouteProp<
   CustomerDishDetailStackParamList,
@@ -518,7 +519,7 @@ export function CustomerDishDetailScreen() {
               </BlurTargetView>
             ) : (
               <View style={styles.heroFallback}>
-                <Text style={styles.heroFallbackCategory}>{dish.category}</Text>
+                <Text style={styles.heroFallbackCategory}>{menuCategoryLabel(dish.category)}</Text>
                 <Text style={styles.heroFallbackTitle}>{dish.itemName}</Text>
               </View>
             )}
@@ -621,7 +622,7 @@ export function CustomerDishDetailScreen() {
               <FoodTypePill foodType={dish.foodType} />
               <View style={styles.categoryChip}>
                 <Text numberOfLines={1} style={styles.categoryChipText}>
-                  {dish.category}
+                  {menuCategoryLabel(dish.category)}
                 </Text>
               </View>
             </View>

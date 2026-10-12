@@ -99,7 +99,7 @@ describe('chefMenuApi contract model', () => {
       'status plus available',
     );
     expect(CHEF_MENU_CONTRACT_GAPS.deleteOrDuplicate.reason).toContain(
-      'No delete',
+      'No duplicate',
     );
     expect(CHEF_MENU_CONTRACT_GAPS.mediaPolicy.reason).toContain(
       'runtime-configured',
@@ -198,6 +198,15 @@ describe('chefMenuApi contract model', () => {
       request,
       {signal: undefined},
     );
+  });
+
+  it('deletes (archives) a chef-owned dish with DELETE and no body', async () => {
+    const del = jest.spyOn(httpClient, 'delete').mockResolvedValue(undefined);
+
+    await expect(chefMenuApi.deleteItem(MENU_ITEM_ID)).resolves.toBeUndefined();
+
+    expect(del).toHaveBeenCalledWith(`/api/v1/kitchens/me/menu-items/${MENU_ITEM_ID}`, {signal: undefined});
+    await expect(chefMenuApi.deleteItem('not-an-id')).rejects.toThrow('Chef menu item ID must be a UUID.');
   });
 
   it('uses the exact availability mutation shape without inventing visibility state', async () => {

@@ -9,12 +9,12 @@ import {
 const positivePriceText = z
   .string()
   .trim()
-  .min(1, 'Price is required.')
+  .min(1, 'Enter a price.')
   .refine(value => /^(?:\d+\.?\d*|\.\d+)$/.test(value), 'Enter a valid price.')
   .refine(value => {
     const numeric = Number(value);
     return Number.isFinite(numeric) && numeric >= 0.01;
-  }, 'Price must be at least 0.01.');
+  }, 'Price must be at least ₹0.01.');
 
 const positiveIntegerText = (requiredMessage: string, invalidMessage: string) =>
   z
@@ -39,21 +39,19 @@ function normalizeMenuCategory(value: string): string {
 }
 
 export const chefMenuFormSchema = z.object({
-  itemName: z.string().trim().min(1, 'Item name is required.'),
+  itemName: z.string().trim().min(1, 'Enter the dish name.'),
   description: z.string(),
-  category: z.string().trim().min(1, 'Category is required.'),
+  category: z.string().trim().min(1, 'Choose a category.'),
   foodType: z.enum(CHEF_MENU_FOOD_TYPES),
   price: positivePriceText,
-  servesCount: optionalPositiveIntegerText(
-    'Serves count must be a positive whole number.',
-  ),
+  servesCount: optionalPositiveIntegerText('Serves must be a whole number, like 2.'),
   preparationTimeMinutes: optionalPositiveIntegerText(
-    'Preparation time must be a positive whole number.',
+    'Ready in must be a whole number of minutes.',
   ),
   spiceLevel: z.union([z.enum(CHEF_MENU_SPICE_LEVELS), z.literal('')]),
   unitPackageWeightGrams: positiveIntegerText(
-    'Package weight is required.',
-    'Package weight must be a positive whole number of grams.',
+    'Enter the packed weight in grams.',
+    'Packed weight must be a whole number of grams.',
   ),
   thermoboxRequired: z.boolean(),
   available: z.boolean(),
@@ -104,10 +102,11 @@ export function buildChefMenuItemRequest(
   values: ChefMenuFormValues,
   intent: ChefMenuSubmitIntent,
 ): ChefMenuItemRequest {
-  return {
-    ...parsedRequestFields(values),
-    status: intent === 'SAVE_DRAFT' ? 'DRAFT' : 'ACTIVE',
-  };
+  // Publishing means customers can order it now: ACTIVE and switched on, whatever the form held.
+  const fields = parsedRequestFields(values);
+  return intent === 'SAVE_DRAFT'
+    ? {...fields, status: 'DRAFT'}
+    : {...fields, status: 'ACTIVE', available: true};
 }
 
 /**
@@ -148,4 +147,12 @@ export function buildChefMenuReplacementRequest(
     currency: existingItem.currency,
     status: existingItem.status,
   };
+}
+
+/** Publishing an existing draft: the same full replacement, but ACTIVE and switched on. */
+export function buildChefMenuPublishRequest(
+  values: ChefMenuFormValues,
+  existingItem: ChefMenuItem,
+): ChefMenuItemRequest {
+  return {...buildChefMenuReplacementRequest(values, existingItem), status: 'ACTIVE', available: true};
 }

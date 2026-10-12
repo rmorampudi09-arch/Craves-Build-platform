@@ -26,7 +26,13 @@ jest.mock('../../../design/reducedMotion', () => ({
 jest.mock('../../../core/config/runtimeConfig', () => ({
   getRuntimeConfig: () => ({apiBaseUrl: 'https://api.craves.in'}),
 }));
-jest.mock('../../chefShell/components/ChefHeader', () => ({ChefHeader: () => null}));
+const mockHeaderDrawn = jest.fn();
+jest.mock('../../chefShell/components/ChefHeader', () => ({
+  ChefHeader: () => {
+    mockHeaderDrawn();
+    return null;
+  },
+}));
 jest.mock('../../chefMenu/state/useChefMenuModel', () => ({
   useChefMenuModel: () => ({
     items: mockMenuItems,
@@ -106,6 +112,22 @@ describe('ChefMealPlansScreen', () => {
     mockPlansState = {isLoading: false, isError: false, isRefetching: false, isFetching: false};
   });
   afterEach(() => act(() => tree?.unmount()));
+
+  it('draws its own Menu header, unless the Menu tab already draws one above it', () => {
+    render();
+    expect(mockHeaderDrawn).toHaveBeenCalled();
+
+    act(() => tree.unmount());
+    mockHeaderDrawn.mockClear();
+    act(() => {
+      tree = renderer.create(
+        <QueryClientProvider client={queryClient}>
+          <ChefMealPlansScreen hideHeader />
+        </QueryClientProvider>,
+      );
+    });
+    expect(mockHeaderDrawn).not.toHaveBeenCalled();
+  });
 
   it('shows the metrics, the accessory and a card per plan', () => {
     mockPlans = [

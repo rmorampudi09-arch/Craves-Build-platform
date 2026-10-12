@@ -1,6 +1,7 @@
 import {
   CHEF_MENU_CATEGORIES,
   CUSTOMER_MENU_CATEGORIES,
+  menuCategoryLabel,
 } from './menuCategories';
 
 describe('menu category catalog', () => {
@@ -30,5 +31,11 @@ describe('menu category catalog', () => {
       'Fast Food',
     ]);
     expect(CHEF_MENU_CATEGORIES).not.toContain('All');
+  });
+
+  it('shows Snacks for the stored value Snakes and leaves other categories alone', () => {
+    expect(menuCategoryLabel('Snakes')).toBe('Snacks');
+    expect(menuCategoryLabel('Biryani')).toBe('Biryani');
+    expect(menuCategoryLabel('Something new')).toBe('Something new');
   });
 });

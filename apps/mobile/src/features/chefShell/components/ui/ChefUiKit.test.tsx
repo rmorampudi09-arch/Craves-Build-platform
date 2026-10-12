@@ -214,6 +214,14 @@ describe('Chef UI kit', () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
+  it('ChefTopBar can show a Close X in place of the back arrow', () => {
+    const onBack = jest.fn();
+    mount(<ChefTopBar title="New dish" onBack={onBack} backIcon="close" showBell={false} />);
+    expect(pressables('Go back')).toHaveLength(0);
+    act(() => pressables('Close')[0].props.onPress());
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
   it('ChefTopBar hides the bell and back arrow when asked', () => {
     mount(<ChefTopBar title="Menu" showBell={false} />);
     expect(pressables('Notifications')).toHaveLength(0);
@@ -246,6 +254,39 @@ describe('Chef UI kit', () => {
       expect(allText()).toEqual(['Published']);
       act(() => {
         jest.advanceTimersByTime(1);
+      });
+      expect(allText()).toEqual([]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a toast with an action shows its button for 4 seconds and the button runs once, then clears the toast', () => {
+    jest.useFakeTimers();
+    try {
+      let toast!: ReturnType<typeof useChefToast>;
+      const Probe = () => {
+        toast = useChefToast();
+        return null;
+      };
+      mount(
+        <ChefToastProvider>
+          <Probe />
+        </ChefToastProvider>,
+      );
+      const onUndo = jest.fn();
+      act(() => toast.show('Prawns biryani is off', {label: 'Undo', onPress: onUndo}));
+      expect(allText()).toEqual(['Prawns biryani is off', 'Undo']);
+      act(() => {
+        jest.advanceTimersByTime(3999);
+      });
+      expect(allText()).toContain('Undo');
+      act(() => pressables('Undo')[0].props.onPress());
+      expect(onUndo).toHaveBeenCalledTimes(1);
+      expect(allText()).toEqual([]);
+      act(() => toast.show('Prawns biryani is off', {label: 'Undo', onPress: onUndo}));
+      act(() => {
+        jest.advanceTimersByTime(4000);
       });
       expect(allText()).toEqual([]);
     } finally {

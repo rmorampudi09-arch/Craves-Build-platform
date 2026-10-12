@@ -24,7 +24,7 @@ export interface ChefAddMenuItemModel {
 function publicSubmitFailure(cause: unknown): string {
   return cause instanceof AppApiError
     ? cause.message
-    : 'The menu item could not be saved. Check your details and try again.';
+    : 'The dish could not be saved. Check your details and try again.';
 }
 
 export function useChefAddMenuItemModel(): ChefAddMenuItemModel {
@@ -44,7 +44,7 @@ export function useChefAddMenuItemModel(): ChefAddMenuItemModel {
       if (!identityId) {
         setSubmitState('error');
         setErrorMessage(
-          'Your Chef session is unavailable. Sign in again before saving an item.',
+          'Your Chef session is unavailable. Sign in again before saving a dish.',
         );
         return null;
       }

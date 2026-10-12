@@ -78,6 +78,7 @@ import {
   useCustomerKitchenAvailabilityQuery,
   useCustomerKitchenProfileQuery,
 } from '../query/kitchenProfileQueries';
+import {menuCategoryLabel} from '../../../shared/catalog/menuCategories';
 
 type KitchenProfileRoute = RouteProp<
   CustomerDishDetailStackParamList,
@@ -701,7 +702,7 @@ export function CustomerKitchenProfileScreen() {
                       onPress={() => scrollToSection(index)}
                       style={[styles.tab, selected && styles.tabSelected]}>
                       <Text style={[styles.tabText, selected && styles.tabTextSelected]}>
-                        {section.category}
+                        {menuCategoryLabel(section.category)}
                       </Text>
                       <Text style={styles.tabCount}>{section.items.length}</Text>
                     </Pressable>
@@ -725,7 +726,7 @@ export function CustomerKitchenProfileScreen() {
                   }}>
                   <View style={styles.sectionHeading}>
                     <Text accessibilityRole="header" style={styles.sectionHeadingTitle}>
-                      {section.category}
+                      {menuCategoryLabel(section.category)}
                     </Text>
                     <Text style={styles.sectionHeadingCount}>
                       {section.items.length} {section.items.length === 1 ? 'dish' : 'dishes'}

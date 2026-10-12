@@ -49,7 +49,7 @@ export const CHEF_MENU_CONTRACT_GAPS = {
     'No separate visibility contract exists; backend state is status plus available only.',
   ),
   deleteOrDuplicate: unavailable(
-    'No delete or duplicate menu-item mutation is exposed.',
+    'No duplicate menu-item mutation is exposed; the app copies a dish by opening the add form pre-filled.',
   ),
   draftRules: unavailable(
     'No separate draft-save or draft-validation contract exists beyond MenuItemRequest status=DRAFT.',
@@ -130,6 +130,7 @@ export interface ChefMenuAvailabilityRequest {
   reason?: string | null;
 }
 
+// Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
 export const CHEF_MENU_BULK_AVAILABILITY_AVAILABLE = false;
 export const CHEF_MENU_BULK_AVAILABILITY_PATH =
   '/api/v1/kitchens/me/menu-items/availability';
@@ -585,6 +586,12 @@ export const chefMenuApi = {
       {signal},
     );
     return requireItemResponse(response);
+  },
+
+  /** Archives the dish: 204, and it disappears from every list. Not published for mobile yet when the gateway answers 404/403. */
+  async deleteItem(menuItemId: string, signal?: AbortSignal): Promise<void> {
+    const id = requireMenuItemId(menuItemId);
+    await httpClient.delete<unknown>(`/api/v1/kitchens/me/menu-items/${encodeURIComponent(id)}`, {signal});
   },
 
   async updateAvailabilityBulk(

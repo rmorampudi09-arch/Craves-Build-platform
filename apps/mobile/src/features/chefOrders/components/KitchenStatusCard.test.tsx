@@ -113,7 +113,7 @@ describe('KitchenStatusCard', () => {
     await act(async () => button('Close kitchen until I open it').props.onPress());
     await act(async () => queued.splice(0).forEach(run => run()));
     expect(
-      hasText("1 order is still cooking. They carry on, but you won't get new orders until you open the kitchen again."),
+      hasText("1 order is still cooking. It carries on, but you won't get new orders until you open the kitchen again."),
     ).toBe(true);
     await act(async () => button('Keep open').props.onPress());
     expect(mockSetOpen).not.toHaveBeenCalled();

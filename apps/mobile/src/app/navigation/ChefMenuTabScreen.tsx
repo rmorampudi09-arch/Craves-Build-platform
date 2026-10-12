@@ -6,10 +6,22 @@ import {
 } from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {colors, fontWeight, spacing, typography} from '../../design/tokens';
+import {
+  borderWidth,
+  colors,
+  fontWeight,
+  iconSize,
+  radius,
+  spacing,
+  textDefaults,
+  typography,
+} from '../../design/tokens';
 import {ChefMenuScreen} from '../../features/chefMenu/screens/ChefMenuScreen';
+import {useChefMenuModel} from '../../features/chefMenu/state/useChefMenuModel';
+import {ChefScreen, ChefTopBar} from '../../features/chefShell/components/ui';
+import {useChefMealPlansQuery} from '../../features/chefSubscription/query/chefMealPlanQueries';
 import {ChefMealPlansScreen} from '../../features/chefSubscription/screens/ChefMealPlansScreen';
-import {SegmentedControl} from '../../shared/components/SegmentedControl';
+import {Icon} from '../../shared/components/Icon';
 import type {ChefProductStackParamList, ChefTabParamList} from './types';
 
 type ChefMenuNavigation = CompositeNavigationProp<
@@ -17,76 +29,105 @@ type ChefMenuNavigation = CompositeNavigationProp<
   NativeStackNavigationProp<ChefProductStackParamList>
 >;
 
-type MenuSegment = 'items' | 'plans';
+type MenuSegment = 'dishes' | 'plans';
 
-const SEGMENTS = [
-  {value: 'items', label: 'Items'},
-  {value: 'plans', label: 'Meal plans'},
-] as const;
+/** `Dishes · 16`; just `Dishes` until the number is known. */
+const withCount = (label: string, count: number | undefined) => (count === undefined ? label : `${label} · ${count}`);
 
+/**
+ * The Menu tab. It owns the header (title and the "+ Add dish" / "+ New plan" button) and the
+ * Dishes / Meal plans toggle, and shows one list under them. The choice lasts while the tab is open.
+ */
 export function ChefMenuTabScreen() {
   const navigation = useNavigation<ChefMenuNavigation>();
-  const [segment, setSegment] = React.useState<MenuSegment>('items');
-  const segmentControl = (
-    <SegmentedControl
-      accessibilityLabel="Menu section"
-      onChange={setSegment}
-      options={SEGMENTS}
-      style={styles.segments}
-      value={segment}
-    />
-  );
+  const [segment, setSegment] = React.useState<MenuSegment>('dishes');
+  const dishes = useChefMenuModel();
+  const plans = useChefMealPlansQuery();
+  const dishCount = dishes.status === 'success' || dishes.items.length > 0 ? dishes.items.length : undefined;
+  const options = [
+    {value: 'dishes', label: withCount('Dishes', dishCount)},
+    {value: 'plans', label: withCount('Meal plans', plans.data?.length)},
+  ] as const;
+  const adding = segment === 'dishes' ? 'Add dish' : 'New plan';
 
   return (
-    <View style={styles.menuScreenBoundary}>
-      {segment === 'items' ? (
-        <ChefMenuScreen headerAccessory={segmentControl} />
-      ) : (
-        <ChefMealPlansScreen headerAccessory={segmentControl} />
-      )}
-      <View style={styles.menuCreateBar}>
-        <Pressable
-          accessibilityLabel={
-            segment === 'items' ? 'Add new Chef menu item' : 'Add new plan'
-          }
-          accessibilityRole="button"
-          onPress={() =>
-            segment === 'items'
-              ? navigation.navigate('ChefAddMenuItem')
-              : navigation.navigate('ChefMealPlanEditor', {})
-          }
-          style={({pressed}) => [styles.menuCreateButton, pressed && styles.pressed]}>
-          <Text style={styles.menuCreateButtonText}>
-            {segment === 'items' ? '+ Add new item' : '+ Add new plan'}
-          </Text>
-        </Pressable>
-      </View>
-    </View>
+    <ChefScreen
+      header={
+        <>
+          <ChefTopBar
+            right={
+              <Pressable
+                accessibilityLabel={adding}
+                accessibilityRole="button"
+                hitSlop={{top: 4, bottom: 4}}
+                onPress={() =>
+                  segment === 'dishes' ? navigation.navigate('ChefAddMenuItem') : navigation.navigate('ChefMealPlanEditor', {})
+                }
+                style={({pressed}) => [styles.addButton, pressed && styles.pressed]}>
+                <Icon color={colors.white} name="plus" size={iconSize.sm} surface={false} />
+                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.addText}>
+                  {adding}
+                </Text>
+              </Pressable>
+            }
+            showBell={false}
+            title="Menu"
+          />
+          <View accessibilityRole="tablist" style={styles.toggle}>
+            {options.map(option => {
+              const on = option.value === segment;
+              return (
+                <Pressable
+                  accessibilityLabel={option.label}
+                  accessibilityRole="tab"
+                  accessibilityState={{selected: on}}
+                  hitSlop={{top: 4, bottom: 4}}
+                  key={option.value}
+                  onPress={() => setSegment(option.value)}
+                  style={[styles.segment, on && styles.segmentOn]}>
+                  <Text
+                    allowFontScaling={textDefaults.allowFontScaling}
+                    numberOfLines={1}
+                    style={[styles.segmentText, on && styles.segmentTextOn]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </>
+      }
+      scroll={false}
+      withTabBar>
+      {segment === 'dishes' ? <ChefMenuScreen /> : <ChefMealPlansScreen hideHeader />}
+    </ChefScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  menuScreenBoundary: {flex: 1},
-  segments: {marginBottom: spacing.md},
-  menuCreateBar: {
-    backgroundColor: colors.white,
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  menuCreateButton: {
+  addButton: {
+    height: 40,
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.flameRed,
-    borderRadius: 999,
-    justifyContent: 'center',
-    minHeight: 48,
-    paddingHorizontal: spacing.lg,
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.sm + 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.flameRedAccessible,
   },
-  menuCreateButtonText: {
-    color: colors.white,
-    fontSize: typography.button,
-    fontWeight: fontWeight.bold,
+  addText: {color: colors.white, fontSize: typography.body, fontWeight: fontWeight.bold},
+  pressed: {opacity: 0.85},
+  // The track is a control, not a page: a soft tile colour, with the chosen side lifted in white.
+  toggle: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    padding: spacing.xxs,
+    borderRadius: radius.md - 2,
+    backgroundColor: colors.iconSurface,
   },
-  pressed: {opacity: 0.65},
+  segment: {flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xs, borderRadius: radius.sm - 1},
+  segmentOn: {backgroundColor: colors.white, borderWidth: borderWidth.standard, borderColor: colors.border},
+  segmentText: {color: colors.textSecondary, fontSize: typography.body, fontWeight: fontWeight.bold},
+  segmentTextOn: {color: colors.textPrimary},
 });

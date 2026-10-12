@@ -2,6 +2,7 @@ import type {ChefMenuItem} from '../api/chefMenuApi';
 import {
   EMPTY_CHEF_MENU_FORM,
   buildChefMenuItemRequest,
+  buildChefMenuPublishRequest,
   buildChefMenuReplacementRequest,
   chefMenuFormSchema,
   chefMenuItemToFormValues,
@@ -71,6 +72,57 @@ describe('chef menu item form', () => {
       status: 'ACTIVE',
       available: true,
     });
+  });
+
+  it('publishing a new dish is always ACTIVE and on, whatever the form held', () => {
+    expect(buildChefMenuItemRequest({...validForm, available: false}, 'ADD_ITEM')).toMatchObject({
+      status: 'ACTIVE',
+      available: true,
+    });
+  });
+
+  it('publishing a draft sends the whole dish back as ACTIVE and on, keeping its currency', () => {
+    expect(
+      buildChefMenuPublishRequest(chefMenuItemToFormValues({...existingItem, status: 'DRAFT'}), {
+        ...existingItem,
+        status: 'DRAFT',
+      }),
+    ).toEqual({
+      itemName: 'Old Paneer',
+      description: null,
+      category: 'Mains',
+      foodType: 'VEG',
+      price: 199,
+      servesCount: 1,
+      preparationTimeMinutes: 20,
+      spiceLevel: 'MILD',
+      unitPackageWeightGrams: 350,
+      thermoboxRequired: false,
+      available: true,
+      currency: 'INR',
+      status: 'ACTIVE',
+    });
+  });
+
+  it('keeps the same rules but says them in the board words', () => {
+    const errors = (values: Partial<ChefMenuFormValues>) => {
+      const result = chefMenuFormSchema.safeParse({...EMPTY_CHEF_MENU_FORM, ...values});
+      // The form shows the first message for each field.
+      return result.success
+        ? {}
+        : Object.fromEntries(result.error.issues.map(issue => [issue.path[0], issue.message]).reverse());
+    };
+    expect(errors({})).toEqual({
+      itemName: 'Enter the dish name.',
+      category: 'Choose a category.',
+      price: 'Enter a price.',
+      unitPackageWeightGrams: 'Enter the packed weight in grams.',
+    });
+    expect(errors({price: 'abc'}).price).toBe('Enter a valid price.');
+    expect(errors({preparationTimeMinutes: '1.5'}).preparationTimeMinutes).toBe(
+      'Ready in must be a whole number of minutes.',
+    );
+    expect(Object.values(errors({})).join(' ')).not.toMatch(/item|backend|contract/i);
   });
 
   it('keeps optional server fields null when the Chef leaves them blank', () => {

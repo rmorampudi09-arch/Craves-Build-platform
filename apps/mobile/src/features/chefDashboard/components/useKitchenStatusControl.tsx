@@ -93,7 +93,7 @@ export function useKitchenStatusControl(
       <ConfirmDialog
         cancelLabel="Keep open"
         confirmLabel="Close kitchen"
-        message={`${cookingCount} ${cookingCount === 1 ? 'order is' : 'orders are'} still cooking. They carry on, but you won't get new orders until you open the kitchen again.`}
+        message={`${cookingCount} ${cookingCount === 1 ? 'order is still cooking. It carries' : 'orders are still cooking. They carry'} on, but you won't get new orders until you open the kitchen again.`}
         onCancel={() => setConfirmClose(false)}
         onConfirm={() => {
           setConfirmClose(false);

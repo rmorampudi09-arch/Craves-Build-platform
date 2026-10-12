@@ -45,4 +45,14 @@ describe('Home category rail', () => {
     selectedItems[0].props.onPress();
     expect(onSelect).toHaveBeenLastCalledWith(null);
   });
+
+  it('reads Snacks for the stored category Snakes and still filters by the stored value', () => {
+    const onSelect = jest.fn();
+    const items = React.Children.toArray(
+      HomeCategoryRail({ selectedCategory: null, onSelect }).props.children,
+    ) as React.ReactElement<CategoryItemProps>[];
+    expect(items.some(item => item.props.accessibilityLabel === 'Snakes category')).toBe(false);
+    items.find(item => item.props.accessibilityLabel === 'Snacks category')?.props.onPress();
+    expect(onSelect).toHaveBeenLastCalledWith('Snakes');
+  });
 });

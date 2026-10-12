@@ -64,7 +64,10 @@ export type IconName =
   | 'id-card'
   | 'bank'
   | 'image'
-  | 'upload';
+  | 'upload'
+  | 'more'
+  | 'camera-plus'
+  | 'copy';
 
 interface Props {
   name: IconName;
@@ -136,6 +139,9 @@ const GLYPHS: Record<IconName, string> = {
   bank: 'bank-outline',
   image: 'image-outline',
   upload: 'tray-arrow-up',
+  more: 'dots-vertical',
+  'camera-plus': 'camera-plus-outline',
+  copy: 'content-copy',
 };
 
 export function Icon({

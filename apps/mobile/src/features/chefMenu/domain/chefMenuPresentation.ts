@@ -1,3 +1,4 @@
+import {menuCategoryLabel} from '../../../shared/catalog/menuCategories';
 import type {ChefMenuItem} from '../api/chefMenuApi';
 
 export const CHEF_MENU_STATUS_FILTERS = [
@@ -6,12 +7,14 @@ export const CHEF_MENU_STATUS_FILTERS = [
   'UNAVAILABLE',
   'DRAFT',
   'INACTIVE',
+  /** Everything customers cannot order: switched off, or inactive. Drafts have their own filter. */
+  'OFF',
 ] as const;
 
 export type ChefMenuStatusFilter =
   (typeof CHEF_MENU_STATUS_FILTERS)[number];
 
-export type ChefMenuDisplayState = Exclude<ChefMenuStatusFilter, 'ALL'>;
+export type ChefMenuDisplayState = Exclude<ChefMenuStatusFilter, 'ALL' | 'OFF'>;
 
 export interface ChefMenuSummary {
   total: number;
@@ -24,6 +27,11 @@ export interface ChefMenuSummary {
 export function formatChefMenuCategory(value: string): string {
   const normalized = value.trim();
   return normalized.toLocaleLowerCase() === 'biriyani' ? 'Biryani' : normalized;
+}
+
+/** The category as the chef reads it: legacy Biriyani as Biryani, the stored Snakes as Snacks. */
+export function chefMenuCategoryLabel(value: string): string {
+  return menuCategoryLabel(formatChefMenuCategory(value));
 }
 
 export function getChefMenuDisplayState(
@@ -81,9 +89,11 @@ export function filterChefMenuItems(
     if (category !== null && displayCategory !== category) {
       return false;
     }
+    const state = getChefMenuDisplayState(item);
     if (
-      statusFilter !== 'ALL' &&
-      getChefMenuDisplayState(item) !== statusFilter
+      statusFilter === 'OFF'
+        ? state !== 'UNAVAILABLE' && state !== 'INACTIVE'
+        : statusFilter !== 'ALL' && state !== statusFilter
     ) {
       return false;
     }
@@ -98,25 +108,25 @@ export function filterChefMenuItems(
   });
 }
 
+/**
+ * The dish row's second line, after the category: how long it takes, or what is wrong.
+ * A draft has none (its Draft chip says it). `off` marks the one note shown in red.
+ */
+export function chefMenuRowNote(item: ChefMenuItem): {text: string; off: boolean} | null {
+  const state = getChefMenuDisplayState(item);
+  if (state === 'DRAFT') {
+    return null;
+  }
+  if (state === 'UNAVAILABLE' || state === 'INACTIVE') {
+    return {text: 'Off for customers', off: true};
+  }
+  return {
+    text: item.preparationTimeMinutes == null ? 'prep time missing' : `${item.preparationTimeMinutes} min`,
+    off: false,
+  };
+}
+
 export function getChefMenuPrimaryImageUrl(item: ChefMenuItem): string | null {
   const primary = item.images.find(image => image.primary) ?? item.images[0];
   return primary?.publicUrl ?? null;
-}
-
-export function formatChefMenuPrice(item: ChefMenuItem): string {
-  const amount = item.price.toFixed(2);
-  return item.currency === 'INR' ? `₹${amount}` : `${item.currency} ${amount}`;
-}
-
-export function chefMenuStatusLabel(state: ChefMenuDisplayState): string {
-  if (state === 'AVAILABLE') {
-    return 'Available';
-  }
-  if (state === 'UNAVAILABLE') {
-    return 'Unavailable';
-  }
-  if (state === 'DRAFT') {
-    return 'Draft';
-  }
-  return 'Inactive';
 }

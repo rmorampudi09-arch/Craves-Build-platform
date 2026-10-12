@@ -28,6 +28,7 @@ import {
   savedKitchenDisplayName,
 } from '../presentation/savedCatalogPresentation';
 import {CustomerFavoriteHeartButton} from './CustomerFavoriteHeartButton';
+import {menuCategoryLabel} from '../../../shared/catalog/menuCategories';
 
 interface Props {
   dish: SavedCatalogItem;
@@ -86,7 +87,7 @@ export function CustomerFavoriteDishCard({
   const canAdd = canAddSavedDish(dish);
   const availability = availabilityCopyForItem(dish);
   const foodType = foodTypeCopy(dish.foodType);
-  const meta = [dish.category, foodType].filter(Boolean).join(' · ');
+  const meta = [dish.category ? menuCategoryLabel(dish.category) : null, foodType].filter(Boolean).join(' · ');
   const price = formatPrice(dish.price, dish.currency);
 
   return (

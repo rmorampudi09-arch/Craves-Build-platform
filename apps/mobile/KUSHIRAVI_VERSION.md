@@ -19,6 +19,15 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.29.2 - First dashboard after approval loads cleanly, 2026-10-12
+
+- On a chef's first open after approval the Dashboard listed dishes before the kitchen
+  existed (catalog answers 400 KITCHEN_PROFILE_REQUIRED), so it showed "Some live data is
+  unavailable" until Retry. Listing and adding dishes now save the kitchen from the
+  application first (chefProfileApi.getKitchen) and try once more.
+- Verified on the phone with 1.29.1: Khushi Test 2 (approved) shows KPHB Kitchen,
+  "Kitchen setup in progress"; the dashboard warning cleared after Retry.
+
 ### Version 1.29.1 - Approved chefs get their kitchen, 2026-10-12
 
 - A newly approved chef had no kitchen, so Chef Profile showed "Kitchen details

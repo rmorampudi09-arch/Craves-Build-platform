@@ -1,4 +1,6 @@
+import {AppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
+import {chefProfileApi} from '../../chefProfile/api/chefProfileApi';
 import {
   CHEF_MENU_BULK_AVAILABILITY_PATH,
   CHEF_MENU_CONTRACT_GAPS,
@@ -349,5 +351,23 @@ describe('chefMenuApi contract model', () => {
     await expect(
       chefMenuApi.replaceItem('not-a-menu-item-id', request),
     ).rejects.toThrow('Chef menu item ID must be a UUID.');
+  });
+
+  it('saves an approved chef’s kitchen first when the menu is opened before it exists', async () => {
+    const missing = new AppApiError('KITCHEN_PROFILE_REQUIRED', 'Create kitchen profile before managing menu items', 400);
+    const get = jest.spyOn(httpClient, 'get').mockRejectedValueOnce(missing).mockResolvedValueOnce([menuItem]);
+    const kitchen = jest.spyOn(chefProfileApi, 'getKitchen').mockResolvedValue({} as never);
+
+    await expect(chefMenuApi.listItems()).resolves.toHaveLength(1);
+    expect(kitchen).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the error when there is no kitchen to save', async () => {
+    const missing = new AppApiError('KITCHEN_PROFILE_REQUIRED', 'Create kitchen profile before managing menu items', 400);
+    jest.spyOn(httpClient, 'post').mockRejectedValue(missing);
+    jest.spyOn(chefProfileApi, 'getKitchen').mockRejectedValue(new AppApiError('KITCHEN_PROFILE_NOT_FOUND', 'Kitchen profile was not found', 404));
+
+    await expect(chefMenuApi.createItem(request)).rejects.toBe(missing);
   });
 });

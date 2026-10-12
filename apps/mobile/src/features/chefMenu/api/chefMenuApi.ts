@@ -1,4 +1,6 @@
+import {toAppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
+import {chefProfileApi} from '../../chefProfile/api/chefProfileApi';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -531,11 +533,26 @@ export function parseChefMenuBulkAvailabilityResponse(
   };
 }
 
+/**
+ * A newly approved chef's first menu call can come before the kitchen exists. Loading the kitchen
+ * saves it from the application (chefProfileApi.getKitchen), then the call is tried once more.
+ */
+async function withKitchen<T>(call: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    if (toAppApiError(error).code !== 'KITCHEN_PROFILE_REQUIRED') throw error;
+    const saved = await chefProfileApi.getKitchen(signal).then(() => true, () => false);
+    if (!saved) throw error;
+    return call();
+  }
+}
+
 export const chefMenuApi = {
   async listItems(signal?: AbortSignal): Promise<ChefMenuItem[]> {
-    const response = await httpClient.get<unknown>(
-      '/api/v1/kitchens/me/menu-items',
-      {signal, dedupeKey: 'chef-menu-items'},
+    const response = await withKitchen(
+      () => httpClient.get<unknown>('/api/v1/kitchens/me/menu-items', {signal, dedupeKey: 'chef-menu-items'}),
+      signal,
     );
     const parsed = parseChefMenuItems(response);
     if (!parsed) {
@@ -548,10 +565,10 @@ export const chefMenuApi = {
     request: ChefMenuItemRequest,
     signal?: AbortSignal,
   ): Promise<ChefMenuItem> {
-    const response = await httpClient.post<unknown>(
-      '/api/v1/kitchens/me/menu-items',
-      validateChefMenuItemRequest(request),
-      {signal},
+    const body = validateChefMenuItemRequest(request);
+    const response = await withKitchen(
+      () => httpClient.post<unknown>('/api/v1/kitchens/me/menu-items', body, {signal}),
+      signal,
     );
     return requireItemResponse(response);
   },

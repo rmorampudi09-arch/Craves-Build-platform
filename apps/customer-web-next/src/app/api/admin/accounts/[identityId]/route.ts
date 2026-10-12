@@ -10,6 +10,8 @@ import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server
 export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Auth requires an audited reason on every status read; it travels as a header, so printable ASCII only.
+const ADMIN_REASON = /^[\x20-\x7E]{10,500}$/;
 
 type Context = { params: Promise<{ identityId: string }> };
 
@@ -35,8 +37,10 @@ async function identityId(context: Context): Promise<string | null> {
 export async function GET(request: NextRequest, context: Context) {
   const id = await identityId(context);
   if (!id) return failure(400, "INVALID_IDENTITY_ID");
+  const reason = (request.headers.get("x-admin-reason") ?? "").trim();
+  if (!ADMIN_REASON.test(reason)) return failure(400, "ADMIN_REASON_REQUIRED");
   try {
-    const upstream = await authenticatedApiFetch(request, `/admin/accounts/${id}/intervention-status`, {}, 15_000);
+    const upstream = await authenticatedApiFetch(request, `/admin/accounts/${id}/intervention-status`, { headers: { "X-Admin-Reason": reason } }, 15_000);
     const body = await upstream.json().catch(() => null);
     if (!upstream.ok) return failure(upstream.status, statusCode(upstream.status));
     const result = parseAdminAccountInterventionStatus(body);

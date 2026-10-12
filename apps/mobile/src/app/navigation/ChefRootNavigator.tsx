@@ -26,6 +26,7 @@ import {ChefKitchenScheduleScreen} from '../../features/chefSchedule/screens/Che
 import {ChefProfileScreen} from '../../features/chefProfile/screens/ChefProfileScreen';
 import {ChefEditProfileDraftProvider} from '../../features/chefProfile/state/ChefEditProfileDraftProvider';
 import {ChefToastProvider} from '../../features/chefShell/components/ui';
+import {ChefNotificationsScreen} from '../../features/chefShell/screens/ChefNotificationsScreen';
 import {isolateChefRole} from '../../features/chefShell/state/chefRoleIsolation';
 import {ChefOperationalProvider} from '../../features/chefShell/state/ChefOperationalProvider';
 import {ChefMealPlanEditorScreen} from '../../features/chefSubscription/screens/ChefMealPlanEditorScreen';
@@ -38,7 +39,6 @@ import {
   ChefBankAccountPlaceholder,
   ChefDailyLimitsPlaceholder,
   ChefEarningsPlaceholder,
-  ChefNotificationsPlaceholder,
   ChefOrdersScheduledPlaceholder,
   ChefReviewsPlaceholder,
   ChefSecurityPlaceholder,
@@ -198,7 +198,7 @@ function ChefProductNavigator() {
           component={ChefEditMenuItemScreen}
           options={{gestureEnabled: false}}
         />
-        <Stack.Screen name="ChefNotifications" component={ChefNotificationsPlaceholder} />
+        <Stack.Screen name="ChefNotifications" component={ChefNotificationsScreen} />
         <Stack.Screen name="ChefDailyLimits" component={ChefDailyLimitsPlaceholder} />
         <Stack.Screen name="ChefSupportTicket" component={ChefSupportTicketPlaceholder} />
       </Stack.Navigator>

@@ -12,6 +12,7 @@ import {
   CHEF_NOTIFICATION_INBOX_V2_AVAILABLE,
   CHEF_NOTIFICATION_PAGE_SIZE,
   chefNotificationInboxApi,
+  markAllChefNoticesRead,
 } from '../api/chefNotificationInboxApi';
 import {
   chefOperationalApi,
@@ -19,6 +20,7 @@ import {
   type ChefOperationalOrder,
   type ChefOperationalOrderStatus,
 } from '../api/chefOperationalApi';
+import {isChefAudienceNotice} from '../domain/chefNoticeAudience';
 import {
   deriveChefOperationalCounters,
   type ChefOperationalCounters,
@@ -238,32 +240,44 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
   });
 
   const markAllReadMutation = useMutation({
-    mutationFn: () => {
-      if (!CHEF_NOTIFICATION_INBOX_V2_AVAILABLE) {
-        throw new Error('CHEF_NOTIFICATION_INBOX_V2_UNAVAILABLE');
+    mutationFn: (noticeIds: string[]) => markAllChefNoticesRead(noticeIds),
+    onSuccess: markedIds => {
+      if (CHEF_NOTIFICATION_INBOX_V2_AVAILABLE) {
+        void Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: notificationsV2QueryKey,
+            exact: true,
+          }),
+          queryClient.invalidateQueries({
+            queryKey: notificationCountQueryKey,
+            exact: true,
+          }),
+        ]);
+        return;
       }
-      return chefNotificationInboxApi.markAllRead();
-    },
-    onSuccess: () => {
-      void Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: notificationsV2QueryKey,
-          exact: true,
-        }),
-        queryClient.invalidateQueries({
-          queryKey: notificationCountQueryKey,
-          exact: true,
-        }),
-      ]);
+
+      const readAt = new Date().toISOString();
+      const marked = new Set(markedIds);
+      queryClient.setQueryData<ChefOperationalNotice[]>(
+        notificationsQueryKey,
+        current =>
+          (current ?? []).map(notice =>
+            marked.has(notice.id) && notice.readAt === null
+              ? {...notice, readAt}
+              : notice,
+          ),
+      );
     },
   });
 
   const orders = React.useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
+  // Chef mode never lists or counts the customer's own order notices.
   const notices = React.useMemo(
     () =>
-      CHEF_NOTIFICATION_INBOX_V2_AVAILABLE
+      (CHEF_NOTIFICATION_INBOX_V2_AVAILABLE
         ? v2NotificationsQuery.data?.pages.flatMap(page => page.notices) ?? []
-        : legacyNotificationsQuery.data ?? [],
+        : legacyNotificationsQuery.data ?? []
+      ).filter(isChefAudienceNotice),
     [legacyNotificationsQuery.data, v2NotificationsQuery.data],
   );
   const counters = React.useMemo(() => {
@@ -455,7 +469,11 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
           ? v2NotificationsQuery.fetchNextPage().then(() => undefined)
           : Promise.resolve(),
       markAllNotificationsRead: () =>
-        markAllReadMutation.mutateAsync().then(() => undefined),
+        markAllReadMutation
+          .mutateAsync(
+            notices.filter(notice => notice.readAt === null).map(notice => notice.id),
+          )
+          .then(() => undefined),
       refresh,
       reconcileOrderStatus,
       markNotificationRead: noticeId => {

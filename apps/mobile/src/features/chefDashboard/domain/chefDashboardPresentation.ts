@@ -1,61 +1,61 @@
-import type {ChefOperationalOrderStatus} from '../../chefShell/api/chefOperationalApi';
+import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
+import {DEFAULT_PREPARATION_MINUTES} from '../../chefOrders/domain/chefOrderPreparation';
+import type {ChefDashboardEarning, ChefDashboardMenuItem} from '../api/chefDashboardApi';
 
-export type ChefDashboardSalesRange = '7D' | '30D' | '90D';
+const EARNED_STATUSES = new Set<ChefDashboardEarning['status']>(['APPROVED', 'SETTLEMENT_PENDING', 'SETTLED']);
+const IN_KITCHEN_STATUSES = new Set<ChefOperationalOrder['status']>(['CHEF_ACCEPTED', 'PREPARING', 'READY_FOR_PICKUP']);
 
-export const CHEF_DASHBOARD_SALES_RANGES: readonly {
-  id: ChefDashboardSalesRange;
-  label: string;
-}[] = [
-  {id: '7D', label: '7 days'},
-  {id: '30D', label: '30 days'},
-  {id: '90D', label: '90 days'},
-];
+const timeOf = (iso: string | null | undefined) => {
+  const time = iso ? Date.parse(iso) : NaN;
+  return Number.isNaN(time) ? 0 : time;
+};
 
-export function getChefDashboardGreeting(hour: number): string {
-  if (hour < 12) {
-    return 'Good morning';
-  }
-  if (hour < 17) {
-    return 'Good afternoon';
-  }
-  return 'Good evening';
+function isToday(iso: string | null | undefined, now: Date): boolean {
+  return iso != null && !Number.isNaN(Date.parse(iso)) && new Date(iso).toDateString() === now.toDateString();
 }
 
-export function formatChefDashboardOrderStatus(
-  status: ChefOperationalOrderStatus,
-): string {
-  switch (status) {
-    case 'CHEF_ACCEPTED':
-      return 'Accepted';
-    case 'PREPARING':
-      return 'Preparing';
-    case 'READY_FOR_PICKUP':
-      return 'Ready for pickup';
-    case 'OUT_FOR_DELIVERY':
-      return 'Out for delivery';
-    case 'CHEF_ACCEPTANCE_PENDING':
-      return 'New order';
-    case 'DELIVERED':
-      return 'Delivered';
-    case 'CHEF_REJECTED':
-      return 'Rejected';
-    case 'CANCELLED':
-      return 'Cancelled';
-    case 'REFUND_PENDING':
-      return 'Refund pending';
-    case 'REFUNDED':
-      return 'Refunded';
-    case 'REFUND_FAILED':
-      return 'Refund failed';
-    case 'PAYMENT_PENDING':
-      return 'Payment pending';
-    case 'PAID':
-      return 'Paid';
-  }
+/** Rupees the chef earned today, from the earnings entries created today (draft and reversed ones do not count). */
+export function earnedToday(entries: readonly ChefDashboardEarning[], now: Date): number {
+  const total = entries
+    .filter(entry => EARNED_STATUSES.has(entry.status) && isToday(entry.createdAt, now))
+    .reduce((sum, entry) => sum + entry.netPayable, 0);
+  return Math.round(total * 100) / 100;
 }
 
-export function shortChefDashboardOrderReference(orderId: string): string {
-  const compact = orderId.replace(/-/g, '');
-  const suffix = compact.slice(-6).toUpperCase();
-  return suffix ? `#${suffix}` : '#ORDER';
+export function deliveredToday(orders: readonly ChefOperationalOrder[], now: Date): number {
+  return orders.filter(order => order.status === 'DELIVERED' && isToday(order.updatedAt, now)).length;
+}
+
+/** New orders to answer (oldest first, the one closest to its deadline) and orders now in the kitchen. */
+export function splitHomeOrders(orders: readonly ChefOperationalOrder[]): {
+  pending: ChefOperationalOrder[];
+  inKitchen: ChefOperationalOrder[];
+} {
+  return {
+    pending: orders
+      .filter(order => order.status === 'CHEF_ACCEPTANCE_PENDING')
+      .sort((a, b) => timeOf(a.createdAt) - timeOf(b.createdAt)),
+    inKitchen: orders
+      .filter(order => IN_KITCHEN_STATUSES.has(order.status))
+      .sort((a, b) => timeOf(a.updatedAt) - timeOf(b.updatedAt)),
+  };
+}
+
+/**
+ * Minutes the Accept button promises. Same rule the accept action applies when it sends the order:
+ * the time the server already holds, else the longest dish, else the default.
+ */
+export function acceptReadyMinutes(order: ChefOperationalOrder, menuItems: readonly ChefDashboardMenuItem[]): number {
+  if (order.prepTimeMinutes != null) {
+    return order.prepTimeMinutes;
+  }
+  const byId = new Map(menuItems.map(item => [item.id, item.preparationTimeMinutes]));
+  const byName = new Map(menuItems.map(item => [item.itemName.trim().toLowerCase(), item.preparationTimeMinutes]));
+  const minutes = (order.items ?? []).map(
+    item =>
+      (item.menuItemId ? byId.get(item.menuItemId) : null) ??
+      byName.get(item.itemName.trim().toLowerCase()) ??
+      DEFAULT_PREPARATION_MINUTES,
+  );
+  return minutes.length === 0 ? DEFAULT_PREPARATION_MINUTES : Math.max(...minutes);
 }

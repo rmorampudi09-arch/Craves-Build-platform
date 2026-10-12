@@ -1,4 +1,5 @@
 import {httpClient} from '../../../core/http/httpClient';
+import {isRouteNotPublished} from '../../../core/http/routeAvailability';
 import type {ChefOperationalNotice} from './chefOperationalApi';
 
 const UUID_PATTERN =
@@ -6,6 +7,8 @@ const UUID_PATTERN =
 
 export const CHEF_NOTIFICATION_INBOX_V2_AVAILABLE = false;
 export const CHEF_NOTIFICATION_PAGE_SIZE = 50;
+// Chef mode shows the chef's notices only; the server ignores role until it filters by it.
+const CHEF_ROLE_PARAMS = {role: 'CHEF'} as const;
 
 export interface ChefNotificationPage {
   notices: ChefOperationalNotice[];
@@ -187,6 +190,7 @@ export const chefNotificationInboxApi = {
     const params: Record<string, string | number | boolean> = {
       limit,
       unreadOnly,
+      ...CHEF_ROLE_PARAMS,
     };
 
     if (options?.cursor) {
@@ -219,6 +223,7 @@ export const chefNotificationInboxApi = {
     const response = await httpClient.get<unknown>(
       '/api/v1/notifications/in-app/unread-count',
       {
+        params: CHEF_ROLE_PARAMS,
         signal,
         dedupeKey: 'chef-notification-unread-count',
       },
@@ -243,7 +248,32 @@ export const chefNotificationInboxApi = {
     await httpClient.patch<void>(
       '/api/v1/notifications/in-app/read-all',
       undefined,
-      {signal},
+      {params: CHEF_ROLE_PARAMS, signal},
     );
   },
 };
+
+/**
+ * Marks the visible chef notices read. When read-all is not published for the app yet, each notice is marked on its own.
+ * Resolves with the ids that are now read; rejects when none could be marked.
+ */
+export async function markAllChefNoticesRead(
+  noticeIds: readonly string[],
+  signal?: AbortSignal,
+): Promise<string[]> {
+  try {
+    await chefNotificationInboxApi.markAllRead(signal);
+    return [...noticeIds];
+  } catch (error) {
+    if (!isRouteNotPublished(error)) throw error;
+  }
+  const results = await Promise.allSettled(
+    noticeIds.map(id => chefNotificationInboxApi.markRead(id, signal)),
+  );
+  const marked = noticeIds.filter((_, index) => results[index].status === 'fulfilled');
+  const failure = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+  if (marked.length === 0 && failure) throw failure.reason;
+  return marked;
+}

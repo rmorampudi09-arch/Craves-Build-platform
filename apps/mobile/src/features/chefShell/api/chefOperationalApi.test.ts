@@ -1,7 +1,13 @@
+import {httpClient} from '../../../core/http/httpClient';
 import {
+  chefOperationalApi,
   parseChefOperationalNotices,
   parseChefOperationalOrders,
 } from './chefOperationalApi';
+
+jest.mock('../../../core/http/httpClient', () => ({
+  httpClient: {get: jest.fn(), patch: jest.fn()},
+}));
 
 const ORDER_ID = '11111111-1111-4111-8111-111111111111';
 const ITEM_ID = '33333333-3333-4333-8333-333333333333';
@@ -142,5 +148,59 @@ describe('chefOperationalApi parsing', () => {
         },
       ]),
     ).toBeNull();
+  });
+
+  it('keeps the optional fields the server adds for the chef app and shows nothing for ones it does not send', () => {
+    const [order] = parseChefOperationalOrders([
+      {
+        id: ORDER_ID,
+        status: 'CHEF_ACCEPTANCE_PENDING',
+        foodSubtotal: 220,
+        chefAcceptanceExpiresAt: '2026-08-09T08:05:00Z',
+        customerNote: '  Less spicy please  ',
+        deliveryPartner: {name: 'Suresh', phone: '+919999999999', photoUrl: null, pickupEtaAt: '2026-08-09T08:20:00Z'},
+        items: [{id: ITEM_ID, itemName: 'Chicken curry', quantity: 2, foodType: 'NON_VEG', menuItemId: NOTICE_ID}],
+      },
+    ]) ?? [];
+    expect(order).toMatchObject({
+      foodSubtotal: 220,
+      chefAcceptanceExpiresAt: '2026-08-09T08:05:00Z',
+      customerNote: 'Less spicy please',
+      deliveryPartner: {name: 'Suresh', pickupEtaAt: '2026-08-09T08:20:00Z'},
+      items: [{itemName: 'Chicken curry', foodType: 'NON_VEG', menuItemId: NOTICE_ID}],
+    });
+
+    const [plain] = parseChefOperationalOrders([{id: ORDER_ID, status: 'PREPARING'}]) ?? [];
+    expect(plain).not.toHaveProperty('chefAcceptanceExpiresAt');
+    expect(plain).not.toHaveProperty('customerNote');
+    expect(plain).not.toHaveProperty('deliveryPartner');
+    expect(plain).not.toHaveProperty('foodSubtotal');
+  });
+
+  it('drops a malformed new field instead of rejecting the whole order list', () => {
+    const [order] = parseChefOperationalOrders([
+      {
+        id: ORDER_ID,
+        status: 'CHEF_ACCEPTANCE_PENDING',
+        foodSubtotal: 'lots',
+        chefAcceptanceExpiresAt: 'soon',
+        customerNote: 42,
+        deliveryPartner: 'Suresh',
+      },
+    ]) ?? [];
+    expect(order).toMatchObject({id: ORDER_ID, status: 'CHEF_ACCEPTANCE_PENDING'});
+    expect(order).not.toHaveProperty('chefAcceptanceExpiresAt');
+    expect(order).not.toHaveProperty('customerNote');
+    expect(order).not.toHaveProperty('deliveryPartner');
+    expect(order).not.toHaveProperty('foodSubtotal');
+  });
+
+  it('asks the server for chef notifications only', async () => {
+    (httpClient.get as jest.Mock).mockResolvedValueOnce([]);
+    await chefOperationalApi.listNotifications();
+    expect(httpClient.get).toHaveBeenCalledWith(
+      '/api/v1/notifications/in-app',
+      expect.objectContaining({params: {limit: 100, role: 'CHEF'}}),
+    );
   });
 });

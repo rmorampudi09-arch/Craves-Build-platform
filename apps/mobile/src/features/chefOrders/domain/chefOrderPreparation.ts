@@ -6,7 +6,7 @@ export type ChefPreparationItem = Pick<
   'id' | 'kitchenId' | 'preparationTimeMinutes'
 >;
 
-const DEFAULT_PREPARATION_MINUTES = 15;
+export const DEFAULT_PREPARATION_MINUTES = 15;
 
 export function resolveChefOrderPreparationTime(
   order: ChefOrderDetail,

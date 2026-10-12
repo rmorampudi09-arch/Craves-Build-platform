@@ -311,8 +311,8 @@ export function CustomerProfileScreen() {
     }
 
     Alert.alert(
-      'Switch to Chef?',
-      'Craves will leave the Customer workspace and reload your Chef account.',
+      'Switch to Chef mode?',
+      "You'll see your kitchen, orders and earnings. You can switch back any time from Profile.",
       [
         {text: 'Cancel', style: 'cancel'},
         {text: 'Switch', onPress: performRoleSwitch},

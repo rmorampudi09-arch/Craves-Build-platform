@@ -10,6 +10,7 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // Order Service owns the Chef review routes, but main does not publish them through APIM yet.
+// Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
 export const CHEF_REVIEWS_AVAILABLE = false;
 
 function requireUuid(value: string, code: string): string {

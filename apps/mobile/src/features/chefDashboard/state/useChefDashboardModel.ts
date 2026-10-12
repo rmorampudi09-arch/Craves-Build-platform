@@ -2,14 +2,18 @@ import React from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
+import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
 import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
-import {chefDashboardApi} from '../api/chefDashboardApi';
+import {chefPayoutApi, type ChefFinanceBalance} from '../../chefPayout/api/chefPayoutApi';
+import {chefDashboardApi, type ChefDashboardMenuItem} from '../api/chefDashboardApi';
 import {
   deriveChefDashboardModel,
   type ChefDashboardModel,
 } from '../domain/chefDashboardModel';
+import {deliveredToday, earnedToday, splitHomeOrders} from '../domain/chefDashboardPresentation';
 
 const CHEF_ROLE = 'CHEF' as const;
+const EMPTY_MENU: ChefDashboardMenuItem[] = [];
 
 type DashboardSourceStatus = 'pending' | 'error' | 'success';
 
@@ -18,11 +22,21 @@ export interface ChefDashboardSourceStatus {
   earnings: DashboardSourceStatus;
   menu: DashboardSourceStatus;
   notifications: DashboardSourceStatus;
+  balance: DashboardSourceStatus;
 }
 
 export interface ChefDashboardQueryModel {
   data: ChefDashboardModel;
   sources: ChefDashboardSourceStatus;
+  /** New orders to answer, oldest first. */
+  pendingOrders: ChefOperationalOrder[];
+  /** Accepted, preparing and ready orders. */
+  kitchenOrders: ChefOperationalOrder[];
+  menuItems: ChefDashboardMenuItem[];
+  /** Today's numbers: rupees earned (earnings entries) and orders delivered. */
+  today: {earned: number; delivered: number};
+  /** Null until the balance loads or when it cannot be read. */
+  balance: ChefFinanceBalance | null;
   isRefreshing: boolean;
   refresh: () => Promise<void>;
 }
@@ -53,6 +67,17 @@ export function useChefDashboardModel(): ChefDashboardQueryModel {
     [identityId],
   );
 
+  const balanceQueryKey = React.useMemo(
+    () =>
+      identityId
+        ? createPrivateQueryKey('chef-dashboard-balance', {
+            userId: identityId,
+            role: CHEF_ROLE,
+          })
+        : (['craves', 'v1', 'private', 'chef-dashboard-balance', 'signed-out'] as const),
+    [identityId],
+  );
+
   const earningsQuery = useQuery({
     queryKey: earningsQueryKey,
     queryFn: ({signal}) => chefDashboardApi.listEarnings(signal),
@@ -62,6 +87,12 @@ export function useChefDashboardModel(): ChefDashboardQueryModel {
   const menuQuery = useQuery({
     queryKey: menuQueryKey,
     queryFn: ({signal}) => chefDashboardApi.listMenuItems(signal),
+    enabled: identityId !== null,
+    staleTime: 30_000,
+  });
+  const balanceQuery = useQuery({
+    queryKey: balanceQueryKey,
+    queryFn: ({signal}) => chefPayoutApi.getBalance(signal),
     enabled: identityId !== null,
     staleTime: 30_000,
   });
@@ -82,13 +113,23 @@ export function useChefDashboardModel(): ChefDashboardQueryModel {
     ],
   );
 
+  const homeOrders = React.useMemo(() => splitHomeOrders(operational.orders), [operational.orders]);
+  const today = React.useMemo(() => {
+    const now = new Date();
+    return {
+      earned: earnedToday(earningsQuery.data ?? [], now),
+      delivered: deliveredToday(operational.orders, now),
+    };
+  }, [earningsQuery.data, operational.orders]);
+
   const refresh = React.useCallback(async () => {
     await Promise.allSettled([
       operational.refresh(),
       earningsQuery.refetch(),
       menuQuery.refetch(),
+      balanceQuery.refetch(),
     ]);
-  }, [earningsQuery, menuQuery, operational]);
+  }, [balanceQuery, earningsQuery, menuQuery, operational]);
 
   return {
     data,
@@ -97,11 +138,18 @@ export function useChefDashboardModel(): ChefDashboardQueryModel {
       earnings: earningsQuery.status,
       menu: menuQuery.status,
       notifications: operational.notificationsStatus,
+      balance: balanceQuery.status,
     },
+    pendingOrders: homeOrders.pending,
+    kitchenOrders: homeOrders.inKitchen,
+    menuItems: menuQuery.data ?? EMPTY_MENU,
+    today,
+    balance: balanceQuery.data ?? null,
     isRefreshing:
       operational.isRefreshing ||
       earningsQuery.isFetching ||
-      menuQuery.isFetching,
+      menuQuery.isFetching ||
+      balanceQuery.isFetching,
     refresh,
   };
 }

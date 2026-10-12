@@ -60,6 +60,13 @@ describe('ChefTabBar', () => {
     expect(names).toEqual(['Home', 'Orders', 'Menu', 'Earnings', 'Profile']);
   });
 
+  it('is announced as a tab list so screen readers say "tab 2 of 5"', () => {
+    mount();
+    const pill = tree.root.find(node => node.props.testID === 'chef-tab-bar');
+    expect(pill.props.accessibilityRole).toBe('tablist');
+    expect(tab('Home').props.accessibilityRole).toBe('tab');
+  });
+
   it('is a plain white pill with a border, no glass', () => {
     mount();
     const pill = StyleSheet.flatten(tree.root.find(node => node.props.testID === 'chef-tab-bar').props.style);

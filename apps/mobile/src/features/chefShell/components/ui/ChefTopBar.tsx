@@ -50,7 +50,7 @@ export function ChefTopBar({title, subtitle, onBack, right, showBell = true}: Ch
 }
 
 // Own component so screens that hide the bell never need the operational provider.
-function NotificationBell() {
+export function NotificationBell() {
   const navigation = useNavigation<NavigationProp<ChefProductStackParamList>>();
   const {counters} = useChefOperationalState();
   const badge = chefCounterBadgeLabel(counters.unreadNotifications);

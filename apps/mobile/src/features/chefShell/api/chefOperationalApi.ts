@@ -39,6 +39,18 @@ export interface ChefOperationalOrderItemSummary {
   id: string;
   itemName: string;
   quantity: number;
+  /** Present when the server sends it; ties the line to its dish. */
+  menuItemId?: string;
+  /** VEG, NON_VEG or EGG when the server sends it. */
+  foodType?: string;
+}
+
+/** The courier the delivery provider assigned; the whole object is absent until the server sends it. */
+export interface ChefOperationalDeliveryPartner {
+  name: string | null;
+  phone: string | null;
+  photoUrl: string | null;
+  pickupEtaAt: string | null;
 }
 
 export interface ChefOperationalDeliverySummary {
@@ -55,6 +67,13 @@ export interface ChefOperationalOrder {
   prepTimeMinutes?: number | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+  /** What the chef earns from the food in this order. Absent when the server does not send it. */
+  foodSubtotal?: number;
+  /** Deadline to accept or reject. Absent until the server sends it. */
+  chefAcceptanceExpiresAt?: string;
+  /** What the customer wrote at checkout. */
+  customerNote?: string;
+  deliveryPartner?: ChefOperationalDeliveryPartner;
 }
 
 export interface ChefOperationalNotice {
@@ -119,7 +138,15 @@ function parseOrderItemSummary(
   if (!id || !UUID_PATTERN.test(id) || !itemName || quantity === null) {
     return null;
   }
-  return {id, itemName, quantity};
+  const menuItemId = boundedString(raw.menuItemId, 64);
+  const foodType = boundedString(raw.foodType, 40);
+  return {
+    id,
+    itemName,
+    quantity,
+    ...(menuItemId && UUID_PATTERN.test(menuItemId) ? {menuItemId} : {}),
+    ...(foodType ? {foodType} : {}),
+  };
 }
 
 function parseOrderItemSummaries(
@@ -151,6 +178,33 @@ function parseDeliverySummary(
   return {
     areaName: optionalString(raw.areaName, 120),
     city,
+  };
+}
+
+function parseDeliveryPartner(value: unknown): ChefOperationalDeliveryPartner | null {
+  const raw = asRecord(value);
+  if (!raw) {
+    return null;
+  }
+  return {
+    name: optionalString(raw.name, 120),
+    phone: optionalString(raw.phone, 40),
+    photoUrl: optionalString(raw.photoUrl, 500),
+    pickupEtaAt: validTimestamp(raw.pickupEtaAt, true),
+  };
+}
+
+/** Fields the server adds over time: kept when valid, left out (never an error) otherwise. */
+function parseOptionalOrderFields(order: Record<string, unknown>): Partial<ChefOperationalOrder> {
+  const foodSubtotal = order.foodSubtotal == null ? NaN : Number(order.foodSubtotal);
+  const chefAcceptanceExpiresAt = validTimestamp(order.chefAcceptanceExpiresAt, true);
+  const customerNote = optionalString(order.customerNote, 500);
+  const deliveryPartner = parseDeliveryPartner(order.deliveryPartner);
+  return {
+    ...(Number.isFinite(foodSubtotal) && foodSubtotal >= 0 ? {foodSubtotal} : {}),
+    ...(chefAcceptanceExpiresAt ? {chefAcceptanceExpiresAt} : {}),
+    ...(customerNote ? {customerNote} : {}),
+    ...(deliveryPartner ? {deliveryPartner} : {}),
   };
 }
 
@@ -186,6 +240,7 @@ function parseOrder(value: unknown): ChefOperationalOrder | null {
     prepTimeMinutes,
     createdAt,
     updatedAt,
+    ...parseOptionalOrderFields(order),
   };
 }
 
@@ -289,7 +344,8 @@ export const chefOperationalApi = {
     signal?: AbortSignal,
   ): Promise<ChefOperationalNotice[]> {
     const response = await httpClient.get<unknown>('/api/v1/notifications/in-app', {
-      params: {limit: 100},
+      // The server ignores role until it filters by it; the app filters too (isChefAudienceNotice).
+      params: {limit: 100, role: 'CHEF'},
       signal,
       dedupeKey: 'chef-shell:notifications:100',
     });

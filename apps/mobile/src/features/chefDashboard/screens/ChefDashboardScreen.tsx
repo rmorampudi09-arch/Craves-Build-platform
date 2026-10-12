@@ -1,937 +1,607 @@
 import React from 'react';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {useNavigation, type CompositeNavigationProp} from '@react-navigation/native';
+import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
+import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import type {ChefProductStackParamList, ChefTabParamList} from '../../../app/navigation/types';
 import {
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import {useNavigation, type NavigationProp} from '@react-navigation/native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import type {
-  ChefTabParamList,
-  ChefTabRouteName,
-} from '../../../app/navigation/types';
-import {useAppSelector} from '../../../app/store/hooks';
-import {toAppApiError} from '../../../core/http/apiError';
-import {
+  borderWidth,
   colors,
-  elevation,
   fontWeight,
+  iconSize,
   radius,
   spacing,
-  touchTarget,
+  textDefaults,
   typography,
 } from '../../../design/tokens';
-import {Icon, type IconName} from '../../../shared/components/Icon';
-import {SkeletonBlock} from '../../../shared/components/Skeleton';
+import {Icon} from '../../../shared/components/Icon';
+import {useKitchenOpenState, type KitchenOpenState, type KitchenPauseDuration} from '../../chefProfile/state/useKitchenOpenState';
+import {useChefNewOrderActions} from '../../chefOrders/state/useChefNewOrderActions';
+import {useChefPreparingOrderActions} from '../../chefOrders/state/useChefPreparingOrderActions';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
-import {ChefHeader} from '../../chefShell/components/ChefHeader';
-import {useChefReviewPreview} from '../../reviews/query/useChefReviewPreview';
 import {
-  CHEF_DASHBOARD_SALES_RANGES,
-  formatChefDashboardOrderStatus,
-  getChefDashboardGreeting,
-  shortChefDashboardOrderReference,
-  type ChefDashboardSalesRange,
-} from '../domain/chefDashboardPresentation';
+  ChefActionButton,
+  ChefCard,
+  ChefScreen,
+  ConfirmDialog,
+  ListGroup,
+  ListRow,
+  OrderCard,
+  SectionHeader,
+  StatTile,
+  useChefToast,
+} from '../../chefShell/components/ui';
+import {NotificationBell} from '../../chefShell/components/ui/ChefTopBar';
+import type {OrderCardOrder} from '../../chefShell/components/ui/OrderCard';
+import type {VegMarkType} from '../../chefShell/components/ui/VegMark';
+import {formatRelativeTime, formatRupees, formatTimeOfDay, shortOrderNumber} from '../../chefShell/domain/chefFormat';
+import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
+import {useChefReviewPreview} from '../../reviews/query/useChefReviewPreview';
+import {KitchenStatusSheet} from '../components/KitchenStatusSheet';
+import {RespondTimer} from '../components/RespondTimer';
+import {acceptReadyMinutes} from '../domain/chefDashboardPresentation';
 import {useChefDashboardModel} from '../state/useChefDashboardModel';
 
-type SourceStatus = 'pending' | 'error' | 'success';
+type HomeNavigation = CompositeNavigationProp<
+  BottomTabNavigationProp<ChefTabParamList, 'Dashboard'>,
+  NativeStackNavigationProp<ChefProductStackParamList>
+>;
 
-interface MetricCardProps {
-  icon: IconName;
-  label: string;
-  sourceStatus: SourceStatus;
-  value: number;
+const KITCHEN_ROWS = 4;
+const KITCHEN_UPDATE_FAILED = "We couldn't update your kitchen. Check your connection and try again.";
+
+const itemCount = (order: ChefOperationalOrder) => (order.items ?? []).reduce((sum, item) => sum + item.quantity, 0);
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+function toCardOrder(order: ChefOperationalOrder): OrderCardOrder {
+  return {
+    id: order.id,
+    area: order.deliverySummary ? order.deliverySummary.areaName ?? order.deliverySummary.city : undefined,
+    placedAt: order.createdAt ?? undefined,
+    total: order.foodSubtotal,
+    items: (order.items ?? []).map(item => ({
+      name: item.itemName,
+      quantity: item.quantity,
+      foodType: item.foodType as VegMarkType | undefined,
+    })),
+    note: order.customerNote,
+  };
 }
 
-function MetricCard({icon, label, sourceStatus, value}: MetricCardProps) {
+function pillText(kitchen: KitchenOpenState): string {
+  if (kitchen.kitchen?.status === 'SUSPENDED') {
+    return 'Suspended';
+  }
+  switch (kitchen.status) {
+    case 'open':
+      return 'Open · taking orders';
+    case 'paused':
+      return kitchen.pausedUntil ? `Paused · back at ${formatTimeOfDay(new Date(kitchen.pausedUntil))}` : 'Paused';
+    case 'closed':
+      return kitchen.opensAt ? `Closed · opens ${kitchen.opensAt}` : 'Closed';
+    default:
+      return kitchen.unavailable ? 'Kitchen status unavailable' : 'Checking kitchen status';
+  }
+}
+
+const PILL_COLORS = {
+  open: {background: colors.successSoft, foreground: colors.successText, dot: colors.success},
+  paused: {background: colors.warningSoft, foreground: colors.warningText, dot: colors.warning},
+  closed: {background: colors.white, foreground: colors.textSecondary, dot: colors.textSecondary},
+  unknown: {background: colors.white, foreground: colors.textSecondary, dot: colors.borderStrong},
+} as const;
+
+function HomeHeader({kitchen, onOpenStatus}: {kitchen: KitchenOpenState; onOpenStatus: () => void}) {
+  const name = kitchen.kitchen?.kitchenName ?? 'Your kitchen';
+  const text = pillText(kitchen);
+  const pill = PILL_COLORS[kitchen.status];
+  const locked = kitchen.status === 'unknown' || kitchen.kitchen?.status === 'SUSPENDED';
   return (
-    <View style={styles.metricCard}>
-      <View style={styles.metricIcon}>
-        <Icon color={colors.flameRed} name={icon} size={20} />
-      </View>
-      {sourceStatus === 'pending' ? (
-        <SkeletonBlock height={28} width={44} />
-      ) : (
-        <Text style={styles.metricValue}>
-          {sourceStatus === 'success' ? value : '—'}
-        </Text>
-      )}
-      <Text style={styles.metricLabel}>{label}</Text>
-    </View>
-  );
-}
-
-interface QuickActionProps {
-  icon: IconName;
-  onPress: () => void;
-  subtitle: string;
-  title: string;
-}
-
-function QuickAction({icon, onPress, subtitle, title}: QuickActionProps) {
-  return (
-    <Pressable
-      accessibilityLabel={`${title}. ${subtitle}`}
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({pressed}) => [styles.actionRow, pressed && styles.pressed]}>
-      <View style={styles.actionIcon}>
-        <Icon color={colors.flameRed} name={icon} size={22} />
-      </View>
-      <View style={styles.flex}>
-        <Text style={styles.actionTitle}>{title}</Text>
-        <Text style={styles.actionSubtitle}>{subtitle}</Text>
-      </View>
-      <Icon color={colors.textSecondary} name="chevron-right" size={18} />
-    </Pressable>
-  );
-}
-
-interface UnavailableProps {
-  icon: IconName;
-  message: string;
-  title: string;
-}
-
-function Unavailable({icon, message, title}: UnavailableProps) {
-  return (
-    <View style={styles.unavailableRow}>
-      <View style={styles.unavailableIcon}>
-        <Icon color={colors.textSecondary} name={icon} size={21} />
-      </View>
-      <View style={styles.flex}>
-        <Text style={styles.unavailableTitle}>{title}</Text>
-        <Text style={styles.unavailableMessage}>{message}</Text>
-      </View>
-    </View>
-  );
-}
-
-function ActiveOrderRow({
-  onPress,
-  order,
-}: {
-  onPress: () => void;
-  order: ChefOperationalOrder;
-}) {
-  const reference = shortChefDashboardOrderReference(order.id);
-  return (
-    <Pressable
-      accessibilityLabel={`Open Orders for active order ${reference}`}
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({pressed}) => [styles.orderRow, pressed && styles.pressed]}>
-      <View style={styles.orderIcon}>
-        <Icon color={colors.flameRed} name="orders" size={20} />
-      </View>
-      <View style={styles.flex}>
-        <Text style={styles.orderReference}>{reference}</Text>
-        <Text style={styles.orderStatus}>
-          {formatChefDashboardOrderStatus(order.status)}
+    <View style={styles.header}>
+      <View importantForAccessibility="no-hide-descendants" style={styles.avatar}>
+        <Text allowFontScaling={false} style={styles.avatarText}>
+          {name.charAt(0).toUpperCase()}
         </Text>
       </View>
-      <Icon color={colors.textSecondary} name="chevron-right" size={18} />
-    </Pressable>
+      <View style={styles.headerText}>
+        <Text
+          accessibilityRole="header"
+          allowFontScaling={textDefaults.allowFontScaling}
+          numberOfLines={1}
+          style={styles.kitchenName}>
+          {name}
+        </Text>
+        <Pressable
+          accessibilityLabel={`Kitchen status: ${text}`}
+          accessibilityRole="button"
+          disabled={locked}
+          hitSlop={{top: 10, bottom: 10, left: 8, right: 8}}
+          onPress={onOpenStatus}
+          style={[styles.pill, {backgroundColor: pill.background}, pill.background === colors.white && styles.pillOutline]}>
+          <View style={[styles.dot, {backgroundColor: pill.dot}]} />
+          <Text allowFontScaling={textDefaults.allowFontScaling} numberOfLines={1} style={[styles.pillText, {color: pill.foreground}]}>
+            {text}
+          </Text>
+          <Icon color={pill.foreground} name="chevron-down" size={iconSize.xs} surface={false} />
+        </Pressable>
+      </View>
+      <NotificationBell />
+    </View>
   );
-}
-
-function formatReviewPublishedAt(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('en', {
-    month: 'short',
-    day: 'numeric',
-  }).format(date);
 }
 
 export function ChefDashboardScreen() {
-  const navigation = useNavigation<NavigationProp<ChefTabParamList>>();
-  const displayName = useAppSelector(
-    state => state.auth.identity?.displayName?.trim() || 'Chef',
-  );
-  const {data, sources, isRefreshing, refresh} = useChefDashboardModel();
+  const navigation = useNavigation<HomeNavigation>();
+  const toast = useChefToast();
+  const model = useChefDashboardModel();
+  const kitchen = useKitchenOpenState();
   const reviews = useChefReviewPreview();
-  const [salesRange, setSalesRange] =
-    React.useState<ChefDashboardSalesRange>('7D');
+  const newActions = useChefNewOrderActions();
+  const prepActions = useChefPreparingOrderActions();
+  const {orderTabs} = useChefOperationalState();
 
-  const firstName = displayName.split(/\s+/)[0] || 'Chef';
-  const greeting = React.useMemo(
-    () => getChefDashboardGreeting(new Date().getHours()),
-    [],
-  );
-  const hasSourceError = Object.values(sources).some(
-    sourceStatus => sourceStatus === 'error',
+  const suspended = kitchen.kitchen?.status === 'SUSPENDED';
+  const [sheetOpen, setSheetOpen] = React.useState(false);
+  const [confirmClose, setConfirmClose] = React.useState(false);
+  const [readyTarget, setReadyTarget] = React.useState<ChefOperationalOrder | null>(null);
+
+  // The order actions explain what happened (accepted, no longer available...); show it once.
+  const {feedback: newFeedback, clearFeedback: clearNewFeedback} = newActions;
+  React.useEffect(() => {
+    if (newFeedback) {
+      toast.show(newFeedback.message);
+      clearNewFeedback();
+    }
+  }, [clearNewFeedback, newFeedback, toast]);
+  const {feedback: prepFeedback, clearFeedback: clearPrepFeedback} = prepActions;
+  React.useEffect(() => {
+    if (prepFeedback) {
+      toast.show(prepFeedback.message);
+      clearPrepFeedback();
+    }
+  }, [clearPrepFeedback, prepFeedback, toast]);
+
+  const refresh = React.useCallback(() => {
+    Promise.allSettled([model.refresh(), reviews.refresh()]).catch(() => undefined);
+  }, [model, reviews]);
+
+  const openOrders = (screen: 'ChefOrdersNew' | 'ChefOrdersPreparing') => navigation.navigate('Orders', {screen});
+
+  const changeKitchen = async (action: () => Promise<void>, done: string) => {
+    setSheetOpen(false);
+    try {
+      await action();
+      toast.show(done);
+    } catch {
+      toast.show(KITCHEN_UPDATE_FAILED);
+    }
+  };
+  const cooking = model.kitchenOrders.filter(order => order.status !== 'READY_FOR_PICKUP').length;
+  const closeKitchen = () => changeKitchen(() => kitchen.setOpen(false), 'Your kitchen is closed');
+  const pauseKitchen = (duration: KitchenPauseDuration) => changeKitchen(() => kitchen.pause(duration), 'New orders paused');
+  const askToClose = () => {
+    if (cooking > 0) {
+      setSheetOpen(false);
+      setConfirmClose(true);
+    } else {
+      closeKitchen().catch(() => undefined);
+    }
+  };
+
+  const confirmReady = async () => {
+    const order = readyTarget;
+    if (!order) return;
+    try {
+      await prepActions.markReady(order.id);
+    } catch {
+      // The preparing-order action reports the reason through its feedback.
+    }
+    setReadyTarget(null);
+  };
+
+  const pending = model.pendingOrders;
+  const firstPending = pending[0];
+  const kitchenRows = model.kitchenOrders.slice(0, KITCHEN_ROWS);
+  const menu = model.data.menu;
+  const ordersFailed = model.sources.orders === 'error' && model.pendingOrders.length === 0 && model.kitchenOrders.length === 0;
+  const nothingGoingOn = !ordersFailed && pending.length === 0 && model.kitchenOrders.length === 0 && kitchen.status === 'open';
+  const average = reviews.summary?.overallAverage;
+  const nowMs = Date.now();
+
+  const kitchenSection =
+    model.kitchenOrders.length > 0 ? (
+      <>
+        <SectionHeader actionLabel="All orders" onAction={() => openOrders('ChefOrdersPreparing')} title="In the kitchen" />
+        <ListGroup>
+          {kitchenRows.map(order => {
+            const number = shortOrderNumber(order.id);
+            if (order.status === 'READY_FOR_PICKUP') {
+              const partner = order.deliveryPartner;
+              const eta = partner?.pickupEtaAt ? Math.round((Date.parse(partner.pickupEtaAt) - nowMs) / 60_000) : null;
+              return (
+                <ListRow
+                  icon="check"
+                  iconTone="green"
+                  key={order.id}
+                  onPress={() => navigation.navigate('ChefOrderDetail', {orderId: order.id})}
+                  subtitle={
+                    partner?.name
+                      ? eta !== null && eta > 0
+                        ? `${partner.name} picks up in ${eta} min`
+                        : `${partner.name} is on the way to pick up`
+                      : 'Waiting for pickup'
+                  }
+                  title={`${number} · Ready`}
+                />
+              );
+            }
+            const timer = orderTabs.prepTimers[order.id];
+            const count = itemCount(order);
+            const timing = timer
+              ? timer.isOverdue
+                ? `${Math.max(1, Math.round((nowMs - timer.serverDueAtMs) / 60_000))} min late`
+                : `ready in ${Math.max(1, Math.ceil(timer.remainingMs / 60_000))} min`
+              : null;
+            return (
+              <ListRow
+                icon="meal"
+                iconTone="amber"
+                key={order.id}
+                right={
+                  <ChefActionButton
+                    accessibilityLabel={`Mark ${number} ready`}
+                    compact
+                    label="Mark ready"
+                    onPress={() => setReadyTarget(order)}
+                    tone="neutral"
+                  />
+                }
+                subtitle={[count > 0 ? plural(count, 'item', 'items') : null, timing].filter(Boolean).join(' · ') || 'Cooking'}
+                title={`${number} · Preparing`}
+              />
+            );
+          })}
+        </ListGroup>
+      </>
+    ) : null;
+
+  const todaySection = (
+    <>
+      <SectionHeader actionLabel="Earnings" onAction={() => navigation.navigate('Earnings')} title="Today" />
+      <View style={styles.stats}>
+        <StatTile label="Earned" value={model.sources.earnings === 'success' ? formatRupees(model.today.earned) : '—'} />
+        <StatTile label="Orders" value={model.sources.orders === 'success' ? model.today.delivered : '—'} />
+        {reviews.available ? <StatTile label="Rating" value={average != null ? `${average.toFixed(1)} ★` : '—'} /> : null}
+      </View>
+    </>
   );
 
-  const navigate = React.useCallback(
-    (routeName: ChefTabRouteName) => navigation.navigate(routeName),
-    [navigation],
-  );
-  const refreshDashboard = React.useCallback(() => {
-    Promise.allSettled([refresh(), reviews.refresh()]).catch(() => undefined);
-  }, [refresh, reviews]);
+  const latestReview = reviews.available ? reviews.reviews[0] : undefined;
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-      <ChefHeader title="Dashboard" />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            colors={[colors.flameRed]}
-            onRefresh={refreshDashboard}
-            refreshing={isRefreshing || reviews.isRefreshing}
-            tintColor={colors.flameRed}
+    <ChefScreen
+      header={<HomeHeader kitchen={kitchen} onOpenStatus={() => setSheetOpen(true)} />}
+      onRefresh={refresh}
+      refreshing={model.isRefreshing}
+      withTabBar>
+      {kitchen.status === 'closed' ? (
+        <ChefCard style={styles.closedCard}>
+          <Icon color={colors.textSecondary} name="store" size={iconSize.xxl} surface={false} />
+          <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.closedTitle}>
+            {suspended ? 'Your kitchen is suspended' : 'Your kitchen is closed'}
+          </Text>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.closedMessage}>
+            {suspended
+              ? "Customers can't order right now. Contact Craves support to find out why and how to open again."
+              : "Customers can't order right now. Open when you're ready to cook."}
+          </Text>
+          {suspended ? null : (
+            <ChefActionButton
+              busy={kitchen.saving}
+              label="Open kitchen"
+              onPress={() => changeKitchen(() => kitchen.setOpen(true), 'Your kitchen is open').catch(() => undefined)}
+              style={styles.fullWidth}
+              tone="success"
+            />
+          )}
+        </ChefCard>
+      ) : null}
+
+      {kitchen.status === 'paused' ? (
+        <>
+          <View style={styles.banner}>
+            <Icon color={colors.warningText} name="pause" size={iconSize.md} surface={false} />
+            <View style={styles.bannerText}>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.bannerTitle}>
+                {kitchen.pausedUntil
+                  ? `New orders paused until ${formatTimeOfDay(new Date(kitchen.pausedUntil))}`
+                  : 'New orders paused'}
+              </Text>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.bannerDetail}>
+                {kitchen.pausedUntil
+                  ? `Customers see "Opens again at ${formatTimeOfDay(new Date(kitchen.pausedUntil))}". Orders you already accepted carry on.`
+                  : 'Orders you already accepted carry on.'}
+              </Text>
+            </View>
+          </View>
+          <ChefActionButton
+            busy={kitchen.saving}
+            icon="play"
+            label="Resume now"
+            onPress={() => changeKitchen(() => kitchen.resume(), 'Taking orders again').catch(() => undefined)}
+            tone="success"
           />
-        }
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.greetingBlock}>
-          <Text accessibilityRole="header" style={styles.greeting}>
-            {greeting}, {firstName}
+        </>
+      ) : null}
+
+      {ordersFailed ? (
+        <ChefCard>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardTitle}>
+            We couldn't load your orders
           </Text>
-          <Text style={styles.subtitle}>Here is your kitchen at a glance.</Text>
-        </View>
-
-        {hasSourceError ? (
-          <View style={styles.errorBanner}>
-            <Icon color={colors.error} name="wifi-off" size={20} />
-            <View style={styles.flex}>
-              <Text style={styles.errorTitle}>Some live data is unavailable</Text>
-              <Text style={styles.errorMessage}>
-                Existing dashboard information is kept where available.
-              </Text>
-            </View>
-            <Pressable
-              accessibilityLabel="Retry dashboard refresh"
-              accessibilityRole="button"
-              disabled={isRefreshing}
-              onPress={refreshDashboard}
-              style={({pressed}) => [
-                styles.retryButton,
-                (pressed || isRefreshing) && styles.pressed,
-              ]}>
-              <Text style={styles.retryText}>
-                {isRefreshing ? 'Refreshing' : 'Retry'}
-              </Text>
-            </Pressable>
-          </View>
-        ) : null}
-
-        <View style={styles.walletCard}>
-          <View style={styles.rowBetween}>
-            <View>
-              <Text style={styles.walletEyebrow}>Wallet balance</Text>
-              <Text style={styles.walletAmount}>—</Text>
-            </View>
-            <View style={styles.walletIcon}>
-              <Icon color={colors.white} name="analytics" size={22} />
-            </View>
-          </View>
-          <Text style={styles.walletMessage}>
-            Balance and withdrawal eligibility are unavailable from the current payout contract.
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardMessage}>
+            Check your connection and try again.
           </Text>
-          <View style={styles.walletFooter}>
-            <Text style={styles.walletStatus}>
-              {sources.earnings === 'pending'
-                ? 'Refreshing earnings ledger…'
-                : sources.earnings === 'error'
-                  ? 'Earnings ledger unavailable'
-                  : 'Earnings ledger connected'}
-            </Text>
-            <Pressable
-              accessibilityLabel="Withdraw unavailable"
-              accessibilityRole="button"
-              accessibilityState={{disabled: true}}
-              disabled
-              style={styles.withdrawButton}>
-              <Text style={styles.withdrawText}>Withdraw</Text>
-            </Pressable>
-          </View>
-        </View>
+          <ChefActionButton label="Try again" onPress={refresh} style={styles.fullWidth} tone="neutral" />
+        </ChefCard>
+      ) : null}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Orders overview</Text>
-          <View style={styles.metricGrid}>
-            <MetricCard
-              icon="bell"
-              label="New orders"
-              sourceStatus={sources.orders}
-              value={data.orders.pendingAcceptance}
-            />
-            <MetricCard
-              icon="chef"
-              label="Active orders"
-              sourceStatus={sources.orders}
-              value={data.orders.activeOrders}
-            />
-            <MetricCard
-              icon="check"
-              label="Ready"
-              sourceStatus={sources.orders}
-              value={data.orders.readyForPickup}
-            />
-            <MetricCard
-              icon="orders"
-              label="Total orders"
-              sourceStatus={sources.orders}
-              value={data.orders.totalOrders}
-            />
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitleCompact}>Sales overview</Text>
-            <Pressable
-              accessibilityLabel="Open Analytics"
-              accessibilityRole="button"
-              onPress={() => navigate('Earnings')}
-              style={({pressed}) => pressed && styles.pressed}>
-              <Text style={styles.sectionLink}>View analytics</Text>
-            </Pressable>
-          </View>
-          <View style={styles.card}>
-            <View accessibilityRole="tablist" style={styles.rangeSelector}>
-              {CHEF_DASHBOARD_SALES_RANGES.map(range => {
-                const selected = salesRange === range.id;
-                return (
-                  <Pressable
-                    accessibilityRole="tab"
-                    accessibilityState={{selected}}
-                    key={range.id}
-                    onPress={() => setSalesRange(range.id)}
-                    style={({pressed}) => [
-                      styles.rangeChip,
-                      selected && styles.rangeChipSelected,
-                      pressed && styles.pressed,
-                    ]}>
-                    <Text
-                      style={[
-                        styles.rangeText,
-                        selected && styles.rangeTextSelected,
-                      ]}>
-                      {range.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <View style={styles.chartState}>
-              <Icon color={colors.placeholder} name="analytics" size={28} />
-              <Text style={styles.chartTitle}>Sales data unavailable</Text>
-              <Text style={styles.chartMessage}>
-                The approved sales time-series contract is not available yet.
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick actions</Text>
-          <View style={styles.actionList}>
-            <QuickAction
-              icon="orders"
-              onPress={() => navigate('Orders')}
-              subtitle={
-                sources.orders === 'success'
-                  ? `${data.orders.pendingAcceptance} new orders`
-                  : 'Open order workspace'
-              }
-              title="Orders"
-            />
-            <QuickAction
-              icon="chef"
-              onPress={() => navigate('Menu')}
-              subtitle={
-                sources.menu === 'success'
-                  ? `${data.menu.sellableItems} dishes live`
-                  : 'Manage your menu'
-              }
-              title="Menu"
-            />
-            <QuickAction
-              icon="analytics"
-              onPress={() => navigate('Earnings')}
-              subtitle="Business performance"
-              title="Analytics"
-            />
-            <QuickAction
-              icon="account"
-              onPress={() => navigate('Profile')}
-              subtitle="Kitchen and account"
-              title="Profile"
-            />
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitleCompact}>Active orders</Text>
-            <Pressable
-              accessibilityLabel="View all orders"
-              accessibilityRole="button"
-              onPress={() => navigate('Orders')}
-              style={({pressed}) => pressed && styles.pressed}>
-              <Text style={styles.sectionLink}>View all</Text>
-            </Pressable>
-          </View>
-          {sources.orders === 'pending' && data.orders.active.length === 0 ? (
-            <View style={styles.skeletonList}>
-              <SkeletonBlock borderRadius={radius.lg} height={78} />
-              <SkeletonBlock borderRadius={radius.lg} height={78} />
-            </View>
-          ) : sources.orders === 'error' && data.orders.active.length === 0 ? (
-            <View style={styles.card}>
-              <Unavailable
-                icon="wifi-off"
-                message="Refresh the dashboard to try loading operational orders again."
-                title="Active orders unavailable"
-              />
-              <Pressable
-                accessibilityLabel="Retry active orders"
-                accessibilityRole="button"
-                disabled={isRefreshing}
-                onPress={refreshDashboard}
-                style={({pressed}) => [
-                  styles.inlineRetry,
-                  (pressed || isRefreshing) && styles.pressed,
-                ]}>
-                <Text style={styles.inlineRetryText}>
-                  {isRefreshing ? 'Refreshing…' : 'Try again'}
-                </Text>
-              </Pressable>
-            </View>
-          ) : data.orders.active.length === 0 ? (
-            <View style={styles.card}>
-              <Unavailable
-                icon="orders"
-                message="New accepted orders will appear here automatically."
-                title="No active orders"
-              />
-            </View>
-          ) : (
-            <View style={styles.actionList}>
-              {data.orders.active.slice(0, 3).map(order => (
-                <ActiveOrderRow
-                  key={order.id}
-                  onPress={() => navigate('Orders')}
-                  order={order}
-                />
-              ))}
-            </View>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitleCompact}>Recent reviews</Text>
-            {reviews.available &&
-            reviews.summary !== null &&
-            reviews.summary.overallAverage !== null ? (
-              <View style={styles.reviewSummary}>
-                <Text style={styles.reviewSummaryScore}>
-                  {reviews.summary.overallAverage.toFixed(1)} ★
-                </Text>
-                <Text style={styles.reviewSummaryCount}>
-                  {reviews.summary.reviewCount}{' '}
-                  {reviews.summary.reviewCount === 1 ? 'review' : 'reviews'}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          {!reviews.available ? (
-            <View style={styles.card}>
-              <Unavailable
-                icon="star"
-                message="The Chef reviews backend exists, but its gateway routes are not published yet."
-                title="Reviews unavailable"
-              />
-            </View>
-          ) : reviews.isPending ? (
-            <View style={styles.skeletonList}>
-              <SkeletonBlock borderRadius={radius.lg} height={112} />
-              <SkeletonBlock borderRadius={radius.lg} height={112} />
-            </View>
-          ) : reviews.error ? (
-            <View style={styles.card}>
-              <Unavailable
-                icon="wifi-off"
-                message={toAppApiError(reviews.error).message}
-                title="Reviews could not be loaded"
-              />
-              <Pressable
-                accessibilityLabel="Retry recent reviews"
-                accessibilityRole="button"
-                onPress={() => { reviews.refresh().catch(() => undefined); }}
-                style={({pressed}) => [
-                  styles.inlineRetry,
-                  pressed && styles.pressed,
-                ]}>
-                <Text style={styles.inlineRetryText}>Try again</Text>
-              </Pressable>
-            </View>
-          ) : reviews.reviews.length === 0 ? (
-            <View style={styles.card}>
-              <Unavailable
-                icon="star"
-                message="Published customer reviews will appear here."
-                title="No published reviews yet"
-              />
-            </View>
-          ) : (
-            <View style={styles.reviewList}>
-              {reviews.reviews.map(review => (
-                <View key={review.reviewId} style={styles.reviewCard}>
-                  <View style={styles.reviewCardHeader}>
-                    <Text style={styles.reviewRating}>
-                      {review.overallRating} ★
-                    </Text>
-                    <Text style={styles.reviewDate}>
-                      {formatReviewPublishedAt(review.publishedAt)}
-                    </Text>
-                  </View>
-                  {review.reviewText ? (
-                    <Text numberOfLines={4} style={styles.reviewText}>
-                      {review.reviewText}
-                    </Text>
-                  ) : null}
-                  {review.tagCodes.length > 0 ? (
-                    <View style={styles.reviewTags}>
-                      {review.tagCodes.map(code => (
-                        <View key={code} style={styles.reviewTag}>
-                          <Text style={styles.reviewTagText}>
-                            {code.replace(/_/g, ' ')}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  ) : null}
+      {firstPending ? (
+        <>
+          <SectionHeader
+            actionLabel={plural(pending.length, 'new order', 'new orders')}
+            onAction={() => openOrders('ChefOrdersNew')}
+            title="Needs you now"
+          />
+          <OrderCard
+            actions={
+              <>
+                {firstPending.chefAcceptanceExpiresAt ? (
+                  <RespondTimer createdAt={firstPending.createdAt} expiresAt={firstPending.chefAcceptanceExpiresAt} />
+                ) : null}
+                <View style={styles.buttons}>
+                  <ChefActionButton
+                    accessibilityLabel={`Reject order ${shortOrderNumber(firstPending.id)}`}
+                    disabled={newActions.actionStateByOrder[firstPending.id] !== undefined}
+                    label="Reject"
+                    onPress={() => openOrders('ChefOrdersNew')}
+                    style={styles.rejectButton}
+                    tone="neutral"
+                  />
+                  <ChefActionButton
+                    busy={newActions.actionStateByOrder[firstPending.id] === 'accepting'}
+                    label={`Accept · ready in ${acceptReadyMinutes(firstPending, model.menuItems)} min`}
+                    onPress={() => {
+                      newActions.accept(firstPending.id).catch(() => undefined);
+                    }}
+                    style={styles.acceptButton}
+                  />
                 </View>
-              ))}
-            </View>
-          )}
-        </View>
+              </>
+            }
+            highlighted
+            onPress={() => navigation.navigate('ChefOrderDetail', {orderId: firstPending.id})}
+            order={toCardOrder(firstPending)}
+          />
+        </>
+      ) : null}
 
-        <View style={styles.insightBanner}>
-          <View style={styles.insightIcon}>
-            <Icon color={colors.flameRed} name="analytics" size={22} />
+      {nothingGoingOn ? (
+        <ChefCard>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardTitle}>
+            No orders right now
+          </Text>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardMessage}>
+            New orders will show up here as soon as customers place them.
+          </Text>
+        </ChefCard>
+      ) : null}
+
+      {kitchen.status === 'paused' ? (
+        <>
+          {kitchenSection}
+          {todaySection}
+        </>
+      ) : (
+        <>
+          {todaySection}
+          {kitchenSection}
+        </>
+      )}
+
+      <SectionHeader actionLabel="Manage" onAction={() => navigation.navigate('Menu')} title="Your menu" />
+      <ChefCard
+        accessibilityLabel={
+          menu.activeItems === 0 ? 'Add your first dish' : `${menu.sellableItems} of ${menu.activeItems} dishes available, open menu`
+        }
+        onPress={() => navigation.navigate('Menu')}>
+        <View style={styles.menuRow}>
+          <Icon color={colors.flameRedAccessible} name="meal" size={iconSize.xl} surface={false} />
+          <View style={styles.bannerText}>
+            {menu.activeItems === 0 ? (
+              <>
+                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardTitle}>
+                  Add your first dish
+                </Text>
+                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardMessage}>
+                  Customers can order once you have a dish on your menu.
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardTitle}>
+                  {`${menu.sellableItems} of ${menu.activeItems} dishes available`}
+                </Text>
+                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardMessage}>
+                  {menu.activeItems === menu.sellableItems
+                    ? 'All your dishes are switched on'
+                    : `${plural(menu.activeItems - menu.sellableItems, 'dish is', 'dishes are')} switched off`}
+                </Text>
+              </>
+            )}
           </View>
-          <View style={styles.flex}>
-            <Text style={styles.insightEyebrow}>Business insight</Text>
-            <Text style={styles.insightTitle}>Insights are not available yet</Text>
-            <Text style={styles.insightMessage}>
-              No approved business-insight contract is currently registered for the Chef dashboard.
+          <Icon color={colors.borderStrong} name="chevron-right" size={iconSize.md} surface={false} />
+        </View>
+      </ChefCard>
+
+      {latestReview ? (
+        <>
+          <SectionHeader
+            actionLabel="See all"
+            onAction={() => navigation.navigate('Profile', {screen: 'ChefReviews'})}
+            title="Latest reviews"
+          />
+          <ChefCard>
+            <Text accessibilityLabel={`${latestReview.overallRating} out of 5 stars`} style={styles.stars}>
+              {'★'.repeat(Math.max(0, Math.min(5, Math.round(latestReview.overallRating))))}
+            </Text>
+            {latestReview.reviewText ? (
+              <Text allowFontScaling={textDefaults.allowFontScaling} numberOfLines={3} style={styles.reviewText}>
+                {latestReview.reviewText}
+              </Text>
+            ) : null}
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.reviewDate}>
+              {formatRelativeTime(latestReview.publishedAt, new Date())}
+            </Text>
+          </ChefCard>
+        </>
+      ) : null}
+
+      <View style={styles.balance}>
+        <View style={styles.balanceTop}>
+          <View style={styles.bannerText}>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.balanceLabel}>
+              Available to withdraw
+            </Text>
+            <Text
+              adjustsFontSizeToFit
+              allowFontScaling={textDefaults.allowFontScaling}
+              minimumFontScale={0.7}
+              numberOfLines={1}
+              style={styles.balanceAmount}>
+              {model.balance ? formatRupees(Number(model.balance.available), {paise: true}) : '—'}
             </Text>
           </View>
+          <Icon color={colors.white} name="wallet" size={iconSize.xl} surface={false} />
         </View>
-      </ScrollView>
-    </SafeAreaView>
+        <ChefActionButton label="Withdraw" onPress={() => navigation.navigate('Earnings')} tone="inverse" />
+      </View>
+
+      <KitchenStatusSheet
+        busy={kitchen.saving}
+        hoursToday={kitchen.hoursToday}
+        onChangeHours={() => {
+          setSheetOpen(false);
+          navigation.navigate('Profile', {screen: 'ChefKitchenSchedule'});
+        }}
+        onClose={() => setSheetOpen(false)}
+        onCloseKitchen={askToClose}
+        onOpen={() => changeKitchen(() => kitchen.setOpen(true), 'Your kitchen is open').catch(() => undefined)}
+        onPause={duration => pauseKitchen(duration).catch(() => undefined)}
+        onResume={() => changeKitchen(() => kitchen.resume(), 'Taking orders again').catch(() => undefined)}
+        opensAt={kitchen.opensAt}
+        pauseAvailable={kitchen.pauseAvailable}
+        pausedUntil={kitchen.pausedUntil}
+        status={kitchen.status}
+        visible={sheetOpen}
+      />
+
+      <ConfirmDialog
+        cancelLabel="Keep open"
+        confirmLabel="Close kitchen"
+        message={`${plural(cooking, 'order is', 'orders are')} still cooking. They carry on, but you won't get new orders until you open the kitchen again.`}
+        onCancel={() => setConfirmClose(false)}
+        onConfirm={() => {
+          setConfirmClose(false);
+          closeKitchen().catch(() => undefined);
+        }}
+        title="Close your kitchen?"
+        tone="danger"
+        visible={confirmClose}
+      />
+
+      <ConfirmDialog
+        busy={readyTarget !== null && prepActions.actionStateByOrder[readyTarget.id] === 'marking-ready'}
+        cancelLabel="Not yet"
+        confirmLabel="Yes, it's ready"
+        message={`${(readyTarget?.items ?? []).map(item => `${item.quantity} × ${item.itemName}`).join(', ')}${
+          readyTarget?.items?.length ? '. ' : ''
+        }The delivery partner is told to pick it up.`}
+        onCancel={() => setReadyTarget(null)}
+        onConfirm={() => {
+          confirmReady().catch(() => undefined);
+        }}
+        title={`Is ${readyTarget ? shortOrderNumber(readyTarget.id) : 'this order'} packed and ready?`}
+        tone="success"
+        visible={readyTarget !== null}
+      />
+    </ChefScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {flex: 1, backgroundColor: colors.surfaceMuted},
-  content: {
+  header: {
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xxxl,
-  },
-  flex: {flex: 1},
-  pressed: {opacity: 0.65},
-  greetingBlock: {marginBottom: spacing.lg},
-  greeting: {
-    color: colors.espressoBrown,
-    fontSize: typography.hero,
-    fontWeight: fontWeight.bold,
-  },
-  subtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.body,
-    marginTop: spacing.xxs,
-  },
-  errorBanner: {
-    alignItems: 'center',
-    backgroundColor: colors.errorSoft,
-    borderColor: colors.error,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-    padding: spacing.sm,
-  },
-  errorTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-  errorMessage: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    marginTop: spacing.xxs,
-  },
-  retryButton: {
-    justifyContent: 'center',
-    minHeight: touchTarget.minimum,
-    paddingHorizontal: spacing.xs,
-  },
-  retryText: {
-    color: colors.error,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
-  },
-  walletCard: {
-    ...elevation.card,
-    backgroundColor: colors.espressoBrown,
-    borderRadius: radius.xl,
-    marginBottom: spacing.xl,
-    padding: spacing.lg,
-  },
-  rowBetween: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  walletEyebrow: {
-    color: colors.creamDeep,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-  walletAmount: {
-    color: colors.white,
-    fontSize: typography.title,
-    fontWeight: fontWeight.extrabold,
-    marginTop: spacing.xxs,
-  },
-  walletIcon: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: radius.pill,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  walletMessage: {
-    color: colors.creamDeep,
-    fontSize: typography.small,
-    marginTop: spacing.sm,
-  },
-  walletFooter: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  walletStatus: {
-    color: colors.placeholder,
-    flex: 1,
-    fontSize: typography.tiny,
-  },
-  withdrawButton: {
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderRadius: radius.pill,
-    justifyContent: 'center',
-    minHeight: touchTarget.minimum,
-    opacity: 0.52,
-    paddingHorizontal: spacing.lg,
-  },
-  withdrawText: {
-    color: colors.espressoBrown,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
-  },
-  section: {marginBottom: spacing.xl},
-  sectionHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  sectionTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-    marginBottom: spacing.sm,
-  },
-  sectionTitleCompact: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  sectionLink: {
-    color: colors.flameRed,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
     paddingVertical: spacing.xs,
-  },
-  metricGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm},
-  metricCard: {
-    ...elevation.card,
     backgroundColor: colors.white,
-    borderRadius: radius.lg,
-    flexBasis: '46%',
-    flexGrow: 1,
-    minHeight: 126,
-    padding: spacing.md,
+    borderBottomWidth: borderWidth.standard,
+    borderBottomColor: colors.border,
   },
-  metricIcon: {
-    alignItems: 'center',
-    backgroundColor: colors.iconSurface,
-    borderRadius: radius.pill,
-    height: 38,
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-    width: 38,
-  },
-  metricValue: {
-    color: colors.espressoBrown,
-    fontSize: typography.hero,
-    fontWeight: fontWeight.extrabold,
-  },
-  metricLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: spacing.xxs,
-  },
-  card: {
-    ...elevation.card,
-    backgroundColor: colors.white,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-  },
-  rangeSelector: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.pill,
-    flexDirection: 'row',
-    padding: spacing.xxs,
-  },
-  rangeChip: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    justifyContent: 'center',
-    minHeight: 36,
-    paddingHorizontal: spacing.sm,
-  },
-  rangeChipSelected: {backgroundColor: colors.flameRed},
-  rangeText: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.semibold,
-  },
-  rangeTextSelected: {color: colors.white},
-  chartState: {
-    alignItems: 'center',
-    backgroundColor: colors.surfaceBase,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    justifyContent: 'center',
-    marginTop: spacing.md,
-    minHeight: 190,
-    paddingHorizontal: spacing.xl,
-  },
-  chartTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-    marginTop: spacing.xs,
-    textAlign: 'center',
-  },
-  chartMessage: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: spacing.xxs,
-    textAlign: 'center',
-  },
-  actionList: {gap: spacing.sm},
-  actionRow: {
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    minHeight: 74,
-    padding: spacing.sm,
-  },
-  actionIcon: {
-    alignItems: 'center',
-    backgroundColor: colors.iconSurface,
-    borderRadius: radius.md,
-    height: 46,
-    justifyContent: 'center',
+  avatar: {
     width: 46,
-  },
-  actionTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  actionSubtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    marginTop: spacing.xxs,
-  },
-  skeletonList: {gap: spacing.sm},
-  orderRow: {
-    ...elevation.card,
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderRadius: radius.lg,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    minHeight: 78,
-    padding: spacing.md,
-  },
-  orderIcon: {
-    alignItems: 'center',
-    backgroundColor: colors.iconSurface,
-    borderRadius: radius.md,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  orderReference: {
-    color: colors.textPrimary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  orderStatus: {
-    color: colors.flameRed,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-    marginTop: spacing.xxs,
-  },
-  reviewSummary: {
-    alignItems: 'flex-end',
-  },
-  reviewSummaryScore: {
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  reviewSummaryCount: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    marginTop: spacing.xxs,
-  },
-  reviewList: {
-    gap: spacing.sm,
-  },
-  reviewCard: {
-    ...elevation.card,
-    backgroundColor: colors.white,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-  },
-  reviewCardHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  reviewRating: {
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  reviewDate: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-  },
-  reviewText: {
-    color: colors.textPrimary,
-    fontSize: typography.small,
-    lineHeight: 20,
-    marginTop: spacing.sm,
-  },
-  reviewTags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  reviewTag: {
-    backgroundColor: colors.surfaceMuted,
+    height: 46,
     borderRadius: radius.pill,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xxs,
-  },
-  reviewTagText: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.semibold,
-  },
-  unavailableRow: {alignItems: 'center', flexDirection: 'row', gap: spacing.sm},
-  unavailableIcon: {
     alignItems: 'center',
-    backgroundColor: colors.iconSurface,
+    justifyContent: 'center',
+    backgroundColor: colors.flameRedAccessible,
+  },
+  avatarText: {color: colors.white, fontSize: typography.heading, fontWeight: fontWeight.bold},
+  headerText: {flex: 1, minWidth: 0, alignItems: 'flex-start', gap: spacing.xxs},
+  kitchenName: {color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.bold, alignSelf: 'stretch'},
+  pill: {
+    maxWidth: '100%',
+    height: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs - 2,
+    paddingLeft: spacing.xs,
+    paddingRight: spacing.xs - 2,
     borderRadius: radius.pill,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
   },
-  unavailableTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  unavailableMessage: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: spacing.xxs,
-  },
-  inlineRetry: {
-    justifyContent: 'center',
-    marginTop: spacing.sm,
-    minHeight: touchTarget.minimum,
-  },
-  inlineRetryText: {
-    color: colors.flameRed,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
-  },
-  insightBanner: {
+  pillOutline: {borderWidth: borderWidth.standard, borderColor: colors.border},
+  dot: {width: 8, height: 8, borderRadius: radius.pill},
+  pillText: {flexShrink: 1, fontSize: typography.small, fontWeight: fontWeight.bold},
+  closedCard: {alignItems: 'center', gap: spacing.xxs, paddingVertical: spacing.lg},
+  closedTitle: {marginTop: spacing.xs, color: colors.textPrimary, fontSize: typography.heading - 2, fontWeight: fontWeight.bold},
+  closedMessage: {color: colors.textSecondary, fontSize: typography.small, textAlign: 'center'},
+  fullWidth: {alignSelf: 'stretch', marginTop: spacing.sm},
+  banner: {
+    flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: colors.white,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    flexDirection: 'row',
     gap: spacing.sm,
-    padding: spacing.md,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.warningSoft,
   },
-  insightIcon: {
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderRadius: radius.pill,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  insightEyebrow: {
-    color: colors.flameRed,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.bold,
-    textTransform: 'uppercase',
-  },
-  insightTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-    marginTop: spacing.xxs,
-  },
-  insightMessage: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: spacing.xxs,
-  },
+  bannerText: {flex: 1, minWidth: 0},
+  bannerTitle: {color: colors.warningText, fontSize: typography.body, fontWeight: fontWeight.bold},
+  bannerDetail: {color: colors.warningText, fontSize: typography.small},
+  cardTitle: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
+  cardMessage: {color: colors.textSecondary, fontSize: typography.small},
+  buttons: {flexDirection: 'row', gap: spacing.sm},
+  rejectButton: {flex: 1},
+  acceptButton: {flex: 2},
+  stats: {flexDirection: 'row', gap: spacing.sm},
+  menuRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+  stars: {color: colors.warning, fontSize: typography.button, fontWeight: fontWeight.bold},
+  reviewText: {marginTop: spacing.xxs, color: colors.textPrimary, fontSize: typography.body},
+  reviewDate: {marginTop: spacing.xs, color: colors.textSecondary, fontSize: typography.small},
+  balance: {gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.espresso},
+  balanceTop: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+  balanceLabel: {color: colors.white, fontSize: typography.small, opacity: 0.75},
+  balanceAmount: {color: colors.white, fontSize: typography.title, fontWeight: fontWeight.extrabold},
 });

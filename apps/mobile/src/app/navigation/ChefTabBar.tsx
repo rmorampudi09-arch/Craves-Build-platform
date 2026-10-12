@@ -49,7 +49,7 @@ export function ChefTabBar({state, descriptors, navigation}: BottomTabBarProps) 
 
   return (
     <View style={[styles.slot, {paddingBottom: Math.max(insets.bottom, spacing.md)}]}>
-      <View style={styles.pill} testID="chef-tab-bar">
+      <View accessibilityRole="tablist" style={styles.pill} testID="chef-tab-bar">
         {state.routes.map((route, index) => {
           const tab = getChefTabDefinition(route.name as ChefTabRouteName);
           const focused = state.index === index;

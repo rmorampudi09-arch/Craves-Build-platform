@@ -45,3 +45,18 @@ export function formatRelativeTime(iso: string, now: Date): string {
   }
   return `${then.getDate()} ${MONTHS[then.getMonth()]}`;
 }
+
+function clock(hours: number, minutes: number): string {
+  return `${hours % 12 || 12}:${String(minutes).padStart(2, '0')} ${hours < 12 ? 'AM' : 'PM'}`;
+}
+
+/** `1:30 PM` in the phone's own time zone. */
+export function formatTimeOfDay(date: Date): string {
+  return clock(date.getHours(), date.getMinutes());
+}
+
+/** A schedule time such as `11:00:00` or `22:00` as `11:00 AM`. Empty when it is not a time. */
+export function formatWindowTime(value: string): string {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)/.exec(value);
+  return match ? clock(Number(match[1]), Number(match[2])) : '';
+}

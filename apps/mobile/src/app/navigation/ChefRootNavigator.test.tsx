@@ -56,6 +56,7 @@ jest.mock('../../features/chefSchedule/screens/ChefKitchenScheduleScreen', () =>
 jest.mock('../../features/chefSubscription/screens/ChefMealPlanEditorScreen', () => mockScreenModule('ChefMealPlanEditorScreen'));
 jest.mock('../../features/chefSubscription/screens/ChefSubscriptionPlanScreen', () => mockScreenModule('ChefSubscriptionPlanScreen'));
 jest.mock('../../features/chefSupport/screens/ChefSupportScreen', () => mockScreenModule('ChefSupportScreen'));
+jest.mock('../../features/chefShell/screens/ChefNotificationsScreen', () => mockScreenModule('ChefNotificationsScreen'));
 
 const navigationRef = createNavigationContainerRef<never>();
 let tree: renderer.ReactTestRenderer;
@@ -141,8 +142,7 @@ describe('ChefRootNavigator', () => {
   it('opens the notifications screen from the bell', () => {
     act(() => tab('Earnings').props.onPress());
     press('Notifications');
-    expect(allText()).toEqual(expect.arrayContaining(['Notifications', 'Coming soon']));
-    expect(tree.root.findAll(n => n.props.accessibilityLabel === 'Go back').length).toBeGreaterThan(0);
+    expect(allText()).toContain('SCREEN:ChefNotificationsScreen');
   });
 
   it('provides the toast to every chef screen', () => {

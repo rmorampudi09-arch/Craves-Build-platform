@@ -6,7 +6,6 @@ import {
   ChefBankAccountPlaceholder,
   ChefDailyLimitsPlaceholder,
   ChefEarningsPlaceholder,
-  ChefNotificationsPlaceholder,
   ChefOrdersScheduledPlaceholder,
   ChefReviewsPlaceholder,
   ChefSecurityPlaceholder,
@@ -57,7 +56,6 @@ describe('chef placeholder screens', () => {
     ['Reviews', ChefReviewsPlaceholder],
     ['Security', ChefSecurityPlaceholder],
     ['Bank account', ChefBankAccountPlaceholder],
-    ['Notifications', ChefNotificationsPlaceholder],
     ['Daily limits', ChefDailyLimitsPlaceholder],
     ['Support ticket', ChefSupportTicketPlaceholder],
   ])('%s shows its title with a Coming soon note', (title, Screen) => {

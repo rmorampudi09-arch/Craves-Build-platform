@@ -1,3 +1,4 @@
+export * from './ChefActionButton';
 export * from './ChefCard';
 export * from './ChefScreen';
 export * from './ChefSheet';

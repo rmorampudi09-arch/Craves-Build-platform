@@ -1,4 +1,4 @@
-import {formatRelativeTime, formatRupees, shortOrderNumber} from './chefFormat';
+import {formatRelativeTime, formatRupees, formatTimeOfDay, formatWindowTime, shortOrderNumber} from './chefFormat';
 
 describe('shortOrderNumber', () => {
   it('uses the last 5 characters of the id without dashes, uppercase', () => {
@@ -51,5 +51,19 @@ describe('formatRelativeTime', () => {
   it('never shows a negative or broken time', () => {
     expect(formatRelativeTime(at(2026, 9, 14, 9, 5), now)).toBe('Just now');
     expect(formatRelativeTime('not a date', now)).toBe('');
+  });
+});
+
+describe('clock times', () => {
+  it('writes a date as 12-hour time like 1:30 PM', () => {
+    expect(formatTimeOfDay(new Date(2026, 9, 14, 13, 30))).toBe('1:30 PM');
+    expect(formatTimeOfDay(new Date(2026, 9, 14, 0, 5))).toBe('12:05 AM');
+    expect(formatTimeOfDay(new Date(2026, 9, 14, 12, 0))).toBe('12:00 PM');
+  });
+
+  it('writes a schedule window time (HH:mm or HH:mm:ss) the same way', () => {
+    expect(formatWindowTime('11:00:00')).toBe('11:00 AM');
+    expect(formatWindowTime('22:00')).toBe('10:00 PM');
+    expect(formatWindowTime('nonsense')).toBe('');
   });
 });

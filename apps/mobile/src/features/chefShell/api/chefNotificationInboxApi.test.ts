@@ -1,6 +1,8 @@
+import {AppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
 import {
   chefNotificationInboxApi,
+  markAllChefNoticesRead,
   parseChefNotification,
   parseChefNotificationPage,
   parseChefNotificationUnreadCount,
@@ -95,6 +97,7 @@ describe('chefNotificationInboxApi contract', () => {
         params: {
           limit: 50,
           unreadOnly: false,
+          role: 'CHEF',
           cursor: 'cursor-1',
         },
         signal: undefined,
@@ -109,6 +112,7 @@ describe('chefNotificationInboxApi contract', () => {
       2,
       '/api/v1/notifications/in-app/unread-count',
       {
+        params: {role: 'CHEF'},
         signal: undefined,
         dedupeKey: 'chef-notification-unread-count',
       },
@@ -127,7 +131,7 @@ describe('chefNotificationInboxApi contract', () => {
       2,
       '/api/v1/notifications/in-app/read-all',
       undefined,
-      {signal: undefined},
+      {params: {role: 'CHEF'}, signal: undefined},
     );
   });
 
@@ -143,5 +147,43 @@ describe('chefNotificationInboxApi contract', () => {
     await expect(
       chefNotificationInboxApi.markRead('bad-id'),
     ).rejects.toThrow('CHEF_NOTIFICATION_ID_INVALID');
+  });
+
+  describe('markAllChefNoticesRead', () => {
+    const ids = [notice.id, '33333333-3333-4333-8333-333333333333'];
+
+    it('marks everything read in one call when the route is published', async () => {
+      (httpClient.patch as jest.Mock).mockResolvedValue(undefined);
+      await expect(markAllChefNoticesRead(ids)).resolves.toEqual(ids);
+      expect(httpClient.patch).toHaveBeenCalledTimes(1);
+    });
+
+    it('marks the visible notices one by one when the route is not published yet', async () => {
+      (httpClient.patch as jest.Mock)
+        .mockRejectedValueOnce(new AppApiError('NOT_FOUND', 'Not found', 404))
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new AppApiError('SERVER', 'Boom', 500));
+      await expect(markAllChefNoticesRead(ids)).resolves.toEqual([ids[0]]);
+      expect(httpClient.patch).toHaveBeenCalledTimes(3);
+      expect(httpClient.patch).toHaveBeenNthCalledWith(
+        2,
+        `/api/v1/notifications/in-app/${ids[0]}/read`,
+        undefined,
+        {signal: undefined},
+      );
+    });
+
+    it('does not hide a real failure behind the one-by-one fallback', async () => {
+      (httpClient.patch as jest.Mock).mockRejectedValueOnce(new AppApiError('SERVER', 'Boom', 500));
+      await expect(markAllChefNoticesRead(ids)).rejects.toMatchObject({status: 500});
+      expect(httpClient.patch).toHaveBeenCalledTimes(1);
+    });
+
+    it('fails when the fallback could not mark any notice', async () => {
+      (httpClient.patch as jest.Mock)
+        .mockRejectedValueOnce(new AppApiError('NOT_FOUND', 'Not found', 404))
+        .mockRejectedValue(new AppApiError('SERVER', 'Boom', 500));
+      await expect(markAllChefNoticesRead(ids)).rejects.toMatchObject({status: 500});
+    });
   });
 });

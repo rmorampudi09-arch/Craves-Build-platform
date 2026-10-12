@@ -267,6 +267,8 @@ describe("logout and refresh generation boundaries", () => {
     const fetcher = vi.fn().mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise)
       .mockResolvedValueOnce(Response.json({ identity: { ...identity, id: other, roles: ["CHEF", "SUPPORT"] } }));
     vi.stubGlobal("fetch", fetcher);
+    // Generation sharing only: Node 24 has Web Locks, which queue the new refresh (covered in session-ended.vitest.ts).
+    vi.stubGlobal("navigator", { ...navigator, locks: undefined });
     const oldFirst = synchronizeSessionRoles();
     const oldSecond = synchronizeSessionRoles();
     expect(fetcher.mock.calls).toHaveLength(1);

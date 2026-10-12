@@ -7,11 +7,16 @@
 #
 # Each operation is added to the API that already owns its path prefix (found by path at run time, never guessed).
 # A prefix nobody owns is created only where the table below says "new". An operation that already exists for the same
-# method and URL template keeps its operation id; its policy is replaced by the same Bearer-check + rewrite policy.
-# Release order: the backend images that carry the new routes (handed-over, kitchen photos, settings, dish DELETE,
-# notification role filter) go out first; this script only wires the gateway. Backend JWT/role checks stay authoritative.
+# method and URL template is KEPT untouched (no operation or policy write); only missing operations are created.
+# All read-only lookups and checks (owners, must-exist prefixes, subscription key, container apps) run for every prefix
+# first; nothing is created until they have all passed.
+# Release order: the backend images that carry the new routes (handed-over, kitchen photos, settings, dish DELETE)
+# go out first; this script only wires the gateway. The notification role filter is a query parameter and needs no route.
+# Backend JWT/role checks stay authoritative.
 #
-# Not published here (older scripts own them; they default to the deleted apim-craves-prodlow-l3ing6, so check kmqgfy):
+# Not published here (older scripts own them; chef-menu, chef-kitchen-profile, chef-order-read and chef-order-actions
+# default to the deleted apim-craves-prodlow-l3ing6, so run them with APIM=apim-craves-prodlow-kmqgfy; chef-menu-media
+# and chef-onboarding-v2 already default to kmqgfy):
 #   kitchens/me GET|PUT, menu items, per-dish availability and image upload (configure-chef-kitchen-profile / chef-menu /
 #   chef-menu-media), chef orders list/get/accept/reject/ready (chef-order-read / chef-order-actions), chef subscription plans
 #   (configure-chef-subscription-plan-workflow-apim.sh), chef application and onboarding, chef finance.
@@ -39,14 +44,14 @@ declare -A APP=(
   [userchef]=ca-craves-user-chef-service-prod
   [notification]=ca-craves-notification-service-p
 )
-# key|gateway path|api id if created|display name if created|backend app|existing = must already exist (never created), new = create if absent
+# key|gateway path|api id if created|display name if created|backend app|existing = must already exist (never created), new = create if absent|script that publishes a missing "existing" prefix
 APIS=(
-  'kitchen|api/v1/kitchens/me|-|-|catalog|existing'
-  'orders|api/v1/chef/orders|-|-|order|existing'
-  'scheduled|api/v1/chef/scheduled-orders|craves-chef-scheduled-orders-v1|Craves Chef Scheduled Orders API|order|new'
-  'reviews|api/v1/chef/reviews|craves-chef-reviews-v1|Craves Chef Reviews API|order|new'
-  'support|api/v1/support|craves-support|Craves Support|userchef|new'
-  'notifications|api/v1/notifications|-|-|notification|existing'
+  'kitchen|api/v1/kitchens/me|-|-|catalog|existing|configure-chef-kitchen-profile-apim.sh'
+  'orders|api/v1/chef/orders|-|-|order|existing|configure-chef-order-read-apim.sh'
+  'scheduled|api/v1/chef/scheduled-orders|craves-chef-scheduled-orders-v1|Craves Chef Scheduled Orders API|order|new|-'
+  'reviews|api/v1/chef/reviews|craves-chef-reviews-v1|Craves Chef Reviews API|order|new|-'
+  'support|api/v1/support|craves-support|Craves Support|userchef|new|-'
+  'notifications|api/v1/notifications|-|-|notification|existing|-'
 )
 # api key|operation id|method|url template (gateway path = backend path)|policy: json (64 KB cap) or upload (multipart)
 ROUTES=(
@@ -73,7 +78,6 @@ ROUTES=(
   'support|chef-app-list-support-cases|GET|/cases|json'
   'support|chef-app-get-support-case|GET|/cases/{caseId}|json'
   'support|chef-app-add-support-message|POST|/cases/{caseId}/messages|json'
-  'notifications|chef-app-list-in-app|GET|/in-app|json'
   'notifications|chef-app-in-app-page|GET|/in-app/page|json'
   'notifications|chef-app-in-app-unread-count|GET|/in-app/unread-count|json'
   'notifications|chef-app-in-app-read-all|PATCH|/in-app/read-all|json'
@@ -95,7 +99,8 @@ print_table() {
     printf '  %-14s /%-30s backend=%-12s %s\n' "${f[0]}" "${f[1]}" "${f[4]}" \
       "$([[ "${f[5]}" == new ]] && echo "create ${f[2]} if absent" || echo 'must already exist, never created here')"
   done
-  echo; echo "Operations (${#ROUTES[@]}):"
+  echo; echo "Operations (${#ROUTES[@]}). At run time an operation that already exists for the same method and URL template is KEPT"
+  echo "untouched (no PUT); only missing operations are created (operation + policy)."
   printf '  %-14s %-7s %-80s %-12s %s\n' API METHOD 'GATEWAY PATH = BACKEND PATH' BACKEND POLICY
   for ROW in "${ROUTES[@]}"; do
     IFS='|' read -r -a f <<<"$ROW"
@@ -114,6 +119,7 @@ fi
 for tool in az jq curl sed awk; do command -v "$tool" >/dev/null || fail "$tool is required"; done
 [[ -f "$JSON_POLICY" && -f "$UPLOAD_POLICY" ]] || fail 'Policy templates are missing under infra/apim/chef-app-routes'
 
+# Phase 1, read-only: nothing from here to the "Phase 2" marker creates or changes anything in Azure.
 SUB=$(az account show --query id -o tsv --only-show-errors)
 TENANT=$(az account show --query tenantId -o tsv --only-show-errors)
 [[ "$SUB" == "$EXPECTED_SUBSCRIPTION" && "$TENANT" == "$EXPECTED_TENANT" ]] || fail 'Wrong Azure subscription or tenant; no update applied.'
@@ -130,55 +136,79 @@ for K in catalog order userchef notification; do
     fail "${APP[$K]} health is not UP; no update applied."
 done
 
-declare -A API_ID OPS
+# One listing of every API (name, path) answers both "who owns this path" and "is this api id already taken".
+API_LIST=$(az apim api list -g "$RG" --service-name "$APIM" --query '[].[name,path]' -o tsv --only-show-errors)
+declare -A API_ID OPS CREATE
 for ROW in "${APIS[@]}"; do
-  IFS='|' read -r KEY PATH_PART NEW_ID NAME BACKEND HOW <<<"$ROW"
-  OWNERS=$(az apim api list -g "$RG" --service-name "$APIM" --query "[?path=='$PATH_PART'].name" -o tsv --only-show-errors)
-  mapfile -t MATCHES < <(grep . <<<"$OWNERS" || true)
-  (( ${#MATCHES[@]} <= 1 )) || fail "Ambiguous APIM path $PATH_PART; no further update applied."
+  IFS='|' read -r KEY PATH_PART NEW_ID NAME BACKEND HOW FIX <<<"$ROW"
+  mapfile -t MATCHES < <(awk -F'\t' -v p="$PATH_PART" '$2==p {print $1}' <<<"$API_LIST")
+  (( ${#MATCHES[@]} <= 1 )) || fail "Ambiguous APIM path $PATH_PART; no update applied."
   if (( ${#MATCHES[@]} == 1 )); then
     API_ID[$KEY]="${MATCHES[0]}"
     [[ $(az apim api show -g "$RG" --service-name "$APIM" --api-id "${API_ID[$KEY]}" --query subscriptionRequired -o tsv --only-show-errors) == [Ff]alse ]] ||
-      fail "Existing API ${API_ID[$KEY]} ($PATH_PART) requires a subscription key; review it before release."
+      fail "Existing API ${API_ID[$KEY]} ($PATH_PART) requires a subscription key; review it before release. No update applied."
+    # name, method, template per existing operation; templates normalised so {id} and {orderId} compare equal.
+    OPS[$KEY]=$(az apim api operation list -g "$RG" --service-name "$APIM" --api-id "${API_ID[$KEY]}" \
+      --query '[].[name,method,urlTemplate]' -o tsv --only-show-errors | sed -E 's/\{[^}]*\}/{}/g')
+    echo "API $KEY: ${API_ID[$KEY]} (/$PATH_PART) exists"
   elif [[ "$HOW" == new ]]; then
-    az apim api create -g "$RG" --service-name "$APIM" --api-id "$NEW_ID" --display-name "$NAME" \
-      --path "$PATH_PART" --protocols https --subscription-required false -o none --only-show-errors
-    API_ID[$KEY]="$NEW_ID"
+    TAKEN=$(awk -F'\t' -v id="$NEW_ID" '$1==id {print $2}' <<<"$API_LIST")
+    [[ -z "$TAKEN" ]] || fail "API id $NEW_ID already exists with path /$TAKEN, not /$PATH_PART; refusing to re-path it. No update applied."
+    API_ID[$KEY]="$NEW_ID"; CREATE[$KEY]=1; OPS[$KEY]=''
+    echo "API $KEY: $NEW_ID (/$PATH_PART) will be created"
+  elif [[ "$FIX" == - ]]; then
+    fail "No APIM API owns /$PATH_PART on $APIM and no script in this repo publishes it; it must already exist (never created here). No update applied."
   else
-    fail "No APIM API owns $PATH_PART on $APIM; publish its base routes with the older script first (never created here)."
+    fail "No APIM API owns /$PATH_PART on $APIM; run scripts/apim/$FIX with APIM=$APIM first (never created here). No update applied."
   fi
-  # name, method, template per existing operation; templates normalised so {id} and {orderId} compare equal.
-  OPS[$KEY]=$(az apim api operation list -g "$RG" --service-name "$APIM" --api-id "${API_ID[$KEY]}" \
-    --query '[].[name,method,urlTemplate]' -o tsv --only-show-errors | sed -E 's/\{[^}]*\}/{}/g')
-  echo "API $KEY: ${API_ID[$KEY]} (/$PATH_PART)"
+done
+declare -a EXISTING_OP
+for I in "${!ROUTES[@]}"; do
+  IFS='|' read -r KEY ID METHOD TEMPLATE KIND <<<"${ROUTES[$I]}"
+  mapfile -t SAME < <(awk -F'\t' -v m="$METHOD" -v t="$(sed -E 's/\{[^}]*\}/{}/g' <<<"$TEMPLATE")" 'toupper($2)==m && $3==t {print $1}' <<<"${OPS[$KEY]}")
+  (( ${#SAME[@]} <= 1 )) || fail "Several operations own $METHOD $TEMPLATE on ${API_ID[$KEY]}; resolve by hand. No update applied."
+  EXISTING_OP[$I]="${SAME[0]:-}"
+done
+
+# Phase 2, writes: create the missing APIs, then only the missing operations. Existing operations are never touched.
+for KEY in "${!CREATE[@]}"; do
+  az apim api create -g "$RG" --service-name "$APIM" --api-id "$(api_field "$KEY" 2)" --display-name "$(api_field "$KEY" 3)" \
+    --path "$(api_field "$KEY" 1)" --protocols https --subscription-required false -o none --only-show-errors
 done
 
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf -- "$TEMP_DIR"' EXIT
-FAILED_PROBES=0
-for ROW in "${ROUTES[@]}"; do
-  IFS='|' read -r KEY ID METHOD TEMPLATE KIND <<<"$ROW"
+FAILED_PROBES=0; KEPT=0; MADE=0
+for I in "${!ROUTES[@]}"; do
+  IFS='|' read -r KEY ID METHOD TEMPLATE KIND <<<"${ROUTES[$I]}"
   API="${API_ID[$KEY]}"
-  mapfile -t SAME < <(awk -F'\t' -v m="$METHOD" -v t="$(sed -E 's/\{[^}]*\}/{}/g' <<<"$TEMPLATE")" 'toupper($2)==m && $3==t {print $1}' <<<"${OPS[$KEY]}")
-  (( ${#SAME[@]} <= 1 )) || fail "Several operations own $METHOD $TEMPLATE on $API; resolve by hand."
-  OP="${SAME[0]:-$ID}"
   TARGET=$(target_path "$KEY" "$TEMPLATE")
-  PARAMS=''
-  for NAME in $(grep -oE '\{[A-Za-z]+\}' <<<"$TEMPLATE" | tr -d '{}' || true); do
-    PARAMS+="${PARAMS:+,}{\"name\":\"$NAME\",\"type\":\"string\",\"required\":true}"
-  done
   MGMT="https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.ApiManagement/service/$APIM/apis/$API"
-  printf '{"properties":{"displayName":"%s","method":"%s","urlTemplate":"%s","templateParameters":[%s],"responses":[]}}' \
-    "$OP" "$METHOD" "$TEMPLATE" "$PARAMS" >"$TEMP_DIR/operation.json"
-  az rest --method put --url "$MGMT/operations/$OP?api-version=$API_VERSION" --body @"$TEMP_DIR/operation.json" -o none --only-show-errors
-  TEMPLATE_FILE="$JSON_POLICY"; [[ "$KIND" == upload ]] && TEMPLATE_FILE="$UPLOAD_POLICY"
-  sed -e "s|__BACKEND_BASE_URL__|https://${FQDN[$(api_field "$KEY" 4)]}|" -e "s|__REWRITE_TEMPLATE__|$TARGET|" "$TEMPLATE_FILE" >"$TEMP_DIR/policy.xml"
-  jq -Rs '{properties:{format:"rawxml",value:.}}' "$TEMP_DIR/policy.xml" >"$TEMP_DIR/policy.json"
-  az rest --method put --url "$MGMT/operations/$OP/policies/policy?api-version=$API_VERSION" --body @"$TEMP_DIR/policy.json" -o none --only-show-errors
-  # Read-back: the operation exists and its policy carries the Bearer check, this backend and this rewrite target.
+  if [[ -n "${EXISTING_OP[$I]}" ]]; then
+    OP="${EXISTING_OP[$I]}"; KEPT=$((KEPT+1))
+    echo "KEEP existing $METHOD $TARGET ($OP)"
+  else
+    OP="$ID"; MADE=$((MADE+1))
+    PARAMS=''
+    for NAME in $(grep -oE '\{[A-Za-z]+\}' <<<"$TEMPLATE" | tr -d '{}' || true); do
+      PARAMS+="${PARAMS:+,}{\"name\":\"$NAME\",\"type\":\"string\",\"required\":true}"
+    done
+    printf '{"properties":{"displayName":"%s","method":"%s","urlTemplate":"%s","templateParameters":[%s],"responses":[]}}' \
+      "$OP" "$METHOD" "$TEMPLATE" "$PARAMS" >"$TEMP_DIR/operation.json"
+    az rest --method put --url "$MGMT/operations/$OP?api-version=$API_VERSION" --body @"$TEMP_DIR/operation.json" -o none --only-show-errors
+    TEMPLATE_FILE="$JSON_POLICY"; [[ "$KIND" == upload ]] && TEMPLATE_FILE="$UPLOAD_POLICY"
+    sed -e "s|__BACKEND_BASE_URL__|https://${FQDN[$(api_field "$KEY" 4)]}|" -e "s|__REWRITE_TEMPLATE__|$TARGET|" "$TEMPLATE_FILE" >"$TEMP_DIR/policy.xml"
+    jq -Rs '{properties:{format:"rawxml",value:.}}' "$TEMP_DIR/policy.xml" >"$TEMP_DIR/policy.json"
+    az rest --method put --url "$MGMT/operations/$OP/policies/policy?api-version=$API_VERSION" --body @"$TEMP_DIR/policy.json" -o none --only-show-errors
+    echo "CREATE $METHOD $TARGET ($API/$OP)"
+  fi
+  # Read-back for every route: the operation exists. For an operation created here the policy must also carry the
+  # Bearer check, this backend and this rewrite target (a kept operation keeps whatever policy it already has).
   az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API" --operation-id "$OP" -o none --only-show-errors
-  POLICY=$(az rest --method get --url "$MGMT/operations/$OP/policies/policy?api-version=$API_VERSION" --query properties.value -o tsv --only-show-errors)
-  [[ "$POLICY" == *"https://${FQDN[$(api_field "$KEY" 4)]}"* && "$POLICY" == *"$TARGET"* && "$POLICY" == *Bearer* ]] || fail "Policy read-back failed for $METHOD $TARGET on $API."
+  if [[ -z "${EXISTING_OP[$I]}" ]]; then
+    POLICY=$(az rest --method get --url "$MGMT/operations/$OP/policies/policy?api-version=$API_VERSION" --query properties.value -o tsv --only-show-errors)
+    [[ "$POLICY" == *"https://${FQDN[$(api_field "$KEY" 4)]}"* && "$POLICY" == *"$TARGET"* && "$POLICY" == *Bearer* ]] || fail "Policy read-back failed for $METHOD $TARGET on $API."
+  fi
   # Unauthenticated probe through the public gateway proves the route exists and is guarded (the policy answers before any backend call).
   PROBE_URL="$PUBLIC_HOST$(sed -E 's/\{[^}]*\}/probe/g' <<<"$TARGET")"
   BODY_ARGS=(); [[ "$METHOD" == POST || "$METHOD" == PUT || "$METHOD" == PATCH ]] && BODY_ARGS=(-H 'Content-Type: application/json' --data '{}')
@@ -187,4 +217,4 @@ for ROW in "${ROUTES[@]}"; do
   else echo "FAIL $METHOD $TARGET -> $API/$OP expected 401 from the unauthenticated probe, got ${STATUS:-none}" >&2; FAILED_PROBES=$((FAILED_PROBES+1)); fi
 done
 (( FAILED_PROBES == 0 )) || fail "$FAILED_PROBES route(s) did not answer 401 unauthenticated; review the gateway before release."
-echo "Chef app APIM operations configured (${#ROUTES[@]} routes). Backend JWT verification and role checks remain authoritative."
+echo "Chef app APIM routes done: $KEPT kept untouched, $MADE created, ${#ROUTES[@]} verified. Backend JWT verification and role checks remain authoritative."

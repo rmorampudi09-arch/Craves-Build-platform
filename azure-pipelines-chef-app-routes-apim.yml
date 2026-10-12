@@ -1,6 +1,6 @@
 # Chef mobile app routes on the mobile gateway (apim-craves-prodlow-kmqgfy). Manual runs only.
 #
-# Run AFTER the backend images that carry the new routes are live (catalog, notification, order):
+# Run AFTER the backend images that carry the new routes are live (catalog and order):
 # the script only wires the gateway, and each route is probed for a 401 when unauthenticated.
 # Without confirmProductionChange the run only validates the script and prints the route table.
 # A write must not overlap another Craves release.

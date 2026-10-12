@@ -122,8 +122,31 @@ public class OccurrenceRepository {
             schedule.version(),
             initialStatus
         );
+        String oldStatus = null;
         if (inserted != 1) {
-            return null;
+            // A pause cancelled this meal before the resume: restore it as freshly generated instead of leaving the date empty.
+            occurrenceId = jdbcTemplate.query(
+                "UPDATE subscription_schema.subscription_occurrence SET plan_id = ?, chef_identity_id = ?, delivery_address_id = ?, " +
+                    "service_at = ?, schedule_version = ?, status = ?, order_id = NULL, order_requested_at = NULL, order_created_at = NULL, " +
+                    "order_dispatch_lock_token = NULL, order_dispatch_locked_at = NULL, updated_at = now() " +
+                    "WHERE subscription_id = ? AND service_date = ? AND meal_slot_code = ? AND status = 'CANCELLED' RETURNING id",
+                (rs, rowNum) -> rs.getObject("id", UUID.class),
+                subscription.planId(), subscription.chefIdentityId(), subscription.deliveryAddressId(),
+                serviceAt, schedule.version(), initialStatus,
+                subscription.subscriptionId(), serviceDate, mealSlotCode
+            ).stream().findFirst().orElse(null);
+            if (occurrenceId == null) {
+                return null;
+            }
+            oldStatus = "CANCELLED";
+            jdbcTemplate.update("DELETE FROM subscription_schema.subscription_occurrence_item WHERE occurrence_id = ?", occurrenceId);
+            // The capacity materialization trigger only fires on insert.
+            jdbcTemplate.update(
+                "UPDATE subscription_schema.subscription_capacity_allocation SET status = 'MATERIALIZED', occurrence_id = ?, " +
+                    "hold_expires_at = NULL, updated_at = now() " +
+                    "WHERE subscription_id = ? AND service_date = ? AND meal_slot_code = ? AND status = 'COMMITTED'",
+                occurrenceId, subscription.subscriptionId(), serviceDate, mealSlotCode
+            );
         }
         for (ScheduleItem item : matchingItems) {
             jdbcTemplate.update(
@@ -139,15 +162,15 @@ public class OccurrenceRepository {
             jdbcTemplate.update(
                 "INSERT INTO subscription_schema.subscription_occurrence_history " +
                     "(id, occurrence_id, old_status, new_status, reason, source, created_at) " +
-                    "VALUES (?, ?, NULL, ?, ?, 'SCHEDULER', now())",
-                UUID.randomUUID(), occurrenceId, initialStatus, reason
+                    "VALUES (?, ?, ?, ?, ?, 'SCHEDULER', now())",
+                UUID.randomUUID(), occurrenceId, oldStatus, initialStatus, reason
             );
         } else {
             jdbcTemplate.update(
                 "INSERT INTO subscription_schema.subscription_occurrence_history " +
                     "(id, occurrence_id, old_status, new_status, reason, actor_identity_id, source, created_at) " +
-                    "VALUES (?, ?, NULL, 'SKIPPED', ?, ?, 'CUSTOMER_SKIP', now())",
-                UUID.randomUUID(), occurrenceId,
+                    "VALUES (?, ?, ?, 'SKIPPED', ?, ?, 'CUSTOMER_SKIP', now())",
+                UUID.randomUUID(), occurrenceId, oldStatus,
                 skipRequest.reason() == null ? "Customer skip request applied during occurrence generation" : skipRequest.reason(),
                 skipRequest.actorIdentityId()
             );

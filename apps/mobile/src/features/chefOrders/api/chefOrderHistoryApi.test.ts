@@ -96,6 +96,7 @@ describe('chefOrderHistoryApi contract', () => {
             city: 'City',
           },
           customerName: 'Customer',
+          checkoutId: '22222222-2222-4222-8222-222222222222',
           foodSubtotal: 180,
           prepTimeMinutes: 25,
           createdAt: '2026-09-19T12:00:00Z',
@@ -107,6 +108,16 @@ describe('chefOrderHistoryApi contract', () => {
     });
     expect(parsed?.orders[0]).not.toHaveProperty('customerIdentityId');
     expect(parsed?.orders[0]).not.toHaveProperty('pickupAddress');
+  });
+
+  it('lists a meal-plan order, which has no checkout, instead of rejecting the whole page', () => {
+    const parsed = parseChefOrderHistoryPage({
+      orders: [order({checkoutId: null})],
+      nextCursor: null,
+      hasMore: false,
+    });
+    expect(parsed?.orders).toHaveLength(1);
+    expect(parsed?.orders[0]).not.toHaveProperty('checkoutId');
   });
 
   it('requires cursor presence when more history exists', () => {

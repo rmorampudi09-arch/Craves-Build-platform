@@ -217,6 +217,16 @@ describe('chefOperationalApi parsing', () => {
     expect(parseChefOperationalOrders([{id: ORDER_ID, status: 'READY_FOR_PICKUP'}])?.[0]).not.toHaveProperty('chefHandedOverAt');
   });
 
+  it('keeps the checkout id only for a paid order, so a meal-plan order can be told apart', () => {
+    const checkout = (value: unknown) =>
+      (parseChefOperationalOrders([{id: ORDER_ID, status: 'PREPARING', checkoutId: value}]) ?? [])[0];
+    expect(checkout(NOTICE_ID)).toHaveProperty('checkoutId', NOTICE_ID);
+    for (const none of [null, 'not-an-id', 42]) {
+      expect(checkout(none)).not.toHaveProperty('checkoutId');
+    }
+    expect(parseChefOperationalOrders([{id: ORDER_ID, status: 'PREPARING'}])?.[0]).not.toHaveProperty('checkoutId');
+  });
+
   it('asks the server for chef notifications only', async () => {
     (httpClient.get as jest.Mock).mockResolvedValueOnce([]);
     await chefOperationalApi.listNotifications();

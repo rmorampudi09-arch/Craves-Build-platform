@@ -67,6 +67,16 @@ describe('useChefOrderHistoryQuery', () => {
     expect(history.hasNextPage).toBe(false);
   });
 
+  it('reads the loaded history again on refresh', async () => {
+    mockPage.mockResolvedValue({orders: [order('a1')], nextCursor: null, hasMore: false});
+    await mount();
+    expect(mockPage).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await history.refresh();
+    });
+    expect(mockPage).toHaveBeenCalledTimes(2);
+  });
+
   it('is silently empty when the server does not publish the history route', async () => {
     mockPage.mockRejectedValue(new AppApiError('HTTP_404', 'Not found', 404));
     await mount();

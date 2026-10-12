@@ -93,7 +93,10 @@ export function ScheduledOrdersList({queue, orders, onOpenOrder, onSeeNew}: Sche
 
   const respond = async (item: ChefScheduledOrder, action: 'ACCEPT' | 'REJECT', note?: string) => {
     try {
-      await queue.respond(item, action, note);
+      // false: this order's answer is already on its way, so this press did nothing and the first one decides what is shown.
+      if ((await queue.respond(item, action, note)) === false) {
+        return;
+      }
     } catch {
       toast.show(SCHEDULE_RESPONSE_FAILED);
     }
@@ -214,6 +217,8 @@ export function ScheduledOrdersList({queue, orders, onOpenOrder, onSeeNew}: Sche
       />
       <RejectOrderSheet
         busy={declineItem !== null && queue.respondingOrderId === declineItem.orderId}
+        // A request the customer has not paid for yet has nothing to refund.
+        kind={declineItem?.paymentGate === 'PAYMENT_BEFORE_CHEF_CONFIRMATION' ? 'paid' : 'unpaid'}
         onClose={() => setDeclineItem(null)}
         onConfirm={reason => {
           if (declineItem) respond(declineItem, 'REJECT', reason).catch(() => undefined);
@@ -234,7 +239,7 @@ const styles = StyleSheet.create({
   topText: {flex: 1, minWidth: 0},
   when: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
   whenText: {flex: 1, color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.extrabold},
-  who: {marginTop: 2, color: colors.textSecondary, fontSize: typography.small},
+  who: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
   amount: {color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.extrabold},
   dishes: {marginTop: spacing.xs, color: colors.textPrimary, fontSize: typography.body},
   note: {marginTop: spacing.sm, color: colors.textSecondary, fontSize: typography.small},

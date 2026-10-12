@@ -16,7 +16,7 @@ import {formatRupees, formatTimeOfDay, shortOrderNumber} from '../../chefShell/d
 import {itemsSummary} from '../domain/chefOrderCard';
 import {
   PAST_KINDS,
-  chefOrderStatusChip,
+  chefOrderChip,
   filterPastOrders,
   groupPastOrders,
   mergePastOrders,
@@ -29,7 +29,7 @@ import {EmptyState} from './OrderCardParts';
 
 function PastRow({order, onOpen}: {order: ChefOperationalOrder; onOpen: () => void}) {
   const number = shortOrderNumber(order.id);
-  const chip = chefOrderStatusChip(order.status);
+  const chip = chefOrderChip(order);
   const finished = order.updatedAt ?? order.createdAt;
   const date = finished ? new Date(finished) : null;
   const when = date && !Number.isNaN(date.getTime()) ? formatTimeOfDay(date) : null;
@@ -52,13 +52,20 @@ export interface PastOrdersListProps {
   orders: readonly ChefOperationalOrder[];
   onOpenOrder: (orderId: string) => void;
   onSeeNew: () => void;
-  refreshing: boolean;
-  onRefresh: () => void;
+  /** Pull to refresh: reads the live orders again. The older history is read again here too. */
+  onRefresh: () => Promise<unknown>;
 }
 
 /** Finished orders (delivered, on the way, cancelled, rejected) grouped by day; older ones load as the list is scrolled. */
-export function PastOrdersList({orders, onOpenOrder, onSeeNew, refreshing, onRefresh}: PastOrdersListProps) {
+export function PastOrdersList({orders, onOpenOrder, onSeeNew, onRefresh}: PastOrdersListProps) {
   const history = useChefOrderHistoryQuery();
+  const [pulling, setPulling] = React.useState(false);
+  const pull = () => {
+    setPulling(true);
+    Promise.allSettled([onRefresh(), history.refresh()])
+      .catch(() => undefined)
+      .finally(() => setPulling(false));
+  };
   const [kind, setKind] = React.useState<PastFilterKind>('ALL');
   const merged = React.useMemo(() => mergePastOrders(orders, history.orders), [history.orders, orders]);
   const groups = React.useMemo(() => groupPastOrders(filterPastOrders(merged, kind), new Date()), [kind, merged]);
@@ -111,8 +118,8 @@ export function PastOrdersList({orders, onOpenOrder, onSeeNew, refreshing, onRef
       ListHeaderComponent={merged.length > 0 ? chips : null}
       onEndReached={history.loadOlder}
       onEndReachedThreshold={0.4}
-      onRefresh={onRefresh}
-      refreshing={refreshing}
+      onRefresh={pull}
+      refreshing={pulling}
       renderItem={({item: group}) => (
         <View style={styles.group}>
           <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.groupTitle}>

@@ -43,7 +43,8 @@ import {CallButton} from '../components/OrderCardParts';
 import {RejectOrderSheet} from '../components/RejectOrderSheet';
 import {itemsSummary} from '../domain/chefOrderCard';
 import {dialablePhone} from '../domain/chefOrderDetailModel';
-import {chefOrderStatusChip} from '../domain/chefOrderFilters';
+import {rejectKindOf} from '../domain/chefOrderReasons';
+import {chefOrderChip} from '../domain/chefOrderFilters';
 import {deriveChefPrepTimer} from '../domain/chefOrderTabs';
 import {buildChefOrderTimeline, type ChefOrderTimelineStep} from '../domain/chefOrderTimeline';
 import {useChefHandedOver} from '../state/useChefHandedOver';
@@ -248,7 +249,7 @@ export function ChefOrderDetailScreen({navigation, route}: Props) {
   }
 
   const number = shortOrderNumber(order.id);
-  const chip = chefOrderStatusChip(order.status);
+  const chip = chefOrderChip(order);
   const finished = FINISHED.has(order.status);
   const address = order.deliveryAddress;
   const customer = shortCustomerName(address?.recipientName) ?? 'Customer';
@@ -499,6 +500,7 @@ export function ChefOrderDetailScreen({navigation, route}: Props) {
 
       <RejectOrderSheet
         busy={decision.action === 'reject'}
+        kind={rejectKindOf(order)}
         onClose={() => setRejectOpen(false)}
         onConfirm={reason => {
           reject(reason).catch(() => undefined);
@@ -529,7 +531,7 @@ const styles = StyleSheet.create({
   muted: {color: colors.textSecondary, fontSize: typography.small},
   cardAction: {marginTop: spacing.sm},
   banner: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md},
-  bannerText: {flex: 1, minWidth: 0, gap: 2},
+  bannerText: {flex: 1, minWidth: 0, gap: spacing.xxs},
   bannerTitle: {fontSize: typography.body, fontWeight: fontWeight.bold},
   bannerDetail: {fontSize: typography.small},
   items: {gap: spacing.xs},
@@ -551,7 +553,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.infoSoft,
@@ -583,7 +585,7 @@ const styles = StyleSheet.create({
   addressLine: {color: colors.textPrimary, fontSize: typography.small},
   step: {flexDirection: 'row', gap: spacing.sm},
   rail: {alignItems: 'center', width: 20},
-  dot: {width: 14, height: 14, borderRadius: 7, marginTop: 3},
+  dot: {width: 14, height: 14, borderRadius: radius.pill, marginTop: spacing.xxs},
   dotTodo: {backgroundColor: colors.white, borderWidth: 2, borderColor: colors.borderStrong},
   line: {flex: 1, width: 2, minHeight: 18},
   stepText: {flex: 1, minWidth: 0, paddingBottom: spacing.sm},

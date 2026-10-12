@@ -1,10 +1,9 @@
 import React from 'react';
-import {InteractionManager, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type CompositeNavigationProp} from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import type {ChefProductStackParamList, ChefTabParamList} from '../../../app/navigation/types';
-import {AppApiError} from '../../../core/http/apiError';
 import {
   borderWidth,
   colors,
@@ -16,9 +15,12 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
-import {useKitchenOpenState, type KitchenOpenState, type KitchenPauseDuration} from '../../chefProfile/state/useKitchenOpenState';
+import {useKitchenOpenState, type KitchenOpenState} from '../../chefProfile/state/useKitchenOpenState';
 import {RejectOrderSheet} from '../../chefOrders/components/RejectOrderSheet';
 import {toOrderCardOrder} from '../../chefOrders/domain/chefOrderCard';
+import {isOrderMovedOn} from '../../chefOrders/domain/chefOrderDecision';
+import {ordersForFilter} from '../../chefOrders/domain/chefOrderFilters';
+import {rejectKindOf} from '../../chefOrders/domain/chefOrderReasons';
 import {useChefNewOrderActions} from '../../chefOrders/state/useChefNewOrderActions';
 import {useChefPreparingOrderActions} from '../../chefOrders/state/useChefPreparingOrderActions';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
@@ -38,8 +40,8 @@ import {NotificationBell} from '../../chefShell/components/ui/ChefTopBar';
 import {formatRelativeTime, formatRupees, formatTimeOfDay, shortOrderNumber} from '../../chefShell/domain/chefFormat';
 import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
 import {useChefReviewPreview} from '../../reviews/query/useChefReviewPreview';
-import {KitchenStatusSheet} from '../components/KitchenStatusSheet';
 import {RespondTimer} from '../components/RespondTimer';
+import {useKitchenStatusControl} from '../components/useKitchenStatusControl';
 import {acceptReadyMinutes} from '../domain/chefDashboardPresentation';
 import {useChefDashboardModel} from '../state/useChefDashboardModel';
 
@@ -49,7 +51,6 @@ type HomeNavigation = CompositeNavigationProp<
 >;
 
 const KITCHEN_ROWS = 4;
-const KITCHEN_UPDATE_FAILED = "We couldn't update your kitchen. Check your connection and try again.";
 
 const itemCount = (order: ChefOperationalOrder) => (order.items ?? []).reduce((sum, item) => sum + item.quantity, 0);
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
@@ -170,27 +171,13 @@ export function ChefDashboardScreen() {
   const prepActions = useChefPreparingOrderActions();
   const {orderTabs} = useChefOperationalState();
 
-  const [sheetOpen, setSheetOpen] = React.useState(false);
-  const [confirmClose, setConfirmClose] = React.useState(false);
   const [readyTarget, setReadyTarget] = React.useState<ChefOperationalOrder | null>(null);
   const [rejectTarget, setRejectTarget] = React.useState<ChefOperationalOrder | null>(null);
-
-  // Two Modals swapping in one tick (or a page opening under a closing sheet) misbehave on Android:
-  // close the sheet first, and run what comes next once it is gone and its animation has finished.
-  const afterSheetClosed = React.useRef<(() => void) | null>(null);
-  const closeSheetThen = (next: () => void) => {
-    afterSheetClosed.current = next;
-    setSheetOpen(false);
-  };
-  React.useEffect(() => {
-    if (sheetOpen || !afterSheetClosed.current) {
-      return undefined;
-    }
-    const next = afterSheetClosed.current;
-    afterSheetClosed.current = null;
-    const task = InteractionManager.runAfterInteractions(next);
-    return () => task.cancel();
-  }, [sheetOpen]);
+  // Orders being cooked now (accepted or preparing), by the same rule as the Preparing list; packed ones are not cooking.
+  const cooking = ordersForFilter(model.kitchenOrders, 'PREPARING').length;
+  const kitchenControl = useKitchenStatusControl(kitchen, cooking, () =>
+    navigation.navigate('Profile', {screen: 'ChefKitchenSchedule'}),
+  );
 
   // The order actions explain what happened (accepted, no longer available...); show it once.
   const {feedback: newFeedback, clearFeedback: clearNewFeedback} = newActions;
@@ -218,28 +205,6 @@ export function ChefDashboardScreen() {
 
   const openOrders = (screen: 'ChefOrdersNew' | 'ChefOrdersPreparing') => navigation.navigate('Orders', {screen});
 
-  const changeKitchen = async (action: () => Promise<boolean>, done: string) => {
-    setSheetOpen(false);
-    try {
-      // false: another save was still running and this press did nothing, so there is nothing to announce.
-      if (await action()) {
-        toast.show(done);
-      }
-    } catch {
-      toast.show(KITCHEN_UPDATE_FAILED);
-    }
-  };
-  const cooking = model.kitchenOrders.filter(order => order.status !== 'READY_FOR_PICKUP').length;
-  const closeKitchen = () => changeKitchen(() => kitchen.setOpen(false), 'Your kitchen is closed');
-  const pauseKitchen = (duration: KitchenPauseDuration) => changeKitchen(() => kitchen.pause(duration), 'New orders paused');
-  const askToClose = () => {
-    if (cooking > 0) {
-      closeSheetThen(() => setConfirmClose(true));
-    } else {
-      closeKitchen().catch(() => undefined);
-    }
-  };
-
   const confirmReady = async () => {
     const order = readyTarget;
     if (!order) return;
@@ -259,7 +224,7 @@ export function ChefDashboardScreen() {
       .then(() => setRejectTarget(null))
       .catch(error => {
         // The order moved on while the sheet was open: its new state is shown, so the question is over.
-        if (error instanceof AppApiError && error.status === 409) setRejectTarget(null);
+        if (isOrderMovedOn(error)) setRejectTarget(null);
       });
   };
 
@@ -403,7 +368,7 @@ export function ChefDashboardScreen() {
 
   return (
     <ChefScreen
-      header={<HomeHeader kitchen={kitchen} onOpenStatus={() => setSheetOpen(true)} onRetry={retryKitchen} />}
+      header={<HomeHeader kitchen={kitchen} onOpenStatus={kitchenControl.openSheet} onRetry={retryKitchen} />}
       onRefresh={refresh}
       refreshing={model.isRefreshing}
       withTabBar>
@@ -420,7 +385,7 @@ export function ChefDashboardScreen() {
             <ChefActionButton
               busy={kitchen.saving}
               label="Open kitchen"
-              onPress={() => changeKitchen(() => kitchen.setOpen(true), 'Your kitchen is open').catch(() => undefined)}
+              onPress={() => kitchenControl.open().catch(() => undefined)}
               style={styles.fullWidth}
               tone="success"
             />
@@ -457,7 +422,7 @@ export function ChefDashboardScreen() {
             busy={kitchen.saving}
             icon="play"
             label="Resume now"
-            onPress={() => changeKitchen(() => kitchen.resume(), 'Taking orders again').catch(() => undefined)}
+            onPress={() => kitchenControl.resume().catch(() => undefined)}
             tone="success"
           />
         </>
@@ -584,39 +549,11 @@ export function ChefDashboardScreen() {
         <ChefActionButton label="Withdraw" onPress={() => navigation.navigate('Earnings')} tone="inverse" />
       </View>
 
-      <KitchenStatusSheet
-        busy={kitchen.saving}
-        hoursToday={kitchen.hoursToday}
-        closedReason={kitchen.closedReason}
-        onChangeHours={() => closeSheetThen(() => navigation.navigate('Profile', {screen: 'ChefKitchenSchedule'}))}
-        onClose={() => setSheetOpen(false)}
-        onCloseKitchen={askToClose}
-        onOpen={() => changeKitchen(() => kitchen.setOpen(true), 'Your kitchen is open').catch(() => undefined)}
-        onPause={duration => pauseKitchen(duration).catch(() => undefined)}
-        onResume={() => changeKitchen(() => kitchen.resume(), 'Taking orders again').catch(() => undefined)}
-        opensAt={kitchen.opensAt}
-        pauseAvailable={kitchen.pauseAvailable}
-        pausedUntil={kitchen.pausedUntil}
-        status={kitchen.status}
-        visible={sheetOpen}
-      />
-
-      <ConfirmDialog
-        cancelLabel="Keep open"
-        confirmLabel="Close kitchen"
-        message={`${plural(cooking, 'order is', 'orders are')} still cooking. They carry on, but you won't get new orders until you open the kitchen again.`}
-        onCancel={() => setConfirmClose(false)}
-        onConfirm={() => {
-          setConfirmClose(false);
-          closeKitchen().catch(() => undefined);
-        }}
-        title="Close your kitchen?"
-        tone="danger"
-        visible={confirmClose}
-      />
+      {kitchenControl.dialogs}
 
       <RejectOrderSheet
         busy={rejectBusy}
+        kind={rejectKindOf(rejectTarget ?? {})}
         onClose={() => setRejectTarget(null)}
         onConfirm={submitReject}
         orderNumber={rejectTarget ? shortOrderNumber(rejectTarget.id) : ''}

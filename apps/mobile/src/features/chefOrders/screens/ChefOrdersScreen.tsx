@@ -9,7 +9,6 @@ import type {
   ChefProductStackParamList,
   ChefTabParamList,
 } from '../../../app/navigation/types';
-import {AppApiError} from '../../../core/http/apiError';
 import {colors, fontWeight, iconSize, radius, spacing, textDefaults, typography} from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {SkeletonBlock} from '../../../shared/components/Skeleton';
@@ -37,6 +36,8 @@ import {PastOrdersList} from '../components/PastOrdersList';
 import {RejectOrderSheet} from '../components/RejectOrderSheet';
 import {ScheduledOrdersList} from '../components/ScheduledOrdersList';
 import {itemsSummary, toOrderCardOrder} from '../domain/chefOrderCard';
+import {isOrderMovedOn} from '../domain/chefOrderDecision';
+import {rejectKindOf} from '../domain/chefOrderReasons';
 import {
   FILTER_FOR_ROUTE,
   ROUTE_FOR_FILTER,
@@ -106,14 +107,16 @@ export function ChefOrdersScreen() {
     NEW: ordersForFilter(orders, 'NEW').length,
     PREPARING: ordersForFilter(orders, 'PREPARING').length,
     READY: ordersForFilter(orders, 'READY').length,
-    SCHEDULED: scheduled.unavailable ? undefined : scheduled.pending.length,
+    // No number until the list is known: not while it loads, not after it failed, not while it is not published.
+    SCHEDULED: scheduled.unavailable || scheduled.status !== 'success' ? undefined : scheduled.pending.length,
   };
   const showFilter = (next: ChefOrderFilter) => navigation.replace(ROUTE_FOR_FILTER[next]);
   const openOrder = (orderId: string) => navigation.navigate('ChefOrderDetail', {orderId});
 
+  const refreshAll = () => Promise.allSettled([refresh(), scheduled.refresh()]);
   const pull = () => {
     setPulling(true);
-    Promise.allSettled([refresh(), scheduled.refresh()])
+    refreshAll()
       .catch(() => undefined)
       .finally(() => setPulling(false));
   };
@@ -127,7 +130,7 @@ export function ChefOrdersScreen() {
       .then(() => setRejectId(null))
       .catch(error => {
         // The order moved on while the sheet was open: its new state is shown, so the question is over.
-        if (error instanceof AppApiError && error.status === 409) setRejectId(null);
+        if (isOrderMovedOn(error)) setRejectId(null);
       });
   };
 
@@ -271,7 +274,7 @@ export function ChefOrdersScreen() {
             title="No new orders"
           />
           <KitchenStatusCard
-            cookingCount={counts.PREPARING + counts.READY}
+            cookingCount={counts.PREPARING}
             onChangeHours={() => navigation.navigate('Profile', {screen: 'ChefKitchenSchedule'})}
           />
         </>
@@ -349,10 +352,9 @@ export function ChefOrdersScreen() {
       {paged ? (
         <PastOrdersList
           onOpenOrder={openOrder}
-          onRefresh={pull}
+          onRefresh={refreshAll}
           onSeeNew={() => showFilter('NEW')}
           orders={orders}
-          refreshing={pulling}
         />
       ) : (
         body
@@ -360,6 +362,7 @@ export function ChefOrdersScreen() {
 
       <RejectOrderSheet
         busy={rejectBusy}
+        kind={rejectKindOf(orders.find(order => order.id === rejectId) ?? {})}
         onClose={() => setRejectId(null)}
         onConfirm={submitReject}
         orderNumber={rejectId ? shortOrderNumber(rejectId) : ''}

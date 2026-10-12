@@ -58,6 +58,20 @@ describe('splitHomeOrders', () => {
   });
 });
 
+describe('splitHomeOrders: an order left in Ready for over a day', () => {
+  it('is no longer in the kitchen; it moved to Past as "Not picked up"', () => {
+    const {inKitchen} = splitHomeOrders(
+      [
+        order(1, 'READY_FOR_PICKUP', {updatedAt: at(2026, 9, 14, 12, 0)}),
+        order(2, 'READY_FOR_PICKUP', {updatedAt: at(2026, 9, 13, 12, 0)}),
+        order(3, 'PREPARING', {updatedAt: at(2026, 9, 10, 12, 0)}),
+      ],
+      now,
+    );
+    expect(inKitchen.map(o => o.id).sort()).toEqual([id(1), id(3)].sort());
+  });
+});
+
 describe('acceptReadyMinutes', () => {
   const menu = [dish(id(7), 'Chicken curry', 20), dish(id(8), 'Lemon rice', 10), dish(id(9), 'Raita', null)];
 

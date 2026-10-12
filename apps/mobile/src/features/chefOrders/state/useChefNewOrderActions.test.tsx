@@ -43,7 +43,7 @@ describe('New order acceptance feedback', () => {
     mockExecute.mockRejectedValueOnce(new AppApiError('CONFLICT', 'Order changed', 409));
     mockGetOrder.mockResolvedValueOnce({...pending, status: 'CHEF_ACCEPTED', prepTimeMinutes: 25});
     await act(async () => {await expect(state.accept('order-id')).rejects.toMatchObject({status: 409});});
-    expect(state.feedback?.message).toContain('Chef Accepted');
+    expect(state.feedback?.message).toBe('This order is now Preparing. The latest status is shown.');
     expect(mockReconcile).toHaveBeenCalledWith('order-id', 'CHEF_ACCEPTED', pending.updatedAt, 25);
   });
 

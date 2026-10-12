@@ -48,6 +48,18 @@ describe('RejectOrderSheet', () => {
     );
   });
 
+  it('tells a meal-plan day what happens to it, and does not promise a refund', () => {
+    mount({kind: 'meal-plan'});
+    expect(allText()).toContain('The customer is told right away. This meal-plan day moves to the end of their plan.');
+    expect(allText().join(' ')).not.toMatch(/refund/);
+  });
+
+  it('promises nothing about money for an order the customer has not paid for yet', () => {
+    mount({kind: 'unpaid'});
+    expect(allText()).toContain('The customer is told right away.');
+    expect(allText().join(' ')).not.toMatch(/refund/);
+  });
+
   it('cannot reject until a reason is picked, then sends that reason as the free text', () => {
     mount();
     expect(find('Reject order')!.props.disabled).toBe(true);

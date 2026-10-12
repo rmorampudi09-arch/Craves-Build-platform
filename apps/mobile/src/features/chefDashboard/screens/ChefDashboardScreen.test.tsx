@@ -1,6 +1,7 @@
 import React from 'react';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {InteractionManager, Modal, RefreshControl, StyleSheet, Text} from 'react-native';
+import {AppApiError} from '../../../core/http/apiError';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
 import {ChefToastProvider, StatTile} from '../../chefShell/components/ui';
 import type {KitchenOpenState} from '../../chefProfile/state/useKitchenOpenState';
@@ -212,6 +213,38 @@ describe('Home: new orders', () => {
     await press('Reject order');
     expect(reject).toHaveBeenCalledTimes(1);
     expect(reject).toHaveBeenCalledWith(NEW_ID, 'Closing soon');
+    expect(tree.root.findAllByType(Modal).some(modal => modal.props.visible === true)).toBe(false);
+  });
+
+  it('says the customer gets a full refund for a paid order, and where a meal-plan day goes otherwise', async () => {
+    mockModel = baseModel({pendingOrders: [{...pendingOrder, checkoutId: NEW_ID_2}]});
+    await mount();
+    await press('Reject order #DF94B');
+    expect(hasText('The customer is told right away and gets a full refund.')).toBe(true);
+    act(() => tree.unmount());
+    mockModel = baseModel({pendingOrders: [{...pendingOrder, checkoutId: undefined}]});
+    await mount();
+    await press('Reject order #DF94B');
+    expect(hasText('The customer is told right away. This meal-plan day moves to the end of their plan.')).toBe(true);
+  });
+
+  it("keeps the reject sheet open while a rejection is already running, and closes it when the order moved on", async () => {
+    const reject = jest.fn(async () => {
+      throw new AppApiError('CHEF_ORDER_DECISION_IN_PROGRESS', 'An order decision is already in progress.', 409);
+    });
+    mockNewActions = {...mockNewActions, reject};
+    await mount();
+    await press('Reject order #DF94B');
+    await press('Closing soon');
+    await press('Reject order');
+    expect(reject).toHaveBeenCalledTimes(1);
+    expect(hasText('Reject #DF94B?')).toBe(true);
+
+    reject.mockImplementationOnce(async () => {
+      throw new AppApiError('CHEF_ORDER_NOT_ACTIONABLE', 'This order is now Rejected.', 409);
+    });
+    await press('Reject order');
+    expect(reject).toHaveBeenCalledTimes(2);
     expect(tree.root.findAllByType(Modal).some(modal => modal.props.visible === true)).toBe(false);
   });
 

@@ -11,6 +11,25 @@ export const REJECT_REASONS: readonly {id: RejectReasonId; label: string}[] = [
   {id: 'other', label: 'Other reason'},
 ];
 
+export type RejectKind = 'paid' | 'meal-plan' | 'unpaid';
+
+/** A paid order has a checkout; a meal-plan day does not, so nothing is refunded for it. */
+export function rejectKindOf(order: {checkoutId?: string | null}): RejectKind {
+  return order.checkoutId ? 'paid' : 'meal-plan';
+}
+
+/** The line under "Reject #XXXXX?": what the customer is told, and only what is true for this kind of order. */
+export function rejectConsequence(kind: RejectKind): string {
+  switch (kind) {
+    case 'meal-plan':
+      return 'The customer is told right away. This meal-plan day moves to the end of their plan.';
+    case 'unpaid':
+      return 'The customer is told right away.';
+    default:
+      return 'The customer is told right away and gets a full refund.';
+  }
+}
+
 const MAX_REASON_LENGTH = 500;
 
 /** The text sent as the reject reason, or null while the sheet is not complete (nothing picked, or "Other reason" with no note). */

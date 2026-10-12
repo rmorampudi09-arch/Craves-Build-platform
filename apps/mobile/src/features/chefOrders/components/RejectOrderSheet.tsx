@@ -3,13 +3,21 @@ import {StyleSheet, Text, View} from 'react-native';
 import {colors, iconSize, radius, spacing, textDefaults, typography} from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {ChefActionButton, ChefSheet} from '../../chefShell/components/ui';
-import {REJECT_REASONS, buildRejectReason, type RejectReasonId} from '../domain/chefOrderReasons';
+import {
+  REJECT_REASONS,
+  buildRejectReason,
+  rejectConsequence,
+  type RejectKind,
+  type RejectReasonId,
+} from '../domain/chefOrderReasons';
 import {ReasonNote, ReasonOptions} from './ReasonOptions';
 
 export interface RejectOrderSheetProps {
   visible: boolean;
   /** `#DF94B`. */
   orderNumber: string;
+  /** What rejecting means for the customer (refund, meal-plan day, nothing paid yet). Defaults to a paid order. */
+  kind?: RejectKind;
   /** The reject request is running: both buttons ignore taps. */
   busy?: boolean;
   onClose: () => void;
@@ -18,7 +26,7 @@ export interface RejectOrderSheetProps {
 }
 
 /** The one place a chef rejects an order: the Orders list, the order page, Home and Scheduled all open this sheet. */
-export function RejectOrderSheet({visible, orderNumber, busy = false, onClose, onConfirm}: RejectOrderSheetProps) {
+export function RejectOrderSheet({visible, orderNumber, kind = 'paid', busy = false, onClose, onConfirm}: RejectOrderSheetProps) {
   const [pick, setPick] = React.useState<RejectReasonId | null>(null);
   const [note, setNote] = React.useState('');
   // Every opening starts clean, so a reason picked for one order never carries over to the next.
@@ -33,7 +41,7 @@ export function RejectOrderSheet({visible, orderNumber, busy = false, onClose, o
   return (
     <ChefSheet onClose={busy ? () => undefined : onClose} title={`Reject ${orderNumber}?`} visible={visible}>
       <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.hint}>
-        The customer is told right away and gets a full refund.
+        {rejectConsequence(kind)}
       </Text>
       <ReasonOptions onChange={setPick} options={REJECT_REASONS} value={pick} />
       <ReasonNote

@@ -60,6 +60,9 @@ export function useChefScheduledOrdersQueue() {
     staleTime: 30_000,
   });
 
+  // Answers already on their way, by order. The mutation's own pending state only shows after the next render, so a
+  // second press in the same moment would otherwise send the same answer twice.
+  const answering = React.useRef(new Set<string>());
   const responseMutation = useMutation({
     mutationFn: async (input: {item: ChefScheduledOrder; action: ChefScheduleResponseAction; responseNote?: string | null}) =>
       chefScheduledOrdersApi.respond(input.item.scheduleRequestId, input.item.orderId, {
@@ -101,9 +104,21 @@ export function useChefScheduledOrdersQueue() {
     loadOlder: async () => {
       await pendingQuery.fetchNextPage();
     },
-    /** Confirms or declines a request; rejects when the server refuses, so the caller can say so. */
+    /**
+     * Confirms or declines a request. Resolves true once sent, false when this order already has an answer on its way
+     * (nothing was sent); rejects when the server refuses, so the caller can say so.
+     */
     respond: async (item: ChefScheduledOrder, action: ChefScheduleResponseAction, responseNote?: string | null) => {
-      await responseMutation.mutateAsync({item, action, responseNote});
+      if (answering.current.has(item.orderId)) {
+        return false;
+      }
+      answering.current.add(item.orderId);
+      try {
+        await responseMutation.mutateAsync({item, action, responseNote});
+        return true;
+      } finally {
+        answering.current.delete(item.orderId);
+      }
     },
   };
 }

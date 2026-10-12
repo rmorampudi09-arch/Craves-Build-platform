@@ -1,4 +1,5 @@
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
+import {isNotPickedUp} from '../../chefOrders/domain/chefOrderFilters';
 import {DEFAULT_PREPARATION_MINUTES} from '../../chefOrders/domain/chefOrderPreparation';
 import type {ChefDashboardEarning, ChefDashboardMenuItem} from '../api/chefDashboardApi';
 
@@ -27,7 +28,7 @@ export function deliveredToday(orders: readonly ChefOperationalOrder[], now: Dat
 }
 
 /** New orders to answer (oldest first, the one closest to its deadline) and orders now in the kitchen. */
-export function splitHomeOrders(orders: readonly ChefOperationalOrder[]): {
+export function splitHomeOrders(orders: readonly ChefOperationalOrder[], now: Date = new Date()): {
   pending: ChefOperationalOrder[];
   inKitchen: ChefOperationalOrder[];
 } {
@@ -36,7 +37,8 @@ export function splitHomeOrders(orders: readonly ChefOperationalOrder[]): {
       .filter(order => order.status === 'CHEF_ACCEPTANCE_PENDING')
       .sort((a, b) => timeOf(a.createdAt) - timeOf(b.createdAt)),
     inKitchen: orders
-      .filter(order => IN_KITCHEN_STATUSES.has(order.status))
+      // An order left in Ready for over a day has moved to Past as "Not picked up".
+      .filter(order => IN_KITCHEN_STATUSES.has(order.status) && !isNotPickedUp(order, now))
       .sort((a, b) => timeOf(a.updatedAt) - timeOf(b.updatedAt)),
   };
 }

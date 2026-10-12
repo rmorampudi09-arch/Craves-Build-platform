@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   partnerIcon: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.infoSoft,

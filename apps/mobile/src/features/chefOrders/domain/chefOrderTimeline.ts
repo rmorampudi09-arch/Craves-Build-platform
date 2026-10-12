@@ -8,8 +8,10 @@ export interface ChefOrderTimelineStep {
   detail?: string;
 }
 
-// Where an order is on its way from placed (0) to delivered (4). Rejected and cancelled orders stop the line instead.
+// Where an order is on its way from placed (0) to delivered (4). Rejected, cancelled and refunded orders stop the line instead.
 const PROGRESS: Partial<Record<ChefOrderDetailStatus, number>> = {
+  PAYMENT_PENDING: 0,
+  PAID: 0,
   CHEF_ACCEPTANCE_PENDING: 0,
   CHEF_ACCEPTED: 1,
   PREPARING: 1,

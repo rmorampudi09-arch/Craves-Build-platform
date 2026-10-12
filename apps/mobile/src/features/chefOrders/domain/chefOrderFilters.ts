@@ -46,9 +46,20 @@ const FILTER_FOR_STATUS: Partial<Record<ChefOperationalOrderStatus, ChefOrderFil
   REFUND_FAILED: 'PAST',
 };
 
+type OrderLike = Pick<ChefOperationalOrder, 'status' | 'updatedAt'>;
+
+/** Past this long in Ready, nobody is coming for the order any more. */
+const NOT_PICKED_UP_AFTER_MS = 24 * 3_600_000;
+
+/** Still Ready more than a day after it last changed: it moves to Past as "Not picked up". */
+export function isNotPickedUp(order: OrderLike, now: Date): boolean {
+  const since = order.updatedAt ? Date.parse(order.updatedAt) : NaN;
+  return order.status === 'READY_FOR_PICKUP' && !Number.isNaN(since) && now.getTime() - since > NOT_PICKED_UP_AFTER_MS;
+}
+
 /** The list an order belongs to, or null while it is not the chef's to see yet. */
-export function chefOrderFilterOf(status: ChefOperationalOrderStatus): ChefOrderFilter | null {
-  return FILTER_FOR_STATUS[status] ?? null;
+export function chefOrderFilterOf(order: OrderLike, now: Date = new Date()): ChefOrderFilter | null {
+  return isNotPickedUp(order, now) ? 'PAST' : FILTER_FOR_STATUS[order.status] ?? null;
 }
 
 const timeOf = (iso: string | null | undefined): number => {
@@ -59,8 +70,12 @@ const timeOf = (iso: string | null | undefined): number => {
 const orderTime = (order: ChefOperationalOrder): number => timeOf(order.updatedAt) || timeOf(order.createdAt);
 
 /** The orders of one filter. New, Preparing and Ready put the longest-waiting first; Scheduled has its own list. */
-export function ordersForFilter(orders: readonly ChefOperationalOrder[], filter: ChefOrderFilter): ChefOperationalOrder[] {
-  const matching = orders.filter(order => chefOrderFilterOf(order.status) === filter);
+export function ordersForFilter(
+  orders: readonly ChefOperationalOrder[],
+  filter: ChefOrderFilter,
+  now: Date = new Date(),
+): ChefOperationalOrder[] {
+  const matching = orders.filter(order => chefOrderFilterOf(order, now) === filter);
   return filter === 'PAST'
     ? matching.sort((a, b) => orderTime(b) - orderTime(a))
     : matching.sort((a, b) => timeOf(a.createdAt) - timeOf(b.createdAt));
@@ -91,7 +106,13 @@ export function chefOrderStatusChip(status: ChefOperationalOrderStatus): {label:
   }
 }
 
-export type PastOrderKind = 'DELIVERED' | 'ON_THE_WAY' | 'CANCELLED' | 'REJECTED';
+/** The chip an order wears on screen: its status, or "Not picked up" for an order left in Ready for over a day. */
+export function chefOrderChip(order: OrderLike, now: Date = new Date()): {label: string; tone: StatusChipTone} {
+  return isNotPickedUp(order, now) ? {label: 'Not picked up', tone: 'cancelled'} : chefOrderStatusChip(order.status);
+}
+
+/** NOT_PICKED_UP has no chip of its own on the board's filter row, so it shows under All only. */
+export type PastOrderKind = 'DELIVERED' | 'ON_THE_WAY' | 'CANCELLED' | 'REJECTED' | 'NOT_PICKED_UP';
 export type PastFilterKind = 'ALL' | PastOrderKind;
 
 export const PAST_KINDS: readonly {kind: PastFilterKind; label: string}[] = [
@@ -103,8 +124,11 @@ export const PAST_KINDS: readonly {kind: PastFilterKind; label: string}[] = [
 ];
 
 /** The chip a finished order is listed under. A refund only follows a cancelled order. */
-export function pastKindOf(status: ChefOperationalOrderStatus): PastOrderKind {
-  switch (status) {
+export function pastKindOf(order: OrderLike, now: Date = new Date()): PastOrderKind {
+  if (isNotPickedUp(order, now)) {
+    return 'NOT_PICKED_UP';
+  }
+  switch (order.status) {
     case 'DELIVERED':
       return 'DELIVERED';
     case 'OUT_FOR_DELIVERY':
@@ -116,22 +140,27 @@ export function pastKindOf(status: ChefOperationalOrderStatus): PastOrderKind {
   }
 }
 
-export function filterPastOrders(orders: readonly ChefOperationalOrder[], kind: PastFilterKind): ChefOperationalOrder[] {
-  return kind === 'ALL' ? [...orders] : orders.filter(order => pastKindOf(order.status) === kind);
+export function filterPastOrders(
+  orders: readonly ChefOperationalOrder[],
+  kind: PastFilterKind,
+  now: Date = new Date(),
+): ChefOperationalOrder[] {
+  return kind === 'ALL' ? [...orders] : orders.filter(order => pastKindOf(order, now) === kind);
 }
 
 /** Past orders from the live list plus older history. The live copy wins when an order is in both. */
 export function mergePastOrders(
   live: readonly ChefOperationalOrder[],
   history: readonly ChefOperationalOrder[],
+  now: Date = new Date(),
 ): ChefOperationalOrder[] {
   const byId = new Map<string, ChefOperationalOrder>();
   for (const order of [...history, ...live]) {
-    if (chefOrderFilterOf(order.status) === 'PAST') {
+    if (chefOrderFilterOf(order, now) === 'PAST') {
       byId.set(order.id, order);
     }
   }
-  return ordersForFilter([...byId.values()], 'PAST');
+  return ordersForFilter([...byId.values()], 'PAST', now);
 }
 
 export interface PastOrderGroup {

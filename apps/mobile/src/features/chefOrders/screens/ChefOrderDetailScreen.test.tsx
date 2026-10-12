@@ -4,7 +4,9 @@ import {Linking, Modal, Text} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {ChefProductStackParamList} from '../../../app/navigation/types';
 import {AppApiError} from '../../../core/http/apiError';
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {ChefToastProvider} from '../../chefShell/components/ui';
+import {chefHandedOverRoute} from '../state/useChefHandedOver';
 import type {ChefOrderDetail} from '../api/chefOrderDetailApi';
 import {deriveChefOrderDetailContractModel as mockDeriveChefOrderDetailContractModel} from '../domain/chefOrderDetailModel';
 import {ChefOrderDetailScreen} from './ChefOrderDetailScreen';
@@ -15,13 +17,13 @@ const mockGoBack = jest.fn();
 const mockAccept = jest.fn(async () => undefined);
 const mockReject = jest.fn(async () => undefined);
 const mockMarkReady = jest.fn(async () => undefined);
-const mockHandOver = jest.fn(async () => undefined);
+const mockHandedOverApi = jest.fn(async (..._args: unknown[]) => ({}));
+const mockReconcile = jest.fn();
 const mockRefresh = jest.fn(async () => undefined);
 const mockCreateCase = jest.fn(async (..._args: unknown[]) => ({}));
 let mockOrder: ChefOrderDetail | null;
 let mockDetailState: {status: string; error: Error | null};
 let mockDecisionAction: 'accept' | 'reject' | null;
-let mockCanHandOver: boolean;
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: require('react-native').View,
@@ -29,6 +31,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 jest.mock('../../../design/reducedMotion', () => ({useReducedMotionPreference: () => false}));
 jest.mock('../state/useChefOrderDetailContract', () => ({
+  ...jest.requireActual('../state/useChefOrderDetailContract'),
   useChefOrderDetailContract: () => ({
     ...mockDetailState,
     data: mockOrder ? mockDeriveChefOrderDetailContractModel(mockOrder) : null,
@@ -42,8 +45,14 @@ jest.mock('../state/useChefOrderDecision', () => ({
 jest.mock('../state/useChefPreparingOrderActions', () => ({
   useChefPreparingOrderActions: () => ({actionStateByOrder: {}, feedback: null, markReady: mockMarkReady, callCustomer: jest.fn(), clearFeedback: jest.fn()}),
 }));
-jest.mock('../state/useChefHandedOver', () => ({
-  useChefHandedOver: () => ({canHandOver: () => mockCanHandOver, busyOrderId: null, handOver: mockHandOver}),
+// The real hand-over hook: whether the button shows is part of what this screen must get right.
+jest.mock('../api/chefOrderDetailApi', () => ({
+  ...jest.requireActual('../api/chefOrderDetailApi'),
+  chefOrderDetailApi: {handedOver: (...args: unknown[]) => mockHandedOverApi(...args)},
+}));
+jest.mock('../../../app/store/hooks', () => ({useAppSelector: () => 'user-1'}));
+jest.mock('../../chefShell/state/ChefOperationalProvider', () => ({
+  useChefOperationalState: () => ({reconcileOrderStatus: mockReconcile, refresh: jest.fn(async () => undefined)}),
 }));
 jest.mock('../state/useChefMenuPrepTimes', () => ({useChefMenuPrepTimes: () => []}));
 jest.mock('../../chefSupport/api/chefSupportCasesApi', () => ({
@@ -51,7 +60,25 @@ jest.mock('../../chefSupport/api/chefSupportCasesApi', () => ({
   chefSupportCasesApi: {create: (...args: unknown[]) => mockCreateCase(...args)},
 }));
 
-const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+// Every time on screen depends on the clock, so the clock is fixed: Wed 14 Oct 2026, 3:00 PM local time.
+const NOW = new Date(2026, 9, 14, 15, 0, 0).getTime();
+const minutesAgo = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
+const DATE_ONLY = [
+  'hrtime',
+  'nextTick',
+  'performance',
+  'queueMicrotask',
+  'requestAnimationFrame',
+  'cancelAnimationFrame',
+  'requestIdleCallback',
+  'cancelIdleCallback',
+  'setImmediate',
+  'clearImmediate',
+  'setInterval',
+  'clearInterval',
+  'setTimeout',
+  'clearTimeout',
+] as const;
 
 function order(status: ChefOrderDetail['status'], extra: Partial<ChefOrderDetail> = {}): ChefOrderDetail {
   return {
@@ -136,9 +163,11 @@ const mount = async () => {
   } as unknown as NativeStackScreenProps<ChefProductStackParamList, 'ChefOrderDetail'>;
   await act(async () => {
     tree = renderer.create(
-      <ChefToastProvider>
-        <ChefOrderDetailScreen {...props} />
-      </ChefToastProvider>,
+      <QueryClientProvider client={new QueryClient()}>
+        <ChefToastProvider>
+          <ChefOrderDetailScreen {...props} />
+        </ChefToastProvider>
+      </QueryClientProvider>,
     );
   });
 };
@@ -146,15 +175,18 @@ const mount = async () => {
 let openUrl: jest.SpyInstance;
 beforeEach(() => {
   jest.clearAllMocks();
+  // Only Date is faked: the screen and its timers still run on the real ones.
+  jest.useFakeTimers({now: NOW, doNotFake: [...DATE_ONLY]});
   mockOrder = order('CHEF_ACCEPTANCE_PENDING');
   mockDetailState = {status: 'success', error: null};
   mockDecisionAction = null;
-  mockCanHandOver = true;
+  chefHandedOverRoute.missing = false;
   openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(true as never);
 });
 afterEach(() => {
   act(() => tree?.unmount());
   openUrl.mockRestore();
+  jest.useRealTimers();
 });
 
 describe('Order page: header', () => {
@@ -163,7 +195,7 @@ describe('Order page: header', () => {
     expect(hasText('Order #DF94B')).toBe(true);
     expect(hasText('New')).toBe(true);
     expect(hasText('New order')).toBe(false);
-    expect(hasText(/^Today, \d{1,2}:\d{2} [AP]M$/)).toBe(true);
+    expect(hasText('Today, 2:58 PM')).toBe(true);
   });
 
   it.each([
@@ -211,7 +243,7 @@ describe('Order page: content', () => {
     await mount();
     expect(hasText(/^Respond in/)).toBe(false);
     act(() => tree.unmount());
-    mockOrder = order('CHEF_ACCEPTANCE_PENDING', {chefAcceptanceExpiresAt: new Date(Date.now() + 272_000).toISOString()});
+    mockOrder = order('CHEF_ACCEPTANCE_PENDING', {chefAcceptanceExpiresAt: new Date(NOW + 272_000).toISOString()});
     await mount();
     expect(hasText(/^Respond in 4:\d\d$/)).toBe(true);
     expect(hasText('Accept or reject before the timer runs out.')).toBe(true);
@@ -282,6 +314,20 @@ describe('Order page: New', () => {
     expect(buttons('Reject order')[0].props.disabled).toBe(true);
   });
 
+  it('tells a paid order the customer gets a full refund', async () => {
+    await mount();
+    await press('Reject order');
+    expect(hasText('The customer is told right away and gets a full refund.')).toBe(true);
+  });
+
+  it('tells a meal-plan day (no checkout) where it goes, and promises no refund', async () => {
+    mockOrder = order('CHEF_ACCEPTANCE_PENDING', {checkoutId: null});
+    await mount();
+    await press('Reject order');
+    expect(hasText('The customer is told right away. This meal-plan day moves to the end of their plan.')).toBe(true);
+    expect(allText().join(' ')).not.toMatch(/refund/);
+  });
+
   it('rejects through the same reasons sheet, then returns to Orders', async () => {
     await mount();
     await press('Reject order');
@@ -304,7 +350,7 @@ describe('Order page: Preparing', () => {
   it('shows the time left and what was promised, with Call and Mark ready in the dock', async () => {
     await mount();
     expect(hasText('Ready in 8 min')).toBe(true);
-    expect(hasText(/^You promised \d{1,2}:\d{2} [AP]M$/)).toBe(true);
+    expect(hasText('You promised 3:08 PM')).toBe(true);
     expect(buttons('Mark ready')).toHaveLength(1);
     expect(buttons('Reject order')).toHaveLength(0);
   });
@@ -344,19 +390,40 @@ describe('Order page: Ready', () => {
     mockOrder = order('READY_FOR_PICKUP', {chefHandedOverAt: null});
   });
 
-  it('has Not picked up and Handed over in the dock', async () => {
+  it('shows Handed over when the order reports a hand-over still to do (the field is null), and sends it once', async () => {
+    mockHandedOverApi.mockResolvedValueOnce(order('READY_FOR_PICKUP', {chefHandedOverAt: minutesAgo(0)}));
     await mount();
     expect(buttons('Not picked up')).toHaveLength(1);
     expect(buttons('Handed over')).toHaveLength(1);
-    await press('Handed over');
-    expect(mockHandOver).toHaveBeenCalledWith(ORDER_ID);
+    const handedOver = buttons('Handed over')[0];
+    await act(async () => {
+      handedOver.props.onPress();
+      handedOver.props.onPress();
+    });
+    expect(mockHandedOverApi).toHaveBeenCalledTimes(1);
+    expect(mockHandedOverApi).toHaveBeenCalledWith(ORDER_ID);
+    expect(buttons('Handed over')).toHaveLength(0);
   });
 
-  it('leaves Handed over out when the order cannot be handed over', async () => {
-    mockCanHandOver = false;
+  it('shows no Handed over button when the order does not carry the field at all', async () => {
+    mockOrder = order('READY_FOR_PICKUP');
+    expect(mockOrder).not.toHaveProperty('chefHandedOverAt');
     await mount();
     expect(buttons('Handed over')).toHaveLength(0);
     expect(buttons('Not picked up')).toHaveLength(1);
+  });
+
+  it('shows no Handed over button once the hand-over has a time', async () => {
+    mockOrder = order('READY_FOR_PICKUP', {chefHandedOverAt: minutesAgo(5)});
+    await mount();
+    expect(buttons('Handed over')).toHaveLength(0);
+  });
+
+  it('labels an order left in Ready for over a day "Not picked up"', async () => {
+    mockOrder = order('READY_FOR_PICKUP', {chefHandedOverAt: null, updatedAt: minutesAgo(30 * 60)});
+    await mount();
+    expect(hasText('Not picked up')).toBe(true);
+    expect(hasText('Ready')).toBe(false);
   });
 
   it('opens the support sheet from Not picked up', async () => {
@@ -388,6 +455,8 @@ describe('Order page: finished orders', () => {
     expect(hasText('Delivered')).toBe(true);
     expect(hasText('You accepted')).toBe(true);
     expect(hasText('Marked ready')).toBe(true);
+    expect(hasText('2:00 PM')).toBe(true);
+    expect(hasText('2:50 PM')).toBe(true);
     expect(buttons('Accept order')).toHaveLength(0);
     expect(buttons('Mark ready')).toHaveLength(0);
     expect(buttons('Handed over')).toHaveLength(0);

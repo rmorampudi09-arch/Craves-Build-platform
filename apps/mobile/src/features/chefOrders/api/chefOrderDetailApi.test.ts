@@ -89,6 +89,19 @@ describe('chefOrderDetailApi contract', () => {
     );
   });
 
+  it('accepts a meal-plan order, which has no checkout, with the checkout absent or null', () => {
+    const withoutCheckout: Record<string, unknown> = order();
+    delete withoutCheckout.checkoutId;
+    expect(parseChefOrderDetail(withoutCheckout)).toEqual(expect.objectContaining({id: ORDER_ID, checkoutId: null}));
+    expect(parseChefOrderDetail(order({checkoutId: null}))).toEqual(expect.objectContaining({id: ORDER_ID, checkoutId: null}));
+    expect(parseChefOrderDetail(order())).toEqual(expect.objectContaining({checkoutId: CHECKOUT_ID}));
+  });
+
+  it('still rejects a checkout that is present but is not an id', () => {
+    expect(parseChefOrderDetail(order({checkoutId: 'not-an-id'}))).toBeNull();
+    expect(parseChefOrderDetail(order({checkoutId: 42}))).toBeNull();
+  });
+
   it('accepts legacy orders whose delivery snapshot is absent', () => {
     expect(parseChefOrderDetail(order({deliveryAddress: null}))).toEqual(
       expect.objectContaining({deliveryAddress: null}),

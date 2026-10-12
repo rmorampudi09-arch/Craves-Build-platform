@@ -75,6 +75,22 @@ describe('buildChefOrderTimeline', () => {
     expect(buildChefOrderTimeline({...base, status: 'CANCELLED'}).map(step => step.label)).toEqual(['Order placed', 'Order cancelled']);
   });
 
+  it('shows an order that is not paid or sent to the kitchen yet as just placed, never as cancelled', () => {
+    for (const status of ['PAYMENT_PENDING', 'PAID'] as const) {
+      const steps = buildChefOrderTimeline({...base, status, prepTimeMinutes: null});
+      expect(steps.map(step => step.label)).not.toContain('Order cancelled');
+      expect(steps.map(step => step.label)).not.toContain('You rejected the order');
+      expect(summary(steps)[0]).toEqual(['Order placed', 'now', '12:08 PM']);
+      expect(steps.slice(1).every(step => step.state === 'todo')).toBe(true);
+    }
+  });
+
+  it('says cancelled for every cancelled or refunded status', () => {
+    for (const status of ['CANCELLED', 'REFUND_PENDING', 'REFUNDED', 'REFUND_FAILED'] as const) {
+      expect(buildChefOrderTimeline({...base, status}).map(step => step.label)).toEqual(['Order placed', 'Order cancelled']);
+    }
+  });
+
   it('shows a new order as just placed', () => {
     expect(summary(buildChefOrderTimeline({...base, status: 'CHEF_ACCEPTANCE_PENDING', prepTimeMinutes: null}))).toEqual([
       ['Order placed', 'now', '12:08 PM'],

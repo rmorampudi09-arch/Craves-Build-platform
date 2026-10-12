@@ -55,7 +55,9 @@ describe('useChefScheduledOrdersQueue', () => {
     }
   };
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.resetAllMocks();
+  });
   afterEach(() => act(() => tree.unmount()));
 
   it('is unavailable, with no error and no second request, when the server does not publish the route', async () => {
@@ -103,6 +105,37 @@ describe('useChefScheduledOrdersQueue', () => {
     expect(queue.unavailable).toBe(false);
     expect(queue.pending.map(entry => entry.orderId)).toEqual(['00000000-0000-4000-8000-0000000000b1']);
     expect(queue.confirmed.map(entry => entry.orderId)).toEqual(['00000000-0000-4000-8000-0000000000b3']);
+  });
+
+  it('sends the answer once when Confirm or Decline is pressed twice in a row', async () => {
+    const pending = item('00000000-0000-4000-8000-0000000000b1', 20, 'PENDING');
+    mockList.mockResolvedValue({items: [pending], nextCursor: null, hasMore: false});
+    let finish: (value: unknown) => void = () => undefined;
+    mockRespond.mockReturnValueOnce(new Promise(resolve => (finish = resolve)));
+    await mount();
+    let results: unknown[] = [];
+    await act(async () => {
+      const answers = Promise.all([queue.respond(pending, 'ACCEPT'), queue.respond(pending, 'ACCEPT')]);
+      finish({});
+      results = await answers;
+    });
+    expect(mockRespond).toHaveBeenCalledTimes(1);
+    // The press that was ignored says so, so the screen does not announce an answer that was never sent.
+    expect(results).toEqual([true, false]);
+  });
+
+  it('answers the same request again after the first answer has finished', async () => {
+    const pending = item('00000000-0000-4000-8000-0000000000b1', 20, 'PENDING');
+    mockList.mockResolvedValue({items: [pending], nextCursor: null, hasMore: false});
+    mockRespond.mockRejectedValueOnce(new AppApiError('HTTP_500', 'boom', 500)).mockResolvedValueOnce({});
+    await mount();
+    await act(async () => {
+      await expect(queue.respond(pending, 'ACCEPT')).rejects.toBeDefined();
+    });
+    await act(async () => {
+      await expect(queue.respond(pending, 'ACCEPT')).resolves.toBe(true);
+    });
+    expect(mockRespond).toHaveBeenCalledTimes(2);
   });
 
   it('answers a request with the version it read and the reason as the note', async () => {

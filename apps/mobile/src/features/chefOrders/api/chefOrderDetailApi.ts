@@ -57,7 +57,8 @@ export interface ChefOrderStatusHistoryEntry {
 
 export interface ChefOrderDetail {
   id: string;
-  checkoutId: string;
+  /** null for a meal-plan order: it is not bought through a checkout, so there is nothing to refund. */
+  checkoutId: string | null;
   kitchenId: string;
   kitchenName: string | null;
   status: ChefOrderDetailStatus;
@@ -267,7 +268,8 @@ export function parseChefOrderDetail(value: unknown): ChefOrderDetail | null {
   }
 
   const id = boundedString(raw.id, 64);
-  const checkoutId = boundedString(raw.checkoutId, 64);
+  // Absent or null is a meal-plan order; anything else must be an id.
+  const checkoutId = raw.checkoutId == null ? null : boundedString(raw.checkoutId, 64);
   const kitchenId = boundedString(raw.kitchenId, 64);
   const status = boundedString(raw.status, 40) as ChefOrderDetailStatus | null;
   const currency = boundedString(raw.currency, 3);
@@ -285,7 +287,7 @@ export function parseChefOrderDetail(value: unknown): ChefOrderDetail | null {
 
   if (
     !isChefOrderId(id) ||
-    !isChefOrderId(checkoutId) ||
+    (raw.checkoutId != null && !isChefOrderId(checkoutId)) ||
     !isChefOrderId(kitchenId) ||
     !status ||
     !ORDER_STATUSES.has(status) ||

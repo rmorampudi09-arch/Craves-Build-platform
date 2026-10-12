@@ -77,6 +77,7 @@ function toOperationalOrder(value: unknown): ChefOperationalOrder | null {
         }
       : null,
     ...(customerName ? {customerName} : {}),
+    ...(order.checkoutId ? {checkoutId: order.checkoutId} : {}),
     foodSubtotal: order.foodSubtotal,
     prepTimeMinutes: order.prepTimeMinutes,
     createdAt: order.createdAt,

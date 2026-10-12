@@ -3,6 +3,8 @@ import {
   REJECT_REASONS,
   buildNotPickedUpCase,
   buildRejectReason,
+  rejectConsequence,
+  rejectKindOf,
 } from './chefOrderReasons';
 
 describe('reject reasons', () => {
@@ -30,6 +32,23 @@ describe('reject reasons', () => {
   it('keeps the reason within the 500 characters the server takes', () => {
     expect(buildRejectReason('other', 'x'.repeat(900))).toHaveLength(500);
     expect(buildRejectReason('busy', 'x'.repeat(900))).toHaveLength(500);
+  });
+});
+
+describe('what rejecting means for the customer', () => {
+  it('tells a paid order from a meal-plan day by its checkout', () => {
+    expect(rejectKindOf({checkoutId: '22222222-2222-4222-8222-222222222222'})).toBe('paid');
+    expect(rejectKindOf({checkoutId: null})).toBe('meal-plan');
+    expect(rejectKindOf({})).toBe('meal-plan');
+  });
+
+  it('says only what is true for each kind', () => {
+    expect(rejectConsequence('paid')).toBe('The customer is told right away and gets a full refund.');
+    expect(rejectConsequence('meal-plan')).toBe(
+      'The customer is told right away. This meal-plan day moves to the end of their plan.',
+    );
+    // A scheduled order the customer has not paid for yet has nothing to refund.
+    expect(rejectConsequence('unpaid')).toBe('The customer is told right away.');
   });
 });
 

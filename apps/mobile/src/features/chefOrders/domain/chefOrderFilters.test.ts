@@ -3,8 +3,10 @@ import {
   CHEF_ORDER_FILTERS,
   FILTER_FOR_ROUTE,
   PAST_KINDS,
+  chefOrderChip,
   chefOrderFilterOf,
   chefOrderStatusChip,
+  isNotPickedUp,
   filterPastOrders,
   groupPastOrders,
   mergePastOrders,
@@ -52,7 +54,7 @@ describe('order filters', () => {
       REFUND_FAILED: 'PAST',
     };
     for (const [status, filter] of Object.entries(expected)) {
-      expect(chefOrderFilterOf(status as ChefOperationalOrderStatus)).toBe(filter);
+      expect(chefOrderFilterOf({status: status as ChefOperationalOrderStatus})).toBe(filter);
     }
   });
 
@@ -74,17 +76,63 @@ describe('order filters', () => {
   });
 });
 
+describe('an order left in Ready for more than a day', () => {
+  const now = new Date(2026, 9, 14, 15, 0, 0);
+  const readyFor = (hours: number, extra: Partial<ChefOperationalOrder> = {}) =>
+    order('r', 'READY_FOR_PICKUP', {updatedAt: new Date(now.getTime() - hours * 3_600_000).toISOString(), ...extra});
+
+  it('moves to Past once it has been Ready for over 24 hours, and not before', () => {
+    expect(isNotPickedUp(readyFor(23.9), now)).toBe(false);
+    expect(isNotPickedUp(readyFor(24), now)).toBe(false);
+    expect(isNotPickedUp(readyFor(24.1), now)).toBe(true);
+    expect(chefOrderFilterOf(readyFor(2), now)).toBe('READY');
+    expect(chefOrderFilterOf(readyFor(30), now)).toBe('PAST');
+  });
+
+  it('stays in Ready when nobody knows how long it has been there', () => {
+    expect(isNotPickedUp(order('r', 'READY_FOR_PICKUP'), now)).toBe(false);
+    expect(isNotPickedUp(order('r', 'READY_FOR_PICKUP', {updatedAt: 'sometime'}), now)).toBe(false);
+  });
+
+  it('only a Ready order can be left behind', () => {
+    expect(isNotPickedUp(order('p', 'PREPARING', {updatedAt: '2020-01-01T00:00:00Z'}), now)).toBe(false);
+  });
+
+  it('leaves the Ready list, appears in Past, and is labelled "Not picked up"', () => {
+    const orders = [readyFor(2, {id: 'fresh'}), readyFor(30, {id: 'stale'})];
+    expect(ordersForFilter(orders, 'READY', now).map(item => item.id)).toEqual(['fresh']);
+    expect(ordersForFilter(orders, 'PAST', now).map(item => item.id)).toEqual(['stale']);
+    expect(chefOrderChip(readyFor(30), now)).toEqual({label: 'Not picked up', tone: 'cancelled'});
+    expect(chefOrderChip(readyFor(2), now)).toEqual({label: 'Ready', tone: 'ready'});
+    expect(chefOrderChip(order('d', 'DELIVERED'), now)).toEqual({label: 'Delivered', tone: 'ready'});
+  });
+
+  it('is listed under All only, and is not counted as sold', () => {
+    const stale = readyFor(30, {foodSubtotal: 160, updatedAt: new Date(2026, 9, 13, 9, 0).toISOString()});
+    expect(pastKindOf(stale, now)).toBe('NOT_PICKED_UP');
+    const merged = mergePastOrders([], [stale], now);
+    expect(merged).toHaveLength(1);
+    expect(filterPastOrders(merged, 'ALL', now)).toHaveLength(1);
+    for (const kind of ['DELIVERED', 'ON_THE_WAY', 'CANCELLED', 'REJECTED'] as const) {
+      expect(filterPastOrders(merged, kind, now)).toHaveLength(0);
+    }
+    const [group] = groupPastOrders(merged, now);
+    expect(group.total).toBe(0);
+    expect(pastGroupLabel(group)).toBe('Yesterday · 1 order');
+  });
+});
+
 describe('Past orders', () => {
   const now = new Date(2026, 9, 14, 21, 0, 0);
   const at = (day: number, hour: number) => new Date(2026, 9, day, hour, 0, 0).toISOString();
 
   it('sorts the statuses into the five chips the board shows', () => {
     expect(PAST_KINDS.map(kind => kind.label)).toEqual(['All', 'Delivered', 'On the way', 'Cancelled', 'Rejected']);
-    expect(pastKindOf('DELIVERED')).toBe('DELIVERED');
-    expect(pastKindOf('OUT_FOR_DELIVERY')).toBe('ON_THE_WAY');
-    expect(pastKindOf('CHEF_REJECTED')).toBe('REJECTED');
-    expect(pastKindOf('CANCELLED')).toBe('CANCELLED');
-    expect(pastKindOf('REFUNDED')).toBe('CANCELLED');
+    expect(pastKindOf({status: 'DELIVERED'})).toBe('DELIVERED');
+    expect(pastKindOf({status: 'OUT_FOR_DELIVERY'})).toBe('ON_THE_WAY');
+    expect(pastKindOf({status: 'CHEF_REJECTED'})).toBe('REJECTED');
+    expect(pastKindOf({status: 'CANCELLED'})).toBe('CANCELLED');
+    expect(pastKindOf({status: 'REFUNDED'})).toBe('CANCELLED');
   });
 
   it('labels each order with a plain chip', () => {

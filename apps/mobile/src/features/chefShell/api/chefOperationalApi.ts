@@ -77,6 +77,8 @@ export interface ChefOperationalOrder {
   deliveryPartner?: ChefOperationalDeliveryPartner;
   /** First name and last initial of the customer, such as "Priya S.". Never the full name. */
   customerName?: string;
+  /** The checkout the customer paid in. Absent for a meal-plan order, which has none. */
+  checkoutId?: string;
   /**
    * When the chef handed the order to the courier. Present (null until then) only when the server
    * supports the hand-over action, so the button shows only for `null`.
@@ -220,6 +222,7 @@ export function parseOptionalOrderFields(order: Record<string, unknown>): Partia
   const customerNote = optionalString(order.customerNote, 500);
   const deliveryPartner = parseDeliveryPartner(order.deliveryPartner);
   const customerName = shortCustomerName(boundedString(asRecord(order.deliveryAddress)?.recipientName, 160));
+  const checkoutId = boundedString(order.checkoutId, 64);
   // Absent means the server has no hand-over action; null means it has one and it is still to be done.
   const chefHandedOverAt =
     order.chefHandedOverAt === null ? null : validTimestamp(order.chefHandedOverAt) ?? undefined;
@@ -229,6 +232,7 @@ export function parseOptionalOrderFields(order: Record<string, unknown>): Partia
     ...(customerNote ? {customerNote} : {}),
     ...(deliveryPartner ? {deliveryPartner} : {}),
     ...(customerName ? {customerName} : {}),
+    ...(checkoutId && UUID_PATTERN.test(checkoutId) ? {checkoutId} : {}),
     ...(chefHandedOverAt !== undefined ? {chefHandedOverAt} : {}),
   };
 }

@@ -84,6 +84,50 @@ describe('KitchenStatusCard', () => {
     expect(hasText('Kitchen status')).toBe(true);
   });
 
+  it('closes the kitchen straight away when nothing is cooking', async () => {
+    await mount(0);
+    await act(async () => button('Change').props.onPress());
+    await act(async () => button('Close kitchen until I open it').props.onPress());
+    expect(mockSetOpen).toHaveBeenCalledWith(false);
+    expect(hasText('Close your kitchen?')).toBe(false);
+  });
+
+  it('asks first when orders are cooking, once the sheet has finished closing, and closes only on confirm', async () => {
+    await mount(2);
+    await act(async () => button('Change').props.onPress());
+    await act(async () => button('Close kitchen until I open it').props.onPress());
+    expect(mockSetOpen).not.toHaveBeenCalled();
+    expect(hasText('Close your kitchen?')).toBe(false);
+    await act(async () => queued.splice(0).forEach(run => run()));
+    expect(hasText('Close your kitchen?')).toBe(true);
+    expect(
+      hasText("2 orders are still cooking. They carry on, but you won't get new orders until you open the kitchen again."),
+    ).toBe(true);
+    await act(async () => button('Close kitchen').props.onPress());
+    expect(mockSetOpen).toHaveBeenCalledWith(false);
+  });
+
+  it('keeps the kitchen open when the chef says keep open', async () => {
+    await mount(1);
+    await act(async () => button('Change').props.onPress());
+    await act(async () => button('Close kitchen until I open it').props.onPress());
+    await act(async () => queued.splice(0).forEach(run => run()));
+    expect(
+      hasText("1 order is still cooking. They carry on, but you won't get new orders until you open the kitchen again."),
+    ).toBe(true);
+    await act(async () => button('Keep open').props.onPress());
+    expect(mockSetOpen).not.toHaveBeenCalled();
+  });
+
+  it('runs "Change opening hours" only after the sheet has finished closing', async () => {
+    const onChangeHours = await mount(0);
+    await act(async () => button('Change').props.onPress());
+    await act(async () => button('Change opening hours').props.onPress());
+    expect(onChangeHours).not.toHaveBeenCalled();
+    await act(async () => queued.splice(0).forEach(run => run()));
+    expect(onChangeHours).toHaveBeenCalledTimes(1);
+  });
+
   it('shows nothing until the kitchen status is known', async () => {
     mockKitchen = kitchen({status: 'unknown'});
     await mount();

@@ -53,6 +53,10 @@ export function useChefOrderHistoryQuery() {
     orders: query.data?.pages.flatMap(page => page.orders) ?? [],
     hasNextPage: Boolean(query.hasNextPage),
     isFetchingNextPage: query.isFetchingNextPage,
+    /** Reads the pages already loaded again (pull to refresh). */
+    refresh: async () => {
+      await query.refetch();
+    },
     loadOlder: () => {
       if (query.hasNextPage && !query.isFetchingNextPage) {
         // Without cancelRefetch:false a second call in the same moment would cancel the first and ask again.

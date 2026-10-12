@@ -25,7 +25,7 @@ import org.junit.jupiter.api.parallel.ResourceLock;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
-/** Real-PostgreSQL checks for the Chef plan photo upsert and the accepting-subscribers switch; runs only against the disposable CI database. */
+/** Real-PostgreSQL checks for the Chef plan photo upsert, the accepting-subscribers switch and the active-subscriber count; runs only against the disposable CI database. */
 @EnabledIfEnvironmentVariable(named = "SUBSCRIPTION_TEST_JDBC_URL", matches = ".+")
 @ResourceLock("disposable-subscription-migration-schema")
 class ChefPlanImageDatabaseTest {
@@ -141,6 +141,31 @@ class ChefPlanImageDatabaseTest {
         db.update("UPDATE subscription_schema.subscription_plan SET status = 'ACTIVE' WHERE id = ?", foreign);
         assertThrows(ApiException.class, () -> plans.setAcceptingSubscribers(foreign, chef, false));
         assertTrue(plans.requireOwned(foreign, otherChef).acceptingSubscribers());
+    }
+
+    @Test
+    void activeSubscriberCountIsActiveOnly_pausedIsNotCountedBecauseAPausedSubscriptionGetsNoMealsAndHoldsNoCapacity() {
+        UUID busy = draftPlan(chef);
+        UUID empty = draftPlan(chef);
+        UUID someoneElses = draftPlan(otherChef);
+        for (String status : new String[] {"ACTIVE", "ACTIVE", "PAUSED", "CANCELLED", "PENDING_PAYMENT", "PAYMENT_FAILED", "EXPIRED"}) {
+            subscribe(busy, chef, status);
+        }
+        subscribe(someoneElses, otherChef, "ACTIVE");
+
+        assertEquals(2, plans.requireOwned(busy, chef).activeSubscriberCount());
+        assertEquals(0, plans.requireOwned(empty, chef).activeSubscriberCount());
+        assertEquals(2, plans.find(busy).orElseThrow().activeSubscriberCount());
+
+        // The list answers every plan of the chef in one statement and never counts another chef's plan.
+        var counts = plans.listOwned(chef).stream().collect(java.util.stream.Collectors.toMap(ChefPlanResponse::id, ChefPlanResponse::activeSubscriberCount));
+        assertEquals(java.util.Map.of(busy, 2, empty, 0), counts);
+        assertEquals(1, plans.listOwned(otherChef).get(0).activeSubscriberCount());
+    }
+
+    private void subscribe(UUID plan, UUID owner, String status) {
+        db.update("INSERT INTO subscription_schema.customer_subscription(id,customer_identity_id,plan_id,chef_identity_id,status,start_date) "
+            + "VALUES (?,?,?,?,?,?)", UUID.randomUUID(), UUID.randomUUID(), plan, owner, status, LocalDate.now());
     }
 
     private UUID draftPlan(UUID owner) {

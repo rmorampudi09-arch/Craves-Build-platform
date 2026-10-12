@@ -179,9 +179,10 @@ class ChefPlanImageControllerTest {
     }
 
     @Test
-    void chefPlanJsonAlwaysCarriesImageUrlAndAcceptingSubscribersKeys() {
+    void chefPlanJsonAlwaysCarriesImageUrlAcceptingSubscribersAndActiveSubscriberCountKeys() {
         JsonNode node = json.valueToTree(plan(null, true));
 
+        assertThat(node.get("activeSubscriberCount").asInt()).isEqualTo(3);
         assertThat(node.has("imageUrl")).isTrue();
         assertThat(node.get("imageUrl").isNull()).isTrue();
         assertThat(node.get("acceptingSubscribers").asBoolean()).isTrue();
@@ -191,7 +192,7 @@ class ChefPlanImageControllerTest {
         return new ChefPlanResponse(
             PLAN_ID, "MEAL-ABC", "Weekly lunches", "Home lunches", "WEEKLY", new BigDecimal("1200.00"), "INR",
             "ACTIVE", null, null, null, Instant.parse("2026-08-13T00:00:00Z"), Instant.parse("2026-08-13T00:00:00Z"),
-            imageUrl, acceptingSubscribers
+            imageUrl, acceptingSubscribers, 3
         );
     }
 }

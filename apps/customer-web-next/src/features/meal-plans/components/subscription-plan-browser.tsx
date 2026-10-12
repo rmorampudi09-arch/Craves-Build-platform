@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { getAddress } from "@/features/auth/api/cravesAuth";
 import type { PublicSubscriptionPlan } from "@/features/meal-plans/lib/subscription-contract";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 
@@ -20,7 +21,14 @@ export function SubscriptionPlanBrowser() {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/subscriptions/plans", { cache: "no-store" })
+    const address = getAddress();
+    if (typeof address?.lat !== "number" || typeof address.lng !== "number") {
+      setMessage("Choose a delivery address to see meal plans from chefs near you.");
+      setLoading(false);
+      return;
+    }
+    // Only chefs within 10 km of this address are listed.
+    fetch(`/api/subscriptions/plans?latitude=${address.lat}&longitude=${address.lng}`, { cache: "no-store" })
       .then(async response => ({ response, body: await response.json().catch(() => null) }))
       .then(({ response, body }) => {
         if (!active) return;

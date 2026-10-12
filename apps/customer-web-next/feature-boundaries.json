@@ -203,6 +203,7 @@
     "landing -> src/features/auth/api/cravesAuth.ts",
     "landing -> src/features/sign-in/components/AuthModal.tsx",
     "meal-plans -> src/features/addresses/lib/address-contract.ts",
+    "meal-plans -> src/features/auth/api/cravesAuth.ts",
     "notifications -> src/features/auth/api/cravesAuth.ts",
     "orders -> src/features/auth/api/cravesAuth.ts",
     "orders -> src/features/cart/api/cravesCart.ts",

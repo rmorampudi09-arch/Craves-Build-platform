@@ -12,11 +12,17 @@ function apiBaseUrl(): string {
   return value.replace(/\/$/, "");
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams;
+  const latitude = Number(params.get("latitude"));
+  const longitude = Number(params.get("longitude"));
+  const near = params.has("latitude") && params.has("longitude") && Number.isFinite(latitude) && Number.isFinite(longitude)
+    ? `?latitude=${latitude}&longitude=${longitude}`
+    : "";
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), SUBSCRIPTION_UPSTREAM_TIMEOUT_MS);
   try {
-    const upstream = await boundedFetch(`${apiBaseUrl()}/subscriptions/plans`, {
+    const upstream = await boundedFetch(`${apiBaseUrl()}/subscriptions/plans${near}`, {
       headers: { Accept: "application/json" },
       cache: "no-store",
       signal: controller.signal

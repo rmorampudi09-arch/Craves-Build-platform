@@ -32,6 +32,8 @@ public class SubscriptionService {
     );
     private static final Pattern IDEMPOTENCY_KEY = Pattern.compile("^[A-Za-z0-9._:-]{8,128}$");
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Kolkata");
+    /** Meal plans are offered within this distance of the chef's kitchen, the same radius the app uses for dishes. */
+    static final int PLAN_RADIUS_METERS = 10_000;
 
     private final SubscriptionRepository repository;
     private final CapacityService capacityService;
@@ -54,6 +56,23 @@ public class SubscriptionService {
         this.billing = billing;
         this.billingRepository = billingRepository;
         this.lifecycleRepository = lifecycleRepository;
+    }
+
+    /** Without a location every plan is listed, as older app versions expect; with one, only plans within 10 km. */
+    public List<PublicPlanResponse> listActivePlans(Double latitude, Double longitude) {
+        if ((latitude == null) != (longitude == null)) {
+            throw ApiException.badRequest("LOCATION_INCOMPLETE", "Send both latitude and longitude, or neither");
+        }
+        if (latitude == null) {
+            return listActivePlans();
+        }
+        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+            throw ApiException.badRequest("LOCATION_INVALID", "latitude or longitude is out of range");
+        }
+        return repository.listActivePlansNear(latitude, longitude, PLAN_RADIUS_METERS).stream()
+            .filter(capacityService::isPlanBookable)
+            .map(this::toPublicPlan)
+            .toList();
     }
 
     public List<PublicPlanResponse> listActivePlans() {
@@ -129,6 +148,12 @@ public class SubscriptionService {
         }
         if (request.deliveryAddressId() == null) {
             throw ApiException.badRequest("DELIVERY_ADDRESS_REQUIRED", "deliveryAddressId is required for meal subscriptions");
+        }
+        if (!repository.isAddressNearChef(user.identityId(), request.deliveryAddressId(), plan.chefIdentityId(), PLAN_RADIUS_METERS)) {
+            throw ApiException.badRequest(
+                "DELIVERY_ADDRESS_OUT_OF_RANGE",
+                "This chef delivers meal plans within 10 km of their kitchen. Choose an address closer to the chef."
+            );
         }
         SubscriptionResponse stored = repository.createSubscription(
             user.identityId(),

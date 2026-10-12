@@ -2,24 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSyncExternalStore } from "react";
 import { Bell } from "lucide-react";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import { ChefAccountMenu } from "@/features/chef/components/chef-account-menu";
-import { ChefWorkspaceNavigation } from "@/features/chef/components/chef-workspace-navigation";
-import { isChefModeVerified } from "@/features/chef/lib/chef-mode";
-import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
+import { ChefWorkspaceNavigation, useChefWorkspace } from "@/features/chef/components/chef-workspace-navigation";
 
 /** Chef Mode header: the logo stays in the chef app; leaving it is an explicit account action. */
 export function ChefAppHeader() {
   const pathname = usePathname();
-  const user = useSyncExternalStore(subscribeSession, getSession, () => null);
+  const { workspace, pending } = useChefWorkspace();
   // The sign-in page carries its own brand block and no account controls.
   if (pathname === "/chef/sign-in") return null;
-  const workspace =
-    !pathname.startsWith("/chef/application") &&
-    Boolean(user?.roles.some((role) => role.toUpperCase() === "CHEF")) &&
-    isChefModeVerified(user?.id);
+  const onNotifications = pathname === "/chef/notifications";
   return (
     <header className="chef-panel-header">
       <div className="chef-header-bar">
@@ -31,11 +25,17 @@ export function ChefAppHeader() {
         <ChefWorkspaceNavigation placement="header" />
         <div className="chef-header-actions">
           {workspace ? (
-            <Link href="/chef/notifications" className="chef-icon-button" aria-label="Notifications">
+            <Link
+              href="/chef/notifications"
+              className="chef-icon-button"
+              aria-label="Notifications"
+              aria-current={onNotifications ? "page" : undefined}
+            >
               <Bell className="h-5 w-5" aria-hidden="true" />
             </Link>
           ) : null}
-          <ChefAccountMenu />
+          {/* The menu needs the signed-in account; until the check answers, a circle keeps its place. */}
+          {pending ? <span className="chef-account-placeholder" aria-hidden="true" /> : <ChefAccountMenu />}
         </div>
       </div>
     </header>

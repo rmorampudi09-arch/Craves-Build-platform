@@ -9,7 +9,7 @@ export default function ChefStatementsPage() {
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader title="Statements" description="PDF records of your orders and money, to keep or share." back={{ href: "/chef/finance", label: "Balance & payouts" }} />
+        <ChefPageHeader title="Statements" description="PDF records of your orders and money, to keep or share." back={{ href: "/chef/earnings", label: "Earnings" }} />
         <DocumentCenter mode="chef" />
       </ChefAccessBoundary>
     </main>

@@ -8,8 +8,8 @@ import { ChefOrderWatcher } from "../components/chef-order-watcher";
 import { ChefOrderInbox } from "../components/chef-order-inbox";
 import { fetchChefOrders, mergeOrders, noticeNewOrders, orderWords, resetOrderAlertsForTests, writeAlertPrefs } from "./chef-order-alert";
 import type { ChefOrder } from "./chef-order-contract";
-import { markChefModeVerified } from "./chef-mode";
-import { captureSessionContext, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
+import { isChefModeTab, markChefModeVerified } from "./chef-mode";
+import { captureSessionContext, getSession, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
 vi.mock("next/navigation", () => ({ usePathname: vi.fn(() => "/chef/menu"), useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
@@ -125,6 +125,38 @@ describe("orders keep working when the sign-in cookie expires", () => {
     expect(calls.slice(0, 2)).toEqual(["/api/chef/orders", "/api/auth/refresh"]);
     await waitFor(() => expect(calls).toContain("/api/auth/me"));
   });
+
+  it("never ends Chef Mode when another tab renewed the sign-in first or Craves is reconnecting", async () => {
+    const chef: CravesIdentity = { id: "61111111-1111-4111-8111-111111111111", phoneNumber: "+910000000002", displayName: "Asha Rao", email: null, emailVerified: false, status: "ACTIVE", roles: ["CUSTOMER", "CHEF"] };
+    setSessionIdentity(chef);
+    markChefModeVerified(chef.id);
+    const calls: string[] = [];
+    let renewed = false;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      calls.push(url);
+      if (url === "/api/auth/refresh") {
+        renewed = true; // the other tab's new cookies arrive meanwhile
+        return Response.json({ code: "REFRESH_SUPERSEDED" }, { status: 409 });
+      }
+      return renewed ? Response.json([order(A, "CHEF_ACCEPTANCE_PENDING")]) : Response.json({ code: "SESSION_EXPIRED" }, { status: 401 });
+    }));
+    expect((await fetchChefOrders())?.map((o) => o.id)).toEqual([A]);
+
+    // A 409 from the orders route, then an expired cookie while the refresh is unavailable (sessionFetch's 503).
+    for (const ordersStatus of [409, 401]) {
+      vi.mocked(fetch).mockImplementation(async (input) => {
+        calls.push(String(input));
+        return Response.json({}, { status: String(input) === "/api/auth/refresh" ? 503 : ordersStatus });
+      });
+      expect(await fetchChefOrders()).toBeNull();
+    }
+    await act(async () => {});
+    expect(calls).not.toContain("/api/auth/me");
+    expect(isChefModeTab(chef.id)).toBe(true);
+    expect(getSession()?.id).toBe(chef.id);
+    invalidateSession(captureSessionContext());
+  });
 });
 
 describe("Orders screen", () => {
@@ -146,6 +178,7 @@ describe("Orders screen", () => {
   it("never moves the chef off the tab they chose when new orders arrive", async () => {
     render(createElement(ChefOrderInbox));
     await screen.findByRole("heading", { name: /Order #000101/ });
+    await act(async () => {});
     fireEvent.click(screen.getByRole("button", { name: /^All/ }));
     list = [order(C, "CHEF_ACCEPTANCE_PENDING"), ...list];
     await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });

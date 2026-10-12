@@ -7,12 +7,13 @@ import type {
   DeliveryReadyAddress,
 } from "@/features/addresses/lib/address-contract";
 import { selectDefaultDeliveryAddress } from "@/features/addresses/lib/address-selection";
-import { clearChefMode, clearCustomerMode } from "@/features/chef/lib/chef-mode";
+import { clearChefMode, forgetChefDevice } from "@/features/chef/lib/chef-mode";
 import {
   parseCustomerProfile,
   type CustomerProfile,
 } from "@/features/profile/lib/profile-contract";
 import { sessionFetch, shareSessionRefresh } from "@/features/auth/api/sessionFetch";
+import { withSessionRefreshLock } from "@/features/auth/lib/session-refresh-lock";
 
 export type CravesUser = {
   id: string;
@@ -142,10 +143,10 @@ export function getSessionEmailRevision(): number { return sessionEmailRevision;
 export function isSessionReady(): boolean { return !sessionEnding && session?.status === "ACTIVE"; }
 function invalidatePendingSessionWork() { sessionGeneration += 1; roleSynchronization = null; }
 export function invalidateSession(context: SessionContext): void { if (isSessionContextCurrent(context)) forgetSession(); }
-function forgetSession() {
-  // Neither side (Chef Mode or the customer app) outlives the session that verified it.
-  clearChefMode();
-  clearCustomerMode();
+function forgetSession(explicit = false) {
+  // An ended sign-in closes Chef Mode in this tab; only "Sign out" makes this device forget the kitchen.
+  if (explicit) forgetChefDevice();
+  else clearChefMode();
   invalidatePendingSessionWork(); sessionEnding = false; session = null; sessionEmailRevision = -1; selectedLocation = null; persistSessionSnapshot(null); persistAddressSnapshot(null); notify();
 }
 let selectedLocation: CravesAddress | null = null;
@@ -153,14 +154,52 @@ let roleSynchronization: Promise<CravesUser | null> | null = null;
 const sessionRefreshes = new Map<number, Promise<Response | null>>();
 const listeners = new Set<() => void>();
 
+const REFRESHED_AT_KEY = "craves.session.refreshed-at";
+// This tab's own entry under REFRESHED_AT_KEY, so only another tab's renewal counts as one.
+let ownRefreshAt = 0;
+
+function refreshedByAnotherTabSince(time: number): boolean {
+  try {
+    const at = Number(window.localStorage.getItem(REFRESHED_AT_KEY)) || 0;
+    return at >= time && at !== ownRefreshAt;
+  } catch {
+    return false;
+  }
+}
+
+/** The current cookies' identity in the refresh response's shape ({ identity }), or the failed /me response. */
+async function currentIdentity(): Promise<Response | null> {
+  const me = await fetch("/api/auth/me", { cache: "no-store", credentials: "same-origin" }).catch(() => null);
+  if (!me?.ok) return me;
+  // Not Response.json(): older iOS Safari lacks it.
+  return new Response(JSON.stringify({ identity: await me.json().catch(() => null) }), {
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 function refreshSessionForGeneration(generation: number): Promise<Response | null> {
   const existing = sessionRefreshes.get(generation);
   if (existing) return existing;
 
-  const pending = fetch("/api/auth/refresh", {
-    method: "POST",
-    credentials: "same-origin",
-    cache: "no-store",
+  const requestedAt = Date.now();
+  // Tabs share the cookies, and a second rotation of the same refresh cookie is refused, so they take turns.
+  const pending = withSessionRefreshLock(async () => {
+    // Another tab renewed the sign-in while this one waited: its new cookies are already here.
+    if (refreshedByAnotherTabSince(requestedAt)) return currentIdentity();
+    const response = await fetch("/api/auth/refresh", {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (response.ok) {
+      ownRefreshAt = Date.now();
+      try {
+        window.localStorage.setItem(REFRESHED_AT_KEY, String(ownRefreshAt));
+      } catch {
+        // Without storage other tabs refresh for themselves, one at a time.
+      }
+    }
+    return response;
   })
     .catch(() => null)
     .finally(() => {
@@ -318,7 +357,8 @@ export async function loadSession(
     }
     const refreshed = await refreshSessionForGeneration(context.generation);
     if (!isSessionContextCurrent(context)) return session;
-    if (refreshed?.ok) response = await lookup();
+    // 409: another tab renewed the sign-in first, and its cookies are already in this browser.
+    if (refreshed?.ok || refreshed?.status === 409) response = await lookup();
   }
 
   if (!isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) {
@@ -349,7 +389,9 @@ export async function synchronizeSessionRoles(): Promise<CravesUser | null> {
   const context = captureSessionContext();
   const sequence = ++identityRequestSequence;
   const pending = (async () => {
-    const response = await refreshSessionForGeneration(context.generation);
+    let response = await refreshSessionForGeneration(context.generation);
+    // Another tab renewed the sign-in first: its cookies already carry the current roles.
+    if (response?.status === 409 && isSessionContextCurrent(context)) response = await currentIdentity();
     if (!isSessionContextCurrent(context)) return session;
     if (!response?.ok) return null;
 
@@ -395,7 +437,7 @@ export async function clearSession(): Promise<void> {
   }
   // Signing out also drops chef application details kept across "Sign in again" (use-chef-onboarding).
   try { window.sessionStorage.removeItem("craves.chef-application-unsaved"); } catch { /* storage blocked */ }
-  forgetSession();
+  forgetSession(true);
 }
 
 export function subscribeSession(listener: () => void): () => void {

@@ -111,6 +111,10 @@
 @media (hover: hover) {
   .chef-icon-button:hover { background: var(--chef-input); }
 }
+/* On Notifications the bell is the current page, marked like the current tab. */
+.chef-icon-button[aria-current="page"] { background: var(--chef-input); color: var(--chef-action); }
+/* Holds the account menu's place until the session check says who is signed in. */
+.chef-account-placeholder { height: 3rem; width: 3rem; flex-shrink: 0; border-radius: 999px; background: var(--chef-input); }
 
 .chef-desktop-nav { display: flex; margin-left: 1.5rem; }
 .chef-desktop-nav-primary { display: flex; gap: 0.25rem; }
@@ -141,7 +145,8 @@
 }
 
 @media (max-width: 1023px) {
-  .chef-panel-theme { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); }
+  /* The tab bar is 4rem and a hairline tall: the last button on a page always ends clear of it. */
+  .chef-panel-theme { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom)); }
   .chef-desktop-nav { display: none; }
   .chef-mobile-nav {
     position: fixed;
@@ -165,7 +170,7 @@
     gap: 0.25rem;
     border-radius: 12px;
     color: var(--chef-muted);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     line-height: 1;
     text-decoration: none;
@@ -499,6 +504,9 @@ a.chef-stat { transition: background-color 150ms var(--chef-ease); }
   background: var(--chef-input);
   color: var(--chef-text);
 }
+/* The drawing sits on the section's white, like the page it belongs to. */
+.chef-empty-image { height: 9.5rem; width: auto; max-width: 100%; object-fit: contain; }
+@media (min-width: 640px) { .chef-empty-image { height: 11rem; } }
 .chef-empty-title { margin-top: 0.5rem; font-family: var(--font-display-family); font-size: 1.125rem; font-weight: 700; color: var(--chef-text); }
 .chef-empty-text { max-width: 26rem; color: var(--chef-muted); font-size: 0.9375rem; line-height: 1.5; }
 .chef-skeleton {
@@ -773,8 +781,10 @@ body .chef-panel-theme .chef-btn:is(.is-primary, .is-go):disabled:not([aria-busy
 .chef-check-doc-state { flex-shrink: 0; color: var(--chef-muted); font-size: 0.8125rem; font-weight: 600; }
 .chef-check-docs li.is-rejected .chef-check-doc-state { color: var(--chef-accent-text); }
 
-/* ---------- New order bar on pages that don't list orders ---------- */
-.chef-order-banner-wrap {
+/* ---------- New order bar on pages that don't list orders, and action messages ---------- */
+/* Both ride above the tab bar (or the dish Save bar, below); a message moves up over the order bar. */
+.chef-order-banner-wrap,
+.chef-flash-region {
   position: fixed;
   right: 0.75rem;
   bottom: calc(4.5rem + env(safe-area-inset-bottom));
@@ -784,7 +794,61 @@ body .chef-panel-theme .chef-btn:is(.is-primary, .is-go):disabled:not([aria-busy
   justify-content: center;
   pointer-events: none;
 }
-@media (min-width: 1024px) { .chef-order-banner-wrap { bottom: 1.5rem; } }
+@media (min-width: 1024px) { .chef-order-banner-wrap, .chef-flash-region { bottom: 1.5rem; } }
+.chef-panel-theme:has(.chef-order-banner) .chef-flash-region { translate: 0 -4.25rem; }
+.chef-flash-region:focus { outline: none; }
+.chef-flash {
+  display: flex;
+  width: 100%;
+  max-width: 30rem;
+  align-items: center;
+  gap: 0.625rem;
+  border: 1px solid var(--chef-line);
+  border-radius: var(--chef-radius);
+  background: var(--chef-surface);
+  padding: 0.25rem 0.25rem 0.25rem 1rem;
+  color: var(--chef-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+  box-shadow: 0 10px 30px rgba(26, 26, 26, 0.16);
+  pointer-events: auto;
+}
+.chef-flash > svg { height: 1.25rem; width: 1.25rem; flex-shrink: 0; color: var(--chef-go); }
+.chef-flash > p { min-width: 0; flex: 1; margin: 0; padding-block: 0.5rem; }
+.chef-flash.is-danger,
+.chef-flash.is-danger > svg { color: var(--chef-accent-text); }
+.chef-panel-theme .chef-flash-close {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 0;
+  color: var(--chef-muted);
+  box-shadow: none;
+}
+@media (hover: hover) {
+  .chef-panel-theme .chef-flash-close:not(:disabled):hover { background: var(--chef-input); box-shadow: none; }
+}
+.chef-panel-theme .chef-flash-close:focus-visible { outline: 2px solid var(--chef-text); outline-offset: -4px; }
+/* Success times itself: one 3.5 s animation (slide in, then stay) whose end closes it. Pointing
+   at it or focusing its button holds it. Reduced motion keeps the wait without the slide. */
+.chef-flash.is-success { animation: chefFlash 3.5s linear both; }
+.chef-flash:is(:hover, :focus-within) { animation-play-state: paused; }
+@keyframes chefFlash {
+  from { opacity: 0; transform: translateY(12px); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  6%, to { opacity: 1; transform: none; }
+}
+@keyframes chefFlashStay { to { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .chef-flash.is-danger { animation: chefBannerIn 260ms var(--chef-ease); }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Longhands: the shorthand would also force play-state back to running and undo the hold. */
+  .chef-panel-theme .chef-flash.is-success { animation-name: chefFlashStay !important; animation-duration: 3.5s !important; }
+}
 /* While the bar shows, pages get room for it, so the last button and a focused field are never under it. */
 .chef-panel-theme:has(.chef-order-banner) .chef-panel-content { padding-bottom: 5.5rem; }
 html:has(.chef-order-banner) { scroll-padding-bottom: 12rem; }
@@ -842,6 +906,14 @@ html:has(.chef-order-banner) { scroll-padding-bottom: 12rem; }
 .chef-notifications .min-h-screen { min-height: 0; background: transparent; padding-bottom: 0; }
 .chef-notifications .min-h-screen > main { max-width: none; padding: 0; }
 body .chef-notifications [aria-label="Notification filters"] button { border-color: transparent !important; box-shadow: none; }
+/* Help chat: fills the screen under the title, so the message box stays above the tab bar. */
+.chef-support-chat {
+  display: flex;
+  height: max(26rem, calc(100dvh - 20rem - env(safe-area-inset-bottom)));
+  flex-direction: column;
+  padding: 0 1rem 1rem;
+}
+@media (min-width: 1024px) { .chef-support-chat { height: max(30rem, calc(100dvh - 17rem)); padding-inline: 1.5rem; } }
 /* The sign-in page has no bottom navigation to make room for. */
 .chef-panel-theme:has(.chef-sign-in) { padding-bottom: 0; }
 
@@ -874,10 +946,10 @@ body .chef-notifications [aria-label="Notification filters"] button { border-col
 /* The Save bar ends the page, so the new-order bar rides just above it (stuck or at the end)
    instead of reserving room below it: both stay tappable at every width. */
 .chef-panel-theme:has(.chef-dish-editor) .chef-panel-content { padding-bottom: 0; }
-.chef-panel-theme:has(.chef-dish-editor) .chef-order-banner-wrap { bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
-@media (min-width: 768px) { .chef-panel-theme:has(.chef-dish-editor) .chef-order-banner-wrap { bottom: 6.5rem; } }
+.chef-panel-theme:has(.chef-dish-editor) :is(.chef-order-banner-wrap, .chef-flash-region) { bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+@media (min-width: 768px) { .chef-panel-theme:has(.chef-dish-editor) :is(.chef-order-banner-wrap, .chef-flash-region) { bottom: 6.5rem; } }
 /* Wide screens: centred over the form column, which is the centred page minus the 19.5rem preview. */
-@media (min-width: 1024px) { .chef-panel-theme:has(.chef-dish-editor) .chef-order-banner-wrap { padding-right: 19.5rem; } }
+@media (min-width: 1024px) { .chef-panel-theme:has(.chef-dish-editor) :is(.chef-order-banner-wrap, .chef-flash-region) { padding-right: 19.5rem; } }
 /* While that bar shows, the last field can still scroll clear of it. */
 .chef-panel-theme:has(.chef-order-banner) .chef-dish-actions { margin-top: 5rem; }
 .chef-dish-actions {

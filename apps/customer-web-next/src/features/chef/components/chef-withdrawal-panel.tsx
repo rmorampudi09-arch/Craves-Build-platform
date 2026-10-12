@@ -3,7 +3,8 @@ import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { ChefAccountingBreakdown } from "@/features/chef/components/chef-accounting-breakdown";
 import { AlertTriangle, ChevronDown, Info, RefreshCw } from "lucide-react";
-import { ChefNotice, ChefPill, ChefSection, ChefSkeleton, dateTime, formatInr, type ChefTone } from "@/features/chef/components/chef-ui";
+import { ChefFlash, ChefNotice, ChefPill, ChefSection, dateTime, formatInr, type ChefTone } from "@/features/chef/components/chef-ui";
+import { ChefBalanceSkeleton } from "@/features/chef/components/chef-loading";
 
 import { useEffect, useRef, useState } from "react";
 import { chefBalanceSchema, payoutSchema, type ChefBalance } from "@/features/admin/finance/lib/finance-contract";
@@ -23,6 +24,7 @@ const PAYOUT_STATE: Record<ChefBalance["recentPayouts"][number]["status"], { lab
 export function ChefWithdrawalPanel() {
   const [balance, setBalance] = useState<ChefBalance | null>(null);const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState("");
   const request = useRef<{requestKey: string; expectedAvailableAmount: string} | null>(null);
   async function load() {
     const response = await sessionFetch("/api/chef/finance/balance", {cache: "no-store"});
@@ -34,12 +36,12 @@ export function ChefWithdrawalPanel() {
   async function withdraw() {
     if (!balance || busy) return;
     if (!request.current) request.current = {requestKey: crypto.randomUUID(), expectedAvailableAmount: balance.available};
-    setBusy(true);
+    setBusy(true);setNotice("");
     try {
       const response = await sessionFetch("/api/chef/finance/withdrawals", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(request.current)});
       if (!response.ok) throw new ChefError("Withdrawal was not confirmed. Refresh your balance and review any existing request before retrying.", chefApiError(response, await response.json().catch(() => null), "").ref, response.status);
       const result = payoutSchema.parse(await response.json());request.current = null;
-      setMessage(`You asked for ${formatInr(result.amount)}. It’s in your bank when it shows Paid below.`);
+      setMessage("");setNotice(`You asked for ${formatInr(result.amount)}. It’s in your bank when it shows Paid below.`);
       setBalance(await load());
     } catch (error) {setMessage(chefErrorText(error instanceof ChefError ? error : new ChefError("The request outcome is uncertain. Do not create another transfer.", "WITHDRAWAL_OUTCOME_UNCERTAIN", 0), ""));}
     finally {setBusy(false);}
@@ -48,7 +50,7 @@ export function ChefWithdrawalPanel() {
   return <div className="chef-stack">
     <ChefSection title="Money you can take out" labelledBy="chef-balance">
       {!balance ? (
-        message ? <ChefNotice icon={AlertTriangle} role="status">{message}</ChefNotice> : <ChefSkeleton className="h-24" />
+        message ? <ChefNotice icon={AlertTriangle} role="status">{message}</ChefNotice> : <ChefBalanceSkeleton />
       ) : <>
         <p className="font-display text-[2.25rem] font-bold leading-none tracking-[-0.03em] text-[#1A1A1A] chef-amount">{formatInr(balance.available)}</p>
         <dl className="mt-4 grid grid-cols-2 gap-3 text-[0.875rem]">
@@ -83,5 +85,6 @@ export function ChefWithdrawalPanel() {
     </details> : null}
 
     <div className="flex justify-center"><button type="button" onClick={() => void refresh()} disabled={busy} className="chef-btn is-small"><RefreshCw className="h-4 w-4" aria-hidden="true" />Check balance again</button></div>
+    <ChefFlash message={notice} onClose={() => setNotice("")} />
   </div>;
 }

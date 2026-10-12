@@ -44,6 +44,7 @@ import {
   type CheckoutPaymentFailure,
 } from "@/features/checkout/components/CheckoutPaymentButton";
 import { AddressEditorFlow } from "@/features/addresses/components/AddressEditorFlow";
+import { useCartAddressAvailability } from "@/features/home/lib/cart-address-availability";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 
 const ADDRESS_KEY = "craves.checkout.addressId";
@@ -291,6 +292,8 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
   const [addressChangeBusy, setAddressChangeBusy] = useState(false);
+  // While Razorpay is open or a payment is being confirmed, a new address would start a second checkout.
+  const [paymentLocked, setPaymentLocked] = useState(false);
   const [error, setError] = useState("");
 
   const prepareCheckout = useCallback(async () => {
@@ -434,7 +437,7 @@ export default function CheckoutPage() {
   }
 
   async function selectAddress(id: string) {
-    if (addressChangeBusy || (id === selectedId && checkout)) return;
+    if (addressChangeBusy || paymentLocked || (id === selectedId && checkout)) return;
 
     setAddressChangeBusy(true);
     setError("");
@@ -460,7 +463,7 @@ export default function CheckoutPage() {
   }
 
   function openAddressEditor() {
-    if (addressChangeBusy) return;
+    if (addressChangeBusy || paymentLocked) return;
 
     // Opening the editor is safe and should never be blocked by a checkout
     // restoration attempt. We only rebuild the cart if the customer actually
@@ -525,6 +528,16 @@ export default function CheckoutPage() {
     reviewing,
     selectedId,
   ]);
+
+  const selectedAddress = addresses.find((address) => address.id === selectedId);
+  const { unavailableItems } = useCartAddressAvailability({
+    items,
+    address: selectedAddress
+      ? { id: selectedAddress.id, lat: selectedAddress.latitude, lng: selectedAddress.longitude }
+      : null,
+  });
+  // Pay waits only when nothing in the order can reach this address; changing it stays open.
+  const noItemReachesAddress = items.length > 0 && unavailableItems.length === items.length;
 
   async function handleBackToCart() {
     setError("");
@@ -591,7 +604,6 @@ export default function CheckoutPage() {
 
   const subtotal = checkout?.foodSubtotal ?? cartTotal();
   const currency = checkout?.currency ?? cartCurrency();
-  const selectedAddress = addresses.find((address) => address.id === selectedId);
   const visibleAddresses = showAllAddresses ? addresses : addresses.slice(0, 3);
   const hasCheckoutContext = items.length > 0 || checkout !== null;
   const addressProblem =
@@ -653,7 +665,7 @@ export default function CheckoutPage() {
                     <button
                       type="button"
                       onClick={openAddressEditor}
-                      disabled={addressChangeBusy}
+                      disabled={addressChangeBusy || paymentLocked}
                       className="inline-flex min-h-9 items-center gap-1.5 rounded-[10px] border border-[#D7DADF] bg-white px-3 text-xs font-bold text-[#1A1A1A] shadow-[0_1px_2px_rgba(26,26,26,0.06)] transition hover:!bg-[#F1F3F5] disabled:pointer-events-none disabled:opacity-45"
                     >
                       <Plus className="h-3.5 w-3.5" aria-hidden="true" />
@@ -681,7 +693,7 @@ export default function CheckoutPage() {
                               name="delivery-address"
                               value={address.id}
                               checked={checked}
-                              disabled={addressChangeBusy}
+                              disabled={addressChangeBusy || paymentLocked}
                               onChange={() => void selectAddress(address.id)}
                               className="mt-1 h-4 w-4 shrink-0 accent-[#F62E18] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-55"
                             />
@@ -725,7 +737,7 @@ export default function CheckoutPage() {
                       <button
                         type="button"
                         onClick={openAddressEditor}
-                        disabled={addressChangeBusy}
+                        disabled={addressChangeBusy || paymentLocked}
                         className="craves-primary-action mt-4"
                       >
                         <Plus className="h-5 w-5" aria-hidden="true" />
@@ -733,6 +745,34 @@ export default function CheckoutPage() {
                       </button>
                     </div>
                   )}
+
+                  {paymentLocked ? (
+                    <p className="mx-3 mb-3 px-1 text-xs leading-5 text-[#6B6B6B] sm:mx-4 sm:mb-4">
+                      The address stays as it is while your payment goes through.
+                    </p>
+                  ) : null}
+
+                  {/* Always mounted, so a notice that arrives after the check is read out. */}
+                  <div aria-live="polite">
+                    {unavailableItems.length > 0 ? (
+                      <div className="mx-3 mb-3 flex items-start gap-2.5 rounded-[1rem] bg-[#F1F3F5] p-3 text-sm leading-5 text-[#1A1A1A] sm:mx-4 sm:mb-4">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#C4200F]" aria-hidden="true" />
+                        <div className="min-w-0">
+                          <p className="font-semibold">
+                            {noItemReachesAddress
+                              ? "Your order can’t be delivered to this address"
+                              : "Some dishes can’t be delivered to this address"}
+                          </p>
+                          <p className="mt-0.5">
+                            Not available here: {unavailableItems.map((item) => `${item.name} × ${item.qty}`).join(", ")}.{" "}
+                            {noItemReachesAddress
+                              ? "Choose another address to pay, or add a new one."
+                              : "Remove them from your cart, or choose another address."}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
 
                   {addressProblem ? (
                     <p
@@ -878,11 +918,13 @@ export default function CheckoutPage() {
                         disabled={
                           reviewing ||
                           addressChangeBusy ||
+                          noItemReachesAddress ||
                           (!checkout && !selectedAddress)
                         }
                         failure={paymentFailure}
                         ensureCheckout={ensureCheckout}
                         onFailure={setPaymentFailure}
+                        onPaymentLockChange={setPaymentLocked}
                       />
                     ) : null}
                   </div>

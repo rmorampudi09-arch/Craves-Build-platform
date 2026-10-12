@@ -2,7 +2,7 @@
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
-import { ChefNotice, ChefPageHead, ChefPill, ChefSection } from "@/features/chef/components/chef-ui";
+import { ChefFlash, ChefNotice, ChefPageHead, ChefPill, ChefSection } from "@/features/chef/components/chef-ui";
 import Link from "next/link";
 import { AddressMapPicker } from "@/features/addresses/components/AddressMapPicker";
 import { useEffect, useRef, useState } from "react";
@@ -111,6 +111,17 @@ function addressSummary(form: FormState): string {
     .join(", ");
 }
 
+// The way out of the page, apart from each setup step's own Back.
+const PAGE_BACK = { href: "/chef/profile", label: "More" } as const;
+function PageBack() {
+  return (
+    <Link href={PAGE_BACK.href} className="chef-back-link">
+      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+      {PAGE_BACK.label}
+    </Link>
+  );
+}
+
 function StepHeader({
   label,
   onBack,
@@ -136,6 +147,7 @@ export function ChefKitchenForm() {
   const [step, setStep] = useState<SetupStep>("name");
   const [loaded, setLoaded] = useState(false);
   const [message, setMessage] = useState("Loading your kitchen…");
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
   const locationRequest = useRef(0);
@@ -239,6 +251,7 @@ export function ChefKitchenForm() {
 
   function go(next: SetupStep) {
     setMessage("");
+    setNotice("");
     setInvalidField(null);
     setStep(next);
     window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
@@ -375,6 +388,7 @@ export function ChefKitchenForm() {
       setKitchen(nextKitchen);
       setForm(fromKitchen(nextKitchen));
       setMessage("");
+      setNotice("Kitchen saved");
       setStep("summary");
     } catch (error) {
       setMessage(chefErrorText(error, "We couldn’t save your kitchen. Please try again."));
@@ -392,9 +406,12 @@ export function ChefKitchenForm() {
 
   if (!kitchen && message && !form.kitchenName && !form.addressLine1) {
     return (
-      <section className="rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center">
-        <p className="text-sm text-[#6B6B6B]">{message}</p>
-      </section>
+      <>
+        <PageBack />
+        <section className="mt-2 rounded-3xl border border-[#E5E7EB] bg-white p-7 text-center">
+          <p className="text-sm text-[#6B6B6B]">{message}</p>
+        </section>
+      </>
     );
   }
 
@@ -402,7 +419,7 @@ export function ChefKitchenForm() {
     const open = kitchen?.status === "ACTIVE";
     return (
       <div>
-        <ChefPageHead title="Kitchen" subtitle="How customers see your kitchen, and where riders pick up." />
+        <ChefPageHead title="Kitchen" subtitle="How customers see your kitchen, and where riders pick up." back={PAGE_BACK} />
         <div className="chef-stack">
           <ChefSection>
             <div className="flex flex-wrap items-center gap-2">
@@ -422,13 +439,16 @@ export function ChefKitchenForm() {
             </div>
           </ChefSection>
         </div>
+        <ChefFlash message={notice} onClose={() => setNotice("")} />
       </div>
     );
   }
 
   if (step === "name") {
     return (
-      <section className="chef-section p-5 md:p-7">
+      <>
+      <PageBack />
+      <section className="chef-section mt-2 p-5 md:p-7">
         <StepHeader label="Name" onBack={kitchen ? () => go("summary") : undefined} />
         <span className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]"><Store className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">What should customers call your kitchen?</h1>
@@ -446,12 +466,15 @@ export function ChefKitchenForm() {
         {message ? <p id="kitchen-field-error" role="alert" className="chef-field-error mt-4">{message}</p> : null}
         <button type="button" onClick={continueName} className="chef-btn is-primary is-block mt-7">Continue</button>
       </section>
+      </>
     );
   }
 
   if (step === "address") {
     return (
-      <section className="chef-section p-5 md:p-7">
+      <>
+      <PageBack />
+      <section className="chef-section mt-2 p-5 md:p-7">
         <StepHeader label="Pickup address" onBack={() => go("name")} />
         <span className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]"><MapPin className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">Is this where you cook?</h1>
@@ -470,12 +493,15 @@ export function ChefKitchenForm() {
         </div>
         <button type="button" onClick={continueAddress} disabled={locating} className="chef-btn is-primary is-block mt-7">Yes, this is right</button>
       </section>
+      </>
     );
   }
 
   const openSelected = form.status === "ACTIVE";
   return (
-    <section className="chef-section p-5 md:p-7">
+    <>
+    <PageBack />
+    <section className="chef-section mt-2 p-5 md:p-7">
       <StepHeader label="Ready for orders" onBack={() => go("address")} />
       <span className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]"><Check className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
       <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">Should your kitchen be ready when your first dish goes live?</h1>
@@ -493,5 +519,6 @@ export function ChefKitchenForm() {
       {message ? <p id="kitchen-field-error" role="alert" className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm font-medium text-[#C4200F]">{message}</p> : null}
       <button type="button" disabled={busy || locating || suspended} onClick={() => void save()} className="chef-btn is-primary is-block mt-7">{busy ? "Saving…" : "Save my kitchen"}</button>
     </section>
+    </>
   );
 }

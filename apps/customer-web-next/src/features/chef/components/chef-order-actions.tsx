@@ -12,7 +12,7 @@ import {
   PackageCheck,
   XCircle,
 } from "lucide-react";
-import { ChefNotice, ChefSection } from "@/features/chef/components/chef-ui";
+import { ChefFlash, ChefNotice, ChefSection } from "@/features/chef/components/chef-ui";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import {
   parseChefOrderResponse,
@@ -156,12 +156,8 @@ export function ChefOrderActions({
     "aria-disabled": Boolean(busyAction) || undefined,
     "aria-busy": busyAction === action || undefined,
   });
-  const feedback = (
-    <>
-      {message ? <p aria-hidden="true" className="mt-4 text-[0.9375rem] text-[#6B6B6B]">{message}</p> : null}
-      {error ? <ChefNotice icon={AlertTriangle} tone="danger" role="alert">{error}</ChefNotice> : null}
-    </>
-  );
+  // While saving, the pressed button says so; the saved answer shows for a moment as a flash below.
+  const feedback = error ? <ChefNotice icon={AlertTriangle} tone="danger" role="alert">{error}</ChefNotice> : null;
   const backButton = (
     <button type="button" onClick={() => goTo("choose")} className="chef-btn is-small !border-0 !bg-transparent px-2">
       <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back
@@ -299,7 +295,7 @@ export function ChefOrderActions({
     content = (
       <ChefNotice icon={CheckCircle2}>
         <p className="font-semibold">Nothing to do right now</p>
-        <p className="mt-0.5 text-[#6B6B6B]">{message || "This order updates here if it needs you again."}</p>
+        <p className="mt-0.5 text-[#6B6B6B]">This order updates here if it needs you again.</p>
       </ChefNotice>
     );
   }
@@ -313,6 +309,10 @@ export function ChefOrderActions({
       <p role="status" aria-live="polite" className="sr-only">
         {message}
       </p>
+      {/* On an order card the list shows its own update notice, since the card moves on. */}
+      {inline ? null : (
+        <ChefFlash message={busyAction ? "" : message} announce={false} onClose={() => setMessage("")} />
+      )}
     </>
   );
 }

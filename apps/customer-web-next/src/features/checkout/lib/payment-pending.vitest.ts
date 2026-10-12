@@ -25,10 +25,10 @@ function paymentStatus(status: string) {
   });
 }
 
-function renderButton(onFailure = vi.fn()) {
+function renderButton(onFailure = vi.fn(), onPaymentLockChange?: (locked: boolean) => void) {
   render(createElement(CheckoutPaymentButton, {
     checkout, previewAmount: 200, currency: "INR", failure: null,
-    ensureCheckout: async () => checkout, onFailure,
+    ensureCheckout: async () => checkout, onFailure, onPaymentLockChange,
   }));
   return onFailure;
 }
@@ -76,6 +76,19 @@ describe("payment pending after a reload", () => {
     await waitFor(() => expect(onFailure).toHaveBeenCalledWith(expect.objectContaining({ retryAllowed: true })));
     expect(window.sessionStorage.getItem("craves.checkout.paymentPending")).toBeNull();
     expect(await screen.findByRole("button", { name: /Pay ₹240/ })).toBeTruthy();
+  });
+
+  it("holds the delivery address while the payment is confirmed and frees it once it failed", async () => {
+    const lock = vi.fn();
+    vi.stubGlobal("fetch", vi.fn()
+      .mockImplementationOnce(async () => paymentStatus("PAYMENT_PENDING"))
+      .mockImplementationOnce(async () => paymentStatus("FAILED")));
+    renderButton(vi.fn(), lock);
+
+    await screen.findByText(/Last checked at/);
+    expect(lock).toHaveBeenLastCalledWith(true);
+    fireEvent.click(screen.getByRole("button", { name: "Check status" }));
+    await waitFor(() => expect(lock).toHaveBeenLastCalledWith(false));
   });
 
   it("ignores a pending payment recorded for another checkout", () => {

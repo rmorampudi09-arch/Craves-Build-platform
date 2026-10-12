@@ -1,5 +1,15 @@
 export const siteUrl = "https://craves.in";
 export const cravesLogoUrl = `${siteUrl}/brand/craves-logo-20260805.png`;
+export const socialProfiles = ["https://www.instagram.com/craves.in_/"];
+// Bump when SEO page copy changes; a lastmod that changes on every request is ignored by search engines.
+export const seoContentUpdated = new Date("2026-10-11");
+// Served by app/opengraph-image.tsx; child pages that set openGraph must list it or they lose the preview image.
+export const shareImage = {
+  url: `${siteUrl}/opengraph-image`,
+  width: 1200,
+  height: 630,
+  alt: "Craves – Homemade food from trusted home chefs",
+};
 
 export type LaunchCity = {
   slug: string;
@@ -36,10 +46,56 @@ export const launchCities: LaunchCity[] = [
       "HITEC City",
       "Gachibowli",
       "Madhapur",
+      "Kondapur",
+      "Kukatpally",
+      "KPHB Colony",
+      "Miyapur",
+      "Nizampet",
+      "Bachupally",
+      "Manikonda",
+      "Narsingi",
+      "Financial District",
+      "Nanakramguda",
+      "Tolichowki",
+      "Mehdipatnam",
       "Jubilee Hills",
       "Banjara Hills",
-      "Kondapur",
+      "Ameerpet",
+      "Begumpet",
+      "SR Nagar",
+      "Somajiguda",
+      "Panjagutta",
+      "Khairatabad",
+      "Himayatnagar",
+      "Abids",
+      "Koti",
+      "Charminar",
+      "Old City",
       "Secunderabad",
+      "Tarnaka",
+      "Habsiguda",
+      "Uppal",
+      "Nacharam",
+      "Malkajgiri",
+      "ECIL",
+      "Kompally",
+      "Alwal",
+      "Dilsukhnagar",
+      "LB Nagar",
+      "Kothapet",
+      "Vanasthalipuram",
+      "Attapur",
+      "Rajendranagar",
+      "Shamshabad",
+      "Chandanagar",
+      "Lingampally",
+      "Kokapet",
+      "Pragathi Nagar",
+      "Moosapet",
+      "Sainikpuri",
+      "AS Rao Nagar",
+      "Boduppal",
+      "Pocharam",
     ],
   },
   {
@@ -59,6 +115,16 @@ export const launchCities: LaunchCity[] = [
       "Marathahalli",
       "Electronic City",
       "Jayanagar",
+      "BTM Layout",
+      "JP Nagar",
+      "Bellandur",
+      "Sarjapur Road",
+      "Hebbal",
+      "Yelahanka",
+      "Malleshwaram",
+      "Rajajinagar",
+      "Banashankari",
+      "Bannerghatta Road",
     ],
   },
 ];
@@ -105,6 +171,20 @@ export const foodIntents: FoodIntent[] = [
     category: "Indian meals",
     phrases: ["tiffin service", "homemade tiffin", "daily tiffin"],
     description: "Tiffin-style food and daily meal options prepared by home chefs.",
+  },
+  {
+    slug: "andhra-meals",
+    name: "Andhra meals",
+    category: "South Indian",
+    phrases: ["andhra meals", "andhra home food", "telugu home style meals"],
+    description: "Andhra and Telugu home-style meals, pappu, curries and rice plates from home kitchens.",
+  },
+  {
+    slug: "north-indian-meals",
+    name: "North Indian meals",
+    category: "Indian meals",
+    phrases: ["north indian home food", "dal roti sabzi", "punjabi home food"],
+    description: "Dal, roti, sabzi and North Indian home-style thalis from home chefs.",
   },
   {
     slug: "veg-meals",
@@ -176,6 +256,19 @@ export function cityUrl(city: LaunchCity): string {
   return `${siteUrl}/${city.slug}`;
 }
 
+export function areaSlug(area: string): string {
+  return area.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+export function areaBySlug(city: LaunchCity, slug: string): string | undefined {
+  return city.neighborhoods.find((area) => areaSlug(area) === slug);
+}
+
+// Area pages share the /[city]/[slug] route with food pages; slugs never overlap (see seo-geo-contract.test.ts).
+export function cityAreaUrl(city: LaunchCity, area: string): string {
+  return `${siteUrl}/${city.slug}/${areaSlug(area)}`;
+}
+
 export function cityFoodUrl(city: LaunchCity, food: FoodIntent): string {
   return `${siteUrl}/${city.slug}/${food.slug}`;
 }
@@ -184,7 +277,7 @@ export function foodUrl(food: FoodIntent): string {
   return `${siteUrl}/food/${food.slug}`;
 }
 
-export function seoKeywords(city?: LaunchCity, food?: FoodIntent): string[] {
+export function seoKeywords(city?: LaunchCity, food?: FoodIntent, area?: string): string[] {
   const base = [
     "Craves",
     "homemade food",
@@ -197,6 +290,23 @@ export function seoKeywords(city?: LaunchCity, food?: FoodIntent): string[] {
     ...base,
     ...(city ? [city.name, city.searchName, ...city.neighborhoods] : []),
     ...(food ? [food.name, food.category, ...food.phrases] : []),
+    ...(area
+      ? [
+          `homemade food in ${area}`,
+          `home cooked food ${area}`,
+          `food delivery ${area}`,
+          `best food in ${area}`,
+          `tiffin service ${area}`,
+          `biryani in ${area}`,
+        ]
+      : city
+        ? [
+            `best homemade food in ${city.name}`,
+            `food near me ${city.name}`,
+            `home food delivery ${city.name}`,
+            `tiffin service ${city.name}`,
+          ]
+        : []),
   ];
 }
 
@@ -219,7 +329,18 @@ export function cravesSiteGraph() {
             addressCountry: city.country,
           },
         })),
-        sameAs: [siteUrl],
+        sameAs: socialProfiles,
+        email: "support@craves.in",
+        contactPoint: {
+          "@type": "ContactPoint",
+          contactType: "customer support",
+          email: "support@craves.in",
+          telephone: "+91-8367366787",
+          areaServed: "IN",
+        },
+        description:
+          "Craves is a homemade food marketplace connecting customers with trusted home chefs for fresh home-cooked meals, biryani, tiffin, and meal subscriptions across Hyderabad and Bangalore.",
+        knowsAbout: ["Homemade food", "Home chefs", "Home-cooked meals", "Hyderabadi biryani", "Tiffin service", "Meal subscriptions"],
       },
       {
         "@type": "WebSite",
@@ -238,11 +359,59 @@ export function cravesSiteGraph() {
   };
 }
 
-export function cityStructuredData(city: LaunchCity, food?: FoodIntent) {
-  const url = food ? cityFoodUrl(city, food) : cityUrl(city);
+// Neighbors in the (roughly geographic) list order, so every area page links to a different set.
+export function nearbyAreas(city: LaunchCity, area: string, count = 6): string[] {
+  const index = city.neighborhoods.indexOf(area);
+  if (index < 0) return [];
+  const half = Math.floor(count / 2);
+  const start = Math.max(0, Math.min(index - half, city.neighborhoods.length - count - 1));
+  return city.neighborhoods.slice(start, start + count + 1).filter((item) => item !== area);
+}
+
+// Rendered on the page and in FAQPage schema; Google requires the two to match.
+export function localFaq(city: LaunchCity, food?: FoodIntent, area?: string) {
+  const place = area ? `${area}, ${city.name}` : city.searchName;
+  const dish = food ? food.name.toLowerCase() : "homemade food";
+  return [
+    {
+      question: `Where can I order ${dish} in ${place}?`,
+      answer: `On Craves (craves.in), a homemade food marketplace for ${place}. Browse trusted home chefs near you, order fresh home-cooked ${dish}, pay securely and track your delivery.`,
+    },
+    {
+      question: `Does Craves deliver in ${place}?`,
+      answer: area
+        ? `Yes. Craves serves ${area} and nearby localities as part of ${city.name}, one of its primary cities. Open craves.in/home and set your address to see the kitchens cooking near you right now.`
+        : `Yes. ${city.searchName} is one of the primary Craves cities. Open craves.in/home and set your address to see the kitchens cooking near you right now.`,
+    },
+    {
+      question: food ? `What kind of ${dish} can I find on Craves?` : "What food can I order on Craves?",
+      answer: food
+        ? `${food.description} What you see depends on which approved home kitchens near you are cooking today.`
+        : "Home-style biryani, breakfast and tiffin, lunch and dinner meals, veg and non-veg curries, healthy meals, snacks, sweets and weekly meal subscriptions, all cooked by approved home chefs.",
+    },
+    {
+      question: "Are Craves home chefs verified?",
+      answer: "Every Craves home chef goes through an application and document review before their kitchen can list food, and customers can see ratings and reviews before ordering.",
+    },
+  ];
+}
+
+export function cityStructuredData(city: LaunchCity, food?: FoodIntent, area?: string) {
+  const url = area ? cityAreaUrl(city, area) : food ? cityFoodUrl(city, food) : cityUrl(city);
+  const place = area ? `${area}, ${city.name}` : city.searchName;
   const name = food
-    ? `Craves ${food.name} in ${city.searchName}`
-    : `Craves homemade food in ${city.searchName}`;
+    ? `Craves ${food.name} in ${place}`
+    : `Craves homemade food in ${place}`;
+  const cityPlace = {
+    "@type": "City",
+    name: city.searchName,
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: city.name,
+      addressRegion: city.state,
+      addressCountry: city.country,
+    },
+  };
 
   return {
     "@context": "https://schema.org",
@@ -258,15 +427,16 @@ export function cityStructuredData(city: LaunchCity, food?: FoodIntent) {
           : ["Homemade food", "Indian food", "Home-cooked meals"],
         priceRange: "₹₹",
         menu: `${siteUrl}/products-pricing`,
-        areaServed: {
-          "@type": "City",
-          name: city.searchName,
-          address: {
-            "@type": "PostalAddress",
-            addressRegion: city.state,
-            addressCountry: city.country,
-          },
+        areaServed: area
+          ? { "@type": "Place", name: place, containedInPlace: cityPlace }
+          : cityPlace,
+        address: {
+          "@type": "PostalAddress",
+          addressLocality: area ?? city.name,
+          addressRegion: city.state,
+          addressCountry: city.country,
         },
+        parentOrganization: { "@id": `${siteUrl}/#organization` },
         geo: {
           "@type": "GeoCoordinates",
           latitude: city.latitude,
@@ -276,25 +446,21 @@ export function cityStructuredData(city: LaunchCity, food?: FoodIntent) {
       {
         "@type": "FAQPage",
         "@id": `${url}#faq`,
-        mainEntity: [
-          {
-            "@type": "Question",
-            name: `Does Craves cover ${city.searchName}?`,
-            acceptedAnswer: {
-              "@type": "Answer",
-              text: `${city.searchName} is one of the primary Craves launch cities for homemade food discovery and home-chef ordering.`,
-            },
-          },
-          {
-            "@type": "Question",
-            name: food ? `Can I find ${food.name} on Craves?` : "What can I find on Craves?",
-            acceptedAnswer: {
-              "@type": "Answer",
-              text: food
-                ? `Craves helps customers discover ${food.name.toLowerCase()} and related home-chef food options where approved kitchens are available.`
-                : "Craves helps customers discover homemade meals, chef kitchens, live pricing, ordering, payment, and delivery-supported workflows.",
-            },
-          },
+        mainEntity: localFaq(city, food, area).map((item) => ({
+          "@type": "Question",
+          name: item.question,
+          acceptedAnswer: { "@type": "Answer", text: item.answer },
+        })),
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${url}#breadcrumb`,
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Craves", item: siteUrl },
+          { "@type": "ListItem", position: 2, name: city.name, item: cityUrl(city) },
+          ...(area || food
+            ? [{ "@type": "ListItem", position: 3, name: area ?? food?.name, item: url }]
+            : []),
         ],
       },
     ],

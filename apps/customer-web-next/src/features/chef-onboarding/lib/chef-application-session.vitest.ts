@@ -223,7 +223,8 @@ it("sends a signed-out applicant to the Chef Mode sign-in with the current step 
 });
 
 it("asks a signed-in customer to sign in to Chef Mode before opening the application", async () => {
-  sessionStorage.clear(); onApplicationStep(); boundary();
+  // Neither this tab nor this device confirmed Chef Mode.
+  sessionStorage.clear(); localStorage.clear(); onApplicationStep(); boundary();
   await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/chef/sign-in?returnTo=%2Fchef%2Fapplication%3Fstep%3Dkitchen"));
   expect(screen.queryByLabelText("Private chef draft")).toBeNull();
   expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/application")).toBe(false);

@@ -209,14 +209,29 @@ test("every page loads in its own shape under its own header, and quick loads sh
     ["../features/notifications/screens/Notifications.tsx", "notifications"],
     ["../features/favorites/screens/Wishlist.tsx", "saved"],
     ["../features/checkout/screens/Checkout.tsx", "checkout"],
+    ["../features/checkout/components/customer-checkout.tsx", "checkout-details"],
+    ["../features/orders/screens/OrderHistory.tsx", "orders"],
+    ["../features/orders/components/CustomerOrderStatus.tsx", "order"],
+    ["../features/orders/screens/OrderTracking.tsx", "tracking"],
+    ["../features/addresses/screens/Addresses.tsx", "addresses"],
     ["../features/meal-plans/components/subscription-plan-browser.tsx", "plans"],
     ["../features/meal-plans/components/subscription-enrollment-form.tsx", "plan-form"],
     ["../features/meal-plans/components/subscription-details.tsx", "plan-details"],
   ] as const) {
     const contents = source(screen);
     assert.match(contents, new RegExp(`<CustomerSectionSkeleton variant="${variant}"`), screen);
-    // Never Home's shape (the default variant) on a page that is not Home.
+    // Never Home's shape (the default variant) on a page that is not Home, and no bare pulse boxes.
     assert.doesNotMatch(contents, /<CustomerPageSkeleton(?![^>]*variant=)/, screen);
+    assert.doesNotMatch(contents, /animate-pulse|Loading checkout…/, screen);
+  }
+  // Route changes to pages with their own header show that page's shape at once.
+  for (const [route, variant] of [
+    ["../app/orders/loading.tsx", "orders"],
+    ["../app/orders/[orderId]/loading.tsx", "order"],
+    ["../app/orders/[orderId]/tracking/loading.tsx", "tracking"],
+    ["../app/addresses/loading.tsx", "addresses"],
+  ] as const) {
+    assert.match(source(route), new RegExp(`<CustomerRouteSkeleton[\\s\\S]*variant="${variant}"`), route);
   }
   // Blocks fade in only after 300 ms, so fast loads and quick revisits never flash a skeleton.
   assert.match(source("../shared/components/loading/CustomerPageSkeleton.module.css"), /cravesSkeletonReveal 200ms ease-out 300ms both/);

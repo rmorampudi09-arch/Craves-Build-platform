@@ -16,9 +16,11 @@ import {
 import { TrackingHeader } from "@/features/orders/components/TrackingHeader";
 import {
   formatOrderStatus,
+  isAbandonedUnpaidOrder,
   parseCustomerOrder,
   type CustomerOrder,
 } from "@/features/orders/lib/order-contract";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { shortOrderNumber } from "@/shared/lib/order-number";
 import { returnToListPath } from "@/shared/lib/return-scroll";
 
@@ -104,8 +106,18 @@ function timeline(order: CustomerOrder): TimelineStep[] {
 
 type Tone = "placed" | "waiting" | "problem";
 
-function summary(order: CustomerOrder): { title: string; next: string; tone: Tone } {
+/** Nothing changes after these, so the page stops checking. A rejected order still moves on to its refund. */
+const FINAL_STATUSES = new Set(["DELIVERED", "CANCELLED", "REFUNDED"]);
+
+function summary(order: CustomerOrder, abandoned: boolean): { title: string; next: string; tone: Tone } {
   const kitchen = order.kitchenName;
+  if (abandoned) {
+    return {
+      title: "Payment not completed",
+      next: "This order wasn’t paid, so it wasn’t sent to the kitchen. If money left your account, contact support with this order number.",
+      tone: "problem",
+    };
+  }
   switch (order.status) {
     case "PAYMENT_PENDING":
       return {
@@ -258,21 +270,21 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
     [orderId],
   );
 
+  // Its age is measured when it was fetched, so a render never changes the answer.
+  const abandoned = order !== null && checkedAt !== null && isAbandonedUnpaidOrder(order, checkedAt.getTime());
+  const settled = order !== null && (abandoned || FINAL_STATUSES.has(order.status));
+
   useEffect(() => {
-    let cancelled = false;
     void refresh();
-
-    const timer = window.setInterval(() => {
-      if (!cancelled && document.visibilityState === "visible") {
-        void refresh(true);
-      }
-    }, 15_000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
   }, [refresh]);
+
+  useEffect(() => {
+    if (settled) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refresh(true);
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [refresh, settled]);
 
   const header = (
     <TrackingHeader
@@ -288,19 +300,9 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
     return (
       <div className="min-h-screen bg-white">
         {header}
-        <p className="sr-only" role="status">
-          Loading your order
-        </p>
-        <div
-          className="mx-auto grid max-w-5xl gap-5 px-4 py-5 md:px-6 lg:grid-cols-[minmax(0,1fr)_22rem]"
-          aria-hidden="true"
-        >
-          <div className="space-y-5">
-            <div className="h-44 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-            <div className="h-72 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-          </div>
-          <div className="h-80 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-        </div>
+        <main className="mx-auto max-w-5xl px-4 py-5 md:px-6 md:py-6">
+          <CustomerSectionSkeleton variant="order" label="Loading your order" />
+        </main>
       </div>
     );
   }
@@ -334,7 +336,7 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
     );
   }
 
-  const status = summary(order);
+  const status = summary(order, abandoned);
   const steps = timeline(order);
   const delivered = order.status === "DELIVERED";
   const problem = status.tone === "problem";
@@ -424,7 +426,7 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
               </h2>
               {problem ? (
                 <p className="mt-2 text-sm leading-6 text-[#4A4A4A]">
-                  {formatOrderStatus(order.status)} · updated {when(order.updatedAt)}
+                  {abandoned ? status.title : formatOrderStatus(order.status)} · updated {when(order.updatedAt)}
                 </p>
               ) : (
                 <ol className="relative mt-4 space-y-5 pl-10">
@@ -476,7 +478,9 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
               <p className="mt-5 text-xs text-[#6B6B6B]" role="status">
                 {refreshing
                   ? "Checking for an update…"
-                  : `Updates every 15 seconds${checkedAt ? ` · last checked ${clock.format(checkedAt)}` : ""}`}
+                  : settled && checkedAt
+                    ? `Last checked ${clock.format(checkedAt)}`
+                    : `Updates every 15 seconds${checkedAt ? ` · last checked ${clock.format(checkedAt)}` : ""}`}
               </p>
             </section>
           </div>
@@ -516,7 +520,7 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
                   ) : null,
                 )}
                 <div className="flex justify-between gap-3 border-t border-[#E5E7EB] pt-3 text-base font-bold text-[#1A1A1A]">
-                  <dt>{awaitingPayment ? "To pay" : "Total paid"}</dt>
+                  <dt>{abandoned ? "Order total" : awaitingPayment ? "To pay" : "Total paid"}</dt>
                   <dd className="tabular-nums">{money(order.grandTotal, order.currency)}</dd>
                 </div>
               </dl>

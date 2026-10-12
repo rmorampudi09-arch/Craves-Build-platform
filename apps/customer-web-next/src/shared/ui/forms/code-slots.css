@@ -1,7 +1,8 @@
 /*
  * One-time-code slots (CodeSlots). Plain CSS, so the separately built landing popup uses it too.
- * Motion: each digit rises 8px and settles in 0.3s with a 0.2 overshoot; the success and error
- * waves step 20ms per slot. Colours come from the component's --cs-* variables.
+ * Motion: each digit rises 8px and settles in 0.3s with a 0.2 overshoot; on success each slot turns
+ * green in 260ms, and the success and error waves step 14ms per slot (the next page is already
+ * loading while it plays). Colours come from the component's --cs-* variables.
  */
 .code-slots {
   position: relative;
@@ -48,7 +49,31 @@
     box-shadow: none !important;
     background: transparent !important;
     color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
+    caret-color: transparent !important;
+    opacity: 1 !important;
+    letter-spacing: -0.5em !important;
+    appearance: none !important;
   }
+}
+/* Browser autofill (Chrome's :-internal-autofill-selected, Safari) paints the field with its own
+   !important background, which no page rule beats: holding the colour change for days keeps the
+   field clear. An inset box-shadow would hide the slots just the same, so it is not used. */
+.code-slots .code-slots-input:-webkit-autofill,
+.code-slots .code-slots-input:-webkit-autofill:hover,
+.code-slots .code-slots-input:-webkit-autofill:focus,
+.code-slots .code-slots-input:-webkit-autofill:active {
+  -webkit-text-fill-color: transparent !important;
+  caret-color: transparent !important;
+  transition: background-color 600000s 0s, color 600000s 0s, -webkit-text-fill-color 600000s 0s !important;
+  box-shadow: none !important;
+}
+/* Separate rule: a browser without :autofill would drop the whole selector list above. */
+.code-slots .code-slots-input:autofill {
+  -webkit-text-fill-color: transparent !important;
+  caret-color: transparent !important;
+  transition: background-color 600000s 0s, color 600000s 0s, -webkit-text-fill-color 600000s 0s !important;
+  box-shadow: none !important;
 }
 .code-slots .code-slots-input::selection { background: transparent; }
 .code-slots .code-slots-input:disabled { cursor: not-allowed; }
@@ -97,7 +122,7 @@
   border-color: var(--cs-success);
   background: var(--cs-success);
   color: var(--cs-digit);
-  animation: cs-accept 420ms cubic-bezier(0.22, 1, 0.36, 1) calc(var(--cs-i) * var(--cs-cascade)) both;
+  animation: cs-accept 260ms cubic-bezier(0.22, 1, 0.36, 1) calc(var(--cs-i) * var(--cs-cascade)) both;
 }
 /* Wrong code: the row shakes once and the borders turn red, slot by slot. No red fill. */
 .code-slots.is-error .code-slot {

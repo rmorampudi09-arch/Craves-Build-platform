@@ -7,7 +7,8 @@ import { z } from "zod";
 import { bankConsentVersion, bankStatusSchema, bankSubmissionSchema, type BankStatus } from "@/features/admin/finance/lib/bank-onboarding-contract";
 import { captureSessionContext, isSessionReady, loadSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 import { ChevronDown, Info, Landmark, RefreshCw } from "lucide-react";
-import { ChefNotice, ChefPill, ChefSection, ChefSkeleton, type ChefTone } from "@/features/chef/components/chef-ui";
+import { ChefFlash, ChefNotice, ChefPill, ChefSection, type ChefTone } from "@/features/chef/components/chef-ui";
+import { ChefBankSkeleton } from "@/features/chef/components/chef-loading";
 import { RequiredMark } from "@/shared/ui/forms/required-mark";
 
 const applicantSchema = z.object({firstName: z.string().nullable().optional(), lastName: z.string().nullable().optional(), status: z.string()});
@@ -63,6 +64,7 @@ function ChefBankOnboardingContent({ titled }: { titled: boolean }) {
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState("");
   const [availabilityError, setAvailabilityError] = useState(false);
   const pending = useRef<z.infer<typeof bankSubmissionSchema> | null>(null);
   const mounted = useRef(true);
@@ -108,7 +110,7 @@ function ChefBankOnboardingContent({ titled }: { titled: boolean }) {
       consent, consentVersion: bankConsentVersion};
     const parsed = bankSubmissionSchema.safeParse(value);
     if (!parsed.success) {setMessage("Check that both account numbers match, the IFSC has 11 characters, and the consent box is ticked.");return;}
-    pending.current = parsed.data; setBusy(true);setMessage("");
+    pending.current = parsed.data; setBusy(true);setMessage("");setNotice("");
     try {
       const response = await sessionFetch("/api/chef-onboarding/bank", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(pending.current)});
       if (!response.ok) throw new Error(response.status === 409
@@ -117,7 +119,7 @@ function ChefBankOnboardingContent({ titled }: { titled: boolean }) {
         : "We couldn’t confirm your bank details were saved. Keep this page open and tap Check again. Trying again won’t create a duplicate.");
       const result = bankStatusSchema.parse(await response.json());
       setBank(result); setAccount("");setConfirmation("");setIfsc("");setConsent(false);pending.current = null;
-      setMessage("Bank details saved securely. The status above shows what happens next.");
+      setNotice("Bank details saved");
     } catch (error) {setMessage(chefErrorText(error, "Bank submission not confirmed"));}
     finally {setBusy(false);}
   }
@@ -133,7 +135,7 @@ function ChefBankOnboardingContent({ titled }: { titled: boolean }) {
           {bank.message ? <p className="mt-1 text-[0.875rem] leading-5 text-[#6B6B6B]">{bank.message}</p> : null}
         </div>
       </div> : null}
-      {!bank ? (availabilityError ? <p className="text-[0.875rem] text-[#6B6B6B]">Tap Check again. You can add an account once this loads.</p> : <ChefSkeleton className="h-16" />)
+      {!bank ? (availabilityError ? <p className="text-[0.875rem] text-[#6B6B6B]">Tap Check again. You can add an account once this loads.</p> : <ChefBankSkeleton />)
       : !bank.automaticActivation ? null
       : !registered ? <p className="text-[0.875rem] text-[#6B6B6B]">Submit your chef application first. This section updates by itself while the page is open.</p>
       : <details className="group" open={!bank.lastFour}>
@@ -149,6 +151,7 @@ function ChefBankOnboardingContent({ titled }: { titled: boolean }) {
         </details>}
       <p className="text-[0.8125rem] leading-5 text-[#6B6B6B]">Money goes only to a bank account that has been checked. Your account number isn’t kept on this phone.</p>
       {bank?.state === "VERIFIED" ? null : <button type="button" onClick={() => void refresh()} disabled={busy} className="chef-btn is-small w-fit"><RefreshCw className="h-4 w-4" aria-hidden="true" />Check again</button>}
+      <ChefFlash message={notice} onClose={() => setNotice("")} />
     </div>
   </ChefSection>;
 }

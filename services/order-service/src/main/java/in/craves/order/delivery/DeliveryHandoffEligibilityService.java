@@ -26,6 +26,7 @@ public class DeliveryHandoffEligibilityService {
         if (deliveryJobId == null || !StringUtils.hasText(borzoProviderDeliveryId)) {
             return new Eligibility(false);
         }
+        // A meal-plan order has no checkout; it stands in for its own checkout in delivery messages.
         return jdbc.query(
             """
                 SELECT o.status, o.accepted_at IS NOT NULL AS chef_accepted,
@@ -43,7 +44,7 @@ public class DeliveryHandoffEligibilityService {
                              )
                        ) AS courier_previously_assigned
                 FROM order_schema.customer_order o
-                WHERE o.id = ? AND o.checkout_id = ?
+                WHERE o.id = ? AND COALESCE(o.checkout_id, o.id) = ?
                 """,
             (rs, rowNumber) -> {
                 String deliveryStatus = rs.getString("delivery_status");

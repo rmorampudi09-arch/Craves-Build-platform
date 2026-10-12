@@ -232,9 +232,10 @@ public class DeliveryStatusUpdateService {
     }
 
     private LockedOrder lockOrder(UUID orderId) {
+        // A meal-plan order has no checkout; it stands in for its own checkout in delivery messages.
         return jdbcTemplate.query(
             """
-                SELECT id, checkout_id, customer_identity_id, status,
+                SELECT id, COALESCE(checkout_id, id) AS checkout_id, customer_identity_id, status,
                        accepted_at, refund_requested_at,
                        delivery_job_id, delivery_provider_id,
                        delivery_provider_delivery_id, delivery_status,

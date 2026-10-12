@@ -7,6 +7,7 @@ import com.azure.storage.blob.BlobContainerClientBuilder;
 import com.azure.storage.blob.models.BlobHttpHeaders;
 import in.craves.catalog.config.CatalogStorageProperties;
 import in.craves.catalog.exception.ApiException;
+import in.craves.catalog.web.ApiDtos.KitchenPhotoKind;
 import in.craves.catalog.web.ApiDtos.MenuItemImageResponse;
 import java.io.IOException;
 import java.io.InputStream;
@@ -47,9 +48,18 @@ public class MediaStorageService {
     }
 
     public StoredMedia uploadMenuImage(UUID kitchenId, UUID menuItemId, MultipartFile file) {
+        return upload("public/dishes/" + kitchenId + "/" + menuItemId + "/", file, "menu-image");
+    }
+
+    /** Chef or kitchen storefront photo; same type, size and optimisation rules as dish photos. */
+    public StoredMedia uploadKitchenImage(UUID kitchenId, KitchenPhotoKind kind, MultipartFile file) {
+        return upload("public/kitchens/" + kitchenId + "/" + kind.name().toLowerCase(Locale.ROOT) + "/", file, "kitchen-photo");
+    }
+
+    private StoredMedia upload(String folder, MultipartFile file, String fallbackName) {
         validate(file);
-        String originalFileName = StringUtils.hasText(file.getOriginalFilename()) ? file.getOriginalFilename() : "menu-image";
-        String blobName = "public/dishes/" + kitchenId + "/" + menuItemId + "/" + UUID.randomUUID() + "-" + sanitize(originalFileName);
+        String originalFileName = StringUtils.hasText(file.getOriginalFilename()) ? file.getOriginalFilename() : fallbackName;
+        String blobName = folder + UUID.randomUUID() + "-" + sanitize(originalFileName);
         byte[] data;
         try {
             data = file.getBytes();
@@ -57,6 +67,16 @@ public class MediaStorageService {
             throw new ApiException(500, "MEDIA_UPLOAD_FAILED", "Could not read uploaded media file");
         }
         return store(blobName, data, file.getContentType());
+    }
+
+    /** Best effort: removes the blob a public photo URL of this store points at; anything else is ignored. */
+    public void deleteByPublicUrl(String url) {
+        try {
+            String prefix = publicBaseUrl() + "/";
+            if (url != null && url.startsWith(prefix)) deleteQuietly(url.substring(prefix.length()));
+        } catch (RuntimeException ex) {
+            log.warn("Photo blob could not be removed: {}", ex.getClass().getSimpleName());
+        }
     }
 
     /** Best effort: a missing blob or unconfigured store never blocks removing the photo record. */

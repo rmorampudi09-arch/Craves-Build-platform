@@ -1,6 +1,9 @@
 -- Chef app order details: the customer's checkout note, the courier reported by the delivery provider,
 -- and the moment the chef handed the food over. All nullable and additive; existing rows stay valid.
 
+-- Fail fast instead of queueing behind long-running order transactions while the table is locked.
+SET LOCAL lock_timeout = '5s';
+
 ALTER TABLE order_schema.customer_order
     ADD COLUMN IF NOT EXISTS customer_note VARCHAR(500),
     ADD COLUMN IF NOT EXISTS delivery_partner_name TEXT,

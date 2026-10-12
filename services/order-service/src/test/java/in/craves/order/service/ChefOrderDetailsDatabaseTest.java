@@ -20,9 +20,12 @@ import in.craves.order.service.CatalogClient.CatalogKitchen;
 import in.craves.order.service.CatalogClient.CatalogMenuItem;
 import in.craves.order.service.CustomerAddressClient.CustomerAddress;
 import in.craves.order.web.ApiDtos.AddCartItemRequest;
+import in.craves.order.web.ApiDtos.CartSnapshotItem;
+import in.craves.order.web.ApiDtos.CartSnapshotRequest;
 import in.craves.order.web.ApiDtos.CheckoutRequest;
 import in.craves.order.web.ApiDtos.OrderResponse;
 import in.craves.order.web.ApiDtos.OrderStatus;
+import in.craves.order.web.CheckoutOperationDtos.Request;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -123,15 +126,55 @@ class ChefOrderDetailsDatabaseTest {
     }
 
     @Test
-    void noteOverFiveHundredCharactersIsRejectedAndNothingIsPlaced() {
+    void noteOverFiveHundredCharactersIsCutToItsFirstFiveHundredCodePointsInsteadOfFailingCheckout() {
+        String note = "x".repeat(499) + "y" + "z";
+
+        UUID id = placeOrder(note);
+
+        assertEquals(note.substring(0, 500), orders.getChefOrderDetail(chefActor, id).customerNote());
+        assertEquals(1, count("customer_order"));
+        assertEquals(0, count("cart_item"));
+    }
+
+    @Test
+    void theCutNeverSplitsASurrogatePair() {
+        String smile = new String(Character.toChars(0x1F600));
+
+        // 499 letters, a 2-char code point straddling the 500-char mark, then more text.
+        UUID straddling = placeOrder("x".repeat(499) + smile + "tail");
+        assertEquals("x".repeat(499) + smile, orders.getChefOrderDetail(chefActor, straddling).customerNote());
+
+        // 501 code points of 2 chars each: 500 whole code points are kept (varchar(500) counts code points).
+        UUID allPairs = placeOrder(smile.repeat(501));
+        assertEquals(smile.repeat(500), orders.getChefOrderDetail(chefActor, allPairs).customerNote());
+    }
+
+    @Test
+    void aLongNoteThroughTheCheckoutOperationPathSucceedsAndKeepsTheRequestFingerprint() {
         orders.addCartItem(customerActor, new AddCartItemRequest(menu, 1));
+        var cart = orders.getCart(customerActor);
+        var snapshot = new CartSnapshotRequest(cart.id(), cart.items().stream()
+            .map(item -> new CartSnapshotItem(item.id(), item.quantity(), item.updatedAt())).toList());
+        var request = new Request(address, "y".repeat(1200), snapshot);
+        var operations = new CheckoutOperationService(jdbc, orders);
+        UUID key = UUID.randomUUID();
 
-        OrderApiException failure = assertThrows(OrderApiException.class,
-            () -> orders.checkout(customerActor, new CheckoutRequest(address, "x".repeat(501))));
+        var first = operations.execute(customerActor, key, request);
 
-        assertEquals(HttpStatus.BAD_REQUEST, failure.status());
-        assertEquals(0, count("customer_order"));
-        assertEquals(1, count("cart_item"));
+        assertEquals("SUCCEEDED", first.status());
+        UUID orderId = jdbc.queryForObject(
+            "SELECT id FROM order_schema.customer_order WHERE checkout_id = ?", UUID.class, first.checkoutId());
+        assertEquals("y".repeat(500), orders.getChefOrderDetail(chefActor, orderId).customerNote());
+        // The receipt is keyed on the note exactly as the client sent it, not on the stored cut.
+        assertEquals(CheckoutOperationFingerprint.of(request), jdbc.queryForObject(
+            "SELECT request_hash FROM order_schema.checkout_operation WHERE operation_id = ?", String.class, key));
+        assertEquals(first, operations.execute(customerActor, key, request));
+        // Two notes that differ only past the cut are still different requests for the same key.
+        var otherTail = new Request(address, "y".repeat(500) + "z".repeat(700), snapshot);
+        assertEquals("CHECKOUT_OPERATION_CONFLICT",
+            assertThrows(OrderApiException.class, () -> operations.execute(customerActor, key, otherTail)).code());
+        assertEquals(1, count("checkout"));
+        assertEquals(1, count("checkout_operation"));
     }
 
     @Test
@@ -148,6 +191,20 @@ class ChefOrderDetailsDatabaseTest {
         assertEquals(java.util.List.of(OrderStatus.PAYMENT_PENDING, OrderStatus.CHEF_ACCEPTANCE_PENDING,
             OrderStatus.CHEF_ACCEPTED), history.stream().map(entry -> entry.status()).toList());
         assertEquals(T0.plusSeconds(60), history.get(1).at());
+    }
+
+    @Test
+    void statusHistorySkipsARowWithAnUnknownStatusInsteadOfFailingTheRoute() {
+        UUID id = placeOrder("note");
+        jdbc.update("DELETE FROM order_schema.order_status_history WHERE order_id = ?", id);
+        history(id, "PAYMENT_PENDING", T0);
+        history(id, "LEGACY_UNKNOWN_STATUS", T0.plusSeconds(30));
+        history(id, "CHEF_ACCEPTED", T0.plusSeconds(60));
+
+        var history = orders.getChefOrderDetail(chefActor, id).statusHistory();
+
+        assertEquals(java.util.List.of(OrderStatus.PAYMENT_PENDING, OrderStatus.CHEF_ACCEPTED),
+            history.stream().map(entry -> entry.status()).toList());
     }
 
     @Test

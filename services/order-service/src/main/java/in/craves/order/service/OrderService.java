@@ -35,8 +35,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -46,6 +49,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class OrderService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(OrderService.class);
     private static final String INR = "INR";
     private static final int MAX_NOTE_LENGTH = 500;
     private static final String DELIVERY_ADDRESS_REQUIRED_MESSAGE =
@@ -559,11 +563,21 @@ public class OrderService {
     /** The chef order plus its status history (oldest first); only the detail route carries the history. */
     public OrderResponse getChefOrderDetail(CravesPrincipal principal, UUID orderId) {
         OrderResponse order = getOrderForChef(principal, orderId);
-        return order.withStatusHistory(jdbcTemplate.query(
+        List<OrderStatusHistoryEntry> history = new ArrayList<>();
+        jdbcTemplate.query(
             "SELECT new_status, created_at FROM order_schema.order_status_history WHERE order_id = ? ORDER BY created_at ASC, id ASC",
-            (rs, rowNum) -> new OrderStatusHistoryEntry(OrderStatus.valueOf(rs.getString("new_status")), instant(rs, "created_at")),
+            (RowCallbackHandler) rs -> {
+                String status = rs.getString("new_status");
+                try {
+                    history.add(new OrderStatusHistoryEntry(OrderStatus.valueOf(status), instant(rs, "created_at")));
+                } catch (IllegalArgumentException unknownStatus) {
+                    // A history row must never take the whole detail route down; skip it.
+                    LOGGER.warn("Skipping order status history row with unknown status orderId={} status={}", orderId, status);
+                }
+            },
             orderId
-        ));
+        );
+        return order.withStatusHistory(history);
     }
 
     /** Records when the chef handed the food over. Status is untouched (the provider moves it on); repeats keep the first time. */
@@ -894,11 +908,14 @@ public class OrderService {
         return value == null ? BigDecimal.ZERO : value.setScale(2, RoundingMode.HALF_UP);
     }
 
-    /** Trimmed checkout note; blank becomes null. Rejects over {@value #MAX_NOTE_LENGTH} characters (the column size). */
+    /**
+     * Trimmed checkout note; blank becomes null. A longer note is cut to its first {@value #MAX_NOTE_LENGTH} code points
+     * (the column size, never splitting a surrogate pair) rather than failing the checkout.
+     */
     private static String checkoutNote(String value) {
         String note = value == null ? "" : value.trim();
         if (note.codePointCount(0, note.length()) > MAX_NOTE_LENGTH) {
-            throw OrderApiException.badRequest("CHECKOUT_NOTE_TOO_LONG", "A note can be at most " + MAX_NOTE_LENGTH + " characters.");
+            note = note.substring(0, note.offsetByCodePoints(0, MAX_NOTE_LENGTH));
         }
         return note.isEmpty() ? null : note;
     }

@@ -1,6 +1,6 @@
 import React from 'react';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
-import {InteractionManager, Modal, Text} from 'react-native';
+import {Modal, Text} from 'react-native';
 import {ChefToastProvider} from '../../chefShell/components/ui';
 import type {KitchenOpenState} from '../../chefProfile/state/useKitchenOpenState';
 import {KitchenStatusCard} from './KitchenStatusCard';
@@ -52,22 +52,24 @@ describe('KitchenStatusCard', () => {
     });
     return onChangeHours;
   };
+  // What waits for a closing sheet runs on the next frame; tests hold those frames until the sheet has finished closing.
   let queued: (() => void)[] = [];
-  let spy: jest.SpyInstance;
+  let frameSpy: jest.SpyInstance;
+  const sheetClosed = () => act(async () => queued.splice(0).forEach(run => run()));
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockKitchen = kitchen();
     mockMenu = [...Array(12).fill(0).map(() => dish(true)), ...Array(4).fill(0).map(() => dish(false)), dish(true, 'DRAFT')];
     queued = [];
-    spy = jest.spyOn(InteractionManager, 'runAfterInteractions').mockImplementation(((run: () => void) => {
+    frameSpy = jest.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(((run: () => void) => {
       queued.push(run);
-      return {cancel: jest.fn()};
+      return queued.length;
     }) as never);
   });
   afterEach(() => {
     act(() => tree?.unmount());
-    spy.mockRestore();
+    frameSpy.mockRestore();
   });
 
   it('says the kitchen is open and how many dishes can be ordered', async () => {
@@ -98,7 +100,7 @@ describe('KitchenStatusCard', () => {
     await act(async () => button('Close kitchen until I open it').props.onPress());
     expect(mockSetOpen).not.toHaveBeenCalled();
     expect(hasText('Close your kitchen?')).toBe(false);
-    await act(async () => queued.splice(0).forEach(run => run()));
+    await sheetClosed();
     expect(hasText('Close your kitchen?')).toBe(true);
     expect(
       hasText("2 orders are still cooking. They carry on, but you won't get new orders until you open the kitchen again."),
@@ -111,7 +113,7 @@ describe('KitchenStatusCard', () => {
     await mount(1);
     await act(async () => button('Change').props.onPress());
     await act(async () => button('Close kitchen until I open it').props.onPress());
-    await act(async () => queued.splice(0).forEach(run => run()));
+    await sheetClosed();
     expect(
       hasText("1 order is still cooking. It carries on, but you won't get new orders until you open the kitchen again."),
     ).toBe(true);
@@ -124,7 +126,7 @@ describe('KitchenStatusCard', () => {
     await act(async () => button('Change').props.onPress());
     await act(async () => button('Change opening hours').props.onPress());
     expect(onChangeHours).not.toHaveBeenCalled();
-    await act(async () => queued.splice(0).forEach(run => run()));
+    await sheetClosed();
     expect(onChangeHours).toHaveBeenCalledTimes(1);
   });
 

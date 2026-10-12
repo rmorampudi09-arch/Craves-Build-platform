@@ -4,6 +4,7 @@ import renderer, {act} from 'react-test-renderer';
 import {Button} from '../../../shared/components/Button';
 import type {CartLine} from '../domain/cartTypes';
 import {askKitchenSwitch, KitchenSwitchHost} from './KitchenSwitchDialog';
+jest.mock('../../../design/reducedMotion', () => ({useReducedMotionPreference: () => false}));
 
 const money = (amount: string) => ({amount, currency: 'INR'});
 const line = (lineId: string, itemName: string): CartLine => ({

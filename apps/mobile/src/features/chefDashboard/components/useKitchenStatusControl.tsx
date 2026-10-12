@@ -1,5 +1,4 @@
 import React from 'react';
-import {InteractionManager} from 'react-native';
 import {ConfirmDialog, useChefToast} from '../../chefShell/components/ui';
 import type {KitchenOpenState, KitchenPauseDuration} from '../../chefProfile/state/useKitchenOpenState';
 import {KitchenStatusSheet} from './KitchenStatusSheet';
@@ -32,7 +31,7 @@ export function useKitchenStatusControl(
   const [confirmClose, setConfirmClose] = React.useState(false);
 
   // Two Modals swapping in one tick (or a page opening under a closing sheet) misbehave on Android:
-  // close the sheet first, and run what comes next once it is gone and its animation has finished.
+  // close the sheet first, and run what comes next on the next frame, once it is gone.
   const afterSheetClosed = React.useRef<(() => void) | null>(null);
   const closeSheetThen = (next: () => void) => {
     afterSheetClosed.current = next;
@@ -44,8 +43,8 @@ export function useKitchenStatusControl(
     }
     const next = afterSheetClosed.current;
     afterSheetClosed.current = null;
-    const task = InteractionManager.runAfterInteractions(next);
-    return () => task.cancel();
+    const frame = requestAnimationFrame(next);
+    return () => cancelAnimationFrame(frame);
   }, [sheetOpen]);
 
   const change = async (action: () => Promise<boolean>, done: string) => {

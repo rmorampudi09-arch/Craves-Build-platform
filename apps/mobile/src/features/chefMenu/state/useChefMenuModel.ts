@@ -88,7 +88,18 @@ export function useChefMenuModel(): ChefMenuModel {
         }
         return true;
       } catch {
-        previous.forEach(([key, data]) => data && queryClient.setQueryData(key, data));
+        // Put back this dish only: another dish saved meanwhile must keep what the server holds.
+        for (const [key, data] of previous) {
+          const before = data?.find(item => item.id === menuItemId);
+          if (before) {
+            queryClient.setQueryData<ChefMenuItem[]>(key, current =>
+              current?.map(item => (item.id === menuItemId ? before : item)),
+            );
+          }
+        }
+        for (const key of keys) {
+          void queryClient.invalidateQueries({queryKey: key});
+        }
         return false;
       } finally {
         activeMutations.current.delete(menuItemId);

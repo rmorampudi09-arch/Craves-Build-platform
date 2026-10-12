@@ -1,6 +1,6 @@
 import React from 'react';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
-import {InteractionManager, Modal, RefreshControl, StyleSheet, Text} from 'react-native';
+import {Modal, RefreshControl, StyleSheet, Text} from 'react-native';
 import {AppApiError} from '../../../core/http/apiError';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
 import {ChefToastProvider, StatTile} from '../../chefShell/components/ui';
@@ -128,13 +128,13 @@ const mount = async () => {
     );
   });
 };
-// A Modal that is closing must be gone before the next one opens or the page changes, so the screen waits for
-// interactions to finish. Tests hold those callbacks until they say the sheet has finished closing.
-let queuedInteractions: (() => void)[] = [];
-let interactionsSpy: jest.SpyInstance;
+// A Modal that is closing must be gone before the next one opens or the page changes, so the screen waits one frame.
+// Tests hold those frame callbacks until they say the sheet has finished closing.
+let queuedFrames: (() => void)[] = [];
+let frameSpy: jest.SpyInstance;
 const finishInteractions = async () => {
   await act(async () => {
-    queuedInteractions.splice(0).forEach(run => run());
+    queuedFrames.splice(0).forEach(run => run());
   });
 };
 const statTile = (label: string) => tree.root.findAllByType(StatTile).find(tile => tile.props.label === label);
@@ -148,15 +148,15 @@ beforeEach(() => {
   mockNewActions = {actionStateByOrder: {}, feedback: null, accept: mockAccept, reject: jest.fn(), clearFeedback: jest.fn()};
   mockPrepActions = {actionStateByOrder: {}, feedback: null, markReady: mockMarkReady, callCustomer: jest.fn(), clearFeedback: jest.fn()};
   mockPrepTimers = {};
-  queuedInteractions = [];
-  interactionsSpy = jest.spyOn(InteractionManager, 'runAfterInteractions').mockImplementation(((run: () => void) => {
-    queuedInteractions.push(run);
-    return {cancel: jest.fn()};
+  queuedFrames = [];
+  frameSpy = jest.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(((run: () => void) => {
+    queuedFrames.push(run);
+    return queuedFrames.length;
   }) as never);
 });
 afterEach(() => {
   act(() => tree?.unmount());
-  interactionsSpy.mockRestore();
+  frameSpy.mockRestore();
 });
 
 describe('Home: new orders', () => {

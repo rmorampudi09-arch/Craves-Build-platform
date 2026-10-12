@@ -104,6 +104,13 @@ describe('home presentation', () => {
     expect(filterHomeDishes([paneer, dosa], '', 'Bowls')).toEqual([paneer]);
   });
 
+  it('finds a Snakes-category dish by the word customers read (snacks) and by the stored one (snakes)', () => {
+    const murukku = dish({id: '44444444-4444-4444-8444-444444444444', itemName: 'Murukku', category: 'Snakes'});
+    const paneer = dish();
+    expect(filterHomeDishes([paneer, murukku], 'snacks', null)).toEqual([murukku]);
+    expect(filterHomeDishes([paneer, murukku], 'snakes', null)).toEqual([murukku]);
+  });
+
   it('formats customer-facing price and distance without changing source values', () => {
     expect(formatDishPrice(199, 'INR')).toBe('₹199');
     expect(formatDishPrice(12.5, 'USD')).toBe('USD 12.50');

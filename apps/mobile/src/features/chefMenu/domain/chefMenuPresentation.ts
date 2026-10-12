@@ -101,7 +101,7 @@ export function filterChefMenuItems(
       return true;
     }
 
-    return [item.itemName, item.description ?? '', displayCategory]
+    return [item.itemName, item.description ?? '', displayCategory, menuCategoryLabel(displayCategory)]
       .join(' ')
       .toLocaleLowerCase()
       .includes(normalizedQuery);

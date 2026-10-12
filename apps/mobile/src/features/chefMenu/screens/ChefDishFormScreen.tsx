@@ -1,5 +1,5 @@
 import React from 'react';
-import {Image, InteractionManager, Pressable, StyleSheet, Switch, Text, View} from 'react-native';
+import {Image, Pressable, StyleSheet, Switch, Text, View} from 'react-native';
 import {Controller, useForm} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
 import {usePreventRemove} from '@react-navigation/native';
@@ -187,6 +187,8 @@ function DishForm({
 
   const model = editing ? editModel : addModel;
   const busy = model.submitState === 'submitting' || photoBusy;
+  // The switch saves by itself; a Save sent while it is still being saved could undo it.
+  const switchBusy = Boolean(dish && menu.availabilityStateByItem[dish.id]);
   const changed = isDirty || photo !== null;
 
   // Leaving with something typed asks first; every way out (X, Back, the system back) goes through here.
@@ -201,7 +203,7 @@ function DishForm({
     setLeaving(true);
   };
 
-  // Two Modals swapping in one tick misbehave on Android: close the sheet first, then do what it was for.
+  // Two Modals swapping in one tick misbehave on Android: close the sheet first, then do what it was for on the next frame.
   const afterSheet = React.useRef<(() => void) | null>(null);
   const closeSheetThen = (next: () => void) => {
     afterSheet.current = next;
@@ -213,8 +215,8 @@ function DishForm({
     }
     const next = afterSheet.current;
     afterSheet.current = null;
-    const task = InteractionManager.runAfterInteractions(next);
-    return () => task.cancel();
+    const frame = requestAnimationFrame(next);
+    return () => cancelAnimationFrame(frame);
   }, [sheet]);
 
   const choosePhoto = async (source: DishPhotoSource) => {
@@ -230,13 +232,23 @@ function DishForm({
     setPhoto(picked.photo);
   };
 
-  const sendPhoto = async (menuItemId: string): Promise<boolean> => {
+  // A second tap must not send the photo again, even before the busy state has reached the buttons.
+  const photoLock = React.useRef(false);
+  /** True when sent (or nothing to send), false when it did not upload, null when it is already being sent. */
+  const sendPhoto = async (menuItemId: string): Promise<boolean | null> => {
     if (!photo) {
       return true;
     }
+    if (photoLock.current) {
+      return null;
+    }
+    photoLock.current = true;
     setPhotoBusy(true);
     try {
-      return await uploadDishPhoto(menuItemId, photo);
+      const uploaded = await uploadDishPhoto(menuItemId, photo);
+      // After a good upload the screen is on its way out: the lock stays so a late tap cannot send it again.
+      photoLock.current = uploaded;
+      return uploaded;
     } finally {
       setPhotoBusy(false);
     }
@@ -251,6 +263,9 @@ function DishForm({
         return;
       }
       const uploaded = await sendPhoto(created.id);
+      if (uploaded === null) {
+        return;
+      }
       if (photo) {
         await menu.refresh().catch(() => undefined);
       }
@@ -281,6 +296,9 @@ function DishForm({
       }
       if (photo) {
         const uploaded = await sendPhoto(dish.id);
+        if (uploaded === null) {
+          return;
+        }
         await menu.refresh().catch(() => undefined);
         if (!uploaded) {
           reset(chefMenuItemToFormValues(saved));
@@ -322,7 +340,7 @@ function DishForm({
           <View style={styles.buttons}>
             <ChefActionButton
               busy={busy && !isDraft}
-              disabled={!changed || busy}
+              disabled={!changed || busy || switchBusy}
               label="Save changes"
               onPress={() => saveEdit(false)}
               style={styles.flex}

@@ -1,5 +1,5 @@
 import React from 'react';
-import {Alert, Image, InteractionManager, Switch, Text, TextInput} from 'react-native';
+import {Alert, Image, Switch, Text, TextInput} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
@@ -182,22 +182,13 @@ async function fillRequired() {
 }
 
 describe('ChefDishFormScreen', () => {
-  let interactions: jest.SpyInstance;
   beforeEach(() => {
     jest.clearAllMocks();
     mockPrevent = {enabled: false};
-    // The sheet has closed; run what was waiting for it at once.
-    interactions = jest.spyOn(InteractionManager, 'runAfterInteractions').mockImplementation(((run: () => void) => {
-      run();
-      return {cancel: jest.fn()};
-    }) as never);
     mockPicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({granted: true});
     mockPicker.requestCameraPermissionsAsync.mockResolvedValue({granted: true});
   });
-  afterEach(() => {
-    act(() => tree.unmount());
-    interactions.mockRestore();
-  });
+  afterEach(() => act(() => tree.unmount()));
 
   describe('add', () => {
     it('shows required fields first with the board labels, the optional extras, and Save draft / Publish dish', async () => {
@@ -288,6 +279,10 @@ describe('ChefDishFormScreen', () => {
     it('the chip Snacks saves the stored value Snakes, and More categories shows the rest', async () => {
       await mount('add', undefined);
       expect(withLabel('Roti & Chapati')).toBeUndefined();
+      // "More…" opens more choices; it is a button, not one of the choices.
+      expect(withLabel('More categories')!.props.accessibilityRole).toBe('button');
+      expect(withLabel('More categories')!.props.accessibilityState).toBeUndefined();
+      expect(withLabel('Curry')!.props.accessibilityRole).toBe('radio');
       await press('More categories');
       expect(['Roti & Chapati', 'Sweet Item', 'Fast Food'].map(label => Boolean(withLabel(label)))).toEqual([true, true, true]);
       await type('Dish name', 'Murukku');
@@ -360,6 +355,7 @@ describe('ChefDishFormScreen', () => {
       expect(mockPicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({allowsEditing: true, aspect: [4, 3]}));
       await press('Change photo');
       await press('Remove photo');
+      await settle();
       expect(withLabel('Add a photo')).toBeTruthy();
     });
 
@@ -479,6 +475,80 @@ describe('ChefDishFormScreen', () => {
       await press('Save changes');
       await settle();
       expect(mockApi.replaceItem).toHaveBeenCalledWith(ID, expect.objectContaining({price: 175, available: false}));
+    });
+
+    it('Save changes waits while the switch is still being saved', async () => {
+      await mount('edit', {menuItemId: ID});
+      await type('Price', '170');
+      expect(withLabel('Save changes')!.props.accessibilityState.disabled).toBe(false);
+      const patch = deferred<ChefMenuItem>();
+      mockApi.updateAvailability.mockReturnValue(patch.promise);
+      await act(async () => {
+        dishSwitch()!.props.onValueChange(false);
+      });
+      await settle();
+      expect(withLabel('Save changes')!.props.accessibilityState.disabled).toBe(true);
+      mockApi.listItems.mockResolvedValue([dish({available: false}), DRAFT]);
+      await act(async () => patch.resolve(dish({available: false})));
+      await settle();
+      expect(withLabel('Save changes')!.props.accessibilityState.disabled).toBe(false);
+    });
+
+    describe('with a new photo', () => {
+      const choosePhoto = async () => {
+        mockPicker.launchImageLibraryAsync.mockResolvedValue({canceled: false, assets: [{uri: 'file:///new.jpg', mimeType: 'image/jpeg'}]});
+        await press('Change photo');
+        await press('Choose from gallery');
+        await settle();
+      };
+
+      it('a double tap on Save changes uploads a photo-only change once', async () => {
+        await mount('edit', {menuItemId: ID});
+        await choosePhoto();
+        expect(withLabel('Save changes')!.props.accessibilityState.disabled).toBe(false);
+        const upload = deferred<unknown>();
+        mockApi.uploadImage.mockReturnValue(upload.promise);
+        const save = withLabel('Save changes')!;
+        await act(async () => {
+          save.props.onPress();
+          save.props.onPress();
+        });
+        await settle();
+        await act(async () => upload.resolve({}));
+        await settle();
+        expect(mockApi.uploadImage).toHaveBeenCalledTimes(1);
+        expect(mockApi.uploadImage).toHaveBeenCalledWith(ID, expect.anything(), true);
+        expect(mockApi.replaceItem).not.toHaveBeenCalled();
+        expect(has('Changes saved')).toBe(true);
+        expect(mockLeft).toHaveBeenCalledTimes(1);
+      });
+
+      it('keeps the saved text, stays on the form and lets the photo be sent again when the upload fails', async () => {
+        await mount('edit', {menuItemId: ID});
+        await type('Price', '170');
+        await choosePhoto();
+        mockApi.replaceItem.mockResolvedValue(dish({price: 170}));
+        mockApi.uploadImage.mockRejectedValue(new Error('offline'));
+        await press('Save changes');
+        await settle();
+        expect(mockApi.replaceItem).toHaveBeenCalledTimes(1);
+        expect(mockApi.uploadImage).toHaveBeenCalledTimes(1);
+        expect(has("The new photo didn't upload. Your other changes are saved. Try the photo again.")).toBe(true);
+        expect(mockLeft).not.toHaveBeenCalled();
+        expect(has('Changes saved')).toBe(false);
+        // The price is saved, so only the photo is left to send.
+        expect(input('Price').props.value).toBe('170');
+        expect(withLabel('Save changes')!.props.accessibilityState.disabled).toBe(false);
+
+        mockApi.uploadImage.mockResolvedValue({});
+        await press('Save changes');
+        await settle();
+        expect(mockApi.uploadImage).toHaveBeenCalledTimes(2);
+        expect(mockApi.replaceItem).toHaveBeenCalledTimes(1);
+        expect(has("The new photo didn't upload. Your other changes are saved. Try the photo again.")).toBe(false);
+        expect(has('Changes saved')).toBe(true);
+        expect(mockLeft).toHaveBeenCalledTimes(1);
+      });
     });
 
     it('asks "Discard changes?" when leaving with unsaved edits', async () => {

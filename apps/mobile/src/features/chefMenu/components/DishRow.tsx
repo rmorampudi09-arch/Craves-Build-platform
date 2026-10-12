@@ -11,7 +11,7 @@ import {
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {ChefActionButton, StatusChip, VegMark} from '../../chefShell/components/ui';
-import {formatRupees} from '../../chefShell/domain/chefFormat';
+import {formatRupeesExact} from '../../chefShell/domain/chefFormat';
 import type {ChefMenuItem} from '../api/chefMenuApi';
 import {
   chefMenuCategoryLabel,
@@ -37,7 +37,7 @@ export function DishRow({item, busy, onOpen, onSwitch, onPublish}: DishRowProps)
   const note = chefMenuRowNote(item);
   const category = chefMenuCategoryLabel(item.category);
   const photo = getChefMenuPrimaryImageUrl(item);
-  const price = formatRupees(item.price);
+  const price = formatRupeesExact(item.price);
   const off = state === 'UNAVAILABLE' || state === 'INACTIVE';
 
   return (

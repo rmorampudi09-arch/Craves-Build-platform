@@ -137,6 +137,14 @@ describe('ChefMenuScreen', () => {
     expect(lines().join(' ')).not.toMatch(/Snakes|NON_VEG|ACTIVE|INACTIVE/);
   });
 
+  it('shows a price with paise exactly (₹49.50) and a whole price without them (₹50)', async () => {
+    await mount([dish(8, {itemName: 'Lemon rice', price: 49.5}), dish(9, {itemName: 'Curd rice', price: 50})]);
+    expect(rowNamed('Lemon rice').props.accessibilityLabel).toBe('Lemon rice, Biryani · 25 min, ₹49.50');
+    expect(rowNamed('Curd rice').props.accessibilityLabel).toBe('Curd rice, Biryani · 25 min, ₹50');
+    expect(has('₹49.50')).toBe(true);
+    expect(has('₹50')).toBe(true);
+  });
+
   it('shows the counts in the filter chips and each filter narrows the list', async () => {
     await mount();
     expect(['All 6', 'On 4', 'Off 1', 'Drafts 1', 'Biryani', 'Curry', 'Snacks'].map(label => Boolean(withLabel(label)))).toEqual(
@@ -192,6 +200,27 @@ describe('ChefMenuScreen', () => {
     expect(mockApi.updateAvailability).toHaveBeenLastCalledWith(DUM.id, {available: true});
     expect(switchFor('Dum Chicken biriyani')!.props.value).toBe(true);
     expect(has('Dum Chicken biriyani is on')).toBe(true);
+    expect(withLabel('Undo')).toBeUndefined();
+  });
+
+  it('when Undo cannot be saved, the dish stays as it was and a plain message says so (without another Undo)', async () => {
+    await mount();
+    mockApi.updateAvailability.mockResolvedValueOnce({...DUM, available: false});
+    // From now on the server holds the dish switched off.
+    mockApi.listItems.mockResolvedValue(ALL.map(item => (item === DUM ? {...DUM, available: false} : item)));
+    await act(async () => {
+      switchFor('Dum Chicken biriyani')!.props.onValueChange(false);
+    });
+    await settle();
+    expect(has('Dum Chicken biriyani is off')).toBe(true);
+
+    mockApi.updateAvailability.mockRejectedValueOnce(new Error('offline'));
+    await press('Undo');
+    await settle();
+    expect(mockApi.updateAvailability).toHaveBeenLastCalledWith(DUM.id, {available: true});
+    expect(switchFor('Dum Chicken biriyani')!.props.value).toBe(false);
+    expect(has("We couldn't update Dum Chicken biriyani. Try again.")).toBe(true);
+    expect(has('Dum Chicken biriyani is on')).toBe(false);
     expect(withLabel('Undo')).toBeUndefined();
   });
 

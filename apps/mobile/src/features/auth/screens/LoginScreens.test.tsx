@@ -14,6 +14,7 @@ import { authTransitionMemory } from '../state/authTransitionMemory';
 import type { AuthRole } from '../domain/types';
 
 const mockDispatch = jest.fn();
+jest.mock('../../../design/reducedMotion', () => ({useReducedMotionPreference: () => false}));
 jest.mock('../../../app/store/hooks', () => ({
   useAppDispatch: () => mockDispatch,
   useAppSelector: (selector: (state: unknown) => unknown) =>

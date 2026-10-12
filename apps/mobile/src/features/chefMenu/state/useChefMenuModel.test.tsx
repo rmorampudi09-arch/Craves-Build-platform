@@ -5,6 +5,7 @@ import type {ChefMenuItem} from '../api/chefMenuApi';
 import {useChefMenuModel, type ChefMenuModel} from './useChefMenuModel';
 
 const ID = '123e4567-e89b-42d3-a456-426614174000';
+const ID_B = '123e4567-e89b-42d3-a456-426614174009';
 const mockApi = {listItems: jest.fn(), updateAvailability: jest.fn(), replaceItem: jest.fn()};
 
 jest.mock('../../../app/store/hooks', () => ({useAppSelector: () => 'user-1'}));
@@ -158,5 +159,77 @@ describe('useChefMenuModel', () => {
       expect.objectContaining({itemName: 'Prawns biryani', status: 'ACTIVE', available: true, currency: 'INR'}),
     );
     expect(model.items[0]).toMatchObject({status: 'ACTIVE', available: true});
+  });
+
+  describe('when one dish fails while another was saved', () => {
+    const A = dish({id: ID, itemName: 'Prawns biryani'});
+    const B = dish({id: ID_B, itemName: 'Paneer biryani'});
+    const byId = (id: string) => model.items.find(item => item.id === id)!;
+
+    // The list is mounted from the server once; after that only the changes below touch it.
+    const mountTwo = async () => {
+      mockApi.listItems.mockResolvedValueOnce([A, B]);
+      await mount();
+      mockApi.listItems.mockReturnValue(new Promise(() => undefined));
+    };
+
+    it('puts back only the dish that failed, and asks the server for the list again', async () => {
+      await mountTwo();
+      const saveA = deferred<ChefMenuItem>();
+      mockApi.updateAvailability.mockImplementation((id: string) =>
+        id === ID ? saveA.promise : Promise.resolve({...B, available: false}),
+      );
+
+      let changeA!: Promise<boolean>;
+      let changeB!: Promise<boolean>;
+      await act(async () => {
+        changeA = model.updateAvailability(ID, false);
+      });
+      await settle();
+      await act(async () => {
+        changeB = model.updateAvailability(ID_B, false);
+      });
+      await settle();
+      expect(await changeB).toBe(true);
+      expect(byId(ID).available).toBe(false);
+      expect(byId(ID_B).available).toBe(false);
+
+      const listCallsBefore = mockApi.listItems.mock.calls.length;
+      await act(async () => {
+        saveA.reject(new Error('offline'));
+        await changeA;
+      });
+      expect(await changeA).toBe(false);
+      // A is back; B stays as the server saved it.
+      expect(byId(ID).available).toBe(true);
+      expect(byId(ID_B).available).toBe(false);
+      expect(mockApi.listItems.mock.calls.length).toBeGreaterThan(listCallsBefore);
+    });
+
+    it('does the same when a Publish fails', async () => {
+      const draft = dish({id: ID, itemName: 'Tomato curry', status: 'DRAFT', available: false});
+      mockApi.listItems.mockResolvedValueOnce([draft, B]);
+      await mount();
+      mockApi.listItems.mockReturnValue(new Promise(() => undefined));
+      const publish = deferred<ChefMenuItem>();
+      mockApi.replaceItem.mockReturnValue(publish.promise);
+      mockApi.updateAvailability.mockResolvedValue({...B, available: false});
+
+      let failing!: Promise<boolean>;
+      await act(async () => {
+        failing = model.publishDraft(draft);
+      });
+      await settle();
+      expect(byId(ID)).toMatchObject({status: 'ACTIVE', available: true});
+      await act(async () => {
+        await model.updateAvailability(ID_B, false);
+      });
+      await act(async () => {
+        publish.reject(new Error('offline'));
+        await failing;
+      });
+      expect(byId(ID)).toMatchObject({status: 'DRAFT', available: false});
+      expect(byId(ID_B).available).toBe(false);
+    });
   });
 });

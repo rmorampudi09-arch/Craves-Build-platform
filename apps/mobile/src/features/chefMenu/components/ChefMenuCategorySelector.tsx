@@ -39,7 +39,13 @@ export function ChefMenuCategorySelector({value, error, disabled = false, onChan
           />
         ))}
         {showAll ? null : (
-          <OptionChip accessibilityLabel="More categories" label="More…" onPress={() => setMore(true)} selected={false} />
+          <OptionChip
+            accessibilityLabel="More categories"
+            accessibilityRole="button"
+            label="More…"
+            onPress={() => setMore(true)}
+            selected={false}
+          />
         )}
       </View>
       {error ? <FieldError message={error} /> : null}

@@ -117,6 +117,12 @@ describe('chefMenuPresentation', () => {
     expect(chefMenuRowNote({...items[0], preparationTimeMinutes: null})).toEqual({text: 'prep time missing', off: false});
   });
 
+  it('search finds a Snakes-category dish by "snacks" (what is shown) and by "snakes" (what is stored)', () => {
+    const murukku = item({id: '00000000-0000-4000-8000-000000000020', itemName: 'Murukku', category: 'Snakes'});
+    expect(filterChefMenuItems([...items, murukku], 'snacks', null, 'ALL')).toEqual([murukku]);
+    expect(filterChefMenuItems([...items, murukku], 'snakes', null, 'ALL')).toEqual([murukku]);
+  });
+
   it('shows the stored category Snakes as Snacks and legacy Biriyani as Biryani', () => {
     expect(chefMenuCategoryLabel('Snakes')).toBe('Snacks');
     expect(chefMenuCategoryLabel('Biriyani')).toBe('Biryani');

@@ -8,8 +8,13 @@
 # Each operation is added to the API that already owns its path prefix (found by path at run time, never guessed).
 # A prefix nobody owns is created only where the table below says "new". An operation that already exists for the same
 # method and URL template is KEPT untouched (no operation or policy write); only missing operations are created.
-# All read-only lookups and checks (owners, must-exist prefixes, subscription key, container apps) run for every prefix
-# first; nothing is created until they have all passed.
+# Parent APIs: APIM serves a request from the API with the LONGEST matching path. A prefix with no API of its own but
+# a parent API (api/v1/kitchens for api/v1/kitchens/me, api/v1/chef for api/v1/chef/reviews, api/v1 for anything) is
+# COVERED when the longest parent has a wildcard operation (urlTemplate with `*`) for every method the app needs there:
+# nothing is created for it, its routes are only probed for 401. If the parent lacks such a wildcard the run stops:
+# a longer-path API created beneath an existing parent would shadow every route the new API does not define.
+# All read-only lookups and checks (owners, parents, must-exist prefixes, subscription key, container apps) run for
+# every prefix first; nothing is created until they have all passed.
 # Release order: the backend images that carry the new routes (handed-over, kitchen photos, settings, dish DELETE)
 # go out first; this script only wires the gateway. The notification role filter is a query parameter and needs no route.
 # Backend JWT/role checks stay authoritative.
@@ -93,11 +98,13 @@ print_table() {
   echo "APIM $APIM (rg $RG), public gateway $PUBLIC_HOST"
   echo; echo "Backends (FQDN is read from the container app at run time):"
   for K in catalog order userchef notification; do printf '  %-12s %s\n' "$K" "${APP[$K]}"; done
-  echo; echo "APIs (looked up by path; an existing owner is reused, never replaced):"
+  echo; echo "APIs (looked up by path; an existing owner is reused, never replaced). A prefix with no API of its own is COVERED if its"
+  echo "longest parent API (e.g. api/v1/kitchens) has a wildcard operation for every needed method; if the parent lacks one the run stops."
+  echo "An API is never created beneath an existing parent API (it would shadow the parent's routes)."
   for ROW in "${APIS[@]}"; do
     IFS='|' read -r -a f <<<"$ROW"
     printf '  %-14s /%-30s backend=%-12s %s\n' "${f[0]}" "${f[1]}" "${f[4]}" \
-      "$([[ "${f[5]}" == new ]] && echo "create ${f[2]} if absent" || echo 'must already exist, never created here')"
+      "$([[ "${f[5]}" == new ]] && echo "create ${f[2]} if absent and no parent API exists (a parent wildcard covers it)" || echo 'must already exist (or be covered by a parent wildcard), never created here')"
   done
   echo; echo "Operations (${#ROUTES[@]}). At run time an operation that already exists for the same method and URL template is KEPT"
   echo "untouched (no PUT); only missing operations are created (operation + policy)."
@@ -138,7 +145,8 @@ done
 
 # One listing of every API (name, path) answers both "who owns this path" and "is this api id already taken".
 API_LIST=$(az apim api list -g "$RG" --service-name "$APIM" --query '[].[name,path]' -o tsv --only-show-errors)
-declare -A API_ID OPS CREATE
+declare -A API_ID OPS CREATE COVERED
+declare -a COVER_OP
 for ROW in "${APIS[@]}"; do
   IFS='|' read -r KEY PATH_PART NEW_ID NAME BACKEND HOW FIX <<<"$ROW"
   mapfile -t MATCHES < <(awk -F'\t' -v p="$PATH_PART" '$2==p {print $1}' <<<"$API_LIST")
@@ -151,15 +159,36 @@ for ROW in "${APIS[@]}"; do
     OPS[$KEY]=$(az apim api operation list -g "$RG" --service-name "$APIM" --api-id "${API_ID[$KEY]}" \
       --query '[].[name,method,urlTemplate]' -o tsv --only-show-errors | sed -E 's/\{[^}]*\}/{}/g')
     echo "API $KEY: ${API_ID[$KEY]} (/$PATH_PART) exists"
-  elif [[ "$HOW" == new ]]; then
-    TAKEN=$(awk -F'\t' -v id="$NEW_ID" '$1==id {print $2}' <<<"$API_LIST")
-    [[ -z "$TAKEN" ]] || fail "API id $NEW_ID already exists with path /$TAKEN, not /$PATH_PART; refusing to re-path it. No update applied."
-    API_ID[$KEY]="$NEW_ID"; CREATE[$KEY]=1; OPS[$KEY]=''
-    echo "API $KEY: $NEW_ID (/$PATH_PART) will be created"
-  elif [[ "$FIX" == - ]]; then
-    fail "No APIM API owns /$PATH_PART on $APIM and no script in this repo publishes it; it must already exist (never created here). No update applied."
   else
-    fail "No APIM API owns /$PATH_PART on $APIM; run scripts/apim/$FIX with APIM=$APIM first (never created here). No update applied."
+    # No API of its own. APIM serves a request from the LONGEST matching API path, so only the longest strict parent
+    # (path equal to a leading run of whole segments, or an empty path) can serve this prefix.
+    PARENT=$(awk -F'\t' -v pp="$PATH_PART" 'BEGIN{best=-1} $2!=pp && ($2=="" || index(pp,$2"/")==1) && length($2)>best {best=length($2); line=$1"\t"$2; f=1} END{if(f) print line}' <<<"$API_LIST")
+    if [[ -n "$PARENT" ]]; then
+      IFS=$'\t' read -r P_ID P_PATH <<<"$PARENT"
+      # Wildcard = an operation whose urlTemplate has `*` (`/*`, `/me/*`, `/{*rest}`); the text before it must prefix the
+      # route path relative to the parent, and the method must match. Nothing is created beneath a parent either way.
+      P_OPS=$(az apim api operation list -g "$RG" --service-name "$APIM" --api-id "$P_ID" --query '[].[name,method,urlTemplate]' -o tsv --only-show-errors)
+      for I in "${!ROUTES[@]}"; do
+        IFS='|' read -r RKEY RID RMETHOD RTEMPLATE RKIND <<<"${ROUTES[$I]}"
+        [[ "$RKEY" == "$KEY" ]] || continue
+        RTARGET=$(target_path "$KEY" "$RTEMPLATE"); REL="$RTARGET"; [[ -z "$P_PATH" ]] || REL="${RTARGET#"/$P_PATH"}"
+        WILD=$(awk -F'\t' -v m="$RMETHOD" -v rel="$REL" 'toupper($2)==m { t=$3; i=index(t,"*"); if (i==0) next; lit=substr(t,1,i-1)
+          if (substr(lit,length(lit))=="{") lit=substr(lit,1,length(lit)-1); if (index(rel,lit)==1) { print $1; exit } }' <<<"$P_OPS")
+        [[ -n "$WILD" ]] || fail "Refusing to create /$PATH_PART under parent API $P_ID (/$P_PATH): it would shadow the parent's routes; the parent has no wildcard operation for $RMETHOD $RTARGET. No update applied."
+        COVER_OP[$I]="$P_ID/$WILD"
+      done
+      API_ID[$KEY]="$P_ID"; COVERED[$KEY]=1; OPS[$KEY]=''
+      echo "API $KEY: /$PATH_PART has no API of its own; covered by wildcard operations of parent $P_ID (/$P_PATH), nothing created"
+    elif [[ "$HOW" == new ]]; then
+      TAKEN=$(awk -F'\t' -v id="$NEW_ID" '$1==id {print $2}' <<<"$API_LIST")
+      [[ -z "$TAKEN" ]] || fail "API id $NEW_ID already exists with path /$TAKEN, not /$PATH_PART; refusing to re-path it. No update applied."
+      API_ID[$KEY]="$NEW_ID"; CREATE[$KEY]=1; OPS[$KEY]=''
+      echo "API $KEY: $NEW_ID (/$PATH_PART) will be created"
+    elif [[ "$FIX" == - ]]; then
+      fail "No APIM API owns /$PATH_PART on $APIM and no script in this repo publishes it; it must already exist (never created here). No update applied."
+    else
+      fail "No APIM API owns /$PATH_PART on $APIM; run scripts/apim/$FIX with APIM=$APIM first (never created here). No update applied."
+    fi
   fi
 done
 declare -a EXISTING_OP
@@ -178,13 +207,16 @@ done
 
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf -- "$TEMP_DIR"' EXIT
-FAILED_PROBES=0; KEPT=0; MADE=0
+FAILED_PROBES=0; KEPT=0; MADE=0; COVERED_N=0
 for I in "${!ROUTES[@]}"; do
   IFS='|' read -r KEY ID METHOD TEMPLATE KIND <<<"${ROUTES[$I]}"
   API="${API_ID[$KEY]}"
   TARGET=$(target_path "$KEY" "$TEMPLATE")
   MGMT="https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.ApiManagement/service/$APIM/apis/$API"
-  if [[ -n "${EXISTING_OP[$I]}" ]]; then
+  if [[ -n "${COVER_OP[$I]:-}" ]]; then
+    OP="${COVER_OP[$I]#*/}"; COVERED_N=$((COVERED_N+1))
+    echo "COVERED by wildcard ${COVER_OP[$I]} $METHOD $TARGET"
+  elif [[ -n "${EXISTING_OP[$I]}" ]]; then
     OP="${EXISTING_OP[$I]}"; KEPT=$((KEPT+1))
     echo "KEEP existing $METHOD $TARGET ($OP)"
   else
@@ -202,10 +234,11 @@ for I in "${!ROUTES[@]}"; do
     az rest --method put --url "$MGMT/operations/$OP/policies/policy?api-version=$API_VERSION" --body @"$TEMP_DIR/policy.json" -o none --only-show-errors
     echo "CREATE $METHOD $TARGET ($API/$OP)"
   fi
-  # Read-back for every route: the operation exists. For an operation created here the policy must also carry the
-  # Bearer check, this backend and this rewrite target (a kept operation keeps whatever policy it already has).
+  # Read-back for every route: the operation exists (for a covered route, the parent's wildcard operation). For an
+  # operation created here the policy must also carry the Bearer check, this backend and this rewrite target (a kept
+  # or covering operation keeps whatever policy it already has).
   az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API" --operation-id "$OP" -o none --only-show-errors
-  if [[ -z "${EXISTING_OP[$I]}" ]]; then
+  if [[ -z "${EXISTING_OP[$I]}" && -z "${COVER_OP[$I]:-}" ]]; then
     POLICY=$(az rest --method get --url "$MGMT/operations/$OP/policies/policy?api-version=$API_VERSION" --query properties.value -o tsv --only-show-errors)
     [[ "$POLICY" == *"https://${FQDN[$(api_field "$KEY" 4)]}"* && "$POLICY" == *"$TARGET"* && "$POLICY" == *Bearer* ]] || fail "Policy read-back failed for $METHOD $TARGET on $API."
   fi
@@ -217,4 +250,4 @@ for I in "${!ROUTES[@]}"; do
   else echo "FAIL $METHOD $TARGET -> $API/$OP expected 401 from the unauthenticated probe, got ${STATUS:-none}" >&2; FAILED_PROBES=$((FAILED_PROBES+1)); fi
 done
 (( FAILED_PROBES == 0 )) || fail "$FAILED_PROBES route(s) did not answer 401 unauthenticated; review the gateway before release."
-echo "Chef app APIM routes done: $KEPT kept untouched, $MADE created, ${#ROUTES[@]} verified. Backend JWT verification and role checks remain authoritative."
+echo "Chef app APIM routes done: $KEPT kept untouched, $MADE created, $COVERED_N covered by a parent wildcard, ${#ROUTES[@]} probed. Backend JWT verification and role checks remain authoritative."

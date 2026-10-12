@@ -56,6 +56,27 @@ public class DeliveryStatusEventValidator {
         }
         requireText(data.providerId(), "providerId");
         requireText(data.providerDeliveryId(), "providerDeliveryId");
+        boolean hasHandoffProvider = data.handoffFromProviderId() != null;
+        boolean hasHandoffDelivery = data.handoffFromProviderDeliveryId() != null;
+        if (hasHandoffProvider != hasHandoffDelivery) {
+            throw new DeliveryStatusValidationException("Delivery handoff requires both prior provider identifiers");
+        }
+        if (Boolean.TRUE.equals(data.handoffContinuation()) && !hasHandoffProvider) {
+            throw new DeliveryStatusValidationException(
+                "Delivery handoff continuation requires prior provider identifiers"
+            );
+        }
+        if (hasHandoffProvider) {
+            requireText(data.handoffFromProviderId(), "handoffFromProviderId");
+            requireText(data.handoffFromProviderDeliveryId(), "handoffFromProviderDeliveryId");
+            if (!"borzo".equalsIgnoreCase(data.handoffFromProviderId())
+                || !"pidge".equalsIgnoreCase(data.providerId())) {
+                throw new DeliveryStatusValidationException("Only a Borzo to Pidge handoff is supported");
+            }
+            if (data.handoffFromProviderDeliveryId().equals(data.providerDeliveryId())) {
+                throw new DeliveryStatusValidationException("Delivery handoff requires a new provider delivery identifier");
+            }
+        }
         if (!STATUSES.contains(data.status())) {
             throw new DeliveryStatusValidationException("Unsupported normalized delivery status");
         }

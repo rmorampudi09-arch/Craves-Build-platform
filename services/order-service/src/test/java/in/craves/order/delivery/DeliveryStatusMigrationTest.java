@@ -53,6 +53,21 @@ class DeliveryStatusMigrationTest {
     }
 
     @Test
+    void productionAppliedHandoffV34IsRestoredAndMealPlanCallbackUsesV36() throws Exception {
+        ClassPathResource appliedV34 = new ClassPathResource(
+            "db/migration/V34__delivery_handoff_inbox_buffer.sql"
+        );
+        assertThat(appliedV34.exists()).isTrue();
+        assertThat(flywayChecksum(appliedV34)).isEqualTo(1014493939L);
+        assertThat(new ClassPathResource(
+            "db/migration/V34__subscription_order_chef_declined_callback.sql"
+        ).exists()).isFalse();
+        assertThat(new ClassPathResource(
+            "db/migration/V36__subscription_order_chef_declined_callback.sql"
+        ).exists()).isTrue();
+    }
+
+    @Test
     void commercialStatusBackfillUsesV21AndDoesNotReuseProductionV20() throws Exception {
         ClassPathResource conflictingV20 = new ClassPathResource(
             "db/migration/V20__delivery_commercial_status_projection.sql"

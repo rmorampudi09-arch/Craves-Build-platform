@@ -1,5 +1,6 @@
 package in.craves.order.finance;
 
+import in.craves.order.exception.OrderApiException;
 import in.craves.order.security.CravesPrincipal;
 import in.craves.order.service.OrderService;
 import in.craves.order.web.ApiDtos.CheckoutResponse;
@@ -26,8 +27,21 @@ public class FinancialCheckoutTransactionAspect {
     @Around("execution(* in.craves.order.service.OrderService.checkout(..))")
     public Object checkout(ProceedingJoinPoint call){
         return transaction.execute(status->{
-            try{CheckoutResponse created=(CheckoutResponse)call.proceed();bindings.bind(created);return orders.getObject().getCheckout((CravesPrincipal)call.getArgs()[0],created.id());}
-            catch(RuntimeException | Error e){throw e;}catch(Throwable checked){throw new IllegalStateException("Checkout financial binding failed",checked);}
+            CheckoutResponse created;
+            try{created=(CheckoutResponse)call.proceed();}
+            catch(RuntimeException | Error e){throw e;}
+            catch(Throwable checked){throw new IllegalStateException("Checkout creation failed",checked);}
+            try{
+                bindings.bind(created);
+                return orders.getObject().getCheckout((CravesPrincipal)call.getArgs()[0],created.id());
+            }catch(OrderApiException e){
+                throw e;
+            }catch(RuntimeException e){
+                throw OrderApiException.serviceUnavailable(
+                    "CHECKOUT_PRICING_UNAVAILABLE",
+                    "Checkout pricing is temporarily unavailable. Please try again."
+                );
+            }
         });
     }
     @Around("execution(* in.craves.order.service.NotificationInternalClient.orderCreated(..))")

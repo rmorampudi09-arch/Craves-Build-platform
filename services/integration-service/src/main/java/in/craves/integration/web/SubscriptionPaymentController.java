@@ -8,6 +8,10 @@ import in.craves.integration.subscription.SubscriptionPaymentService;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/v1/subscription-payments")
@@ -64,5 +69,14 @@ public class SubscriptionPaymentController {
     ) {
         apiProperties.requireOrderExecutionEnabled();
         return service.verifyRazorpay(authorization, invoiceId, request);
+    }
+
+    /** A 409 (bill cancelled by a resume) carries text the app shows; other errors keep the default body. */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ProblemDetail> conflict(ResponseStatusException error) {
+        if (error.getStatusCode().value() != 409) {
+            throw error; // rethrowing the handled exception hands it back to Spring's default handling
+        }
+        return ResponseEntity.status(409).body(ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, error.getReason()));
     }
 }

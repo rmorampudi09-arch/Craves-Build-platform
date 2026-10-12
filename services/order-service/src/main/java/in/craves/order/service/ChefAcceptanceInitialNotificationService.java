@@ -6,6 +6,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -39,7 +40,7 @@ public class ChefAcceptanceInitialNotificationService {
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("orderId", order.orderId().toString());
-        payload.put("checkoutId", order.checkoutId().toString());
+        payload.put("checkoutId", Objects.toString(order.checkoutId(), null));
         payload.put("kitchenId", order.kitchenId().toString());
         payload.put("kitchenName", order.kitchenName());
         payload.put("grandTotal", order.grandTotal());

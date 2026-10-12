@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Predicate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,8 @@ public class SubscriptionBillingRepository {
     /** Invoices a resume has not voided (voided ones, paid or not, no longer cover or block anything). */
     private static final String STANDING =
         "(failure_code IS NULL OR failure_code NOT IN ('" + PAUSE_VOIDED + "', '" + PAID_AFTER_VOID + "'))";
+    /** provider_reference of the zero-amount PAID invoices that carry days forward. */
+    private static final String CREDITS = "('PAUSE_CREDIT', 'DECLINE_CREDIT')";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -142,10 +145,11 @@ public class SubscriptionBillingRepository {
                 "WHERE subscription_id = ? AND new_status = 'PAUSED' ORDER BY created_at DESC LIMIT 1",
             (rs, rowNum) -> rs.getObject(1, LocalDate.class), subscriptionId
         ).stream().findFirst().orElse(resumeOn);
-        // Meals already sent to the chef when the customer paused were still delivered, so they are not credited.
+        // Meals already sent to the chef when the customer paused were still delivered, or added to the end if the chef
+        // declined them (FAILED), so they are not credited again.
         LocalDate lastMealSent = jdbcTemplate.queryForObject(
             "SELECT max(service_date) FROM subscription_schema.subscription_occurrence WHERE subscription_id = ? " +
-                "AND status IN ('ORDER_REQUESTED', 'ORDER_CREATED') AND service_date >= ? AND service_date < ?",
+                "AND status IN ('ORDER_REQUESTED', 'ORDER_CREATED', 'FAILED') AND service_date >= ? AND service_date < ?",
             LocalDate.class, subscriptionId, pauseDate, resumeOn
         );
         LocalDate pausedOn = lastMealSent == null ? pauseDate : lastMealSent.plusDays(1);
@@ -191,19 +195,22 @@ public class SubscriptionBillingRepository {
             );
         }
 
-        // An earlier pause credit that has not started and is the last standing invoice moves into the new credit.
-        CreditRow unstarted = jdbcTemplate.query(
+        // Credits that have not started and come after every billed invoice (earlier pause credits, or days added after a
+        // chef decline) move into the new credit, so none is left behind a bill this resume just voided.
+        List<CreditRow> unstarted = jdbcTemplate.query(
             "SELECT f.id, f.cycle_start, f.cycle_end FROM subscription_schema.subscription_invoice f " +
-                "WHERE f.subscription_id = ? AND f.status = 'PAID' AND f.provider_reference = 'PAUSE_CREDIT' AND f.cycle_start >= ? " +
+                "WHERE f.subscription_id = ? AND f.status = 'PAID' AND f.provider_reference IN " + CREDITS + " AND f.cycle_start >= ? " +
                 "AND NOT EXISTS (SELECT 1 FROM subscription_schema.subscription_invoice later " +
-                "WHERE later.subscription_id = f.subscription_id AND later.cycle_start > f.cycle_start AND " + STANDING + ") " +
-                "FOR UPDATE",
+                "WHERE later.subscription_id = f.subscription_id AND later.cycle_start > f.cycle_start AND " + STANDING + " " +
+                "AND later.provider_reference IS DISTINCT FROM 'PAUSE_CREDIT' AND later.provider_reference IS DISTINCT FROM 'DECLINE_CREDIT') " +
+                "ORDER BY f.cycle_start FOR UPDATE",
             (rs, rowNum) -> new CreditRow(
                 rs.getObject("id", UUID.class), rs.getObject("cycle_start", LocalDate.class), rs.getObject("cycle_end", LocalDate.class)
             ),
             subscriptionId, resumeOn
-        ).stream().findFirst().orElse(null);
-        int carriedDays = unstarted == null ? 0 : Math.toIntExact(ChronoUnit.DAYS.between(unstarted.start(), unstarted.end()));
+        );
+        int carriedDays = unstarted.stream().mapToInt(row -> Math.toIntExact(ChronoUnit.DAYS.between(row.start(), row.end()))).sum();
+        LocalDate unstartedFrom = unstarted.isEmpty() ? null : unstarted.getFirst().start();
 
         List<PauseCredit.Cycle> paidCycles = jdbcTemplate.query(
             "SELECT cycle_start, cycle_end FROM subscription_schema.subscription_invoice " +
@@ -215,18 +222,34 @@ public class SubscriptionBillingRepository {
         LocalDate keptThrough = jdbcTemplate.queryForObject(
             "SELECT CASE WHEN EXISTS (SELECT 1 FROM subscription_schema.subscription_invoice i WHERE i.subscription_id = cs.id) " +
                 "THEN (SELECT max(i.cycle_end) FROM subscription_schema.subscription_invoice i " +
-                "WHERE i.subscription_id = cs.id AND i.id IS DISTINCT FROM CAST(? AS uuid) AND " + STANDING + ") " +
+                "WHERE i.subscription_id = cs.id AND (CAST(? AS date) IS NULL OR i.cycle_start < CAST(? AS date)) AND " + STANDING + ") " +
                 "ELSE cs.next_billing_date END FROM subscription_schema.customer_subscription cs WHERE cs.id = ?",
-            LocalDate.class, unstarted == null ? null : unstarted.id(), subscriptionId
+            LocalDate.class, unstartedFrom, unstartedFrom, subscriptionId
         );
         PauseCredit credit = PauseCredit.plan(pausedOn, resumeOn, paidCycles, carriedDays, keptThrough);
 
-        if (unstarted != null) {
-            jdbcTemplate.update(
-                "UPDATE subscription_schema.subscription_invoice SET cycle_start = ?, cycle_end = ?, updated_at = now() WHERE id = ?",
-                credit.creditStart(), credit.nextBillingDate(), unstarted.id()
-            );
-            creditHistory(unstarted.id(), "PAID", "Pause credit laid out again after a later pause: " + credit.creditDays() + " days");
+        if (!unstarted.isEmpty()) {
+            // Park the rows far ahead first: laying them out one by one could briefly reuse another row's cycle_start.
+            for (CreditRow row : unstarted) {
+                jdbcTemplate.update(
+                    "UPDATE subscription_schema.subscription_invoice SET cycle_start = cycle_start + 36500, cycle_end = cycle_end + 36500 WHERE id = ?",
+                    row.id()
+                );
+            }
+            // Back to back from the credit start; the first one also takes the days this pause stopped.
+            // shortcut: a moved decline credit keeps its calendar length, so moving one that spanned a no-meal weekend
+            // onto weekdays credits up to 2 extra days; recompute it from the plan schedule if that shows up.
+            LocalDate cursor = credit.creditStart();
+            int pausedDays = credit.creditDays() - carriedDays;
+            for (CreditRow row : unstarted) {
+                LocalDate end = cursor.plusDays(ChronoUnit.DAYS.between(row.start(), row.end()) + (row == unstarted.getFirst() ? pausedDays : 0));
+                jdbcTemplate.update(
+                    "UPDATE subscription_schema.subscription_invoice SET cycle_start = ?, cycle_end = ?, updated_at = now() WHERE id = ?",
+                    cursor, end, row.id()
+                );
+                creditHistory(row.id(), "PAID", "Credit laid out again after a later pause: " + ChronoUnit.DAYS.between(cursor, end) + " days");
+                cursor = end;
+            }
         } else if (credit.creditDays() > 0) {
             UUID invoiceId = UUID.randomUUID();
             int inserted = jdbcTemplate.update(
@@ -249,6 +272,69 @@ public class SubscriptionBillingRepository {
             credit.nextBillingDate(), subscriptionId
         );
         return credit;
+    }
+
+    /**
+     * Inside the caller's transaction: a meal the chef declined is added to the end of the plan as a zero-amount PAID
+     * invoice running from where billing would restart through the next date that serves that meal (or one day if none
+     * does within 62 days). next_billing_date moves past it. Returns the new next_billing_date, or null when the plan is
+     * not ACTIVE or PAUSED, or was never paid. The credit starts at or after every standing invoice's end and after every
+     * voided cycle's start, so it cannot collide on (subscription_id, cycle_start).
+     */
+    public LocalDate applyDeclineCredit(UUID subscriptionId, Predicate<LocalDate> servesMeal) {
+        List<LocalDate> starts = jdbcTemplate.query(
+            "SELECT GREATEST(cs.next_billing_date, (SELECT max(i.cycle_end) FROM subscription_schema.subscription_invoice i " +
+                "WHERE i.subscription_id = cs.id AND " + STANDING + ")) FROM subscription_schema.customer_subscription cs " +
+                "WHERE cs.id = ? AND cs.status IN ('ACTIVE', 'PAUSED') AND EXISTS (SELECT 1 FROM subscription_schema.subscription_invoice p " +
+                "WHERE p.subscription_id = cs.id AND p.status = 'PAID') FOR UPDATE OF cs",
+            (rs, rowNum) -> rs.getObject(1, LocalDate.class), subscriptionId
+        );
+        if (starts.isEmpty() || starts.getFirst() == null) {
+            return null;
+        }
+        LocalDate start = starts.getFirst();
+        int days = 1;
+        for (int offset = 0; offset < 62; offset++) {
+            if (servesMeal.test(start.plusDays(offset))) {
+                days = offset + 1;
+                break;
+            }
+        }
+        LocalDate end = start.plusDays(days);
+        UUID invoiceId = UUID.randomUUID();
+        int inserted = jdbcTemplate.update(
+            "INSERT INTO subscription_schema.subscription_invoice " +
+                "(id, subscription_id, plan_id, customer_identity_id, chef_identity_id, cycle_start, cycle_end, amount, currency, " +
+                "status, provider_reference, paid_at, created_at, updated_at) " +
+                "SELECT ?, cs.id, cs.plan_id, cs.customer_identity_id, cs.chef_identity_id, ?, ?, 0, sp.currency, " +
+                "'PAID', 'DECLINE_CREDIT', now(), now(), now() " +
+                "FROM subscription_schema.customer_subscription cs " +
+                "JOIN subscription_schema.subscription_plan sp ON sp.id = cs.plan_id WHERE cs.id = ?",
+            invoiceId, start, end, subscriptionId
+        );
+        if (inserted != 1) {
+            throw new IllegalStateException("Decline credit could not be recorded");
+        }
+        creditHistory(invoiceId, null, "Chef declined a meal: " + days + " days added to the end of the plan");
+        jdbcTemplate.update(
+            "UPDATE subscription_schema.customer_subscription SET next_billing_date = ?, updated_at = now() WHERE id = ?",
+            end, subscriptionId
+        );
+        // Meals already generated for the added days were waiting for a bill; the credit pays for them.
+        List<UUID> waiting = jdbcTemplate.query(
+            "UPDATE subscription_schema.subscription_occurrence SET status = 'READY_FOR_ORDER', updated_at = now() " +
+                "WHERE subscription_id = ? AND service_date >= ? AND service_date < ? AND status = 'BILLING_PENDING' RETURNING id",
+            (rs, rowNum) -> rs.getObject("id", UUID.class), subscriptionId, start, end
+        );
+        for (UUID occurrenceId : waiting) {
+            jdbcTemplate.update(
+                "INSERT INTO subscription_schema.subscription_occurrence_history " +
+                    "(id, occurrence_id, old_status, new_status, reason, source, created_at) " +
+                    "VALUES (?, ?, 'BILLING_PENDING', 'READY_FOR_ORDER', 'Day added after a chef decline', 'CHEF_DECLINED', now())",
+                UUID.randomUUID(), occurrenceId
+            );
+        }
+        return end;
     }
 
     private void creditHistory(UUID invoiceId, String oldStatus, String reason) {

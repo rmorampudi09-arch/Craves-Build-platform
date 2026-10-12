@@ -244,7 +244,7 @@
       "JdbcInstantConfigurationTest": 2,
       "OccurrenceGeneratorServiceTest": 3,
       "OccurrenceOrderInternalSecurityTest": 1,
-      "OccurrenceOrderPropertiesTest": 2,
+      "OccurrenceOrderPropertiesTest": 1,
       "OccurrencePaidCycleSafetyTest": 1,
       "PlanScheduleRequestValidationTest": 3,
       "SpringConstructorAmbiguitySafetyTest": 1,

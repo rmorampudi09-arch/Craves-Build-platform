@@ -2,6 +2,8 @@ package in.craves.subscription.order;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -17,14 +19,19 @@ public class OccurrenceOrderRepository {
     }
 
     @Transactional
-    public List<OccurrenceClaim> claimReady(int leadHours, int staleLockMinutes, int batchSize) {
+    public List<OccurrenceClaim> claimReady(Instant now, int staleLockMinutes, int batchSize) {
         UUID lockToken = UUID.randomUUID();
+        // Breakfast, and any meal served before 09:00, goes to the chef at 20:00 the evening before; other meals at 07:00 on the day.
         String sql = """
             WITH candidates AS (
                 SELECT id
                   FROM subscription_schema.subscription_occurrence
                  WHERE status = 'READY_FOR_ORDER'
-                   AND service_at <= now() + (? * INTERVAL '1 hour')
+                   AND CAST(? AS timestamptz) >= (CASE
+                           WHEN meal_slot_code = 'BREAKFAST' OR (service_at AT TIME ZONE 'Asia/Kolkata')::time < TIME '09:00'
+                           THEN (service_date - 1) + TIME '20:00'
+                           ELSE service_date + TIME '07:00'
+                       END) AT TIME ZONE 'Asia/Kolkata'
                    AND (order_dispatch_lock_token IS NULL OR order_dispatch_locked_at < now() - (? * INTERVAL '1 minute'))
                  ORDER BY service_at, created_at
                  FOR UPDATE SKIP LOCKED
@@ -51,7 +58,7 @@ public class OccurrenceOrderRepository {
                 findItems(rs.getObject("id", UUID.class)),
                 lockToken
             ),
-            leadHours, staleLockMinutes, batchSize, lockToken
+            now.atOffset(ZoneOffset.UTC), staleLockMinutes, batchSize, lockToken
         );
     }
 
@@ -189,6 +196,56 @@ public class OccurrenceOrderRepository {
         return true;
     }
 
+    /** Marks the meal FAILED; returns it when its day is still owed to the customer, or null when that was already handled. */
+    @Transactional
+    public DeclinedMeal markOrderDeclined(UUID occurrenceId, UUID orderId) {
+        // Lock the plan first, as other paths do, so two declines for the same day are counted one after the other.
+        UUID subscriptionId = jdbcTemplate.query(
+            "SELECT subscription_id FROM subscription_schema.subscription_occurrence WHERE id = ?",
+            (rs, rowNum) -> rs.getObject("subscription_id", UUID.class), occurrenceId
+        ).stream().findFirst().orElseThrow(() -> new IllegalArgumentException("Subscription occurrence was not found"));
+        jdbcTemplate.query(
+            "SELECT id FROM subscription_schema.customer_subscription WHERE id = ? FOR UPDATE",
+            (rs, rowNum) -> rs.getObject("id", UUID.class), subscriptionId
+        );
+        DeclinedMeal meal = jdbcTemplate.query(
+            "SELECT subscription_id, plan_id, service_date, meal_slot_code, status, order_id " +
+                "FROM subscription_schema.subscription_occurrence WHERE id = ? FOR UPDATE",
+            (rs, rowNum) -> new DeclinedMeal(
+                rs.getObject("subscription_id", UUID.class), rs.getObject("plan_id", UUID.class),
+                rs.getObject("service_date", LocalDate.class), rs.getString("meal_slot_code"),
+                rs.getString("status"), rs.getObject("order_id", UUID.class)
+            ),
+            occurrenceId
+        ).stream().findFirst().orElseThrow(() -> new IllegalArgumentException("Subscription occurrence was not found"));
+        if (meal.orderId() != null && !orderId.equals(meal.orderId())) {
+            throw new IllegalStateException("Subscription occurrence is linked to a different order");
+        }
+        if ("FAILED".equals(meal.status())) {
+            return null;
+        }
+        if (!"ORDER_REQUESTED".equals(meal.status()) && !"ORDER_CREATED".equals(meal.status())) {
+            throw new IllegalStateException("Subscription occurrence was not sent to the chef");
+        }
+        jdbcTemplate.update(
+            "UPDATE subscription_schema.subscription_occurrence SET status = 'FAILED', order_id = ?, updated_at = now() WHERE id = ?",
+            orderId, occurrenceId
+        );
+        jdbcTemplate.update(
+            "INSERT INTO subscription_schema.subscription_occurrence_history " +
+                "(id, occurrence_id, old_status, new_status, reason, source, created_at) " +
+                "VALUES (?, ?, ?, 'FAILED', 'Chef declined the order', 'CHEF_DECLINED', now())",
+            UUID.randomUUID(), occurrenceId, meal.status()
+        );
+        // A day is added once, however many of its meals the chef declines. Only a chef decline sets FAILED.
+        Boolean dayAlreadyAdded = jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM subscription_schema.subscription_occurrence WHERE subscription_id = ? " +
+                "AND service_date = ? AND status = 'FAILED' AND id <> ?)",
+            Boolean.class, meal.subscriptionId(), meal.serviceDate(), occurrenceId
+        );
+        return Boolean.TRUE.equals(dayAlreadyAdded) ? null : meal;
+    }
+
     private List<OccurrenceItem> findItems(UUID occurrenceId) {
         return jdbcTemplate.query(
             "SELECT menu_item_id, quantity, sequence_number FROM subscription_schema.subscription_occurrence_item " +
@@ -237,5 +294,10 @@ public class OccurrenceOrderRepository {
     }
 
     private record OccurrenceState(String status, UUID orderId) {
+    }
+
+    public record DeclinedMeal(
+        UUID subscriptionId, UUID planId, LocalDate serviceDate, String mealSlotCode, String status, UUID orderId
+    ) {
     }
 }

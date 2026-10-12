@@ -6,6 +6,7 @@ import in.craves.order.event.SerializedDomainEvent;
 import in.craves.order.exception.OrderApiException;
 import in.craves.order.outbox.OrderDomainOutboxRepository;
 import in.craves.order.security.CravesPrincipal;
+import in.craves.order.subscription.SubscriptionOrderRepository;
 import in.craves.order.web.ApiDtos.ChefRejectRequest;
 import in.craves.order.web.ApiDtos.OrderResponse;
 import in.craves.order.web.ApiDtos.OrderStatus;
@@ -16,6 +17,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -32,19 +34,22 @@ public class ChefAcceptanceResolutionService {
     private final RefundRequestedEventFactory refundEventFactory;
     private final OrderDomainOutboxRepository domainOutboxRepository;
     private final NotificationOutboxRepository notificationOutboxRepository;
+    private final SubscriptionOrderRepository subscriptionOrderRepository;
 
     public ChefAcceptanceResolutionService(
         JdbcTemplate jdbcTemplate,
         OrderService orderService,
         RefundRequestedEventFactory refundEventFactory,
         OrderDomainOutboxRepository domainOutboxRepository,
-        NotificationOutboxRepository notificationOutboxRepository
+        NotificationOutboxRepository notificationOutboxRepository,
+        SubscriptionOrderRepository subscriptionOrderRepository
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.orderService = orderService;
         this.refundEventFactory = refundEventFactory;
         this.domainOutboxRepository = domainOutboxRepository;
         this.notificationOutboxRepository = notificationOutboxRepository;
+        this.subscriptionOrderRepository = subscriptionOrderRepository;
     }
 
     @Transactional
@@ -149,7 +154,7 @@ public class ChefAcceptanceResolutionService {
         String eventKey = stage.eventKeyPrefix + orderId;
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("orderId", orderId.toString());
-        payload.put("checkoutId", lockedOrder.checkoutId().toString());
+        payload.put("checkoutId", Objects.toString(lockedOrder.checkoutId(), null));
         payload.put("kitchenId", lockedOrder.kitchenId().toString());
         payload.put("kitchenName", lockedOrder.kitchenName());
         payload.put("acceptanceExpiresAt", lockedOrder.acceptanceExpiresAt().toString());
@@ -195,8 +200,8 @@ public class ChefAcceptanceResolutionService {
                 SET status = 'CHEF_REJECTED',
                     chef_rejection_code = ?,
                     chef_response_note = ?,
-                    refund_requested_at = now(),
-                    refund_requested_amount = grand_total,
+                    refund_requested_at = CASE WHEN checkout_id IS NULL THEN NULL ELSE now() END,
+                    refund_requested_amount = CASE WHEN checkout_id IS NULL THEN NULL ELSE grand_total END,
                     updated_at = now()
                 WHERE id = ?
                   AND status = 'CHEF_ACCEPTANCE_PENDING'
@@ -229,6 +234,13 @@ public class ChefAcceptanceResolutionService {
             rejectionCode
         );
 
+        // A meal-plan order has no checkout: the plan paid for it, so instead of a refund its day is added to the end.
+        if (order.checkoutId() == null) {
+            subscriptionOrderRepository.queueChefDeclined(order.orderId());
+            recordMealPlanDayAddedNotification(order);
+            return;
+        }
+
         RefundRequestedEventSource eventSource = new RefundRequestedEventSource(
             order.checkoutId(),
             order.orderId(),
@@ -246,6 +258,28 @@ public class ChefAcceptanceResolutionService {
             );
         }
         recordCustomerRefundNotification(order, rejectionCode, decision);
+    }
+
+    private void recordMealPlanDayAddedNotification(LockedOrder order) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("orderId", order.orderId().toString());
+        payload.put("kitchenId", order.kitchenId().toString());
+        payload.put("kitchenName", order.kitchenName());
+        notificationOutboxRepository.savePending(new NotificationOutboxEvent(
+            "meal-plan-day-added-" + order.orderId(),
+            "MEAL_PLAN_MEAL_DECLINED",
+            "ORDER",
+            order.orderId(),
+            order.customerIdentityId(),
+            "CUSTOMER",
+            "IN_APP",
+            "MEAL_PLAN_MEAL_DECLINED_IN_APP",
+            "Meal plan update",
+            "Your chef couldn't make this meal, so we've added a day to the end of your meal plan.",
+            "ORDER",
+            order.orderId(),
+            payload
+        ));
     }
 
     private void recordCustomerRefundNotification(

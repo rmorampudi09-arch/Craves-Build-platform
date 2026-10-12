@@ -129,9 +129,31 @@ class ChefDispatchAndDeclineDatabaseTest {
 
         var credit=tx.execute(s->new SubscriptionBillingRepository(db).applyPauseCredit(subscription,d("10-09")));
 
-        assertEquals(0,credit.creditDays());
-        assertEquals(1,credits().size());
+        // Nothing paused was owed (the declined lunch was already sent); only the declined day's 3 days carry, once.
+        assertEquals(3,credit.creditDays());
+        assertEquals(List.of("2026-10-10..2026-10-13 PAID 0.00"),credits());
         assertEquals(d("10-13"),nextBilling());
+    }
+
+    @Test void resumeAfterAnUnpaidBillStartedPullsTheDeclineCreditForward() {
+        // Next week's bill is raised but unpaid, so the declined day lands after it.
+        UUID open=UUID.randomUUID();
+        db.update("INSERT INTO subscription_schema.subscription_invoice(id,subscription_id,plan_id,customer_identity_id,chef_identity_id,cycle_start,cycle_end,amount,currency,status) VALUES (?,?,?,?,?,?,?,300,'INR','PAYMENT_REQUESTED')",open,subscription,plan,customer,chef,d("10-10"),d("10-17"));
+        db.update("UPDATE subscription_schema.customer_subscription SET next_billing_date=? WHERE id=?",d("10-17"),subscription);
+        UUID order=UUID.randomUUID();
+        UUID lunch=meal(d("10-08"),"LUNCH",ist("10-08T12:30"),"ORDER_CREATED",order);
+        decline(lunch,order);
+        assertEquals(List.of("2026-10-17..2026-10-20 PAID 0.00"),credits());
+        // Paused 09:00 IST on Friday 9 October, resumed Monday 12 October: the unpaid bill is voided.
+        db.update("UPDATE subscription_schema.customer_subscription SET status='PAUSED' WHERE id=?",subscription);
+        db.update("INSERT INTO subscription_schema.subscription_status_history(subscription_id,old_status,new_status,reason,created_at) VALUES (?,'ACTIVE','PAUSED','Travelling',CAST('2026-10-09T03:30:00Z' AS timestamptz))",subscription);
+
+        tx.execute(s->new SubscriptionBillingRepository(db).applyPauseCredit(subscription,d("10-12")));
+
+        assertEquals("CANCELLED",db.queryForObject("SELECT status FROM subscription_schema.subscription_invoice WHERE id=?",String.class,open));
+        // No gap after the resume: the paused Friday plus the declined credit's 3 days start on the resume date.
+        assertEquals(List.of("2026-10-12..2026-10-16 PAID 0.00"),credits());
+        assertEquals(d("10-16"),nextBilling());
     }
 
     @Test void declineForAnotherOrderIsRefused() {

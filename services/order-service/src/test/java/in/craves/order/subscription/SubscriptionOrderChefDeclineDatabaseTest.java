@@ -6,9 +6,12 @@ import static org.mockito.Mockito.mock;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import in.craves.order.event.ChefAcceptedOrderEventFactory;
 import in.craves.order.event.RefundRequestedEventFactory;
 import in.craves.order.outbox.OrderDomainOutboxRepository;
+import in.craves.order.security.CravesPrincipal;
 import in.craves.order.service.ChefAcceptanceResolutionService;
+import in.craves.order.service.ChefAcceptanceService;
 import in.craves.order.service.NotificationOutboxRepository;
 import in.craves.order.service.OrderService;
 import in.craves.order.subscription.SubscriptionOrderModels.CallbackRecord;
@@ -16,6 +19,7 @@ import in.craves.order.subscription.SubscriptionOrderModels.EventEnvelope;
 import in.craves.order.subscription.SubscriptionOrderModels.RequestedData;
 import in.craves.order.subscription.SubscriptionOrderModels.RequestedItem;
 import in.craves.order.subscription.SubscriptionOrderRepository.ValidatedItem;
+import in.craves.order.web.ApiDtos.ChefAcceptRequest;
 import in.craves.order.web.ApiDtos.CustomerAddressSnapshotResponse;
 import in.craves.order.web.ApiDtos.KitchenPickupSnapshotResponse;
 import java.time.Duration;
@@ -37,6 +41,8 @@ class SubscriptionOrderChefDeclineDatabaseTest {
     JdbcTemplate jdbc;
     SubscriptionOrderRepository repository;
     ChefAcceptanceResolutionService resolution;
+    ChefAcceptanceService acceptance;
+    ObjectMapper json;
     final UUID occurrence = UUID.randomUUID(), kitchen = UUID.randomUUID();
 
     @BeforeEach void setup() {
@@ -50,9 +56,11 @@ class SubscriptionOrderChefDeclineDatabaseTest {
         Flyway.configure().dataSource(ds).defaultSchema("order_schema").schemas("order_schema").locations("classpath:db/migration").load().migrate();
         jdbc.update("INSERT INTO catalog_schema.kitchen_profile(id,identity_id) VALUES (?,?)", kitchen, UUID.randomUUID());
         repository = new SubscriptionOrderRepository(jdbc);
-        ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
+        json = new ObjectMapper().registerModule(new JavaTimeModule());
         resolution = new ChefAcceptanceResolutionService(jdbc, mock(OrderService.class), new RefundRequestedEventFactory(json),
             new OrderDomainOutboxRepository(jdbc), new NotificationOutboxRepository(jdbc, json), repository);
+        acceptance = new ChefAcceptanceService(jdbc, mock(OrderService.class), new ChefAcceptedOrderEventFactory(json),
+            new OrderDomainOutboxRepository(jdbc));
     }
 
     UUID createOrder(Instant serviceAt) {
@@ -100,5 +108,18 @@ class SubscriptionOrderChefDeclineDatabaseTest {
         assertEquals(1, callbacks.size());
         assertEquals(List.of(occurrence, id, true, 1), List.of(callbacks.get(0).occurrenceId(), callbacks.get(0).orderId(),
             callbacks.get(0).chefDeclined(), callbacks.get(0).attemptCount()));
+    }
+
+    @Test void chefCanAcceptAMealPlanOrderAndBookItsCourier() throws Exception {
+        UUID id = createOrder(Instant.now().plus(Duration.ofHours(5)));
+
+        acceptance.accept(new CravesPrincipal(UUID.randomUUID(), "", java.util.Set.of("CHEF")), id, new ChefAcceptRequest(20, null),
+            UUID.randomUUID(), "accept-" + id);
+
+        assertEquals("CHEF_ACCEPTED", order(id).get("status"));
+        var event = json.readTree(jdbc.queryForObject("SELECT payload_json::text FROM order_schema.domain_event_outbox WHERE aggregate_id = ?", String.class, id));
+        // The courier side needs an order id; a meal-plan order stands in for its own checkout.
+        assertEquals(id.toString(), event.path("data").path("orderId").asText());
+        assertEquals(id.toString(), event.path("data").path("chefSubOrderId").asText());
     }
 }

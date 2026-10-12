@@ -187,7 +187,8 @@ public class ChefAcceptanceService {
         );
 
         return jdbcTemplate.query(
-            "SELECT * FROM order_schema.customer_order WHERE id = ?",
+            // A meal-plan order has no checkout; it stands in for its own checkout in delivery messages.
+            "SELECT *, COALESCE(checkout_id, id) AS delivery_checkout_id FROM order_schema.customer_order WHERE id = ?",
             (resultSet, rowNumber) -> mapEventSource(resultSet, deliveryItems),
             orderId
         ).stream().findFirst().orElseThrow(() -> OrderApiException.notFound(
@@ -211,7 +212,7 @@ public class ChefAcceptanceService {
 
         return new ChefAcceptedOrderEventSource(
             resultSet.getObject("id", UUID.class),
-            resultSet.getObject("checkout_id", UUID.class),
+            resultSet.getObject("delivery_checkout_id", UUID.class),
             instant(resultSet, "accepted_at"),
             instant(resultSet, "ready_at"),
             totalPackageWeightGrams,

@@ -33,7 +33,6 @@ steps:
       order_config='services/order-service/src/main/resources/application.yml'
       grep -Fq 'CRAVES_SUBSCRIPTION_ORDER_REQUEST_WORKER_ENABLED:false' "$sub_config"
       grep -Fq 'CRAVES_SUBSCRIPTION_ORDER_PUBLISHER_ENABLED:false' "$sub_config"
-      grep -Fq 'CRAVES_SUBSCRIPTION_ORDER_LEAD_HOURS:-1' "$sub_config"
       grep -Fq 'CRAVES_SUBSCRIPTION_ORDER_CONSUMER_ENABLED:false' "$order_config"
       grep -Fq 'CRAVES_SUBSCRIPTION_ORDER_CALLBACK_WORKER_ENABLED:false' "$order_config"
       grep -Fq "financial_allocation_status = 'PENDING_POLICY'" \

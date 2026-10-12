@@ -22,10 +22,9 @@ paid billing cycle
 ```text
 CRAVES_SUBSCRIPTION_ORDER_REQUEST_WORKER_ENABLED=false
 CRAVES_SUBSCRIPTION_ORDER_PUBLISHER_ENABLED=false
-CRAVES_SUBSCRIPTION_ORDER_LEAD_HOURS=-1
 ```
 
-The request worker refuses to start until an approved lead from 0 to 168 hours is configured. Source code does not choose that operational value.
+Updated 2026-10-12: the lead-hours setting is gone. Meals go to the chef at 07:00 IST on the meal day, and breakfast (or anything served before 09:00) at 20:00 IST the evening before.
 
 ## Order-side controls
 

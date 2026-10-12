@@ -199,6 +199,15 @@ public class OccurrenceOrderRepository {
     /** Marks the meal FAILED; returns it when its day is still owed to the customer, or null when that was already handled. */
     @Transactional
     public DeclinedMeal markOrderDeclined(UUID occurrenceId, UUID orderId) {
+        // Lock the plan first, as other paths do, so two declines for the same day are counted one after the other.
+        UUID subscriptionId = jdbcTemplate.query(
+            "SELECT subscription_id FROM subscription_schema.subscription_occurrence WHERE id = ?",
+            (rs, rowNum) -> rs.getObject("subscription_id", UUID.class), occurrenceId
+        ).stream().findFirst().orElseThrow(() -> new IllegalArgumentException("Subscription occurrence was not found"));
+        jdbcTemplate.query(
+            "SELECT id FROM subscription_schema.customer_subscription WHERE id = ? FOR UPDATE",
+            (rs, rowNum) -> rs.getObject("id", UUID.class), subscriptionId
+        );
         DeclinedMeal meal = jdbcTemplate.query(
             "SELECT subscription_id, plan_id, service_date, meal_slot_code, status, order_id " +
                 "FROM subscription_schema.subscription_occurrence WHERE id = ? FOR UPDATE",

@@ -1,0 +1,13 @@
+# Code catalog-service must keep in production. A production start (CRAVES_ENVIRONMENT=prod*) refuses
+# to run a build that lacks any of them. Remove a line only when retiring that code on purpose.
+# See docs/runbooks/live-runtime-safety.md.
+in.craves.catalog.banners.AdminHomeBannerController
+in.craves.catalog.banners.PublicHomeBannerController
+in.craves.catalog.web.FavoriteHomeFeedController
+in.craves.catalog.web.InternalCatalogController
+in.craves.catalog.web.KitchenController
+in.craves.catalog.web.KitchenScheduleController
+in.craves.catalog.web.NearbyDiscoveryController
+in.craves.catalog.web.PublicCatalogController
+in.craves.catalog.web.PublicKitchenAvailabilityController
+in.craves.catalog.web.SavedMenuItemController

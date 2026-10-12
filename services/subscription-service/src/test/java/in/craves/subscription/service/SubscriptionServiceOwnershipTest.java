@@ -111,6 +111,35 @@ class SubscriptionServiceOwnershipTest {
     }
 
     @Test
+    void addressFartherThanTenKilometresFromTheChefIsRejectedBeforeAnySubscriptionIsCreated() {
+        CurrentUser customer = new CurrentUser(CUSTOMER_ID, "firebase-customer", "+918888888888", List.of("CUSTOMER"));
+        UUID planId = UUID.fromString("44444444-4444-4444-8444-444444444444");
+        UUID addressId = UUID.fromString("66666666-6666-4666-8666-666666666666");
+        PlanResponse stored = plan(CHEF_ID, "ACTIVE");
+        when(repository.findActivePlanById(planId)).thenReturn(Optional.of(stored));
+        when(repository.isPlanAcceptingSubscribers(planId)).thenReturn(true);
+        when(capacityService.isPlanBookable(stored)).thenReturn(true);
+        when(repository.isAddressNearChef(CUSTOMER_ID, addressId, CHEF_ID, 10_000)).thenReturn(false);
+        CreateSubscriptionRequest request = new CreateSubscriptionRequest(planId, LocalDate.now().plusDays(1), addressId, null);
+
+        assertThatThrownBy(() -> service.createSubscription(request, "enroll-key-0001", customer))
+            .isInstanceOfSatisfying(ApiException.class, error -> {
+                assertThat(error.getStatus()).isEqualTo(400);
+                assertThat(error.getCode()).isEqualTo("DELIVERY_ADDRESS_OUT_OF_RANGE");
+            });
+
+        verify(repository, never()).createSubscription(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void nearbyPlansNeedBothCoordinates() {
+        assertThatThrownBy(() -> service.listActivePlans(17.44, null))
+            .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("LOCATION_INCOMPLETE"));
+        assertThatThrownBy(() -> service.listActivePlans(95.0, 78.37))
+            .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("LOCATION_INVALID"));
+    }
+
+    @Test
     void missingPlanImageIsAnApiNotFound() {
         UUID planId = UUID.fromString("44444444-4444-4444-8444-444444444444");
         when(planImages.findImage(planId)).thenReturn(Optional.empty());

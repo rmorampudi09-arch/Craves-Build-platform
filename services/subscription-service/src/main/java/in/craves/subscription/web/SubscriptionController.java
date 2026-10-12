@@ -52,8 +52,11 @@ public class SubscriptionController {
     }
 
     @GetMapping("/subscriptions/plans")
-    public List<PublicPlanResponse> listActivePlans() {
-        return service.listActivePlans();
+    public List<PublicPlanResponse> listActivePlans(
+        @RequestParam(required = false) Double latitude,
+        @RequestParam(required = false) Double longitude
+    ) {
+        return service.listActivePlans(latitude, longitude);
     }
 
     @GetMapping("/subscriptions/plans/{planId}")

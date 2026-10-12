@@ -56,7 +56,7 @@ class SubscriptionPlanImageControllerTest {
 
     @Test
     void publicPlanListSerializesImageUrlAsNullWhenThePlanHasNoImage() throws Exception {
-        when(service.listActivePlans()).thenReturn(List.of(publicPlan(null)));
+        when(service.listActivePlans(null, null)).thenReturn(List.of(publicPlan(null)));
 
         mockMvc.perform(get("/api/v1/subscriptions/plans"))
             .andExpect(status().isOk())
@@ -66,7 +66,7 @@ class SubscriptionPlanImageControllerTest {
 
     @Test
     void publicPlanListCarriesTheVersionedImagePath() throws Exception {
-        when(service.listActivePlans()).thenReturn(List.of(publicPlan(IMAGE_PATH)));
+        when(service.listActivePlans(null, null)).thenReturn(List.of(publicPlan(IMAGE_PATH)));
 
         mockMvc.perform(get("/api/v1/subscriptions/plans"))
             .andExpect(status().isOk())

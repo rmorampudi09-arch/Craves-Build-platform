@@ -1,0 +1,55 @@
+import {formatRelativeTime, formatRupees, shortOrderNumber} from './chefFormat';
+
+describe('shortOrderNumber', () => {
+  it('uses the last 5 characters of the id without dashes, uppercase', () => {
+    expect(shortOrderNumber('11111111-1111-4111-8111-1111-7a3df94b')).toBe('#DF94B');
+    expect(shortOrderNumber('7a3df94b')).toBe('#DF94B');
+  });
+
+  it('copes with ids shorter than 5 characters', () => {
+    expect(shortOrderNumber('ab-c')).toBe('#ABC');
+  });
+});
+
+describe('formatRupees', () => {
+  it('shows whole rupees with en-IN grouping', () => {
+    expect(formatRupees(1240)).toBe('₹1,240');
+    expect(formatRupees(0)).toBe('₹0');
+    expect(formatRupees(1234567)).toBe('₹12,34,567');
+    expect(formatRupees(99.6)).toBe('₹100');
+  });
+
+  it('shows paise for balances', () => {
+    expect(formatRupees(3450, {paise: true})).toBe('₹3,450.00');
+    expect(formatRupees(0, {paise: true})).toBe('₹0.00');
+    expect(formatRupees(1234.5, {paise: true})).toBe('₹1,234.50');
+  });
+
+  it('keeps the sign in front of the symbol and tolerates bad numbers', () => {
+    expect(formatRupees(-1240)).toBe('-₹1,240');
+    expect(formatRupees(Number.NaN)).toBe('₹0');
+  });
+});
+
+describe('formatRelativeTime', () => {
+  const now = new Date(2026, 9, 14, 9, 0, 0);
+  const at = (...parts: [number, number, number, number, number]) => new Date(...parts).toISOString();
+
+  it('says how long ago for the last day', () => {
+    expect(formatRelativeTime(at(2026, 9, 14, 8, 58), now)).toBe('2 min ago');
+    expect(formatRelativeTime(at(2026, 9, 14, 8, 59), now)).toBe('1 min ago');
+    expect(formatRelativeTime(new Date(now.getTime() - 20_000).toISOString(), now)).toBe('Just now');
+    expect(formatRelativeTime(at(2026, 9, 14, 6, 0), now)).toBe('3 hr ago');
+  });
+
+  it('says Yesterday for the previous calendar day and a date after that', () => {
+    expect(formatRelativeTime(at(2026, 9, 13, 20, 0), now)).toBe('Yesterday');
+    expect(formatRelativeTime(at(2026, 9, 13, 9, 30), now)).toBe('Yesterday');
+    expect(formatRelativeTime(at(2026, 9, 13, 12, 0), new Date(2026, 9, 20, 9, 0))).toBe('13 Oct');
+  });
+
+  it('never shows a negative or broken time', () => {
+    expect(formatRelativeTime(at(2026, 9, 14, 9, 5), now)).toBe('Just now');
+    expect(formatRelativeTime('not a date', now)).toBe('');
+  });
+});

@@ -48,7 +48,8 @@ import {
 import {
   useMySubscriptionsQuery,
   usePlanCover,
-  usePublicMealPlansQuery,
+  useHasMealPlanLocation,
+  useNearbyMealPlansQuery,
 } from '../query/mealPlanQueries';
 import {
   alertProfileIncomplete,
@@ -174,7 +175,8 @@ function SubscriptionCard({
 }
 
 export function MealPlansScreen({navigation}: Props) {
-  const plansQuery = usePublicMealPlansQuery();
+  const plansQuery = useNearbyMealPlansQuery();
+  const hasLocation = useHasMealPlanLocation();
   const subscriptionsQuery = useMySubscriptionsQuery();
   const [filter, setFilter] = React.useState<Filter>('all');
   const [searchText, setSearchText] = React.useState('');
@@ -364,9 +366,11 @@ export function MealPlansScreen({navigation}: Props) {
           ) : plansQuery.isError ? null : (
             <TerminalState
               title={
-                filter === 'all'
-                  ? 'No meal plans yet'
-                  : `No ${filter === 'week' ? 'weekly' : 'monthly'} meal plans yet`
+                !hasLocation
+                  ? 'Choose a delivery location to see meal plans near you'
+                  : filter === 'all'
+                    ? 'No meal plans near you yet'
+                    : `No ${filter === 'week' ? 'weekly' : 'monthly'} meal plans near you yet`
               }
             />
           )

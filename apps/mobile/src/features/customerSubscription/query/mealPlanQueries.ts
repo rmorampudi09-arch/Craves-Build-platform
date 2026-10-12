@@ -42,6 +42,7 @@ export const mealPlanQueryPrefix = [
 
 export type MealPlanResource =
   | 'plans'
+  | 'nearbyPlans'
   | 'schedule'
   | 'policy'
   | 'subscriptions'
@@ -96,6 +97,21 @@ export function usePublicMealPlansQuery() {
     signal => customerSubscriptionApi.listPlans(signal),
     PLAN_STALE_MS,
   );
+}
+
+/** Browse list: only chefs within 10 km of the selected location. Other screens look plans up in the full list. */
+export function useNearbyMealPlansQuery() {
+  const location = useAppSelector(state => state.customerShell.selectedLocation);
+  return useMealPlanQuery(
+    'nearbyPlans',
+    location ? `${location.latitude},${location.longitude}` : null,
+    signal => customerSubscriptionApi.listNearbyPlans(location!, signal),
+    PLAN_STALE_MS,
+  );
+}
+
+export function useHasMealPlanLocation(): boolean {
+  return useAppSelector(state => state.customerShell.selectedLocation !== null);
 }
 
 export function usePlanScheduleQuery(planId: string | null) {

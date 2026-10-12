@@ -169,6 +169,19 @@ export const customerSubscriptionApi = {
     return parseMany(publicSubscriptionPlanSchema, response, 'Meal plans');
   },
 
+  /** Plans whose chef is within 10 km of the location; the server applies the radius. */
+  async listNearbyPlans(
+    location: {latitude: number; longitude: number},
+    signal?: AbortSignal,
+  ): Promise<PublicSubscriptionPlan[]> {
+    const response = await httpClient.get<unknown>('/api/v1/subscriptions/plans', {
+      params: {latitude: location.latitude, longitude: location.longitude},
+      signal,
+      dedupeKey: `customer-subscription:plans:${location.latitude},${location.longitude}`,
+    });
+    return parseMany(publicSubscriptionPlanSchema, response, 'Meal plans');
+  },
+
   async getPlan(planId: string, signal?: AbortSignal): Promise<PublicSubscriptionPlan> {
     requireUuid(planId, 'Meal plan');
     const response = await httpClient.get<unknown>(

@@ -19,6 +19,15 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.30.0 - Meal plans only from chefs within 10 km, 2026-10-12
+
+- The Meal plans list now sends the selected location, and the server lists only plans whose
+  chef has an active kitchen within 10 km (the same radius as dishes). With no location chosen,
+  the list asks for one. Other meal-plan screens still read the full list, so a customer's own plan
+  keeps its details after they move.
+- Subscribing to a chef more than 10 km from the delivery address is refused by the server
+  (DELIVERY_ADDRESS_OUT_OF_RANGE). That check needs the subscription-service release from this change.
+
 ### Version 1.29.2 - First dashboard after approval loads cleanly, 2026-10-12
 
 - On a chef's first open after approval the Dashboard listed dishes before the kitchen

@@ -271,3 +271,22 @@ describe('customerSubscriptionApi schedules saved before dish snapshots', () => 
     expect(parsed.items[0]).toMatchObject({menuItemName: 'Dish', menuItemPrice: null, menuItemCurrency: null});
   });
 });
+
+describe('customerSubscriptionApi nearby plans', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('asks the server only for plans near the selected location', async () => {
+    (httpClient.get as jest.Mock).mockResolvedValueOnce([planBase]);
+
+    await expect(
+      customerSubscriptionApi.listNearbyPlans({latitude: 17.4435, longitude: 78.3772}),
+    ).resolves.toHaveLength(1);
+
+    expect(httpClient.get).toHaveBeenCalledWith(
+      '/api/v1/subscriptions/plans',
+      expect.objectContaining({params: {latitude: 17.4435, longitude: 78.3772}}),
+    );
+  });
+});

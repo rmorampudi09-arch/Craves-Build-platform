@@ -28,6 +28,8 @@ jest.mock('../../../design/reducedMotion', () => ({
 }));
 jest.mock('../query/mealPlanQueries', () => ({
   usePublicMealPlansQuery: jest.fn(),
+  useNearbyMealPlansQuery: jest.fn(),
+  useHasMealPlanLocation: jest.fn(() => true),
   useMySubscriptionsQuery: jest.fn(),
   usePlanCover: jest.fn(),
   usePlanScheduleQuery: jest.fn(),
@@ -153,6 +155,11 @@ function given({
 } = {}) {
   const selected = addresses[0] ?? null;
   jest.mocked(queries.usePublicMealPlansQuery).mockReturnValue({
+    data: plans,
+    isLoading: false,
+    isError: false,
+  } as never);
+  jest.mocked(queries.useNearbyMealPlansQuery).mockReturnValue({
     data: plans,
     isLoading: false,
     isError: false,
@@ -330,7 +337,13 @@ describe('MealPlansScreen', () => {
 
   it('shows the empty state', () => {
     given({plans: []});
-    expect(texts(renderList())).toContain('No meal plans yet');
+    expect(texts(renderList())).toContain('No meal plans near you yet');
+  });
+
+  it('asks for a delivery location before listing nearby plans', () => {
+    given({plans: []});
+    jest.mocked(queries.useHasMealPlanLocation).mockReturnValueOnce(false);
+    expect(texts(renderList())).toContain('Choose a delivery location to see meal plans near you');
   });
 });
 

@@ -1,4 +1,5 @@
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /** `#` + last 5 characters of the id without dashes, uppercase. The one order number every chef screen shows. */
 export function shortOrderNumber(id: string): string {
@@ -19,6 +20,20 @@ export function formatRupees(amount: number, opts: {paise?: boolean} = {}): stri
   const [whole, fraction] = fixed.split('.');
   const sign = safe < 0 && Number(fixed) !== 0 ? '-' : '';
   return `${sign}₹${groupIndian(whole)}${fraction ? `.${fraction}` : ''}`;
+}
+
+/** `₹40` for whole rupees, `₹7.25` when there are paise (a bill line that must show the exact amount). */
+export function formatRupeesExact(amount: number): string {
+  return formatRupees(amount, {paise: !Number.isInteger(amount)});
+}
+
+/** `Priya S.`: the first name and the last initial of a full name; undefined when there is no name. */
+export function shortCustomerName(fullName: string | null | undefined): string | undefined {
+  const parts = (fullName ?? '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return undefined;
+  }
+  return parts.length === 1 ? parts[0] : `${parts[0]} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`;
 }
 
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
@@ -59,4 +74,13 @@ export function formatTimeOfDay(date: Date): string {
 export function formatWindowTime(value: string): string {
   const match = /^([01]\d|2[0-3]):([0-5]\d)/.exec(value);
   return match ? clock(Number(match[1]), Number(match[2])) : '';
+}
+
+/** `Today`, `Yesterday`, `Tomorrow`, then `2 Oct` (`Sun 18 Oct` with `{weekday: true}`). */
+export function formatDayLabel(date: Date, now: Date, opts: {weekday?: boolean} = {}): string {
+  const daysApart = Math.round((startOfDay(date) - startOfDay(now)) / 86_400_000);
+  if (daysApart === 0) return 'Today';
+  if (daysApart === -1) return 'Yesterday';
+  if (daysApart === 1) return 'Tomorrow';
+  return `${opts.weekday ? `${WEEKDAYS[date.getDay()]} ` : ''}${date.getDate()} ${MONTHS[date.getMonth()]}`;
 }

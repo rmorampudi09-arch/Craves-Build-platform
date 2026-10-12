@@ -20,6 +20,8 @@ export interface OrderCardOrder {
   area?: string;
   /** ISO timestamp; shown as "2 min ago". */
   placedAt?: string;
+  /** Replaces the "2 min ago" part, e.g. "Ready since 12:25 PM". */
+  detail?: string;
   total?: number;
   items: {name: string; quantity: number; foodType?: VegMarkType | null}[];
   /** What the customer asked for, e.g. "Less spicy please". */
@@ -31,16 +33,18 @@ export interface OrderCardProps {
   /** The screen's own buttons and timer. Kept outside the tappable summary so TalkBack can reach each button. */
   actions?: React.ReactNode;
   highlighted?: boolean;
+  /** Shown beside the order number, e.g. a status chip. */
+  badge?: React.ReactNode;
   /** Opens the order. */
   onPress?: () => void;
 }
 
-export function OrderCard({order, actions, highlighted, onPress}: OrderCardProps) {
+export function OrderCard({order, actions, highlighted, badge, onPress}: OrderCardProps) {
   const number = shortOrderNumber(order.id);
   const who = [
     order.customerName,
     order.area,
-    order.placedAt ? formatRelativeTime(order.placedAt, new Date()) : undefined,
+    order.detail ?? (order.placedAt ? formatRelativeTime(order.placedAt, new Date()) : undefined),
   ]
     .filter(Boolean)
     .join(' · ');
@@ -49,9 +53,12 @@ export function OrderCard({order, actions, highlighted, onPress}: OrderCardProps
     <>
       <View style={styles.top}>
         <View style={styles.idBlock}>
-          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.id}>
-            {number}
-          </Text>
+          <View style={styles.numberRow}>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.id}>
+              {number}
+            </Text>
+            {badge}
+          </View>
           {who ? (
             <Text allowFontScaling={textDefaults.allowFontScaling} numberOfLines={2} style={styles.who}>
               {who}
@@ -126,6 +133,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
   idBlock: {flex: 1, minWidth: 0},
+  numberRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
   id: {color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.extrabold},
   who: {marginTop: 2, color: colors.textSecondary, fontSize: typography.small},
   amount: {color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.extrabold},

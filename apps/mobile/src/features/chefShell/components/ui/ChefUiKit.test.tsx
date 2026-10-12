@@ -82,6 +82,19 @@ describe('Chef UI kit', () => {
     expect(text.join(' ')).not.toMatch(/NON_VEG|VEG\b/);
   });
 
+  it('OrderCard can say "Ready since 12:25 PM" in place of the age, and show a status chip beside the number', () => {
+    mount(
+      <OrderCard
+        badge={<Text>BADGE</Text>}
+        order={{...order, area: undefined, detail: 'Ready since 12:25 PM'}}
+      />,
+    );
+    const text = allText();
+    expect(text).toContain('BADGE');
+    expect(text).toContain('Priya S. · Ready since 12:25 PM');
+    expect(text.join(' ')).not.toContain('min ago');
+  });
+
   it('OrderCard keeps the action buttons outside the tappable summary', () => {
     const onPress = jest.fn();
     mount(<OrderCard order={order} onPress={onPress} actions={<Text accessibilityLabel="Accept">Accept</Text>} />);

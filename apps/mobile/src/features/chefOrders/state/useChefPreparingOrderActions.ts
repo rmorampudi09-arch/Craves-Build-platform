@@ -8,6 +8,7 @@ import {
   type ChefOrderDetail,
 } from '../api/chefOrderDetailApi';
 import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
+import {dialablePhone} from '../domain/chefOrderDetailModel';
 import {createChefOrderDetailQueryKey} from './useChefOrderDetailContract';
 
 export type ChefPreparingOrderAction = 'marking-ready' | 'calling';
@@ -31,15 +32,6 @@ function isPreparingStatus(status: ChefOrderDetail['status']): boolean {
 
 function isReadyStatus(status: ChefOrderDetail['status']): boolean {
   return status === 'READY_FOR_PICKUP';
-}
-
-function callablePhone(detail: ChefOrderDetail): string | null {
-  const phone = detail.deliveryAddress?.contactPhoneNumber.trim() ?? '';
-  if (!phone) {
-    return null;
-  }
-  const normalized = phone.replace(/[^+\d]/g, '');
-  return normalized.length >= 7 ? normalized : null;
 }
 
 export function useChefPreparingOrderActions(): ChefPreparingOrderActions {
@@ -201,7 +193,7 @@ export function useChefPreparingOrderActions(): ChefPreparingOrderActions {
             409,
           );
         }
-        const phone = callablePhone(latest);
+        const phone = dialablePhone(latest.deliveryAddress?.contactPhoneNumber);
         if (!phone) {
           throw new AppApiError(
             'CHEF_CUSTOMER_CONTACT_UNAVAILABLE',

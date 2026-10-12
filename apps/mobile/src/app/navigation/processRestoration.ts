@@ -55,6 +55,7 @@ const chefNestedScreenSchema = z.enum([
   'ChefOrdersNew',
   'ChefOrdersReady',
   'ChefOrdersCompleted',
+  'ChefOrdersScheduled',
   'ChefProfileHome',
   'ChefBusinessInformation',
   'ChefPayoutHistory',

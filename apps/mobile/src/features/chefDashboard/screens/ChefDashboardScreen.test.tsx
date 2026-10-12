@@ -49,6 +49,7 @@ const pendingOrder: ChefOperationalOrder = {
   status: 'CHEF_ACCEPTANCE_PENDING',
   createdAt: new Date(Date.now() - 2 * 60_000).toISOString(),
   foodSubtotal: 220,
+  customerName: 'Priya S.',
   deliverySummary: {areaName: 'KPHB Colony', city: 'Hyderabad'},
   items: [
     {id: ITEM(1), itemName: 'Chicken curry', quantity: 2, foodType: 'NON_VEG'},
@@ -165,6 +166,7 @@ describe('Home: new orders', () => {
     expect(hasText('#DF94B')).toBe(true);
     expect(hasText('#B2E1C')).toBe(false);
     expect(hasText('₹220')).toBe(true);
+    expect(hasText(/^Priya S\. · KPHB Colony · /)).toBe(true);
     expect(pressables('Accept · ready in 20 min')).toHaveLength(1);
     expect(pressables('Reject order #DF94B')).toHaveLength(1);
     await press('2 new orders');
@@ -192,12 +194,38 @@ describe('Home: new orders', () => {
     expect(pressables('Reject order #DF94B')[0].props.disabled).toBe(true);
   });
 
-  it('opens the order when the card is tapped and sends Reject to the New orders list', async () => {
+  it('opens the order when the card is tapped', async () => {
     await mount();
-    await press('Order #DF94B, ₹220, 3 items');
+    await press('Order #DF94B, ₹220, Priya S., 3 items');
     expect(mockNavigate).toHaveBeenCalledWith('ChefOrderDetail', {orderId: NEW_ID});
+  });
+
+  it('opens the reject sheet from Reject, and rejects with the reason picked', async () => {
+    const reject = jest.fn(async () => ({}));
+    mockNewActions = {...mockNewActions, reject};
+    await mount();
     await press('Reject order #DF94B');
-    expect(mockNavigate).toHaveBeenCalledWith('Orders', {screen: 'ChefOrdersNew'});
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(hasText('Reject #DF94B?')).toBe(true);
+    expect(pressables('Reject order')[0].props.disabled).toBe(true);
+    await press('Closing soon');
+    await press('Reject order');
+    expect(reject).toHaveBeenCalledTimes(1);
+    expect(reject).toHaveBeenCalledWith(NEW_ID, 'Closing soon');
+    expect(tree.root.findAllByType(Modal).some(modal => modal.props.visible === true)).toBe(false);
+  });
+
+  it('keeps the reject sheet open when the rejection fails', async () => {
+    const reject = jest.fn(async () => {
+      throw new Error('offline');
+    });
+    mockNewActions = {...mockNewActions, reject};
+    await mount();
+    await press('Reject order #DF94B');
+    await press('Closing soon');
+    await press('Reject order');
+    expect(reject).toHaveBeenCalledTimes(1);
+    expect(hasText('Reject #DF94B?')).toBe(true);
   });
 
   it('shows the response countdown and the customer note only when the order carries them', async () => {

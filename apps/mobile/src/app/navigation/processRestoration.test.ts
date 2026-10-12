@@ -15,6 +15,20 @@ describe('P111 process restoration policy', () => {
     expect(captureProcessRestorationSnapshot(root, 'CUSTOMER')).toEqual({version: 1, role: 'CUSTOMER', target: {kind: 'CUSTOMER_SCREEN', tab: 'Profile', screen: 'CustomerShareInvitation'}});
   });
 
+  it.each(['ChefOrdersNew', 'ChefOrdersPreparing', 'ChefOrdersReady', 'ChefOrdersScheduled', 'ChefOrdersCompleted'])(
+    'restores the %s filter of the chef Orders screen',
+    screen => {
+      const root = state([{name: 'ChefTabs', state: state([{name: 'Orders', state: state([{name: screen}])}])}]);
+      const snapshot = captureProcessRestorationSnapshot(root, 'CHEF');
+      expect(snapshot).toEqual({version: 1, role: 'CHEF', target: {kind: 'CHEF_NESTED', tab: 'Orders', screen}});
+      expect(parseProcessRestorationSnapshot(snapshot)).toEqual(snapshot);
+      expect(toRestorationNavigatePayload(snapshot!)).toEqual({
+        name: 'ChefTabs',
+        params: {screen: 'Orders', params: {screen}},
+      });
+    },
+  );
+
   it.each(['ChefReferral', 'ChefReferralEarnings'])('restores %s inside the chef Profile stack', screen => {
     const root = state([{name: 'ChefTabs', state: state([{name: 'Profile', state: state([{name: 'ChefProfileHome'}, {name: screen}], 1)}])}]);
     expect(captureProcessRestorationSnapshot(root, 'CHEF')).toEqual({version: 1, role: 'CHEF', target: {kind: 'CHEF_NESTED', tab: 'Profile', screen}});

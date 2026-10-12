@@ -41,11 +41,8 @@ jest.mock('../../features/chefBusinessInformation/screens/ChefBusinessInformatio
 jest.mock('../../features/chefMenu/screens/ChefAddMenuItemScreen', () => mockScreenModule('ChefAddMenuItemScreen'));
 jest.mock('../../features/chefMenu/screens/ChefEditMenuItemScreen', () => mockScreenModule('ChefEditMenuItemScreen'));
 jest.mock('../../features/chefMenu/screens/ChefMenuItemDetailScreen', () => mockScreenModule('ChefMenuItemDetailScreen'));
-jest.mock('../../features/chefOrders/screens/ChefCompletedOrdersScreen', () => mockScreenModule('ChefCompletedOrdersScreen'));
-jest.mock('../../features/chefOrders/screens/ChefNewOrdersScreen', () => mockScreenModule('ChefNewOrdersScreen'));
 jest.mock('../../features/chefOrders/screens/ChefOrderDetailScreen', () => mockScreenModule('ChefOrderDetailScreen'));
-jest.mock('../../features/chefOrders/screens/ChefPreparingOrdersScreen', () => mockScreenModule('ChefPreparingOrdersScreen'));
-jest.mock('../../features/chefOrders/screens/ChefReadyOrdersScreen', () => mockScreenModule('ChefReadyOrdersScreen'));
+jest.mock('../../features/chefOrders/screens/ChefOrdersScreen', () => mockScreenModule('ChefOrdersScreen'));
 jest.mock('../../features/chefPayout/screens/ChefPayoutHistoryScreen', () => mockScreenModule('ChefPayoutHistoryScreen'));
 jest.mock('../../features/chefPreferences/screens/ChefAppPreferencesScreen', () => mockScreenModule('ChefAppPreferencesScreen'));
 jest.mock('../../features/chefProfile/screens/ChefEditProfileScreen', () => mockScreenModule('ChefEditProfileScreen'));
@@ -100,7 +97,7 @@ describe('ChefRootNavigator', () => {
 
   it('switches tabs from the bar: Orders opens the New list and Earnings the placeholder', () => {
     act(() => tab('Orders').props.onPress());
-    expect(allText()).toContain('SCREEN:ChefNewOrdersScreen');
+    expect(allText()).toContain('SCREEN:ChefOrdersScreen');
     act(() => tab('Earnings').props.onPress());
     expect(allText()).toEqual(expect.arrayContaining(['Earnings', 'Coming soon']));
   });
@@ -108,7 +105,7 @@ describe('ChefRootNavigator', () => {
   it('sends the old Profile Scheduled orders route to Orders and leaves Profile usable', () => {
     act(() => tab('Profile').props.onPress());
     navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefScheduledOrders'}});
-    expect(allText()).toContain('Scheduled orders');
+    expect(allText()).toContain('SCREEN:ChefOrdersScreen');
     act(() => tab('Profile').props.onPress());
     expect(allText()).toContain('SCREEN:ChefProfileScreen');
     expect(tab('Profile').props.accessibilityState).toEqual({selected: true});
@@ -116,7 +113,7 @@ describe('ChefRootNavigator', () => {
 
   it('does the same when the redirect is opened straight into an unmounted Profile stack', () => {
     navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefScheduledOrders'}});
-    expect(allText()).toContain('Scheduled orders');
+    expect(allText()).toContain('SCREEN:ChefOrdersScreen');
     act(() => tab('Profile').props.onPress());
     expect(allText()).toContain('SCREEN:ChefProfileScreen');
     expect(tab('Profile').props.accessibilityState).toEqual({selected: true});
@@ -124,7 +121,7 @@ describe('ChefRootNavigator', () => {
 
   it('reaches every new route without a crash', () => {
     navigate('ChefTabs', {screen: 'Orders', params: {screen: 'ChefOrdersScheduled'}});
-    expect(allText()).toContain('Scheduled orders');
+    expect(allText()).toContain('SCREEN:ChefOrdersScreen');
     for (const [route, title] of [
       ['ChefReviews', 'Reviews'],
       ['ChefSecurity', 'Security'],

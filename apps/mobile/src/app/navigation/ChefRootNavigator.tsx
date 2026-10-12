@@ -12,11 +12,8 @@ import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDash
 import {ChefAddMenuItemScreen} from '../../features/chefMenu/screens/ChefAddMenuItemScreen';
 import {ChefEditMenuItemScreen} from '../../features/chefMenu/screens/ChefEditMenuItemScreen';
 import {ChefMenuItemDetailScreen} from '../../features/chefMenu/screens/ChefMenuItemDetailScreen';
-import {ChefCompletedOrdersScreen} from '../../features/chefOrders/screens/ChefCompletedOrdersScreen';
-import {ChefNewOrdersScreen} from '../../features/chefOrders/screens/ChefNewOrdersScreen';
 import {ChefOrderDetailScreen} from '../../features/chefOrders/screens/ChefOrderDetailScreen';
-import {ChefPreparingOrdersScreen} from '../../features/chefOrders/screens/ChefPreparingOrdersScreen';
-import {ChefReadyOrdersScreen} from '../../features/chefOrders/screens/ChefReadyOrdersScreen';
+import {ChefOrdersScreen} from '../../features/chefOrders/screens/ChefOrdersScreen';
 import {ChefPayoutHistoryScreen} from '../../features/chefPayout/screens/ChefPayoutHistoryScreen';
 import {ChefAppPreferencesScreen} from '../../features/chefPreferences/screens/ChefAppPreferencesScreen';
 import {ChefEditProfileScreen} from '../../features/chefProfile/screens/ChefEditProfileScreen';
@@ -39,7 +36,6 @@ import {
   ChefBankAccountPlaceholder,
   ChefDailyLimitsPlaceholder,
   ChefEarningsPlaceholder,
-  ChefOrdersScheduledPlaceholder,
   ChefReviewsPlaceholder,
   ChefSecurityPlaceholder,
   ChefSupportTicketPlaceholder,
@@ -47,7 +43,6 @@ import {
 import {CHEF_ORDER_ROUTES, CHEF_TAB_STATE_OPTIONS} from './chefTabs';
 import type {
   ChefOrdersStackParamList,
-  ChefOrdersStackRouteName,
   ChefProductStackParamList,
   ChefProfileStackParamList,
   ChefTabParamList,
@@ -57,15 +52,6 @@ const Tab = createBottomTabNavigator<ChefTabParamList>();
 const Stack = createNativeStackNavigator<ChefProductStackParamList>();
 const OrdersStack = createNativeStackNavigator<ChefOrdersStackParamList>();
 const ProfileStack = createNativeStackNavigator<ChefProfileStackParamList>();
-
-// Task 4 points every entry at ChefOrdersScreen.
-const ORDER_SCREENS: Record<ChefOrdersStackRouteName, React.ComponentType> = {
-  ChefOrdersNew: ChefNewOrdersScreen,
-  ChefOrdersPreparing: ChefPreparingOrdersScreen,
-  ChefOrdersReady: ChefReadyOrdersScreen,
-  ChefOrdersCompleted: ChefCompletedOrdersScreen,
-  ChefOrdersScheduled: ChefOrdersScheduledPlaceholder,
-};
 
 const chefTabScreenOptions = {
   headerShown: false,
@@ -98,7 +84,7 @@ function ChefOrdersNavigator() {
   return (
     <OrdersStack.Navigator initialRouteName="ChefOrdersNew" screenOptions={screenOptions}>
       {CHEF_ORDER_ROUTES.map(name => (
-        <OrdersStack.Screen key={name} name={name} component={ORDER_SCREENS[name]} />
+        <OrdersStack.Screen key={name} name={name} component={ChefOrdersScreen} />
       ))}
     </OrdersStack.Navigator>
   );

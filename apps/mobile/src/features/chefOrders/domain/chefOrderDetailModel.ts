@@ -73,6 +73,12 @@ export const chefOrderDetailUnavailableCapabilities = {
   },
 } as const satisfies Record<string, ChefOrderUnavailableCapability>;
 
+/** The number to dial (digits and a leading +), or null when it is too short to be a phone number. */
+export function dialablePhone(phone: string | null | undefined): string | null {
+  const normalized = (phone ?? '').trim().replace(/[^+\d]/g, '');
+  return normalized.length >= 7 ? normalized : null;
+}
+
 export function deriveChefOrderDecisionActionability(
   status: ChefOrderDetailStatus,
 ): ChefOrderDecisionActionability {

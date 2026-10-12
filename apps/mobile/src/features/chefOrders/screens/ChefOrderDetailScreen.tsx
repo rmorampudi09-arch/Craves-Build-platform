@@ -1,560 +1,600 @@
 import React from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import {Linking, Pressable, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
-import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {ChefProductStackParamList} from '../../../app/navigation/types';
+import {toAppApiError} from '../../../core/http/apiError';
 import {
+  borderWidth,
   colors,
-  elevation,
   fontWeight,
+  iconSize,
   radius,
   spacing,
+  textDefaults,
   touchTarget,
   typography,
 } from '../../../design/tokens';
-import {Icon} from '../../../shared/components/Icon';
+import {Icon, type IconName} from '../../../shared/components/Icon';
 import {SkeletonBlock} from '../../../shared/components/Skeleton';
+import {RespondTimer} from '../../chefDashboard/components/RespondTimer';
+import {acceptReadyMinutes} from '../../chefDashboard/domain/chefDashboardPresentation';
 import {
-  formatChefOrderStatus,
-  maskChefOrderContactPhone,
-} from '../domain/chefOrderDecision';
+  ChefActionButton,
+  ChefCard,
+  ChefScreen,
+  ChefTopBar,
+  ConfirmDialog,
+  StatusChip,
+  VegMark,
+  useChefToast,
+} from '../../chefShell/components/ui';
+import type {VegMarkType} from '../../chefShell/components/ui/VegMark';
+import {
+  formatDayLabel,
+  formatRupees,
+  formatRupeesExact,
+  formatTimeOfDay,
+  shortCustomerName,
+  shortOrderNumber,
+} from '../../chefShell/domain/chefFormat';
+import type {ChefOrderDetail} from '../api/chefOrderDetailApi';
+import {NotPickedUpSheet} from '../components/NotPickedUpSheet';
+import {CallButton} from '../components/OrderCardParts';
+import {RejectOrderSheet} from '../components/RejectOrderSheet';
+import {itemsSummary} from '../domain/chefOrderCard';
+import {dialablePhone} from '../domain/chefOrderDetailModel';
+import {chefOrderStatusChip} from '../domain/chefOrderFilters';
+import {deriveChefPrepTimer} from '../domain/chefOrderTabs';
+import {buildChefOrderTimeline, type ChefOrderTimelineStep} from '../domain/chefOrderTimeline';
+import {useChefHandedOver} from '../state/useChefHandedOver';
+import {useChefMenuPrepTimes} from '../state/useChefMenuPrepTimes';
 import {useChefOrderDecision} from '../state/useChefOrderDecision';
 import {useChefOrderDetailContract} from '../state/useChefOrderDetailContract';
+import {useChefPreparingOrderActions} from '../state/useChefPreparingOrderActions';
 
 type Props = NativeStackScreenProps<ChefProductStackParamList, 'ChefOrderDetail'>;
 
-function money(currency: string, value: number): string {
-  return `${currency} ${value.toFixed(2)}`;
+const OPEN_FAILED = "We couldn't open that on this phone.";
+// Orders the chef can no longer act on: they show the Status card first and a way to ask Craves about the order.
+const FINISHED = new Set<ChefOrderDetail['status']>([
+  'OUT_FOR_DELIVERY',
+  'DELIVERED',
+  'CHEF_REJECTED',
+  'CANCELLED',
+  'REFUND_PENDING',
+  'REFUNDED',
+  'REFUND_FAILED',
+]);
+
+function placedLabel(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : `${formatDayLabel(date, new Date())}, ${formatTimeOfDay(date)}`;
 }
 
-function shortOrderId(orderId: string): string {
-  return `#${orderId.replace(/-/g, '').slice(-8).toUpperCase()}`;
-}
-
-function displayTimestamp(value: string): string {
-  const timestamp = new Date(value);
-  if (Number.isNaN(timestamp.getTime())) {
-    return 'Time unavailable';
-  }
-  return timestamp.toLocaleString(undefined, {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function UnavailableRow({title, message}: {title: string; message: string}) {
+function Card({title, children}: {title: string; children: React.ReactNode}) {
   return (
-    <View style={styles.unavailableRow}>
-      <Icon color={colors.placeholder} name="lock" size={18} />
-      <View style={styles.flex}>
-        <Text style={styles.unavailableTitle}>{title}</Text>
-        <Text style={styles.unavailableMessage}>{message}</Text>
-      </View>
+    <ChefCard>
+      <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.cardTitle}>
+        {title}
+      </Text>
+      {children}
+    </ChefCard>
+  );
+}
+
+function Banner({tone, icon, children}: {tone: 'error' | 'success'; icon: IconName; children: React.ReactNode}) {
+  const error = tone === 'error';
+  return (
+    <View style={[styles.banner, {backgroundColor: error ? colors.errorSoft : colors.successSoft}]}>
+      <Icon color={error ? colors.flameRedAccessible : colors.successText} name={icon} size={iconSize.md} surface={false} />
+      <View style={styles.bannerText}>{children}</View>
     </View>
   );
 }
 
-function LoadingScreen({onBack}: {onBack: () => void}) {
+/** "Ready in 8 min / You promised 12:40 PM" for a cooking order, in red once it is late. */
+function PrepBanner({order}: {order: ChefOrderDetail}) {
+  const acceptedAt =
+    order.statusHistory?.find(entry => entry.status === 'CHEF_ACCEPTED' || entry.status === 'PREPARING')?.at ?? order.updatedAt;
+  const timer = deriveChefPrepTimer(
+    {id: order.id, status: order.status, prepTimeMinutes: order.prepTimeMinutes, updatedAt: acceptedAt},
+    Date.now(),
+  );
+  if (!timer) {
+    return null;
+  }
+  const late = timer.isOverdue;
+  const color = late ? colors.flameRedAccessible : colors.successText;
+  const minutes = late
+    ? Math.max(1, Math.round((Date.now() - timer.serverDueAtMs) / 60_000))
+    : Math.max(1, Math.ceil(timer.remainingMs / 60_000));
   return (
-    <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.safeArea}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-          onPress={onBack}
-          style={styles.iconButton}>
-          <Icon name="arrow-left" size={22} />
-        </Pressable>
-        <Text accessibilityRole="header" style={styles.headerTitle}>New order</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-      <View style={styles.loadingContent}>
-        <SkeletonBlock borderRadius={radius.lg} height={92} />
-        <SkeletonBlock borderRadius={radius.lg} height={180} />
-        <SkeletonBlock borderRadius={radius.lg} height={140} />
-        <SkeletonBlock borderRadius={radius.lg} height={160} />
-      </View>
-    </SafeAreaView>
+    <Banner icon={late ? 'alert' : 'clock'} tone={late ? 'error' : 'success'}>
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.bannerTitle, {color}]}>
+        {late ? `${minutes} min late` : `Ready in ${minutes} min`}
+      </Text>
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.bannerDetail, {color}]}>
+        {`You promised ${formatTimeOfDay(new Date(timer.serverDueAtMs))}`}
+      </Text>
+    </Banner>
   );
 }
 
+function StatusTimeline({steps}: {steps: ChefOrderTimelineStep[]}) {
+  return (
+    <View>
+      {steps.map((step, index) => {
+        const color = step.state === 'done' ? colors.success : colors.warning;
+        return (
+          <View key={`${step.label}-${index}`} style={styles.step}>
+            <View style={styles.rail}>
+              <View style={[styles.dot, step.state === 'todo' ? styles.dotTodo : {backgroundColor: color}]} />
+              {index < steps.length - 1 ? (
+                <View style={[styles.line, {backgroundColor: step.state === 'done' ? colors.success : colors.border}]} />
+              ) : null}
+            </View>
+            <View style={styles.stepText}>
+              <Text
+                allowFontScaling={textDefaults.allowFontScaling}
+                style={[styles.stepLabel, step.state === 'todo' && styles.stepTodo]}>
+                {step.label}
+              </Text>
+              {step.detail ? (
+                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.stepDetail}>
+                  {step.detail}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function RoundButton({icon, label, onPress}: {icon: IconName; label: string; onPress: () => void}) {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({pressed}) => [styles.round, pressed && styles.pressed]}>
+      <Icon color={colors.textPrimary} name={icon} size={iconSize.md} surface={false} />
+    </Pressable>
+  );
+}
+
+/** One order: what to cook, who it is for, what the customer paid, and the next step for its status. */
 export function ChefOrderDetailScreen({navigation, route}: Props) {
-  const insets = useSafeAreaInsets();
   const {orderId} = route.params;
+  const toast = useChefToast();
   const detail = useChefOrderDetailContract(orderId);
   const decision = useChefOrderDecision(orderId);
+  const prepActions = useChefPreparingOrderActions();
+  const handover = useChefHandedOver();
+  const menuItems = useChefMenuPrepTimes();
   const [rejectOpen, setRejectOpen] = React.useState(false);
-  const [rejectReason, setRejectReason] = React.useState('');
+  const [readyOpen, setReadyOpen] = React.useState(false);
+  const [notPickedId, setNotPickedId] = React.useState<string | null>(null);
+  const [pulling, setPulling] = React.useState(false);
 
-  const goToOrders = React.useCallback(() => {
-    navigation.navigate('ChefTabs', {screen: 'Orders'});
-  }, [navigation]);
+  const order = detail.data?.order ?? null;
+  const status = order?.status;
 
-  if (detail.status === 'pending' && !detail.data) {
-    return <LoadingScreen onBack={() => navigation.goBack()} />;
-  }
+  // Say what went wrong once, plainly, then clear it.
+  const {error: decisionError, clearError} = decision;
+  React.useEffect(() => {
+    if (decisionError) {
+      toast.show(decisionError.message);
+      clearError();
+    }
+  }, [clearError, decisionError, toast]);
+  const {feedback, clearFeedback} = prepActions;
+  React.useEffect(() => {
+    if (feedback) {
+      toast.show(feedback.message);
+      clearFeedback();
+    }
+  }, [clearFeedback, feedback, toast]);
+  // If the order moved on while the reject sheet was open (the latest status was loaded), the question is over.
+  React.useEffect(() => {
+    if (status && status !== 'CHEF_ACCEPTANCE_PENDING') {
+      setRejectOpen(false);
+    }
+  }, [status]);
 
-  if (!detail.data) {
+  const goBack = () => navigation.goBack();
+  const goToOrders = () => navigation.navigate('ChefTabs', {screen: 'Orders'});
+  const open = (url: string) => {
+    Linking.openURL(url).catch(() => toast.show(OPEN_FAILED));
+  };
+
+  if (!order) {
+    const loading = detail.status === 'pending';
+    // A missing order is a real answer for a single order, unlike a route the server has not published.
+    const notFound = !loading && detail.error !== null && toAppApiError(detail.error).status === 404;
     return (
-      <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.safeArea}>
-        <View style={styles.header}>
-          <Pressable
-            accessibilityLabel="Back"
-            accessibilityRole="button"
-            onPress={() => navigation.goBack()}
-            style={styles.iconButton}>
-            <Icon name="arrow-left" size={22} />
-          </Pressable>
-          <Text accessibilityRole="header" style={styles.headerTitle}>New order</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-        <View style={styles.centerState}>
-          <Icon color={colors.error} name="wifi-off" size={34} />
-          <Text style={styles.centerTitle}>Order unavailable</Text>
-          <Text style={styles.centerMessage}>
-            {detail.error?.message ?? 'The latest order detail could not be loaded.'}
-          </Text>
-          <Pressable
-            accessibilityLabel="Retry order detail"
-            accessibilityRole="button"
-            disabled={detail.isFetching}
-            onPress={() => detail.refresh().catch(() => undefined)}
-            style={({pressed}) => [styles.primaryButton, pressed && styles.pressed]}>
-            <Text style={styles.primaryButtonText}>
-              {detail.isFetching ? 'Refreshing…' : 'Try again'}
+      <ChefScreen header={<ChefTopBar onBack={goBack} showBell={false} title="Order" />}>
+        {loading ? (
+          <>
+            <SkeletonBlock height={120} />
+            <SkeletonBlock height={160} />
+            <SkeletonBlock height={120} />
+          </>
+        ) : (
+          <ChefCard>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardTitle}>
+              {notFound ? "We can't find this order" : "We couldn't load this order"}
             </Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
+              {notFound ? 'It may have been removed. Go back to your orders.' : 'Check your connection and try again.'}
+            </Text>
+            <ChefActionButton
+              label={notFound ? 'Back to orders' : 'Try again'}
+              onPress={
+                notFound
+                  ? goBack
+                  : () => {
+                      detail.refresh().catch(() => undefined);
+                    }
+              }
+              style={styles.cardAction}
+              tone="neutral"
+            />
+          </ChefCard>
+        )}
+      </ChefScreen>
     );
   }
 
-  const model = detail.data;
-  const order = model.order;
-  const actionable =
-    model.actionability.acceptCandidate && model.actionability.rejectCandidate;
-  const actionBusy = decision.action !== null;
+  const number = shortOrderNumber(order.id);
+  const chip = chefOrderStatusChip(order.status);
+  const finished = FINISHED.has(order.status);
   const address = order.deliveryAddress;
+  const customer = shortCustomerName(address?.recipientName) ?? 'Customer';
+  const phone = dialablePhone(address?.contactPhoneNumber);
+  const cooking = order.status === 'CHEF_ACCEPTED' || order.status === 'PREPARING';
+  const pendingDecision = order.status === 'CHEF_ACCEPTANCE_PENDING';
+  const ready = order.status === 'READY_FOR_PICKUP';
+  const deciding = decision.action !== null;
+  const markingReady = prepActions.actionStateByOrder[order.id] === 'marking-ready';
+  const minutes = acceptReadyMinutes(
+    {
+      id: order.id,
+      status: order.status,
+      prepTimeMinutes: order.prepTimeMinutes,
+      items: order.items.map(({id, itemName, quantity, menuItemId}) => ({id, itemName, quantity, menuItemId})),
+    },
+    menuItems,
+  );
 
-  const acceptOrder = async () => {
+  const accept = async () => {
     try {
       await decision.accept();
       goToOrders();
     } catch {
-      // The hook exposes the normalized action error inline.
+      // The decision hook reports what went wrong.
     }
   };
-
-  const rejectOrder = async () => {
-    const reason = rejectReason.trim();
-    if (actionBusy || !reason) {
-      return;
-    }
+  const reject = async (reason: string) => {
     try {
       await decision.reject(reason);
       setRejectOpen(false);
       goToOrders();
     } catch {
-      // The hook exposes the normalized action error inline.
+      // The decision hook reports what went wrong.
     }
   };
+  const markReady = async () => {
+    try {
+      await prepActions.markReady(order.id);
+    } catch {
+      // The preparing-order action reports the reason through its feedback.
+    }
+    setReadyOpen(false);
+  };
+  const pull = () => {
+    setPulling(true);
+    detail
+      .refresh()
+      .catch(() => undefined)
+      .finally(() => setPulling(false));
+  };
+
+  let dock: React.ReactNode = null;
+  if (pendingDecision) {
+    dock = (
+      <View style={styles.dock}>
+        <ChefActionButton
+          accessibilityLabel="Reject order"
+          disabled={deciding}
+          label="Reject"
+          onPress={() => setRejectOpen(true)}
+          style={styles.secondary}
+          tone="neutral"
+        />
+        <ChefActionButton
+          accessibilityLabel="Accept order"
+          busy={decision.action === 'accept'}
+          disabled={deciding}
+          label={`Accept · ready in ${minutes} min`}
+          onPress={() => {
+            accept().catch(() => undefined);
+          }}
+          style={styles.main}
+        />
+      </View>
+    );
+  } else if (cooking) {
+    dock = (
+      <View style={styles.dock}>
+        <CallButton label="Call customer" onPress={() => (phone ? open(`tel:${phone}`) : toast.show(OPEN_FAILED))} />
+        <ChefActionButton
+          accessibilityLabel="Mark ready"
+          busy={markingReady}
+          label="Mark ready"
+          onPress={() => setReadyOpen(true)}
+          style={styles.secondary}
+          tone="success"
+        />
+      </View>
+    );
+  } else if (ready) {
+    dock = (
+      <View style={styles.dock}>
+        <ChefActionButton
+          accessibilityLabel="Not picked up"
+          label="Not picked up"
+          onPress={() => setNotPickedId(order.id)}
+          style={styles.secondary}
+          tone="neutral"
+        />
+        {handover.canHandOver(order) ? (
+          <ChefActionButton
+            accessibilityLabel="Handed over"
+            busy={handover.busyOrderId === order.id}
+            label="Handed over"
+            onPress={() => {
+              handover.handOver(order.id).catch(() => undefined);
+            }}
+            style={styles.main}
+          />
+        ) : null}
+      </View>
+    );
+  }
+
+  const timeline = pendingDecision ? null : (
+    <Card title="Status">
+      <StatusTimeline steps={buildChefOrderTimeline(order)} />
+    </Card>
+  );
+  const alsoPaid = [
+    order.deliveryFee > 0 ? `${formatRupeesExact(order.deliveryFee)} delivery` : null,
+    order.taxAmount > 0 ? `${formatRupeesExact(order.taxAmount)} tax` : null,
+  ].filter(Boolean);
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.safeArea}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityLabel="Back to Chef orders"
-          accessibilityRole="button"
-          disabled={actionBusy}
-          onPress={() => navigation.goBack()}
-          style={({pressed}) => [styles.iconButton, pressed && styles.pressed]}>
-          <Icon name="arrow-left" size={22} />
-        </Pressable>
-        <Text accessibilityRole="header" style={styles.headerTitle}>New order</Text>
-        <Pressable
-          accessibilityLabel="Refresh order detail"
-          accessibilityRole="button"
-          disabled={detail.isFetching || actionBusy}
-          onPress={() => detail.refresh().catch(() => undefined)}
-          style={({pressed}) => [styles.iconButton, pressed && styles.pressed]}>
-          {detail.isFetching ? (
-            <ActivityIndicator color={colors.flameRed} size="small" />
-          ) : (
-            <Icon color={colors.flameRed} name="orders" size={21} />
-          )}
-        </Pressable>
-      </View>
+    <ChefScreen
+      footer={dock}
+      header={
+        <ChefTopBar
+          onBack={goBack}
+          right={<StatusChip label={chip.label} tone={chip.tone} />}
+          showBell={false}
+          subtitle={placedLabel(order.createdAt)}
+          title={`Order ${number}`}
+        />
+      }
+      onRefresh={pull}
+      refreshing={pulling}>
+      {pendingDecision && order.chefAcceptanceExpiresAt ? (
+        <Banner icon="clock" tone="error">
+          <RespondTimer createdAt={order.createdAt} expiresAt={order.chefAcceptanceExpiresAt} />
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.bannerDetail, {color: colors.flameRedAccessible}]}>
+            Accept or reject before the timer runs out.
+          </Text>
+        </Banner>
+      ) : null}
+      {cooking ? <PrepBanner order={order} /> : null}
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.heroCard}>
-          <View style={styles.rowBetween}>
-            <View>
-              <Text style={styles.eyebrow}>Order</Text>
-              <Text style={styles.orderId}>{shortOrderId(order.id)}</Text>
-            </View>
-            <View style={[styles.statusBadge, actionable && styles.statusBadgeNew]}>
-              <Text style={[styles.statusText, actionable && styles.statusTextNew]}>
-                {actionable ? 'NEW' : formatChefOrderStatus(order.status)}
+      {finished ? timeline : null}
+
+      <Card title="Items">
+        <View style={styles.items}>
+          {order.items.map(item => (
+            <View key={item.id} style={styles.item}>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.quantity}>
+                {`${item.quantity}×`}
               </Text>
-            </View>
-          </View>
-          <Text style={styles.receivedText}>Received {displayTimestamp(order.createdAt)}</Text>
-          <View style={styles.slaBox}>
-            <Icon color={colors.warning} name="bell" size={18} />
-            <View style={styles.flex}>
-              <Text style={styles.slaTitle}>Response deadline unavailable</Text>
-              <Text style={styles.slaMessage}>
-                Craves will not estimate an acceptance countdown without the server SLA timestamp.
+              {item.foodType ? <VegMark type={item.foodType as VegMarkType} /> : null}
+              <Text allowFontScaling={textDefaults.allowFontScaling} numberOfLines={2} style={styles.itemName}>
+                {item.itemName}
               </Text>
-            </View>
-          </View>
-        </View>
-
-        {decision.error ? (
-          <Pressable
-            accessibilityLabel="Dismiss order action error"
-            accessibilityRole="button"
-            onPress={decision.clearError}
-            style={styles.errorBanner}>
-            <Icon color={colors.error} name="wifi-off" size={19} />
-            <Text style={styles.errorText}>{decision.error.message}</Text>
-          </Pressable>
-        ) : null}
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Order items</Text>
-          {order.items.map((item, index) => (
-            <View
-              key={item.id}
-              style={[styles.itemRow, index > 0 && styles.dividedRow]}>
-              <View style={styles.quantityBadge}>
-                <Text style={styles.quantityText}>{item.quantity}×</Text>
-              </View>
-              <View style={styles.flex}>
-                <Text style={styles.itemName}>{item.itemName}</Text>
-                <Text style={styles.itemMeta}>
-                  {[item.category, item.foodType].filter(Boolean).join(' · ') || 'Dish'}
-                </Text>
-              </View>
-              <Text style={styles.itemPrice}>{money(order.currency, item.lineTotal)}</Text>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.itemPrice}>
+                {formatRupeesExact(item.lineTotal)}
+              </Text>
             </View>
           ))}
-          {order.items.length === 0 ? (
-            <Text style={styles.emptyMessage}>No order items were returned.</Text>
-          ) : null}
-          <View style={styles.totalBlock}>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Food subtotal</Text>
-              <Text style={styles.totalValue}>{money(order.currency, order.foodSubtotal)}</Text>
-            </View>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Platform fee</Text>
-              <Text style={styles.totalValue}>{money(order.currency, order.platformFee)}</Text>
-            </View>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Tax</Text>
-              <Text style={styles.totalValue}>{money(order.currency, order.taxAmount)}</Text>
-            </View>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Delivery</Text>
-              <Text style={styles.totalValue}>{money(order.currency, order.deliveryFee)}</Text>
-            </View>
-            <View style={[styles.totalRow, styles.grandTotalRow]}>
-              <Text style={styles.grandTotalLabel}>Total</Text>
-              <Text style={styles.grandTotalValue}>{money(order.currency, order.grandTotal)}</Text>
-            </View>
-          </View>
         </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Customer</Text>
-          {model.authorizedContactSnapshot ? (
-            <>
-              <Text style={styles.customerName}>{model.authorizedContactSnapshot.recipientName}</Text>
-              <Text style={styles.maskedPhone}>
-                {maskChefOrderContactPhone(model.authorizedContactSnapshot.contactPhoneNumber)}
-              </Text>
-              <View style={styles.contactActions}>
-                <View style={styles.disabledContactButton}>
-                  <Icon color={colors.placeholder} name="phone" size={18} />
-                  <Text style={styles.disabledContactText}>Call unavailable</Text>
-                </View>
-                <View style={styles.disabledContactButton}>
-                  <Icon color={colors.placeholder} name="mail" size={18} />
-                  <Text style={styles.disabledContactText}>Chat unavailable</Text>
-                </View>
-              </View>
-              <Text style={styles.privacyNote}>
-                Contact controls stay disabled until a separate authorized contact/chat contract is available.
-              </Text>
-            </>
-          ) : (
-            <UnavailableRow title="Customer contact unavailable" message="No authorized delivery contact snapshot was returned." />
-          )}
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Delivery address</Text>
-          {address ? (
-            <View style={styles.addressRow}>
-              <View style={styles.locationIcon}>
-                <Icon color={colors.flameRed} name="location" size={20} />
-              </View>
-              <View style={styles.flex}>
-                <Text style={styles.addressPrimary}>{address.addressLine1}</Text>
-                {address.addressLine2 ? <Text style={styles.addressSecondary}>{address.addressLine2}</Text> : null}
-                <Text style={styles.addressSecondary}>
-                  {[address.areaName, address.city, address.state, address.postalCode]
-                    .filter(Boolean)
-                    .join(', ')}
-                </Text>
-                {address.landmark ? <Text style={styles.addressSecondary}>Near {address.landmark}</Text> : null}
-              </View>
-            </View>
-          ) : (
-            <Text style={styles.emptyMessage}>Delivery address is unavailable for this order.</Text>
-          )}
-          <UnavailableRow
-            title="Map action unavailable"
-            message="No approved Chef map/deep-link authorization contract is registered yet."
-          />
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Order context</Text>
-          <UnavailableRow
-            title="Customer note unavailable"
-            message={model.unavailable.customerOrderNote.reason}
-          />
-          <UnavailableRow
-            title="Payment method unavailable"
-            message={model.unavailable.paymentMethod.reason}
-          />
-          <UnavailableRow
-            title="Status timeline unavailable"
-            message={model.unavailable.statusTimeline.reason}
-          />
-        </View>
-
-        {!actionable ? (
-          <View style={styles.latestStatusCard}>
-            <Icon color={colors.success} name="check" size={22} />
-            <View style={styles.flex}>
-              <Text style={styles.latestStatusTitle}>Latest status</Text>
-              <Text style={styles.latestStatusText}>{formatChefOrderStatus(order.status)}</Text>
-              <Text style={styles.latestStatusHint}>This order can no longer be accepted or rejected from this screen.</Text>
-            </View>
+        {order.customerNote ? (
+          <View style={styles.note}>
+            <Icon color={colors.warningText} name="info" size={iconSize.xs} surface={false} />
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.noteText}>
+              {`“${order.customerNote}”`}
+            </Text>
           </View>
         ) : null}
-      </ScrollView>
+      </Card>
 
-      {actionable ? (
-        <View style={styles.actionDock}>
-          <View style={styles.actionRow}>
-            <Pressable
-              accessibilityLabel="Reject order"
-              accessibilityRole="button"
-              accessibilityState={{disabled: actionBusy}}
-              disabled={actionBusy}
-              onPress={() => {
-                decision.clearError();
-                setRejectReason('');
-                setRejectOpen(true);
-              }}
-              style={({pressed}) => [styles.rejectButton, pressed && styles.pressed, actionBusy && styles.disabled]}>
-              <Text style={styles.rejectButtonText}>Reject</Text>
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Accept order"
-              accessibilityRole="button"
-              accessibilityState={{disabled: actionBusy}}
-              disabled={actionBusy}
-              onPress={acceptOrder}
-              style={({pressed}) => [styles.acceptButton, pressed && styles.pressed, actionBusy && styles.disabled]}>
-              {decision.action === 'accept' ? (
-                <ActivityIndicator color={colors.white} size="small" />
-              ) : (
-                <Text style={styles.acceptButtonText}>Accept order</Text>
-              )}
-            </Pressable>
+      {finished ? null : (
+        <Card title="Customer">
+          <View style={styles.customer}>
+            <View style={styles.avatar}>
+              <Text allowFontScaling={false} style={styles.avatarText}>
+                {customer
+                  .split(' ')
+                  .map(part => part.charAt(0))
+                  .join('')
+                  .slice(0, 2)
+                  .toUpperCase()}
+              </Text>
+            </View>
+            <Text allowFontScaling={textDefaults.allowFontScaling} numberOfLines={1} style={styles.customerName}>
+              {customer}
+            </Text>
+            {phone ? (
+              <>
+                <RoundButton icon="phone" label="Call customer" onPress={() => open(`tel:${phone}`)} />
+                <RoundButton icon="mail" label="Message customer" onPress={() => open(`sms:${phone}`)} />
+              </>
+            ) : null}
           </View>
+          {address ? (
+            <Pressable
+              accessibilityLabel="Open the address in Maps"
+              accessibilityRole="button"
+              onPress={() => open(`https://www.google.com/maps/search/?api=1&query=${address.latitude},${address.longitude}`)}
+              style={({pressed}) => [styles.address, pressed && styles.pressed]}>
+              <Icon color={colors.flameRedAccessible} name="location" size={iconSize.md} surface={false} />
+              <View style={styles.addressText}>
+                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.addressLine}>
+                  {[address.addressLine1, address.addressLine2, address.areaName].filter(Boolean).join(', ')}
+                </Text>
+                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
+                  {[address.landmark ? `Near ${address.landmark}` : null, address.city].filter(Boolean).join(' · ')}
+                </Text>
+              </View>
+            </Pressable>
+          ) : null}
+        </Card>
+      )}
+
+      {finished ? null : timeline}
+
+      <Card title="Bill">
+        <View style={styles.billRow}>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.billLabel}>
+            Food
+          </Text>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.billValue}>
+            {formatRupees(order.foodSubtotal, {paise: true})}
+          </Text>
         </View>
+        {alsoPaid.length > 0 ? (
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.alsoPaid}>
+            {`Customer also paid ${alsoPaid.join(' and ')} (not part of your earnings)`}
+          </Text>
+        ) : null}
+      </Card>
+
+      {finished ? (
+        <ChefActionButton
+          icon="headset"
+          label="Problem with this order?"
+          onPress={() => navigation.navigate('ChefSupportTicket', {orderId: order.id})}
+          tone="neutral"
+        />
       ) : null}
 
-      <Modal
-        animationType="slide"
-        onRequestClose={() => !actionBusy && setRejectOpen(false)}
-        transparent
-        visible={rejectOpen}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalAvoider}>
-          <Pressable
-            accessibilityLabel="Close rejection dialog"
-            accessibilityRole="button"
-            disabled={actionBusy}
-            onPress={() => setRejectOpen(false)}
-            style={styles.modalBackdrop}
-          />
-          <View style={[styles.sheet, {paddingBottom: Math.max(spacing.xl, insets.bottom)}]}>
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
-              style={styles.sheetBody}>
-              <View style={styles.sheetHandle} />
-              <Text style={styles.sheetTitle}>Reject this order?</Text>
-              <Text style={styles.sheetMessage}>Add a clear reason. The decision is final once the server confirms it.</Text>
-              <TextInput
-                accessibilityLabel="Rejection reason"
-                editable={!actionBusy}
-                maxLength={500}
-                multiline
-                onChangeText={setRejectReason}
-                placeholder="Why can’t you prepare this order?"
-                placeholderTextColor={colors.placeholder}
-                style={styles.reasonInput}
-                textAlignVertical="top"
-                value={rejectReason}
-              />
-              {decision.error ? <Text accessibilityRole="alert" style={styles.sheetError}>{decision.error.message}</Text> : null}
-            </ScrollView>
-            <View style={styles.sheetActions}>
-              <Pressable
-                accessibilityLabel="Cancel rejecting order"
-                accessibilityRole="button"
-                disabled={actionBusy}
-                onPress={() => setRejectOpen(false)}
-                style={({pressed}) => [styles.sheetCancel, pressed && styles.pressed]}>
-                <Text style={styles.sheetCancelText}>Keep order</Text>
-              </Pressable>
-              <Pressable
-                accessibilityLabel="Confirm reject order"
-                accessibilityRole="button"
-                accessibilityState={{disabled: actionBusy || !rejectReason.trim()}}
-                disabled={actionBusy || !rejectReason.trim()}
-                onPress={rejectOrder}
-                style={({pressed}) => [styles.sheetReject, pressed && styles.pressed, (actionBusy || !rejectReason.trim()) && styles.disabled]}>
-                {decision.action === 'reject' ? (
-                  <ActivityIndicator color={colors.white} size="small" />
-                ) : (
-                  <Text style={styles.sheetRejectText}>Confirm reject</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </SafeAreaView>
+      <RejectOrderSheet
+        busy={decision.action === 'reject'}
+        onClose={() => setRejectOpen(false)}
+        onConfirm={reason => {
+          reject(reason).catch(() => undefined);
+        }}
+        orderNumber={number}
+        visible={rejectOpen}
+      />
+      <ConfirmDialog
+        busy={markingReady}
+        cancelLabel="Not yet"
+        confirmLabel="Yes, it's ready"
+        message={`${itemsSummary(order.items)}${order.items.length ? '. ' : ''}The delivery partner is told to pick it up.`}
+        onCancel={() => setReadyOpen(false)}
+        onConfirm={() => {
+          markReady().catch(() => undefined);
+        }}
+        title={`Is ${number} packed and ready?`}
+        tone="success"
+        visible={readyOpen}
+      />
+      <NotPickedUpSheet onClose={() => setNotPickedId(null)} orderId={notPickedId} />
+    </ChefScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {flex: 1, backgroundColor: colors.surfaceMuted},
-  flex: {flex: 1},
-  pressed: {opacity: 0.68},
-  disabled: {opacity: 0.45},
-  header: {
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderBottomColor: colors.border,
-    borderBottomWidth: 1,
+  cardTitle: {marginBottom: spacing.xs, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
+  muted: {color: colors.textSecondary, fontSize: typography.small},
+  cardAction: {marginTop: spacing.sm},
+  banner: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md},
+  bannerText: {flex: 1, minWidth: 0, gap: 2},
+  bannerTitle: {fontSize: typography.body, fontWeight: fontWeight.bold},
+  bannerDetail: {fontSize: typography.small},
+  items: {gap: spacing.xs},
+  item: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
+  quantity: {minWidth: 26, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.extrabold},
+  itemName: {flex: 1, minWidth: 0, color: colors.textPrimary, fontSize: typography.body},
+  itemPrice: {color: colors.textPrimary, fontSize: typography.body},
+  note: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 60,
-    paddingHorizontal: spacing.sm,
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    backgroundColor: colors.warningSoft,
   },
-  headerTitle: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
-  iconButton: {alignItems: 'center', justifyContent: 'center', minHeight: touchTarget.minimum, minWidth: touchTarget.minimum},
-  headerSpacer: {height: touchTarget.minimum, width: touchTarget.minimum},
-  loadingContent: {gap: spacing.md, padding: spacing.md},
-  centerState: {alignItems: 'center', flex: 1, justifyContent: 'center', padding: spacing.xl},
-  centerTitle: {color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold, marginTop: spacing.md},
-  centerMessage: {color: colors.textSecondary, fontSize: typography.body, marginTop: spacing.xs, textAlign: 'center'},
-  primaryButton: {backgroundColor: colors.flameRed, borderRadius: radius.pill, marginTop: spacing.lg, minHeight: touchTarget.minimum, paddingHorizontal: spacing.xl, justifyContent: 'center'},
-  primaryButtonText: {color: colors.white, fontSize: typography.button, fontWeight: fontWeight.bold},
-  content: {padding: spacing.md, paddingBottom: spacing.xxxl},
-  heroCard: {...elevation.card, backgroundColor: colors.espressoBrown, borderRadius: radius.xl, padding: spacing.lg, marginBottom: spacing.md},
-  rowBetween: {alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between'},
-  eyebrow: {color: colors.creamDeep, fontSize: typography.small, fontWeight: fontWeight.semibold},
-  orderId: {color: colors.white, fontSize: typography.hero, fontWeight: fontWeight.extrabold, marginTop: spacing.xxs},
-  statusBadge: {backgroundColor: colors.surfaceMuted, borderRadius: radius.pill, maxWidth: 150, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs},
-  statusBadgeNew: {backgroundColor: colors.flameRed},
-  statusText: {color: colors.textSecondary, fontSize: typography.tiny, fontWeight: fontWeight.bold, textAlign: 'center'},
-  statusTextNew: {color: colors.white},
-  receivedText: {color: colors.creamDeep, fontSize: typography.small, marginTop: spacing.sm},
-  slaBox: {alignItems: 'flex-start', backgroundColor: colors.white, borderRadius: radius.md, flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md, padding: spacing.sm},
-  slaTitle: {color: colors.textPrimary, fontSize: typography.small, fontWeight: fontWeight.semibold},
-  slaMessage: {color: colors.textSecondary, fontSize: typography.tiny, marginTop: spacing.xxs},
-  errorBanner: {alignItems: 'center', backgroundColor: colors.errorSoft, borderColor: colors.error, borderRadius: radius.md, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md, padding: spacing.sm},
-  errorText: {color: colors.error, flex: 1, fontSize: typography.small, fontWeight: fontWeight.medium},
-  card: {...elevation.card, backgroundColor: colors.white, borderRadius: radius.lg, marginBottom: spacing.md, padding: spacing.md},
-  sectionTitle: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold, marginBottom: spacing.sm},
-  itemRow: {alignItems: 'center', flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.sm},
-  dividedRow: {borderTopColor: colors.border, borderTopWidth: 1},
-  quantityBadge: {alignItems: 'center', backgroundColor: colors.white, borderRadius: radius.sm, justifyContent: 'center', minHeight: 38, minWidth: 38},
-  quantityText: {color: colors.flameRed, fontSize: typography.small, fontWeight: fontWeight.bold},
-  itemName: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},
-  itemMeta: {color: colors.textSecondary, fontSize: typography.small, marginTop: spacing.xxs},
-  itemPrice: {color: colors.espressoBrown, fontSize: typography.small, fontWeight: fontWeight.bold},
-  emptyMessage: {color: colors.textSecondary, fontSize: typography.body, paddingVertical: spacing.sm},
-  totalBlock: {borderTopColor: colors.borderStrong, borderTopWidth: 1, marginTop: spacing.sm, paddingTop: spacing.sm},
-  totalRow: {alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs},
-  totalLabel: {color: colors.textSecondary, fontSize: typography.small},
-  totalValue: {color: colors.textPrimary, fontSize: typography.small, fontWeight: fontWeight.medium},
-  grandTotalRow: {borderTopColor: colors.border, borderTopWidth: 1, marginTop: spacing.xs, paddingTop: spacing.sm},
-  grandTotalLabel: {color: colors.espressoBrown, fontSize: typography.button, fontWeight: fontWeight.bold},
-  grandTotalValue: {color: colors.flameRed, fontSize: typography.button, fontWeight: fontWeight.extrabold},
-  customerName: {color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.semibold},
-  maskedPhone: {color: colors.textSecondary, fontSize: typography.body, marginTop: spacing.xxs, letterSpacing: 0.5},
-  contactActions: {flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md},
-  disabledContactButton: {alignItems: 'center', backgroundColor: colors.surfaceMuted, borderRadius: radius.pill, flexDirection: 'row', gap: spacing.xs, minHeight: touchTarget.minimum, paddingHorizontal: spacing.md},
-  disabledContactText: {color: colors.placeholder, fontSize: typography.small, fontWeight: fontWeight.semibold},
-  privacyNote: {color: colors.textSecondary, fontSize: typography.tiny, marginTop: spacing.sm},
-  addressRow: {alignItems: 'flex-start', flexDirection: 'row', gap: spacing.sm},
-  locationIcon: {alignItems: 'center', backgroundColor: colors.iconSurface, borderRadius: radius.pill, height: 40, justifyContent: 'center', width: 40},
-  addressPrimary: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},
-  addressSecondary: {color: colors.textSecondary, fontSize: typography.small, marginTop: spacing.xxs},
-  unavailableRow: {alignItems: 'flex-start', borderTopColor: colors.border, borderTopWidth: 1, flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm, paddingTop: spacing.sm},
-  unavailableTitle: {color: colors.textPrimary, fontSize: typography.small, fontWeight: fontWeight.semibold},
-  unavailableMessage: {color: colors.textSecondary, fontSize: typography.tiny, marginTop: spacing.xxs},
-  latestStatusCard: {alignItems: 'flex-start', backgroundColor: colors.successSoft, borderColor: colors.success, borderRadius: radius.lg, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md, padding: spacing.md},
-  latestStatusTitle: {color: colors.textPrimary, fontSize: typography.small, fontWeight: fontWeight.semibold},
-  latestStatusText: {color: colors.success, fontSize: typography.body, fontWeight: fontWeight.bold, marginTop: spacing.xxs},
-  latestStatusHint: {color: colors.textSecondary, fontSize: typography.tiny, marginTop: spacing.xxs},
-  actionDock: {...elevation.card, backgroundColor: colors.white, borderTopColor: colors.border, borderTopWidth: 1, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm},
-  actionRow: {flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm},
-  rejectButton: {alignItems: 'center', borderColor: colors.flameRed, borderRadius: radius.pill, borderWidth: 1, flex: 1, justifyContent: 'center', minHeight: touchTarget.comfortable},
-  rejectButtonText: {color: colors.flameRed, fontSize: typography.button, fontWeight: fontWeight.bold},
-  acceptButton: {...elevation.primaryAction, alignItems: 'center', backgroundColor: colors.flameRed, borderRadius: radius.pill, flex: 2, justifyContent: 'center', minHeight: touchTarget.comfortable},
-  acceptButtonText: {color: colors.white, fontSize: typography.button, fontWeight: fontWeight.bold},
-  modalAvoider: {flex: 1, justifyContent: 'flex-end'},
-  modalBackdrop: {position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(38,26,21,0.48)'},
-  sheet: {maxHeight: '100%', flexShrink: 1, backgroundColor: colors.white, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.lg},
-  sheetBody: {flexGrow: 0, flexShrink: 1},
-  sheetHandle: {alignSelf: 'center', backgroundColor: colors.borderStrong, borderRadius: radius.pill, height: 4, marginBottom: spacing.md, width: 48},
-  sheetTitle: {color: colors.espressoBrown, fontSize: typography.hero, fontWeight: fontWeight.bold},
-  sheetMessage: {color: colors.textSecondary, fontSize: typography.body, marginTop: spacing.xs},
-  reasonInput: {backgroundColor: colors.surfaceMuted, borderColor: colors.borderStrong, borderRadius: radius.md, borderWidth: 1, color: colors.textPrimary, fontSize: typography.body, marginTop: spacing.md, height: 112, padding: spacing.sm},
-  sheetError: {color: colors.error, fontSize: typography.small, marginTop: spacing.sm},
-  sheetActions: {flexShrink: 0, flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md},
-  sheetCancel: {alignItems: 'center', borderColor: colors.borderStrong, borderRadius: radius.pill, borderWidth: 1, flex: 1, justifyContent: 'center', minHeight: touchTarget.comfortable},
-  sheetCancelText: {color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.semibold},
-  sheetReject: {alignItems: 'center', backgroundColor: colors.error, borderRadius: radius.pill, flex: 1, justifyContent: 'center', minHeight: touchTarget.comfortable},
-  sheetRejectText: {color: colors.white, fontSize: typography.button, fontWeight: fontWeight.bold},
+  noteText: {flex: 1, color: colors.warningText, fontSize: typography.small},
+  customer: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.infoSoft,
+  },
+  avatarText: {color: colors.infoText, fontSize: typography.body, fontWeight: fontWeight.bold},
+  customerName: {flex: 1, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
+  round: {
+    width: touchTarget.minimum,
+    height: touchTarget.minimum,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  pressed: {opacity: 0.6},
+  address: {
+    minHeight: touchTarget.minimum,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: borderWidth.standard,
+    borderTopColor: colors.border,
+  },
+  addressText: {flex: 1, minWidth: 0},
+  addressLine: {color: colors.textPrimary, fontSize: typography.small},
+  step: {flexDirection: 'row', gap: spacing.sm},
+  rail: {alignItems: 'center', width: 20},
+  dot: {width: 14, height: 14, borderRadius: 7, marginTop: 3},
+  dotTodo: {backgroundColor: colors.white, borderWidth: 2, borderColor: colors.borderStrong},
+  line: {flex: 1, width: 2, minHeight: 18},
+  stepText: {flex: 1, minWidth: 0, paddingBottom: spacing.sm},
+  stepLabel: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},
+  stepTodo: {color: colors.textSecondary, fontWeight: fontWeight.regular},
+  stepDetail: {color: colors.textSecondary, fontSize: typography.small},
+  billRow: {flexDirection: 'row', justifyContent: 'space-between'},
+  billLabel: {color: colors.textPrimary, fontSize: typography.body},
+  billValue: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
+  alsoPaid: {marginTop: spacing.xs, color: colors.textSecondary, fontSize: typography.small},
+  dock: {flexDirection: 'row', gap: spacing.sm},
+  secondary: {flex: 1},
+  main: {flex: 2},
 });

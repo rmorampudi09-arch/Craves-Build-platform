@@ -2,6 +2,7 @@ import type {ChefOrderDetail} from '../api/chefOrderDetailApi';
 import {
   deriveChefOrderDecisionActionability,
   deriveChefOrderDetailContractModel,
+  dialablePhone,
 } from './chefOrderDetailModel';
 
 const ORDER_ID = '11111111-1111-4111-8111-111111111111';
@@ -100,5 +101,13 @@ describe('chefOrderDetailModel', () => {
 
     expect(model.authorizedContactSnapshot).toBeNull();
     expect(model.deliveryMapPoint).toBeNull();
+  });
+});
+
+describe('dialablePhone', () => {
+  it('keeps the digits and a leading plus, and refuses a number too short to call', () => {
+    expect(dialablePhone(' +91 99999-99999 ')).toBe('+919999999999');
+    expect(dialablePhone('12345')).toBeNull();
+    expect(dialablePhone(null)).toBeNull();
   });
 });

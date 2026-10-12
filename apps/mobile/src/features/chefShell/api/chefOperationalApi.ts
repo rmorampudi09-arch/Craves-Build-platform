@@ -1,4 +1,5 @@
 import {httpClient} from '../../../core/http/httpClient';
+import {shortCustomerName} from '../domain/chefFormat';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -74,6 +75,13 @@ export interface ChefOperationalOrder {
   /** What the customer wrote at checkout. */
   customerNote?: string;
   deliveryPartner?: ChefOperationalDeliveryPartner;
+  /** First name and last initial of the customer, such as "Priya S.". Never the full name. */
+  customerName?: string;
+  /**
+   * When the chef handed the order to the courier. Present (null until then) only when the server
+   * supports the hand-over action, so the button shows only for `null`.
+   */
+  chefHandedOverAt?: string | null;
 }
 
 export interface ChefOperationalNotice {
@@ -206,16 +214,22 @@ function optionalMoney(value: unknown): number | null {
 }
 
 /** Fields the server adds over time: kept when valid, left out (never an error) otherwise. */
-function parseOptionalOrderFields(order: Record<string, unknown>): Partial<ChefOperationalOrder> {
+export function parseOptionalOrderFields(order: Record<string, unknown>): Partial<ChefOperationalOrder> {
   const foodSubtotal = optionalMoney(order.foodSubtotal);
   const chefAcceptanceExpiresAt = validTimestamp(order.chefAcceptanceExpiresAt, true);
   const customerNote = optionalString(order.customerNote, 500);
   const deliveryPartner = parseDeliveryPartner(order.deliveryPartner);
+  const customerName = shortCustomerName(boundedString(asRecord(order.deliveryAddress)?.recipientName, 160));
+  // Absent means the server has no hand-over action; null means it has one and it is still to be done.
+  const chefHandedOverAt =
+    order.chefHandedOverAt === null ? null : validTimestamp(order.chefHandedOverAt) ?? undefined;
   return {
     ...(foodSubtotal !== null ? {foodSubtotal} : {}),
     ...(chefAcceptanceExpiresAt ? {chefAcceptanceExpiresAt} : {}),
     ...(customerNote ? {customerNote} : {}),
     ...(deliveryPartner ? {deliveryPartner} : {}),
+    ...(customerName ? {customerName} : {}),
+    ...(chefHandedOverAt !== undefined ? {chefHandedOverAt} : {}),
   };
 }
 

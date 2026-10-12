@@ -14,7 +14,7 @@ const ITEM_ID = '33333333-3333-4333-8333-333333333333';
 const NOTICE_ID = '22222222-2222-4222-8222-222222222222';
 
 describe('chefOperationalApi parsing', () => {
-  it('keeps bounded lifecycle and safe P87 card fields while discarding direct customer contact data', () => {
+  it('keeps bounded lifecycle and safe P87 card fields, shortening the customer name and discarding the phone and street address', () => {
     expect(
       parseChefOperationalOrders({
         content: [
@@ -44,6 +44,7 @@ describe('chefOperationalApi parsing', () => {
         kitchenName: 'Meena’s Kitchen',
         items: [{id: ITEM_ID, itemName: 'Home-style meal', quantity: 2}],
         deliverySummary: {areaName: 'Indiranagar', city: 'Bengaluru'},
+        customerName: 'Private C.',
         prepTimeMinutes: 30,
         createdAt: '2026-08-09T08:00:00Z',
         updatedAt: '2026-08-09T08:10:00Z',
@@ -205,6 +206,15 @@ describe('chefOperationalApi parsing', () => {
     for (const bad of ['', '  ', true, false, null, -5, '-5', '12abc', '1e3', 'Infinity', 'NaN', Number.NaN, Infinity, [], {}]) {
       expect(subtotal(bad)).toBeUndefined();
     }
+  });
+
+  it('tells a handed-over order from one the server cannot hand over: the field is kept only when it is sent', () => {
+    const handedOverAt = (value: unknown) =>
+      (parseChefOperationalOrders([{id: ORDER_ID, status: 'READY_FOR_PICKUP', chefHandedOverAt: value}]) ?? [])[0];
+    expect(handedOverAt(null)).toHaveProperty('chefHandedOverAt', null);
+    expect(handedOverAt('2026-08-09T08:30:00Z')).toHaveProperty('chefHandedOverAt', '2026-08-09T08:30:00Z');
+    expect(handedOverAt('later')).not.toHaveProperty('chefHandedOverAt');
+    expect(parseChefOperationalOrders([{id: ORDER_ID, status: 'READY_FOR_PICKUP'}])?.[0]).not.toHaveProperty('chefHandedOverAt');
   });
 
   it('asks the server for chef notifications only', async () => {

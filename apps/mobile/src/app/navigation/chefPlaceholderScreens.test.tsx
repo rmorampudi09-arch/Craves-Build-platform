@@ -6,7 +6,6 @@ import {
   ChefBankAccountPlaceholder,
   ChefDailyLimitsPlaceholder,
   ChefEarningsPlaceholder,
-  ChefOrdersScheduledPlaceholder,
   ChefReviewsPlaceholder,
   ChefSecurityPlaceholder,
   ChefSupportTicketPlaceholder,
@@ -52,7 +51,6 @@ describe('chef placeholder screens', () => {
 
   it.each([
     ['Earnings', ChefEarningsPlaceholder],
-    ['Scheduled orders', ChefOrdersScheduledPlaceholder],
     ['Reviews', ChefReviewsPlaceholder],
     ['Security', ChefSecurityPlaceholder],
     ['Bank account', ChefBankAccountPlaceholder],

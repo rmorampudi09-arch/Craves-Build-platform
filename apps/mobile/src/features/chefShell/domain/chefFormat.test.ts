@@ -1,4 +1,13 @@
-import {formatRelativeTime, formatRupees, formatTimeOfDay, formatWindowTime, shortOrderNumber} from './chefFormat';
+import {
+  formatDayLabel,
+  formatRelativeTime,
+  formatRupees,
+  formatRupeesExact,
+  formatTimeOfDay,
+  formatWindowTime,
+  shortCustomerName,
+  shortOrderNumber,
+} from './chefFormat';
 
 describe('shortOrderNumber', () => {
   it('uses the last 5 characters of the id without dashes, uppercase', () => {
@@ -65,5 +74,41 @@ describe('clock times', () => {
     expect(formatWindowTime('11:00:00')).toBe('11:00 AM');
     expect(formatWindowTime('22:00')).toBe('10:00 PM');
     expect(formatWindowTime('nonsense')).toBe('');
+  });
+});
+
+describe('shortCustomerName', () => {
+  it('keeps the first name and the last initial', () => {
+    expect(shortCustomerName('Priya Sharma')).toBe('Priya S.');
+    expect(shortCustomerName('  kiran   kumar  reddy ')).toBe('kiran R.');
+  });
+
+  it('keeps a single name and leaves nothing for a blank one', () => {
+    expect(shortCustomerName('Meena')).toBe('Meena');
+    expect(shortCustomerName('   ')).toBeUndefined();
+    expect(shortCustomerName(null)).toBeUndefined();
+  });
+});
+
+describe('formatRupeesExact', () => {
+  it('drops the paise only when there are none', () => {
+    expect(formatRupeesExact(40)).toBe('₹40');
+    expect(formatRupeesExact(7.25)).toBe('₹7.25');
+    expect(formatRupeesExact(1234.5)).toBe('₹1,234.50');
+  });
+});
+
+describe('formatDayLabel', () => {
+  const now = new Date(2026, 9, 14, 9, 0, 0);
+
+  it('names today, yesterday and tomorrow', () => {
+    expect(formatDayLabel(new Date(2026, 9, 14, 23, 0), now)).toBe('Today');
+    expect(formatDayLabel(new Date(2026, 9, 13, 8, 0), now)).toBe('Yesterday');
+    expect(formatDayLabel(new Date(2026, 9, 15, 13, 0), now)).toBe('Tomorrow');
+  });
+
+  it('gives a date after that, with the weekday when asked', () => {
+    expect(formatDayLabel(new Date(2026, 9, 2, 3, 51), now)).toBe('2 Oct');
+    expect(formatDayLabel(new Date(2026, 9, 18, 12, 30), now, {weekday: true})).toBe('Sun 18 Oct');
   });
 });

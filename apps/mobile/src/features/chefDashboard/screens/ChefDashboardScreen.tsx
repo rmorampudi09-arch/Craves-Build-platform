@@ -4,6 +4,7 @@ import {useNavigation, type CompositeNavigationProp} from '@react-navigation/nat
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import type {ChefProductStackParamList, ChefTabParamList} from '../../../app/navigation/types';
+import {AppApiError} from '../../../core/http/apiError';
 import {
   borderWidth,
   colors,
@@ -16,6 +17,8 @@ import {
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {useKitchenOpenState, type KitchenOpenState, type KitchenPauseDuration} from '../../chefProfile/state/useKitchenOpenState';
+import {RejectOrderSheet} from '../../chefOrders/components/RejectOrderSheet';
+import {toOrderCardOrder} from '../../chefOrders/domain/chefOrderCard';
 import {useChefNewOrderActions} from '../../chefOrders/state/useChefNewOrderActions';
 import {useChefPreparingOrderActions} from '../../chefOrders/state/useChefPreparingOrderActions';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
@@ -32,8 +35,6 @@ import {
   useChefToast,
 } from '../../chefShell/components/ui';
 import {NotificationBell} from '../../chefShell/components/ui/ChefTopBar';
-import type {OrderCardOrder} from '../../chefShell/components/ui/OrderCard';
-import type {VegMarkType} from '../../chefShell/components/ui/VegMark';
 import {formatRelativeTime, formatRupees, formatTimeOfDay, shortOrderNumber} from '../../chefShell/domain/chefFormat';
 import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
 import {useChefReviewPreview} from '../../reviews/query/useChefReviewPreview';
@@ -52,21 +53,6 @@ const KITCHEN_UPDATE_FAILED = "We couldn't update your kitchen. Check your conne
 
 const itemCount = (order: ChefOperationalOrder) => (order.items ?? []).reduce((sum, item) => sum + item.quantity, 0);
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
-
-function toCardOrder(order: ChefOperationalOrder): OrderCardOrder {
-  return {
-    id: order.id,
-    area: order.deliverySummary ? order.deliverySummary.areaName ?? order.deliverySummary.city : undefined,
-    placedAt: order.createdAt ?? undefined,
-    total: order.foodSubtotal,
-    items: (order.items ?? []).map(item => ({
-      name: item.itemName,
-      quantity: item.quantity,
-      foodType: item.foodType as VegMarkType | undefined,
-    })),
-    note: order.customerNote,
-  };
-}
 
 function pillText(kitchen: KitchenOpenState): string {
   switch (kitchen.status) {
@@ -187,6 +173,7 @@ export function ChefDashboardScreen() {
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [confirmClose, setConfirmClose] = React.useState(false);
   const [readyTarget, setReadyTarget] = React.useState<ChefOperationalOrder | null>(null);
+  const [rejectTarget, setRejectTarget] = React.useState<ChefOperationalOrder | null>(null);
 
   // Two Modals swapping in one tick (or a page opening under a closing sheet) misbehave on Android:
   // close the sheet first, and run what comes next once it is gone and its animation has finished.
@@ -262,6 +249,18 @@ export function ChefDashboardScreen() {
       // The preparing-order action reports the reason through its feedback.
     }
     setReadyTarget(null);
+  };
+
+  const rejectBusy = rejectTarget !== null && newActions.actionStateByOrder[rejectTarget.id] === 'rejecting';
+  const submitReject = (reason: string) => {
+    if (!rejectTarget) return;
+    newActions
+      .reject(rejectTarget.id, reason)
+      .then(() => setRejectTarget(null))
+      .catch(error => {
+        // The order moved on while the sheet was open: its new state is shown, so the question is over.
+        if (error instanceof AppApiError && error.status === 409) setRejectTarget(null);
+      });
   };
 
   const pending = model.pendingOrders;
@@ -494,7 +493,7 @@ export function ChefDashboardScreen() {
                     accessibilityLabel={`Reject order ${shortOrderNumber(firstPending.id)}`}
                     disabled={newActions.actionStateByOrder[firstPending.id] !== undefined}
                     label="Reject"
-                    onPress={() => openOrders('ChefOrdersNew')}
+                    onPress={() => setRejectTarget(firstPending)}
                     style={styles.rejectButton}
                     tone="neutral"
                   />
@@ -511,7 +510,7 @@ export function ChefDashboardScreen() {
             }
             highlighted
             onPress={() => navigation.navigate('ChefOrderDetail', {orderId: firstPending.id})}
-            order={toCardOrder(firstPending)}
+            order={toOrderCardOrder(firstPending)}
           />
         </>
       ) : null}
@@ -614,6 +613,14 @@ export function ChefDashboardScreen() {
         title="Close your kitchen?"
         tone="danger"
         visible={confirmClose}
+      />
+
+      <RejectOrderSheet
+        busy={rejectBusy}
+        onClose={() => setRejectTarget(null)}
+        onConfirm={submitReject}
+        orderNumber={rejectTarget ? shortOrderNumber(rejectTarget.id) : ''}
+        visible={rejectTarget !== null}
       />
 
       <ConfirmDialog

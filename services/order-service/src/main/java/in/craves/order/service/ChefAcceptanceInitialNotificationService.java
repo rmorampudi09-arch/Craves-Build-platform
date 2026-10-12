@@ -1,5 +1,7 @@
 package in.craves.order.service;
 
+import in.craves.order.security.CravesPrincipal;
+import in.craves.order.web.ApiDtos.ChefAcceptRequest;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -7,6 +9,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -16,17 +19,25 @@ import org.springframework.transaction.annotation.Transactional;
 public class ChefAcceptanceInitialNotificationService {
     private final JdbcTemplate jdbcTemplate;
     private final NotificationOutboxRepository notificationOutboxRepository;
+    private final ChefAcceptanceService chefAcceptanceService;
 
     public ChefAcceptanceInitialNotificationService(
         JdbcTemplate jdbcTemplate,
-        NotificationOutboxRepository notificationOutboxRepository
+        NotificationOutboxRepository notificationOutboxRepository,
+        ChefAcceptanceService chefAcceptanceService
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.notificationOutboxRepository = notificationOutboxRepository;
+        this.chefAcceptanceService = chefAcceptanceService;
     }
 
+    /**
+     * Records the chef's new-order notification. With autoAcceptPrepMinutes the order is first accepted through the
+     * chef's accept service in the same transaction, so a failed accept rolls everything back and the caller can
+     * fall back to the plain notification with the order still pending.
+     */
     @Transactional
-    public boolean record(UUID orderId, UUID chefIdentityId) {
+    public boolean record(UUID orderId, UUID chefIdentityId, Integer autoAcceptPrepMinutes) {
         if (chefIdentityId == null) {
             return false;
         }
@@ -36,6 +47,16 @@ public class ChefAcceptanceInitialNotificationService {
             || order.expiresAt() == null
             || !order.databaseNow().isBefore(order.expiresAt())) {
             return false;
+        }
+        boolean auto = autoAcceptPrepMinutes != null;
+        if (auto) {
+            chefAcceptanceService.accept(
+                new CravesPrincipal(chefIdentityId, "", Set.of("CHEF")),
+                orderId,
+                new ChefAcceptRequest(autoAcceptPrepMinutes, null),
+                null,
+                "auto-accept:" + orderId
+            );
         }
 
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -56,8 +77,10 @@ public class ChefAcceptanceInitialNotificationService {
             "CHEF",
             "IN_APP",
             "CHEF_ORDER_AWAITING_ACCEPTANCE_IN_APP",
-            "New order received",
-            "A paid Craves order is waiting for your confirmation.",
+            auto ? "New order accepted automatically" : "New order received",
+            auto
+                ? "A paid Craves order was accepted for you automatically."
+                : "A paid Craves order is waiting for your confirmation.",
             "ORDER",
             order.orderId(),
             payload

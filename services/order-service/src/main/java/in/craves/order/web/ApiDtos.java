@@ -217,7 +217,8 @@ public final class ApiDtos {
         @JsonInclude(JsonInclude.Include.NON_NULL) String customerNote,
         @JsonInclude(JsonInclude.Include.NON_NULL) List<OrderStatusHistoryEntry> statusHistory,
         @JsonInclude(JsonInclude.Include.NON_NULL) DeliveryPartnerResponse deliveryPartner,
-        @JsonInclude(JsonInclude.Include.NON_NULL) Instant chefHandedOverAt
+        // Always present (null until handed over) so the app can tell the server supports hand-over.
+        @JsonInclude(JsonInclude.Include.ALWAYS) Instant chefHandedOverAt
     ) {
         public OrderResponse(
             UUID id,

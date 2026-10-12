@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 class ChefOrderResponseContractTest {
     private static final Instant T0 = Instant.parse("2026-10-13T10:00:00Z");
     private static final List<String> CHEF_ONLY_KEYS = List.of(
-        "chefAcceptanceExpiresAt", "customerNote", "statusHistory", "deliveryPartner", "chefHandedOverAt");
+        "chefAcceptanceExpiresAt", "customerNote", "statusHistory", "deliveryPartner");
 
     private final ObjectMapper json = JsonMapper.builder().findAndAddModules()
         .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS).build();
@@ -42,6 +42,17 @@ class ChefOrderResponseContractTest {
 
         CHEF_ONLY_KEYS.forEach(key -> assertThat(node.has(key)).as(key).isFalse());
         assertThat(node.has("chefResponseNote")).isTrue();
+    }
+
+    @Test
+    void chefHandedOverAtIsAlwaysPresentAndNullUntilHandedOver() throws Exception {
+        JsonNode notYet = json.readTree(json.writeValueAsString(plainOrder()));
+        JsonNode handed = json.readTree(json.writeValueAsString(plainOrder().withChefDetails(null, null, null, T0)));
+
+        // The app reads the key's presence as "this server supports hand-over".
+        assertThat(notYet.has("chefHandedOverAt")).isTrue();
+        assertThat(notYet.get("chefHandedOverAt").isNull()).isTrue();
+        assertThat(handed.get("chefHandedOverAt").asText()).isEqualTo("2026-10-13T10:00:00Z");
     }
 
     @Test

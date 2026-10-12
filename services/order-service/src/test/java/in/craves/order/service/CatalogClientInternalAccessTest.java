@@ -1,6 +1,7 @@
 package in.craves.order.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -101,6 +102,28 @@ class CatalogClientInternalAccessTest {
 
         assertEquals(HttpStatus.BAD_GATEWAY, exception.getStatusCode());
         assertEquals("Catalog internal kitchen response is incomplete", exception.getReason());
+        server.verify();
+    }
+
+    @Test
+    void getKitchenReadsTheOptionalAutoAcceptSettingsAndTreatsAbsentAsUnset() {
+        UUID kitchenId = UUID.fromString("8990a560-5720-4273-be46-5a8e9fba1169");
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        CatalogClient client = new CatalogClient(properties("shared-internal-secret"), builder);
+        String base = "\"id\":\"8990a560-5720-4273-be46-5a8e9fba1169\",\"identityId\":\"cedc27bd-9cd2-46d4-8dcb-ca79acc9802d\"";
+        String url = "https://catalog.test/api/v1/catalog/internal/kitchens/" + kitchenId;
+        server.expect(requestTo(url)).andRespond(withSuccess(
+            "{" + base + ",\"autoAcceptOrders\":true,\"defaultPrepMinutes\":25}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(url)).andRespond(withSuccess("{" + base + "}", MediaType.APPLICATION_JSON));
+
+        CatalogClient.CatalogKitchen on = client.getKitchen(kitchenId);
+        CatalogClient.CatalogKitchen absent = client.getKitchen(kitchenId);
+
+        assertEquals(Boolean.TRUE, on.autoAcceptOrders());
+        assertEquals(25, on.defaultPrepMinutes());
+        assertNull(absent.autoAcceptOrders());
+        assertNull(absent.defaultPrepMinutes());
         server.verify();
     }
 

@@ -170,8 +170,36 @@ public class CatalogClient {
         String postalCode,
         BigDecimal latitude,
         BigDecimal longitude,
-        String status
+        String status,
+        // Chef settings; the catalog omits them when unset, so absent reads as null (auto-accept off).
+        Boolean autoAcceptOrders,
+        Integer defaultPrepMinutes
     ) {
+        public CatalogKitchen(
+            UUID id,
+            UUID identityId,
+            String kitchenName,
+            String displayName,
+            String description,
+            String phoneNumber,
+            String email,
+            String addressLine1,
+            String addressLine2,
+            String landmark,
+            String areaName,
+            String city,
+            String state,
+            String postalCode,
+            BigDecimal latitude,
+            BigDecimal longitude,
+            String status
+        ) {
+            this(
+                id, identityId, kitchenName, displayName, description, phoneNumber, email, addressLine1, addressLine2,
+                landmark, areaName, city, state, postalCode, latitude, longitude, status, null, null
+            );
+        }
+
         public CatalogKitchen(
             UUID id,
             UUID identityId,

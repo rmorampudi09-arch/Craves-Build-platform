@@ -81,7 +81,6 @@ craves:
     order-dispatch:
       request-worker-enabled: ${CRAVES_SUBSCRIPTION_ORDER_REQUEST_WORKER_ENABLED:false}
       publisher-enabled: ${CRAVES_SUBSCRIPTION_ORDER_PUBLISHER_ENABLED:false}
-      lead-hours: ${CRAVES_SUBSCRIPTION_ORDER_LEAD_HOURS:-1}
       batch-size: ${CRAVES_SUBSCRIPTION_ORDER_BATCH_SIZE:50}
       stale-lock-minutes: ${CRAVES_SUBSCRIPTION_ORDER_STALE_LOCK_MINUTES:10}
       max-publish-attempts: ${CRAVES_SUBSCRIPTION_ORDER_MAX_PUBLISH_ATTEMPTS:10}

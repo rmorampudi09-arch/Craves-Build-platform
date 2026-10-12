@@ -46,7 +46,9 @@ public class SubscriptionOrderCallbackWorker {
         try {
             subscriptionClient.post()
                 .uri(
-                    "/internal/v1/subscription-occurrences/{occurrenceId}/order-created",
+                    callback.chefDeclined()
+                        ? "/internal/v1/subscription-occurrences/{occurrenceId}/order-declined"
+                        : "/internal/v1/subscription-occurrences/{occurrenceId}/order-created",
                     callback.occurrenceId()
                 )
                 .header(INTERNAL_HEADER, properties.getInternalAccessValue())

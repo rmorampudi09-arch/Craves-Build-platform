@@ -20,13 +20,16 @@ public class OccurrenceOrderInternalController {
 
     private final OccurrenceOrderProperties properties;
     private final OccurrenceOrderRepository repository;
+    private final OccurrenceOrderService service;
 
     public OccurrenceOrderInternalController(
         OccurrenceOrderProperties properties,
-        OccurrenceOrderRepository repository
+        OccurrenceOrderRepository repository,
+        OccurrenceOrderService service
     ) {
         this.properties = properties;
         this.repository = repository;
+        this.service = service;
     }
 
     @PostMapping("/{occurrenceId}/order-created")
@@ -41,6 +44,25 @@ public class OccurrenceOrderInternalController {
         }
         try {
             repository.markOrderCreated(occurrenceId, request.orderId());
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, exception.getMessage());
+        } catch (IllegalStateException exception) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, exception.getMessage());
+        }
+    }
+
+    @PostMapping("/{occurrenceId}/order-declined")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void orderDeclined(
+        @RequestHeader(INTERNAL_HEADER) String internalAccess,
+        @PathVariable UUID occurrenceId,
+        @Valid @RequestBody OrderCreatedRequest request
+    ) {
+        if (!properties.validInternalAccess(internalAccess)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid internal service credential");
+        }
+        try {
+            service.orderDeclined(occurrenceId, request.orderId());
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, exception.getMessage());
         } catch (IllegalStateException exception) {

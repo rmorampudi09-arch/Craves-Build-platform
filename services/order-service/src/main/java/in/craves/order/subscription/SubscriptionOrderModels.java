@@ -45,7 +45,8 @@ public final class SubscriptionOrderModels {
         UUID occurrenceId,
         UUID orderId,
         int attemptCount,
-        UUID lockToken
+        UUID lockToken,
+        boolean chefDeclined
     ) {
     }
 }

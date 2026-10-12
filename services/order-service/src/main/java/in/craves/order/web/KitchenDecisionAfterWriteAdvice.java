@@ -27,7 +27,8 @@ public class KitchenDecisionAfterWriteAdvice implements ResponseBodyAdvice<Objec
 
     @Override
     public Object beforeBodyWrite(Object body, MethodParameter returnType, MediaType selectedContentType, Class<? extends HttpMessageConverter<?>> selectedConverterType, ServerHttpRequest request, ServerHttpResponse response) {
-        if (body instanceof OrderResponse order) {
+        // A meal-plan order (no checkout) gets the "day added to your plan" message from the decline itself.
+        if (body instanceof OrderResponse order && order.checkoutId() != null) {
             client.kitchenCouldNotConfirm(order);
         }
         return body;

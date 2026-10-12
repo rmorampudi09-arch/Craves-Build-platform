@@ -125,7 +125,7 @@ public class OccurrenceGeneratorService {
         return new GenerationSummary(claimed, generated, skipped, advancedWithoutOccurrence, deferred, failed);
     }
 
-    static List<ScheduleItem> matchingItems(ActiveSchedule schedule, LocalDate date) {
+    public static List<ScheduleItem> matchingItems(ActiveSchedule schedule, LocalDate date) {
         return schedule.items().stream()
             .filter(item -> matches(schedule.recurrenceType(), item, date))
             .sorted(Comparator

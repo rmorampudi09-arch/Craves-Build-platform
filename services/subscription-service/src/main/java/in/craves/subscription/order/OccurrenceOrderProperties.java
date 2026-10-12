@@ -10,7 +10,6 @@ import org.springframework.util.StringUtils;
 public class OccurrenceOrderProperties {
     private boolean requestWorkerEnabled = false;
     private boolean publisherEnabled = false;
-    private int leadHours = -1;
     private int batchSize = 50;
     private int staleLockMinutes = 10;
     private int maxPublishAttempts = 10;
@@ -23,9 +22,6 @@ public class OccurrenceOrderProperties {
 
     @PostConstruct
     void validate() {
-        if (requestWorkerEnabled && (leadHours < 0 || leadHours > 168)) {
-            throw new IllegalStateException("An approved order dispatch leadHours value from 0 to 168 is required");
-        }
         if (batchSize < 1 || batchSize > 500 || staleLockMinutes < 1 || staleLockMinutes > 120) {
             throw new IllegalStateException("Occurrence order dispatch batch or lease settings are invalid");
         }
@@ -48,8 +44,6 @@ public class OccurrenceOrderProperties {
     public void setRequestWorkerEnabled(boolean value) { this.requestWorkerEnabled = value; }
     public boolean isPublisherEnabled() { return publisherEnabled; }
     public void setPublisherEnabled(boolean value) { this.publisherEnabled = value; }
-    public int getLeadHours() { return leadHours; }
-    public void setLeadHours(int value) { this.leadHours = value; }
     public int getBatchSize() { return batchSize; }
     public void setBatchSize(int value) { this.batchSize = value; }
     public int getStaleLockMinutes() { return staleLockMinutes; }

@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @EnableConfigurationProperties(CravesJwtProperties.class)
 public class SubscriptionServiceApplication {
     public static void main(String[] args) {
+        LiveRuntimeLock.verify();
         SpringApplication.run(SubscriptionServiceApplication.class, args);
     }
 }

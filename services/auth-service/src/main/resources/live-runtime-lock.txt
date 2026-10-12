@@ -1,0 +1,25 @@
+# Code auth-service must keep in production. A production start (CRAVES_ENVIRONMENT=prod*) refuses
+# to run a build that lacks any of them. Remove a line only when retiring that code on purpose.
+# See docs/runbooks/live-runtime-safety.md.
+in.craves.auth.academy.AcademyController
+in.craves.auth.admin.AdminAccountInterventionController
+in.craves.auth.admin.InternalAdminRoleController
+in.craves.auth.admin.explorer.AdminExplorerController
+in.craves.auth.email.EmailVerificationController
+in.craves.auth.referrals.ReferralAccessController
+in.craves.auth.referrals.ReferralEnrollmentController
+in.craves.auth.web.AdminSessionPolicyController
+in.craves.auth.web.AuthController
+in.craves.auth.web.InternalIdentityController
+in.craves.auth.web.InternalRoleController
+
+# --- live-only: running in production (image sha256:258e4126…, tag email-test-pairs-87eddd1c4563) but NOT yet on main.
+# A build from main therefore refuses to start in production until this code is restored here.
+# See docs/runbooks/live-runtime-safety.md ("Auth") for where each piece lives.
+in.craves.auth.msg91.Msg91Properties                  # live-only: ACR tag msg91-c83c3d5b42f51e983afc79bd13ae2c0b27c2cd9f (source not on GitHub)
+in.craves.auth.centralotp.CentralOtpController        # live-only: branch KUSHIRAVI-app-build, apps/mobile/backend-patches/msg91-centralized-v1/auth
+in.craves.auth.centralotp.CentralOtpStore             # live-only: same overlay (owns auth_phone_otp, migration V19)
+in.craves.auth.centralotp.CentralOtpProvider          # live-only: same overlay
+in.craves.auth.centralotp.CentralOtpIdentity          # live-only: same overlay
+in.craves.auth.centralotp.CentralOtpRequestLimit      # live-only: same overlay
+in.craves.auth.email.EmailVerificationTestBypass      # live-only: branch fix/email-test-bypass-20261007 (commit 87eddd1c4)

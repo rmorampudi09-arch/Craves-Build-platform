@@ -283,7 +283,7 @@ def migrate(image, source):
     files = sorted(p.name for p in (source / 'services/referral-service/src/main/resources/db/referral_migration').glob('V*__*.sql'))
     env = owner_env(read_only=False)
     before = history(env)
-    require(all(row[2] == 't' for row in before), 'FAILED_MIGRATION_IN_HISTORY')
+    require(all(row[2] == 'true' for row in before), 'FAILED_MIGRATION_IN_HISTORY')
     require({row[1] for row in before} <= set(files), 'UNKNOWN_APPLIED_MIGRATION')
     pending = sorted(set(files) - {row[1] for row in before})
     log(f'referral migrations applied={len(before)} pending={pending}')
@@ -308,7 +308,7 @@ def migrate(image, source):
                                      'in.craves.referral.infra.ReferralMigrate'], env=run_env, capture_output=True, text=True, timeout=300)
             require(result.returncode == 0, 'MIGRATION_FAILED ' + result.stderr.strip()[-400:])
     after = history(env)
-    require({row[1] for row in after} == set(files) and all(row[2] == 't' for row in after), 'MIGRATION_INCOMPLETE')
+    require({row[1] for row in after} == set(files) and all(row[2] == 'true' for row in after), 'MIGRATION_INCOMPLETE')
     role = runtime_role()
     require(re.fullmatch('[a-z_][a-z0-9_]{2,62}', role) is not None, 'UNEXPECTED_RUNTIME_ROLE')
     grants = [f'GRANT SELECT,INSERT,UPDATE ON referral_schema.{t} TO {role};' for t in CHEF_TABLES]

@@ -113,29 +113,35 @@ public class NotificationRepository {
             """, new MapSqlParameterSource().addValue("id", requestId).addValue("status", status.name()).addValue("error", error));
     }
 
-    public List<AppNoticeResponse> findAppNotices(UUID userId, int limit) {
+    // role is null (no filter) or CHEF/CUSTOMER; rows with a null recipient_role only match "no filter".
+    public List<AppNoticeResponse> findAppNotices(UUID userId, int limit, String role) {
         return jdbc.query("""
             SELECT id, title, body, notification_type, target_type, target_id, read_at, created_at
               FROM notification_schema.in_app_notification
              WHERE recipient_identity_id = :userId
+               AND (CAST(:role AS text) IS NULL OR upper(recipient_role) = :role)
              ORDER BY created_at DESC, id DESC
              LIMIT :limit
-            """, new MapSqlParameterSource().addValue("userId", userId).addValue("limit", Math.min(Math.max(limit, 1), 100)), this::mapNotice);
+            """, new MapSqlParameterSource().addValue("userId", userId).addValue("role", role)
+                .addValue("limit", Math.min(Math.max(limit, 1), 100)), this::mapNotice);
     }
 
     public List<AppNoticeResponse> findAppNoticesPage(
         UUID userId,
         int fetchLimit,
         AppNoticeCursor cursor,
-        boolean unreadOnly
+        boolean unreadOnly,
+        String role
     ) {
         StringBuilder sql = new StringBuilder("""
             SELECT id, title, body, notification_type, target_type, target_id, read_at, created_at
               FROM notification_schema.in_app_notification
              WHERE recipient_identity_id = :userId
+               AND (CAST(:role AS text) IS NULL OR upper(recipient_role) = :role)
             """);
         MapSqlParameterSource params = new MapSqlParameterSource()
             .addValue("userId", userId)
+            .addValue("role", role)
             .addValue("limit", Math.min(Math.max(fetchLimit, 1), 101));
 
         if (unreadOnly) {
@@ -150,13 +156,14 @@ public class NotificationRepository {
         return jdbc.query(sql.toString(), params, this::mapNotice);
     }
 
-    public long countUnreadAppNotices(UUID userId) {
+    public long countUnreadAppNotices(UUID userId, String role) {
         Long count = jdbc.queryForObject("""
             SELECT COUNT(*)
               FROM notification_schema.in_app_notification
              WHERE recipient_identity_id = :userId
+               AND (CAST(:role AS text) IS NULL OR upper(recipient_role) = :role)
                AND read_at IS NULL
-            """, Map.of("userId", userId), Long.class);
+            """, new MapSqlParameterSource().addValue("userId", userId).addValue("role", role), Long.class);
         return count == null ? 0L : count;
     }
 
@@ -168,13 +175,14 @@ public class NotificationRepository {
             """, new MapSqlParameterSource().addValue("noticeId", noticeId).addValue("userId", userId));
     }
 
-    public int markAllRead(UUID userId) {
+    public int markAllRead(UUID userId, String role) {
         return jdbc.update("""
             UPDATE notification_schema.in_app_notification
                SET read_at = now()
              WHERE recipient_identity_id = :userId
+               AND (CAST(:role AS text) IS NULL OR upper(recipient_role) = :role)
                AND read_at IS NULL
-            """, Map.of("userId", userId));
+            """, new MapSqlParameterSource().addValue("userId", userId).addValue("role", role));
     }
 
     private NotificationRequestResponse mapRequest(ResultSet rs, int rowNum) throws SQLException {

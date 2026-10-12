@@ -10,6 +10,8 @@ import in.craves.notification.domain.NotificationChannel;
 import in.craves.notification.domain.NotificationStatus;
 import in.craves.notification.repository.NotificationRepository;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,7 @@ public class NotificationService {
     private static final String EMAIL_KEY_SUFFIX = "-email";
     private static final int MAX_INBOX_PAGE_SIZE = 100;
     private static final int MAX_CURSOR_LENGTH = 512;
+    private static final Set<String> INBOX_ROLES = Set.of("CHEF", "CUSTOMER");
 
     private final NotificationRepository repository;
     private final ImportantEmailPolicyProperties importantEmailPolicy;
@@ -98,15 +101,16 @@ public class NotificationService {
         return repository.findByRequestKey(request.requestKey()).orElse(created);
     }
 
-    public List<AppNoticeResponse> appNotices(UUID userId, int limit) {
-        return repository.findAppNotices(userId, limit);
+    public List<AppNoticeResponse> appNotices(UUID userId, int limit, String role) {
+        return repository.findAppNotices(userId, limit, normalizeRole(role));
     }
 
     public AppNoticePageResponse appNoticePage(
         UUID userId,
         int limit,
         String encodedCursor,
-        boolean unreadOnly
+        boolean unreadOnly,
+        String role
     ) {
         validatePageSize(limit);
         AppNoticeCursor cursor = decodeCursor(encodedCursor);
@@ -114,7 +118,8 @@ public class NotificationService {
             userId,
             limit + 1,
             cursor,
-            unreadOnly
+            unreadOnly,
+            normalizeRole(role)
         );
         boolean hasMore = fetched.size() > limit;
         List<AppNoticeResponse> notices = hasMore
@@ -130,8 +135,8 @@ public class NotificationService {
         return new AppNoticePageResponse(notices, nextCursor, hasMore);
     }
 
-    public UnreadCountResponse unreadCount(UUID userId) {
-        return new UnreadCountResponse(repository.countUnreadAppNotices(userId));
+    public UnreadCountResponse unreadCount(UUID userId, String role) {
+        return new UnreadCountResponse(repository.countUnreadAppNotices(userId, normalizeRole(role)));
     }
 
     @Transactional
@@ -140,8 +145,20 @@ public class NotificationService {
     }
 
     @Transactional
-    public void markAllRead(UUID userId) {
-        repository.markAllRead(userId);
+    public void markAllRead(UUID userId, String role) {
+        repository.markAllRead(userId, normalizeRole(role));
+    }
+
+    /** null (parameter absent) means no filter; anything else must be CHEF or CUSTOMER, any case. */
+    private static String normalizeRole(String role) {
+        if (role == null) {
+            return null;
+        }
+        String upper = role.strip().toUpperCase(Locale.ROOT);
+        if (!INBOX_ROLES.contains(upper)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "role must be CHEF or CUSTOMER");
+        }
+        return upper;
     }
 
     private static void validatePageSize(int limit) {

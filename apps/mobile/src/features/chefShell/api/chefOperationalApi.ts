@@ -194,14 +194,25 @@ function parseDeliveryPartner(value: unknown): ChefOperationalDeliveryPartner | 
   };
 }
 
+/** Rupees from a JSON number or a plain decimal string; anything else (empty, boolean, negative, "1e3") is not money. */
+function optionalMoney(value: unknown): number | null {
+  const amount =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && /^\d+(\.\d+)?$/.test(value.trim())
+        ? Number(value)
+        : NaN;
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+}
+
 /** Fields the server adds over time: kept when valid, left out (never an error) otherwise. */
 function parseOptionalOrderFields(order: Record<string, unknown>): Partial<ChefOperationalOrder> {
-  const foodSubtotal = order.foodSubtotal == null ? NaN : Number(order.foodSubtotal);
+  const foodSubtotal = optionalMoney(order.foodSubtotal);
   const chefAcceptanceExpiresAt = validTimestamp(order.chefAcceptanceExpiresAt, true);
   const customerNote = optionalString(order.customerNote, 500);
   const deliveryPartner = parseDeliveryPartner(order.deliveryPartner);
   return {
-    ...(Number.isFinite(foodSubtotal) && foodSubtotal >= 0 ? {foodSubtotal} : {}),
+    ...(foodSubtotal !== null ? {foodSubtotal} : {}),
     ...(chefAcceptanceExpiresAt ? {chefAcceptanceExpiresAt} : {}),
     ...(customerNote ? {customerNote} : {}),
     ...(deliveryPartner ? {deliveryPartner} : {}),

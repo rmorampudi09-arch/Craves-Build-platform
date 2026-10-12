@@ -1,7 +1,8 @@
 import React from 'react';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
-import {Modal, Text} from 'react-native';
+import {InteractionManager, Modal, RefreshControl, StyleSheet, Text} from 'react-native';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
+import {ChefToastProvider, StatTile} from '../../chefShell/components/ui';
 import type {KitchenOpenState} from '../../chefProfile/state/useKitchenOpenState';
 import {ChefDashboardScreen} from './ChefDashboardScreen';
 
@@ -9,9 +10,11 @@ const mockNavigate = jest.fn();
 const mockAccept = jest.fn(async () => ({}));
 const mockMarkReady = jest.fn(async () => undefined);
 const mockRefresh = jest.fn(async () => undefined);
-const mockSetOpen = jest.fn(async () => undefined);
-const mockPause = jest.fn(async () => undefined);
-const mockResume = jest.fn(async () => undefined);
+const mockSetOpen = jest.fn(async () => true);
+const mockPause = jest.fn(async () => true);
+const mockResume = jest.fn(async () => true);
+const mockKitchenRefresh = jest.fn(async () => undefined);
+const mockReviewsRefresh = jest.fn(async () => undefined);
 let mockUnread = 0;
 let mockModel: Record<string, unknown>;
 let mockKitchen: KitchenOpenState;
@@ -78,6 +81,7 @@ function baseModel(overrides: Record<string, unknown> = {}) {
 function baseKitchen(overrides: Partial<KitchenOpenState> = {}): KitchenOpenState {
   return {
     status: 'open',
+    closedReason: null,
     kitchen: {kitchenName: 'Relangi mavayya kitchen'} as KitchenOpenState['kitchen'],
     pausedUntil: null,
     opensAt: null,
@@ -85,6 +89,7 @@ function baseKitchen(overrides: Partial<KitchenOpenState> = {}): KitchenOpenStat
     saving: false,
     pauseAvailable: true,
     unavailable: false,
+    refresh: mockKitchenRefresh,
     setOpen: mockSetOpen,
     pause: mockPause,
     resume: mockResume,
@@ -114,21 +119,43 @@ const press = async (label: string) => {
 };
 const mount = async () => {
   await act(async () => {
-    tree = renderer.create(<ChefDashboardScreen />);
+    tree = renderer.create(
+      <ChefToastProvider>
+        <ChefDashboardScreen />
+      </ChefToastProvider>,
+    );
   });
 };
+// A Modal that is closing must be gone before the next one opens or the page changes, so the screen waits for
+// interactions to finish. Tests hold those callbacks until they say the sheet has finished closing.
+let queuedInteractions: (() => void)[] = [];
+let interactionsSpy: jest.SpyInstance;
+const finishInteractions = async () => {
+  await act(async () => {
+    queuedInteractions.splice(0).forEach(run => run());
+  });
+};
+const statTile = (label: string) => tree.root.findAllByType(StatTile).find(tile => tile.props.label === label);
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockUnread = 0;
   mockModel = baseModel();
   mockKitchen = baseKitchen();
-  mockReviews = {available: true, reviews: [], summary: {overallAverage: 4.6, reviewCount: 12}, isPending: false, isRefreshing: false, error: null, refresh: jest.fn()};
+  mockReviews = {available: true, reviews: [], summary: {overallAverage: 4.6, reviewCount: 12}, isPending: false, isRefreshing: false, error: null, refresh: mockReviewsRefresh};
   mockNewActions = {actionStateByOrder: {}, feedback: null, accept: mockAccept, reject: jest.fn(), clearFeedback: jest.fn()};
   mockPrepActions = {actionStateByOrder: {}, feedback: null, markReady: mockMarkReady, callCustomer: jest.fn(), clearFeedback: jest.fn()};
   mockPrepTimers = {};
+  queuedInteractions = [];
+  interactionsSpy = jest.spyOn(InteractionManager, 'runAfterInteractions').mockImplementation(((run: () => void) => {
+    queuedInteractions.push(run);
+    return {cancel: jest.fn()};
+  }) as never);
 });
-afterEach(() => act(() => tree?.unmount()));
+afterEach(() => {
+  act(() => tree?.unmount());
+  interactionsSpy.mockRestore();
+});
 
 describe('Home: new orders', () => {
   it('shows the first pending order with its accept time, a Reject button and the new-order count link', async () => {
@@ -225,50 +252,128 @@ describe('Home: kitchen status', () => {
     expect(mockSetOpen).toHaveBeenCalledWith(false);
   });
 
-  it('asks first when orders are still cooking', async () => {
+  it('asks first when orders are still cooking, but only once the sheet has finished closing', async () => {
     await mount();
     await press('Kitchen status: Open · taking orders');
     await press('Close kitchen until I open it');
     expect(mockSetOpen).not.toHaveBeenCalled();
+    const visibleModals = () => tree.root.findAllByType(Modal).filter(modal => modal.props.visible === true);
+    // The sheet is closing and the dialog has not opened yet: never two Modals changing places in one tick.
+    expect(visibleModals()).toHaveLength(0);
+    expect(hasText('Close your kitchen?')).toBe(false);
+    await finishInteractions();
+    expect(visibleModals()).toHaveLength(1);
     expect(hasText('Close your kitchen?')).toBe(true);
     await press('Close kitchen');
     expect(mockSetOpen).toHaveBeenCalledWith(false);
   });
 
-  it('opens the opening-hours screen from the sheet', async () => {
+  it('opens the opening-hours screen from the sheet once the sheet has closed', async () => {
     await mount();
     await press('Kitchen status: Open · taking orders');
     await press('Change opening hours');
+    expect(mockNavigate).not.toHaveBeenCalled();
+    await finishInteractions();
     expect(mockNavigate).toHaveBeenCalledWith('Profile', {screen: 'ChefKitchenSchedule'});
   });
 
-  it('shows a closed kitchen with one button to open it', async () => {
-    mockKitchen = baseKitchen({status: 'closed', opensAt: '11:00 AM'});
+  it('shows a kitchen the chef closed with just "Closed" and one button to open it', async () => {
+    mockKitchen = baseKitchen({status: 'closed', closedReason: 'chef', opensAt: null});
     mockModel = baseModel({pendingOrders: [], kitchenOrders: []});
     await mount();
-    expect(hasText('Closed · opens 11:00 AM')).toBe(true);
+    expect(hasText('Closed')).toBe(true);
+    expect(hasText(/opens/)).toBe(false);
     expect(hasText('Your kitchen is closed')).toBe(true);
     await press('Open kitchen');
     expect(mockSetOpen).toHaveBeenCalledWith(true);
   });
 
-  it('does not offer to open a suspended kitchen', async () => {
+  it('says "not taking orders" when the schedule has orders switched off, and can switch them on', async () => {
+    mockKitchen = baseKitchen({status: 'closed', closedReason: 'not-accepting'});
+    await mount();
+    expect(hasText('Closed · not taking orders')).toBe(true);
+    await press('Open kitchen');
+    expect(mockSetOpen).toHaveBeenCalledWith(true);
+  });
+
+  it('shows the next opening only for a kitchen that is outside its hours, and does not offer a pointless Open button', async () => {
+    mockKitchen = baseKitchen({status: 'closed', closedReason: 'outside-hours', opensAt: '11:00 AM'});
+    await mount();
+    expect(hasText('Closed · opens 11:00 AM')).toBe(true);
+    expect(pressables('Open kitchen')).toHaveLength(0);
+    await press('Change opening hours');
+    expect(mockNavigate).toHaveBeenCalledWith('Profile', {screen: 'ChefKitchenSchedule'});
+  });
+
+  it('does not offer to open a kitchen Craves has suspended', async () => {
     mockKitchen = baseKitchen({
-      status: 'closed',
+      status: 'suspended',
       kitchen: {kitchenName: 'Relangi mavayya kitchen', status: 'SUSPENDED'} as KitchenOpenState['kitchen'],
     });
     await mount();
-    expect(hasText('Your kitchen is suspended')).toBe(true);
-    expect(hasText('Suspended')).toBe(true);
+    expect(hasText('Your kitchen is paused by Craves')).toBe(true);
+    expect(hasText('Paused by Craves')).toBe(true);
     expect(pressables('Open kitchen')).toHaveLength(0);
-    expect(pressables('Kitchen status: Suspended')[0].props.disabled).toBe(true);
+    expect(pressables('Kitchen status: Paused by Craves')[0].props.disabled).toBe(true);
   });
 
-  it('says so when the kitchen status could not be read', async () => {
+  it('says so, and lets the chef try again by tapping the pill, when the kitchen status could not be read', async () => {
     mockKitchen = baseKitchen({status: 'unknown', kitchen: null, unavailable: true});
     await mount();
     expect(hasText('Your kitchen')).toBe(true);
     expect(hasText('Kitchen status unavailable')).toBe(true);
+    await press('Kitchen status: Kitchen status unavailable');
+    expect(mockKitchenRefresh).toHaveBeenCalledTimes(1);
+    expect(tree.root.findAllByType(Modal).some(modal => modal.props.visible === true)).toBe(false);
+  });
+
+  it('shows no tappable pill while the kitchen status is still loading', async () => {
+    mockKitchen = baseKitchen({status: 'unknown', kitchen: null, unavailable: false});
+    await mount();
+    expect(hasText('Checking kitchen status')).toBe(true);
+    expect(pressables('Kitchen status: Checking kitchen status')[0].props.disabled).toBe(true);
+  });
+
+  it('lets the status pill grow with large text instead of clipping it', async () => {
+    await mount();
+    const pill = StyleSheet.flatten(pressables('Kitchen status: Open · taking orders')[0].props.style);
+    expect(pill.minHeight).toBeGreaterThanOrEqual(28);
+    expect(pill.height).toBeUndefined();
+  });
+
+  it('refreshes the kitchen status together with everything else on pull to refresh', async () => {
+    await mount();
+    await act(async () => {
+      tree.root.findByType(RefreshControl).props.onRefresh();
+    });
+    expect(mockKitchenRefresh).toHaveBeenCalledTimes(1);
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+    expect(mockReviewsRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('toasts only after the kitchen really changed, never for a press that was skipped', async () => {
+    mockModel = baseModel({kitchenOrders: []});
+    await mount();
+    mockSetOpen.mockResolvedValueOnce(false);
+    await press('Kitchen status: Open · taking orders');
+    await press('Close kitchen until I open it');
+    expect(mockSetOpen).toHaveBeenCalledTimes(1);
+    expect(hasText('Your kitchen is closed')).toBe(false);
+
+    await press('Kitchen status: Open · taking orders');
+    await press('Close kitchen until I open it');
+    expect(mockSetOpen).toHaveBeenCalledTimes(2);
+    expect(hasText('Your kitchen is closed')).toBe(true);
+  });
+
+  it('says plainly when the kitchen could not be changed', async () => {
+    mockModel = baseModel({kitchenOrders: []});
+    mockSetOpen.mockRejectedValueOnce(new Error('KITCHEN_SUSPENDED'));
+    await mount();
+    await press('Kitchen status: Open · taking orders');
+    await press('Close kitchen until I open it');
+    expect(hasText("We couldn't update your kitchen. Check your connection and try again.")).toBe(true);
+    expect(hasText(/KITCHEN_SUSPENDED/)).toBe(false);
   });
 
   it('shows a paused kitchen with the time it comes back and a Resume button', async () => {
@@ -315,14 +420,14 @@ describe('Home: kitchen, today and balance', () => {
 
   it("shows today's earnings, orders and rating, and hides the rating when reviews are not published", async () => {
     await mount();
-    expect(hasText('₹1,240')).toBe(true);
-    expect(hasText('8')).toBe(true);
-    expect(hasText('4.6 ★')).toBe(true);
+    expect(statTile('Earned')?.props.value).toBe('₹1,240');
+    expect(statTile('Orders')?.props.value).toBe(8);
+    expect(statTile('Rating')?.props.value).toBe('4.6 ★');
     act(() => tree.unmount());
     mockReviews = {...mockReviews, available: false, summary: null};
     await mount();
-    expect(hasText('₹1,240')).toBe(true);
-    expect(hasText('Rating')).toBe(false);
+    expect(statTile('Earned')?.props.value).toBe('₹1,240');
+    expect(statTile('Rating')).toBeUndefined();
     expect(hasText('Latest reviews')).toBe(false);
   });
 
@@ -368,6 +473,65 @@ describe('Home: kitchen, today and balance', () => {
     expect(hasText('Add your first dish')).toBe(true);
     await press('Add your first dish');
     expect(mockNavigate).toHaveBeenCalledWith('Menu');
+  });
+
+  it('does not claim there are no orders while the orders are still loading', async () => {
+    mockModel = baseModel({
+      pendingOrders: [],
+      kitchenOrders: [],
+      sources: {orders: 'pending', earnings: 'pending', menu: 'success', notifications: 'success', balance: 'success'},
+    });
+    await mount();
+    expect(hasText('No orders right now')).toBe(false);
+    expect(statTile('Orders')?.props.value).toBe('—');
+  });
+
+  it('offers a retry instead of "No orders right now" when the orders could not be loaded', async () => {
+    mockModel = baseModel({
+      pendingOrders: [],
+      kitchenOrders: [],
+      sources: {orders: 'error', earnings: 'success', menu: 'success', notifications: 'success', balance: 'success'},
+    });
+    await mount();
+    expect(hasText('No orders right now')).toBe(false);
+    expect(hasText("We couldn't load your orders")).toBe(true);
+    await press('Try again');
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a neutral row, not "Add your first dish", while the menu is still loading', async () => {
+    mockModel = baseModel({
+      data: {menu: {totalItems: 0, activeItems: 0, sellableItems: 0, activeItemsWithPublicImage: 0}},
+      sources: {orders: 'success', earnings: 'success', menu: 'pending', notifications: 'success', balance: 'success'},
+      menuItems: [],
+    });
+    await mount();
+    expect(hasText('Add your first dish')).toBe(false);
+    expect(pressables('Add your first dish')).toHaveLength(0);
+    expect(hasText('Checking your menu')).toBe(true);
+  });
+
+  it('offers a retry, not "Add your first dish", when the menu could not be loaded', async () => {
+    mockModel = baseModel({
+      data: {menu: {totalItems: 0, activeItems: 0, sellableItems: 0, activeItemsWithPublicImage: 0}},
+      sources: {orders: 'success', earnings: 'success', menu: 'error', notifications: 'success', balance: 'success'},
+      menuItems: [],
+    });
+    await mount();
+    expect(hasText('Add your first dish')).toBe(false);
+    expect(hasText("We couldn't load your menu")).toBe(true);
+    await press('Try again');
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps showing the dish counts when a later refresh of the menu fails', async () => {
+    mockModel = baseModel({
+      sources: {orders: 'success', earnings: 'success', menu: 'error', notifications: 'success', balance: 'success'},
+      menuItems: [menuItem('Chicken curry', 20)],
+    });
+    await mount();
+    expect(hasText('12 of 16 dishes available')).toBe(true);
+    expect(hasText("We couldn't load your menu")).toBe(false);
   });
 
   it('has no Quick actions list and never says Analytics', async () => {

@@ -46,8 +46,10 @@ const schedule = {
   acceptingOrders: true,
   pausedUntil: null as string | null,
   pauseReason: null as string | null,
-  weeklyWindows: [{id: WINDOW_ID, dayOfWeek: 1, opensAt: '11:00:00', closesAt: '22:00:00'}],
+  weeklyWindows: [{id: WINDOW_ID, dayOfWeek: 3, opensAt: '11:00:00', closesAt: '22:00:00'}],
 };
+// 14 Oct 2026 is a Wednesday (day 3); the clock stands at 2:00 PM, inside the 11:00-22:00 hours.
+const setClock = (hours: number) => jest.spyOn(Date, 'now').mockReturnValue(new Date(2026, 9, 14, hours, 0).getTime());
 const get = (mock: unknown) => mock as jest.Mock;
 
 // The server keeps what was saved, so the refetch after a save sees it too.
@@ -86,9 +88,11 @@ async function mountHook() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  setClock(14);
   get(chefProfileApi.getKitchen).mockResolvedValue(kitchen);
   get(chefKitchenScheduleApi.get).mockResolvedValue(schedule);
 });
+afterEach(() => jest.restoreAllMocks());
 
 describe('useKitchenOpenState status', () => {
   it('is open for an active kitchen and closed for an inactive one', async () => {
@@ -129,6 +133,67 @@ describe('useKitchenOpenState status', () => {
     const missing = await mountHook();
     expect(missing.current.pauseAvailable).toBe(false);
     expect(missing.current.status).toBe('open');
+  });
+});
+
+describe('useKitchenOpenState closed reasons', () => {
+  it('says only "closed" after the chef closed the kitchen, even when it has hours today', async () => {
+    get(chefProfileApi.getKitchen).mockResolvedValue({...kitchen, status: 'INACTIVE'});
+    setClock(9);
+    const state = await mountHook();
+    expect(state.current.status).toBe('closed');
+    expect(state.current.closedReason).toBe('chef');
+    expect(state.current.opensAt).toBeNull();
+  });
+
+  it('is closed, not taking orders, when the schedule says so', async () => {
+    get(chefKitchenScheduleApi.get).mockResolvedValue({...schedule, acceptingOrders: false});
+    const state = await mountHook();
+    expect(state.current.status).toBe('closed');
+    expect(state.current.closedReason).toBe('not-accepting');
+  });
+
+  it("is closed until its next opening when an active kitchen is outside today's hours", async () => {
+    setClock(9);
+    const early = await mountHook();
+    expect(early.current.status).toBe('closed');
+    expect(early.current.closedReason).toBe('outside-hours');
+    expect(early.current.opensAt).toBe('11:00 AM');
+
+    setClock(23);
+    const late = await mountHook();
+    expect(late.current.closedReason).toBe('outside-hours');
+    expect(late.current.opensAt).toBeNull();
+  });
+
+  it("is open inside today's hours and has no closed reason", async () => {
+    const state = await mountHook();
+    expect(state.current.status).toBe('open');
+    expect(state.current.closedReason).toBeNull();
+  });
+});
+
+describe('useKitchenOpenState refresh', () => {
+  it('reads the kitchen and the schedule again', async () => {
+    const state = await mountHook();
+    expect(chefProfileApi.getKitchen).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await state.current.refresh();
+    });
+    expect(chefProfileApi.getKitchen).toHaveBeenCalledTimes(2);
+    expect(chefKitchenScheduleApi.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers from a failed first read', async () => {
+    get(chefProfileApi.getKitchen).mockRejectedValueOnce(new Error('offline'));
+    const state = await mountHook();
+    expect(state.current.unavailable).toBe(true);
+    await act(async () => {
+      await state.current.refresh();
+    });
+    await settle();
+    expect(state.current.status).toBe('open');
+    expect(state.current.unavailable).toBe(false);
   });
 });
 
@@ -173,16 +238,54 @@ describe('useKitchenOpenState actions', () => {
     expect(state.current.status).toBe('open');
   });
 
-  it('sends one request when the button is pressed twice', async () => {
+  it('sends one request when the button is pressed twice, and tells the second caller it was skipped', async () => {
     let finish: (value: unknown) => void = () => undefined;
     get(chefProfileApi.replaceKitchen).mockReturnValue(new Promise(resolve => (finish = resolve)));
     const state = await mountHook();
     await act(async () => {
-      void state.current.setOpen(false);
-      void state.current.setOpen(false);
+      const first = state.current.setOpen(false);
+      const second = state.current.setOpen(false);
+      // The skipped press settles at once, before the real save has finished.
+      expect(await second).toBe(false);
+      finish({...kitchen, status: 'INACTIVE'});
+      expect(await first).toBe(true);
     });
     expect(chefProfileApi.replaceKitchen).toHaveBeenCalledTimes(1);
-    await act(async () => finish({...kitchen, status: 'INACTIVE'}));
+  });
+
+  it('reports a pause or resume that was skipped the same way', async () => {
+    let finish: (value: unknown) => void = () => undefined;
+    get(chefKitchenScheduleApi.replace).mockReturnValue(new Promise(resolve => (finish = resolve)));
+    const state = await mountHook();
+    await act(async () => {
+      const first = state.current.pause(30);
+      expect(await state.current.resume()).toBe(false);
+      finish(schedule);
+      expect(await first).toBe(true);
+    });
+    expect(chefKitchenScheduleApi.replace).toHaveBeenCalledTimes(1);
+  });
+
+  it('never saves ACTIVE over a suspended kitchen', async () => {
+    get(chefProfileApi.getKitchen).mockResolvedValue({...kitchen, status: 'SUSPENDED'});
+    const state = await mountHook();
+    expect(state.current.status).toBe('suspended');
+    await act(async () => {
+      await expect(state.current.setOpen(true)).rejects.toThrow('KITCHEN_SUSPENDED');
+      await expect(state.current.setOpen(false)).rejects.toThrow('KITCHEN_SUSPENDED');
+    });
+    expect(chefProfileApi.replaceKitchen).not.toHaveBeenCalled();
+  });
+
+  it('turns orders back on in the schedule when it says it is not taking orders', async () => {
+    get(chefKitchenScheduleApi.get).mockResolvedValue({...schedule, acceptingOrders: false});
+    get(chefKitchenScheduleApi.replace).mockResolvedValue(schedule);
+    const state = await mountHook();
+    await act(async () => {
+      await state.current.setOpen(true);
+    });
+    expect(chefProfileApi.replaceKitchen).not.toHaveBeenCalled();
+    expect(get(chefKitchenScheduleApi.replace).mock.calls[0][0]).toMatchObject({acceptingOrders: true});
   });
 
   it('pauses by writing pausedUntil into the schedule and keeps the weekly hours', async () => {
@@ -196,7 +299,7 @@ describe('useKitchenOpenState actions', () => {
       await state.current.pause(60);
     });
     const request = get(chefKitchenScheduleApi.replace).mock.calls[0][0];
-    expect(request.weeklyWindows).toEqual([{dayOfWeek: 1, opensAt: '11:00:00', closesAt: '22:00:00'}]);
+    expect(request.weeklyWindows).toEqual([{dayOfWeek: 3, opensAt: '11:00:00', closesAt: '22:00:00'}]);
     expect(Date.parse(request.pausedUntil)).toBeGreaterThanOrEqual(before + 60 * 60_000);
     expect(Date.parse(request.pausedUntil)).toBeLessThan(Date.now() + 60 * 60_000 + 1000);
     expect(state.current.status).toBe('paused');
@@ -240,14 +343,24 @@ describe('deriveKitchenHours', () => {
   const at = (hours: number) => new Date(2026, 9, 14, hours, 0);
 
   it("shows today's opening hours and the next opening still to come today", () => {
-    expect(deriveKitchenHours({weeklyWindows: windows}, at(9))).toEqual({hoursToday: '11:00 AM – 10:00 PM', opensAt: '11:00 AM'});
+    expect(deriveKitchenHours({weeklyWindows: windows}, at(9))).toEqual({hoursToday: '11:00 AM – 10:00 PM', opensAt: '11:00 AM', outsideHours: true});
     expect(deriveKitchenHours({weeklyWindows: windows}, at(16)).opensAt).toBe('6:00 PM');
     expect(deriveKitchenHours({weeklyWindows: windows}, at(23)).opensAt).toBeNull();
   });
 
   it('has nothing to show without a schedule or without hours today', () => {
-    expect(deriveKitchenHours(null, at(9))).toEqual({hoursToday: null, opensAt: null});
-    expect(deriveKitchenHours({weeklyWindows: [windows[2]]}, at(9))).toEqual({hoursToday: null, opensAt: null});
+    expect(deriveKitchenHours(null, at(9))).toEqual({hoursToday: null, opensAt: null, outsideHours: false});
+    expect(deriveKitchenHours({weeklyWindows: [windows[2]]}, at(9))).toEqual({hoursToday: null, opensAt: null, outsideHours: false});
+  });
+
+  it('is outside the hours before, between and after the windows, and inside during one', () => {
+    expect(deriveKitchenHours({weeklyWindows: windows}, at(9)).outsideHours).toBe(true);
+    expect(deriveKitchenHours({weeklyWindows: windows}, at(12)).outsideHours).toBe(false);
+    expect(deriveKitchenHours({weeklyWindows: windows}, at(16)).outsideHours).toBe(true);
+    expect(deriveKitchenHours({weeklyWindows: windows}, at(19)).outsideHours).toBe(false);
+    expect(deriveKitchenHours({weeklyWindows: windows}, at(23)).outsideHours).toBe(true);
+    // The closing minute is already closed.
+    expect(deriveKitchenHours({weeklyWindows: windows}, new Date(2026, 9, 14, 15, 0)).outsideHours).toBe(true);
   });
 
   it('counts Sunday as day 7', () => {

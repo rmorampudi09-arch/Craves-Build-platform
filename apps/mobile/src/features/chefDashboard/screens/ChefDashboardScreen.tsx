@@ -1,5 +1,5 @@
 import React from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {InteractionManager, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type CompositeNavigationProp} from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -69,16 +69,16 @@ function toCardOrder(order: ChefOperationalOrder): OrderCardOrder {
 }
 
 function pillText(kitchen: KitchenOpenState): string {
-  if (kitchen.kitchen?.status === 'SUSPENDED') {
-    return 'Suspended';
-  }
   switch (kitchen.status) {
     case 'open':
       return 'Open · taking orders';
     case 'paused':
       return kitchen.pausedUntil ? `Paused · back at ${formatTimeOfDay(new Date(kitchen.pausedUntil))}` : 'Paused';
+    case 'suspended':
+      return 'Paused by Craves';
     case 'closed':
-      return kitchen.opensAt ? `Closed · opens ${kitchen.opensAt}` : 'Closed';
+      if (kitchen.closedReason === 'not-accepting') return 'Closed · not taking orders';
+      return kitchen.closedReason === 'outside-hours' && kitchen.opensAt ? `Closed · opens ${kitchen.opensAt}` : 'Closed';
     default:
       return kitchen.unavailable ? 'Kitchen status unavailable' : 'Checking kitchen status';
   }
@@ -87,15 +87,58 @@ function pillText(kitchen: KitchenOpenState): string {
 const PILL_COLORS = {
   open: {background: colors.successSoft, foreground: colors.successText, dot: colors.success},
   paused: {background: colors.warningSoft, foreground: colors.warningText, dot: colors.warning},
+  suspended: {background: colors.warningSoft, foreground: colors.warningText, dot: colors.warning},
   closed: {background: colors.white, foreground: colors.textSecondary, dot: colors.textSecondary},
   unknown: {background: colors.white, foreground: colors.textSecondary, dot: colors.borderStrong},
 } as const;
 
-function HomeHeader({kitchen, onOpenStatus}: {kitchen: KitchenOpenState; onOpenStatus: () => void}) {
+/** What the closed card says and does: open the kitchen, change the hours, or nothing (Craves holds it). */
+function closedCardCopy(kitchen: KitchenOpenState): {title: string; message: string; action: 'open' | 'hours' | null} {
+  if (kitchen.status === 'suspended') {
+    return {
+      title: 'Your kitchen is paused by Craves',
+      message: "Customers can't order right now. Contact Craves support to find out why and how to open again.",
+      action: null,
+    };
+  }
+  if (kitchen.closedReason === 'not-accepting') {
+    return {
+      title: 'Your kitchen is not taking orders',
+      message: "Customers can't order right now. Start taking orders again when you're ready to cook.",
+      action: 'open',
+    };
+  }
+  if (kitchen.closedReason === 'outside-hours') {
+    return {
+      title: 'Your kitchen is closed for now',
+      message: kitchen.opensAt
+        ? `It opens again at ${kitchen.opensAt}, as set in your opening hours.`
+        : 'It opens again at its next opening time, as set in your opening hours.',
+      action: 'hours',
+    };
+  }
+  return {
+    title: 'Your kitchen is closed',
+    message: "Customers can't order right now. Open when you're ready to cook.",
+    action: 'open',
+  };
+}
+
+function HomeHeader({
+  kitchen,
+  onOpenStatus,
+  onRetry,
+}: {
+  kitchen: KitchenOpenState;
+  onOpenStatus: () => void;
+  onRetry: () => void;
+}) {
   const name = kitchen.kitchen?.kitchenName ?? 'Your kitchen';
   const text = pillText(kitchen);
   const pill = PILL_COLORS[kitchen.status];
-  const locked = kitchen.status === 'unknown' || kitchen.kitchen?.status === 'SUSPENDED';
+  // Unreadable: tapping asks again. Still loading, or held by Craves: nothing to tap.
+  const retry = kitchen.status === 'unknown' && kitchen.unavailable;
+  const locked = (kitchen.status === 'unknown' && !kitchen.unavailable) || kitchen.status === 'suspended';
   return (
     <View style={styles.header}>
       <View importantForAccessibility="no-hide-descendants" style={styles.avatar}>
@@ -112,17 +155,18 @@ function HomeHeader({kitchen, onOpenStatus}: {kitchen: KitchenOpenState; onOpenS
           {name}
         </Text>
         <Pressable
+          accessibilityHint={retry ? 'Tries to load the kitchen status again' : undefined}
           accessibilityLabel={`Kitchen status: ${text}`}
           accessibilityRole="button"
           disabled={locked}
           hitSlop={{top: 10, bottom: 10, left: 8, right: 8}}
-          onPress={onOpenStatus}
+          onPress={retry ? onRetry : onOpenStatus}
           style={[styles.pill, {backgroundColor: pill.background}, pill.background === colors.white && styles.pillOutline]}>
           <View style={[styles.dot, {backgroundColor: pill.dot}]} />
           <Text allowFontScaling={textDefaults.allowFontScaling} numberOfLines={1} style={[styles.pillText, {color: pill.foreground}]}>
             {text}
           </Text>
-          <Icon color={pill.foreground} name="chevron-down" size={iconSize.xs} surface={false} />
+          {locked ? null : <Icon color={pill.foreground} name={retry ? 'renew' : 'chevron-down'} size={iconSize.xs} surface={false} />}
         </Pressable>
       </View>
       <NotificationBell />
@@ -140,10 +184,26 @@ export function ChefDashboardScreen() {
   const prepActions = useChefPreparingOrderActions();
   const {orderTabs} = useChefOperationalState();
 
-  const suspended = kitchen.kitchen?.status === 'SUSPENDED';
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [confirmClose, setConfirmClose] = React.useState(false);
   const [readyTarget, setReadyTarget] = React.useState<ChefOperationalOrder | null>(null);
+
+  // Two Modals swapping in one tick (or a page opening under a closing sheet) misbehave on Android:
+  // close the sheet first, and run what comes next once it is gone and its animation has finished.
+  const afterSheetClosed = React.useRef<(() => void) | null>(null);
+  const closeSheetThen = (next: () => void) => {
+    afterSheetClosed.current = next;
+    setSheetOpen(false);
+  };
+  React.useEffect(() => {
+    if (sheetOpen || !afterSheetClosed.current) {
+      return undefined;
+    }
+    const next = afterSheetClosed.current;
+    afterSheetClosed.current = null;
+    const task = InteractionManager.runAfterInteractions(next);
+    return () => task.cancel();
+  }, [sheetOpen]);
 
   // The order actions explain what happened (accepted, no longer available...); show it once.
   const {feedback: newFeedback, clearFeedback: clearNewFeedback} = newActions;
@@ -161,17 +221,23 @@ export function ChefDashboardScreen() {
     }
   }, [clearPrepFeedback, prepFeedback, toast]);
 
+  const refreshKitchen = kitchen.refresh;
+  const retryKitchen = () => {
+    refreshKitchen().catch(() => undefined);
+  };
   const refresh = React.useCallback(() => {
-    Promise.allSettled([model.refresh(), reviews.refresh()]).catch(() => undefined);
-  }, [model, reviews]);
+    Promise.allSettled([model.refresh(), reviews.refresh(), refreshKitchen()]).catch(() => undefined);
+  }, [model, refreshKitchen, reviews]);
 
   const openOrders = (screen: 'ChefOrdersNew' | 'ChefOrdersPreparing') => navigation.navigate('Orders', {screen});
 
-  const changeKitchen = async (action: () => Promise<void>, done: string) => {
+  const changeKitchen = async (action: () => Promise<boolean>, done: string) => {
     setSheetOpen(false);
     try {
-      await action();
-      toast.show(done);
+      // false: another save was still running and this press did nothing, so there is nothing to announce.
+      if (await action()) {
+        toast.show(done);
+      }
     } catch {
       toast.show(KITCHEN_UPDATE_FAILED);
     }
@@ -181,8 +247,7 @@ export function ChefDashboardScreen() {
   const pauseKitchen = (duration: KitchenPauseDuration) => changeKitchen(() => kitchen.pause(duration), 'New orders paused');
   const askToClose = () => {
     if (cooking > 0) {
-      setSheetOpen(false);
-      setConfirmClose(true);
+      closeSheetThen(() => setConfirmClose(true));
     } else {
       closeKitchen().catch(() => undefined);
     }
@@ -204,7 +269,12 @@ export function ChefDashboardScreen() {
   const kitchenRows = model.kitchenOrders.slice(0, KITCHEN_ROWS);
   const menu = model.data.menu;
   const ordersFailed = model.sources.orders === 'error' && model.pendingOrders.length === 0 && model.kitchenOrders.length === 0;
-  const nothingGoingOn = !ordersFailed && pending.length === 0 && model.kitchenOrders.length === 0 && kitchen.status === 'open';
+  // "No orders" is only true once the orders have loaded; before that we simply do not know.
+  const nothingGoingOn =
+    model.sources.orders === 'success' && pending.length === 0 && model.kitchenOrders.length === 0 && kitchen.status === 'open';
+  // Same for the menu. Dishes already on screen stay, even if a later refresh failed.
+  const menuKnown = model.sources.menu === 'success' || model.menuItems.length > 0;
+  const closedCopyNow = closedCardCopy(kitchen);
   const average = reviews.summary?.overallAverage;
   const nowMs = Date.now();
 
@@ -278,24 +348,76 @@ export function ChefDashboardScreen() {
 
   const latestReview = reviews.available ? reviews.reviews[0] : undefined;
 
+  const menuCard = menuKnown ? (
+    <ChefCard
+      accessibilityLabel={
+        menu.activeItems === 0 ? 'Add your first dish' : `${menu.sellableItems} of ${menu.activeItems} dishes available, open menu`
+      }
+      onPress={() => navigation.navigate('Menu')}>
+      <View style={styles.menuRow}>
+        <Icon color={colors.flameRedAccessible} name="meal" size={iconSize.xl} surface={false} />
+        <View style={styles.bannerText}>
+          {menu.activeItems === 0 ? (
+            <>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardTitle}>
+                Add your first dish
+              </Text>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardMessage}>
+                Customers can order once you have a dish on your menu.
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardTitle}>
+                {`${menu.sellableItems} of ${menu.activeItems} dishes available`}
+              </Text>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardMessage}>
+                {menu.activeItems === menu.sellableItems
+                  ? 'All your dishes are switched on'
+                  : `${plural(menu.activeItems - menu.sellableItems, 'dish is', 'dishes are')} switched off`}
+              </Text>
+            </>
+          )}
+        </View>
+        <Icon color={colors.borderStrong} name="chevron-right" size={iconSize.md} surface={false} />
+      </View>
+    </ChefCard>
+  ) : (
+    <ChefCard>
+      {model.sources.menu === 'error' ? (
+        <>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardTitle}>
+            We couldn't load your menu
+          </Text>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardMessage}>
+            Check your connection and try again.
+          </Text>
+          <ChefActionButton label="Try again" onPress={refresh} style={styles.fullWidth} tone="neutral" />
+        </>
+      ) : (
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardMessage}>
+          Checking your menu
+        </Text>
+      )}
+    </ChefCard>
+  );
+
   return (
     <ChefScreen
-      header={<HomeHeader kitchen={kitchen} onOpenStatus={() => setSheetOpen(true)} />}
+      header={<HomeHeader kitchen={kitchen} onOpenStatus={() => setSheetOpen(true)} onRetry={retryKitchen} />}
       onRefresh={refresh}
       refreshing={model.isRefreshing}
       withTabBar>
-      {kitchen.status === 'closed' ? (
+      {kitchen.status === 'closed' || kitchen.status === 'suspended' ? (
         <ChefCard style={styles.closedCard}>
           <Icon color={colors.textSecondary} name="store" size={iconSize.xxl} surface={false} />
           <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.closedTitle}>
-            {suspended ? 'Your kitchen is suspended' : 'Your kitchen is closed'}
+            {closedCopyNow.title}
           </Text>
           <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.closedMessage}>
-            {suspended
-              ? "Customers can't order right now. Contact Craves support to find out why and how to open again."
-              : "Customers can't order right now. Open when you're ready to cook."}
+            {closedCopyNow.message}
           </Text>
-          {suspended ? null : (
+          {closedCopyNow.action === 'open' ? (
             <ChefActionButton
               busy={kitchen.saving}
               label="Open kitchen"
@@ -303,7 +425,15 @@ export function ChefDashboardScreen() {
               style={styles.fullWidth}
               tone="success"
             />
-          )}
+          ) : null}
+          {closedCopyNow.action === 'hours' ? (
+            <ChefActionButton
+              label="Change opening hours"
+              onPress={() => navigation.navigate('Profile', {screen: 'ChefKitchenSchedule'})}
+              style={styles.fullWidth}
+              tone="neutral"
+            />
+          ) : null}
         </ChefCard>
       ) : null}
 
@@ -410,39 +540,7 @@ export function ChefDashboardScreen() {
       )}
 
       <SectionHeader actionLabel="Manage" onAction={() => navigation.navigate('Menu')} title="Your menu" />
-      <ChefCard
-        accessibilityLabel={
-          menu.activeItems === 0 ? 'Add your first dish' : `${menu.sellableItems} of ${menu.activeItems} dishes available, open menu`
-        }
-        onPress={() => navigation.navigate('Menu')}>
-        <View style={styles.menuRow}>
-          <Icon color={colors.flameRedAccessible} name="meal" size={iconSize.xl} surface={false} />
-          <View style={styles.bannerText}>
-            {menu.activeItems === 0 ? (
-              <>
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardTitle}>
-                  Add your first dish
-                </Text>
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardMessage}>
-                  Customers can order once you have a dish on your menu.
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardTitle}>
-                  {`${menu.sellableItems} of ${menu.activeItems} dishes available`}
-                </Text>
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardMessage}>
-                  {menu.activeItems === menu.sellableItems
-                    ? 'All your dishes are switched on'
-                    : `${plural(menu.activeItems - menu.sellableItems, 'dish is', 'dishes are')} switched off`}
-                </Text>
-              </>
-            )}
-          </View>
-          <Icon color={colors.borderStrong} name="chevron-right" size={iconSize.md} surface={false} />
-        </View>
-      </ChefCard>
+      {menuCard}
 
       {latestReview ? (
         <>
@@ -490,10 +588,8 @@ export function ChefDashboardScreen() {
       <KitchenStatusSheet
         busy={kitchen.saving}
         hoursToday={kitchen.hoursToday}
-        onChangeHours={() => {
-          setSheetOpen(false);
-          navigation.navigate('Profile', {screen: 'ChefKitchenSchedule'});
-        }}
+        closedReason={kitchen.closedReason}
+        onChangeHours={() => closeSheetThen(() => navigation.navigate('Profile', {screen: 'ChefKitchenSchedule'}))}
         onClose={() => setSheetOpen(false)}
         onCloseKitchen={askToClose}
         onOpen={() => changeKitchen(() => kitchen.setOpen(true), 'Your kitchen is open').catch(() => undefined)}
@@ -564,10 +660,11 @@ const styles = StyleSheet.create({
   kitchenName: {color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.bold, alignSelf: 'stretch'},
   pill: {
     maxWidth: '100%',
-    height: 28,
+    minHeight: 28,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs - 2,
+    paddingVertical: 2,
     paddingLeft: spacing.xs,
     paddingRight: spacing.xs - 2,
     borderRadius: radius.pill,

@@ -57,6 +57,7 @@ function timeLabel(notice: ChefOperationalNotice, now: Date): string {
 }
 
 const MARK_ALL_FAILED = "We couldn't mark your notifications as read. Try again.";
+const MARK_ALL_PARTIAL = 'Some notifications could not be marked as read.';
 
 export function ChefNotificationsScreen() {
   const navigation = useNavigation<NavigationProp<ChefProductStackParamList>>();
@@ -73,6 +74,7 @@ export function ChefNotificationsScreen() {
   const unreadBy = (category: Filter) =>
     unread.filter(notice => category === 'all' || categoryOf(notice) === category).length;
   const visible = notices.filter(notice => filter === 'all' || categoryOf(notice) === filter);
+  const filterLabel = FILTERS.find(candidate => candidate.id === filter)?.label ?? 'All';
   const groups = [
     {title: 'Today', rows: visible.filter(notice => isToday(notice.createdAt, now))},
     {title: 'Earlier', rows: visible.filter(notice => !isToday(notice.createdAt, now))},
@@ -95,7 +97,12 @@ export function ChefNotificationsScreen() {
   };
 
   const markAll = () => {
-    state.markAllNotificationsRead().catch(() => toast.show(MARK_ALL_FAILED));
+    state
+      .markAllNotificationsRead()
+      .then(all => {
+        if (!all) toast.show(MARK_ALL_PARTIAL);
+      })
+      .catch(() => toast.show(MARK_ALL_FAILED));
   };
 
   const refresh = () => {
@@ -168,10 +175,10 @@ export function ChefNotificationsScreen() {
       {state.notificationsStatus === 'success' && visible.length === 0 ? (
         <ChefCard>
           <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.emptyTitle}>
-            No notifications yet
+            {filter === 'all' ? 'No notifications yet' : `No ${filterLabel} notifications`}
           </Text>
           <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.emptyMessage}>
-            New orders, payouts and reviews will show up here.
+            {filter === 'all' ? 'New orders, payouts and reviews will show up here.' : 'Try the All tab to see everything else.'}
           </Text>
         </ChefCard>
       ) : null}

@@ -14,7 +14,11 @@ import {
 import {Icon} from '../../../shared/components/Icon';
 import {ChefActionButton, ChefSheet} from '../../chefShell/components/ui';
 import {formatTimeOfDay} from '../../chefShell/domain/chefFormat';
-import type {KitchenOpenStatus, KitchenPauseDuration} from '../../chefProfile/state/useKitchenOpenState';
+import type {
+  KitchenClosedReason,
+  KitchenOpenStatus,
+  KitchenPauseDuration,
+} from '../../chefProfile/state/useKitchenOpenState';
 
 const PAUSE_OPTIONS: {value: KitchenPauseDuration; label: string; button: string}[] = [
   {value: 30, label: '30 min', button: 'Pause for 30 min'},
@@ -27,6 +31,7 @@ export interface KitchenStatusSheetProps {
   visible: boolean;
   onClose: () => void;
   status: KitchenOpenStatus;
+  closedReason: KitchenClosedReason | null;
   pausedUntil: string | null;
   opensAt: string | null;
   hoursToday: string | null;
@@ -45,6 +50,7 @@ export function KitchenStatusSheet({
   visible,
   onClose,
   status,
+  closedReason,
   pausedUntil,
   opensAt,
   hoursToday,
@@ -72,12 +78,29 @@ export function KitchenStatusSheet({
             tone: styles.pausedCard,
             color: colors.warningText,
           }
-        : {
-            title: 'Closed',
-            detail: opensAt ? `Opens ${opensAt}` : "Customers can't order until you open it.",
-            tone: styles.closedCard,
-            color: colors.textPrimary,
-          };
+        : status === 'closed'
+          ? {
+              title:
+                closedReason === 'not-accepting'
+                  ? 'Closed · not taking orders'
+                  : closedReason === 'outside-hours' && opensAt
+                    ? `Closed · opens ${opensAt}`
+                    : 'Closed',
+              detail:
+                closedReason === 'not-accepting'
+                  ? "Customers can't order until you start taking orders again."
+                  : closedReason === 'outside-hours'
+                    ? 'Your kitchen opens again by its opening hours.'
+                    : "Customers can't order until you open it.",
+              tone: styles.closedCard,
+              color: colors.textPrimary,
+            }
+          : {
+              title: 'Paused by Craves',
+              detail: 'Contact Craves support to find out why.',
+              tone: styles.pausedCard,
+              color: colors.warningText,
+            };
 
   return (
     <ChefSheet onClose={onClose} title="Kitchen status" visible={visible}>
@@ -128,7 +151,9 @@ export function KitchenStatusSheet({
       ) : null}
 
       {status === 'paused' ? <ChefActionButton busy={busy} icon="play" label="Resume now" onPress={onResume} tone="success" /> : null}
-      {status === 'closed' ? <ChefActionButton busy={busy} label="Open kitchen" onPress={onOpen} tone="success" /> : null}
+      {status === 'closed' && closedReason !== 'outside-hours' ? (
+        <ChefActionButton busy={busy} label="Open kitchen" onPress={onOpen} tone="success" />
+      ) : null}
       {status === 'open' || status === 'paused' ? (
         <ChefActionButton disabled={busy} label="Close kitchen until I open it" onPress={onCloseKitchen} tone="neutral" />
       ) : null}

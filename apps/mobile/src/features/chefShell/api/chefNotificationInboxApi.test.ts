@@ -179,6 +179,25 @@ describe('chefNotificationInboxApi contract', () => {
       expect(httpClient.patch).toHaveBeenCalledTimes(1);
     });
 
+    it('marks at most 6 notices at a time in the fallback', async () => {
+      const many = Array.from({length: 20}, (_, index) => `${String(index + 1).padStart(8, '0')}-1111-4111-8111-111111111111`);
+      let inFlight = 0;
+      let peak = 0;
+      (httpClient.patch as jest.Mock).mockReset();
+      (httpClient.patch as jest.Mock)
+        .mockRejectedValueOnce(new AppApiError('NOT_FOUND', 'Not found', 404))
+        .mockImplementation(async () => {
+          inFlight += 1;
+          peak = Math.max(peak, inFlight);
+          await new Promise<void>(resolve => setTimeout(resolve, 5));
+          inFlight -= 1;
+        });
+      await expect(markAllChefNoticesRead(many)).resolves.toEqual(many);
+      expect(httpClient.patch).toHaveBeenCalledTimes(21);
+      expect(peak).toBe(6);
+      (httpClient.patch as jest.Mock).mockReset();
+    });
+
     it('fails when the fallback could not mark any notice', async () => {
       (httpClient.patch as jest.Mock)
         .mockRejectedValueOnce(new AppApiError('NOT_FOUND', 'Not found', 404))

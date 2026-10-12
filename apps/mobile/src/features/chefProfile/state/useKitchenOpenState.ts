@@ -19,15 +19,20 @@ import {
 import {createChefProfileKitchenQueryKey} from './chefProfileQuery';
 import {synchronizeChefProfileAfterSave} from './chefProfileSynchronization';
 
-export type KitchenOpenStatus = 'open' | 'paused' | 'closed' | 'unknown';
+/** suspended: Craves has paused the kitchen; the chef cannot open it. */
+export type KitchenOpenStatus = 'open' | 'paused' | 'closed' | 'suspended' | 'unknown';
+/** Why a closed kitchen is closed: the chef closed it, the schedule is not taking orders, or it is outside today's hours. */
+export type KitchenClosedReason = 'chef' | 'not-accepting' | 'outside-hours';
 export type KitchenPauseDuration = 30 | 60 | 120 | 'rest-of-day';
 
 export interface KitchenOpenState {
   status: KitchenOpenStatus;
+  /** Set only while status is closed. */
+  closedReason: KitchenClosedReason | null;
   kitchen: ChefKitchenProfile | null;
   /** ISO time the pause ends; only while status is paused. */
   pausedUntil: string | null;
-  /** Today's next opening as "11:00 AM", from the weekly hours when the schedule route works. */
+  /** Today's next opening as "11:00 AM"; only for an active kitchen that is outside today's hours. */
   opensAt: string | null;
   /** Today's hours as "11:00 AM – 10:00 PM". */
   hoursToday: string | null;
@@ -37,29 +42,41 @@ export interface KitchenOpenState {
   saving: boolean;
   /** False until the schedule route answers: pausing needs it. */
   pauseAvailable: boolean;
-  setOpen(open: boolean): Promise<void>;
-  pause(duration: KitchenPauseDuration): Promise<void>;
-  resume(): Promise<void>;
+  /** Reads the kitchen and the schedule again. */
+  refresh(): Promise<void>;
+  /**
+   * Each action resolves true once it has saved, false when it was skipped because another save was
+   * still running, and rejects when it fails (or, for setOpen, when Craves has suspended the kitchen).
+   */
+  setOpen(open: boolean): Promise<boolean>;
+  pause(duration: KitchenPauseDuration): Promise<boolean>;
+  resume(): Promise<boolean>;
 }
 
 const hhmm = (date: Date) =>
   `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 
-/** Today's hours and next opening from the weekly windows. shortcut: phone time zone, not the schedule's timezoneId; fine for India-only kitchens. */
+/**
+ * Today's hours, the next opening still to come today, and whether it is outside every window now.
+ * A day with no windows at all reads as "no hours known", not as closed.
+ * shortcut: phone time zone, not the schedule's timezoneId; fine for India-only kitchens.
+ */
 export function deriveKitchenHours(
   schedule: {weeklyWindows: Pick<ChefKitchenSchedule['weeklyWindows'][number], 'dayOfWeek' | 'opensAt' | 'closesAt'>[]} | null,
   now: Date,
-): {hoursToday: string | null; opensAt: string | null} {
+): {hoursToday: string | null; opensAt: string | null; outsideHours: boolean} {
   const today = (schedule?.weeklyWindows ?? [])
     .filter(window => window.dayOfWeek === (now.getDay() || 7))
     .sort((a, b) => a.opensAt.localeCompare(b.opensAt));
   if (today.length === 0) {
-    return {hoursToday: null, opensAt: null};
+    return {hoursToday: null, opensAt: null, outsideHours: false};
   }
-  const next = today.find(window => window.opensAt.slice(0, 5) > hhmm(now));
+  const time = hhmm(now);
+  const next = today.find(window => window.opensAt.slice(0, 5) > time);
   return {
     hoursToday: `${formatWindowTime(today[0].opensAt)} – ${formatWindowTime(today[today.length - 1].closesAt)}`,
     opensAt: next ? formatWindowTime(next.opensAt) : null,
+    outsideHours: !today.some(window => window.opensAt.slice(0, 5) <= time && time < window.closesAt.slice(0, 5)),
   };
 }
 
@@ -129,14 +146,16 @@ export function useKitchenOpenState(): KitchenOpenState {
 
   const inFlight = React.useRef(false);
   const [saving, setSaving] = React.useState(false);
-  const guarded = React.useCallback(async (action: () => Promise<void>) => {
+  /** Runs one save at a time; resolves false, without running, when another save is still going. */
+  const guarded = React.useCallback(async (action: () => Promise<void>): Promise<boolean> => {
     if (inFlight.current) {
-      return;
+      return false;
     }
     inFlight.current = true;
     setSaving(true);
     try {
       await action();
+      return true;
     } finally {
       inFlight.current = false;
       setSaving(false);
@@ -145,16 +164,42 @@ export function useKitchenOpenState(): KitchenOpenState {
 
   const kitchen = kitchenQuery.data ?? null;
   const schedule = scheduleQuery.data ?? null;
-  const now = new Date();
+  const now = new Date(Date.now());
   const paused = schedule?.pausedUntil != null && Date.parse(schedule.pausedUntil) > now.getTime();
-  const status: KitchenOpenStatus = !kitchen
-    ? 'unknown'
-    : kitchen.status !== 'ACTIVE'
-      ? 'closed'
-      : paused
-        ? 'paused'
-        : 'open';
   const hours = deriveKitchenHours(schedule, now);
+  let status: KitchenOpenStatus;
+  let closedReason: KitchenClosedReason | null = null;
+  if (!kitchen) {
+    status = 'unknown';
+  } else if (kitchen.status === 'SUSPENDED') {
+    status = 'suspended';
+  } else if (kitchen.status !== 'ACTIVE') {
+    status = 'closed';
+    closedReason = 'chef';
+  } else if (schedule?.acceptingOrders === false) {
+    status = 'closed';
+    closedReason = 'not-accepting';
+  } else if (paused) {
+    status = 'paused';
+  } else if (hours.outsideHours) {
+    status = 'closed';
+    closedReason = 'outside-hours';
+  } else {
+    status = 'open';
+  }
+
+  const replaceSchedule = React.useCallback(
+    async (current: ChefKitchenSchedule, changes: {acceptingOrders: boolean; pausedUntil: string | null}) => {
+      const saved = await chefKitchenScheduleApi.replace(
+        scheduleUpdateFromCurrent(current, {
+          ...changes,
+          pauseReason: changes.pausedUntil ? 'Paused by chef' : null,
+        }),
+      );
+      queryClient.setQueryData<ChefKitchenSchedule>(scheduleKey, saved);
+    },
+    [queryClient, scheduleKey],
+  );
 
   const setOpen = React.useCallback(
     (open: boolean) =>
@@ -162,12 +207,20 @@ export function useKitchenOpenState(): KitchenOpenState {
         if (!kitchen || !identityId) {
           throw new Error('KITCHEN_NOT_LOADED');
         }
-        const updated = await chefProfileApi.replaceKitchen(
-          replacementRequest(kitchen, open ? 'ACTIVE' : 'INACTIVE'),
-        );
-        await synchronizeChefProfileAfterSave(queryClient, identityId, updated);
+        if (kitchen.status === 'SUSPENDED') {
+          // PUT would replace SUSPENDED with ACTIVE, undoing Craves' decision.
+          throw new Error('KITCHEN_SUSPENDED');
+        }
+        const target: ChefKitchenStatus = open ? 'ACTIVE' : 'INACTIVE';
+        if (kitchen.status !== target) {
+          const updated = await chefProfileApi.replaceKitchen(replacementRequest(kitchen, target));
+          await synchronizeChefProfileAfterSave(queryClient, identityId, updated);
+        }
+        if (open && schedule?.acceptingOrders === false) {
+          await replaceSchedule(schedule, {acceptingOrders: true, pausedUntil: schedule.pausedUntil});
+        }
       }),
-    [guarded, identityId, kitchen, queryClient],
+    [guarded, identityId, kitchen, queryClient, replaceSchedule, schedule],
   );
 
   const writeSchedule = React.useCallback(
@@ -176,29 +229,30 @@ export function useKitchenOpenState(): KitchenOpenState {
         if (!schedule) {
           throw new Error('KITCHEN_SCHEDULE_NOT_LOADED');
         }
-        const saved = await chefKitchenScheduleApi.replace(
-          scheduleUpdateFromCurrent(schedule, {
-            acceptingOrders: schedule.acceptingOrders,
-            pausedUntil,
-            pauseReason: pausedUntil ? 'Paused by chef' : null,
-          }),
-        );
-        queryClient.setQueryData<ChefKitchenSchedule>(scheduleKey, saved);
+        await replaceSchedule(schedule, {acceptingOrders: schedule.acceptingOrders, pausedUntil});
       }),
-    [guarded, queryClient, schedule, scheduleKey],
+    [guarded, replaceSchedule, schedule],
   );
+
+  const {refetch: refetchKitchen} = kitchenQuery;
+  const {refetch: refetchSchedule} = scheduleQuery;
+  const refresh = React.useCallback(async () => {
+    await Promise.allSettled([refetchKitchen(), refetchSchedule()]);
+  }, [refetchKitchen, refetchSchedule]);
 
   return {
     status,
+    closedReason,
     kitchen,
     pausedUntil: paused ? schedule?.pausedUntil ?? null : null,
-    opensAt: status === 'closed' ? hours.opensAt : null,
+    opensAt: closedReason === 'outside-hours' ? hours.opensAt : null,
     hoursToday: hours.hoursToday,
     unavailable: kitchenQuery.isError,
     saving,
     pauseAvailable: scheduleQuery.isSuccess,
+    refresh,
     setOpen,
-    pause: duration => writeSchedule(pauseEnd(duration, new Date()).toISOString()),
+    pause: duration => writeSchedule(pauseEnd(duration, new Date(Date.now())).toISOString()),
     resume: () => writeSchedule(null),
   };
 }

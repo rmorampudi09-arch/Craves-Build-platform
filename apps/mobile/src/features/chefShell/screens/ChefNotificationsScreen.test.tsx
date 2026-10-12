@@ -2,12 +2,13 @@ import React from 'react';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {Text} from 'react-native';
 import type {ChefOperationalNotice} from '../api/chefOperationalApi';
+import {ChefToastProvider} from '../components/ui';
 import {ChefNotificationsScreen} from './ChefNotificationsScreen';
 
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 const mockMarkRead = jest.fn();
-const mockMarkAllRead = jest.fn(async () => undefined);
+const mockMarkAllRead = jest.fn(async () => true);
 const mockRefresh = jest.fn(async () => undefined);
 let mockState: Record<string, unknown>;
 
@@ -66,7 +67,11 @@ const press = async (match: string | ((label: string) => boolean)) => {
 };
 const mount = async () => {
   await act(async () => {
-    tree = renderer.create(<ChefNotificationsScreen />);
+    tree = renderer.create(
+      <ChefToastProvider>
+        <ChefNotificationsScreen />
+      </ChefToastProvider>,
+    );
   });
 };
 
@@ -146,6 +151,21 @@ describe('ChefNotificationsScreen', () => {
     expect(buttons(label => label === 'Mark all read')).toHaveLength(0);
   });
 
+  it('keeps the button and says so when only some notices could be marked read', async () => {
+    mockMarkAllRead.mockResolvedValueOnce(false);
+    await mount();
+    await press('Mark all read');
+    expect(hasText('Some notifications could not be marked as read.')).toBe(true);
+    expect(buttons(label => label === 'Mark all read')).toHaveLength(1);
+  });
+
+  it('says so when marking everything read fails outright', async () => {
+    mockMarkAllRead.mockRejectedValueOnce(new Error('offline'));
+    await mount();
+    await press('Mark all read');
+    expect(hasText("We couldn't mark your notifications as read. Try again.")).toBe(true);
+  });
+
   it('goes back from the arrow', async () => {
     await mount();
     await press('Go back');
@@ -156,6 +176,19 @@ describe('ChefNotificationsScreen', () => {
     mockState = {...mockState, notices: []};
     await mount();
     expect(hasText('No notifications yet')).toBe(true);
+  });
+
+  it('names the empty filter instead of saying there are no notifications at all', async () => {
+    mockState = {...mockState, notices: [newOrder]};
+    await mount();
+    await press('Reviews');
+    expect(hasText('No Reviews notifications')).toBe(true);
+    expect(hasText('No notifications yet')).toBe(false);
+    await press('Money');
+    expect(hasText('No Money notifications')).toBe(true);
+    await press('Orders, 1 unread');
+    expect(hasText('New order #DF94B')).toBe(true);
+    expect(hasText(/^No .* notifications$/)).toBe(false);
   });
 
   it('offers a retry, not error details, when the notices cannot be loaded', async () => {

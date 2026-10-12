@@ -195,6 +195,18 @@ describe('chefOperationalApi parsing', () => {
     expect(order).not.toHaveProperty('foodSubtotal');
   });
 
+  it('reads the food total only from a number or a decimal string, never from an empty value, a boolean or a negative', () => {
+    const subtotal = (value: unknown) =>
+      (parseChefOperationalOrders([{id: ORDER_ID, status: 'PREPARING', foodSubtotal: value}]) ?? [])[0]?.foodSubtotal;
+    expect(subtotal(220)).toBe(220);
+    expect(subtotal(0)).toBe(0);
+    expect(subtotal('220.50')).toBe(220.5);
+    expect(subtotal(' 99 ')).toBe(99);
+    for (const bad of ['', '  ', true, false, null, -5, '-5', '12abc', '1e3', 'Infinity', 'NaN', Number.NaN, Infinity, [], {}]) {
+      expect(subtotal(bad)).toBeUndefined();
+    }
+  });
+
   it('asks the server for chef notifications only', async () => {
     (httpClient.get as jest.Mock).mockResolvedValueOnce([]);
     await chefOperationalApi.listNotifications();

@@ -253,9 +253,12 @@ export const chefNotificationInboxApi = {
   },
 };
 
+const FALLBACK_CONCURRENCY = 6;
+
 /**
- * Marks the visible chef notices read. When read-all is not published for the app yet, each notice is marked on its own.
- * Resolves with the ids that are now read; rejects when none could be marked.
+ * Marks the visible chef notices read. When read-all is not published for the app yet, each notice is marked on its
+ * own, six requests at a time. Resolves with the ids that are now read (fewer than asked when some failed);
+ * rejects when none could be marked.
  */
 export async function markAllChefNoticesRead(
   noticeIds: readonly string[],
@@ -267,13 +270,22 @@ export async function markAllChefNoticesRead(
   } catch (error) {
     if (!isRouteNotPublished(error)) throw error;
   }
-  const results = await Promise.allSettled(
-    noticeIds.map(id => chefNotificationInboxApi.markRead(id, signal)),
-  );
-  const marked = noticeIds.filter((_, index) => results[index].status === 'fulfilled');
-  const failure = results.find(
-    (result): result is PromiseRejectedResult => result.status === 'rejected',
-  );
-  if (marked.length === 0 && failure) throw failure.reason;
-  return marked;
+  const marked: string[] = [];
+  let failure: {reason: unknown} | null = null;
+  let next = 0;
+  const worker = async () => {
+    while (next < noticeIds.length) {
+      const id = noticeIds[next++];
+      try {
+        await chefNotificationInboxApi.markRead(id, signal);
+        marked.push(id);
+      } catch (reason) {
+        failure = {reason};
+      }
+    }
+  };
+  await Promise.all(Array.from({length: Math.min(FALLBACK_CONCURRENCY, noticeIds.length)}, worker));
+  if (marked.length === 0 && failure) throw (failure as {reason: unknown}).reason;
+  // Keep the order the caller gave, whatever order the requests finished in.
+  return noticeIds.filter(id => marked.includes(id));
 }

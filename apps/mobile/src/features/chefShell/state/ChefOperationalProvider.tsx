@@ -82,7 +82,8 @@ interface ChefOperationalContextValue {
   notificationsHasNextPage: boolean;
   isFetchingNextNotificationsPage: boolean;
   fetchNextNotifications: () => Promise<void>;
-  markAllNotificationsRead: () => Promise<void>;
+  /** Resolves true when every visible notice is now read, false when some could not be marked. */
+  markAllNotificationsRead: () => Promise<boolean>;
   refresh: () => Promise<void>;
   reconcileOrderStatus: (
     orderId: string,
@@ -468,12 +469,10 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
         CHEF_NOTIFICATION_INBOX_V2_AVAILABLE
           ? v2NotificationsQuery.fetchNextPage().then(() => undefined)
           : Promise.resolve(),
-      markAllNotificationsRead: () =>
-        markAllReadMutation
-          .mutateAsync(
-            notices.filter(notice => notice.readAt === null).map(notice => notice.id),
-          )
-          .then(() => undefined),
+      markAllNotificationsRead: () => {
+        const unreadIds = notices.filter(notice => notice.readAt === null).map(notice => notice.id);
+        return markAllReadMutation.mutateAsync(unreadIds).then(marked => marked.length === unreadIds.length);
+      },
       refresh,
       reconcileOrderStatus,
       markNotificationRead: noticeId => {

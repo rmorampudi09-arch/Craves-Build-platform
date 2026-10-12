@@ -4,7 +4,7 @@ export const PROCESS_RESTORATION_VERSION = 1 as const;
 
 export type ProductRole = 'CUSTOMER' | 'CHEF';
 export type CustomerRestorableTab = 'Home' | 'Chefs' | 'Orders' | 'Profile';
-export type ChefRestorableTab = 'Dashboard' | 'Orders' | 'Menu' | 'Analytics' | 'Profile';
+export type ChefRestorableTab = 'Dashboard' | 'Orders' | 'Menu' | 'Earnings' | 'Profile';
 
 type NavigationRouteLike = {
   name: string;
@@ -19,7 +19,7 @@ export type NavigationStateLike = {
 
 const resourceIdSchema = z.string().min(1).max(160);
 const customerTabSchema = z.enum(['Home', 'Chefs', 'Orders', 'Profile']);
-const chefTabSchema = z.enum(['Dashboard', 'Orders', 'Menu', 'Analytics', 'Profile']);
+const chefTabSchema = z.enum(['Dashboard', 'Orders', 'Menu', 'Earnings', 'Profile']);
 
 const customerNoParamScreenSchema = z.enum([
   'CustomerCart',

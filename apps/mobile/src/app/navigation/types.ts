@@ -161,6 +161,7 @@ export type ChefOrdersStackParamList = {
   ChefOrdersNew: undefined;
   ChefOrdersReady: undefined;
   ChefOrdersCompleted: undefined;
+  ChefOrdersScheduled: undefined;
 };
 
 /** P108 adds the fail-closed Chef App Preferences route while preserving existing profile flows. */
@@ -175,6 +176,9 @@ export type ChefProfileStackParamList = {
   ChefReferralEarnings: undefined;
   ChefKitchenSchedule: undefined;
   ChefScheduledOrders: undefined;
+  ChefReviews: undefined;
+  ChefSecurity: undefined;
+  ChefBankAccount: undefined;
   ChefEditProfile: undefined;
 };
 
@@ -183,7 +187,7 @@ export type ChefTabParamList = {
   Dashboard: undefined;
   Orders: NavigatorScreenParams<ChefOrdersStackParamList> | undefined;
   Menu: undefined;
-  Analytics: undefined;
+  Earnings: undefined;
   Profile: NavigatorScreenParams<ChefProfileStackParamList> | undefined;
 };
 
@@ -200,6 +204,8 @@ export type ChefProductStackParamList = {
   ChefEditMenuItem: ChefMenuItemEditRouteParams;
   ChefMealPlanEditor: {planId?: string};
   ChefNotifications: undefined;
+  ChefDailyLimits: {planId?: string};
+  ChefSupportTicket: {caseId?: string; orderId?: string; topic?: string};
 };
 
 export type ChefTabRouteName = keyof ChefTabParamList;

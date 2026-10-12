@@ -127,6 +127,27 @@ describe('Chef UI kit', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
+  it('ConfirmDialog Cancel is neutral: grey border and dark text, not the red outline', () => {
+    mount(
+      <ConfirmDialog visible title="Reject order?" message="m" confirmLabel="Reject order" tone="danger" onConfirm={jest.fn()} onCancel={jest.fn()} />,
+    );
+    const box = StyleSheet.flatten(pressables('Cancel')[0].props.style({pressed: false}));
+    expect(box.borderColor).toBe(colors.borderStrong);
+    expect(box.backgroundColor).toBe(colors.white);
+    const label = tree.root.findAllByType(Text).find(n => textOf(n) === 'Cancel');
+    expect(StyleSheet.flatten(label!.props.style).color).toBe(colors.textPrimary);
+  });
+
+  it('VegMark renders nothing for a missing or unknown food type instead of crashing', () => {
+    for (const type of [undefined, null, '', 'VEGAN', 'veg']) {
+      mount(<VegMark type={type as never} />);
+      expect(tree.toJSON()).toBeNull();
+      act(() => tree.unmount());
+    }
+    mount(<VegMark type="NON_VEG" />);
+    expect(tree.root.findAll(n => n.props.accessibilityLabel === 'Non-vegetarian').length).toBeGreaterThan(0);
+  });
+
   it('ListRow is a button only when it has onPress', () => {
     mount(<ListRow title="Kitchen name" subtitle="Open" />);
     expect(roleButtons()).toHaveLength(0);

@@ -289,7 +289,7 @@ export function ChefDashboardScreen() {
             <Pressable
               accessibilityLabel="Open Analytics"
               accessibilityRole="button"
-              onPress={() => navigate('Analytics')}
+              onPress={() => navigate('Earnings')}
               style={({pressed}) => pressed && styles.pressed}>
               <Text style={styles.sectionLink}>View analytics</Text>
             </Pressable>
@@ -355,7 +355,7 @@ export function ChefDashboardScreen() {
             />
             <QuickAction
               icon="analytics"
-              onPress={() => navigate('Analytics')}
+              onPress={() => navigate('Earnings')}
               subtitle="Business performance"
               title="Analytics"
             />

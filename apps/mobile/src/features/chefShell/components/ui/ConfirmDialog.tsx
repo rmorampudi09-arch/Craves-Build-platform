@@ -1,6 +1,16 @@
 import React from 'react';
-import {Modal, StyleSheet, Text, View, useWindowDimensions} from 'react-native';
-import {colors, elevation, fontWeight, radius, spacing, textDefaults, typography} from '../../../../design/tokens';
+import {Modal, Pressable, StyleSheet, Text, View, useWindowDimensions} from 'react-native';
+import {
+  borderWidth,
+  colors,
+  elevation,
+  fontWeight,
+  radius,
+  spacing,
+  textDefaults,
+  touchTarget,
+  typography,
+} from '../../../../design/tokens';
 import {shouldStackCriticalActions} from '../../../../design/responsive';
 import {Button} from '../../../../shared/components/Button';
 
@@ -57,13 +67,22 @@ export function ConfirmDialog({
             {message}
           </Text>
           <View style={[styles.actions, stacked && styles.stacked]}>
-            <Button
+            {/* Neutral on purpose: the shared outline Button is red, which reads as the main action. */}
+            <Pressable
+              accessibilityLabel={cancelLabel}
+              accessibilityRole="button"
+              accessibilityState={{disabled: busy}}
               disabled={busy}
-              label={cancelLabel}
               onPress={onCancel}
-              style={stacked ? undefined : styles.cancel}
-              variant="outline"
-            />
+              style={({pressed}) => [
+                styles.cancelButton,
+                stacked ? undefined : styles.cancel,
+                busy ? styles.cancelDisabled : pressed && styles.cancelPressed,
+              ]}>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cancelLabel}>
+                {cancelLabel}
+              </Text>
+            </Pressable>
             <Button
               label={confirmLabel}
               loading={busy}
@@ -98,5 +117,18 @@ const styles = StyleSheet.create({
   // Confirm first when stacked so the main action is the thumb's first stop.
   stacked: {flexDirection: 'column-reverse'},
   cancel: {flex: 1},
+  cancelButton: {
+    minHeight: touchTarget.comfortable,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.white,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.borderStrong,
+  },
+  cancelDisabled: {opacity: 0.48},
+  cancelPressed: {opacity: 0.9},
+  cancelLabel: {color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.semibold, textAlign: 'center'},
   confirm: {flex: 2},
 });

@@ -7,7 +7,6 @@ import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
-import {ChefAnalyticsScreen} from '../../features/chefAnalytics/screens/ChefAnalyticsScreen';
 import {ChefBusinessInformationScreen} from '../../features/chefBusinessInformation/screens/ChefBusinessInformationScreen';
 import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDashboardScreen';
 import {ChefAddMenuItemScreen} from '../../features/chefMenu/screens/ChefAddMenuItemScreen';
@@ -24,28 +23,31 @@ import {ChefEditProfileScreen} from '../../features/chefProfile/screens/ChefEdit
 import {ChefReferralEarningsScreen} from '../../features/chefReferrals/screens/ChefReferralEarningsScreen';
 import {ChefReferralScreen} from '../../features/chefReferrals/screens/ChefReferralScreen';
 import {ChefKitchenScheduleScreen} from '../../features/chefSchedule/screens/ChefKitchenScheduleScreen';
-import {ChefScheduledOrdersScreen} from '../../features/chefScheduledOrders/screens/ChefScheduledOrdersScreen';
 import {ChefProfileScreen} from '../../features/chefProfile/screens/ChefProfileScreen';
 import {ChefEditProfileDraftProvider} from '../../features/chefProfile/state/ChefEditProfileDraftProvider';
+import {ChefToastProvider} from '../../features/chefShell/components/ui';
 import {isolateChefRole} from '../../features/chefShell/state/chefRoleIsolation';
-import {
-  ChefOperationalProvider,
-  useChefOperationalState,
-} from '../../features/chefShell/state/ChefOperationalProvider';
+import {ChefOperationalProvider} from '../../features/chefShell/state/ChefOperationalProvider';
 import {ChefMealPlanEditorScreen} from '../../features/chefSubscription/screens/ChefMealPlanEditorScreen';
 import {ChefSubscriptionPlanScreen} from '../../features/chefSubscription/screens/ChefSubscriptionPlanScreen';
 import {ChefSupportScreen} from '../../features/chefSupport/screens/ChefSupportScreen';
-import {BottomMenuIcon} from '../../shared/components/BottomMenuIcon';
-import {renderLiquidBottomTabBar, LiquidTabButton, LiquidTabScene, LiquidTabScenesProvider} from '../../shared/components/LiquidBottomTabBar';
 import {ChefMenuTabScreen} from './ChefMenuTabScreen';
+import {ChefScheduledOrdersRedirect} from './ChefScheduledOrdersRedirect';
+import {renderChefTabBar} from './ChefTabBar';
 import {
-  CHEF_TAB_ACTIVE_COLOR,
-  CHEF_TAB_INACTIVE_COLOR,
-  CHEF_TAB_STATE_OPTIONS,
-  getChefTabDefinition,
-} from './chefTabs';
+  ChefBankAccountPlaceholder,
+  ChefDailyLimitsPlaceholder,
+  ChefEarningsPlaceholder,
+  ChefNotificationsPlaceholder,
+  ChefOrdersScheduledPlaceholder,
+  ChefReviewsPlaceholder,
+  ChefSecurityPlaceholder,
+  ChefSupportTicketPlaceholder,
+} from './chefPlaceholderScreens';
+import {CHEF_ORDER_ROUTES, CHEF_TAB_STATE_OPTIONS} from './chefTabs';
 import type {
   ChefOrdersStackParamList,
+  ChefOrdersStackRouteName,
   ChefProductStackParamList,
   ChefProfileStackParamList,
   ChefTabParamList,
@@ -56,64 +58,21 @@ const Stack = createNativeStackNavigator<ChefProductStackParamList>();
 const OrdersStack = createNativeStackNavigator<ChefOrdersStackParamList>();
 const ProfileStack = createNativeStackNavigator<ChefProfileStackParamList>();
 
-const dashboardTab = getChefTabDefinition('Dashboard');
-const ordersTab = getChefTabDefinition('Orders');
-const menuTab = getChefTabDefinition('Menu');
-const analyticsTab = getChefTabDefinition('Analytics');
-const profileTab = getChefTabDefinition('Profile');
+// Task 4 points every entry at ChefOrdersScreen.
+const ORDER_SCREENS: Record<ChefOrdersStackRouteName, React.ComponentType> = {
+  ChefOrdersNew: ChefNewOrdersScreen,
+  ChefOrdersPreparing: ChefPreparingOrdersScreen,
+  ChefOrdersReady: ChefReadyOrdersScreen,
+  ChefOrdersCompleted: ChefCompletedOrdersScreen,
+  ChefOrdersScheduled: ChefOrdersScheduledPlaceholder,
+};
 
-interface TabIconProps {
-  color: string;
-  size: number;
-}
-
-function DashboardTabIcon({color, size}: TabIconProps) {
-  return <BottomMenuIcon name="home" color={color} size={size} />;
-}
-
-function OrdersTabIcon({color, size}: TabIconProps) {
-  return <BottomMenuIcon name="orders" color={color} size={size} />;
-}
-
-function MenuTabIcon({color, size}: TabIconProps) {
-  return <BottomMenuIcon name="chef" color={color} size={size} />;
-}
-
-function AnalyticsTabIcon({color, size}: TabIconProps) {
-  return <BottomMenuIcon name="analytics" color={color} size={size} />;
-}
-
-function ProfileTabIcon({color, size}: TabIconProps) {
-  return <BottomMenuIcon name="account" color={color} size={size} />;
-}
-
-function useChefTabScreenOptions() {
-  return React.useMemo(
-    () =>
-      ({
-        headerShown: false,
-        ...CHEF_TAB_STATE_OPTIONS,
-        tabBarActiveTintColor: CHEF_TAB_ACTIVE_COLOR,
-        tabBarInactiveTintColor: CHEF_TAB_INACTIVE_COLOR,
-        tabBarHideOnKeyboard: true,
-        tabBarButton: LiquidTabButton,
-        tabBarLabelPosition: 'below-icon',
-        tabBarLabelStyle: {
-          fontSize: typography.tiny,
-          fontWeight: fontWeight.semibold,
-        },
-        tabBarStyle: {
-          height: 80,
-          backgroundColor: 'transparent',
-          borderTopWidth: 0,
-          elevation: 0,
-          paddingTop: 0,
-          paddingBottom: 0,
-        },
-      }) as const,
-    [],
-  );
-}
+const chefTabScreenOptions = {
+  headerShown: false,
+  ...CHEF_TAB_STATE_OPTIONS,
+  tabBarHideOnKeyboard: true,
+  sceneStyle: {backgroundColor: colors.white},
+} as const;
 
 function useChefStackScreenOptions() {
   const reduceMotionEnabled = useReducedMotionPreference();
@@ -131,20 +90,16 @@ function useChefStackScreenOptions() {
 
 function ChefOrdersNavigator() {
   const stackScreenOptions = useChefStackScreenOptions();
+  // Switching between the order lists should feel like changing a filter, not opening a page.
+  const screenOptions = React.useMemo(
+    () => ({...stackScreenOptions, animation: 'none' as const}),
+    [stackScreenOptions],
+  );
   return (
-    <OrdersStack.Navigator
-      initialRouteName="ChefOrdersNew"
-      screenOptions={stackScreenOptions}>
-      <OrdersStack.Screen
-        name="ChefOrdersPreparing"
-        component={ChefPreparingOrdersScreen}
-      />
-      <OrdersStack.Screen name="ChefOrdersNew" component={ChefNewOrdersScreen} />
-      <OrdersStack.Screen name="ChefOrdersReady" component={ChefReadyOrdersScreen} />
-      <OrdersStack.Screen
-        name="ChefOrdersCompleted"
-        component={ChefCompletedOrdersScreen}
-      />
+    <OrdersStack.Navigator initialRouteName="ChefOrdersNew" screenOptions={screenOptions}>
+      {CHEF_ORDER_ROUTES.map(name => (
+        <OrdersStack.Screen key={name} name={name} component={ORDER_SCREENS[name]} />
+      ))}
     </OrdersStack.Navigator>
   );
 }
@@ -191,8 +146,11 @@ function ChefProfileNavigator() {
         />
         <ProfileStack.Screen
           name="ChefScheduledOrders"
-          component={ChefScheduledOrdersScreen}
+          component={ChefScheduledOrdersRedirect}
         />
+        <ProfileStack.Screen name="ChefReviews" component={ChefReviewsPlaceholder} />
+        <ProfileStack.Screen name="ChefSecurity" component={ChefSecurityPlaceholder} />
+        <ProfileStack.Screen name="ChefBankAccount" component={ChefBankAccountPlaceholder} />
         <ProfileStack.Screen
           name="ChefEditProfile"
           component={ChefEditProfileScreen}
@@ -203,79 +161,18 @@ function ChefProfileNavigator() {
   );
 }
 
-function renderChefTabScene({route, children}: {route: {key: string}; children: React.ReactNode}) {
-  return <LiquidTabScene routeKey={route.key}>{children}</LiquidTabScene>;
-}
-
 function ChefTabsNavigator() {
-  const tabScreenOptions = useChefTabScreenOptions();
-  const {counters} = useChefOperationalState();
-  const ordersBadge =
-    counters.pendingAcceptance > 99
-      ? '99+'
-      : counters.pendingAcceptance > 0
-        ? counters.pendingAcceptance
-        : undefined;
-
   return (
-    <LiquidTabScenesProvider>
     <Tab.Navigator
       initialRouteName="Dashboard"
-      screenOptions={tabScreenOptions}
-      tabBar={renderLiquidBottomTabBar}
-      screenLayout={renderChefTabScene}>
-      <Tab.Screen
-        name="Dashboard"
-        component={ChefDashboardScreen}
-        options={{
-          tabBarAccessibilityLabel: `${dashboardTab.label} tab`,
-          tabBarLabel: dashboardTab.label,
-          tabBarIcon: DashboardTabIcon,
-        }}
-      />
-      <Tab.Screen
-        name="Orders"
-        component={ChefOrdersNavigator}
-        options={{
-          tabBarAccessibilityLabel:
-            counters.pendingAcceptance > 0
-              ? `${ordersTab.label} tab, ${counters.pendingAcceptance} new orders`
-              : `${ordersTab.label} tab`,
-          tabBarLabel: ordersTab.label,
-          tabBarIcon: OrdersTabIcon,
-          tabBarBadge: ordersBadge,
-          tabBarBadgeStyle: styles.ordersBadge,
-        }}
-      />
-      <Tab.Screen
-        name="Menu"
-        component={ChefMenuTabScreen}
-        options={{
-          tabBarAccessibilityLabel: `${menuTab.label} tab`,
-          tabBarLabel: menuTab.label,
-          tabBarIcon: MenuTabIcon,
-        }}
-      />
-      <Tab.Screen
-        name="Analytics"
-        component={ChefAnalyticsScreen}
-        options={{
-          tabBarAccessibilityLabel: `${analyticsTab.label} tab`,
-          tabBarLabel: analyticsTab.label,
-          tabBarIcon: AnalyticsTabIcon,
-        }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={ChefProfileNavigator}
-        options={{
-          tabBarAccessibilityLabel: `${profileTab.label} tab`,
-          tabBarLabel: profileTab.label,
-          tabBarIcon: ProfileTabIcon,
-        }}
-      />
+      screenOptions={chefTabScreenOptions}
+      tabBar={renderChefTabBar}>
+      <Tab.Screen name="Dashboard" component={ChefDashboardScreen} />
+      <Tab.Screen name="Orders" component={ChefOrdersNavigator} />
+      <Tab.Screen name="Menu" component={ChefMenuTabScreen} />
+      <Tab.Screen name="Earnings" component={ChefEarningsPlaceholder} />
+      <Tab.Screen name="Profile" component={ChefProfileNavigator} />
     </Tab.Navigator>
-    </LiquidTabScenesProvider>
   );
 }
 
@@ -301,6 +198,9 @@ function ChefProductNavigator() {
           component={ChefEditMenuItemScreen}
           options={{gestureEnabled: false}}
         />
+        <Stack.Screen name="ChefNotifications" component={ChefNotificationsPlaceholder} />
+        <Stack.Screen name="ChefDailyLimits" component={ChefDailyLimitsPlaceholder} />
+        <Stack.Screen name="ChefSupportTicket" component={ChefSupportTicketPlaceholder} />
       </Stack.Navigator>
     </ChefOperationalProvider>
   );
@@ -362,15 +262,14 @@ export function ChefRootNavigator() {
     );
   }
 
-  return <ChefProductNavigator />;
+  return (
+    <ChefToastProvider>
+      <ChefProductNavigator />
+    </ChefToastProvider>
+  );
 }
 
 const styles = StyleSheet.create({
-  ordersBadge: {
-    backgroundColor: colors.flameRed,
-    color: colors.white,
-    fontSize: typography.tiny,
-  },
   isolationSafeArea: {
     flex: 1,
     backgroundColor: colors.surfaceBase,

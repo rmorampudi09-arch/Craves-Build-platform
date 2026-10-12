@@ -19,6 +19,18 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.31.0 - Chef app: new tabs and a light tab bar, 2026-10-13
+
+- First step of the chef-side redesign. The chef tabs are now Home, Orders, Menu, Earnings and
+  Profile, in a plain white floating bar (no glass) with the new-order count on Orders. Analytics
+  became Earnings.
+- Notifications open their own screen from the bell; the old side menu and the notifications
+  sheet are gone. Order lists switch without a slide animation, and Scheduled orders is a new
+  Orders route (the old Profile entry now opens it).
+- Screens that are not rebuilt yet (Earnings, Scheduled orders, Reviews, Security, Bank account,
+  Notifications, Daily limits, Support ticket) show a "Coming soon" page until the next steps land.
+- Confirm dialogs now have a grey Cancel button, and an unknown food type no longer crashes a card.
+
 ### Version 1.30.0 - Meal plans only from chefs within 10 km, 2026-10-12
 
 - The Meal plans list now sends the selected location, and the server lists only plans whose

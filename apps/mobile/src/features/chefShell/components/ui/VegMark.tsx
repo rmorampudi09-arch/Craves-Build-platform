@@ -12,6 +12,8 @@ const MARKS: Record<VegMarkType, {color: string; label: string}> = {
 
 /** The food-type square: green dot, red triangle or amber dot inside a 14 dp outline. */
 export function VegMark({type}: {type: VegMarkType}) {
+  // The API sends this as a free string; an unexpected value must not crash the screen.
+  if (!Object.prototype.hasOwnProperty.call(MARKS, type)) return null;
   const {color, label} = MARKS[type];
   return (
     <View accessible accessibilityLabel={label} accessibilityRole="image" style={[styles.box, {borderColor: color}]}>

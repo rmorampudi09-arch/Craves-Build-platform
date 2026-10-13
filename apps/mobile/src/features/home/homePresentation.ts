@@ -1,4 +1,5 @@
 import type {NearbyDish, NearbyDishPage} from './api/homeFeedApi';
+import {menuCategoryLabel} from '../../shared/catalog/menuCategories';
 
 function normalizeCategory(value: string): string {
   const normalized = value.trim().toLocaleLowerCase();
@@ -59,6 +60,8 @@ export function filterHomeDishes(
       dish.itemName,
       dish.description ?? '',
       dish.category,
+      // Customers read "Snacks" for the stored "Snakes": both words find it.
+      menuCategoryLabel(dish.category),
       dish.kitchenDisplayName ?? dish.kitchenName,
     ]
       .join(' ')

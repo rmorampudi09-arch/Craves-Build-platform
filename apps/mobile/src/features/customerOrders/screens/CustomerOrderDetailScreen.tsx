@@ -64,6 +64,7 @@ import {
   getCustomerOrderStatusPresentation,
 } from '../presentation/customerOrdersPresentation';
 import {useCustomerOrderDetailQuery} from '../query/customerOrdersQueries';
+import {menuCategoryLabel} from '../../../shared/catalog/menuCategories';
 
 type DetailRoute = RouteProp<CustomerOrdersStackParamList, 'CustomerOrderDetail'>;
 type DetailNavigation = NavigationProp<CustomerOrdersStackParamList, 'CustomerOrderDetail'>;
@@ -309,7 +310,7 @@ export function CustomerOrderDetailScreen() {
 
   const openHelp = () => {
     const tabs = navigation.getParent<NavigationProp<CustomerTabParamList>>();
-    tabs?.navigate('Profile', {screen: 'CustomerSettingsSupport'});
+    tabs?.navigate('Profile', {screen: 'CustomerSupportChat', params: {orderId: order.id}});
   };
 
   const showContactChefUnavailable = () => {
@@ -520,7 +521,7 @@ export function CustomerOrderDetailScreen() {
                     {item.itemName}
                   </Text>
                   <Text numberOfLines={1} style={styles.itemMeta}>
-                    {item.category || item.foodType || 'Home-cooked dish'}
+                    {menuCategoryLabel(item.category ?? '') || item.foodType || 'Home-cooked dish'}
                   </Text>
                   <View style={styles.itemPriceLine}>
                     <Text style={styles.unitPrice}>
@@ -625,7 +626,9 @@ export function CustomerOrderDetailScreen() {
                 accessibilityRole="button"
                 accessibilityState={{disabled: paymentBusy}}
                 disabled={paymentBusy}
-                onPress={() => void continuePendingPayment()}
+                onPress={() => {
+                  void continuePendingPayment();
+                }}
                 style={({pressed}) => [styles.primaryAction, pressed && styles.pressed]}>
                 {paymentBusy ? (
                   <ActivityIndicator color={colors.white} size="small" />

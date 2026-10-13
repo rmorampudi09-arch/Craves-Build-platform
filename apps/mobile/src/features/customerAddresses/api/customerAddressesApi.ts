@@ -32,6 +32,20 @@ export interface ReverseGeocodedCustomerAddress {
   preciseHouseNumber: boolean;
 }
 
+/** One Ola place suggestion. Its id is opaque: never parse or store it. */
+export interface CustomerLocationSuggestion {
+  id: string | null;
+  title: string;
+  subtitle: string | null;
+  latitude: number;
+  longitude: number;
+}
+
+export interface LocationBias {
+  latitude: number;
+  longitude: number;
+}
+
 export class CustomerAddressesContractError extends Error {
   readonly code = 'invalid-response' as const;
 
@@ -189,6 +203,34 @@ function parseResolvedAddress(value: unknown): ReverseGeocodedCustomerAddress {
   };
 }
 
+/** Lenient by contract: unknown fields are ignored and malformed suggestions are dropped. */
+export function parseLocationSearchResponse(
+  value: unknown,
+): CustomerLocationSuggestion[] {
+  const results = asRecord(value)?.results;
+  if (!Array.isArray(results)) {
+    throw new CustomerAddressesContractError();
+  }
+  return results.slice(0, 6).flatMap(raw => {
+    const item = asRecord(raw);
+    const title = optionalText(item?.title);
+    const latitude = coordinate(item?.latitude, -90, 90);
+    const longitude = coordinate(item?.longitude, -180, 180);
+    if (!item || !title || latitude === null || longitude === null) {
+      return [];
+    }
+    return [
+      {
+        id: typeof item.id === 'string' ? item.id : null,
+        title,
+        subtitle: optionalText(item.subtitle) ?? null,
+        latitude,
+        longitude,
+      },
+    ];
+  });
+}
+
 function requireAddressId(addressId: string): void {
   if (!addressId.trim()) {
     throw new AppApiError(
@@ -252,11 +294,29 @@ export const customerAddressesApi = {
   async reverseGeocode(
     latitude: number,
     longitude: number,
+    signal?: AbortSignal,
   ): Promise<ReverseGeocodedCustomerAddress> {
     const response = await httpClient.post<unknown>(
       `${CUSTOMER_ADDRESSES_PATH}/reverse-geocode`,
       {latitude, longitude},
+      {signal},
     );
     return parseResolvedAddress(response);
+  },
+
+  /** Ola typeahead through User/Chef; the bias point is sent whole or not at all. */
+  async searchLocations(
+    query: string,
+    bias: LocationBias | null,
+    signal?: AbortSignal,
+  ): Promise<CustomerLocationSuggestion[]> {
+    const response = await httpClient.post<unknown>(
+      `${CUSTOMER_ADDRESSES_PATH}/location-search`,
+      bias
+        ? {query, latitude: bias.latitude, longitude: bias.longitude}
+        : {query},
+      {signal},
+    );
+    return parseLocationSearchResponse(response);
   },
 };

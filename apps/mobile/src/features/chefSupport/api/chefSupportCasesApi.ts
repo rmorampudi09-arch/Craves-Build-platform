@@ -13,6 +13,7 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STATUS_SET = new Set<string>(SUPPORT_CASE_STATUSES);
 
+// Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
 export const CHEF_SUPPORT_CASES_AVAILABLE = false;
 
 export interface CreateChefSupportCaseRequest {

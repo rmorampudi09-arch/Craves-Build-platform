@@ -37,6 +37,7 @@ import {
   getCustomerDishIngredientsCapabilityState,
 } from '../dishIngredientsCapability';
 import {useCustomerDishDetailQuery} from '../query/dishDetailQueries';
+import {menuCategoryLabel} from '../../../shared/catalog/menuCategories';
 
 type DishIngredientsRoute = RouteProp<
   CustomerDishDetailStackParamList,
@@ -191,7 +192,7 @@ export function CustomerDishIngredientsScreen() {
           ) : null}
 
           <View style={styles.dishHeading}>
-            <Text style={styles.eyebrow}>{dish.category}</Text>
+            <Text style={styles.eyebrow}>{menuCategoryLabel(dish.category)}</Text>
             <Text style={styles.dishTitle}>{dish.itemName}</Text>
             <Text style={styles.subtitle}>What goes into this dish</Text>
           </View>

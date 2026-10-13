@@ -1,6 +1,6 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {askKitchenSwitch} from '../../cart/components/KitchenSwitchDialog';
 import {
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -10,6 +10,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {
   useFocusEffect,
   useNavigation,
@@ -30,6 +31,7 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
+import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface';
 import {
   OfflineNotice,
   RecoverableErrorBanner,
@@ -45,11 +47,16 @@ import {
   type CartMutationOutcome,
 } from '../../cart/state/cartMutations';
 import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
+import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
 import {
   isFavoriteMenuItem,
   useCustomerFavoritesQuery,
   useToggleCustomerFavorite,
 } from '../../favorites/query/customerFavoritesQueries';
+import {
+  useFavoriteKitchensQuery,
+  useToggleFavoriteKitchen,
+} from '../../favorites/query/homeFavoriteQueries';
 import {
   PUBLIC_KITCHEN_REVIEWS_AVAILABLE,
   publicKitchenReviewsApi,
@@ -61,13 +68,17 @@ import {CustomerKitchenMenuCard} from '../components/CustomerKitchenMenuCard';
 import {
   formatCustomerKitchenJoinedLabel,
   formatCustomerKitchenLocation,
+  formatCustomerKitchenPrepRange,
+  getActiveMenuSectionIndex,
+  getCustomerKitchenFoodMixLabel,
   getCustomerKitchenInitials,
-  getCustomerKitchenMenuPreview,
+  groupCustomerKitchenMenu,
 } from '../kitchenProfilePresentation';
 import {
   useCustomerKitchenAvailabilityQuery,
   useCustomerKitchenProfileQuery,
 } from '../query/kitchenProfileQueries';
+import {menuCategoryLabel} from '../../../shared/catalog/menuCategories';
 
 type KitchenProfileRoute = RouteProp<
   CustomerDishDetailStackParamList,
@@ -78,8 +89,12 @@ type KitchenProfileNavigation = NavigationProp<
   'CustomerKitchenProfile'
 >;
 
-const MENU_PREVIEW_LIMIT = 4;
 const REVIEW_PREVIEW_LIMIT = 3;
+/** Empty for now: chef-uploaded kitchen photos will fill this space. */
+const PHOTO_SPACE_HEIGHT = 200;
+const AVATAR_SIZE = 92;
+/** The header shows the kitchen name once the avatar has scrolled under it. */
+const HEADER_TITLE_OFFSET = PHOTO_SPACE_HEIGHT + AVATAR_SIZE / 2;
 
 function formatReviewPublishedAt(value: string): string {
   const date = new Date(value);
@@ -106,23 +121,6 @@ function KitchenProfileSkeleton() {
   );
 }
 
-interface MenuPreviewCardProps {
-  item: CustomerKitchenMenuItemSummary;
-  cartLine: CartLine | null;
-  busy: boolean;
-  favorite: boolean;
-  favoritePending: boolean;
-  favoriteDisabled: boolean;
-  onFavoriteToggle: (menuItemId: string, favorite: boolean) => void;
-  onOpen: (menuItemId: string) => void;
-  onIncrease: (item: CustomerKitchenMenuItemSummary) => void;
-  onDecrease: (line: CartLine) => void;
-}
-
-function MenuPreviewCard(props: MenuPreviewCardProps) {
-  return <CustomerKitchenMenuCard {...props} />;
-}
-
 export function CustomerKitchenProfileScreen() {
   const navigation = useNavigation<KitchenProfileNavigation>();
   const route = useRoute<KitchenProfileRoute>();
@@ -133,11 +131,19 @@ export function CustomerKitchenProfileScreen() {
   );
   const favorites = useCustomerFavoritesQuery();
   const toggleFavorite = useToggleCustomerFavorite();
+  const favoriteKitchens = useFavoriteKitchensQuery();
+  const toggleFavoriteKitchen = useToggleFavoriteKitchen();
   const cartSnapshot = useAppSelector(state => state.cart.snapshot);
   const cartMutations = useAppSelector(state => state.cart.mutations);
   const scrollRef = useRef<ScrollView>(null);
   const scrollOffsetRef = useRef(0);
-  const [menuSectionY, setMenuSectionY] = useState(0);
+  const tabsScrollRef = useRef<ScrollView>(null);
+  const tabsHeightRef = useRef(0);
+  const tabXRef = useRef<number[]>([]);
+  const menuTopRef = useRef(0);
+  const sectionTopsRef = useRef<number[]>([]);
+  const [headerTitleVisible, setHeaderTitleVisible] = useState(false);
+  const [activeSection, setActiveSection] = useState(0);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [interactionNotice, setInteractionNotice] = useState<string | null>(null);
   const [revalidatingItemId, setRevalidatingItemId] = useState<string | null>(null);
@@ -149,11 +155,13 @@ export function CustomerKitchenProfileScreen() {
   const profile = profileQuery.data;
   const queryError = profileQuery.error ? toAppApiError(profileQuery.error) : null;
   const offline = queryError?.code === 'NETWORK_ERROR';
-  const cartCount =
-    cartSnapshot?.lines.reduce((total, line) => total + line.quantity, 0) ?? 0;
-  const menuPreview = useMemo(
-    () => getCustomerKitchenMenuPreview(profile?.menuItems ?? [], MENU_PREVIEW_LIMIT),
+  const sections = useMemo(
+    () => groupCustomerKitchenMenu(profile?.menuItems ?? []),
     [profile?.menuItems],
+  );
+  // shortcut: only checks the loaded pages of saved kitchens; fine while lists are short.
+  const kitchenFavorite = favoriteKitchens.items.some(
+    item => item.kitchenId === route.params.kitchenId,
   );
 
   const loadPublicReviews = useCallback(async () => {
@@ -195,12 +203,45 @@ export function CustomerKitchenProfileScreen() {
     }, []),
   );
 
-  const saveScrollOffset = useCallback(
+  // Keep the active category tab in view when the tabs overflow the screen.
+  useEffect(() => {
+    const x = tabXRef.current[activeSection];
+    if (x !== undefined) {
+      tabsScrollRef.current?.scrollTo({x: Math.max(0, x - spacing.md), animated: true});
+    }
+  }, [activeSection]);
+
+  const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+      const {contentOffset, contentSize, layoutMeasurement} = event.nativeEvent;
+      scrollOffsetRef.current = contentOffset.y;
+      setHeaderTitleVisible(contentOffset.y > HEADER_TITLE_OFFSET);
+      if (sections.length === 0) return;
+      // The last sections may be too short to reach the tabs, so the end of the page selects the last one.
+      const atEnd =
+        contentOffset.y + layoutMeasurement.height >= contentSize.height - spacing.xxs;
+      const tops = sections.map(
+        (_, index) => menuTopRef.current + (sectionTopsRef.current[index] ?? Infinity),
+      );
+      setActiveSection(
+        atEnd
+          ? sections.length - 1
+          : getActiveMenuSectionIndex(tops, contentOffset.y + tabsHeightRef.current + 1),
+      );
     },
-    [],
+    [sections],
   );
+
+  const scrollToSection = (index: number) => {
+    setActiveSection(index);
+    scrollRef.current?.scrollTo({
+      y: Math.max(
+        0,
+        menuTopRef.current + (sectionTopsRef.current[index] ?? 0) - tabsHeightRef.current,
+      ),
+      animated: true,
+    });
+  };
 
   const handleCartOutcome = (outcome: CartMutationOutcome) => {
     if (outcome.status === 'FAILED') {
@@ -253,33 +294,31 @@ export function CustomerKitchenProfileScreen() {
           : null;
       if (otherKitchen && cartSnapshot) {
         const expectedSnapshot = cartSnapshot;
-        Alert.alert(
-          'Replace current cart?',
-          `Your cart has food from ${otherKitchen.kitchenName}. To add ${latest.itemName}, Craves must replace the cart you are reviewing now.`,
-          [
-            {text: 'Keep cart', style: 'cancel'},
-            {
-              text: 'Replace & add',
-              style: 'destructive',
-              onPress: () => {
-                dispatch(
-                  switchCartKitchen({
-                    expectedSnapshot,
-                    menuItemId: latest.id,
-                    quantity: 1,
-                    expectedKitchenId: route.params.kitchenId,
-                  }),
-                )
-                  .then(handleCartOutcome)
-                  .catch(() =>
-                    setInteractionNotice(
-                      'We couldn’t confirm the cart change. Check your cart before trying again.',
-                    ),
-                  );
-              },
-            },
-          ],
-        );
+        askKitchenSwitch({
+          cartLines: expectedSnapshot.lines,
+          newDish: {
+            name: latest.itemName,
+            kitchenName: refreshed.data.displayName ?? refreshed.data.kitchenName,
+            priceLabel: formatDishDetailPrice(latest.price.amount, latest.price.currency),
+            imageUrl: (latest.images.find(image => image.primary) ?? latest.images[0])?.url,
+          },
+          onReplace: () => {
+            dispatch(
+              switchCartKitchen({
+                expectedSnapshot,
+                menuItemId: latest.id,
+                quantity: 1,
+                expectedKitchenId: route.params.kitchenId,
+              }),
+            )
+              .then(handleCartOutcome)
+              .catch(() =>
+                setInteractionNotice(
+                  'We couldn’t confirm the cart change. Check your cart before trying again.',
+                ),
+              );
+          },
+        });
         return;
       }
       const outcome = currentLine
@@ -322,22 +361,21 @@ export function CustomerKitchenProfileScreen() {
     [favorites.sessionRequired, toggleFavorite],
   );
 
+  const handleKitchenFavorite = () => {
+    if (!favoriteKitchens.identityId || toggleFavoriteKitchen.isPending) return;
+    setInteractionNotice(null);
+    toggleFavoriteKitchen.mutate(
+      {kitchenId: route.params.kitchenId, favorite: kitchenFavorite},
+      {onError: () => setInteractionNotice('Favorite could not be updated. Please try again.')},
+    );
+  };
+
   const openDish = useCallback(
     (menuItemId: string) => {
       navigation.navigate('CustomerDishDetail', {menuItemId});
     },
     [navigation],
   );
-
-  const openAllDishes = useCallback(() => {
-    navigation.navigate('CustomerKitchenDishes', {
-      kitchenId: route.params.kitchenId,
-    });
-  }, [navigation, route.params.kitchenId]);
-
-  const scrollToMenu = () => {
-    scrollRef.current?.scrollTo({y: Math.max(0, menuSectionY - spacing.sm), animated: true});
-  };
 
   if (profileQuery.invalidKitchenId) {
     return (
@@ -393,6 +431,12 @@ export function CustomerKitchenProfileScreen() {
   const joinedLabel = formatCustomerKitchenJoinedLabel(profile.joinedAt);
   const initials = getCustomerKitchenInitials(profile);
   const showDescriptionToggle = (profile.biography?.length ?? 0) > 180;
+  const dishCount = profile.menuItems.length;
+  const facts = [
+    {icon: 'silverware-fork-knife', label: `${dishCount} ${dishCount === 1 ? 'dish' : 'dishes'}`},
+    {icon: 'food-variant', label: getCustomerKitchenFoodMixLabel(profile.menuItems)},
+    {icon: 'clock-outline', label: formatCustomerKitchenPrepRange(profile.menuItems)},
+  ].filter((fact): fact is {icon: string; label: string} => Boolean(fact.label));
 
   return (
     <ScreenShell
@@ -401,28 +445,49 @@ export function CustomerKitchenProfileScreen() {
       testID="customer-kitchen-profile">
       <View style={styles.screen}>
         <View style={styles.header}>
-          <Pressable
-            accessibilityLabel="Back"
-            accessibilityRole="button"
-            onPress={() => navigation.goBack()}
-            style={({pressed}) => [styles.headerAction, pressed && styles.pressed]}>
-            <Icon name="arrow-left" />
-          </Pressable>
-          <Text numberOfLines={1} style={styles.headerTitle}>
-            Kitchen profile
-          </Text>
-          <View style={styles.headerCartSummary}>
-            <Text style={styles.headerCartCount}>{cartCount}</Text>
-            <Text style={styles.headerCartLabel}>in cart</Text>
+          <LiquidGlassSurface appearance="home" style={styles.headerGlass}>
+            <Pressable
+              accessibilityLabel="Back"
+              accessibilityRole="button"
+              onPress={() => navigation.goBack()}
+              style={({pressed}) => [styles.headerGlassControl, pressed && styles.pressed]}>
+              <Icon name="arrow-left" surface={false} />
+            </Pressable>
+          </LiquidGlassSurface>
+          <View style={styles.headerTitleRow}>
+            {headerTitleVisible ? (
+              <>
+                <View style={styles.headerAvatar}>
+                  <Text style={styles.headerAvatarText}>{initials}</Text>
+                </View>
+                <Text numberOfLines={1} style={styles.headerTitle}>
+                  {kitchenName}
+                </Text>
+              </>
+            ) : null}
           </View>
+          <LiquidGlassSurface appearance="home" style={styles.headerGlass}>
+            <CustomerFavoriteHeartButton
+              favorite={kitchenFavorite}
+              pending={toggleFavoriteKitchen.isPending}
+              disabled={!favoriteKitchens.identityId}
+              itemLabel={kitchenName}
+              onToggle={handleKitchenFavorite}
+              style={styles.headerGlassControl}
+            />
+          </LiquidGlassSurface>
         </View>
+        {interactionNotice ? (
+          <RecoverableErrorBanner message={interactionNotice} style={styles.pinnedNotice} />
+        ) : null}
 
         <ScrollView
           ref={scrollRef}
           contentContainerStyle={styles.scrollContent}
-          onMomentumScrollEnd={saveScrollOffset}
-          onScroll={saveScrollOffset}
+          onMomentumScrollEnd={handleScroll}
+          onScroll={handleScroll}
           scrollEventThrottle={16}
+          stickyHeaderIndices={[1]}
           refreshControl={
             <RefreshControl
               colors={[colors.flameRed]}
@@ -438,170 +503,76 @@ export function CustomerKitchenProfileScreen() {
             />
           }
           showsVerticalScrollIndicator={false}>
-          <View style={styles.hero}>
-            <View style={styles.heroAvatar}>
-              <Text style={styles.heroInitials}>{initials}</Text>
-              <View style={styles.heroChefBadge}>
-                <Icon name="chef" color={colors.flameRed} size={20} />
+          <View>
+            <View style={styles.photoSpace} />
+            <View style={styles.identity}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarInitials}>{initials}</Text>
               </View>
-            </View>
-            <View style={styles.activeBadge}>
-              <Text style={styles.activeBadgeText}>Active kitchen</Text>
-            </View>
-            {availabilityQuery.available && availabilityQuery.data ? (
-              <View
-                style={[
-                  styles.currentAvailabilityBadge,
-                  availabilityQuery.data.availableNow
-                    ? styles.currentAvailabilityOpen
-                    : styles.currentAvailabilityClosed,
-                ]}>
-                <Text
+              {availabilityQuery.available && availabilityQuery.data ? (
+                <View
                   style={[
-                    styles.currentAvailabilityText,
+                    styles.currentAvailabilityBadge,
                     availabilityQuery.data.availableNow
-                      ? styles.currentAvailabilityOpenText
-                      : styles.currentAvailabilityClosedText,
+                      ? styles.currentAvailabilityOpen
+                      : styles.currentAvailabilityClosed,
                   ]}>
-                  {availabilityQuery.data.availableNow
-                    ? 'Available now'
-                    : availabilityQuery.data.paused
-                      ? 'Paused'
-                      : !availabilityQuery.data.acceptingOrders
-                        ? 'Not accepting orders'
-                        : 'Closed right now'}
-                </Text>
-              </View>
-            ) : null}
-            <Text accessibilityRole="header" style={styles.kitchenName}>
-              {kitchenName}
-            </Text>
-            {profile.displayName && profile.displayName !== profile.kitchenName ? (
-              <Text style={styles.legalKitchenName}>{profile.kitchenName}</Text>
-            ) : null}
-            {location ? <Text style={styles.location}>{location}</Text> : null}
-
-            <View style={styles.heroActions}>
-              <Pressable
-                accessibilityHint="Scrolls to the currently available dishes on this profile"
-                accessibilityLabel="Open menu preview"
-                accessibilityRole="button"
-                onPress={scrollToMenu}
-                style={({pressed}) => [styles.primaryAction, pressed && styles.pressed]}>
-                <Text style={styles.primaryActionText}>Menu</Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.content}>
-            {interactionNotice ? (
-              <RecoverableErrorBanner message={interactionNotice} style={styles.notice} />
-            ) : null}
-            {queryError ? (
-              offline ? (
-                <OfflineNotice
-                  message={queryError.message}
-                  onRetry={() => profileQuery.refetch()}
-                  style={styles.notice}
-                />
-              ) : (
-                <RecoverableErrorBanner
-                  message={queryError.message}
-                  onRetry={() => profileQuery.refetch()}
-                  style={styles.notice}
-                />
-              )
-            ) : null}
-
-            <View style={styles.factRow}>
-              <View style={styles.factCard}>
-                <Text style={styles.factValue}>{profile.menuItems.length}</Text>
-                <Text style={styles.factLabel}>
-                  {profile.menuItems.length === 1 ? 'dish available' : 'dishes available'}
-                </Text>
-              </View>
-              {joinedLabel ? (
-                <View style={styles.factCard}>
-                  <Text style={styles.factValue}>{joinedLabel.replace('On Craves since ', '')}</Text>
-                  <Text style={styles.factLabel}>on Craves since</Text>
+                  <Text
+                    style={[
+                      styles.currentAvailabilityText,
+                      availabilityQuery.data.availableNow
+                        ? styles.currentAvailabilityOpenText
+                        : styles.currentAvailabilityClosedText,
+                    ]}>
+                    {availabilityQuery.data.availableNow
+                      ? 'Available now'
+                      : availabilityQuery.data.paused
+                        ? 'Paused'
+                        : !availabilityQuery.data.acceptingOrders
+                          ? 'Not accepting orders'
+                          : 'Closed right now'}
+                  </Text>
                 </View>
               ) : null}
-            </View>
-
-            {PUBLIC_KITCHEN_REVIEWS_AVAILABLE && reviewSummary ? (
-              <View style={styles.section}>
-                <View style={styles.reviewHeadingRow}>
-                  <View>
-                    <Text style={styles.sectionTitle}>Ratings & reviews</Text>
-                    <Text style={styles.sectionCaption}>
-                      Published customer feedback for this kitchen
-                    </Text>
-                  </View>
-                  {reviewSummary.reviewCount > 0 &&
-                  reviewSummary.overallAverage !== null ? (
-                    <View style={styles.reviewScorePill}>
-                      <Text style={styles.reviewScoreText}>
-                        {reviewSummary.overallAverage.toFixed(1)} ★
-                      </Text>
-                      <Text style={styles.reviewCountText}>
-                        {reviewSummary.reviewCount}{' '}
-                        {reviewSummary.reviewCount === 1 ? 'review' : 'reviews'}
-                      </Text>
-                    </View>
+              <Text accessibilityRole="header" style={styles.kitchenName}>
+                {kitchenName}
+              </Text>
+              {profile.displayName && profile.displayName !== profile.kitchenName ? (
+                <Text style={styles.legalKitchenName}>{profile.kitchenName}</Text>
+              ) : null}
+              {location || joinedLabel ? (
+                <View style={styles.locationRow}>
+                  {location ? (
+                    <Icon
+                      name="location-outline"
+                      size={17}
+                      color={colors.textSecondary}
+                      surface={false}
+                    />
                   ) : null}
+                  <Text style={styles.location}>
+                    {[location, joinedLabel].filter(Boolean).join(' · ')}
+                  </Text>
                 </View>
-
-                {reviewLoadError ? (
-                  <RecoverableErrorBanner
-                    message={reviewLoadError}
-                    onRetry={() => { loadPublicReviews().catch(() => undefined); }}
-                    style={styles.notice}
-                  />
-                ) : reviewSummary.reviewCount === 0 ? (
-                  <View style={styles.emptyReviewsCard}>
-                    <Text style={styles.emptyReviewsText}>
-                      No published reviews yet.
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.reviewList}>
-                    {reviewPreview.map(review => (
-                      <View key={review.reviewId} style={styles.reviewCard}>
-                        <View style={styles.reviewCardHeader}>
-                          <Text style={styles.reviewRating}>
-                            {review.overallRating} ★
-                          </Text>
-                          <Text style={styles.reviewDate}>
-                            {formatReviewPublishedAt(review.publishedAt)}
-                          </Text>
-                        </View>
-                        {review.reviewText ? (
-                          <Text style={styles.reviewText}>{review.reviewText}</Text>
-                        ) : null}
-                        {review.tagCodes.length > 0 ? (
-                          <View style={styles.reviewTags}>
-                            {review.tagCodes.map(code => (
-                              <View key={code} style={styles.reviewTag}>
-                                <Text style={styles.reviewTagText}>
-                                  {code.replace(/_/g, ' ')}
-                                </Text>
-                              </View>
-                            ))}
-                          </View>
-                        ) : null}
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
-            ) : null}
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>About this kitchen</Text>
+              ) : null}
+              {facts.length > 0 ? (
+                <View style={styles.facts}>
+                  {facts.map(fact => (
+                    <View key={fact.icon} style={styles.fact}>
+                      <MaterialDesignIcons
+                        name={fact.icon as React.ComponentProps<typeof MaterialDesignIcons>['name']}
+                        size={16}
+                        color={colors.flameRedAccessible}
+                      />
+                      <Text style={styles.factText}>{fact.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
               {profile.biography ? (
                 <>
                   <Text
-                    numberOfLines={descriptionExpanded ? undefined : 4}
+                    numberOfLines={descriptionExpanded ? undefined : 3}
                     style={styles.bodyText}>
                     {profile.biography}
                   </Text>
@@ -616,50 +587,152 @@ export function CustomerKitchenProfileScreen() {
                     </Pressable>
                   ) : null}
                 </>
-              ) : (
-                <Text style={styles.bodyText}>
-                  This kitchen has not added a public story yet.
-                </Text>
-              )}
+              ) : null}
             </View>
 
-            <View style={styles.trustCard}>
-              <Text style={styles.trustTitle}>What Craves can confirm</Text>
-              <Text style={styles.trustBody}>
-                This is an active public kitchen with the available menu shown below.
-                Ratings, verification badges and delivery estimates are shown only when
-                authoritative data is available.
-              </Text>
-            </View>
+            <View style={styles.content}>
+              {queryError ? (
+                offline ? (
+                  <OfflineNotice
+                    message={queryError.message}
+                    onRetry={() => profileQuery.refetch()}
+                    style={styles.notice}
+                  />
+                ) : (
+                  <RecoverableErrorBanner
+                    message={queryError.message}
+                    onRetry={() => profileQuery.refetch()}
+                    style={styles.notice}
+                  />
+                )
+              ) : null}
 
-            <View
-              onLayout={event => setMenuSectionY(event.nativeEvent.layout.y)}
-              style={styles.section}>
-              <View style={styles.menuSectionHeading}>
-                <View style={styles.menuSectionCopy}>
-                  <Text style={styles.sectionTitle}>Available dishes</Text>
-                  <Text style={styles.sectionCaption}>
-                    Current sellable dishes, kept in the kitchen's published order
-                  </Text>
+              {PUBLIC_KITCHEN_REVIEWS_AVAILABLE && reviewSummary ? (
+                <View style={styles.section}>
+                  <View style={styles.reviewHeadingRow}>
+                    <View>
+                      <Text style={styles.sectionTitle}>Ratings & reviews</Text>
+                      <Text style={styles.sectionCaption}>
+                        Published customer feedback for this kitchen
+                      </Text>
+                    </View>
+                    {reviewSummary.reviewCount > 0 &&
+                    reviewSummary.overallAverage !== null ? (
+                      <View style={styles.reviewScorePill}>
+                        <Text style={styles.reviewScoreText}>
+                          {reviewSummary.overallAverage.toFixed(1)} ★
+                        </Text>
+                        <Text style={styles.reviewCountText}>
+                          {reviewSummary.reviewCount}{' '}
+                          {reviewSummary.reviewCount === 1 ? 'review' : 'reviews'}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {reviewLoadError ? (
+                    <RecoverableErrorBanner
+                      message={reviewLoadError}
+                      onRetry={() => { loadPublicReviews().catch(() => undefined); }}
+                      style={styles.notice}
+                    />
+                  ) : reviewSummary.reviewCount === 0 ? (
+                    <View style={styles.emptyReviewsCard}>
+                      <Text style={styles.emptyReviewsText}>
+                        No published reviews yet.
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.reviewList}>
+                      {reviewPreview.map(review => (
+                        <View key={review.reviewId} style={styles.reviewCard}>
+                          <View style={styles.reviewCardHeader}>
+                            <Text style={styles.reviewRating}>
+                              {review.overallRating} ★
+                            </Text>
+                            <Text style={styles.reviewDate}>
+                              {formatReviewPublishedAt(review.publishedAt)}
+                            </Text>
+                          </View>
+                          {review.reviewText ? (
+                            <Text style={styles.reviewText}>{review.reviewText}</Text>
+                          ) : null}
+                          {review.tagCodes.length > 0 ? (
+                            <View style={styles.reviewTags}>
+                              {review.tagCodes.map(code => (
+                                <View key={code} style={styles.reviewTag}>
+                                  <Text style={styles.reviewTagText}>
+                                    {code.replace(/_/g, ' ')}
+                                  </Text>
+                                </View>
+                              ))}
+                            </View>
+                          ) : null}
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
-                {profile.menuItems.length > 0 ? (
-                  <Pressable
-                    accessibilityLabel="View all dishes"
-                    accessibilityRole="button"
-                    onPress={openAllDishes}
-                    style={({pressed}) => [
-                      styles.previewPill,
-                      pressed && styles.pressed,
-                    ]}>
-                    <Text style={styles.previewPillText}>View all</Text>
-                    <Icon name="chevron-right" size={18} color={colors.flameRedAccessible} surface={false} />
-                  </Pressable>
-                ) : null}
-              </View>
+              ) : null}
+            </View>
+          </View>
 
-              {menuPreview.length > 0 ? (
-                <View style={styles.menuList}>
-                  {menuPreview.map(item => {
+          {/* Sticky category tabs; must stay child index 1 of the ScrollView. */}
+          <View
+            onLayout={event => {
+              tabsHeightRef.current = event.nativeEvent.layout.height;
+            }}
+            style={sections.length > 0 ? styles.tabsBar : undefined}>
+            {sections.length > 0 ? (
+              <ScrollView
+                ref={tabsScrollRef}
+                contentContainerStyle={styles.tabsContent}
+                horizontal
+                showsHorizontalScrollIndicator={false}>
+                {sections.map((section, index) => {
+                  const selected = index === activeSection;
+                  return (
+                    <Pressable
+                      key={section.category}
+                      accessibilityRole="tab"
+                      accessibilityState={{selected}}
+                      onLayout={event => {
+                        tabXRef.current[index] = event.nativeEvent.layout.x;
+                      }}
+                      onPress={() => scrollToSection(index)}
+                      style={[styles.tab, selected && styles.tabSelected]}>
+                      <Text style={[styles.tabText, selected && styles.tabTextSelected]}>
+                        {menuCategoryLabel(section.category)}
+                      </Text>
+                      <Text style={styles.tabCount}>{section.items.length}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
+          </View>
+
+          <View
+            onLayout={event => {
+              menuTopRef.current = event.nativeEvent.layout.y;
+            }}
+            style={styles.menu}>
+            {sections.length > 0 ? (
+              sections.map((section, sectionIndex) => (
+                <View
+                  key={section.category}
+                  onLayout={event => {
+                    sectionTopsRef.current[sectionIndex] = event.nativeEvent.layout.y;
+                  }}>
+                  <View style={styles.sectionHeading}>
+                    <Text accessibilityRole="header" style={styles.sectionHeadingTitle}>
+                      {menuCategoryLabel(section.category)}
+                    </Text>
+                    <Text style={styles.sectionHeadingCount}>
+                      {section.items.length} {section.items.length === 1 ? 'dish' : 'dishes'}
+                    </Text>
+                  </View>
+                  {section.items.map((item, itemIndex) => {
                     const cartLine =
                       cartSnapshot?.lines.find(line => line.menuItemId === item.id) ?? null;
                     const menuMutationPending =
@@ -672,38 +745,32 @@ export function CustomerKitchenProfileScreen() {
                       menuMutationPending ||
                       lineMutationPending;
                     return (
-                      <MenuPreviewCard
-                        key={item.id}
-                        item={item}
-                        cartLine={cartLine}
-                        busy={busy}
-                        favorite={isFavoriteMenuItem(favorites.data, item.id)}
-                        favoritePending={toggleFavorite.isPending}
-                        favoriteDisabled={favorites.sessionRequired}
-                        onFavoriteToggle={handleFavoriteToggle}
-                        onOpen={openDish}
-                        onIncrease={increaseOrAdd}
-                        onDecrease={decreaseQuantity}
-                      />
+                      <View key={item.id} style={itemIndex > 0 && styles.rowDivider}>
+                        <CustomerKitchenMenuCard
+                          item={item}
+                          cartLine={cartLine}
+                          busy={busy}
+                          favorite={isFavoriteMenuItem(favorites.data, item.id)}
+                          favoritePending={toggleFavorite.isPending}
+                          favoriteDisabled={favorites.sessionRequired}
+                          onFavoriteToggle={handleFavoriteToggle}
+                          onOpen={openDish}
+                          onIncrease={increaseOrAdd}
+                          onDecrease={decreaseQuantity}
+                        />
+                      </View>
                     );
                   })}
                 </View>
-              ) : (
-                <View style={styles.emptyMenuCard}>
-                  <Text style={styles.emptyMenuTitle}>No dishes available right now</Text>
-                  <Text style={styles.emptyMenuBody}>
-                    Pull to refresh to check this kitchen again.
-                  </Text>
-                </View>
-              )}
-
-              {profile.menuItems.length > MENU_PREVIEW_LIMIT ? (
-                <Text style={styles.previewFootnote}>
-                  More dishes are available from this kitchen. Use View all to browse the
-                  complete current menu.
+              ))
+            ) : (
+              <View style={styles.emptyMenuCard}>
+                <Text style={styles.emptyMenuTitle}>No dishes available right now</Text>
+                <Text style={styles.emptyMenuBody}>
+                  Pull to refresh to check this kitchen again.
                 </Text>
-              ) : null}
-            </View>
+              </View>
+            )}
           </View>
         </ScrollView>
       </View>
@@ -720,90 +787,83 @@ const styles = StyleSheet.create({
     minHeight: touchTarget.comfortable,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
     backgroundColor: colors.white,
   },
-  headerAction: {
+  headerGlass: {
     width: touchTarget.minimum,
     height: touchTarget.minimum,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+  },
+  headerGlassControl: {
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  headerTitleRow: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  headerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.cream,
+  },
+  headerAvatarText: {
+    color: colors.flameRed,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.extrabold,
   },
   headerTitle: {
     flex: 1,
     color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-    textAlign: 'center',
-  },
-  headerCartSummary: {
-    width: 64,
-    alignItems: 'flex-end',
-  },
-  headerCartCount: {
-    color: colors.espressoBrown,
-    fontSize: typography.small,
+    fontSize: typography.button,
     fontWeight: fontWeight.bold,
   },
-  headerCartLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
+  pinnedNotice: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.xs,
   },
   scrollContent: {
     paddingBottom: spacing.xxl,
   },
-  hero: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.xl,
+  photoSpace: {
+    height: PHOTO_SPACE_HEIGHT,
     backgroundColor: colors.white,
   },
-  heroAvatar: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
+  identity: {
+    paddingHorizontal: spacing.md,
+  },
+  avatar: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    marginTop: -AVATAR_SIZE / 2,
+    borderRadius: radius.pill,
+    borderWidth: 4,
+    borderColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.white,
-    borderWidth: 3,
-    borderColor: colors.white,
+    backgroundColor: colors.cream,
     ...elevation.card,
   },
-  heroInitials: {
+  avatarInitials: {
     color: colors.flameRed,
-    fontSize: typography.title,
+    fontSize: 28,
     fontWeight: fontWeight.extrabold,
   },
-  heroChefBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: 4,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  activeBadge: {
-    marginTop: spacing.md,
-    borderRadius: radius.pill,
-    backgroundColor: colors.successSoft,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xxs,
-  },
-  activeBadgeText: {
-    color: colors.success,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.bold,
-  },
   currentAvailabilityBadge: {
-    marginTop: spacing.xs,
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xxs,
@@ -821,87 +881,64 @@ const styles = StyleSheet.create({
     color: colors.espressoBrown,
     fontSize: typography.hero,
     fontWeight: fontWeight.extrabold,
-    textAlign: 'center',
   },
   legalKitchenName: {
     marginTop: spacing.xxs,
     color: colors.textSecondary,
     fontSize: typography.small,
-    textAlign: 'center',
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    marginTop: spacing.xs,
   },
   location: {
-    marginTop: spacing.xs,
+    flexShrink: 1,
     color: colors.textSecondary,
     fontSize: typography.small,
-    textAlign: 'center',
   },
-  heroActions: {
-    width: '100%',
+  facts: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
   },
-  primaryAction: {
-    flex: 1,
-    minHeight: touchTarget.comfortable,
-    borderRadius: radius.md,
+  fact: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.flameRed,
-    ...elevation.primaryAction,
+    gap: spacing.xxs + 2,
+    height: 30,
+    paddingHorizontal: spacing.sm - 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
   },
-  primaryActionText: {
-    color: colors.white,
-    fontSize: typography.button,
-    fontWeight: fontWeight.bold,
-  },
-  secondaryAction: {
-    flex: 1,
-    minHeight: touchTarget.comfortable,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-  },
-  secondaryActionText: {
+  factText: {
     color: colors.espressoBrown,
-    fontSize: typography.button,
+    fontSize: typography.small,
+    fontWeight: fontWeight.semibold,
+  },
+  bodyText: {
+    marginTop: spacing.sm,
+    color: colors.textPrimary,
+    fontSize: typography.body,
+  },
+  inlineAction: {
+    alignSelf: 'flex-start',
+    minHeight: touchTarget.minimum,
+    justifyContent: 'center',
+  },
+  inlineActionText: {
+    color: colors.flameRed,
+    fontSize: typography.small,
     fontWeight: fontWeight.bold,
   },
   content: {
     paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
   },
   notice: {
     marginTop: spacing.md,
-  },
-  factRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-  },
-  factCard: {
-    flex: 1,
-    minHeight: 84,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.sm,
-  },
-  factValue: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.extrabold,
-  },
-  factLabel: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    textAlign: 'center',
   },
   section: {
     marginTop: spacing.xl,
@@ -910,6 +947,11 @@ const styles = StyleSheet.create({
     color: colors.espressoBrown,
     fontSize: typography.heading,
     fontWeight: fontWeight.bold,
+  },
+  sectionCaption: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.small,
   },
   reviewHeadingRow: {
     flexDirection: 'row',
@@ -994,229 +1036,59 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.small,
   },
-  bodyText: {
-    marginTop: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: typography.body,
+  tabsBar: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.white,
   },
-  inlineAction: {
-    alignSelf: 'flex-start',
-    minHeight: touchTarget.minimum,
-    justifyContent: 'center',
+  tabsContent: {
+    gap: spacing.lg,
+    paddingHorizontal: spacing.md,
   },
-  inlineActionText: {
-    color: colors.flameRed,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
-  },
-  trustCard: {
-    marginTop: spacing.xl,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceMuted,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  trustTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  trustBody: {
-    marginTop: spacing.xs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  menuSectionHeading: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  menuSectionCopy: {
-    flex: 1,
-  },
-  sectionCaption: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-  },
-  previewPill: {
+  tab: {
     minHeight: touchTarget.minimum,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing.xxs,
-    paddingHorizontal: spacing.xs,
-    backgroundColor: 'transparent',
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
   },
-  previewPillText: {
-    color: colors.flameRedAccessible,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
+  tabSelected: {
+    borderBottomColor: colors.flameRed,
   },
-  menuList: {
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  favoriteButton: {
-    position: 'absolute',
-    top: spacing.xs,
-    right: spacing.xs,
-    zIndex: 4,
-  },
-  menuCard: {
-    minHeight: 164,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    backgroundColor: colors.white,
-    overflow: 'hidden',
-    ...elevation.card,
-  },
-  menuCardRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  menuImagePressable: {
-    width: 132,
-    minHeight: 164,
-  },
-  menuImage: {
-    width: 132,
-    height: 164,
-    backgroundColor: colors.surfaceMuted,
-  },
-  menuImageFallback: {
-    width: 132,
-    height: 164,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.sm,
-    backgroundColor: colors.surfaceMuted,
-  },
-  menuImageFallbackText: {
-    color: colors.flameRed,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
-    textAlign: 'center',
-  },
-  menuCopy: {
-    flex: 1,
-    minWidth: 0,
-    padding: spacing.sm,
-    paddingRight: spacing.md,
-  },
-  menuTitle: {
-    paddingRight: touchTarget.minimum,
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  availabilityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xxs,
-    marginTop: spacing.xxs,
-  },
-  availabilityText: {
-    color: colors.success,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.medium,
-  },
-  menuMetadataRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.xxs,
-    marginTop: spacing.xs,
-  },
-  menuMeta: {
+  tabText: {
     color: colors.textSecondary,
-    fontSize: typography.tiny,
+    fontSize: typography.body,
+    fontWeight: fontWeight.semibold,
   },
-  metadataSeparator: {
-    color: colors.borderStrong,
-    fontSize: typography.tiny,
-    marginHorizontal: spacing.xxs,
+  tabTextSelected: {
+    color: colors.espressoBrown,
   },
-  foodTypePill: {
-    alignSelf: 'flex-start',
+  tabCount: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
+  },
+  menu: {
+    paddingHorizontal: spacing.md,
+  },
+  sectionHeading: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xxs,
-    marginTop: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xxs,
-    backgroundColor: colors.white,
+    alignItems: 'baseline',
+    gap: spacing.xs,
+    paddingTop: spacing.lg,
   },
-  foodTypeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: radius.pill,
-  },
-  foodTypeText: {
-    color: colors.textPrimary,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.medium,
-  },
-  menuPurchaseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  menuPrice: {
-    flexShrink: 1,
+  sectionHeadingTitle: {
     color: colors.espressoBrown,
     fontSize: typography.heading,
     fontWeight: fontWeight.extrabold,
   },
-  addButton: {
-    minHeight: touchTarget.minimum,
-    minWidth: 104,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.flameRed,
+  sectionHeadingCount: {
+    color: colors.textSecondary,
+    fontSize: typography.small,
   },
-  addButtonText: {
-    color: colors.white,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  quantityControl: {
-    minHeight: touchTarget.minimum,
-    minWidth: 120,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.flameRed,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.white,
-    overflow: 'hidden',
-  },
-  quantityButton: {
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quantityButtonText: {
-    color: colors.flameRed,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  quantityText: {
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
+  rowDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   emptyMenuCard: {
     marginTop: spacing.md,
@@ -1236,16 +1108,8 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     textAlign: 'center',
   },
-  previewFootnote: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-  },
   pressed: {
     opacity: 0.82,
-  },
-  disabled: {
-    opacity: 0.55,
   },
   skeletonWrap: {
     padding: spacing.md,

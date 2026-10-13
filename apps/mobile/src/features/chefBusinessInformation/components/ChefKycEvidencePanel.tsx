@@ -326,10 +326,9 @@ export function ChefKycEvidencePanel({
       />
 
       <Text style={styles.privacy}>
-        Mobile accepts JPG or PNG for this flow. Files go directly to the
-        authenticated Chef evidence endpoint; the app does not retain a local
-        document copy after selection. Approved documents cannot be replaced
-        through this onboarding route.
+        You can upload JPG or PNG files here. They go straight to Craves and the
+        app does not keep a copy on your phone. Approved documents cannot be
+        replaced from this screen.
       </Text>
     </View>
   );

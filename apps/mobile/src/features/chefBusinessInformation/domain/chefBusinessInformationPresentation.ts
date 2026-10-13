@@ -44,7 +44,7 @@ export function getChefBusinessVerificationPresentation(
       return {
         title: 'Business verification approved',
         summary:
-          'Your Chef application is approved. Proof files shown below are listed exactly as the verification service currently reports them.',
+          'Your Chef application is approved. Your proof files are listed below.',
         label: 'Verified',
         tone: 'success',
       };
@@ -52,7 +52,7 @@ export function getChefBusinessVerificationPresentation(
       return {
         title: 'Verification under review',
         summary:
-          'Your Chef application is pending review. Status remains server-authoritative while Craves waits for a decision.',
+          'Your Chef application is pending review. We will update this once Craves has made a decision.',
         label: 'Pending',
         tone: 'warning',
       };

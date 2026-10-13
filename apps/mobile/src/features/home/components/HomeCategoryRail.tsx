@@ -9,6 +9,7 @@ import {
 import {ScrollView} from 'react-native-gesture-handler';
 import {
   CUSTOMER_MENU_CATEGORIES,
+  menuCategoryLabel,
   type CustomerMenuCategory,
 } from '../../../shared/catalog/menuCategories';
 import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
@@ -53,7 +54,7 @@ export function HomeCategoryRail({
         return (
           <Pressable
             key={category}
-            accessibilityLabel={`${category} category`}
+            accessibilityLabel={`${menuCategoryLabel(category)} category`}
             accessibilityRole="button"
             accessibilityState={{selected}}
             hitSlop={spacing.xxs}
@@ -68,7 +69,7 @@ export function HomeCategoryRail({
             <Text
               numberOfLines={2}
               style={[styles.label, selected && styles.labelSelected]}>
-              {category}
+              {menuCategoryLabel(category)}
             </Text>
           </Pressable>
         );

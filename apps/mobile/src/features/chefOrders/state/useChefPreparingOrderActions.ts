@@ -8,6 +8,8 @@ import {
   type ChefOrderDetail,
 } from '../api/chefOrderDetailApi';
 import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
+import {useReportFeedback} from './useReportFeedback';
+import {dialablePhone} from '../domain/chefOrderDetailModel';
 import {createChefOrderDetailQueryKey} from './useChefOrderDetailContract';
 
 export type ChefPreparingOrderAction = 'marking-ready' | 'calling';
@@ -33,15 +35,6 @@ function isReadyStatus(status: ChefOrderDetail['status']): boolean {
   return status === 'READY_FOR_PICKUP';
 }
 
-function callablePhone(detail: ChefOrderDetail): string | null {
-  const phone = detail.deliveryAddress?.contactPhoneNumber.trim() ?? '';
-  if (!phone) {
-    return null;
-  }
-  const normalized = phone.replace(/[^+\d]/g, '');
-  return normalized.length >= 7 ? normalized : null;
-}
-
 export function useChefPreparingOrderActions(): ChefPreparingOrderActions {
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
   const queryClient = useQueryClient();
@@ -51,6 +44,7 @@ export function useChefPreparingOrderActions(): ChefPreparingOrderActions {
     Record<string, ChefPreparingOrderAction>
   >({});
   const [feedback, setFeedback] = React.useState<ChefPreparingOrderFeedback | null>(null);
+  const report = useReportFeedback<ChefPreparingOrderFeedback>(setFeedback);
 
   const cacheDetail = React.useCallback(
     (detail: ChefOrderDetail) => {
@@ -131,7 +125,7 @@ export function useChefPreparingOrderActions(): ChefPreparingOrderActions {
 
         if (isReadyStatus(latest.status)) {
           operational.refresh().catch(() => undefined);
-          setFeedback({kind: 'success', message: 'Order is already ready for pickup.'});
+          report({kind: 'success', message: 'Order is already ready for pickup.'});
           return;
         }
 
@@ -153,17 +147,17 @@ export function useChefPreparingOrderActions(): ChefPreparingOrderActions {
           ready.prepTimeMinutes,
         );
         operational.refresh().catch(() => undefined);
-        setFeedback({kind: 'success', message: 'Order marked ready for pickup.'});
+        report({kind: 'success', message: 'Order marked ready for pickup.'});
       } catch (cause: unknown) {
         const appError = cause instanceof AppApiError ? cause : toAppApiError(cause);
         if (appError.status === 409) {
           const latest = await reconcileLatest(orderId);
           if (latest && isReadyStatus(latest.status)) {
-            setFeedback({kind: 'success', message: 'Order is already ready for pickup.'});
+            report({kind: 'success', message: 'Order is already ready for pickup.'});
             return;
           }
         }
-        setFeedback({
+        report({
           kind: 'error',
           message: appError.message || 'Could not mark this order ready. Try again.',
         });
@@ -171,7 +165,7 @@ export function useChefPreparingOrderActions(): ChefPreparingOrderActions {
       } finally {
         endAction(orderId);
       }
-    }, [beginAction, cacheDetail, endAction, operational, reconcileLatest],
+    }, [beginAction, cacheDetail, endAction, operational, reconcileLatest, report],
   );
 
   const callCustomer = React.useCallback(
@@ -201,7 +195,7 @@ export function useChefPreparingOrderActions(): ChefPreparingOrderActions {
             409,
           );
         }
-        const phone = callablePhone(latest);
+        const phone = dialablePhone(latest.deliveryAddress?.contactPhoneNumber);
         if (!phone) {
           throw new AppApiError(
             'CHEF_CUSTOMER_CONTACT_UNAVAILABLE',
@@ -221,7 +215,7 @@ export function useChefPreparingOrderActions(): ChefPreparingOrderActions {
         await Linking.openURL(url);
       } catch (cause: unknown) {
         const appError = cause instanceof AppApiError ? cause : toAppApiError(cause);
-        setFeedback({
+        report({
           kind: 'error',
           message: appError.message || 'Could not start the customer call.',
         });
@@ -229,7 +223,7 @@ export function useChefPreparingOrderActions(): ChefPreparingOrderActions {
       } finally {
         endAction(orderId);
       }
-    }, [beginAction, cacheDetail, endAction, operational],
+    }, [beginAction, cacheDetail, endAction, operational, report],
   );
 
   return {

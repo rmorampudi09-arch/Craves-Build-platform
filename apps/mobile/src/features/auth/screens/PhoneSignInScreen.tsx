@@ -75,6 +75,7 @@ export function PhoneSignInScreen({ navigation, route }: Props) {
   };
 
   const updatePhone = (value: string) => {
+    // No native maxLength: it would cut a pasted "+91…" number before the dial code is stripped.
     setPhone(sanitizeNationalPhone(value));
     if (requestError) {
       setRequestError(null);
@@ -96,7 +97,7 @@ export function PhoneSignInScreen({ navigation, route }: Props) {
 
   return (
     <VideoAuthLayout onBack={() => navigation.goBack()} backDisabled={busy}>
-      {role === 'CHEF' ? heading : null}
+      {heading}
       <AuthRoleCards
         value={role}
         onChange={nextRole => {
@@ -104,12 +105,12 @@ export function PhoneSignInScreen({ navigation, route }: Props) {
           setChefSignup(false);
         }}
         disabled={busy}
+        descriptions={false}
+        slim
       />
-      {role === 'CUSTOMER' ? heading : null}
       <AuthTextField
         ref={phoneInput}
         label="Mobile number"
-        labelInside={role === 'CUSTOMER'}
         value={phone}
         onChangeText={updatePhone}
         placeholder="Enter 10-digit number"
@@ -118,7 +119,6 @@ export function PhoneSignInScreen({ navigation, route }: Props) {
         textContentType="telephoneNumber"
         autoComplete="tel"
         prefix={DEFAULT_PHONE_COUNTRY.dialCode}
-        maxLength={DEFAULT_PHONE_COUNTRY.nationalDigits}
         accessibilityLabel="Phone number"
         disabled={busy}
         error={validationError}
@@ -131,7 +131,7 @@ export function PhoneSignInScreen({ navigation, route }: Props) {
       ) : null}
       <AuthActionButton
         label="Send OTP"
-        arrow={role === 'CHEF'}
+        arrow={false}
         loading={busy}
         disabled={!phoneValid || busy}
         accessibilityHint={copy.continueAccessibilityHint}
@@ -144,7 +144,6 @@ export function PhoneSignInScreen({ navigation, route }: Props) {
       </View>
       <AuthActionButton
         outline
-        outlineTone={role === 'CUSTOMER' ? 'red' : 'neutral'}
         label="Use email & password"
         disabled={busy}
         onPress={() => navigation.navigate('EmailSignIn', { role })}

@@ -118,7 +118,7 @@ const CUSTOMER_VISUAL_QA_TARGETS: readonly CustomerVisualQaTarget[] = [
     ref: 16,
     image: 'image16.jpeg',
     state: 'Customer Kitchen All Dishes',
-    screenPath: 'src/features/kitchenProfile/screens/CustomerKitchenDishesScreen.tsx',
+    screenPath: 'src/features/kitchenProfile/screens/CustomerKitchenProfileScreen.tsx',
     chromePolicy: 'focused',
     certification: 'pending-device-comparison',
   },
@@ -177,7 +177,7 @@ describe('P124 customer visual QA target preflight', () => {
       [13, 'src/features/dishDetail/screens/CustomerDishDetailScreen.tsx'],
       [14, 'src/features/dishDetail/screens/CustomerDishIngredientsScreen.tsx'],
       [15, 'src/features/kitchenProfile/screens/CustomerKitchenProfileScreen.tsx'],
-      [16, 'src/features/kitchenProfile/screens/CustomerKitchenDishesScreen.tsx'],
+      [16, 'src/features/kitchenProfile/screens/CustomerKitchenProfileScreen.tsx'],
       [17, 'src/features/discoveryFilters/screens/CustomerFilterSortScreen.tsx'],
       [18, 'src/features/cart/screens/CustomerCartScreen.tsx'],
     ]);

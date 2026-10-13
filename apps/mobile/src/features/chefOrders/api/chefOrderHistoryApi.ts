@@ -3,8 +3,10 @@ import type {
   ChefOperationalOrder,
   ChefOperationalOrderStatus,
 } from '../../chefShell/api/chefOperationalApi';
+import {shortCustomerName} from '../../chefShell/domain/chefFormat';
 import {parseChefOrderDetail} from './chefOrderDetailApi';
 
+// Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
 export const CHEF_ORDER_HISTORY_V2_AVAILABLE = false;
 export const CHEF_ORDER_HISTORY_PAGE_SIZE = 20;
 
@@ -56,6 +58,7 @@ function normalizeLimit(limit: number | undefined): number {
 function toOperationalOrder(value: unknown): ChefOperationalOrder | null {
   const order = parseChefOrderDetail(value);
   if (!order) return null;
+  const customerName = shortCustomerName(order.deliveryAddress?.recipientName);
 
   return {
     id: order.id,
@@ -65,6 +68,8 @@ function toOperationalOrder(value: unknown): ChefOperationalOrder | null {
       id: item.id,
       itemName: item.itemName,
       quantity: item.quantity,
+      menuItemId: item.menuItemId,
+      ...(item.foodType ? {foodType: item.foodType} : {}),
     })),
     deliverySummary: order.deliveryAddress
       ? {
@@ -72,6 +77,9 @@ function toOperationalOrder(value: unknown): ChefOperationalOrder | null {
           city: order.deliveryAddress.city,
         }
       : null,
+    ...(customerName ? {customerName} : {}),
+    ...(order.checkoutId ? {checkoutId: order.checkoutId} : {}),
+    foodSubtotal: order.foodSubtotal,
     prepTimeMinutes: order.prepTimeMinutes,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,

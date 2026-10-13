@@ -84,8 +84,9 @@ export function InputField({
         {shownIcon ? (
           <Icon
             name={shownIcon}
-            size={iconSize.sm}
+            size={shownIcon === 'search' ? iconSize.lg : iconSize.sm}
             color={focused ? colors.flameRed : colors.textSecondary}
+            surface={shownIcon !== 'search'}
           />
         ) : null}
         {prefix ? (

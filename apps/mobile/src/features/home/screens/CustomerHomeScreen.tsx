@@ -43,17 +43,24 @@ import {
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {getDisplayAvailabilityCount} from '../../../shared/menuAvailability';
+import {askKitchenSwitch} from '../../cart/components/KitchenSwitchDialog';
 import type {CartLine} from '../../cart/domain/cartTypes';
 import {
   addCartItem,
   removeCartItem,
   setCartItemQuantity,
+  switchCartKitchen,
   type CartMutationOutcome,
 } from '../../cart/state/cartMutations';
+import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
 import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
 import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmptyStateAdapters';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
-import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
+import {
+  CustomerLocationSelector,
+  DeliveryAddressEditor,
+  type DeliveryAddressEditorTarget,
+} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
 import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
 import {
@@ -82,6 +89,7 @@ import {
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
 import {useQueryClient} from '@tanstack/react-query';
 import {homeBannerQueryKey} from '../query/homeBannerQueries';
+import {menuCategoryLabel} from '../../../shared/catalog/menuCategories';
 
 const HOME_RADIUS_METERS = 10_000;
 const HOME_PAGE_SIZE = 20;
@@ -171,7 +179,7 @@ function DishCard({
               />
             ) : (
               <View style={styles.imageFallback}>
-                <Text style={styles.imageFallbackText}>{dish.category}</Text>
+                <Text style={styles.imageFallbackText}>{menuCategoryLabel(dish.category)}</Text>
               </View>
             )}
           </Pressable>
@@ -335,6 +343,7 @@ export function CustomerHomeScreen() {
     insets.bottom + touchTarget.comfortable + spacing.xxxl,
   );
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
+  const [addressEditor, setAddressEditor] = useState<DeliveryAddressEditorTarget | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const listRef = useRef<FlatList<HomeFeedListItem>>(null);
@@ -524,6 +533,32 @@ export function CustomerHomeScreen() {
 
   const handleAdd = (dishId: string) => {
     setMutationError(null);
+    const dish = dishes.find(candidate => candidate.id === dishId);
+    const otherKitchen =
+      dish && cartSnapshot?.lines.find(line => line.kitchenId !== dish.kitchenId);
+    if (dish && otherKitchen && cartSnapshot) {
+      const expectedSnapshot = cartSnapshot;
+      askKitchenSwitch({
+        cartLines: expectedSnapshot.lines,
+        newDish: {
+          name: dish.itemName,
+          kitchenName: dish.kitchenDisplayName ?? dish.kitchenName,
+          priceLabel: formatDishDetailPrice(dish.price, dish.currency),
+          imageUrl: dish.primaryImageUrl,
+        },
+        onReplace: () => {
+          dispatch(
+            switchCartKitchen({
+              expectedSnapshot,
+              menuItemId: dish.id,
+              quantity: 1,
+              expectedKitchenId: dish.kitchenId,
+            }),
+          ).then(handleMutationOutcome);
+        },
+      });
+      return;
+    }
     dispatch(addCartItem({menuItemId: dishId, quantity: 1})).then(handleMutationOutcome);
   };
 
@@ -580,12 +615,36 @@ export function CustomerHomeScreen() {
   const emptyState = (() => {
     if (feed.locationRequired) {
       return (
-        <TerminalState
-          title="Choose where to deliver"
-          description="Select a saved address to see available home-cooked meals nearby."
-          actionLabel="Choose location"
-          onAction={() => setLocationSelectorVisible(true)}
-        />
+        <View style={styles.noLocationCard}>
+          <View style={styles.noLocationIcon}>
+            <Icon color={colors.flameRed} name="location" size={36} surface={false} />
+          </View>
+          <Text accessibilityRole="header" style={styles.noLocationTitle}>
+            Where should Craves deliver?
+          </Text>
+          <Text style={styles.noLocationBody}>
+            Home kitchens, dishes and delivery depend on your address.
+          </Text>
+          <View style={styles.noLocationActions}>
+            <Button
+              label="Use current location"
+              leftIcon="gps"
+              onPress={() => setAddressEditor({mode: 'add', start: 'current-location'})}
+            />
+            <Button
+              label="Search area or street"
+              leftIcon="search"
+              onPress={() => setAddressEditor({mode: 'add', start: 'search'})}
+              variant="outline"
+            />
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setLocationSelectorVisible(true)}
+            style={({pressed}) => [styles.noLocationLink, pressed && styles.noLocationPressed]}>
+            <Text style={styles.noLocationLinkText}>Choose a saved address</Text>
+          </Pressable>
+        </View>
       );
     }
     if (initialLoading) {
@@ -852,11 +911,59 @@ export function CustomerHomeScreen() {
         visible={locationSelectorVisible}
         onClose={() => setLocationSelectorVisible(false)}
       />
+      {addressEditor ? (
+        <DeliveryAddressEditor
+          onClose={() => setAddressEditor(null)}
+          target={addressEditor}
+        />
+      ) : null}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
+  noLocationCard: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    ...elevation.card,
+  },
+  noLocationIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.iconSurface,
+  },
+  noLocationTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.hero - 2,
+    fontWeight: fontWeight.bold,
+    textAlign: 'center',
+  },
+  noLocationBody: {
+    color: colors.textSecondary,
+    fontSize: typography.body,
+    textAlign: 'center',
+  },
+  noLocationActions: {alignSelf: 'stretch', gap: spacing.sm, marginTop: spacing.xs},
+  noLocationLink: {minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.sm},
+  noLocationPressed: {opacity: 0.84},
+  noLocationLinkText: {
+    color: colors.flameRedAccessible,
+    fontSize: typography.small + 1,
+    fontWeight: fontWeight.semibold,
+  },
   fixedHeader: {
     backgroundColor: colors.white,
   },

@@ -23,24 +23,10 @@ export const loginFontAssets = {
   [loginFonts.bold]: require('../../../assets/auth/fonts/Inter-Bold.ttf'),
 };
 
-export const loginHeroFractions = {
-  welcome: 0.465,
-  phone: 0.45,
-  otp: 0.465,
-  email: 0.425,
+/** Share of the screen the white sign-in sheet takes; the video fills the rest. */
+export const loginPanelFractions = {
+  resting: 1 / 3,
+  raised: 1 / 2,
+  /** Typing needs the field and its button above the keyboard. */
+  keyboard: 2 / 3,
 } as const;
-
-export type LoginLayout = keyof typeof loginHeroFractions;
-
-export function authHeroFraction(route: string) {
-  switch (route) {
-    case 'RoleSelection':
-      return loginHeroFractions.welcome;
-    case 'OtpVerification':
-      return loginHeroFractions.otp;
-    case 'EmailSignIn':
-      return loginHeroFractions.email;
-    default:
-      return loginHeroFractions.phone;
-  }
-}

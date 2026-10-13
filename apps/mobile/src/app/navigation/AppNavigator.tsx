@@ -33,6 +33,7 @@ import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {useBootstrap} from '../../features/auth/hooks/useBootstrap';
 import {useSessionLifecycle} from '../../features/auth/hooks/useSessionLifecycle';
 import {SplashScreen} from '../../features/auth/screens/SplashScreen';
+import {SplashDoneContext} from '../../features/auth/components/CravesWordmark';
 import {RoleSelectionScreen} from '../../features/auth/screens/RoleSelectionScreen';
 import {PhoneSignInScreen} from '../../features/auth/screens/PhoneSignInScreen';
 import {EmailSignInScreen} from '../../features/auth/screens/EmailSignInScreen';
@@ -43,11 +44,12 @@ import {CustomerRegistrationScreen} from '../../features/auth/screens/CustomerRe
 import {CustomerAccountStatusScreen} from '../../features/auth/screens/CustomerAccountStatusScreen';
 import {ChefRegistrationScreen} from '../../features/auth/screens/ChefRegistrationScreen';
 import {ChefAccountStatusScreen} from '../../features/auth/screens/ChefAccountStatusScreen';
+import {ChefOnboardingScreen} from '../../features/chefOnboarding/screens/ChefOnboardingScreen';
 import {StartupErrorScreen} from '../../features/auth/screens/StartupErrorScreen';
 import {AccountRouterScreen} from '../../features/auth/screens/AccountRouterScreen';
 import {AuthVideoBackground} from '../../features/auth/components/AuthVideoBackground';
 import {useFonts} from 'expo-font';
-import {authHeroFraction, loginFontAssets} from '../../features/auth/components/loginVisuals';
+import {loginFontAssets} from '../../features/auth/components/loginVisuals';
 import type {
   AccountResolution,
   ChefApplicationStatus,
@@ -67,8 +69,9 @@ function useAuthStackScreenOptions() {
   return React.useMemo(
     () => ({
       headerShown: false,
+      // A plain crossfade keeps the shared white sheet anchored while it glides between heights.
       animation: resolveReducedMotionAnimation(
-        'fade_from_bottom' as const,
+        'fade' as const,
         reduceMotionEnabled,
       ),
     }),
@@ -84,8 +87,7 @@ function AuthNavigator() {
   return (
     <View style={authCanvasStyles.root}>
       <AuthVideoBackground
-        enabled={authScene !== 'ForgotPassword' && authScene !== 'PasswordResetSent'}
-        heroFraction={authHeroFraction(authScene)} />
+        enabled={authScene !== 'ForgotPassword' && authScene !== 'PasswordResetSent'} />
       {fontsReady ? <AuthStack.Navigator
         screenOptions={screenOptions}
         initialRouteName="RoleSelection"
@@ -145,11 +147,11 @@ function ChefAccountNavigator({
   }
 
   const status: ChefApplicationStatus = resolution.onboardingStatus;
-  const initialRouteName =
-    status === 'NOT_SUBMITTED' ? 'ChefRegistration' : 'ChefAccountStatus';
 
+  // The step-by-step application decides between its form and status page; the older screens stay as its fallback.
   return (
-    <ChefStack.Navigator screenOptions={screenOptions} initialRouteName={initialRouteName}>
+    <ChefStack.Navigator screenOptions={screenOptions} initialRouteName="ChefApplication">
+      <ChefStack.Screen name="ChefApplication" component={ChefOnboardingScreen} />
       <ChefStack.Screen name="ChefRegistration" component={ChefRegistrationScreen} />
       <ChefStack.Screen
         name="ChefAccountStatus"
@@ -528,20 +530,26 @@ export function AppNavigator() {
     <View style={styles.root}>
       {status === 'error' ? <StartupErrorScreen /> : null}
       {canRenderNavigator ? (
-        <NavigationContainer
-          ref={navigationRef}
-          onReady={handleNavigationReadyOrChange}
-          onStateChange={handleNavigationReadyOrChange}>
-          {auth.bootstrapStatus === 'authenticated' ? (
-            <AuthenticatedNavigator resolution={auth.accountResolution} />
-          ) : (
-            <AuthNavigator />
-          )}
-        </NavigationContainer>
+        <SplashDoneContext.Provider value={splashDismissed}>
+          <NavigationContainer
+            ref={navigationRef}
+            onReady={handleNavigationReadyOrChange}
+            onStateChange={handleNavigationReadyOrChange}>
+            {auth.bootstrapStatus === 'authenticated' ? (
+              <AuthenticatedNavigator resolution={auth.accountResolution} />
+            ) : (
+              <AuthNavigator />
+            )}
+          </NavigationContainer>
+        </SplashDoneContext.Provider>
       ) : null}
       {!splashDismissed ? (
         <SplashScreen
           readyToLeave={bootstrapReady}
+          movesToWelcome={() =>
+            navigationRef.isReady() &&
+            navigationRef.getCurrentRoute()?.name === 'RoleSelection'
+          }
           onFinish={() => setSplashDismissed(true)}
         />
       ) : null}

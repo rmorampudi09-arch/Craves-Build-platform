@@ -22,6 +22,9 @@ describe('phone sign-in policy', () => {
   it('sanitizes local and E.164-style pasted phone input', () => {
     expect(sanitizeNationalPhone('+91 98765-43210')).toBe('9876543210');
     expect(sanitizeNationalPhone('98765 43210 123')).toBe('9876543210');
+    expect(sanitizeNationalPhone('+919876543210')).toBe('9876543210');
+    expect(sanitizeNationalPhone('919876543210')).toBe('9876543210');
+    expect(sanitizeNationalPhone('91987654321')).toBe('9198765432');
   });
 
   it('accepts only valid Indian mobile numbers and normalizes them to E.164', () => {

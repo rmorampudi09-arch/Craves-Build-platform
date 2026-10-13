@@ -87,6 +87,12 @@ describe('chefBankOnboardingApi contract', () => {
     ).toBeNull();
   });
 
+  it('accepts the named account, bank and branch the service now returns', () => {
+    const named = {...status, accountHolderName: 'TEST CHEF', bankName: 'HDFC Bank', branchName: null};
+    expect(parseChefBankStatus(named)).toEqual(named);
+    expect(parseChefBankStatus({...status, bankName: 42})).toBeNull();
+  });
+
   it('allows NOT_SUBMITTED only without masked bank metadata', () => {
     expect(
       parseChefBankStatus({

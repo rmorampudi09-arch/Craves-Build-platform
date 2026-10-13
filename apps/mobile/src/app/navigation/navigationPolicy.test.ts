@@ -33,7 +33,7 @@ describe('navigationPolicy', () => {
       'CustomerDishDetail',
       'CustomerDishIngredients',
       'CustomerKitchenProfile',
-      'CustomerKitchenDishes',
+      'CustomerSupportChat',
     ] as const) {
       expect(isCurrentImmersiveRoute(routeName)).toBe(true);
       expect(resolveRouteChromePolicy('Customer', routeName)).toEqual({

@@ -1,6 +1,7 @@
 import {httpClient} from '../../../core/http/httpClient';
 import {
   customerSubscriptionApi,
+  publicPlanScheduleSchema,
   publicSubscriptionPolicySchema,
 } from './customerSubscriptionApi';
 
@@ -58,6 +59,143 @@ describe('customerSubscriptionApi policy', () => {
   });
 });
 
+const SUBSCRIPTION_ID = '22222222-2222-4222-8222-222222222222';
+const ORDER_ID = '55555555-5555-4555-8555-555555555555';
+
+const planBase = {
+  id: PLAN_ID,
+  planCode: 'WEEKLY_LUNCH',
+  name: 'Weekly Lunch',
+  description: null,
+  billingPeriod: 'WEEKLY',
+  amount: 1499,
+  currency: 'INR',
+};
+
+const subscriptionBase = {
+  id: SUBSCRIPTION_ID,
+  planId: PLAN_ID,
+  status: 'ACTIVE',
+  startDate: '2026-10-12',
+  endDate: null,
+  nextServiceDate: '2026-10-12',
+  deliveryAddressId: '66666666-6666-4666-8666-666666666666',
+  notes: null,
+  createdAt: '2026-10-11T08:30:00Z',
+  updatedAt: '2026-10-11T08:30:00Z',
+};
+
+const occurrenceBase = {
+  id: '77777777-7777-4777-8777-777777777777',
+  serviceDate: '2026-10-12',
+  mealSlotCode: 'LUNCH',
+  serviceAt: '2026-10-12T06:30:00Z',
+  status: 'ORDER_CREATED',
+  items: [],
+};
+
+describe('customerSubscriptionApi optional presentation fields', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('parses today\'s production responses that lack the new fields', async () => {
+    (httpClient.get as jest.Mock)
+      .mockResolvedValueOnce([planBase])
+      .mockResolvedValueOnce([subscriptionBase])
+      .mockResolvedValueOnce([occurrenceBase]);
+
+    const [plan] = await customerSubscriptionApi.listPlans();
+    const [subscription] = await customerSubscriptionApi.listMine();
+    const [occurrence] = await customerSubscriptionApi.listOccurrences(SUBSCRIPTION_ID);
+
+    expect(plan.imageUrl ?? null).toBeNull();
+    expect(subscription.planName ?? null).toBeNull();
+    expect(subscription.amount ?? null).toBeNull();
+    expect(subscription.nextBillingDate ?? null).toBeNull();
+    expect(subscription.planImageUrl ?? null).toBeNull();
+    expect(occurrence.orderId ?? null).toBeNull();
+  });
+
+  it('accepts explicit nulls for the new fields', async () => {
+    (httpClient.get as jest.Mock)
+      .mockResolvedValueOnce([{...planBase, imageUrl: null}])
+      .mockResolvedValueOnce([
+        {
+          ...subscriptionBase,
+          planName: null,
+          billingPeriod: null,
+          amount: null,
+          currency: null,
+          nextBillingDate: null,
+          planImageUrl: null,
+        },
+      ])
+      .mockResolvedValueOnce([{...occurrenceBase, orderId: null}]);
+
+    await expect(customerSubscriptionApi.listPlans()).resolves.toHaveLength(1);
+    await expect(customerSubscriptionApi.listMine()).resolves.toHaveLength(1);
+    await expect(
+      customerSubscriptionApi.listOccurrences(SUBSCRIPTION_ID),
+    ).resolves.toHaveLength(1);
+  });
+
+  it('maps the new fields when the backend sends them', async () => {
+    const planImage = `/api/v1/subscriptions/plans/${PLAN_ID}/image`;
+    (httpClient.get as jest.Mock)
+      .mockResolvedValueOnce([{...planBase, imageUrl: planImage}])
+      .mockResolvedValueOnce([
+        {
+          ...subscriptionBase,
+          planName: 'Weekly Lunch',
+          billingPeriod: 'WEEKLY',
+          amount: 1499,
+          currency: 'INR',
+          nextBillingDate: '2026-10-19',
+          planImageUrl: planImage,
+        },
+      ])
+      .mockResolvedValueOnce([{...occurrenceBase, orderId: ORDER_ID}]);
+
+    const [plan] = await customerSubscriptionApi.listPlans();
+    const [subscription] = await customerSubscriptionApi.listMine();
+    const [occurrence] = await customerSubscriptionApi.listOccurrences(SUBSCRIPTION_ID);
+
+    expect(plan.imageUrl).toBe(planImage);
+    expect(subscription).toMatchObject({
+      planName: 'Weekly Lunch',
+      billingPeriod: 'WEEKLY',
+      amount: '1499',
+      currency: 'INR',
+      nextBillingDate: '2026-10-19',
+      planImageUrl: planImage,
+    });
+    expect(occurrence.orderId).toBe(ORDER_ID);
+  });
+
+  it('reads the subscription amount as money, whether sent as a number or a string', async () => {
+    (httpClient.get as jest.Mock).mockResolvedValueOnce([
+      {...subscriptionBase, amount: 1499.5},
+      {...subscriptionBase, amount: '1499.50'},
+    ]);
+
+    const subscriptions = await customerSubscriptionApi.listMine();
+
+    expect(subscriptions.map(subscription => subscription.amount)).toEqual([
+      '1499.5',
+      '1499.50',
+    ]);
+  });
+
+  it('still rejects malformed values for the new fields', async () => {
+    (httpClient.get as jest.Mock).mockResolvedValueOnce([
+      {...subscriptionBase, nextBillingDate: 'next week'},
+    ]);
+
+    await expect(customerSubscriptionApi.listMine()).rejects.toThrow('Subscriptions');
+  });
+});
+
 describe('customerSubscriptionApi skip contract', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -112,3 +250,43 @@ describe('customerSubscriptionApi skip contract', () => {
   });
 });
 
+describe('customerSubscriptionApi schedules saved before dish snapshots', () => {
+  it('parses a schedule row with no dish name, price or currency and labels it as a dish', () => {
+    const parsed = publicPlanScheduleSchema.parse({
+      planId: PLAN_ID,
+      recurrenceType: 'WEEKLY',
+      timezone: 'Asia/Kolkata',
+      items: [{
+        menuItemId: '22222222-2222-4222-8222-222222222222',
+        menuItemName: null,
+        menuItemPrice: null,
+        menuItemCurrency: null,
+        quantity: 1,
+        isoDayOfWeek: 1,
+        mealSlotCode: 'LUNCH',
+        serviceTime: '12:30:00',
+        sequenceNumber: 1,
+      }],
+    });
+    expect(parsed.items[0]).toMatchObject({menuItemName: 'Dish', menuItemPrice: null, menuItemCurrency: null});
+  });
+});
+
+describe('customerSubscriptionApi nearby plans', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('asks the server only for plans near the selected location', async () => {
+    (httpClient.get as jest.Mock).mockResolvedValueOnce([planBase]);
+
+    await expect(
+      customerSubscriptionApi.listNearbyPlans({latitude: 17.4435, longitude: 78.3772}),
+    ).resolves.toHaveLength(1);
+
+    expect(httpClient.get).toHaveBeenCalledWith(
+      '/api/v1/subscriptions/plans',
+      expect.objectContaining({params: {latitude: 17.4435, longitude: 78.3772}}),
+    );
+  });
+});

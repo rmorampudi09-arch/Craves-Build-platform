@@ -103,6 +103,17 @@ jest.mock('expo-glass-effect', () => {
   };
 });
 
+// MapLibre Native draws the Ola map; Jest only needs host views and the header manager.
+jest.mock('@maplibre/maplibre-react-native', () => {
+  const React = require('react');
+  const {View} = require('react-native');
+  return {
+    Map: View,
+    Camera: React.forwardRef(() => null),
+    TransformRequestManager: {addHeader: jest.fn()},
+  };
+});
+
 jest.mock('expo-haptics', () => ({
   AndroidHaptics: {Segment_Tick: 'segment-tick'},
   performAndroidHapticsAsync: jest.fn(async () => undefined),

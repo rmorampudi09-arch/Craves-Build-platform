@@ -1,38 +1,22 @@
 import React from 'react';
 import {useQueryClient} from '@tanstack/react-query';
 import {useAppSelector} from '../../../app/store/hooks';
-import {AppApiError} from '../../../core/http/apiError';
-import {
-  chefProfileApi,
-  type ChefKitchenProfile,
-} from '../api/chefProfileApi';
-import {
-  buildChefKitchenProfileReplacementRequest,
-  canEditChefKitchenProfile,
-} from '../domain/chefEditProfileForm';
+import {chefProfileApi, type ChefKitchenProfile} from '../api/chefProfileApi';
+import {buildChefKitchenProfileReplacementRequest, canEditChefKitchenProfile} from '../domain/chefEditProfileForm';
 import {useChefEditProfileDraft} from './ChefEditProfileDraftProvider';
+import {createChefProfileKitchenQueryKey} from './chefProfileQuery';
 import {synchronizeChefProfileAfterSave} from './chefProfileSynchronization';
+
+export const KITCHEN_SAVE_FAILED = "We couldn't save your changes. Please try again.";
+export const KITCHEN_PAUSED_BY_CRAVES = 'Craves has paused your kitchen, so its details cannot be changed right now.';
 
 export interface ChefEditProfileModel {
   saveState: 'idle' | 'submitting' | 'error' | 'success';
+  /** Plain words for the chef; never the server's own text. */
   errorMessage: string | null;
-  errorDetails: readonly string[];
   save: () => Promise<ChefKitchenProfile | null>;
   cancelSave: () => void;
   clearError: () => void;
-}
-
-function publicSaveFailure(cause: unknown): {
-  message: string;
-  details: readonly string[];
-} {
-  if (cause instanceof AppApiError) {
-    return {message: cause.message, details: cause.details};
-  }
-  return {
-    message: 'Your Chef profile could not be updated. Check the form and try again.',
-    details: [],
-  };
 }
 
 export function useChefEditProfileModel(): ChefEditProfileModel {
@@ -40,52 +24,42 @@ export function useChefEditProfileModel(): ChefEditProfileModel {
   const queryClient = useQueryClient();
   const draftSession = useChefEditProfileDraft();
   const activeSubmission = React.useRef<AbortController | null>(null);
-  const [saveState, setSaveState] = React.useState<
-    ChefEditProfileModel['saveState']
-  >('idle');
+  const [saveState, setSaveState] = React.useState<ChefEditProfileModel['saveState']>('idle');
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  const [errorDetails, setErrorDetails] = React.useState<readonly string[]>([]);
+
+  const fail = React.useCallback((message: string) => {
+    setSaveState('error');
+    setErrorMessage(message);
+    return null;
+  }, []);
 
   const save = React.useCallback(async () => {
     if (activeSubmission.current) {
       return null;
     }
-    if (!identityId) {
-      setSaveState('error');
-      setErrorMessage(
-        'Your Chef session is unavailable. Sign in again before saving profile changes.',
-      );
-      setErrorDetails([]);
-      return null;
+    if (!identityId || !draftSession.originalProfile || !draftSession.formDraft) {
+      return fail(KITCHEN_SAVE_FAILED);
     }
-    if (!draftSession.originalProfile || !draftSession.formDraft) {
-      setSaveState('error');
-      setErrorMessage('Open the Chef profile editor again before saving changes.');
-      setErrorDetails([]);
-      return null;
-    }
-    if (!canEditChefKitchenProfile(draftSession.originalProfile)) {
-      setSaveState('error');
-      setErrorMessage(
-        'This kitchen is suspended and its profile is read-only. Resolve the suspension before editing.',
-      );
-      setErrorDetails([]);
-      return null;
-    }
+    const form = draftSession.formDraft;
 
     const controller = new AbortController();
     activeSubmission.current = controller;
     setSaveState('submitting');
     setErrorMessage(null);
-    setErrorDetails([]);
 
     try {
-      const request = buildChefKitchenProfileReplacementRequest(
-        draftSession.formDraft,
-        draftSession.originalProfile,
-      );
+      // The PUT replaces the whole kitchen, status and pin included, so it is built on the kitchen as it is
+      // right now: the chef may have closed it on Home, or Craves may have paused it, since this form opened.
+      const latest = await queryClient.fetchQuery({
+        queryKey: createChefProfileKitchenQueryKey(identityId),
+        queryFn: () => chefProfileApi.getKitchen(controller.signal),
+        staleTime: 0,
+      });
+      if (!canEditChefKitchenProfile(latest)) {
+        return fail(KITCHEN_PAUSED_BY_CRAVES);
+      }
       const updated = await chefProfileApi.replaceKitchen(
-        request,
+        buildChefKitchenProfileReplacementRequest(form, latest),
         controller.signal,
       );
 
@@ -93,22 +67,18 @@ export function useChefEditProfileModel(): ChefEditProfileModel {
       void synchronizeChefProfileAfterSave(queryClient, identityId, updated);
       setSaveState('success');
       return updated;
-    } catch (cause) {
+    } catch {
       if (controller.signal.aborted) {
         setSaveState('idle');
         return null;
       }
-      const failure = publicSaveFailure(cause);
-      setSaveState('error');
-      setErrorMessage(failure.message);
-      setErrorDetails(failure.details);
-      return null;
+      return fail(KITCHEN_SAVE_FAILED);
     } finally {
       if (activeSubmission.current === controller) {
         activeSubmission.current = null;
       }
     }
-  }, [draftSession, identityId, queryClient]);
+  }, [draftSession, fail, identityId, queryClient]);
 
   const cancelSave = React.useCallback(() => {
     activeSubmission.current?.abort();
@@ -116,16 +86,8 @@ export function useChefEditProfileModel(): ChefEditProfileModel {
 
   const clearError = React.useCallback(() => {
     setErrorMessage(null);
-    setErrorDetails([]);
     setSaveState(current => (current === 'error' ? 'idle' : current));
   }, []);
 
-  return {
-    saveState,
-    errorMessage,
-    errorDetails,
-    save,
-    cancelSave,
-    clearError,
-  };
+  return {saveState, errorMessage, save, cancelSave, clearError};
 }

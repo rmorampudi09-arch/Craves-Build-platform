@@ -1,4 +1,11 @@
 import {httpClient} from '../../../core/http/httpClient';
+import {
+  parseOptionalOrderFields,
+  type ChefOperationalDeliveryPartner,
+} from '../../chefShell/api/chefOperationalApi';
+
+// Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
+export const CHEF_ORDER_HANDED_OVER_AVAILABLE = false;
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -45,9 +52,16 @@ export interface ChefOrderDeliveryAddress {
   longitude: number;
 }
 
+/** One step in the order's life, oldest first. Only sent on the detail response. */
+export interface ChefOrderStatusHistoryEntry {
+  status: ChefOrderDetailStatus;
+  at: string;
+}
+
 export interface ChefOrderDetail {
   id: string;
-  checkoutId: string;
+  /** null for a meal-plan order: it is not bought through a checkout, so there is nothing to refund. */
+  checkoutId: string | null;
   kitchenId: string;
   kitchenName: string | null;
   status: ChefOrderDetailStatus;
@@ -63,6 +77,13 @@ export interface ChefOrderDetail {
   items: ChefOrderDetailItem[];
   createdAt: string;
   updatedAt: string;
+  /** The fields below arrive as the server adds them; each is absent until then. */
+  chefAcceptanceExpiresAt?: string;
+  customerNote?: string;
+  statusHistory?: ChefOrderStatusHistoryEntry[];
+  deliveryPartner?: ChefOperationalDeliveryPartner;
+  /** null while the hand-over is still to be done; absent when the server has no hand-over action. */
+  chefHandedOverAt?: string | null;
 }
 
 export interface ChefAcceptOrderRequest {
@@ -231,6 +252,18 @@ function parseDeliveryAddress(value: unknown): ChefOrderDeliveryAddress | null {
   };
 }
 
+function parseStatusHistory(value: unknown): ChefOrderStatusHistoryEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.slice(0, 50).flatMap(entry => {
+    const raw = asRecord(entry);
+    const status = boundedString(raw?.status, 40) as ChefOrderDetailStatus | null;
+    const at = timestamp(raw?.at);
+    return status && ORDER_STATUSES.has(status) && at ? [{status, at}] : [];
+  });
+}
+
 export function parseChefOrderDetail(value: unknown): ChefOrderDetail | null {
   const raw = asRecord(value);
   if (!raw) {
@@ -238,7 +271,8 @@ export function parseChefOrderDetail(value: unknown): ChefOrderDetail | null {
   }
 
   const id = boundedString(raw.id, 64);
-  const checkoutId = boundedString(raw.checkoutId, 64);
+  // Absent or null is a meal-plan order; anything else must be an id.
+  const checkoutId = raw.checkoutId == null ? null : boundedString(raw.checkoutId, 64);
   const kitchenId = boundedString(raw.kitchenId, 64);
   const status = boundedString(raw.status, 40) as ChefOrderDetailStatus | null;
   const currency = boundedString(raw.currency, 3);
@@ -256,7 +290,7 @@ export function parseChefOrderDetail(value: unknown): ChefOrderDetail | null {
 
   if (
     !isChefOrderId(id) ||
-    !isChefOrderId(checkoutId) ||
+    (raw.checkoutId != null && !isChefOrderId(checkoutId)) ||
     !isChefOrderId(kitchenId) ||
     !status ||
     !ORDER_STATUSES.has(status) ||
@@ -276,6 +310,9 @@ export function parseChefOrderDetail(value: unknown): ChefOrderDetail | null {
     return null;
   }
 
+  const {chefAcceptanceExpiresAt, customerNote, deliveryPartner, chefHandedOverAt} = parseOptionalOrderFields(raw);
+  const statusHistory = parseStatusHistory(raw.statusHistory);
+
   return {
     id,
     checkoutId,
@@ -294,6 +331,11 @@ export function parseChefOrderDetail(value: unknown): ChefOrderDetail | null {
     items: items as ChefOrderDetailItem[],
     createdAt,
     updatedAt,
+    ...(chefAcceptanceExpiresAt ? {chefAcceptanceExpiresAt} : {}),
+    ...(customerNote ? {customerNote} : {}),
+    ...(statusHistory.length > 0 ? {statusHistory} : {}),
+    ...(deliveryPartner ? {deliveryPartner} : {}),
+    ...(chefHandedOverAt !== undefined ? {chefHandedOverAt} : {}),
   };
 }
 
@@ -378,6 +420,17 @@ export const chefOrderDetailApi = {
     const id = requireChefOrderId(orderId);
     const response = await httpClient.post<unknown>(
       `/api/v1/chef/orders/${encodeURIComponent(id)}/ready-for-pickup`,
+      undefined,
+      {signal},
+    );
+    return requireOrderResponse(response);
+  },
+
+  /** Tells Craves the bag went to the courier. Does not change the status; the delivery provider does. */
+  async handedOver(orderId: string, signal?: AbortSignal): Promise<ChefOrderDetail> {
+    const id = requireChefOrderId(orderId);
+    const response = await httpClient.post<unknown>(
+      `/api/v1/chef/orders/${encodeURIComponent(id)}/handed-over`,
       undefined,
       {signal},
     );

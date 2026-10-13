@@ -37,7 +37,7 @@ export function RoleSelectionScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  content: { gap: 6, marginBottom: 6 },
+  content: { gap: 6 },
   title: {
     fontSize: 28,
     fontFamily: loginFonts.bold,

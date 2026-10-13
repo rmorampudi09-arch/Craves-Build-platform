@@ -10,7 +10,10 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
-import {useCustomerHeaderState} from '../hooks/useCustomerHeaderState';
+import {
+  browsingLocationLabel,
+  useCustomerHeaderState,
+} from '../hooks/useCustomerHeaderState';
 
 export type CustomerHeaderVariant = 'default' | 'compact';
 
@@ -30,9 +33,15 @@ export function CustomerHeader({
   onPressSubscription,
 }: Props) {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const {locationDisplayName, badgeLabel} = useCustomerHeaderState();
+  const {selectedLocation, locationDisplayName, badgeLabel} = useCustomerHeaderState();
   const compact = variant === 'compact';
   const showBack = Boolean(title && navigation.canGoBack());
+  const locationTitle = selectedLocation
+    ? browsingLocationLabel(selectedLocation.label)
+    : 'Set delivery location';
+  const locationLine = selectedLocation
+    ? selectedLocation.displayName
+    : 'Needed to show kitchens near you';
 
   return (
     <View style={[styles.container, compact && styles.containerCompact]}>
@@ -49,7 +58,13 @@ export function CustomerHeader({
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Location: ${locationDisplayName}`}
+        accessibilityLabel={
+          compact
+            ? `Location: ${locationDisplayName}`
+            : selectedLocation
+              ? `Delivering to ${locationTitle}, ${locationLine}`
+              : locationTitle
+        }
         accessibilityHint="Choose a different delivery location"
         hitSlop={spacing.xs}
         onPress={onPressLocation}
@@ -57,17 +72,30 @@ export function CustomerHeader({
         <View style={styles.locationIcon}>
           <Icon name="location" size={19} color={colors.flameRed} />
         </View>
-        <View style={styles.locationCopy}>
-          {!compact && <Text style={styles.eyebrow}>Delivering to</Text>}
-          <View style={styles.locationValueRow}>
-            <Text numberOfLines={1} style={styles.locationText}>
-              {locationDisplayName}
-            </Text>
-            <View style={styles.locationChevron}>
-              <Icon name="chevron" size={14} color={colors.textSecondary} />
+        {compact ? (
+          <View style={styles.locationCopy}>
+            <View style={styles.locationValueRow}>
+              <Text numberOfLines={1} style={styles.locationText}>
+                {locationDisplayName}
+              </Text>
+              <View style={styles.locationChevron}>
+                <Icon name="chevron" size={14} color={colors.textSecondary} />
+              </View>
             </View>
           </View>
-        </View>
+        ) : (
+          <View style={styles.locationCopy}>
+            {/* The title fills the row and carries the chevron inline: some Android fonts
+                under-measure bold text, so a shrink-to-fit label gets cut to "Ho…". */}
+            <Text numberOfLines={1} style={[styles.locationText, styles.locationTitle]}>
+              {locationTitle}{' '}
+              <Icon name="chevron-down" size={18} color={colors.textPrimary} surface={false} />
+            </Text>
+            <Text numberOfLines={1} style={styles.locationLine}>
+              {locationLine}
+            </Text>
+          </View>
+        )}
       </Pressable>
 
       {title ? (
@@ -165,10 +193,14 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flex: 1,
   },
-  eyebrow: {
+  locationTitle: {
+    alignSelf: 'stretch',
+    fontSize: typography.body + 1,
+    fontWeight: fontWeight.bold,
+  },
+  locationLine: {
     color: colors.textSecondary,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.medium,
+    fontSize: typography.small,
   },
   locationValueRow: {
     minWidth: 0,

@@ -4,7 +4,7 @@ export const PROCESS_RESTORATION_VERSION = 1 as const;
 
 export type ProductRole = 'CUSTOMER' | 'CHEF';
 export type CustomerRestorableTab = 'Home' | 'Chefs' | 'Orders' | 'Profile';
-export type ChefRestorableTab = 'Dashboard' | 'Orders' | 'Menu' | 'Analytics' | 'Profile';
+export type ChefRestorableTab = 'Dashboard' | 'Orders' | 'Menu' | 'Earnings' | 'Profile';
 
 type NavigationRouteLike = {
   name: string;
@@ -19,7 +19,7 @@ export type NavigationStateLike = {
 
 const resourceIdSchema = z.string().min(1).max(160);
 const customerTabSchema = z.enum(['Home', 'Chefs', 'Orders', 'Profile']);
-const chefTabSchema = z.enum(['Dashboard', 'Orders', 'Menu', 'Analytics', 'Profile']);
+const chefTabSchema = z.enum(['Dashboard', 'Orders', 'Menu', 'Earnings', 'Profile']);
 
 const customerNoParamScreenSchema = z.enum([
   'CustomerCart',
@@ -46,7 +46,6 @@ const customerResourceScreenSchema = z.discriminatedUnion('screen', [
   z.object({screen: z.literal('CustomerDishDetail'), menuItemId: resourceIdSchema}).strict(),
   z.object({screen: z.literal('CustomerDishIngredients'), menuItemId: resourceIdSchema}).strict(),
   z.object({screen: z.literal('CustomerKitchenProfile'), kitchenId: resourceIdSchema}).strict(),
-  z.object({screen: z.literal('CustomerKitchenDishes'), kitchenId: resourceIdSchema}).strict(),
   z.object({screen: z.literal('CustomerOrderDetail'), orderId: resourceIdSchema}).strict(),
   z.object({screen: z.literal('CustomerOrderTracking'), orderId: resourceIdSchema}).strict(),
 ]);
@@ -56,6 +55,7 @@ const chefNestedScreenSchema = z.enum([
   'ChefOrdersNew',
   'ChefOrdersReady',
   'ChefOrdersCompleted',
+  'ChefOrdersScheduled',
   'ChefProfileHome',
   'ChefBusinessInformation',
   'ChefPayoutHistory',
@@ -132,6 +132,17 @@ function captureCustomer(chain: NavigationRouteLike[]): ProcessRestorationSnapsh
   const leaf = chain[chain.length - 1];
   if (!leaf || chain.length === 1) return customerTabFallback(tab);
 
+  // The meal-plan flow is a nested stack under this route, so the deepest leaf is one of its inner
+  // screens. Those carry payment context and stay out of the allowlist: restore the meal-plan list,
+  // where interrupted-payment recovery runs.
+  if (chain.some(route => route.name === 'CustomerSettingsSubscription')) {
+    return {
+      version: PROCESS_RESTORATION_VERSION,
+      role: 'CUSTOMER',
+      target: {kind: 'CUSTOMER_SCREEN', tab, screen: 'CustomerSettingsSubscription'},
+    };
+  }
+
   const noParamResult = customerNoParamScreenSchema.safeParse(leaf.name);
   if (noParamResult.success) {
     // Draft-bearing forms are intentionally excluded from this allowlist. Only
@@ -154,7 +165,7 @@ function captureCustomer(chain: NavigationRouteLike[]): ProcessRestorationSnapsh
       : customerTabFallback(tab);
   }
 
-  if (leaf.name === 'CustomerKitchenProfile' || leaf.name === 'CustomerKitchenDishes') {
+  if (leaf.name === 'CustomerKitchenProfile') {
     const kitchenId = safeResourceParam(leaf.params, 'kitchenId');
     return kitchenId
       ? {
@@ -218,7 +229,11 @@ function captureChef(chain: NavigationRouteLike[]): ProcessRestorationSnapshot |
 
   // Add/Edit Menu and other mutable product forms are deliberately collapsed to
   // their safe owner instead of persisting draft fields or provider/session data.
-  if (outer.name === 'ChefAddMenuItem' || outer.name === 'ChefEditMenuItem') {
+  if (
+    outer.name === 'ChefAddMenuItem' ||
+    outer.name === 'ChefEditMenuItem' ||
+    outer.name === 'ChefMealPlanEditor'
+  ) {
     return chefTabFallback('Menu');
   }
 
@@ -307,10 +322,9 @@ export function toRestorationNavigatePayload(
     };
   }
   if (target.kind === 'CHEF_NESTED') {
-    return {
-      name: 'ChefTabs',
-      params: {screen: target.tab, params: {screen: target.screen}},
-    };
+    // Profile screens sit on top of Profile home; `initial: false` keeps it beneath them.
+    const params = target.tab === 'Profile' ? {screen: target.screen, initial: false} : {screen: target.screen};
+    return {name: 'ChefTabs', params: {screen: target.tab, params}};
   }
 
   const {screen, ...params} = target.route;

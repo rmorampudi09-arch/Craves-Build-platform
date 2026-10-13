@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {httpClient} from '../../../core/http/httpClient';
 
+// Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
 export const CHEF_KITCHEN_SCHEDULE_AVAILABLE = false;
 export const PUBLIC_KITCHEN_AVAILABILITY_AVAILABLE = false;
 export const CHEF_KITCHEN_SCHEDULE_PATH = '/api/v1/kitchens/me/schedule';

@@ -89,6 +89,19 @@ describe('chefOrderDetailApi contract', () => {
     );
   });
 
+  it('accepts a meal-plan order, which has no checkout, with the checkout absent or null', () => {
+    const withoutCheckout: Record<string, unknown> = order();
+    delete withoutCheckout.checkoutId;
+    expect(parseChefOrderDetail(withoutCheckout)).toEqual(expect.objectContaining({id: ORDER_ID, checkoutId: null}));
+    expect(parseChefOrderDetail(order({checkoutId: null}))).toEqual(expect.objectContaining({id: ORDER_ID, checkoutId: null}));
+    expect(parseChefOrderDetail(order())).toEqual(expect.objectContaining({checkoutId: CHECKOUT_ID}));
+  });
+
+  it('still rejects a checkout that is present but is not an id', () => {
+    expect(parseChefOrderDetail(order({checkoutId: 'not-an-id'}))).toBeNull();
+    expect(parseChefOrderDetail(order({checkoutId: 42}))).toBeNull();
+  });
+
   it('accepts legacy orders whose delivery snapshot is absent', () => {
     expect(parseChefOrderDetail(order({deliveryAddress: null}))).toEqual(
       expect.objectContaining({deliveryAddress: null}),
@@ -175,5 +188,48 @@ describe('chefOrderDetailApi contract', () => {
       undefined,
       {signal: undefined},
     );
+  });
+  it('keeps the optional fields the server adds (deadline, note, history, courier, hand-over) and leaves them out otherwise', () => {
+    const plain = parseChefOrderDetail(order());
+    for (const key of ['chefAcceptanceExpiresAt', 'customerNote', 'statusHistory', 'deliveryPartner', 'chefHandedOverAt']) {
+      expect(plain).not.toHaveProperty(key);
+    }
+    expect(
+      parseChefOrderDetail(
+        order({
+          chefAcceptanceExpiresAt: '2026-08-09T08:05:00Z',
+          customerNote: 'Less spicy please',
+          deliveryPartner: {name: 'Suresh', phone: null, photoUrl: null, pickupEtaAt: null},
+          chefHandedOverAt: null,
+          statusHistory: [
+            {status: 'CHEF_ACCEPTANCE_PENDING', at: '2026-08-09T08:00:00Z'},
+            {status: 'NOT_A_STATUS', at: '2026-08-09T08:01:00Z'},
+            {status: 'CHEF_ACCEPTED', at: 'yesterday'},
+            {status: 'CHEF_ACCEPTED', at: '2026-08-09T08:02:00Z'},
+          ],
+        }),
+      ),
+    ).toMatchObject({
+      chefAcceptanceExpiresAt: '2026-08-09T08:05:00Z',
+      customerNote: 'Less spicy please',
+      deliveryPartner: {name: 'Suresh'},
+      chefHandedOverAt: null,
+      statusHistory: [
+        {status: 'CHEF_ACCEPTANCE_PENDING', at: '2026-08-09T08:00:00Z'},
+        {status: 'CHEF_ACCEPTED', at: '2026-08-09T08:02:00Z'},
+      ],
+    });
+  });
+
+  it('posts the hand-over to its own route with no body', async () => {
+    const post = jest
+      .spyOn(httpClient, 'post')
+      .mockResolvedValue(order({status: 'READY_FOR_PICKUP', chefHandedOverAt: '2026-08-09T08:30:00Z'}));
+
+    await expect(chefOrderDetailApi.handedOver(ORDER_ID)).resolves.toMatchObject({
+      chefHandedOverAt: '2026-08-09T08:30:00Z',
+    });
+    expect(post).toHaveBeenCalledWith(`/api/v1/chef/orders/${ORDER_ID}/handed-over`, undefined, {signal: undefined});
+    await expect(chefOrderDetailApi.handedOver('nope')).rejects.toThrow('Chef order ID must be a UUID.');
   });
 });

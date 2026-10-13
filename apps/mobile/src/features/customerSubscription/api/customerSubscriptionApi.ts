@@ -15,17 +15,20 @@ export const publicSubscriptionPlanSchema = z.object({
   billingPeriod: z.string().min(1).max(80),
   amount: moneyValue,
   currency: z.string().length(3),
+  // Added by the backend later; absent on older production. Relative `/api/...` path or https URL.
+  imageUrl: z.string().min(1).nullable().optional(),
 });
 
 export type PublicSubscriptionPlan = z.infer<typeof publicSubscriptionPlanSchema>;
 
 const publicScheduleItemSchema = z.object({
+  // Schedules saved before the V17 dish snapshots have no name, price or currency.
   menuItemId: uuid,
-  menuItemName: z.string().min(1).max(200),
+  menuItemName: z.string().min(1).max(200).nullable().transform(value => value ?? 'Dish'),
   menuItemCategory: z.string().max(120).nullable().optional().transform(value => value ?? null),
   menuItemFoodType: z.string().max(40).nullable().optional().transform(value => value ?? null),
-  menuItemPrice: moneyValue,
-  menuItemCurrency: z.string().length(3),
+  menuItemPrice: moneyValue.nullable(),
+  menuItemCurrency: z.string().length(3).nullable(),
   quantity: z.number().int().positive(),
   isoDayOfWeek: z.number().int().min(1).max(7).nullable().optional().transform(value => value ?? null),
   dayOfMonth: z.number().int().min(1).max(28).nullable().optional().transform(value => value ?? null),
@@ -71,6 +74,13 @@ export const customerSubscriptionSchema = z.object({
   notes: z.string().max(2000).nullable().optional().transform(value => value ?? null),
   createdAt: instant,
   updatedAt: instant,
+  // Added by the backend later; each may be absent (older production) or null. Never assume a value.
+  planName: z.string().min(1).max(160).nullable().optional(),
+  billingPeriod: z.string().min(1).max(80).nullable().optional(),
+  amount: moneyValue.nullable().optional(),
+  currency: z.string().length(3).nullable().optional(),
+  nextBillingDate: localDate.nullable().optional(),
+  planImageUrl: z.string().min(1).nullable().optional(),
 });
 
 export type CustomerSubscription = z.infer<typeof customerSubscriptionSchema>;
@@ -88,6 +98,8 @@ export const customerSubscriptionOccurrenceSchema = z.object({
   serviceAt: instant,
   status: z.string().min(1).max(60),
   items: z.array(occurrenceItemSchema).max(100),
+  // Added by the backend later; the placed order for this meal, absent on older production.
+  orderId: uuid.nullable().optional(),
 });
 
 export type CustomerSubscriptionOccurrence = z.infer<
@@ -153,6 +165,19 @@ export const customerSubscriptionApi = {
     const response = await httpClient.get<unknown>('/api/v1/subscriptions/plans', {
       signal,
       dedupeKey: 'customer-subscription:plans',
+    });
+    return parseMany(publicSubscriptionPlanSchema, response, 'Meal plans');
+  },
+
+  /** Plans whose chef is within 10 km of the location; the server applies the radius. */
+  async listNearbyPlans(
+    location: {latitude: number; longitude: number},
+    signal?: AbortSignal,
+  ): Promise<PublicSubscriptionPlan[]> {
+    const response = await httpClient.get<unknown>('/api/v1/subscriptions/plans', {
+      params: {latitude: location.latitude, longitude: location.longitude},
+      signal,
+      dedupeKey: `customer-subscription:plans:${location.latitude},${location.longitude}`,
     });
     return parseMany(publicSubscriptionPlanSchema, response, 'Meal plans');
   },

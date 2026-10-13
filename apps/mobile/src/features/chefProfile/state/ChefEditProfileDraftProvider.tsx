@@ -42,7 +42,13 @@ function formValuesEqual(
     left.areaName === right.areaName &&
     left.city === right.city &&
     left.state === right.state &&
-    left.postalCode === right.postalCode
+    left.postalCode === right.postalCode &&
+    (left.cuisines ?? []).join('|') === (right.cuisines ?? []).join('|') &&
+    (left.serviceAreas ?? []).join('|') === (right.serviceAreas ?? []).join('|') &&
+    (left.instagram ?? '') === (right.instagram ?? '') &&
+    (left.facebook ?? '') === (right.facebook ?? '') &&
+    (left.youtube ?? '') === (right.youtube ?? '') &&
+    (left.website ?? '') === (right.website ?? '')
   );
 }
 

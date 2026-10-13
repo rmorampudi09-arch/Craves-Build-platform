@@ -378,10 +378,10 @@ export function ChefBankOnboardingPanel() {
       />
 
       <Text style={styles.privacy}>
-        Full account numbers are never returned by the bank-status API and are
-        not stored in mobile state outside this live form. Changing an account
-        creates a new backend version. Failed, unmatched or uncertain validation
-        cannot authorize a payout.
+        Craves never shows your full account number again, and this app does not
+        keep it after you submit. Changing your account details starts a new
+        check. If the check fails, or the details do not match or cannot be
+        confirmed, no payout will be sent to that account.
       </Text>
     </View>
   );

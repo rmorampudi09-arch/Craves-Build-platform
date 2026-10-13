@@ -1,4 +1,5 @@
 import React from 'react';
+import {StyleSheet, Text} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {BottomMenuIcon} from '../../shared/components/BottomMenuIcon';
@@ -7,10 +8,10 @@ import * as Location from 'expo-location';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
 import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
-import {fontWeight, typography} from '../../design/tokens';
+import {bottomMenu, fontWeight, typography} from '../../design/tokens';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
+import {KitchenSwitchHost} from '../../features/cart/components/KitchenSwitchDialog';
 import {refreshCartSnapshot} from '../../features/cart/state/cartRefresh';
-import {CartBillPreviewSync} from '../../features/cart/query/useCartBillPreview';
 import {DiscoverHomeChefsRouteScreen} from '../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen';
 import {customerAddressesApi} from '../../features/customerAddresses/api/customerAddressesApi';
 import {
@@ -38,6 +39,7 @@ import {
 } from '../../features/customerSettings/screens/CustomerSettingsChildScreens';
 import {CustomerSettingsRouteScreen} from '../../features/customerSettings/screens/CustomerSettingsRouteScreen';
 import {CustomerHelpSupportRouteScreen} from '../../features/customerSupport/screens/CustomerHelpSupportRouteScreen';
+import {CustomerSupportChatRouteScreen} from '../../features/supportChat/screens/SupportChatRouteScreens';
 import {CustomerDishDetailScreen} from '../../features/dishDetail/screens/CustomerDishDetailScreen';
 import {CustomerDishIngredientsScreen} from '../../features/dishDetail/screens/CustomerDishIngredientsScreen';
 import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/CustomerFilterSortScreen';
@@ -45,7 +47,6 @@ import {CustomerHomeSearchScreen} from '../../features/discoverySearch/screens/C
 import {CustomerFavoritesRouteScreen} from '../../features/favorites/screens/CustomerFavoritesRouteScreen';
 import {CustomerHomeRouteScreen} from '../../features/home/screens/CustomerHomeRouteScreen';
 import {CustomerShareInvitationScreen} from '../../features/referralsV2/screens/CustomerReferralScreens';
-import {CustomerKitchenDishesScreen} from '../../features/kitchenProfile/screens/CustomerKitchenDishesScreen';
 import {CustomerKitchenProfileScreen} from '../../features/kitchenProfile/screens/CustomerKitchenProfileScreen';
 import {CustomerNotificationsRouteScreen} from '../../features/notifications/screens/CustomerNotificationsRouteScreen';
 import {CustomerPaymentMethodsRouteScreen} from '../../features/payment/screens/CustomerPaymentMethodsRouteScreen';
@@ -95,47 +96,79 @@ const SAVED_ADDRESS_MATCH_RADIUS_METERS = 100;
 
 interface TabIconProps {
   color: string;
+  focused: boolean;
   size: number;
 }
 
 const CUSTOMER_TAB_ICON_SIZE = 30;
 
-function HomeTabIcon({color}: TabIconProps) {
+function HomeTabIcon({color, focused}: TabIconProps) {
   return (
     <BottomMenuIcon
       color={color}
+      glow={focused}
       name="home"
       size={CUSTOMER_TAB_ICON_SIZE}
     />
   );
 }
-function ChefsTabIcon({color}: TabIconProps) {
+function ChefsTabIcon({color, focused}: TabIconProps) {
   return (
     <BottomMenuIcon
       color={color}
+      glow={focused}
       name="chef"
       size={CUSTOMER_TAB_ICON_SIZE}
     />
   );
 }
-function OrdersTabIcon({color}: TabIconProps) {
+function OrdersTabIcon({color, focused}: TabIconProps) {
   return (
     <BottomMenuIcon
       color={color}
+      glow={focused}
       name="orders"
       size={CUSTOMER_TAB_ICON_SIZE}
     />
   );
 }
-function ProfileTabIcon({color}: TabIconProps) {
+function ProfileTabIcon({color, focused}: TabIconProps) {
   return (
     <BottomMenuIcon
       color={color}
+      glow={focused}
       name="account"
       size={CUSTOMER_TAB_ICON_SIZE}
     />
   );
 }
+
+// A function label lets the active tab's text glow like its icon.
+function glowingTabLabel(label: string) {
+  return function TabLabel({focused, color}: {focused: boolean; color: string}) {
+    return (
+      <Text
+        numberOfLines={1}
+        style={[tabLabelStyles.label, {color}, focused && tabLabelStyles.glow]}>
+        {label}
+      </Text>
+    );
+  };
+}
+
+const tabLabelStyles = StyleSheet.create({
+  label: {
+    fontSize: typography.small,
+    fontWeight: fontWeight.regular,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  glow: {
+    textShadowColor: bottomMenu.glowTextShadow,
+    textShadowOffset: {width: 0, height: 0},
+    textShadowRadius: bottomMenu.glowTextRadius,
+  },
+});
 
 const tabScreenOptions = {
   headerShown: false,
@@ -147,12 +180,6 @@ const tabScreenOptions = {
   tabBarLabelPosition: 'below-icon',
   tabBarIconStyle: {
     marginTop: 0,
-    marginBottom: 0,
-  },
-  tabBarLabelStyle: {
-    fontSize: typography.small,
-    fontWeight: fontWeight.regular,
-    marginTop: 2,
     marginBottom: 0,
   },
   tabBarItemStyle: {
@@ -176,23 +203,23 @@ const tabScreenOptions = {
 
 const homeTabOptions = {
   tabBarAccessibilityLabel: `${homeTab.label} tab`,
-  tabBarLabel: homeTab.label,
+  tabBarLabel: glowingTabLabel(homeTab.label),
   tabBarIcon: HomeTabIcon,
 };
 const chefsTabOptions = {
   tabBarAccessibilityLabel: `${chefsTab.label} tab`,
-  tabBarLabel: chefsTab.label,
+  tabBarLabel: glowingTabLabel(chefsTab.label),
   tabBarIcon: ChefsTabIcon,
 };
 const ordersTabOptions = {
   tabBarAccessibilityLabel: `${ordersTab.label} tab`,
-  tabBarLabel: ordersTab.label,
+  tabBarLabel: glowingTabLabel(ordersTab.label),
   tabBarIcon: OrdersTabIcon,
 };
 const profileTabOptions = {
   ...CUSTOMER_PROFILE_TAB_STATE_OPTIONS,
   tabBarAccessibilityLabel: `${profileTab.label} tab`,
-  tabBarLabel: profileTab.label,
+  tabBarLabel: glowingTabLabel(profileTab.label),
   tabBarIcon: ProfileTabIcon,
 };
 
@@ -371,7 +398,6 @@ function CustomerHomeStackNavigator() {
       <HomeStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
       <HomeStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
       <HomeStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
-      <HomeStack.Screen name="CustomerKitchenDishes" component={CustomerKitchenDishesScreen} />
       <HomeStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
       <HomeStack.Screen name="CustomerOrderReview" component={CustomerOrderReviewScreen} />
       <HomeStack.Screen name="CustomerOrderTracking" component={CustomerOrderTrackingScreen} />
@@ -392,7 +418,6 @@ function CustomerChefsStackNavigator() {
       <ChefsStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
       <ChefsStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
       <ChefsStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
-      <ChefsStack.Screen name="CustomerKitchenDishes" component={CustomerKitchenDishesScreen} />
       <ChefsStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
       <ChefsStack.Screen name="CustomerOrderReview" component={CustomerOrderReviewScreen} />
       <ChefsStack.Screen name="CustomerOrderTracking" component={CustomerOrderTrackingScreen} />
@@ -412,7 +437,6 @@ function CustomerOrdersStackNavigator() {
       <OrdersStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
       <OrdersStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
       <OrdersStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
-      <OrdersStack.Screen name="CustomerKitchenDishes" component={CustomerKitchenDishesScreen} />
       <OrdersStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
       <OrdersStack.Screen name="CustomerOrderReview" component={CustomerOrderReviewScreen} />
       <OrdersStack.Screen name="CustomerOrderTracking" component={CustomerOrderTrackingScreen} />
@@ -446,13 +470,13 @@ function CustomerProfileStackNavigator() {
       <ProfileStack.Screen name="CustomerSettingsSupport" component={CustomerHelpSupportRouteScreen} />
       <ProfileStack.Screen name="CustomerSettingsSubscription" component={CustomerSettingsSubscriptionScreen} />
       <ProfileStack.Screen name="CustomerSettingsLegal" component={CustomerSettingsLegalScreen} />
+      <ProfileStack.Screen name="CustomerSupportChat" component={CustomerSupportChatRouteScreen} />
       <ProfileStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
       <ProfileStack.Screen name="CustomerOrderReview" component={CustomerOrderReviewScreen} />
       <ProfileStack.Screen name="CustomerOrderTracking" component={CustomerOrderTrackingScreen} />
       <ProfileStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
       <ProfileStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
       <ProfileStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
-      <ProfileStack.Screen name="CustomerKitchenDishes" component={CustomerKitchenDishesScreen} />
       <ProfileStack.Screen name="CustomerCart" component={CustomerCartScreen} />
       <ProfileStack.Screen name="CustomerPaymentMethods" component={CustomerPaymentMethodsRouteScreen} />
     </ProfileStack.Navigator>
@@ -500,8 +524,8 @@ export function CustomerRootNavigator() {
     <CustomerBottomNavVisibilityProvider>
       <CustomerLaunchLocationResolver />
       <CustomerLaunchCartResolver />
-      <CartBillPreviewSync />
       <CustomerTabsNavigator />
+      <KitchenSwitchHost />
     </CustomerBottomNavVisibilityProvider>
   );
 }

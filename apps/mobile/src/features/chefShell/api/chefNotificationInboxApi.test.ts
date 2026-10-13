@@ -1,6 +1,8 @@
+import {AppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
 import {
   chefNotificationInboxApi,
+  markAllChefNoticesRead,
   parseChefNotification,
   parseChefNotificationPage,
   parseChefNotificationUnreadCount,
@@ -95,6 +97,7 @@ describe('chefNotificationInboxApi contract', () => {
         params: {
           limit: 50,
           unreadOnly: false,
+          role: 'CHEF',
           cursor: 'cursor-1',
         },
         signal: undefined,
@@ -109,6 +112,7 @@ describe('chefNotificationInboxApi contract', () => {
       2,
       '/api/v1/notifications/in-app/unread-count',
       {
+        params: {role: 'CHEF'},
         signal: undefined,
         dedupeKey: 'chef-notification-unread-count',
       },
@@ -127,8 +131,18 @@ describe('chefNotificationInboxApi contract', () => {
       2,
       '/api/v1/notifications/in-app/read-all',
       undefined,
-      {signal: undefined},
+      {params: {role: 'CHEF'}, signal: undefined},
     );
+  });
+
+  it('asks for 100 notices at a time by default (the most the server allows), still bounded to 1-100', async () => {
+    (httpClient.get as jest.Mock).mockResolvedValueOnce({notices: [], nextCursor: null, hasMore: false});
+    await chefNotificationInboxApi.page();
+    expect(httpClient.get).toHaveBeenCalledWith(
+      '/api/v1/notifications/in-app/page',
+      expect.objectContaining({params: {limit: 100, unreadOnly: false, role: 'CHEF'}}),
+    );
+    await expect(chefNotificationInboxApi.page({limit: 101})).rejects.toThrow('CHEF_NOTIFICATION_LIMIT_INVALID');
   });
 
   it('rejects invalid ids and paging bounds before network calls', async () => {
@@ -143,5 +157,50 @@ describe('chefNotificationInboxApi contract', () => {
     await expect(
       chefNotificationInboxApi.markRead('bad-id'),
     ).rejects.toThrow('CHEF_NOTIFICATION_ID_INVALID');
+  });
+
+  describe('markAllChefNoticesRead', () => {
+    const ids = [notice.id, '33333333-3333-4333-8333-333333333333'];
+
+    it('marks only the visible chef notices, one by one, and never calls read-all (it would also mark customer notices)', async () => {
+      (httpClient.patch as jest.Mock).mockResolvedValue(undefined);
+      await expect(markAllChefNoticesRead(ids)).resolves.toEqual(ids);
+      expect(httpClient.patch).toHaveBeenCalledTimes(2);
+      for (const id of ids) {
+        expect(httpClient.patch).toHaveBeenCalledWith(`/api/v1/notifications/in-app/${id}/read`, undefined, {signal: undefined});
+      }
+      const urls = (httpClient.patch as jest.Mock).mock.calls.map(call => String(call[0]));
+      expect(urls.some(url => url.includes('read-all'))).toBe(false);
+    });
+
+    it('returns only the ids that were marked when one fails', async () => {
+      (httpClient.patch as jest.Mock)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new AppApiError('SERVER', 'Boom', 500));
+      await expect(markAllChefNoticesRead(ids)).resolves.toEqual([ids[0]]);
+      expect(httpClient.patch).toHaveBeenCalledTimes(2);
+    });
+
+    it('marks at most 6 notices at a time', async () => {
+      const many = Array.from({length: 20}, (_, index) => `${String(index + 1).padStart(8, '0')}-1111-4111-8111-111111111111`);
+      let inFlight = 0;
+      let peak = 0;
+      (httpClient.patch as jest.Mock).mockReset();
+      (httpClient.patch as jest.Mock).mockImplementation(async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise<void>(resolve => setTimeout(resolve, 5));
+        inFlight -= 1;
+      });
+      await expect(markAllChefNoticesRead(many)).resolves.toEqual(many);
+      expect(httpClient.patch).toHaveBeenCalledTimes(20);
+      expect(peak).toBe(6);
+      (httpClient.patch as jest.Mock).mockReset();
+    });
+
+    it('fails when no notice could be marked', async () => {
+      (httpClient.patch as jest.Mock).mockRejectedValue(new AppApiError('SERVER', 'Boom', 500));
+      await expect(markAllChefNoticesRead(ids)).rejects.toMatchObject({status: 500});
+    });
   });
 });

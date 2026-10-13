@@ -20,6 +20,7 @@ export type RootStackParamList = {
   AccountRouter: undefined;
   CustomerRegistration: undefined;
   CustomerAccountStatus: undefined;
+  ChefApplication: undefined;
   ChefRegistration: undefined;
   ChefAccountStatus: {status?: ChefApplicationStatus};
   StartupError: undefined;
@@ -44,7 +45,7 @@ export type CustomerAccountStackParamList = Pick<
 
 export type ChefAccountStackParamList = Pick<
   RootStackParamList,
-  'AccountRouter' | 'ChefRegistration' | 'ChefAccountStatus'
+  'AccountRouter' | 'ChefApplication' | 'ChefRegistration' | 'ChefAccountStatus'
 >;
 
 export type CustomerFilterSortRouteParams = {
@@ -54,14 +55,12 @@ export type CustomerFilterSortRouteParams = {
 export type CustomerDishDetailRouteParams = {menuItemId: string};
 export type CustomerDishIngredientsRouteParams = {menuItemId: string};
 export type CustomerKitchenProfileRouteParams = {kitchenId: string};
-export type CustomerKitchenDishesRouteParams = {kitchenId: string};
 export type CustomerOrderRouteParams = {orderId: string};
 
 export type CustomerDishDetailStackParamList = {
   CustomerDishDetail: CustomerDishDetailRouteParams;
   CustomerDishIngredients: CustomerDishIngredientsRouteParams;
   CustomerKitchenProfile: CustomerKitchenProfileRouteParams;
-  CustomerKitchenDishes: CustomerKitchenDishesRouteParams;
 };
 
 export type CustomerOrderDetailStackParamList = {
@@ -124,11 +123,25 @@ export type CustomerProfileStackParamList = {
   CustomerFavorites: undefined;
   CustomerNotifications: undefined;
   CustomerSettings: undefined;
+  /** `orderId`: opened from an order ("Help"), so the assistant knows which order. */
+  CustomerSupportChat: {orderId?: string} | undefined;
 } & CustomerSettingsChildStackParamList &
   CustomerDishDetailStackParamList &
   CustomerOrderDetailStackParamList &
   CustomerCartStackParamList &
   CustomerPaymentMethodsStackParamList;
+
+/** Nested stack mounted under the existing `CustomerSettingsSubscription` route (Home and Profile stacks). */
+export type CustomerMealPlanStackParamList = {
+  MealPlans: undefined;
+  MealPlanDetail: {planId: string};
+  MealPlanReview: {planId: string};
+  MealPlanAddress: undefined;
+  MealPlanPayment: {planId: string; subscriptionId?: string};
+  MealPlanActivated: {subscriptionId: string};
+  MyMealPlan: {subscriptionId: string};
+  MealPlanMeal: {subscriptionId: string; occurrenceId: string};
+};
 
 export type CustomerTabParamList = {
   Home: NavigatorScreenParams<CustomerHomeStackParamList> | undefined;
@@ -150,13 +163,15 @@ export type ChefOrdersStackParamList = {
   ChefOrdersNew: undefined;
   ChefOrdersReady: undefined;
   ChefOrdersCompleted: undefined;
+  ChefOrdersScheduled: undefined;
 };
 
 /** P108 adds the fail-closed Chef App Preferences route while preserving existing profile flows. */
 export type ChefProfileStackParamList = {
   ChefProfileHome: undefined;
   ChefBusinessInformation: undefined;
-  ChefPayoutHistory: undefined;
+  /** `from: 'earnings'`: opened from the Earnings tab, so Back returns there. */
+  ChefPayoutHistory: {from?: 'earnings'} | undefined;
   ChefSubscriptionPlan: undefined;
   ChefAppPreferences: undefined;
   ChefSupport: undefined;
@@ -164,6 +179,9 @@ export type ChefProfileStackParamList = {
   ChefReferralEarnings: undefined;
   ChefKitchenSchedule: undefined;
   ChefScheduledOrders: undefined;
+  ChefReviews: undefined;
+  ChefSecurity: undefined;
+  ChefBankAccount: {from?: 'earnings'} | undefined;
   ChefEditProfile: undefined;
 };
 
@@ -171,8 +189,10 @@ export type ChefProfileStackParamList = {
 export type ChefTabParamList = {
   Dashboard: undefined;
   Orders: NavigatorScreenParams<ChefOrdersStackParamList> | undefined;
-  Menu: undefined;
-  Analytics: undefined;
+  /** `segment: 'plans'`: open on Meal plans (a meal-plan notification). */
+  Menu: {segment?: 'plans'} | undefined;
+  /** `openWithdraw`: Home's Withdraw button opens the withdraw sheet on arrival. */
+  Earnings: {openWithdraw?: boolean} | undefined;
   Profile: NavigatorScreenParams<ChefProfileStackParamList> | undefined;
 };
 
@@ -185,8 +205,16 @@ export type ChefProductStackParamList = {
   ChefTabs: NavigatorScreenParams<ChefTabParamList> | undefined;
   ChefOrderDetail: ChefOrderDetailRouteParams;
   ChefMenuItemDetail: ChefMenuItemDetailRouteParams;
-  ChefAddMenuItem: undefined;
+  /** `copyOfMenuItemId`: open the form pre-filled from that dish ("Duplicate dish"). */
+  ChefAddMenuItem: {copyOfMenuItemId?: string} | undefined;
   ChefEditMenuItem: ChefMenuItemEditRouteParams;
+  /** `step: 2` opens a plan on its meals ("Schedule" on a plan card). */
+  ChefMealPlanEditor: {planId?: string; step?: 2};
+  ChefNotifications: undefined;
+  ChefDailyLimits: {planId?: string};
+  ChefSupportTicket: {caseId?: string; orderId?: string; topic?: string};
+  /** `orderId`: opened from an order page ("Problem with this order?"). */
+  ChefSupportChat: {orderId?: string} | undefined;
 };
 
 export type ChefTabRouteName = keyof ChefTabParamList;

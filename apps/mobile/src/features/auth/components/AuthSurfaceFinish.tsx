@@ -21,11 +21,7 @@ export function AuthSurfaceFinish({ action, selected, radius = 16 }: Props) {
   const id = useId();
   return (
     <View
-      style={[
-        StyleSheet.absoluteFill,
-        styles.clip,
-        { borderRadius: radius },
-      ]}
+      style={[StyleSheet.absoluteFill, styles.clip, { borderRadius: radius }]}
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
@@ -97,16 +93,19 @@ export function AuthSurfaceFinish({ action, selected, radius = 16 }: Props) {
           rx={radius}
           fill={`url(#${id}-light)`}
         />
-        <Rect
-          x="1%"
-          y="3%"
-          width="98%"
-          height="94%"
-          rx={Math.max(0, radius - 2)}
-          fill="none"
-          stroke={`url(#${id}-edge)`}
-          strokeWidth={action ? 1.3 : 1}
-        />
+        {action ? null : (
+          // The inner white edge suits cards; on the red buttons it read as a stray line.
+          <Rect
+            x="1%"
+            y="3%"
+            width="98%"
+            height="94%"
+            rx={Math.max(0, radius - 2)}
+            fill="none"
+            stroke={`url(#${id}-edge)`}
+            strokeWidth={1}
+          />
+        )}
       </Svg>
     </View>
   );

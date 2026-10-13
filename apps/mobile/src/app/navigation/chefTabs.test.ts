@@ -1,5 +1,6 @@
-import {bottomMenu, colors} from '../../design/tokens';
+import {colors} from '../../design/tokens';
 import {
+  CHEF_ORDER_ROUTES,
   CHEF_TAB_ACTIVE_COLOR,
   CHEF_TAB_INACTIVE_COLOR,
   CHEF_TAB_STATE_OPTIONS,
@@ -13,14 +14,14 @@ describe('chefTabs', () => {
       'Dashboard',
       'Orders',
       'Menu',
-      'Analytics',
+      'Earnings',
       'Profile',
     ]);
     expect(CHEF_TABS.map(tab => tab.label)).toEqual([
-      'Dashboard',
+      'Home',
       'Orders',
       'Menu',
-      'Analytics',
+      'Earnings',
       'Profile',
     ]);
   });
@@ -30,10 +31,9 @@ describe('chefTabs', () => {
     expect(CHEF_TABS.some(tab => tab.icon === 'cart')).toBe(false);
   });
 
-  it('uses the same red active and softer inactive menu foreground as Customer tabs', () => {
+  it('uses a red active tab and dark label ink on the light tab bar', () => {
     expect(CHEF_TAB_ACTIVE_COLOR).toBe(colors.flameRedAccessible);
-    expect(CHEF_TAB_INACTIVE_COLOR).toBe(bottomMenu.inactiveColor);
-    expect(CHEF_TAB_INACTIVE_COLOR).not.toBe(colors.black);
+    expect(CHEF_TAB_INACTIVE_COLOR).toBe(colors.textPrimary);
   });
 
   it('preserves each Chef tab instead of popping it on blur', () => {
@@ -47,7 +47,17 @@ describe('chefTabs', () => {
     expect(getChefTabDefinition('Dashboard').icon).toBe('home');
     expect(getChefTabDefinition('Orders').icon).toBe('orders');
     expect(getChefTabDefinition('Menu').icon).toBe('chef');
-    expect(getChefTabDefinition('Analytics').icon).toBe('analytics');
+    expect(getChefTabDefinition('Earnings').icon).toBe('wallet');
     expect(getChefTabDefinition('Profile').icon).toBe('account');
+  });
+
+  it('registers Scheduled beside the four status routes in the Orders stack', () => {
+    expect([...CHEF_ORDER_ROUTES].sort()).toEqual([
+      'ChefOrdersCompleted',
+      'ChefOrdersNew',
+      'ChefOrdersPreparing',
+      'ChefOrdersReady',
+      'ChefOrdersScheduled',
+    ]);
   });
 });

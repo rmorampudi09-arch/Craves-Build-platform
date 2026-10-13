@@ -39,7 +39,37 @@ export type IconName =
   | 'translate'
   | 'theme'
   | 'document'
-  | 'info';
+  | 'info'
+  | 'gps'
+  | 'plus'
+  | 'close'
+  | 'work'
+  | 'edit'
+  | 'location-off'
+  | 'cloud-off'
+  | 'search-off'
+  | 'alert'
+  | 'chevron-down'
+  | 'pause'
+  | 'calendar'
+  | 'calendar-check'
+  | 'location-outline'
+  | 'meal'
+  | 'play'
+  | 'renew'
+  | 'calendar-remove'
+  | 'receipt'
+  | 'camera'
+  | 'store'
+  | 'id-card'
+  | 'bank'
+  | 'image'
+  | 'upload'
+  | 'more'
+  | 'camera-plus'
+  | 'copy'
+  | 'send'
+  | 'refresh';
 
 interface Props {
   name: IconName;
@@ -86,6 +116,36 @@ const GLYPHS: Record<IconName, string> = {
   theme: 'theme-light-dark',
   document: 'file-document-outline',
   info: 'information-outline',
+  gps: 'crosshairs-gps',
+  plus: 'plus',
+  close: 'close',
+  work: 'briefcase-outline',
+  edit: 'pencil-outline',
+  'location-off': 'map-marker-off-outline',
+  'cloud-off': 'cloud-off-outline',
+  'search-off': 'magnify-close',
+  alert: 'alert-circle-outline',
+  'chevron-down': 'chevron-down',
+  pause: 'pause',
+  calendar: 'calendar-blank-outline',
+  'calendar-check': 'calendar-check-outline',
+  'location-outline': 'map-marker-outline',
+  meal: 'silverware-fork-knife',
+  play: 'play',
+  renew: 'autorenew',
+  'calendar-remove': 'calendar-remove-outline',
+  receipt: 'receipt-text-outline',
+  camera: 'camera-outline',
+  store: 'storefront-outline',
+  'id-card': 'card-account-details-outline',
+  bank: 'bank-outline',
+  image: 'image-outline',
+  upload: 'tray-arrow-up',
+  more: 'dots-vertical',
+  'camera-plus': 'camera-plus-outline',
+  copy: 'content-copy',
+  send: 'send',
+  refresh: 'refresh',
 };
 
 export function Icon({

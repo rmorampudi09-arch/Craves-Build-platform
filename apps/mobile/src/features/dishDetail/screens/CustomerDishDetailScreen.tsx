@@ -64,8 +64,9 @@ export function CustomerDishDetailScreen() {
         <Animated.View
           {...panResponder.panHandlers}
           style={[styles.sheet, {transform: [{translateY}]}]}>
-          <View style={styles.handle} />
           <CustomerDishDetailLegacyScreen />
+          {/* Drawn last so it sits on the photo and on the slim header. */}
+          <View pointerEvents="none" style={styles.handle} />
         </Animated.View>
       </View>
     </Modal>
@@ -89,14 +90,17 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     backgroundColor: colors.white,
-    paddingTop: spacing.xs,
   },
   handle: {
-    alignSelf: 'center',
+    position: 'absolute',
+    top: spacing.xs,
+    left: '50%',
     width: 42,
     height: 4,
-    marginBottom: spacing.xxs,
+    marginLeft: -21,
     borderRadius: radius.pill,
-    backgroundColor: colors.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(38,26,21,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
   },
 });

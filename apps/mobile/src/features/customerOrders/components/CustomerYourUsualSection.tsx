@@ -374,7 +374,7 @@ export function CustomerYourUsualSection() {
               if (uncertainReorder) {
                 void checkCart();
               } else {
-                navigation.navigate('CustomerKitchenDishes', {
+                navigation.navigate('CustomerKitchenProfile', {
                   kitchenId: failedCandidate.kitchenId,
                 });
               }
@@ -452,7 +452,7 @@ export function CustomerYourUsualSection() {
                 }
                 onPress={() => {
                   if (catalogReviewRequired) {
-                    navigation.navigate('CustomerKitchenDishes', {
+                    navigation.navigate('CustomerKitchenProfile', {
                       kitchenId: candidate.kitchenId,
                     });
                     return;

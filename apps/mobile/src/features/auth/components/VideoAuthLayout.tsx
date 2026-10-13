@@ -1,24 +1,36 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Image,
+  Animated,
+  Dimensions,
+  Easing,
   Keyboard,
   KeyboardAvoidingView,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
+import { useReducedMotionPreference } from '../../../design/reducedMotion';
 import { colors, spacing, touchTarget } from '../../../design/tokens';
-import { loginHeroFractions, type LoginLayout } from './loginVisuals';
+import { loginPanelFractions } from './loginVisuals';
+import {
+  CravesWordmark,
+  SplashDoneContext,
+  WELCOME_WORDMARK_WIDTH,
+  welcomeWordmarkTop,
+} from './CravesWordmark';
+
+const SHEET_MOVE_MS = 650;
+// The sheet a new auth screen starts from, so moving between screens glides instead of jumping.
+let lastPanelFraction: number = loginPanelFractions.resting;
 
 interface Props extends React.PropsWithChildren {
   welcome?: boolean;
-  variant?: LoginLayout;
   onBack?: () => void;
   backDisabled?: boolean;
 }
@@ -26,26 +38,34 @@ interface Props extends React.PropsWithChildren {
 export function VideoAuthLayout({
   children,
   welcome = false,
-  variant = 'phone',
   onBack,
   backDisabled,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const reduceMotion = useReducedMotionPreference();
+  const splashDone = useContext(SplashDoneContext);
   const [androidLayoutBottom, setAndroidLayoutBottom] = useState(0);
   const [androidKeyboardTop, setAndroidKeyboardTop] = useState<number | null>(
     () =>
       Platform.OS === 'android' ? Keyboard.metrics()?.screenY ?? null : null,
   );
+  const [keyboardOpen, setKeyboardOpen] = useState(() => Keyboard.isVisible());
+  // Welcome rests low to show the video; the sign-in forms open half way.
+  const [raised, setRaised] = useState(!welcome);
+  const scrollY = useRef(0);
+  const [areaHeight, setAreaHeight] = useState(
+    () => Dimensions.get('window').height,
+  );
   useEffect(() => {
-    if (Platform.OS !== 'android') {
-      return;
-    }
     // Android's hide event can exclude system bars; hiding must reset to zero.
     const show = Keyboard.addListener('keyboardDidShow', event => {
-      setAndroidKeyboardTop(event.endCoordinates.screenY);
+      setKeyboardOpen(true);
+      if (Platform.OS === 'android') {
+        setAndroidKeyboardTop(event.endCoordinates.screenY);
+      }
     });
     const hide = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardOpen(false);
       setAndroidKeyboardTop(null);
     });
     return () => {
@@ -57,8 +77,60 @@ export function VideoAuthLayout({
     androidKeyboardTop === null
       ? 0
       : Math.max(0, androidLayoutBottom - androidKeyboardTop);
-  const logoWidth = Math.min(width * 0.65, 310);
-  const heroFraction = loginHeroFractions[welcome ? 'welcome' : variant];
+  const expanded = raised || keyboardOpen;
+  const panelFraction = keyboardOpen
+    ? loginPanelFractions.keyboard
+    : raised
+    ? loginPanelFractions.raised
+    : loginPanelFractions.resting;
+  // The sheet keeps its tallest height and slides on the native driver, so the
+  // move stays smooth while the video decodes; resting hides its lower part.
+  const sheetHeight =
+    areaHeight *
+    (keyboardOpen ? loginPanelFractions.keyboard : loginPanelFractions.raised);
+  const hiddenBelow = (fraction: number) =>
+    keyboardOpen
+      ? 0
+      : Math.max(0, areaHeight * (loginPanelFractions.raised - fraction));
+  const offset = hiddenBelow(panelFraction);
+  const slide = useRef(
+    new Animated.Value(hiddenBelow(lastPanelFraction)),
+  ).current;
+  useEffect(() => {
+    lastPanelFraction = panelFraction;
+    if (reduceMotion) {
+      slide.setValue(offset);
+      return;
+    }
+    const move = Animated.timing(slide, {
+      toValue: offset,
+      duration: SHEET_MOVE_MS,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: true,
+    });
+    move.start();
+    return () => move.stop();
+  }, [slide, offset, panelFraction, reduceMotion]);
+  const raise = (next: boolean) => {
+    if (next !== raised) {
+      setRaised(next);
+    }
+  };
+  const raiseRef = useRef(raise);
+  raiseRef.current = raise;
+  const sheetPan = useMemo(
+    () =>
+      PanResponder.create({
+        // Up opens a resting sheet; down lowers a raised one once its copy is at the top.
+        onMoveShouldSetPanResponderCapture: (_event, gesture) =>
+          Math.abs(gesture.dy) > 10 &&
+          Math.abs(gesture.dy) > Math.abs(gesture.dx) &&
+          (gesture.dy < 0 ? !expanded : raised && scrollY.current <= 0),
+        onPanResponderRelease: (_event, gesture) =>
+          raiseRef.current(gesture.dy < 0),
+      }),
+    [expanded, raised],
+  );
   return (
     <KeyboardAvoidingView
       style={[
@@ -81,19 +153,9 @@ export function VideoAuthLayout({
       <StatusBar barStyle="dark-content" />
       <View
         testID="auth-video-window"
-        style={[styles.hero, { flex: heroFraction }]}
+        style={styles.area}
+        onLayout={event => setAreaHeight(event.nativeEvent.layout.height)}
       >
-        <Image
-          testID="auth-wordmark"
-          source={require('../../../assets/auth/craves-login-wordmark.png')}
-          accessibilityLabel="Craves"
-          resizeMode="contain"
-          style={{
-            width: logoWidth,
-            height: logoWidth / 3,
-            marginTop: insets.top + spacing.md,
-          }}
-        />
         {onBack ? (
           <Pressable
             onPress={onBack}
@@ -110,29 +172,63 @@ export function VideoAuthLayout({
             <ArrowLeft size={22} color={colors.ink} />
           </Pressable>
         ) : null}
-      </View>
-      <View
-        testID="auth-white-panel"
-        style={[styles.panel, { flex: 1 - heroFraction }]}
-      >
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={[
-            styles.content,
-            welcome && styles.welcomeContent,
-            {
-              paddingBottom: Math.max(insets.bottom, spacing.sm),
-              paddingLeft: Math.max(insets.left, spacing.xl),
-              paddingRight: Math.max(insets.right, spacing.xl),
-            },
+        {welcome && splashDone ? (
+          <View
+            testID="auth-wordmark"
+            pointerEvents="none"
+            style={[styles.wordmark, { top: welcomeWordmarkTop(insets.top) }]}
+          >
+            <CravesWordmark width={WELCOME_WORDMARK_WIDTH} />
+          </View>
+        ) : null}
+        <Animated.View
+          testID="auth-white-panel"
+          style={[
+            styles.panel,
+            { height: sheetHeight, transform: [{ translateY: slide }] },
           ]}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
+          {...sheetPan.panHandlers}
         >
-          <View style={styles.handle} accessibilityElementsHidden />
-          {children}
-        </ScrollView>
+          <ScrollView
+            style={styles.scroll}
+            onScroll={event => {
+              scrollY.current = event.nativeEvent.contentOffset.y;
+              // Long forms scroll natively, so rolling their copy up also opens the sheet.
+              if (!expanded && scrollY.current > 8) {
+                raise(true);
+              }
+            }}
+            scrollEventThrottle={16}
+            contentContainerStyle={[
+              styles.content,
+              welcome && styles.welcomeContent,
+              {
+                // Room to scroll copy out of the part hidden below the screen.
+                paddingBottom: Math.max(insets.bottom, spacing.sm) + offset,
+                paddingLeft: Math.max(insets.left, spacing.xl),
+                paddingRight: Math.max(insets.right, spacing.xl),
+              },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={false}
+          >
+            <Pressable
+              testID="auth-sheet-handle"
+              onPress={() => raise(!raised)}
+              disabled={keyboardOpen}
+              accessibilityRole="button"
+              accessibilityLabel={
+                raised ? 'Lower sign-in panel' : 'Raise sign-in panel'
+              }
+              hitSlop={{ top: 12, bottom: 12, left: 40, right: 40 }}
+              style={styles.handleTarget}
+            >
+              <View style={styles.handle} />
+            </Pressable>
+            {children}
+          </ScrollView>
+        </Animated.View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -140,8 +236,12 @@ export function VideoAuthLayout({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: 'transparent' },
-  hero: { alignItems: 'center', overflow: 'hidden' },
+  area: { flex: 1 },
   panel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: '#FEFEFF',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -156,15 +256,15 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     gap: 12,
   },
+  handleTarget: { alignSelf: 'center', paddingBottom: 10 },
   handle: {
     width: 50,
     height: 5,
     borderRadius: 3,
     backgroundColor: '#CED1D8',
-    alignSelf: 'center',
-    marginBottom: 10,
   },
-  welcomeContent: { gap: 18, paddingTop: 12 },
+  welcomeContent: { gap: 10, paddingTop: 12 },
+  wordmark: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   back: {
     position: 'absolute',
     left: spacing.md,

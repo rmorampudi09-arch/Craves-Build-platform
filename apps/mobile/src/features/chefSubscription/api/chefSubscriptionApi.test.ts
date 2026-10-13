@@ -1,11 +1,13 @@
 import {httpClient} from '../../../core/http/httpClient';
 import {
+  chefMealPlanSchema,
   chefSubscriptionApi,
   menuItemRuleSchema,
 } from './chefSubscriptionApi';
 
 jest.mock('../../../core/http/httpClient', () => ({
   httpClient: {
+    patch: jest.fn(),
     put: jest.fn(),
   },
 }));
@@ -260,5 +262,91 @@ describe('chefSubscriptionApi date overrides', () => {
     ).rejects.toThrow();
 
     expect(httpClient.put).not.toHaveBeenCalled();
+  });
+});
+
+describe('chefSubscriptionApi plan photo and accepting-subscribers', () => {
+  const PLAN_ID = '77777777-7777-4777-8777-777777777777';
+  const plan = {
+    id: PLAN_ID,
+    planCode: 'WEEKLY-LUNCH',
+    name: 'Weekly Home Lunch Plan',
+    description: null,
+    billingPeriod: 'WEEKLY',
+    amount: 1499,
+    currency: 'INR',
+    status: 'ACTIVE',
+    reviewReason: null,
+    submittedAt: null,
+    reviewedAt: null,
+    createdAt: '2026-09-20T12:00:00Z',
+    updatedAt: '2026-09-20T12:00:00Z',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('keeps the new plan fields optional so an older backend still parses', () => {
+    const parsed = chefMealPlanSchema.parse(plan);
+    expect('imageUrl' in parsed).toBe(false);
+    expect('acceptingSubscribers' in parsed).toBe(false);
+
+    expect(chefMealPlanSchema.parse({...plan, imageUrl: null, acceptingSubscribers: null})).toMatchObject({
+      imageUrl: null,
+      acceptingSubscribers: null,
+    });
+    expect(
+      chefMealPlanSchema.parse({
+        ...plan,
+        imageUrl: `/api/v1/subscriptions/plans/${PLAN_ID}/image?v=3`,
+        acceptingSubscribers: false,
+      }),
+    ).toMatchObject({
+      imageUrl: `/api/v1/subscriptions/plans/${PLAN_ID}/image?v=3`,
+      acceptingSubscribers: false,
+    });
+  });
+
+  it('reads the active subscriber count only when the backend sends it', () => {
+    expect('activeSubscriberCount' in chefMealPlanSchema.parse(plan)).toBe(false);
+    expect(chefMealPlanSchema.parse({...plan, activeSubscriberCount: 8})).toMatchObject({activeSubscriberCount: 8});
+    expect(chefMealPlanSchema.parse({...plan, activeSubscriberCount: null})).toMatchObject({activeSubscriberCount: null});
+  });
+
+  it('patches accepting-subscribers and verifies the returned plan', async () => {
+    (httpClient.patch as jest.Mock).mockResolvedValue({...plan, acceptingSubscribers: false});
+
+    await expect(chefSubscriptionApi.setAcceptingSubscribers(PLAN_ID, false)).resolves.toMatchObject({
+      id: PLAN_ID,
+      acceptingSubscribers: false,
+    });
+
+    expect(httpClient.patch).toHaveBeenCalledWith(
+      `/api/v1/chef/subscription-plans/${PLAN_ID}/accepting-subscribers`,
+      {acceptingSubscribers: false},
+    );
+  });
+
+  it('puts the plan photo as multipart and verifies the returned plan', async () => {
+    const form = new FormData();
+    (httpClient.put as jest.Mock).mockResolvedValue({
+      ...plan,
+      imageUrl: `/api/v1/subscriptions/plans/${PLAN_ID}/image?v=4`,
+    });
+
+    await expect(chefSubscriptionApi.uploadPlanImage(PLAN_ID, form)).resolves.toMatchObject({
+      imageUrl: `/api/v1/subscriptions/plans/${PLAN_ID}/image?v=4`,
+    });
+
+    expect(httpClient.put).toHaveBeenCalledWith(
+      `/api/v1/chef/subscription-plans/${PLAN_ID}/image`,
+      form,
+    );
+  });
+
+  it('rejects an unverifiable response', async () => {
+    (httpClient.patch as jest.Mock).mockResolvedValue({id: PLAN_ID});
+    await expect(chefSubscriptionApi.setAcceptingSubscribers(PLAN_ID, true)).rejects.toThrow();
   });
 });

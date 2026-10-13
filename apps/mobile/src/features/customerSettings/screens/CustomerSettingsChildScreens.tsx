@@ -10,5 +10,5 @@ export {
   CustomerSettingsLegalScreen,
 } from './CustomerSettingsLegacyScreens';
 
-export {CustomerMealPlansScreen as CustomerSettingsSubscriptionScreen} from '../../customerSubscription/screens/CustomerMealPlansScreen';
+export {CustomerMealPlanNavigator as CustomerSettingsSubscriptionScreen} from '../../customerSubscription/navigation/CustomerMealPlanNavigator';
 export {CustomerHelpSupportScreen as CustomerSettingsSupportScreen} from '../../customerSupport/screens/CustomerHelpSupportScreen';

@@ -7,7 +7,6 @@ import { toAppApiError } from '../../../core/http/apiError';
 import { VideoAuthLayout } from '../components/VideoAuthLayout';
 import { AuthOtpInput } from '../components/AuthOtpInput';
 import { AuthActionButton } from '../components/AuthActionButton';
-import { AuthRoleCards } from '../components/AuthRoleCards';
 import { loginStyles as styles } from '../components/loginStyles';
 import {
   formatLoginCountdown,
@@ -23,6 +22,7 @@ import {
   sanitizeOtpCode,
 } from '../domain/otpVerificationPolicy';
 import { useAuthAttemptRole } from '../hooks/useAuthAttemptRole';
+import { listenForOtpSms } from '../sms/otpSmsConsent';
 import { authService } from '../state/authService';
 import { authActions } from '../state/authSlice';
 import { authTransitionMemory } from '../state/authTransitionMemory';
@@ -46,17 +46,15 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
   const requestGate = useRef(createOtpRequestGate());
   const mounted = useRef(true);
   const resendAvailabilityAnnounced = useRef(false);
+  // Bumped after each resend so the next SMS can be read too.
+  const [smsRound, setSmsRound] = useState(0);
 
   const resendSeconds = remainingOtpCooldownSeconds(resendAvailableAt, clockMs);
   const rateLimitSeconds = remainingOtpCooldownSeconds(rateLimitUntil, clockMs);
   const rateLimited = rateLimitSeconds > 0;
-  const canVerify =
-    Boolean(phone) &&
-    isOtpCodeComplete(code) &&
-    !busy &&
-    !requiresResend &&
-    !requiresRestart &&
-    !rateLimited;
+  const verifyBlocked =
+    !phone || busy || requiresResend || requiresRestart || rateLimited;
+  const canVerify = isOtpCodeComplete(code) && !verifyBlocked;
   const canResend =
     Boolean(phone) &&
     resendSeconds === 0 &&
@@ -122,15 +120,19 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
     }
   };
 
-  const finish = async () => {
-    if (!canVerify || !requestGate.current.tryAcquire()) {
+  const finish = async (value: string = code) => {
+    if (
+      !isOtpCodeComplete(value) ||
+      verifyBlocked ||
+      !requestGate.current.tryAcquire()
+    ) {
       return;
     }
 
     setBusy(true);
     setError(null);
     try {
-      const tokens = await authService.confirmOtp(code);
+      const tokens = await authService.confirmOtp(value);
       if (!mounted.current) {
         return;
       }
@@ -165,6 +167,7 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
       setCode('');
       setRequiresResend(false);
       setRateLimitUntil(0);
+      setSmsRound(round => round + 1);
       setResendAvailableAt(authService.otpResendAvailableAt());
       AccessibilityInfo.announceForAccessibility(
         'A new verification code was sent.',
@@ -180,6 +183,20 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
       }
     }
   };
+
+  const finishRef = useRef(finish);
+  finishRef.current = finish;
+
+  useEffect(() => {
+    if (!phone) {
+      return undefined;
+    }
+    // Fill and verify straight from the SMS once the user taps Allow.
+    return listenForOtpSms(otp => {
+      setCode(otp);
+      finishRef.current(otp);
+    });
+  }, [phone, smsRound]);
 
   const updateCode = (value: string) => {
     setCode(sanitizeOtpCode(value));
@@ -197,12 +214,7 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
     : 'Resend code';
 
   return (
-    <VideoAuthLayout
-      variant="otp"
-      onBack={() => navigation.goBack()}
-      backDisabled={busy}
-    >
-      <AuthRoleCards value={role} descriptions={false} />
+    <VideoAuthLayout onBack={() => navigation.goBack()} backDisabled={busy}>
       <View style={styles.heading}>
         <Text style={styles.title}>Verify your number</Text>
         <Text style={styles.description}>
@@ -234,13 +246,12 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
         returnKeyType="done"
         textContentType="oneTimeCode"
         autoFocus={Boolean(phone)}
-        selectTextOnFocus
         maxLength={OTP_CODE_LENGTH}
         disabled={busy || requiresResend || rateLimited || !phone}
         accessibilityLabel="Verification code"
         accessibilityHint="Enter the six digit code sent to your phone"
         error={error ?? undefined}
-        onSubmitEditing={finish}
+        onSubmitEditing={() => finish()}
       />
       <Pressable
         disabled={!canResend}
@@ -269,7 +280,7 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
         loading={busy}
         disabled={!canVerify}
         accessibilityHint="Verifies this phone code and continues sign in"
-        onPress={finish}
+        onPress={() => finish()}
       />
       <Text style={styles.description}>
         Signing in as{' '}

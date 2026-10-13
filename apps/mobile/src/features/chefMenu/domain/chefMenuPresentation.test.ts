@@ -1,9 +1,10 @@
 import type {ChefMenuItem} from '../api/chefMenuApi';
 import {
+  chefMenuCategoryLabel,
+  chefMenuRowNote,
   deriveChefMenuSummary,
   filterChefMenuItems,
   formatChefMenuCategory,
-  formatChefMenuPrice,
   getChefMenuCategories,
   getChefMenuDisplayState,
   getChefMenuPrimaryImageUrl,
@@ -100,6 +101,34 @@ describe('chefMenuPresentation', () => {
     ]);
   });
 
+  it('the Off filter holds every dish customers cannot order: switched off or inactive, never drafts', () => {
+    expect(filterChefMenuItems(items, '', null, 'OFF').map(x => x.id)).toEqual([items[1].id, items[3].id]);
+    expect(filterChefMenuItems(items, '', null, 'AVAILABLE').map(x => x.id)).toEqual([items[0].id]);
+    expect(filterChefMenuItems(items, '', null, 'DRAFT').map(x => x.id)).toEqual([items[2].id]);
+  });
+
+  it('says on each row how long a dish takes, or what is wrong with it', () => {
+    expect(items.map(chefMenuRowNote)).toEqual([
+      {text: '20 min', off: false},
+      {text: 'Off for customers', off: true},
+      null,
+      {text: 'Off for customers', off: true},
+    ]);
+    expect(chefMenuRowNote({...items[0], preparationTimeMinutes: null})).toEqual({text: 'prep time missing', off: false});
+  });
+
+  it('search finds a Snakes-category dish by "snacks" (what is shown) and by "snakes" (what is stored)', () => {
+    const murukku = item({id: '00000000-0000-4000-8000-000000000020', itemName: 'Murukku', category: 'Snakes'});
+    expect(filterChefMenuItems([...items, murukku], 'snacks', null, 'ALL')).toEqual([murukku]);
+    expect(filterChefMenuItems([...items, murukku], 'snakes', null, 'ALL')).toEqual([murukku]);
+  });
+
+  it('shows the stored category Snakes as Snacks and legacy Biriyani as Biryani', () => {
+    expect(chefMenuCategoryLabel('Snakes')).toBe('Snacks');
+    expect(chefMenuCategoryLabel('Biriyani')).toBe('Biryani');
+    expect(chefMenuCategoryLabel('Curry')).toBe('Curry');
+  });
+
   it('presents legacy Biriyani values as Biryani for chef filters', () => {
     const legacyBiryani = item({
       id: '00000000-0000-4000-8000-000000000006',
@@ -114,7 +143,7 @@ describe('chefMenuPresentation', () => {
     ]);
   });
 
-  it('uses the primary image when present and keeps backend currency explicit', () => {
+  it('uses the primary image when present', () => {
     const withImages = item({
       id: '00000000-0000-4000-8000-000000000005',
       itemName: 'Biryani',
@@ -150,6 +179,5 @@ describe('chefMenuPresentation', () => {
     expect(getChefMenuPrimaryImageUrl(withImages)).toBe(
       'https://example.test/primary.webp',
     );
-    expect(formatChefMenuPrice(withImages)).toBe('₹245.50');
   });
 });

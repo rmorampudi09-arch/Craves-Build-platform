@@ -1,4 +1,5 @@
 import {httpClient} from '../../../core/http/httpClient';
+import {shortCustomerName} from '../domain/chefFormat';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -39,6 +40,18 @@ export interface ChefOperationalOrderItemSummary {
   id: string;
   itemName: string;
   quantity: number;
+  /** Present when the server sends it; ties the line to its dish. */
+  menuItemId?: string;
+  /** VEG, NON_VEG or EGG when the server sends it. */
+  foodType?: string;
+}
+
+/** The courier the delivery provider assigned; the whole object is absent until the server sends it. */
+export interface ChefOperationalDeliveryPartner {
+  name: string | null;
+  phone: string | null;
+  photoUrl: string | null;
+  pickupEtaAt: string | null;
 }
 
 export interface ChefOperationalDeliverySummary {
@@ -55,6 +68,22 @@ export interface ChefOperationalOrder {
   prepTimeMinutes?: number | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+  /** What the chef earns from the food in this order. Absent when the server does not send it. */
+  foodSubtotal?: number;
+  /** Deadline to accept or reject. Absent until the server sends it. */
+  chefAcceptanceExpiresAt?: string;
+  /** What the customer wrote at checkout. */
+  customerNote?: string;
+  deliveryPartner?: ChefOperationalDeliveryPartner;
+  /** First name and last initial of the customer, such as "Priya S.". Never the full name. */
+  customerName?: string;
+  /** The checkout the customer paid in. Absent for a meal-plan order, which has none. */
+  checkoutId?: string;
+  /**
+   * When the chef handed the order to the courier. Present (null until then) only when the server
+   * supports the hand-over action, so the button shows only for `null`.
+   */
+  chefHandedOverAt?: string | null;
 }
 
 export interface ChefOperationalNotice {
@@ -119,7 +148,15 @@ function parseOrderItemSummary(
   if (!id || !UUID_PATTERN.test(id) || !itemName || quantity === null) {
     return null;
   }
-  return {id, itemName, quantity};
+  const menuItemId = boundedString(raw.menuItemId, 64);
+  const foodType = boundedString(raw.foodType, 40);
+  return {
+    id,
+    itemName,
+    quantity,
+    ...(menuItemId && UUID_PATTERN.test(menuItemId) ? {menuItemId} : {}),
+    ...(foodType ? {foodType} : {}),
+  };
 }
 
 function parseOrderItemSummaries(
@@ -151,6 +188,52 @@ function parseDeliverySummary(
   return {
     areaName: optionalString(raw.areaName, 120),
     city,
+  };
+}
+
+function parseDeliveryPartner(value: unknown): ChefOperationalDeliveryPartner | null {
+  const raw = asRecord(value);
+  if (!raw) {
+    return null;
+  }
+  return {
+    name: optionalString(raw.name, 120),
+    phone: optionalString(raw.phone, 40),
+    photoUrl: optionalString(raw.photoUrl, 500),
+    pickupEtaAt: validTimestamp(raw.pickupEtaAt, true),
+  };
+}
+
+/** Rupees from a JSON number or a plain decimal string; anything else (empty, boolean, negative, "1e3") is not money. */
+function optionalMoney(value: unknown): number | null {
+  const amount =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && /^\d+(\.\d+)?$/.test(value.trim())
+        ? Number(value)
+        : NaN;
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+}
+
+/** Fields the server adds over time: kept when valid, left out (never an error) otherwise. */
+export function parseOptionalOrderFields(order: Record<string, unknown>): Partial<ChefOperationalOrder> {
+  const foodSubtotal = optionalMoney(order.foodSubtotal);
+  const chefAcceptanceExpiresAt = validTimestamp(order.chefAcceptanceExpiresAt, true);
+  const customerNote = optionalString(order.customerNote, 500);
+  const deliveryPartner = parseDeliveryPartner(order.deliveryPartner);
+  const customerName = shortCustomerName(boundedString(asRecord(order.deliveryAddress)?.recipientName, 160));
+  const checkoutId = boundedString(order.checkoutId, 64);
+  // Absent means the server has no hand-over action; null means it has one and it is still to be done.
+  const chefHandedOverAt =
+    order.chefHandedOverAt === null ? null : validTimestamp(order.chefHandedOverAt) ?? undefined;
+  return {
+    ...(foodSubtotal !== null ? {foodSubtotal} : {}),
+    ...(chefAcceptanceExpiresAt ? {chefAcceptanceExpiresAt} : {}),
+    ...(customerNote ? {customerNote} : {}),
+    ...(deliveryPartner ? {deliveryPartner} : {}),
+    ...(customerName ? {customerName} : {}),
+    ...(checkoutId && UUID_PATTERN.test(checkoutId) ? {checkoutId} : {}),
+    ...(chefHandedOverAt !== undefined ? {chefHandedOverAt} : {}),
   };
 }
 
@@ -186,6 +269,7 @@ function parseOrder(value: unknown): ChefOperationalOrder | null {
     prepTimeMinutes,
     createdAt,
     updatedAt,
+    ...parseOptionalOrderFields(order),
   };
 }
 
@@ -289,7 +373,8 @@ export const chefOperationalApi = {
     signal?: AbortSignal,
   ): Promise<ChefOperationalNotice[]> {
     const response = await httpClient.get<unknown>('/api/v1/notifications/in-app', {
-      params: {limit: 100},
+      // The server ignores role until it filters by it; the app filters too (isChefAudienceNotice).
+      params: {limit: 100, role: 'CHEF'},
       signal,
       dedupeKey: 'chef-shell:notifications:100',
     });

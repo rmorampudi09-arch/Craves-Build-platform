@@ -12,6 +12,7 @@ import {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
 export const CHEF_SCHEDULED_ORDERS_AVAILABLE = false;
 export const CHEF_SCHEDULED_ORDERS_PATH = '/api/v1/chef/scheduled-orders';
 export const CHEF_SCHEDULED_ORDERS_PAGE_SIZE = 20;

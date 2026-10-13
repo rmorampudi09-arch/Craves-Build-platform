@@ -2,10 +2,8 @@ import React from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
-import {
-  CHEF_REVIEWS_AVAILABLE,
-  chefReviewsApi,
-} from '../api/chefReviewsApi';
+import {isRouteNotPublished} from '../../../core/http/routeAvailability';
+import {chefReviewsApi} from '../api/chefReviewsApi';
 import type {
   PublicKitchenReview,
   PublicKitchenReviewSummary,
@@ -15,6 +13,7 @@ const CHEF_ROLE = 'CHEF' as const;
 const PREVIEW_LIMIT = 3;
 
 export interface ChefReviewPreviewModel {
+  /** False when the server does not publish the reviews route for the app yet. */
   available: boolean;
   reviews: PublicKitchenReview[];
   summary: PublicKitchenReviewSummary | null;
@@ -43,7 +42,7 @@ export function useChefReviewPreview(): ChefReviewPreviewModel {
     queryKey: listKey,
     queryFn: ({signal}) =>
       chefReviewsApi.list({limit: PREVIEW_LIMIT, signal}),
-    enabled: CHEF_REVIEWS_AVAILABLE && identityId !== null,
+    enabled: identityId !== null,
     staleTime: 30_000,
   });
 
@@ -72,15 +71,12 @@ export function useChefReviewPreview(): ChefReviewPreviewModel {
   const summaryQuery = useQuery({
     queryKey: summaryKey,
     queryFn: ({signal}) => chefReviewsApi.summary(kitchenId as string, signal),
-    enabled:
-      CHEF_REVIEWS_AVAILABLE &&
-      identityId !== null &&
-      kitchenId !== null,
+    enabled: identityId !== null && kitchenId !== null,
     staleTime: 30_000,
   });
 
   const refresh = React.useCallback(async () => {
-    if (!CHEF_REVIEWS_AVAILABLE || !identityId) return;
+    if (!identityId) return;
 
     const listResult = await listQuery.refetch();
     const refreshedReviews = listResult.data?.items ?? [];
@@ -91,13 +87,11 @@ export function useChefReviewPreview(): ChefReviewPreviewModel {
   }, [identityId, listQuery, summaryQuery]);
 
   return {
-    available: CHEF_REVIEWS_AVAILABLE,
+    available: !isRouteNotPublished(listQuery.error),
     reviews,
     summary: summaryQuery.data ?? null,
     isPending:
-      CHEF_REVIEWS_AVAILABLE &&
-      (listQuery.isPending ||
-        (kitchenId !== null && summaryQuery.isPending)),
+      listQuery.isPending || (kitchenId !== null && summaryQuery.isPending),
     isRefreshing: listQuery.isFetching || summaryQuery.isFetching,
     error: listQuery.error ?? summaryQuery.error ?? null,
     refresh,

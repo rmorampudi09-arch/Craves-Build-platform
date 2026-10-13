@@ -250,6 +250,28 @@
       "responseValidator": "chefMealScheduleSchema"
     },
     {
+      "id": "chefSubscriptions.setAcceptingSubscribers",
+      "source": "src/features/chefSubscription/api/chefSubscriptionApi.ts",
+      "method": "PATCH",
+      "path": "/api/v1/chef/subscription-plans/{planId}/accepting-subscribers",
+      "auth": "bearer",
+      "requestModel": "{ acceptingSubscribers: boolean }",
+      "responseModel": "ChefMealPlan",
+      "requestValidator": "owned ACTIVE plan (409 PLAN_NOT_ACTIVE otherwise)",
+      "responseValidator": "chefMealPlanSchema"
+    },
+    {
+      "id": "chefSubscriptions.uploadPlanImage",
+      "source": "src/features/chefSubscription/api/chefSubscriptionApi.ts",
+      "method": "PUT",
+      "path": "/api/v1/chef/subscription-plans/{planId}/image",
+      "auth": "bearer",
+      "requestModel": "multipart file (JPEG or PNG, max 2 MiB, max 4096 px)",
+      "responseModel": "ChefMealPlan",
+      "requestValidator": "owned DRAFT or REJECTED plan",
+      "responseValidator": "chefMealPlanSchema"
+    },
+    {
       "id": "chefSubscriptions.putSlotCapacity",
       "source": "src/features/chefSubscription/api/chefSubscriptionApi.ts",
       "method": "PUT",

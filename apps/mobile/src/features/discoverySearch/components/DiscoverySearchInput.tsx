@@ -11,6 +11,7 @@ import {
 import {
   colors,
   fontWeight,
+  iconSize,
   radius,
   spacing,
   touchTarget,
@@ -50,7 +51,7 @@ export function DiscoverySearchInput({
   return (
     <View style={[styles.container, style]}>
       <View pointerEvents="none" style={styles.searchIcon}>
-        <Icon name="search" size={18} color={iconColor} />
+        <Icon name="search" size={iconSize.lg} color={iconColor} surface={false} />
       </View>
       <TextInput
         accessibilityLabel={accessibilityLabel}
@@ -106,7 +107,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     color: colors.textPrimary,
     fontSize: typography.small,
-    paddingLeft: 40,
+    paddingLeft: 44,
     paddingRight: spacing.md,
   },
   inputPill: {

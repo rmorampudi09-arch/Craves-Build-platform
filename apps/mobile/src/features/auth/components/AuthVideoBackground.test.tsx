@@ -28,7 +28,7 @@ describe('bundled auth background', () => {
     jest.restoreAllMocks();
     AppState.currentState = originalAppState;
   });
-  it('uses only a bundled asset, silently loops, and covers startup with a poster', () => {
+  it('uses only a bundled asset, silently loops at 2x, and covers startup with a poster', () => {
     const player = render();
     expect(jest.mocked(useVideoPlayer).mock.calls[0][0]).not.toEqual(
       expect.objectContaining({ uri: expect.any(String) }),
@@ -38,6 +38,7 @@ describe('bundled auth background', () => {
       muted: true,
       volume: 0,
       audioMixingMode: 'mixWithOthers',
+      playbackRate: 2,
     });
     expect(player.play).toHaveBeenCalledTimes(1);
     expect(tree.root.findAllByType(Image)).toHaveLength(2);
@@ -87,13 +88,17 @@ describe('bundled auth background', () => {
     expect(player.pause).toHaveBeenCalledTimes(1);
     expect(player.addListener.mock.results[0].value.remove).toHaveBeenCalled();
   });
-  it('frames the whole video inside the hero and reuses the player as the form changes', () => {
+  it('fills the screen behind the sheet and reuses the player as the form changes', () => {
     const player = render();
-    act(() => tree.update(<AuthVideoBackground enabled heroFraction={0.45} />));
+    act(() => tree.update(<AuthVideoBackground enabled />));
     const viewport = tree.root.findAllByProps({
       testID: 'auth-video-background',
     })[0];
-    expect(StyleSheet.flatten(viewport.props.style).height).toBe('45%');
+    expect(StyleSheet.flatten(viewport.props.style)).toMatchObject({
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+    });
     expect(jest.mocked(useVideoPlayer).mock.results.at(-1)?.value).toBe(player);
     expect(player.release).not.toHaveBeenCalled();
   });

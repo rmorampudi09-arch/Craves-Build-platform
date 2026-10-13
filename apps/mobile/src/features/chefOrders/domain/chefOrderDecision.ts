@@ -1,5 +1,6 @@
 import {AppApiError} from '../../../core/http/apiError';
 import {chefMenuApi} from '../../chefMenu/api/chefMenuApi';
+import {chefOrderStatusChip} from './chefOrderFilters';
 import {
   resolveChefOrderPreparationTime,
   type ChefPreparationItem,
@@ -55,12 +56,17 @@ export class ChefOrderDecisionConflictError extends AppApiError {
   }
 }
 
+/**
+ * The order moved on while the chef was answering (a real conflict). The decision hook's own "already in progress"
+ * answer is also a 409, but then the first request is still running, so the question is not over.
+ */
+export function isOrderMovedOn(error: unknown): boolean {
+  return error instanceof AppApiError && error.status === 409 && error.code !== 'CHEF_ORDER_DECISION_IN_PROGRESS';
+}
+
+/** The status in the words the chef sees on the order's chip ("Preparing", "Rejected"), never the raw name. */
 export function formatChefOrderStatus(status: ChefOrderDetail['status']): string {
-  return status
-    .toLowerCase()
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+  return chefOrderStatusChip(status).label;
 }
 
 export function maskChefOrderContactPhone(value: string): string {

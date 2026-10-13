@@ -122,6 +122,47 @@ describe('typed HTTP client foundation', () => {
     await expect(pending).resolves.toBe(false);
   });
 
+  it('keeps the Retry-After seconds of a 429 and ignores it elsewhere', () => {
+    const config = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
+    const failure = (status: number, retryAfter: string) =>
+      toAppApiError(
+        new AxiosError('failed', 'ERR_BAD_REQUEST', config, undefined, {
+          data: {code: 'LOCATION_RATE_LIMITED', message: 'Too many location lookups.'},
+          status,
+          statusText: '',
+          headers: new AxiosHeaders({'Retry-After': retryAfter}),
+          config,
+        }),
+      );
+
+    expect(failure(429, '7').retryAfterSeconds).toBe(7);
+    expect(failure(429, '7').code).toBe('LOCATION_RATE_LIMITED');
+    expect(failure(429, 'Wed, 21 Oct 2026 07:28:00 GMT').retryAfterSeconds).toBeUndefined();
+    expect(failure(503, '7').retryAfterSeconds).toBeUndefined();
+  });
+
+  it('keeps the generic 429 message for every caller and hands the backend text over separately', () => {
+    const config = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
+    const failure = (data: unknown) =>
+      toAppApiError(
+        new AxiosError('failed', 'ERR_BAD_REQUEST', config, undefined, {
+          data,
+          status: 429,
+          statusText: '',
+          headers: new AxiosHeaders({'Retry-After': '30'}),
+          config,
+        }),
+      );
+
+    const otp = failure({code: 'OTP_COOLDOWN', message: 'Wait 28 seconds before asking for another code.'});
+    expect(otp.code).toBe('OTP_COOLDOWN');
+    expect(otp.message).toBe('Too many requests. Please wait a moment and try again.');
+    expect(otp.backendMessage).toBe('Wait 28 seconds before asking for another code.');
+    expect(failure({code: 'AUTH_RATE_LIMITED'}).message).toBe('Too many requests. Please wait a moment and try again.');
+    expect(failure(undefined).message).toBe('Too many requests. Please wait a moment and try again.');
+    expect(failure(undefined).backendMessage).toBeUndefined();
+  });
+
   it('normalizes cancellation without making it retriable', () => {
     const config = {
       headers: new AxiosHeaders({'X-Correlation-ID': 'cancel-corr'}),

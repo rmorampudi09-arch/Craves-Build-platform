@@ -32,6 +32,10 @@ export interface ChefBankStatus {
   automaticActivation: boolean;
   message: string;
   updatedAt: string | null;
+  /** Newer integration-service responses name the account, bank and branch. */
+  accountHolderName?: string | null;
+  bankName?: string | null;
+  branchName?: string | null;
 }
 
 export interface ChefBankSubmission {
@@ -70,6 +74,7 @@ const STATUS_KEYS = new Set([
   'message',
   'updatedAt',
 ]);
+const OPTIONAL_STATUS_KEYS = ['accountHolderName', 'bankName', 'branchName'] as const;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -80,9 +85,13 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function exactKeys(
   raw: Record<string, unknown>,
   expected: ReadonlySet<string>,
+  optional: readonly string[] = [],
 ): boolean {
   const keys = Object.keys(raw);
-  return keys.length === expected.size && keys.every(key => expected.has(key));
+  return (
+    [...expected].every(key => key in raw) &&
+    keys.every(key => expected.has(key) || optional.includes(key))
+  );
 }
 
 function timestamp(value: unknown): string | null | undefined {
@@ -94,7 +103,7 @@ function timestamp(value: unknown): string | null | undefined {
 
 export function parseChefBankStatus(value: unknown): ChefBankStatus | null {
   const raw = asRecord(value);
-  if (!raw || !exactKeys(raw, STATUS_KEYS)) return null;
+  if (!raw || !exactKeys(raw, STATUS_KEYS, OPTIONAL_STATUS_KEYS)) return null;
 
   const id =
     raw.id == null
@@ -130,7 +139,10 @@ export function parseChefBankStatus(value: unknown): ChefBankStatus | null {
     typeof raw.automaticActivation !== 'boolean' ||
     typeof raw.message !== 'string' ||
     raw.message.length > 1000 ||
-    updatedAt === undefined
+    updatedAt === undefined ||
+    OPTIONAL_STATUS_KEYS.some(
+      key => raw[key] != null && (typeof raw[key] !== 'string' || (raw[key] as string).length > 255),
+    )
   ) {
     return null;
   }
@@ -152,6 +164,9 @@ export function parseChefBankStatus(value: unknown): ChefBankStatus | null {
     automaticActivation: raw.automaticActivation,
     message: raw.message,
     updatedAt,
+    ...Object.fromEntries(
+      OPTIONAL_STATUS_KEYS.filter(key => key in raw).map(key => [key, raw[key] ?? null]),
+    ),
   };
 }
 

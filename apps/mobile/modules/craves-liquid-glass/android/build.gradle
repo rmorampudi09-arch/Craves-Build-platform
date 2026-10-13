@@ -1,0 +1,22 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'in.craves'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.cravesliquidglass"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+}
+
+dependencies {
+  // expo-blur is linked as its prebuilt AAR, not a source project.
+  implementation 'host.exp.exponent:expo.modules.blur:56.0.3'
+  // The same BlurView build expo-blur ships; the glass redraws its recorded backdrop node.
+  implementation 'com.github.Dimezis:BlurView:version-3.1.0'
+}

@@ -1,4 +1,4 @@
-# KUSHIRAVI App Build - Version 1.24.2 Chef Application Location
+# KUSHIRAVI App Build - Version 1.25.1 Ola Maps Address Flow
 
 This branch contains the local KUSHIRAVI Android app build line. Version 1 remains the known-good rollback point installed on the connected phone on 2026-09-29.
 
@@ -9,15 +9,303 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Baseline source branch: `origin/mobile-ui-rebuild-from-scratch`
 - Baseline commit: `4d6907e254b43180d6d86c540ba4795771778c4f`
 - Android package: `com.cravesapp`
-- Installed Android versionCode: `37`
-- Installed Android versionName: `1.24.2`
+- Installed Android versionCode: `40`
+- Installed Android versionName: `1.25.1`
 - Approved rollback origin: `KUSHIRAVI-app-v1.15.1`, source `5dece0e8cae9208aeccdcf12f231e336ad830bec`.
-- Installed release: `KUSHIRAVI-app-v1.24.2`, source/tag checkpoint `983a24898a5f7ff3535ce64b8162e70b2d081f7c`. Chef sign-in, verified email, current-location address fill, submission and matching Admin pending request are verified. Subsequent document upload fails and is under investigation; no approval is claimed.
-- Last installation: `2026-10-02 13:06:00` Asia/Calcutta, device `RS7PB6VOY9ZLLFYD` / RMX5003; replace-install succeeded without clearing app data.
+- Installed release: `KUSHIRAVI-app-v1.25.1`, source/tag checkpoint `0bd37e0c810f749de8dd45a09a9c0f265583adfa` (local branch in the `C:\mscratch` worktree, not pushed). Previous: `KUSHIRAVI-app-v1.25.0` (`4bdc5109837cfb4f3d5436bf9de8b537ed8b8f1f`) and the 1.24.3 + liquid-glass build recorded as commit `7c89bb2a6`. Earlier release: `KUSHIRAVI-app-v1.24.2`, source/tag checkpoint `983a24898a5f7ff3535ce64b8162e70b2d081f7c`. Chef sign-in, verified email, current-location address fill, submission and matching Admin pending request are verified. Subsequent document upload fails and is under investigation; no approval is claimed.
+- Last installation: `2026-10-10 19:57:24` Asia/Calcutta, device `GURKT4DYYPUW7DX8` / Xiaomi 22041216I (Android 14); replace-install succeeded without clearing app data.
 - Runtime API base URL: `https://api.craves.in`
 - Runtime environment: `production`
 
 ## Version Checkpoints
+
+### Version 1.31.1 - Ask Craves support chat for chefs and customers, 2026-10-13
+
+- Chef Help & support "Chat with us" and the order page "Problem with this order?" open the Ask
+  Craves chat (POST /api/v1/support/chat, channel APP, live on api.craves.in). When the assistant
+  opens a ticket the chat shows "Ticket #... created" and opens it. Customers get the same chat from
+  Help & support and the order page. Ported from main #468/#469/#471, restyled for the chef kit.
+- Chat limits: the per-minute limit waits out Retry-After; the daily limit keeps Send off for the
+  visit. Sign-in and other screens keep their generic "too many requests" copy.
+
+### Version 1.31.0 - Chef app redesign: Home, Orders, Menu, Meal plans, Earnings, Profile, 2026-10-13
+
+- Whole chef side rebuilt on one white design kit (white screens, white cards, no grey pages). The
+  chef tabs are Home, Orders, Menu, Earnings and Profile, in a plain white floating bar (no glass)
+  with the new-order count on Orders. Analytics became Earnings. The bell opens a chef-only
+  notifications screen; the old side menu and notifications sheet are gone. Order numbers read
+  `#` plus the last 5 characters everywhere, and money reads as `₹1,240`.
+- Home: kitchen open, paused or closed with a status sheet and Resume; "Needs you now" (accept with
+  cooking time, reject, response timer and customer note when sent); Today tiles; "In the kitchen"
+  with a confirm before Mark ready and courier or "Waiting for pickup" on ready orders; menu card,
+  latest reviews, balance card with Withdraw.
+- Orders: one screen with New, Preparing, Ready, Scheduled and Past, and a status-aware order page
+  (reject with a reason, Handed over and Not picked up on ready orders, status times and courier
+  details when sent). Buttons ignore a second tap while one request is running.
+- Menu: dishes list with search, one filter row, on/off switch per dish (rolls back if it fails),
+  one add or edit dish form, publish drafts, delete a dish.
+- Meal plans: list with Live, Waiting approval and Drafts, 3-step plan editor, "Taking new
+  subscribers" switch, and Daily limits per meal that never overwrite silently.
+- Earnings: sales for week, month or a picked range with order counts, Withdraw, payout history and
+  Bank account.
+- Profile: kitchen details with photos, documents and verification, opening hours and special days,
+  preferences (sound, push, email, auto-accept, default cooking time), help and support tickets,
+  reviews, refer a chef, login and security, switch to customer, log out.
+- Anything whose server route is not published for mobile yet (schedule, reviews, support, scheduled
+  orders, full order history, notification settings, kitchen settings, photos, hand-over, delete a
+  dish) shows "Coming soon" instead of an error, and goes live on the first successful call with no
+  new build.
+- Confirm dialogs have a grey Cancel button, and an unknown food type no longer crashes a card.
+
+### Version 1.30.0 - Meal plans only from chefs within 10 km, 2026-10-12
+
+- The Meal plans list now sends the selected location, and the server lists only plans whose
+  chef has an active kitchen within 10 km (the same radius as dishes). With no location chosen,
+  the list asks for one. Other meal-plan screens still read the full list, so a customer's own plan
+  keeps its details after they move.
+- Subscribing to a chef more than 10 km from the delivery address is refused by the server
+  (DELIVERY_ADDRESS_OUT_OF_RANGE). That check needs the subscription-service release from this change.
+
+### Version 1.29.2 - First dashboard after approval loads cleanly, 2026-10-12
+
+- On a chef's first open after approval the Dashboard listed dishes before the kitchen
+  existed (catalog answers 400 KITCHEN_PROFILE_REQUIRED), so it showed "Some live data is
+  unavailable" until Retry. Listing and adding dishes now save the kitchen from the
+  application first (chefProfileApi.getKitchen) and try once more.
+- Verified on the phone with 1.29.1: Khushi Test 2 (approved) shows KPHB Kitchen,
+  "Kitchen setup in progress"; the dashboard warning cleared after Retry.
+
+### Version 1.29.1 - Approved chefs get their kitchen, 2026-10-12
+
+- A newly approved chef had no kitchen, so Chef Profile showed "Kitchen details
+  unavailable" and Edit profile stayed blocked. When GET /api/v1/kitchens/me answers
+  KITCHEN_PROFILE_NOT_FOUND, the app now saves the kitchen from the approved application
+  (name, about, address, pin, contact; status DRAFT), like the website's chef-kitchen-handoff.
+- A sign-in pass signed before approval has no CHEF role, so "Open your kitchen" failed with
+  "We could not verify your Chef access". Account resolution now renews the pass once and
+  retries, like the website.
+- Still open: chefs approved through the old one-page form have no kitchen name to copy; the
+  kitchen editor cannot create a kitchen from scratch yet.
+
+### Version 1.29.0 - Step-by-step chef application, same as craves.in, 2026-10-12
+
+- New chefs now get the website's application (craves.in/chef/application, onboarding v2)
+  instead of the one-page form: Basic details (full name, birthday calendar for 18+,
+  verified mobile and email), Your kitchen (name, about, Ola map pin with search and
+  current location, address, two kitchen photos), FSSAI number or "Don't have FSSAI?"
+  (FoSCoS steps, video guide in 23 languages, request a call), Identity verification
+  (Aadhaar/PAN/bank statement/other ID, front and back), Bank details when the server
+  requires them, Review with terms, then the status page.
+- Same server contract as the website: GET/PUT/PATCH /api/v1/chef/onboarding, submit,
+  help, document preview/delete, learning content and playback; uploads go multipart to
+  /api/v1/chef/application/proof-files; IFSC lookup /api/v1/chef-onboarding/bank/ifsc.
+- Draft saved per step ("Save and continue", "Save & exit"), Welcome back list with
+  section progress, and changes requested by Craves walk only the flagged sections.
+- The older registration and status screens stay as the fallback for applications made
+  with the older form, or when the server has no step-by-step application.
+- Bank status responses that name the account holder, bank and branch are accepted
+  (the old strict check rejected them).
+- Known gaps vs the website: photos only (no PDF picker), no upload percentage or cancel.
+
+### Version 1.28.1 - Glass buttons on the kitchen page, popup closes on Add, 2026-10-11
+
+- Kitchen page: the back arrow and kitchen heart in the top bar, and the heart on every
+  dish photo, use the Home liquid glass (`LiquidGlassSurface appearance="home"`; dish
+  hearts sample their photo through a `BlurTargetView`, like the Home kitchen cards).
+- Dish popup: a successful first Add (including Replace in the kitchen-switch popup)
+  closes the popup. It stays open on a failure or a price-change message, and − / + on
+  a dish already in the cart keeps it open.
+
+### Version 1.28.0 - Kitchen page with the full menu, 2026-10-11
+
+- The kitchen page now holds the whole menu (design Option A in
+  `design-review/kitchen-profile/`): an empty white space at the top where chef-uploaded
+  kitchen photos will go, a round initials avatar, name, area and "On Craves since",
+  three facts from the menu (dish count, veg/non-veg mix, prep-time range), the
+  kitchen's line, then sticky category tabs and every dish grouped by category.
+  Tabs follow the scroll and jump to a category when tapped.
+- The top bar has back and a kitchen favorite heart (saved kitchens, same as the Chefs
+  tab); the "in cart" counter is gone. The kitchen name shows in the bar after scrolling.
+- Dish rows are compact: veg/non-veg mark, full name, price, prep time and serves, photo
+  on the right with the heart and Add on it; Add turns into − 1 + in place.
+- Removed: "Active kitchen" pill, Menu button, fact boxes, "What Craves can confirm",
+  the made-up "Available - N" count on these rows, and the separate "View all" page
+  (`CustomerKitchenDishes`). "Your usual" and Favorites now open the kitchen page.
+- Still to do: backend for chefs to upload a profile photo and kitchen photos.
+
+### Version 1.27.3 - White backgrounds and kitchen-switch popup, 2026-10-11
+
+- Cart, Checkout and Discover home chefs page backgrounds are white instead of grey
+  (1.27.2). Cards keep their borders.
+- Adding a dish from another kitchen now opens a Craves popup instead of a system
+  alert. The popup shows "Replace your cart?", the dishes in the cart (two shown, then
+  "+ N more"), the dish that would replace them, and Keep cart / Replace buttons.
+  `askKitchenSwitch()` lives in `features/cart/components/KitchenSwitchDialog.tsx`,
+  and `KitchenSwitchHost` is mounted once in `CustomerRootNavigator`.
+- Used by the kitchen page, kitchen dishes, dish popup and favourites (each keeps its
+  existing `switchCartKitchen` call). Home's Add button previously had no check (the
+  server rejection showed as a warning above the dishes) and now asks too.
+- Checks: tsc and eslint clean; Jest 226 suites / 1,388 tests. Installed on
+  GURKT4DYYPUW7DX8 (code 63). APK in artifacts. Uncommitted. The popup was not
+  opened on the phone because the cart was empty at the time.
+
+### Version 1.27.1 - Cart then Checkout redesign (Option A), 2026-10-11
+
+- Cart page: dishes grouped in a kitchen card (open kitchen, "Add more from this
+  kitchen"), delivery card, bottom bar "Item total" + Proceed to Checkout. No bill,
+  no Offers card, no location bar or bell (removed in 1.26.4).
+- Proceed creates the server checkout (the server empties the cart at this point) and
+  shows the Checkout page: address, Your order with Edit, bill details, Razorpay note,
+  bar "To pay" + Continue to Payment. Razorpay only opens from the Checkout page.
+- Back, Edit or Change on Checkout puts the missing dishes back with add-to-cart
+  (`cartItemsToRestore`). A started payment is dropped only if the server still
+  reports it unpaid.
+- The broken read-only bill preview (`/api/v1/cart/bill-preview`, body-less 403
+  from order-service) is no longer called. `CartBillPreviewSync` was unmounted and the
+  module was left unused.
+- 1.26.2–1.26.4 on the same day: the preview error code was shown in the banner, a
+  failed preview no longer blocked checkout, and the "Check previous payment" loop
+  after a Razorpay cancel plus a cart change was fixed.
+- Design: `Downloads\Craves-Build-platform-KUSHIRAVI-app-build\design-review\cart\board.html`.
+- Checks: tsc and eslint clean; Jest 225 suites / 1,386 tests (before the 1.27.1 polish;
+  cart suites re-run after it). APK `C:\mscratch\artifacts\KUSHIRAVI-app-v1.27.1.apk`,
+  installed on GURKT4DYYPUW7DX8 (code 61). Uncommitted. The Checkout page itself was
+  not exercised on the phone: tapping Proceed creates a real checkout.
+
+### Version 1.26.0 - Meal Plan Redesign, 2026-10-11
+
+- User approved the meal-plan redesign (board `design-review/meal-plans/board.html`
+  in the Downloads folder) with "go with your design", then asked for the backend
+  that satisfies it. Plan: `docs/superpowers/plans/2026-10-11-meal-plan-redesign.md`.
+- Builds on 1.25.14 (code 53, commit `4592ba4bd`) and another session's 1.25.15
+  (code 54, commit `ce0171258`, Chefs-tab photo strip), both committed on this branch.
+- Customer: the single meal-plan screen is replaced by a nested stack on the existing
+  `CustomerSettingsSubscription` route: Meal Plans list (search, All/Weekly/Monthly,
+  banner, plan cards), Meal Plan detail, Review Subscription (start date and address
+  Change), Delivery Address picker (add/edit via the Ola editor), Payment (no in-app
+  method list; Pay & Subscribe opens Razorpay), Meal Plan Activated, My Meal Plan
+  (pause/resume, skip a meal, cancel, this week's schedule, Complete payment) and the
+  meal details screen (order tracker when the backend links an order).
+- Payment: the old Razorpay sequence is ported unchanged (create with Idempotency-Key,
+  invoice wait, order, pending-payment store, verify, recovery). New: leaving Payment
+  is blocked while checkout is open; retries and re-entry reuse the created
+  subscription; a verify failure after Razorpay returned proof shows "processing";
+  recovered payments show a notice on the list.
+- Chef: Menu tab has an "Items | Meal plans" switch; the Meal plans tab lists plans
+  like items (status, schedule summary, price, Accepting new subscribers switch when
+  the backend supports it) with "+ Add new plan"; new Create/Edit Meal Plan editor
+  (plan photo, weekly/monthly, price, description, lead time, per-day meal slots with
+  editable times, dish and quantity; Save draft / Submit for approval). The old
+  Profile "Subscription plan" screen stays for capacity rules.
+- Works against today's production: plan photos, ratings, Renews date, the order
+  tracker, the chef photo upload and the accepting switch use optional fields from the
+  backend branch `feat/meal-plan-backend` (`C:\msub`, not yet merged or deployed) and
+  fall back when absent. Ratings use the existing public kitchen review summary.
+- Android 1.26.0 / code 55, tag `KUSHIRAVI-app-v1.26.0`. ARM64 release via
+  `scripts\build-kushiravi-release-apk.ps1 -PhoneOnly -SkipNpmCi` (3m 9s, 41 of 907
+  tasks executed). Signer SHA-256 `fac61745…3b9c`, same as installed; v2/v3 verify.
+- APK: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.26.0.apk` (61,622,479 bytes) SHA-256
+  `0FD5CF97F847851110D811AF6AB674801DE489AA1F59EBBCAE9E4F33A89B92E1`; aapt2 badging
+  `com.cravesapp` versionCode 55 versionName 1.26.0. Not yet installed.
+- Checks: TypeScript clean, ESLint zero warnings on changed files, Jest 224 suites /
+  1,383 tests, APIM contract check unchanged (3 pre-existing failures), every task
+  spec + quality reviewed, final whole-branch review with one fix wave.
+
+### Version 1.25.1 - Ola Maps Address Flow, 2026-10-10
+
+- User approved the address designs (Design canvas "Craves Address & Ola Maps
+  Screens") and asked to integrate Ola Maps per the CRAVES APK guide and the
+  location rate-limit patch, validated against GitHub `main`, then build and
+  install. Validated on `origin/main` `c9fbe9ed2`: User/Chef
+  `CustomerAddressGeocodingController`, `OlaMapsClient` records and
+  `LocationRateLimiter` (60 searches / 30 reverse geocodes per customer per
+  minute, `429 LOCATION_RATE_LIMITED` + `Retry-After`) match the guide.
+  Live probes: both APIM routes answer 401 without a token; the craves.in
+  tile proxy serves the Ola style (200 with the craves.in Referer, 403
+  without), rewrites every URL to itself and exposes no `api_key`.
+- Baseline: the phone ran an uncommitted 1.24.3 + liquid-glass build from
+  `C:\cm\mobile` (APK SHA-256 `178a2413…8ff5`, installed 18:24). Its source
+  was taken byte-for-byte as commit `7c89bb2a6` so nothing installed is lost.
+- Map: `@maplibre/maplibre-react-native` 11.5.0 and `OlaMapPicker` /
+  `olaMapTiles` from `main` (`8364ab604`), Ola vector tiles through
+  `https://craves.in/api/location/map-tiles`; no Ola key in the APK and no
+  `api.olamaps.io` call (bundle checked). iOS Podfile hook as on `main`.
+- Address editor is now search -> map pin -> details:
+  `POST /customer/addresses/location-search` (350 ms debounce, from 3 letters,
+  stale requests cancelled, bias sent as a full lat/lng pair or omitted),
+  settled pin -> existing `reverse-geocode`. Flat/house is filled only from a
+  precise house number, otherwise empty and required. Area, pincode, city,
+  district and state come from the pin in an editable card. Saving still
+  requires a pin (manual entry keeps the placed pin).
+- States per the guide: empty results, 503 search / reverse geocode (manual
+  entry and current location stay available), permission denied (search
+  still works; permission asked only on "Use current location"), 429
+  (`AppApiError.retryAfterSeconds`; lookups wait Retry-After, retry once).
+- Location sheet: search, use current location, add new address, saved
+  addresses as radios, "Set map pin" for saved addresses without a pin,
+  "Manage addresses". Saving or picking from a delivery picker selects that
+  address (and the cart address on Cart). Default header shows label +
+  address line (Home, Chefs, Orders, Favorites, Notifications); compact
+  header unchanged. Home without a location offers GPS, search or saved.
+- 1.25.0 (code 39, tag `KUSHIRAVI-app-v1.25.0`) installed at 19:42:20 IST.
+  On the phone the header label read "Ho…" (this Xiaomi under-measures bold
+  text; existing "Subscription" is clipped the same way) and in landscape the
+  map sheet left a thin strip. 1.25.1 fixes both: the title fills its row
+  with an inline chevron; the map sheet is capped at 50% with scrolling copy.
+- Android 1.25.1 / code 40, tag `KUSHIRAVI-app-v1.25.1`. ARM64 release via
+  `scripts\build-kushiravi-release-apk.ps1 -PhoneOnly -SkipNpmCi` from
+  `C:\mscratch\apps\mobile` (1.25.0: 15m 52s, 907 tasks; 1.25.1: 3m 43s, 41
+  executed). Signer SHA-256 `fac61745…3b9c`, same as installed; v2/v3 verify.
+- APKs: `C:\mscratch\artifacts\KUSHIRAVI-app-v1.25.1.apk` SHA-256
+  `2BD12DEA1D0349824E7ED28B7A93B3726A9263EFC53695307ED106D1DB0A9CD9`;
+  `KUSHIRAVI-app-v1.25.0.apk` SHA-256
+  `8F84D2AA7AA79E999503E7A5300A42C60C84487CD3D61BD2F631F71C863A237E`.
+  Source ZIP `KUSHIRAVI-app-v1.25.1-source.zip` SHA-256
+  `1976B871CCC55E7C0AA137B9AFB87B7061CB7C743526A12CD9A8C1E7F4263A51`,
+  1,155 entries, no `.env`.
+- Checks: TypeScript, ESLint (zero warnings) on changed files, `git diff
+  --check`; Jest 207 suites / 1,149 tests pass with `--maxWorkers=4` (two
+  unrelated screen suites time out under default workers and pass alone),
+  including new search-contract, Retry-After and editor-flow tests.
+- Phone verification (landscape, phone lying flat): replace-install kept the
+  session (the first launch of 1.25.0 showed "We couldn't restore your
+  session"; Try again restored it. Auth refresh answered normally from the
+  PC; ART was optimising the new APK at that moment; cause not confirmed.
+  The 1.25.1 launch restored the session directly).
+  Header, sheet, live search ("Madhapur" -> Ola results), map with Ola tiles,
+  reverse geocode with approximate-pin warning, drag-to-re-resolve, details
+  form (house empty + hint, street and area from the pin), denied-permission
+  notice (the permission dialog was dismissed, permission left as it was)
+  and discard all work; no crash or JS error. No address was saved and no
+  permission was granted: saving and GPS are left for the owner to try.
+- Observed, not changed: on this phone bold text sometimes renders regular
+  between launches, and pre-existing bold labels with one-line truncation
+  (header "Subscription") can be clipped.
+
+### Version 1.24.3 - Android System Bars, 2026-10-10
+
+- User reported a white bar at the top while the red splash showed, and a thick
+  red strip at the bottom on every screen. Remove both; no other UI change.
+- Cause: the theme hard-coded `navigationBarColor` to `#ff1707` and nothing reset
+  it. The JS splash sets a red status bar, but the home screen's `ScreenShell`
+  `StatusBar` (white) mounts behind the still-visible splash and wins the
+  React Native StatusBar stack, so the status bar turned white mid-splash.
+- Fix: `android/gradle.properties` `edgeToEdgeEnabled=true`. Both system bars are
+  transparent; the full-screen splash covers them, and screens draw behind the
+  gesture bar using their existing safe-area insets. Android 15+ already forces
+  edge-to-edge for targetSdk 35+, so Android 14 now matches newer phones.
+- Android target 1.24.3 / code 38. Release ARM64 build via
+  `scripts\build-kushiravi-release-apk.ps1 -PhoneOnly` from the short build copy
+  `C:\cm\mobile` (the Downloads path exceeds ninja 1.10.2's 260-character limit).
+  2m 19s, 38 of 823 tasks executed. Existing signer verifies with APK v2/v3.
+- APK SHA256 `5198696D5C758FFB973547DC5A2DAFB7531BE8FCD0D6214065E7B89797C3DA4E`.
+- Phone verification: replace-install kept the session. A launch burst
+  (screenshot about every 0.45s) shows a red status bar with light icons
+  throughout the splash (before: white from 2.0s to 4.1s) and no red strip under
+  the tab bar. Home, Chefs, Orders and Profile headers sit below the status bar,
+  and the tab bar sits above the gesture bar. No crash.
+- Not re-verified: login, checkout/Razorpay, chef screens, modals and keyboard
+  screens under edge-to-edge on Android 14.
 
 ### Version 1.24.2 - Chef Application Current Location, 2026-10-02
 

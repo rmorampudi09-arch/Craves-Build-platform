@@ -12,6 +12,7 @@ parameters:
       - validate
       - prepareDomains
       - associateDomains
+      - cacheLanding
   - name: confirmPremium
     displayName: Type PROVISION_PREMIUM_AFD for billable Premium create/upgrade
     type: string

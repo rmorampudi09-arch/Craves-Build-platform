@@ -42,6 +42,8 @@ Craves is being prepared for a full-scale launch. Premium is used because Micros
 
 Only immutable Next.js assets under `/_next/static/*` are cached. The catch-all `/*` application route has no Front Door cache configuration. This prevents personalized HTML, login/session responses, checkout responses and BFF/API responses from being cached accidentally.
 
+The one exception is the opt-in `cacheLanding` action: a `landingcache` rule caches and compresses `/` for one hour, only for requests without the `craves_access_token` cookie. `/` is the static landing file, identical for every anonymous visitor and sent with no Set-Cookie. Every other path stays uncached. Re-run `cacheLanding` (it purges `/`) after closing the launch gate or releasing a new landing build, or visitors can see the old copy for up to an hour.
+
 ## WAF rollout
 
 Start with `Detection`. This logs rule matches without blocking customers. Review WAF logs and functional smoke tests, then switch to `Prevention` before public DNS cutover. Do not create broad exclusions; any exclusion must be based on an observed false positive and scoped to the exact rule/request field.
@@ -98,6 +100,10 @@ If exactly one Log Analytics workspace exists in the resource group it is auto-d
 ### validate
 
 Checks the Premium tier, no-cache app route, cached static route, endpoint HTTP response, HSTS and `X-Content-Type-Options: nosniff`.
+
+### cacheLanding
+
+Adds or updates the `landingcache` rule in the security-header ruleset (see Caching safety) and purges `/`. It does not touch routes, WAF or domains, so it is safe to run on its own. Afterwards, `curl -sI -H 'Accept-Encoding: br' https://craves.in/` twice should show `content-encoding: br` and `x-cache: TCP_HIT` on the repeat, and the same request with `Cookie: craves_access_token=x` should still get a 307 to `/home`.
 
 ### prepareDomains
 

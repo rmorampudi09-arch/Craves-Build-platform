@@ -39,6 +39,20 @@ class PreflightTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"Incorrect V17"):
             preflight.compare_history(self.rows,self.sources)
 
+    def test_v18_is_exactly_reviewed_and_may_be_pending_after_applied_v17(self):
+        for version,script in (("14","V14__chef_onboarding_v2.sql"),("15","V15__chef_onboarding_all_chefs_selected_proof.sql"),("16","V16__chef_onboarding_submission_contract.sql"),("17","V17__chef_onboarding_reference_and_correction_sections.sql"),("18","V18__support_guest_callbacks.sql")):
+            self.sources[version]={"script":script,"checksum":int(version)}
+        for version in ("13","14","15","16","17"):
+            self.rows.append({"version":version,**self.sources[version],"type":"SQL","success":True})
+        result=preflight.compare_history(self.rows,self.sources)
+        self.assertEqual((result["v17"],result["v18"],result["pendingVersions"]),("APPLIED_MATCHING","PENDING",["18"]))
+        self.rows.append({"version":"18",**self.sources["18"],"type":"SQL","success":True})
+        self.assertEqual(preflight.compare_history(self.rows,self.sources)["v18"],"APPLIED_MATCHING")
+        self.rows.pop()
+        self.sources["18"]["script"]="V18__other.sql"
+        with self.assertRaisesRegex(ValueError,"Incorrect V18"):
+            preflight.compare_history(self.rows,self.sources)
+
     def test_bank_release_accepts_only_exact_later_v149(self):
         sources={"148":{"script":"V148__existing.sql","checksum":148},"149":{"script":"V149__chef_bank_branch_directory.sql","checksum":149}}
         rows=[{"version":"148",**sources["148"],"type":"SQL","success":True}]

@@ -24,23 +24,26 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
-// Needs a disposable PostgreSQL server, e.g. CENTRAL_OTP_TEST_DB=jdbc:postgresql://127.0.0.1:55447 (user postgres, no password).
+// Needs a disposable PostgreSQL server, e.g. CENTRAL_OTP_TEST_DB=jdbc:postgresql://127.0.0.1:55447.
+// The test creates and resets its own database, central_otp_test, on that server.
 @EnabledIfEnvironmentVariable(named = "CENTRAL_OTP_TEST_DB", matches = "jdbc:postgresql://.+")
 class CentralOtpTest {
     private static final String SERVER = System.getenv("CENTRAL_OTP_TEST_DB");
+    private static final String USER = System.getenv().getOrDefault("CENTRAL_OTP_TEST_DB_USER", "postgres");
+    private static final String PASSWORD = System.getenv().getOrDefault("CENTRAL_OTP_TEST_DB_PASSWORD", "");
     private JdbcTemplate db;
     private CentralOtpStore store;
     private final String phone = "+919876543210";
 
     @BeforeAll static void database() {
-        var db = new JdbcTemplate(new DriverManagerDataSource(SERVER + "/postgres", "postgres", ""));
+        var db = new JdbcTemplate(new DriverManagerDataSource(SERVER + "/postgres", USER, PASSWORD));
         if (db.queryForObject("SELECT count(*) FROM pg_database WHERE datname='central_otp_test'", Integer.class) == 0) {
             db.execute("CREATE DATABASE central_otp_test");
         }
     }
 
     @BeforeEach void setup() throws Exception {
-        var source = new DriverManagerDataSource(SERVER + "/central_otp_test", "postgres", "");
+        var source = new DriverManagerDataSource(SERVER + "/central_otp_test", USER, PASSWORD);
         db = new JdbcTemplate(source);
         db.execute("DROP TABLE IF EXISTS auth_phone_otp, auth_phone_otp_limits");
         db.execute(Files.readString(Path.of("src/main/resources/db/migration/V19__centralized_phone_otp.sql")));

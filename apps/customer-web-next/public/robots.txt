@@ -1,6 +1,6 @@
 User-agent: *
 Allow: /
-Disallow: /orders/
+Disallow: /orders
 Disallow: /api/
 Disallow: /admin
 Disallow: /chef/
@@ -19,7 +19,7 @@ Disallow: /sign-in
 
 User-agent: OAI-SearchBot
 Allow: /
-Disallow: /orders/
+Disallow: /orders
 Disallow: /api/
 Disallow: /admin
 Disallow: /chef/
@@ -38,7 +38,7 @@ Disallow: /sign-in
 
 User-agent: ChatGPT-User
 Allow: /
-Disallow: /orders/
+Disallow: /orders
 Disallow: /api/
 Disallow: /admin
 Disallow: /chef/
@@ -57,7 +57,7 @@ Disallow: /sign-in
 
 User-agent: GPTBot
 Allow: /
-Disallow: /orders/
+Disallow: /orders
 Disallow: /api/
 Disallow: /admin
 Disallow: /chef/
@@ -76,7 +76,7 @@ Disallow: /sign-in
 
 User-agent: PerplexityBot
 Allow: /
-Disallow: /orders/
+Disallow: /orders
 Disallow: /api/
 Disallow: /admin
 Disallow: /chef/
@@ -98,7 +98,7 @@ Allow: /
 
 User-agent: ClaudeBot
 Allow: /
-Disallow: /orders/
+Disallow: /orders
 Disallow: /api/
 Disallow: /admin
 Disallow: /chef/
@@ -117,7 +117,7 @@ Disallow: /sign-in
 
 User-agent: Claude-SearchBot
 Allow: /
-Disallow: /orders/
+Disallow: /orders
 Disallow: /api/
 Disallow: /admin
 Disallow: /chef/

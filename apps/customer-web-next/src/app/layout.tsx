@@ -41,19 +41,20 @@ export const metadata: Metadata = {
     template: "%s",
   },
   description:
-    "Order fresh homemade food from trusted home chefs anywhere in Hyderabad and Bangalore. Home-style biryani, tiffin, breakfast, lunch, dinner and meal subscriptions, with secure checkout and delivery on Craves.",
+    "Order homemade food from trusted home chefs in Hyderabad and Bangalore. Biryani, tiffin, lunch, dinner and meal plans, delivered to your door.",
   keywords: seoKeywords(),
   authors: [{ name: "Craves" }],
   robots: { index: true, follow: true },
   alternates: {
-    canonical: siteUrl,
+    // "./" resolves to each page's own path; siteUrl made every page claim to be the homepage.
+    canonical: "./",
   },
   openGraph: {
     images: [shareImage],
     title: "Craves — Homemade Food from Trusted Home Chefs",
     description:
       "Discover homemade food, trusted home chefs, live dishes, secure checkout, and delivery-supported ordering with Craves.",
-    url: siteUrl,
+    url: "./",
     siteName: "Craves",
     locale: "en_IN",
     type: "website",

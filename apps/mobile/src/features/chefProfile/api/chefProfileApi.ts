@@ -319,4 +319,9 @@ export const chefProfileApi = {
   async deletePhoto(kind: ChefKitchenPhotoKind, signal?: AbortSignal): Promise<ChefKitchenProfile> {
     return parseKitchenResponse(await httpClient.delete<unknown>(`/api/v1/kitchens/me/photos/${kind}`, {signal}));
   },
+
+  /** Picks one of the 18 drawn faces as the chef's public picture; the response is the kitchen with its new picture link. */
+  async setAvatar(avatarId: string, signal?: AbortSignal): Promise<ChefKitchenProfile> {
+    return parseKitchenResponse(await httpClient.put<unknown>('/api/v1/kitchens/me/chef-avatar', {avatarId}, {signal}));
+  },
 };

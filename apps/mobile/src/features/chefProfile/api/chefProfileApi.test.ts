@@ -185,4 +185,19 @@ describe('chefProfileApi photos', () => {
     await expect(chefProfileApi.deletePhoto('KITCHEN')).resolves.toMatchObject({kitchenPhotoUrl: null});
     expect(httpClient.delete).toHaveBeenCalledWith('/api/v1/kitchens/me/photos/KITCHEN', {signal: undefined});
   });
+
+  it('saves a face with PUT /api/v1/kitchens/me/chef-avatar', async () => {
+    (httpClient.put as jest.Mock).mockResolvedValue(
+      kitchen({chefPhotoUrl: 'https://media.example.test/public/chef-avatars/chef-avatar-04.jpg'}),
+    );
+
+    await expect(chefProfileApi.setAvatar('chef-avatar-04')).resolves.toMatchObject({
+      chefPhotoUrl: 'https://media.example.test/public/chef-avatars/chef-avatar-04.jpg',
+    });
+    expect(httpClient.put).toHaveBeenCalledWith(
+      '/api/v1/kitchens/me/chef-avatar',
+      {avatarId: 'chef-avatar-04'},
+      {signal: undefined},
+    );
+  });
 });

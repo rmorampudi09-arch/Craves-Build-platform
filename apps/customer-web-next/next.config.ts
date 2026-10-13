@@ -69,6 +69,15 @@ const nextConfig: NextConfig = {
           { key: "Permissions-Policy", value: "geolocation=(self), camera=(), microphone=()" }
         ],
       },
+      {
+        // The static landing page frames the assistant chat; only craves.in itself may frame it.
+        source: "/assistant",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+          { key: "Cache-Control", value: "private, no-store, no-cache, max-age=0, must-revalidate" },
+        ],
+      },
     ];
   },
 };

@@ -7,6 +7,7 @@ import { BottomNav } from "@/features/customer-shell/components/BottomNav";
 import { ChefModeGuard } from "@/features/chef/components/ChefModeGuard";
 import { SessionEndedPrompt } from "@/features/auth/components/session-ended-prompt";
 import { NewCustomerProfileGate } from "@/features/profile/components/new-customer-profile-gate";
+import { SupportLauncher } from "@/features/support/components/SupportLauncher";
 import { MotionPreferences } from "@/shared/components/layout/MotionPreferences";
 import { StructuredData } from "@/features/seo/components/StructuredData";
 import { cravesSiteGraph, seoKeywords, shareImage, siteUrl } from "@/features/seo/lib/seo-craves";
@@ -96,6 +97,7 @@ export default function RootLayout({
           <ChefModeGuard />
           <NewCustomerProfileGate />
           <SessionEndedPrompt />
+          <SupportLauncher />
         </MotionPreferences>
       </body>
     </html>

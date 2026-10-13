@@ -231,6 +231,7 @@
     "sign-in -> src/features/profile/components/EditProfileModal.tsx",
     "sign-in -> src/features/profile/lib/profile-contract.ts",
     "src/shared -> src/features/admin/shell/lib/admin-contract.ts",
+    "support -> src/features/auth/api/cravesAuth.ts",
     "support -> src/features/auth/api/sessionFetch.ts"
   ]
 }

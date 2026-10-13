@@ -32,6 +32,11 @@ public class SupportChatLimiter {
 
     /** Admits one message, or throws {@link Limited} with the seconds until the user may send again. */
     public void admit(UUID user) {
+        admit(user, PER_MINUTE, PER_DAY);
+    }
+
+    /** Same, with caps for a key that is not a user: a website visitor, or all visitors together. */
+    public void admit(UUID user, int perMinute, int perDay) {
         long now = clock.getAsLong();
         long minute = now - Math.floorMod(now, MINUTE_MILLIS);
         long day = now - Math.floorMod(now, DAY_MILLIS);
@@ -43,10 +48,10 @@ public class SupportChatLimiter {
             boolean sameMinute = sameDay && previous.minute() == minute;
             return new Usage(day, sameDay ? previous.today() + 1 : 1, minute, sameMinute ? previous.thisMinute() + 1 : 1);
         });
-        if (current.today() > PER_DAY) {
+        if (current.today() > perDay) {
             throw new Limited(seconds(day + DAY_MILLIS - now), true);
         }
-        if (current.thisMinute() > PER_MINUTE) {
+        if (current.thisMinute() > perMinute) {
             throw new Limited(seconds(minute + MINUTE_MILLIS - now), false);
         }
     }

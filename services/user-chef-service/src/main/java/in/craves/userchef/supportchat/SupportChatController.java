@@ -3,6 +3,7 @@ package in.craves.userchef.supportchat;
 import in.craves.userchef.exception.ApiException;
 import in.craves.userchef.exception.AppErrorHandler;
 import in.craves.userchef.security.CurrentUser;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -23,6 +24,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class SupportChatController {
     static final int MAX_MESSAGES = 20;
     static final int MAX_MESSAGE_CHARS = 2000;
+    static final int GUEST_PER_DAY = 20;
+    // All signed-out visitors together, per replica: bounds the cost of an unauthenticated endpoint.
+    static final int GUESTS_PER_MINUTE = 30;
+    static final int GUESTS_PER_DAY = 400;
+    static final UUID ALL_GUESTS = UUID.nameUUIDFromBytes("support-guest:all".getBytes(StandardCharsets.UTF_8));
 
     private final SupportAssistant assistant;
     private final SupportChatLimiter limiter;
@@ -46,6 +52,31 @@ public class SupportChatController {
         }
         limiter.admit(user.identityId());
         return assistant.reply(user, role, channel, authorization, request.orderId(), request.messages());
+    }
+
+    /**
+     * Website visitors who are not signed in: general and sign-in help, plus a callback request. No account data.
+     * The web BFF sends a hash of the visitor's IP as {@code X-Craves-Visitor}; callers without it share one bucket,
+     * and all visitors together have a daily cap, so the Claude bill stays bounded whoever calls.
+     */
+    @PostMapping("/guest")
+    public SupportChatResponse guestChat(
+        @RequestHeader(value = "X-Craves-Visitor", required = false) String visitor,
+        @RequestBody SupportChatRequest request
+    ) {
+        validate(request);
+        String channel = channel(request.channel());
+        if (!assistant.available()) {
+            throw SupportAssistant.unavailable();
+        }
+        limiter.admit(visitorKey(visitor), SupportChatLimiter.PER_MINUTE, GUEST_PER_DAY);
+        limiter.admit(ALL_GUESTS, GUESTS_PER_MINUTE, GUESTS_PER_DAY);
+        return assistant.guestReply(channel, request.messages());
+    }
+
+    static UUID visitorKey(String visitor) {
+        String key = visitor != null && visitor.matches("[0-9a-f]{64}") ? visitor : "unknown";
+        return UUID.nameUUIDFromBytes(("support-guest:" + key).getBytes(StandardCharsets.UTF_8));
     }
 
     /** Same error body as {@link AppErrorHandler}, plus Retry-After, which that handler cannot set. */

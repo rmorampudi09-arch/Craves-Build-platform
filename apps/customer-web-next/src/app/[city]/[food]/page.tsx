@@ -36,8 +36,8 @@ export async function generateMetadata({ params }: CityFoodPageProps): Promise<M
   if (area) {
     const url = cityAreaUrl(city, area);
     return {
-      title: `Homemade Food in ${area}, ${city.name} – Home Chefs & Delivery | Craves`,
-      description: `Looking for food in ${area}, ${city.name}? Order fresh homemade meals, biryani, tiffin and home-cooked lunch & dinner from trusted home chefs near ${area} on Craves.`,
+      title: `Homemade Food in ${area}, ${city.name} | Craves`,
+      description: `Order fresh homemade meals, biryani, tiffin, lunch and dinner from trusted home chefs near ${area}, ${city.name} on Craves.`,
       keywords: seoKeywords(city, undefined, area),
       alternates: { canonical: url },
       openGraph: {

@@ -8,7 +8,7 @@ import { formatAdminTimestamp, readableAdminStatus } from "@/features/admin/shel
 const STATUSES = ["OPEN", "IN_PROGRESS", "WAITING_FOR_REQUESTER", "RESOLVED", "CLOSED"] as const;
 type SupportStatus = (typeof STATUSES)[number];
 type SupportCase = {
-  id: string; caseNumber: string; requesterIdentityId: string; requesterRole: string; orderId: string | null;
+  id: string; caseNumber: string; requesterIdentityId: string | null; requesterRole: string; orderId: string | null;
   subject: string; status: SupportStatus; assignedToIdentityId: string | null; createdAt: string; updatedAt: string;
 };
 type SupportMessage = { id: string; senderRole: string; body: string; internalNote: boolean; createdAt: string };
@@ -77,7 +77,7 @@ export function AdminSupportInbox() {
             </div>
             <span className="text-xs text-slate-500">{formatAdminTimestamp(item.updatedAt)}</span>
           </div>
-          <p className="mt-2 text-sm text-slate-600">{readableAdminStatus(item.requesterRole)}{item.orderId ? ` · Order ${item.orderId.slice(-8).toUpperCase()}` : ""} · {item.assignedToIdentityId ? "Assigned" : "Unassigned"}</p>
+          <p className="mt-2 text-sm text-slate-600">{requesterLabel(item.requesterRole)}{item.orderId ? ` · Order ${item.orderId.slice(-8).toUpperCase()}` : ""} · {item.assignedToIdentityId ? "Assigned" : "Unassigned"}</p>
         </Link>
       </li>)}
     </ul>
@@ -87,10 +87,14 @@ export function AdminSupportInbox() {
   </section>;
 }
 
+// GUEST: a website visitor who was not signed in asked for a callback; their contact details are in the first message.
+const fromRequester = (role: string) => role === "CUSTOMER" || role === "CHEF" || role === "GUEST";
+const requesterLabel = (role: string) => role === "GUEST" ? "Website visitor (not signed in)" : readableAdminStatus(role);
+
 function author(message: SupportMessage): string {
   if (message.internalNote) return `Internal note · ${readableAdminStatus(message.senderRole)}`;
-  if (message.senderRole === "CUSTOMER" || message.senderRole === "CHEF") {
-    return message.body.startsWith(ASSISTANT_PREFIX) ? `${readableAdminStatus(message.senderRole)} via AI assistant (unverified summary)` : `Requester · ${readableAdminStatus(message.senderRole)}`;
+  if (fromRequester(message.senderRole)) {
+    return message.body.startsWith(ASSISTANT_PREFIX) ? `${requesterLabel(message.senderRole)} via AI assistant (unverified summary)` : `Requester · ${requesterLabel(message.senderRole)}`;
   }
   return `Support · ${readableAdminStatus(message.senderRole)}`;
 }
@@ -152,7 +156,7 @@ export function AdminSupportCase({ caseId }: { caseId: string }) {
           <button type="button" disabled={busy} onClick={() => void work(() => api(`/${caseId}/assign-to-me`, "POST"), "Case assigned to you.")} className="rounded-xl bg-[#6930CA] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Assign to me</button>
         </div>
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-          <div><dt className="text-slate-500">Requester</dt><dd className="break-all font-bold">{readableAdminStatus(supportCase.requesterRole)} · {supportCase.requesterIdentityId}</dd></div>
+          <div><dt className="text-slate-500">Requester</dt><dd className="break-all font-bold">{supportCase.requesterIdentityId ? `${readableAdminStatus(supportCase.requesterRole)} · ${supportCase.requesterIdentityId}` : `${requesterLabel(supportCase.requesterRole)} · call or email them (details in the first message)`}</dd></div>
           <div><dt className="text-slate-500">Order</dt><dd className="break-all font-bold">{supportCase.orderId ? <Link href={`/admin/operations?reference=${supportCase.orderId}`} className="text-[#6930CA] underline">{supportCase.orderId}</Link> : "None"}</dd></div>
           <div><dt className="text-slate-500">Assigned to</dt><dd className="break-all font-bold">{supportCase.assignedToIdentityId ?? "Unassigned"}</dd></div>
           <div><dt className="text-slate-500">Opened</dt><dd className="font-bold">{formatAdminTimestamp(supportCase.createdAt)}</dd></div>
@@ -164,7 +168,7 @@ export function AdminSupportCase({ caseId }: { caseId: string }) {
         <ol className="mt-4 space-y-3">
           {detail.messages.map(item => <li key={item.id} className={item.internalNote
             ? "rounded-2xl border border-dashed border-amber-400 bg-amber-50 p-4"
-            : item.senderRole === "CUSTOMER" || item.senderRole === "CHEF" ? "mr-8 rounded-2xl border border-slate-200 p-4" : "ml-8 rounded-2xl bg-[#6930CA]/10 p-4"}>
+            : fromRequester(item.senderRole) ? "mr-8 rounded-2xl border border-slate-200 p-4" : "ml-8 rounded-2xl bg-[#6930CA]/10 p-4"}>
             <p className="text-xs font-bold text-slate-600">{author(item)} · {formatAdminTimestamp(item.createdAt)}</p>
             <p className="mt-2 whitespace-pre-wrap text-sm">{item.body}</p>
           </li>)}

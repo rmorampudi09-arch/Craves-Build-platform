@@ -11,6 +11,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 
 @Configuration
@@ -31,6 +32,8 @@ public class SecurityConfig {
                 .requestMatchers("/internal/v1/chef-finance/approvals").permitAll()
                 // Dedicated Auth email HMAC; never published through a public API product.
                 .requestMatchers("/internal/v1/auth-email/projection").permitAll()
+                // Support chat for signed-out website visitors: no account data; limits in SupportChatController.
+                .requestMatchers(HttpMethod.POST, "/api/v1/support/chat/guest").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class);

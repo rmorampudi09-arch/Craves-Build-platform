@@ -187,6 +187,54 @@ class SupportAssistantTest {
     }
 
     @Test
+    void visitorsGetOnlyTheCallbackToolAndAreToldTheyAreNotSignedIn() throws Exception {
+        claude.reply(text("Tap Sign up / Sign in at the top of craves.in."));
+
+        var response = assistant.guestReply("WEB", chat("how do I sign up?"));
+
+        assertEquals("Tap Sign up / Sign in at the top of craves.in.", response.reply());
+        JsonNode sent = claude.sent.get(0);
+        assertEquals(1, sent.path("tools").size());
+        assertEquals("request_callback", sent.path("tools").get(0).path("name").asText());
+        assertTrue(sent.path("system").get(1).path("text").asText().contains("has not signed in"));
+        assertTrue(sent.path("system").get(1).path("text").asText().contains("Craves website"));
+        assertTrue(sent.path("system").get(0).path("text").asText().contains("Send verification code"));
+    }
+
+    @Test
+    void visitorCallbackBecomesAGuestCaseAndAccountToolsAreRefused() throws Exception {
+        claude.reply(toolUse("t1", "get_my_recent_orders", "{}"));
+        claude.reply(toolUse("t2", "request_callback", "{\"name\":\"Ravi\",\"phone\":\"+91 98765 43210\","
+            + "\"subject\":\"OTP not arriving\",\"details\":\"No code after two tries\"}"));
+        claude.reply(text("Done."));
+
+        var response = assistant.guestReply("WEB", chat("my otp never comes, please call me on 9876543210"));
+
+        assertTrue(orders.bearers.isEmpty());
+        assertTrue(claude.sent.get(1).path("messages").get(2).path("content").get(0).path("is_error").asBoolean());
+        assertEquals("CR-GUEST", response.supportCase().caseNumber());
+        assertEquals("Callback: OTP not arriving", cases.guestSubject);
+        assertTrue(cases.guestMessage.startsWith(SupportAssistant.TICKET_PREFIX + "Callback request from a website visitor"));
+        assertTrue(cases.guestMessage.contains("Name: Ravi\nPhone: 9876543210\n"));
+        assertTrue(cases.guestMessage.contains("No code after two tries"));
+        assertTrue(cases.guestMessage.contains("my otp never comes"));
+        assertTrue(cases.created.isEmpty());
+    }
+
+    @Test
+    void visitorCallbackNeedsAMobileNumberOrEmail() throws Exception {
+        claude.reply(toolUse("t1", "request_callback",
+            "{\"name\":\"Ravi\",\"phone\":\"12345\",\"email\":\"not-an-email\",\"subject\":\"Help\",\"details\":\"Call me\"}"));
+        claude.reply(text("Could you share your mobile number?"));
+
+        var response = assistant.guestReply("WEB", chat("call me"));
+
+        assertNull(response.supportCase());
+        assertNull(cases.guestSubject);
+        assertTrue(claude.sent.get(1).path("messages").get(2).path("content").get(0).path("is_error").asBoolean());
+    }
+
+    @Test
     void maskKeepsOrderIdsAndRemovesCardNumbers() {
         String masked = SupportAssistant.mask("order 12345678-1234-1234-1234-123456789012, card 4111-1111-1111-1111, call +91 98765 43210");
 
@@ -272,6 +320,8 @@ class SupportAssistantTest {
     private static final class FakeCases extends SupportCaseService {
         private final List<CreateSupportCaseRequest> created = new ArrayList<>();
         private final List<SupportCaseSummaryResponse> existing = new ArrayList<>();
+        private String guestSubject;
+        private String guestMessage;
 
         FakeCases() {
             super(new JdbcTemplate());
@@ -280,6 +330,14 @@ class SupportAssistantTest {
         @Override
         public SupportCasePageResponse listMine(CurrentUser user, int limit, String cursor, SupportCaseStatus status) {
             return new SupportCasePageResponse(existing, null, false);
+        }
+
+        @Override
+        public SupportCaseSummaryResponse createGuest(String subject, String message) {
+            guestSubject = subject;
+            guestMessage = message;
+            return new SupportCaseSummaryResponse(UUID.randomUUID(), "CR-GUEST", null, "GUEST", null, subject,
+                SupportCaseStatus.OPEN, null, Instant.EPOCH, null, null, null, Instant.EPOCH, Instant.EPOCH);
         }
 
         @Override

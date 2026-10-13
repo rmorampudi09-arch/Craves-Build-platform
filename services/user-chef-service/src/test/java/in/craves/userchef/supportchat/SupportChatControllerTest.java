@@ -2,6 +2,7 @@ package in.craves.userchef.supportchat;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import in.craves.userchef.exception.ApiException;
@@ -48,6 +49,16 @@ class SupportChatControllerTest {
         assertEquals(null, SupportChatController.channel(null));
         assertEquals("SUPPORT_CHAT_INVALID", assertThrows(ApiException.class,
             () -> SupportChatController.channel("ADMIN")).getCode());
+    }
+
+    @Test
+    void visitorsWithoutAValidKeyShareOneBucket() {
+        String hash = "a".repeat(64);
+        assertEquals(SupportChatController.visitorKey(hash), SupportChatController.visitorKey(hash));
+        assertEquals(SupportChatController.visitorKey(null), SupportChatController.visitorKey("not-a-hash"));
+        assertEquals(SupportChatController.visitorKey(null), SupportChatController.visitorKey("A".repeat(64)));
+        assertNotEquals(SupportChatController.visitorKey(hash), SupportChatController.visitorKey(null));
+        assertNotEquals(SupportChatController.visitorKey(hash), SupportChatController.ALL_GUESTS);
     }
 
     @Test

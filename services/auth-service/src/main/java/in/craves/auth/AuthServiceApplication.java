@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @EnableConfigurationProperties({FirebaseProperties.class, JwtProperties.class, InternalServiceProperties.class})
 public class AuthServiceApplication {
     public static void main(String[] args) {
+        LiveRuntimeLock.verify();
         SpringApplication.run(AuthServiceApplication.class, args);
     }
 }

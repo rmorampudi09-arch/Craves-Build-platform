@@ -1,0 +1,32 @@
+# Code order-service must keep in production. A production start (CRAVES_ENVIRONMENT=prod*) refuses
+# to run a build that lacks any of them. Remove a line only when retiring that code on purpose.
+# See docs/runbooks/live-runtime-safety.md.
+in.craves.order.admin.AdminCustomerOrdersController
+in.craves.order.admin.AdminDashboardController
+in.craves.order.admin.AdminOrderInvestigationController
+in.craves.order.admin.explorer.AdminExplorerController
+in.craves.order.launchpolicy.LaunchPolicyController
+in.craves.order.referrals.ReferralBenefitPaymentController
+in.craves.order.referrals.ReferralCheckoutBenefitsController
+in.craves.order.web.AdminChargePolicyController
+in.craves.order.web.AdminReviewController
+in.craves.order.web.AdminScheduledOrderPolicyController
+in.craves.order.web.CartController
+in.craves.order.web.CheckoutController
+in.craves.order.web.CheckoutOperationController
+in.craves.order.web.ChefOrderController
+in.craves.order.web.ChefOrderHistoryController
+in.craves.order.web.ChefReviewController
+in.craves.order.web.ChefScheduledOrderController
+in.craves.order.web.CustomerOrderHistoryController
+in.craves.order.web.CustomerReviewController
+in.craves.order.web.DeliveryStatusController
+in.craves.order.web.InternalDeliveryHandoffEligibilityController
+in.craves.order.web.InternalPaymentController
+in.craves.order.web.InternalScheduledOrderController
+in.craves.order.web.OrderController
+in.craves.order.web.OrderDocumentSourceController
+in.craves.order.web.OrderReviewController
+in.craves.order.web.PublicReviewController
+in.craves.order.web.RepeatOrderController
+in.craves.order.web.ScheduledOrderController

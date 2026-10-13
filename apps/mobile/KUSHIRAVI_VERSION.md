@@ -19,17 +19,34 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
-### Version 1.31.0 - Chef app: new tabs and a light tab bar, 2026-10-13
+### Version 1.31.0 - Chef app redesign: Home, Orders, Menu, Meal plans, Earnings, Profile, 2026-10-13
 
-- First step of the chef-side redesign. The chef tabs are now Home, Orders, Menu, Earnings and
-  Profile, in a plain white floating bar (no glass) with the new-order count on Orders. Analytics
-  became Earnings.
-- Notifications open their own screen from the bell; the old side menu and the notifications
-  sheet are gone. Order lists switch without a slide animation, and Scheduled orders is a new
-  Orders route (the old Profile entry now opens it).
-- Screens that are not rebuilt yet (Earnings, Scheduled orders, Reviews, Security, Bank account,
-  Notifications, Daily limits, Support ticket) show a "Coming soon" page until the next steps land.
-- Confirm dialogs now have a grey Cancel button, and an unknown food type no longer crashes a card.
+- Whole chef side rebuilt on one white design kit (white screens, white cards, no grey pages). The
+  chef tabs are Home, Orders, Menu, Earnings and Profile, in a plain white floating bar (no glass)
+  with the new-order count on Orders. Analytics became Earnings. The bell opens a chef-only
+  notifications screen; the old side menu and notifications sheet are gone. Order numbers read
+  `#` plus the last 5 characters everywhere, and money reads as `₹1,240`.
+- Home: kitchen open, paused or closed with a status sheet and Resume; "Needs you now" (accept with
+  cooking time, reject, response timer and customer note when sent); Today tiles; "In the kitchen"
+  with a confirm before Mark ready and courier or "Waiting for pickup" on ready orders; menu card,
+  latest reviews, balance card with Withdraw.
+- Orders: one screen with New, Preparing, Ready, Scheduled and Past, and a status-aware order page
+  (reject with a reason, Handed over and Not picked up on ready orders, status times and courier
+  details when sent). Buttons ignore a second tap while one request is running.
+- Menu: dishes list with search, one filter row, on/off switch per dish (rolls back if it fails),
+  one add or edit dish form, publish drafts, delete a dish.
+- Meal plans: list with Live, Waiting approval and Drafts, 3-step plan editor, "Taking new
+  subscribers" switch, and Daily limits per meal that never overwrite silently.
+- Earnings: sales for week, month or a picked range with order counts, Withdraw, payout history and
+  Bank account.
+- Profile: kitchen details with photos, documents and verification, opening hours and special days,
+  preferences (sound, push, email, auto-accept, default cooking time), help and support tickets,
+  reviews, refer a chef, login and security, switch to customer, log out.
+- Anything whose server route is not published for mobile yet (schedule, reviews, support, scheduled
+  orders, full order history, notification settings, kitchen settings, photos, hand-over, delete a
+  dish) shows "Coming soon" instead of an error, and goes live on the first successful call with no
+  new build.
+- Confirm dialogs have a grey Cancel button, and an unknown food type no longer crashes a card.
 
 ### Version 1.30.0 - Meal plans only from chefs within 10 km, 2026-10-12
 

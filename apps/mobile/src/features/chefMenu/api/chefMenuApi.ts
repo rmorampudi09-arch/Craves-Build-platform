@@ -132,6 +132,8 @@ export interface ChefMenuAvailabilityRequest {
 
 // Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
 export const CHEF_MENU_BULK_AVAILABILITY_AVAILABLE = false;
+// Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
+export const CHEF_MENU_DELETE_AVAILABLE = false;
 export const CHEF_MENU_BULK_AVAILABILITY_PATH =
   '/api/v1/kitchens/me/menu-items/availability';
 

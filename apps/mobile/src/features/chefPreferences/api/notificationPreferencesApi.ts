@@ -1,5 +1,8 @@
 import {httpClient} from '../../../core/http/httpClient';
 
+// Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
+export const NOTIFICATION_PREFERENCES_AVAILABLE = false;
+
 /** The channels the server keeps a switch for; SMS has none yet. */
 export type NotificationChannel = 'IN_APP' | 'PUSH' | 'EMAIL';
 const CHANNELS = new Set<string>(['IN_APP', 'PUSH', 'EMAIL']);

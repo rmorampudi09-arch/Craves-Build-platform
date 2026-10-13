@@ -1,6 +1,9 @@
 import {httpClient} from '../../../core/http/httpClient';
 
-const ROUTE = '/api/v1/kitchens/me/settings';
+// Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
+export const CHEF_KITCHEN_SETTINGS_AVAILABLE = false;
+
+const ROUTE ='/api/v1/kitchens/me/settings';
 
 export const MIN_PREP_MINUTES = 5;
 export const MAX_PREP_MINUTES = 120;

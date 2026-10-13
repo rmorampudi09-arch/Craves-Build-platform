@@ -626,7 +626,9 @@ export function CustomerOrderDetailScreen() {
                 accessibilityRole="button"
                 accessibilityState={{disabled: paymentBusy}}
                 disabled={paymentBusy}
-                onPress={() => void continuePendingPayment()}
+                onPress={() => {
+                  void continuePendingPayment();
+                }}
                 style={({pressed}) => [styles.primaryAction, pressed && styles.pressed]}>
                 {paymentBusy ? (
                   <ActivityIndicator color={colors.white} size="small" />

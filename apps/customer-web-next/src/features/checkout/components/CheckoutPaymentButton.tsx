@@ -450,7 +450,7 @@ export function CheckoutPaymentButton({
 
   if (pending) {
     return (
-      <div className={barClass}>
+      <div data-craves-action-bar className={barClass}>
         <div className="mx-auto max-w-2xl px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-6 lg:max-w-none lg:px-0 lg:pb-0 lg:pt-4">
           <div role="status" className="lg:rounded-xl lg:bg-[#F1F3F5] lg:p-4">
             <p className="text-base font-bold text-[#1A1A1A]">
@@ -486,7 +486,7 @@ export function CheckoutPaymentButton({
   const paymentProblem = failure && !failure.section ? failure : null;
 
   return (
-    <div className={barClass}>
+    <div data-craves-action-bar className={barClass}>
       {paymentProblem ? (
         <div
           role="alert"

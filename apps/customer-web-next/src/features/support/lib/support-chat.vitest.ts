@@ -76,3 +76,16 @@ it("keeps only the newest 20 turns", () => {
   expect(history).toHaveLength(20);
   expect(history.at(-1)?.content).toBe("24");
 });
+
+it("lets a visitor who is not signed in ask for a callback", async () => {
+  const fetch = vi.fn().mockResolvedValue(Response.json({ reply: "I've sent your callback request.", supportCase: { id: "c9", caseNumber: "CR-77" } }));
+  vi.stubGlobal("fetch", fetch);
+  render(createElement(SupportChat, { contextRole: "GUEST" }));
+  type("Please call me on 9876543210");
+  expect(await screen.findByText("I've sent your callback request.")).toBeTruthy();
+  expect(screen.getByRole("status").textContent).toContain("Request CR-77 sent — our team will call or email you");
+  const [url, init] = fetch.mock.calls[0];
+  expect(url).toBe("/api/support/chat/guest");
+  expect(JSON.parse(init.body)).toEqual({ messages: [{ role: "user", content: "Please call me on 9876543210" }] });
+  expect(init.credentials).toBeUndefined();
+});

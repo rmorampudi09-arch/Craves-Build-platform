@@ -23,23 +23,25 @@ Owner rule (Raviteja, Oct 2026): no change, rebuild from `main`, pipeline or man
 
 To retire code on purpose, delete its line from the lock file in the same PR, with the reason in the PR description.
 
-## Auth (12 Oct 2026): production is ahead of `main`
+## Auth: live overlays restored to `main` (13 Oct 2026)
 
 Live image: `cravesrm09prodlow6bf632.azurecr.io/craves/auth-service@sha256:258e4126151be06968742caf03d14bb443f8df4c08486b7d0fbd3ca7a94a2b0c`, tag `email-test-pairs-87eddd1c4563`.
 
-It was built as a chain of JAR overlays. Each one patched the previous live JAR without going through `main`:
+Production was built as a chain of JAR overlays that never went through `main`. Their source is now on `main`:
 
-| ACR tag | Date (IST) | Adds | Source |
+| ACR tag | Date (IST) | Adds | Source restored from |
 |---|---|---|---|
-| `msg91-c83c3d5b42f51e983afc79bd13ae2c0b27c2cd9f` | 29 Sep | `in.craves.auth.msg91.*` (MSG91 settings, `/auth/msg91/verify`) | not on GitHub (probably Azure Repos `rmorampudi09/Craves`) |
-| `member-read-335024f2-20261001` | 1 Oct | unknown | not on GitHub |
-| `central-otp-1002-ed955bdc`, `central-otp-realtime-1002` | 2 Oct | `in.craves.auth.centralotp.*`, `/api/v1/auth/otp/send` + `/verify`, migration V19 (`auth_phone_otp`) | branch `KUSHIRAVI-app-build`, `apps/mobile/backend-patches/msg91-centralized-v1/auth` |
-| `otp-test-whitelist-20261006-185231` | 7 Oct | phone OTP test numbers (`CRAVES_OTP_TEST_*`) | not on GitHub |
-| `email-test-pairs-ec1c060c625e`, `email-test-pairs-87eddd1c4563` | 7 Oct | `EmailVerificationTestBypass` | branch `fix/email-test-bypass-20261007` |
+| `msg91-c83c3d5b42f51e983afc79bd13ae2c0b27c2cd9f` | 29 Sep | `in.craves.auth.msg91.*`, `/api/v1/auth/msg91/verify`, migration V18, security filter changes | Azure Repos `rmorampudi09/Craves` commit `c83c3d5b` |
+| `member-read-335024f2-20261001` | 1 Oct | `ReferralAccessController` also enabled by `CRAVES_REFERRAL_MEMBER_READ_ENABLED` | local commit `335024f2` (branch `codex/referral-mobile-backend-20261001`) |
+| `central-otp-1002-ed955bdc`, `central-otp-realtime-1002` | 2 Oct | `in.craves.auth.centralotp.*`, `/api/v1/auth/otp/send` + `/verify`, migration V19 | `KUSHIRAVI-app-build` commit `8f956490f`, `apps/mobile/backend-patches/msg91-centralized-v1/auth` |
+| `otp-test-whitelist-20261006-185231` | 7 Oct | phone OTP test numbers (`CRAVES_OTP_TEST_*`, `CentralOtpTestBypass`) | laptop package `craves-otp-test-bypass` |
+| `email-test-pairs-ec1c060c625e`, `email-test-pairs-87eddd1c4563` | 7 Oct | `EmailVerificationTestBypass` | branch `fix/email-test-bypass-20261007` commit `87eddd1c4` |
 
-The Auth lock lists these classes as `live-only`. Until they are restored to `main`, an Auth build from `main` refuses to start in production. Without the lock, it would start and silently remove phone sign-in on craves.in.
+How it was checked: the restored source, compiled against the libraries in the `otp-test-whitelist` JAR (sha256 `a5003312…`), gives bytecode identical to that JAR for 164 of its 166 classes, and every resource (all migrations, including V18 and V19) is byte-identical. The two differences are intended: `AuthServiceApplication` now calls the lock, and `EmailVerificationService` carries the later email layer, which is taken from its tagged commit.
 
-Until the source is restored, ship Auth changes only as another overlay on the live JAR, using the method in `README-EMAIL-TEST-BYPASS.md` on `fix/email-test-bypass-20261007`. Record each new overlay here.
+`CentralOtpTest` needs a disposable PostgreSQL server. It runs when `CENTRAL_OTP_TEST_DB` is set, as launch regression CI does.
+
+New Auth changes go through `main` like every other service.
 
 ## Limits
 

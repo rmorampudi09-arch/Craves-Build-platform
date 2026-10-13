@@ -40,6 +40,17 @@ class PostgresAuthAbuseProtectionFilterTest {
         verify(limiter,never()).allowCredential(anyString(),anyString());
         assertEquals("no-store",response.getHeader("Cache-Control"));assertFalse(response.getContentAsString().contains("malformed"));
     }
+    @Test void msg91RequiresDurableGuardEvenWhenLegacyLimiterIsDisabled() throws Exception {
+        filter = new PostgresAuthAbuseProtectionFilter(settings(false,"redis",1), limiter);
+        var request = new MockHttpServletRequest("POST", "/api/v1/auth/msg91/verify");
+        request.setContentType("application/json");
+        request.setContent("{\"accessToken\":\"synthetic-msg91-token\"}".getBytes(StandardCharsets.UTF_8));
+        assertEquals("forwarded", run(request).getContentAsString());
+        verify(limiter).allowGlobal("msg91");
+        verify(limiter).allowCredential("msg91", "synthetic-msg91-token");
+        when(limiter.allowGlobal("msg91")).thenThrow(new DataAccessResourceFailureException("offline"));
+        assertEquals(503, run(request).getStatus());
+    }
     @Test void exchangeBodyIsPreservedAndGlobalRunsBeforeCredential() throws Exception {
         String body="{\"firebaseIdToken\":\"synthetic-token\",\"adminSession\":true}";
         var response=new MockHttpServletResponse();

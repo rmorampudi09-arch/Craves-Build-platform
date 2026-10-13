@@ -20,9 +20,9 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /**
  * Real PostgreSQL. Drops notification_schema, so it only runs against the disposable
- * notification_inbox_test database named by NOTIFICATION_INBOX_TEST_JDBC_URL.
+ * pdf_module_test database that CI already provides for the other notification DB tests.
  */
-@EnabledIfEnvironmentVariable(named = "NOTIFICATION_INBOX_TEST_JDBC_URL", matches = ".+")
+@EnabledIfEnvironmentVariable(named = "DOCUMENT_TEST_JDBC_URL", matches = ".+")
 class AppNoticeRoleFilterDbTest {
     private JdbcTemplate jdbc;
     private NotificationService service;
@@ -32,10 +32,11 @@ class AppNoticeRoleFilterDbTest {
 
     @BeforeEach
     void setUp() {
-        String url = System.getenv("NOTIFICATION_INBOX_TEST_JDBC_URL");
-        assertTrue(url.endsWith("/notification_inbox_test"), "Refusing any database except disposable notification_inbox_test");
+        String url = System.getenv("DOCUMENT_TEST_JDBC_URL");
+        assertTrue(url.startsWith("jdbc:postgresql://localhost:") && url.endsWith("/pdf_module_test"),
+            "Refusing any database except the disposable local pdf_module_test");
         var data = new DriverManagerDataSource(
-            url, System.getenv("NOTIFICATION_INBOX_TEST_DB_USER"), System.getenv("NOTIFICATION_INBOX_TEST_DB_PASSWORD"));
+            url, System.getenv("DOCUMENT_TEST_DB_USER"), System.getenv("DOCUMENT_TEST_DB_PASSWORD"));
         jdbc = new JdbcTemplate(data);
         jdbc.execute("DROP SCHEMA IF EXISTS notification_schema CASCADE");
         jdbc.execute("DROP TABLE IF EXISTS public.flyway_schema_history");

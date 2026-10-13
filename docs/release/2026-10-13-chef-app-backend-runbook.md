@@ -50,7 +50,7 @@ gw() { local r m p c; for r in "$@"; do m=${r%% *}; p=${r#* }; case $m in GET|DE
 
 ## Step 0. Before anything is deployed
 
-0.1 Merge the PR to main (the branch is local and unpushed; pushing and merging are yours). Wait for CI. Watch `catalog-finance-eligibility-ci`: the nearby-discovery tests ran locally only against a PostGIS stand-in, real PostGIS runs only there. `ChefOrderDetailsDatabaseTest` and `ChefAutoAcceptDatabaseTest` DO run in CI: `chef-ledger-ci` (it runs on pull requests that touch `services/order-service/**`) sets `LEDGER_TEST_JDBC_URL` and runs `mvn -f services/order-service/pom.xml verify`, so a failure there is real and must be read, not dismissed. Only `AppNoticeRoleFilterDbTest` (needs `NOTIFICATION_INBOX_TEST_JDBC_URL`, which no workflow sets) never runs in CI; it passed locally against PostgreSQL 16.4.
+0.1 Merge the PR to main (the branch is local and unpushed; pushing and merging are yours). Wait for CI. Watch `catalog-finance-eligibility-ci`: the nearby-discovery tests ran locally only against a PostGIS stand-in, real PostGIS runs only there. `ChefOrderDetailsDatabaseTest` and `ChefAutoAcceptDatabaseTest` DO run in CI: `chef-ledger-ci` (it runs on pull requests that touch `services/order-service/**`) sets `LEDGER_TEST_JDBC_URL` and runs `mvn -f services/order-service/pom.xml verify`, so a failure there is real and must be read, not dismissed. `AppNoticeRoleFilterDbTest` runs in CI on the disposable `pdf_module_test` database (`DOCUMENT_TEST_JDBC_URL`, the same one the other notification DB tests use), including the exact-release regression's notification-service run.
 
 0.2 Cloud Shell: confirm the account, then fetch the exact merged SHA into a fresh checkout.
 

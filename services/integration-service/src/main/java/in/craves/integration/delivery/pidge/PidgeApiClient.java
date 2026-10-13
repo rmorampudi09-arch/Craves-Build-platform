@@ -15,11 +15,14 @@ import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 @Component
 public class PidgeApiClient implements DeliveryProviderAdapter {
+    private static final Logger log = LoggerFactory.getLogger(PidgeApiClient.class);
     private static final String ROOT = "/v1.0/store/channel/vendor";
     private final PidgeProperties properties;
     private final PidgeTransport transport;
@@ -37,10 +40,16 @@ public class PidgeApiClient implements DeliveryProviderAdapter {
 
     /** Chargeable provider quote; does not create an order or dispatch a rider. */
     public ProviderQuote readOnlyQuote(QuoteRequest request) {
-        validate(request);
+        try {
+            validate(request);
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            log.warn("Pidge quote rejected before HTTP: {}", ex.getMessage());
+            throw ex;
+        }
         JsonNode body = buildQuote(request);
         JsonNode response = transport.quote(body);
         List<JsonNode> candidates = immediateCandidates(response);
+        log.info("Pidge coordinate quote completed eligibleImmediatePartners={}", candidates.size());
         if (candidates.isEmpty()) return new ProviderQuote(providerId(), false, null, null, "INR",
             List.of("Pidge returned no available immediate-delivery partner"), mapper.createObjectNode(), Instant.now());
         JsonNode selected = candidates.getFirst();
@@ -241,8 +250,8 @@ public class PidgeApiClient implements DeliveryProviderAdapter {
     static void validate(QuoteRequest request) {
         Objects.requireNonNull(request, "delivery request");
         validateStop(request.pickup()); validateStop(request.dropoff());
-        if (!request.pickup().city().trim().equalsIgnoreCase(request.dropoff().city().trim()))
-            throw new IllegalArgumentException("Pidge food delivery is limited to same-city routes");
+        // Pidge evaluates real-time serviceability from the validated coordinates and pincodes.
+        // City labels remain address data, not a geographic comparison (for example HYD/Hyderabad).
         if (request.totalWeightGrams() <= 0 || request.thermoboxRequired())
             throw new IllegalArgumentException("Pidge requires measured weight and cannot guarantee thermobox service");
         if (!"PREPAID".equalsIgnoreCase(request.paymentCollectionMode()))

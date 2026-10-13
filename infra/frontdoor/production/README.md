@@ -103,7 +103,7 @@ Checks the Premium tier, no-cache app route, cached static route, endpoint HTTP 
 
 ### cacheLanding
 
-Adds or updates the `landingcache` rule in the security-header ruleset (see Caching safety) and purges `/`. It does not touch routes, WAF or domains, so it is safe to run on its own. Afterwards, `curl -sI -H 'Accept-Encoding: br' https://craves.in/` twice should show `content-encoding: br` and `x-cache: TCP_HIT` on the repeat, and the same request with `Cookie: craves_access_token=x` should still get a 307 to `/home`.
+Adds or updates the `landingcache` rule in the security-header ruleset (see Caching safety) and purges `/`. It does not touch routes, WAF or domains, so it is safe to run on its own. Afterwards, `curl -s -o /dev/null -D - -H 'Accept-Encoding: br' https://craves.in/` twice should show `content-encoding: br` and `x-cache: TCP_HIT` on the repeat, and the same GET with `Cookie: craves_access_token=x` should still get a 307 to `/home` (use GET, not `curl -I`: Front Door only caches GET, and the redirect only applies to GET).
 
 ### prepareDomains
 

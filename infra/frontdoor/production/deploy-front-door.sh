@@ -217,7 +217,7 @@ ensure_landing_cache(){
   az rest --method put --uri "$rule_uri" --headers Content-Type=application/json --body "$rule_body" --only-show-errors >/dev/null
   purge_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/afdEndpoints/${ENDPOINT}/purge?api-version=2025-04-15"
   az rest --method post --uri "$purge_uri" --headers Content-Type=application/json --body '{"contentPaths":["/"]}' --only-show-errors >/dev/null
-  info "Landing cache rule applied at order $order. Check: curl -sI -H 'Accept-Encoding: br' https://craves.in/ twice -> content-encoding: br and x-cache TCP_HIT on the repeat; with 'Cookie: craves_access_token=x' -> 307 to /home."
+  info "Landing cache rule applied at order $order. Check: curl -s -o /dev/null -D - -H 'Accept-Encoding: br' https://craves.in/ twice -> content-encoding: br and x-cache TCP_HIT on the repeat; with 'Cookie: craves_access_token=x' -> 307 to /home."
 }
 
 ensure_edge(){

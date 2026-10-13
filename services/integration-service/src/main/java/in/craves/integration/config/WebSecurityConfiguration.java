@@ -1,6 +1,8 @@
 package in.craves.integration.config;
 
 import in.craves.integration.security.CravesJwtAuthenticationFilter;
+import in.craves.integration.security.internalcall.InternalCallFilter;
+import org.springframework.core.env.Environment;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -14,7 +16,8 @@ public class WebSecurityConfiguration {
     @Bean
     public SecurityFilterChain integrationSecurityFilterChain(
         HttpSecurity http,
-        CravesJwtAuthenticationFilter jwtFilter
+        CravesJwtAuthenticationFilter jwtFilter,
+        Environment environment
     ) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -26,8 +29,14 @@ public class WebSecurityConfiguration {
                     "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
                 )
                 .requestMatchers("/api/v1/chef/**").hasRole("CHEF")
-                .anyRequest().permitAll()
+                // Payment, webhook and readiness APIs keep their in-controller checks. Internal routes: InternalCallFilter
+                // checks the caller identity, then each route's shared secret or HMAC still applies.
+                .requestMatchers("/api/**", "/internal/**", "/error").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                // CH-03: deny by default, so a new route or actuator endpoint is never public by accident.
+                .anyRequest().denyAll()
             )
+            .addFilterBefore(InternalCallFilter.fromEnvironment(environment, "/internal/**"), UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

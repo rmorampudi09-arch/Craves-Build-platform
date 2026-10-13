@@ -1,5 +1,6 @@
 import React from 'react';
-import {Text} from 'react-native';
+import {StyleSheet, Text} from 'react-native';
+import {touchTarget} from '../../../design/tokens';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {ChefDatePicker} from './ChefDatePicker';
 
@@ -60,6 +61,19 @@ describe('ChefDatePicker', () => {
 
     press('Previous month');
     expect(lines()).toContain('October 2026');
+  });
+
+  it('gives every day and arrow at least 48 dp to tap', () => {
+    render('2026-10-20');
+    const buttons = tree.root.findAll(node => typeof node.props.onPress === 'function' && node.props.accessibilityRole === 'button');
+    const tooSmall = buttons.flatMap(node => {
+      const style = StyleSheet.flatten(typeof node.props.style === 'function' ? node.props.style({pressed: false}) : node.props.style) ?? {};
+      const height = Math.max(Number(style.height ?? 0), Number(style.minHeight ?? 0));
+      return height < touchTarget.minimum ? [`${node.props.accessibilityLabel}: ${height}`] : [];
+    });
+
+    expect(buttons.length).toBeGreaterThan(30);
+    expect(tooSmall).toEqual([]);
   });
 
   it('starts weeks on Monday', () => {

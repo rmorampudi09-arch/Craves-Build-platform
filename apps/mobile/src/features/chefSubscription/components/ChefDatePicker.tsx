@@ -79,12 +79,14 @@ export function ChefDatePicker({value, min, onChange}: ChefDatePickerProps) {
                 accessibilityState={{selected, disabled}}
                 disabled={disabled}
                 onPress={() => onChange(iso)}
-                style={[styles.day, selected && styles.dayOn]}>
-                <Text
-                  allowFontScaling={textDefaults.allowFontScaling}
-                  style={[styles.dayText, selected && styles.dayTextOn, disabled && styles.dayTextOff]}>
-                  {day}
-                </Text>
+                style={styles.dayTap}>
+                <View style={[styles.day, selected && styles.dayOn]}>
+                  <Text
+                    allowFontScaling={textDefaults.allowFontScaling}
+                    style={[styles.dayText, selected && styles.dayTextOn, disabled && styles.dayTextOff]}>
+                    {day}
+                  </Text>
+                </View>
               </Pressable>
             </View>
           );
@@ -104,7 +106,9 @@ const styles = StyleSheet.create({
   week: {flexDirection: 'row', flexWrap: 'wrap'},
   weekday: {width: `${100 / 7}%`, textAlign: 'center', color: colors.textSecondary, fontSize: typography.small, fontWeight: fontWeight.semibold},
   cell: {width: `${100 / 7}%`, alignItems: 'center'},
-  day: {width: touchTarget.minimum - 4, height: touchTarget.minimum - 4, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center'},
+  // The tap area is the full 48 dp cell; the round highlight drawn inside it is a little smaller.
+  dayTap: {width: '100%', height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center'},
+  day: {width: touchTarget.minimum - spacing.xxs, height: touchTarget.minimum - spacing.xxs, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center'},
   dayOn: {backgroundColor: colors.flameRedAccessible},
   dayText: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},
   dayTextOn: {color: colors.white},

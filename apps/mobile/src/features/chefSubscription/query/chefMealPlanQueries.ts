@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
+import {AppApiError} from '../../../core/http/apiError';
 import {
   chefSubscriptionApi,
   type ChefMealPlan,
@@ -58,10 +59,13 @@ export function useChefMealPlansQuery() {
   });
 }
 
-/** Loaded schedules by plan id; a plan whose schedule is loading or failed is simply absent. */
-export function useChefMealPlanSchedulesQuery(
-  planIds: string[],
-): Record<string, ChefMealSchedule | undefined> {
+const isNotFound = (error: unknown) => error instanceof AppApiError && error.status === 404;
+
+/**
+ * Schedules by plan id with the state of loading them. A plan without meals yet answers 404: that is an empty
+ * schedule (absent from `byId`), not a failure. `failed` is any other error, `isLoading` the first fetch.
+ */
+export function useChefMealPlanSchedulesState(planIds: string[]) {
   const identityId = useIdentityId();
   return useQueries({
     queries: planIds.map(planId => ({
@@ -74,9 +78,23 @@ export function useChefMealPlanSchedulesQuery(
       staleTime: STALE_MS,
       retry: false,
     })),
-    combine: results =>
-      Object.fromEntries(planIds.map((planId, index) => [planId, results[index]?.data])),
+    combine: results => ({
+      byId: Object.fromEntries(planIds.map((planId, index) => [planId, results[index]?.data])) as Record<
+        string,
+        ChefMealSchedule | undefined
+      >,
+      isLoading: results.some(result => result.isLoading),
+      failed: results.some(result => result.isError && !isNotFound(result.error)),
+      refetch: () => results.forEach(result => result.refetch()),
+    }),
   });
+}
+
+/** Loaded schedules by plan id; a plan whose schedule is loading or failed is simply absent. */
+export function useChefMealPlanSchedulesQuery(
+  planIds: string[],
+): Record<string, ChefMealSchedule | undefined> {
+  return useChefMealPlanSchedulesState(planIds).byId;
 }
 
 /** One plan's schedule with its error, for the editor (a 404 means the draft has no schedule yet). */

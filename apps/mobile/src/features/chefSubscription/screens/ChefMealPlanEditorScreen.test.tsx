@@ -1,10 +1,11 @@
 import React from 'react';
-import {Text, TextInput} from 'react-native';
+import {StyleSheet, Text, TextInput} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import {usePreventRemove} from '@react-navigation/native';
 import {AppApiError} from '../../../core/http/apiError';
+import {touchTarget} from '../../../design/tokens';
 import {ChefToastProvider} from '../../chefShell/components/ui';
 import type {ChefMealPlan, ChefMealSchedule} from '../api/chefSubscriptionApi';
 import {ChefMealPlanEditorScreen} from './ChefMealPlanEditorScreen';
@@ -88,20 +89,20 @@ let tree: renderer.ReactTestRenderer;
 
 const navigation = {goBack: mockGoBack, navigate: mockNavigate, dispatch: mockDispatch};
 const queryClient = new QueryClient();
-const screen = (planId?: string) => (
+const screen = (planId?: string, step?: 2) => (
   <QueryClientProvider client={queryClient}>
     <ChefToastProvider>
       <ChefMealPlanEditorScreen
         navigation={navigation as never}
-        route={{key: 'editor', name: 'ChefMealPlanEditor', params: {planId}}}
+        route={{key: 'editor', name: 'ChefMealPlanEditor', params: {planId, step}}}
       />
     </ChefToastProvider>
   </QueryClientProvider>
 );
 
-function render(planId?: string) {
+function render(planId?: string, step?: 2) {
   act(() => {
-    tree = renderer.create(screen(planId));
+    tree = renderer.create(screen(planId, step));
   });
 }
 
@@ -112,7 +113,22 @@ const allText = () =>
 
 const pressable = (label: string): ReactTestInstance =>
   tree.root.findAll(node => node.props.accessibilityLabel === label && typeof node.props.onPress === 'function')[0];
-const press = (label: string) => act(() => pressable(label).props.onPress());
+const press = (label: string) =>
+  act(() => {
+    pressable(label).props.onPress();
+  });
+
+/** Buttons (anything with an onPress and a role) that declare a height but give less than 48 dp to tap (height or minHeight, plus hitSlop above and below). */
+const smallTargets = () =>
+  tree.root.findAll(node => typeof node.props.onPress === 'function' && node.props.accessibilityRole !== undefined).flatMap(node => {
+    const raw = typeof node.props.style === 'function' ? node.props.style({pressed: false}) : node.props.style;
+    const style = StyleSheet.flatten(raw) ?? {};
+    const declared = (style.height ?? style.minHeight) as number | undefined;
+    if (declared === undefined) return [];
+    const slop = node.props.hitSlop;
+    const extra = typeof slop === 'number' ? slop * 2 : (slop?.top ?? 0) + (slop?.bottom ?? 0);
+    return declared + extra < touchTarget.minimum ? [`${node.props.accessibilityLabel}: ${declared} + ${extra}`] : [];
+  });
 
 const input = (label: string): ReactTestInstance =>
   tree.root.findAllByType(TextInput).find(node => node.props.accessibilityLabel === label)!;
@@ -197,19 +213,38 @@ describe('ChefMealPlanEditorScreen', () => {
           'Home Lunch',
           'Waiting approval',
           "Craves is checking this plan. You can't edit it until then.",
-          'Chicken Biryani',
-          '12:30 PM',
         ]),
       );
       expect(allText().some(line => line.startsWith('Step '))).toBe(false);
       expect(pressable('Save draft')).toBeUndefined();
       expect(pressable('Next: Meals')).toBeUndefined();
       expect(pressable('Submit for approval')).toBeUndefined();
-      expect(pressable('Remove lunch')).toBeUndefined();
       expect(pressable('Add plan photo')).toBeUndefined();
       expect(input('Plan name').props.editable).toBe(false);
       expect(input('Description').props.editable).toBe(false);
+
+      press('Meals');
+      expect(allText()).toEqual(expect.arrayContaining(['Chicken Biryani', '12:30 PM']));
+      expect(pressable('Remove lunch')).toBeUndefined();
       expect(pressable('Fewer lunch portions')).toBeUndefined();
+      press('Details');
+      expect(input('Plan name')).toBeDefined();
+    });
+
+    it('opens at the meals when asked to (the Schedule button), and at the details otherwise', () => {
+      mockPlans = [plan({status: 'ACTIVE'})];
+      mockMenu.items = [dish(DISH_ID, 'Chicken Biryani', 80)];
+      mockSchedule = lunchSchedule();
+      render(PLAN_ID, 2);
+
+      expect(allText()).toContain('Chicken Biryani');
+      expect(pressable('Meals').props.accessibilityState.checked).toBe(true);
+      expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
+
+      act(() => tree.unmount());
+      render(PLAN_ID);
+      expect(pressable('Details').props.accessibilityState.checked).toBe(true);
+      expect(input('Plan name')).toBeDefined();
     });
 
     it.each([
@@ -248,6 +283,46 @@ describe('ChefMealPlanEditorScreen', () => {
     mockSchedule = {isLoading: true};
     act(() => tree.update(screen(PLAN_ID)));
     expect(input('Plan name').props.value).toBe('Edited');
+  });
+
+  it('can open a draft straight at the Meals step', () => {
+    mockPlans = [plan({})];
+    mockSchedule = lunchSchedule();
+    mockMenu.items = [dish(DISH_ID, 'Chicken Biryani', 80)];
+    render(PLAN_ID, 2);
+
+    expect(stepLine()).toBe('Step 2 of 3 · Meals');
+    expect(allText()).toContain('Chicken Biryani');
+  });
+
+  describe('every control has at least 48 dp to tap', () => {
+    it('on each step of a new plan', () => {
+      newPlanWithTuesdayLunch();
+      expect(smallTargets()).toEqual([]);
+
+      act(() => tree.unmount());
+      render();
+      expect(smallTargets()).toEqual([]);
+
+      fillDetails();
+      press('Monthly');
+      press('Next: Meals');
+      expect(pressable('Day 28')).toBeDefined();
+      expect(smallTargets()).toEqual([]);
+    });
+
+    it('on the review step and in the read-only plan', () => {
+      newPlanWithTuesdayLunch();
+      press('Next: Review');
+      expect(stepLine()).toBe('Step 3 of 3 · Review');
+      expect(smallTargets()).toEqual([]);
+
+      act(() => tree.unmount());
+      mockPlans = [plan({status: 'ACTIVE'})];
+      mockSchedule = lunchSchedule();
+      render(PLAN_ID, 2);
+      expect(smallTargets()).toEqual([]);
+    });
   });
 
   describe('the loading states', () => {
@@ -518,6 +593,14 @@ describe('ChefMealPlanEditorScreen', () => {
 
       expect(mockUpdatePlan).toHaveBeenCalledWith(PLAN_ID, expect.objectContaining({name: 'Home Lunch', amount: 1499}));
       expect(mockPutSchedule).toHaveBeenCalledTimes(1);
+      expect(mockPutSchedule).toHaveBeenCalledWith(PLAN_ID, {
+        recurrenceType: 'WEEKLY',
+        timezone: 'Asia/Kolkata',
+        generationLeadHours: 24,
+        items: [
+          {menuItemId: DISH_ID, quantity: 1, isoDayOfWeek: 1, dayOfMonth: null, mealSlotCode: 'LUNCH', serviceTime: '12:30', sequenceNumber: 1},
+        ],
+      });
       expect(mockSubmit).toHaveBeenCalledWith(PLAN_ID, ' Please check the price ');
       expect(mockInvalidate).toHaveBeenCalled();
       expect(mockGoBack).toHaveBeenCalled();
@@ -638,14 +721,18 @@ describe('ChefMealPlanEditorScreen', () => {
       expect(allText()).toContain('Draft saved');
     });
 
-    it('takes the chef to the step with the problem when the draft cannot be saved yet', async () => {
-      render();
-      type('Plan name', 'Half done');
+    it('takes the chef back to the step with the problem when a draft saved from a later step is not complete', async () => {
+      // A draft that came back without a description, opened on the Meals step.
+      mockPlans = [plan({description: null})];
+      mockSchedule = lunchSchedule();
+      render(PLAN_ID, 2);
+      expect(stepLine()).toBe('Step 2 of 3 · Meals');
       tryLeave();
       await act(async () => pressable('Save draft').props.onPress());
 
-      expect(mockCreatePlan).not.toHaveBeenCalled();
-      expect(allText()).toEqual(expect.arrayContaining(['Add a short description.', 'Enter a price above ₹0.']));
+      expect(mockUpdatePlan).not.toHaveBeenCalled();
+      expect(stepLine()).toBe('Step 1 of 3 · Details');
+      expect(allText()).toContain('Add a short description.');
       expect(mockGoBack).not.toHaveBeenCalled();
     });
 
@@ -661,6 +748,25 @@ describe('ChefMealPlanEditorScreen', () => {
       press('Discard');
       expect(mockDispatch).toHaveBeenCalledWith({type: 'GO_BACK'});
       expect(mockCreatePlan).not.toHaveBeenCalled();
+    });
+
+    it('brings the chef to the Meals step to read why removing every meal keeps the old schedule', async () => {
+      mockPlans = [plan({})];
+      mockSchedule = lunchSchedule();
+      mockUpdatePlan.mockResolvedValueOnce(plan({}));
+      render(PLAN_ID);
+      press('Next: Meals');
+      press('Remove lunch');
+      press('Remove');
+      press('Back');
+      expect(stepLine()).toBe('Step 1 of 3 · Details');
+
+      tryLeave();
+      await act(async () => pressable('Save draft').props.onPress());
+
+      expect(stepLine()).toBe('Step 2 of 3 · Meals');
+      expect(allText()).toContain('Add at least one meal to save schedule changes.');
+      expect(mockGoBack).not.toHaveBeenCalled();
     });
 
     it('locks the form while saving and explains why removing every meal keeps the old schedule', async () => {

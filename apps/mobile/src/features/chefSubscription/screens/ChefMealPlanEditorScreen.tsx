@@ -34,7 +34,6 @@ import {
   ChefSheet,
   ChefTopBar,
   ConfirmDialog,
-  SectionHeader,
   VegMark,
   useChefToast,
 } from '../../chefShell/components/ui';
@@ -96,6 +95,8 @@ const SLOT_ICON: Record<MealSlot, string> = {
   DINNER: 'weather-night',
 };
 
+const SUMMARY_PHOTO = touchTarget.comfortable + spacing.xs;
+
 const leadHoursLabel = (hours: number) =>
   hours === 24 ? '24 hours before (default)' : `${hours} ${hours === 1 ? 'hour' : 'hours'} before`;
 
@@ -135,6 +136,7 @@ export function ChefMealPlanEditorScreen({navigation, route}: Props) {
   if (!planId || loaded) {
     return (
       <MealPlanEditor
+        initialStep={route.params?.step === 2 ? 2 : 1}
         navigation={navigation}
         plan={loaded?.plan ?? null}
         schedule={loaded?.schedule ?? null}
@@ -182,10 +184,13 @@ export function ChefMealPlanEditorScreen({navigation, route}: Props) {
 }
 
 function MealPlanEditor({
+  initialStep,
   navigation,
   plan,
   schedule,
 }: {
+  /** 2 opens on the meals ("Schedule" on a plan card). */
+  initialStep: Step;
   navigation: Props['navigation'];
   plan: ChefMealPlan | null;
   schedule: ChefMealSchedule | null;
@@ -197,7 +202,7 @@ function MealPlanEditor({
   // Older backends send no imageUrl key at all and have no photo endpoint.
   const photoSupported = !plan || 'imageUrl' in plan;
 
-  const [step, setStep] = React.useState<Step>(1);
+  const [step, setStep] = React.useState<Step>(initialStep);
   const [savedPlanId, setSavedPlanId] = React.useState(plan?.id ?? null);
   const [form, setForm] = React.useState<MealPlanFormValues>({
     name: plan?.name ?? '',
@@ -394,9 +399,10 @@ function MealPlanEditor({
         await chefSubscriptionApi.submit(id, submitNote);
       }
       if (scheduleKept) {
-        // A schedule cannot be emptied, so the server kept the old one; stay and say so.
+        // A schedule cannot be emptied, so the server kept the old one; stay, and show the Meals step that says so.
         setScheduleNote(true);
         setDirty(true);
+        setStep(2);
         return;
       }
       toast.show(mode === 'submit' ? 'Sent to Craves for approval' : 'Draft saved');
@@ -630,17 +636,7 @@ function MealPlanEditor({
     </>
   );
 
-  const reviewItems = slots
-    .filter(slot => slot.menuItemId !== null)
-    .map(slot => ({
-      menuItemId: slot.menuItemId as string,
-      mealSlotCode: slot.slot,
-      serviceTime: slot.time,
-      sequenceNumber: 1,
-      quantity: slot.quantity,
-      isoDayOfWeek: period === 'WEEKLY' ? slot.day : null,
-      dayOfMonth: period === 'MONTHLY' ? slot.day : null,
-    }));
+  const reviewItems = slotsToScheduleRequest(slots, period, leadHours).items;
   const review = (
     <>
       <ChefCard>
@@ -791,10 +787,11 @@ function MealPlanEditor({
         )
       ) : (
         <>
-          <SectionHeader title="Details" />
-          {details}
-          <SectionHeader title="Meals" />
-          {meals}
+          <View accessibilityRole="radiogroup" style={styles.chips}>
+            <OptionChip label="Details" onPress={() => setStep(1)} selected={step === 1} />
+            <OptionChip label="Meals" onPress={() => setStep(2)} selected={step === 2} />
+          </View>
+          {step === 2 ? meals : details}
         </>
       )}
 
@@ -857,7 +854,7 @@ function MealPlanEditor({
               <SheetRow
                 key={item.id}
                 label={item.itemName}
-                leading={<DishThumb item={item} size={40} />}
+                leading={<DishThumb item={item} size={iconSize.xxl} />}
                 onPress={() => {
                   updateSlots(current => setSlotDish(current, sheet.key, item.id));
                   setSheet(null);
@@ -950,7 +947,7 @@ function EditLink({label, onPress}: {label: string; onPress: () => void}) {
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
-      hitSlop={{top: 4, bottom: 4}}
+      hitSlop={{top: spacing.xxs, bottom: spacing.xxs}}
       onPress={onPress}
       style={styles.editLink}>
       <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.editLinkText}>
@@ -967,7 +964,7 @@ function DishThumb({item, size}: {item: ChefMenuItem; size: number}) {
     <Image accessibilityIgnoresInvertColors resizeMode="cover" source={{uri}} style={box} />
   ) : (
     <View style={[box, styles.noThumb]}>
-      <Icon color={colors.borderStrong} name="meal" size={Math.round(size * 0.5)} surface={false} />
+      <Icon color={colors.borderStrong} name="meal" size={iconSize.md} surface={false} />
     </View>
   );
 }
@@ -1068,7 +1065,7 @@ function SlotCard({
           style={({pressed}) => [dishName ? styles.dishOpen : styles.addDish, error && styles.addDishError, pressed && styles.pressed]}>
           {dishName ? (
             <>
-              {dish ? <DishThumb item={dish} size={52} /> : null}
+              {dish ? <DishThumb item={dish} size={touchTarget.minimum} /> : null}
               <View style={styles.flex}>
                 <View style={styles.dishName}>
                   {dish ? <VegMark type={dish.foodType} /> : null}
@@ -1164,8 +1161,8 @@ const styles = StyleSheet.create({
   message: {alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.md},
   messageTitle: {color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold, textAlign: 'center'},
   messageText: {color: colors.textSecondary, fontSize: typography.body},
-  steps: {flexDirection: 'row', gap: 6, paddingHorizontal: spacing.md, paddingBottom: spacing.sm, backgroundColor: colors.white},
-  stepBar: {flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.border},
+  steps: {flexDirection: 'row', gap: spacing.xxs, paddingHorizontal: spacing.md, paddingBottom: spacing.sm, backgroundColor: colors.white},
+  stepBar: {flex: 1, height: spacing.xxs, borderRadius: radius.pill, backgroundColor: colors.border},
   stepBarOn: {backgroundColor: colors.flameRed},
   buttons: {flexDirection: 'row', gap: spacing.sm},
   banner: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.warningSoft},
@@ -1176,7 +1173,7 @@ const styles = StyleSheet.create({
   bannerInfoText: {color: colors.infoText},
   bannerErrorText: {color: colors.flameRedAccessible},
   help: {color: colors.textSecondary, fontSize: typography.small},
-  group: {gap: 6},
+  group: {gap: spacing.xs},
   chips: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs},
   select: {
     minHeight: touchTarget.minimum,
@@ -1184,7 +1181,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: radius.md - 2,
+    borderRadius: radius.md,
     borderWidth: borderWidth.focus,
     borderColor: colors.border,
     backgroundColor: colors.white,
@@ -1193,10 +1190,10 @@ const styles = StyleSheet.create({
   photoBlock: {gap: spacing.xs},
   photo: {width: '100%', aspectRatio: 4 / 3, borderRadius: radius.md},
   upload: {
-    height: 120,
+    height: 120, // the board's photo drop-zone; no token for it
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: spacing.xxs,
     borderRadius: radius.md,
     borderWidth: borderWidth.focus,
     borderStyle: 'dashed',
@@ -1208,7 +1205,7 @@ const styles = StyleSheet.create({
   monthScroll: {flexGrow: 0},
   monthDays: {gap: spacing.xs},
   dayCell: {
-    height: 38,
+    minHeight: touchTarget.minimum,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
@@ -1225,7 +1222,7 @@ const styles = StyleSheet.create({
   slotHeader: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
   slotTitle: {flex: 1, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
   timeChip: {
-    minHeight: 40,
+    minHeight: touchTarget.minimum,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xxs,
@@ -1248,21 +1245,21 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingHorizontal: spacing.xs,
   },
-  addDishError: {borderRadius: radius.md - 2, borderWidth: borderWidth.focus, borderColor: colors.flameRedAccessible},
+  addDishError: {borderRadius: radius.md, borderWidth: borderWidth.focus, borderColor: colors.flameRedAccessible},
   addDishText: {color: colors.flameRedAccessible, fontSize: typography.body, fontWeight: fontWeight.bold},
   noThumb: {alignItems: 'center', justifyContent: 'center', borderWidth: borderWidth.standard, borderColor: colors.border},
   stepper: {flexDirection: 'row', alignItems: 'center'},
   stepperButton: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center'},
-  stepperValue: {minWidth: 24, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold, textAlign: 'center'},
+  stepperValue: {minWidth: spacing.xl, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold, textAlign: 'center'},
   summary: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm},
-  summaryPhoto: {width: 64, height: 64, borderRadius: radius.md - 2},
+  summaryPhoto: {width: SUMMARY_PHOTO, height: SUMMARY_PHOTO, borderRadius: radius.md},
   summaryName: {color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.bold},
-  summaryPrice: {marginTop: 2, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
+  summaryPrice: {marginTop: spacing.xxs, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
   summaryHead: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
   summaryTitle: {color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.bold},
   editLink: {minHeight: touchTarget.minimum, justifyContent: 'center', paddingHorizontal: spacing.xs},
   editLinkText: {color: colors.flameRedAccessible, fontSize: typography.body, fontWeight: fontWeight.bold},
-  reviewRow: {paddingVertical: spacing.xs, gap: 2},
+  reviewRow: {paddingVertical: spacing.xs, gap: spacing.xxs},
   reviewTitle: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},
   sheetRow: {minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xxs},
   sheetRowText: {flex: 1, color: colors.textPrimary, fontSize: typography.body},

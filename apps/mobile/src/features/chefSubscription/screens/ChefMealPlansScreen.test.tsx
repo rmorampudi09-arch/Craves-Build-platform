@@ -1,5 +1,6 @@
 import React from 'react';
-import {Image, Switch, Text} from 'react-native';
+import {Image, StyleSheet, Switch, Text} from 'react-native';
+import {touchTarget} from '../../../design/tokens';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
@@ -247,7 +248,7 @@ describe('ChefMealPlansScreen', () => {
     expect(tree.root.findAll(node => node.props.accessibilityLabel === 'Schedule' && node.props.onPress)).toHaveLength(1);
 
     press('Schedule');
-    expect(mockNavigate).toHaveBeenLastCalledWith('ChefMealPlanEditor', {planId: PLAN_A});
+    expect(mockNavigate).toHaveBeenLastCalledWith('ChefMealPlanEditor', {planId: PLAN_A, step: 2});
     press('Daily limits');
     expect(mockNavigate).toHaveBeenLastCalledWith('ChefDailyLimits', {planId: PLAN_A});
   });
@@ -275,6 +276,23 @@ describe('ChefMealPlansScreen', () => {
     render();
 
     expect(button('Fine, Live, ₹1,499 per week')).toBeDefined();
+  });
+
+  it('gives every button and filter at least 48 dp to tap', () => {
+    mockPlans = mixedPlans();
+    render();
+    const tooSmall = tree.root
+      .findAll(node => typeof node.props.onPress === 'function' && node.props.accessibilityRole !== undefined)
+      .flatMap(node => {
+        const raw = typeof node.props.style === 'function' ? node.props.style({pressed: false}) : node.props.style;
+        const style = StyleSheet.flatten(raw) ?? {};
+        const declared = (style.height ?? style.minHeight) as number | undefined;
+        const slop = node.props.hitSlop;
+        const extra = typeof slop === 'number' ? slop * 2 : (slop?.top ?? 0) + (slop?.bottom ?? 0);
+        return declared !== undefined && declared + extra < touchTarget.minimum ? [`${node.props.accessibilityLabel}: ${declared} + ${extra}`] : [];
+      });
+
+    expect(tooSmall).toEqual([]);
   });
 
   it('opens the editor for a tapped plan', () => {

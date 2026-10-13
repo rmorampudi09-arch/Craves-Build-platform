@@ -203,7 +203,8 @@ export type ChefProductStackParamList = {
   /** `copyOfMenuItemId`: open the form pre-filled from that dish ("Duplicate dish"). */
   ChefAddMenuItem: {copyOfMenuItemId?: string} | undefined;
   ChefEditMenuItem: ChefMenuItemEditRouteParams;
-  ChefMealPlanEditor: {planId?: string};
+  /** `step: 2` opens a plan on its meals ("Schedule" on a plan card). */
+  ChefMealPlanEditor: {planId?: string; step?: 2};
   ChefNotifications: undefined;
   ChefDailyLimits: {planId?: string};
   ChefSupportTicket: {caseId?: string; orderId?: string; topic?: string};

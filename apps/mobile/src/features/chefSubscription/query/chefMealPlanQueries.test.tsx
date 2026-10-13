@@ -2,12 +2,14 @@ import React from 'react';
 import {act, create} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {isPrivateQueryKey, matchesPrivateQueryScope} from '../../../app/query/queryKeys';
+import {AppApiError} from '../../../core/http/apiError';
 import {chefSubscriptionApi} from '../api/chefSubscriptionApi';
 import {
   chefMealPlansQueryPrefix,
   createChefMealPlanQueryKey,
   useChefCapacityQuery,
   useChefMealPlanSchedulesQuery,
+  useChefMealPlanSchedulesState,
   useChefMealPlansQuery,
   useSetAcceptingSubscribers,
 } from './chefMealPlanQueries';
@@ -106,6 +108,41 @@ describe('useChefMealPlanSchedulesQuery', () => {
     const {result} = await renderHook(() => useChefMealPlanSchedulesQuery([PLAN_ID]));
 
     expect(result.current).toEqual({[PLAN_ID]: undefined});
+  });
+});
+
+describe('useChefMealPlanSchedulesState', () => {
+  it('says it is loading until every schedule has answered', async () => {
+    get(chefSubscriptionApi.getSchedule).mockReturnValue(new Promise(() => undefined));
+    const {result} = await renderHook(() => useChefMealPlanSchedulesState([PLAN_ID]));
+
+    expect(result.current).toMatchObject({isLoading: true, failed: false, byId: {[PLAN_ID]: undefined}});
+  });
+
+  it('hands over the loaded schedules by plan id', async () => {
+    const {result} = await renderHook(() => useChefMealPlanSchedulesState([PLAN_ID]));
+
+    expect(result.current).toMatchObject({isLoading: false, failed: false, byId: {[PLAN_ID]: schedule}});
+  });
+
+  it('treats a plan without a schedule yet (404) as empty, not as a failure', async () => {
+    get(chefSubscriptionApi.getSchedule).mockRejectedValue(new AppApiError('NOT_FOUND', 'No schedule', 404));
+    const {result} = await renderHook(() => useChefMealPlanSchedulesState([PLAN_ID]));
+
+    expect(result.current).toMatchObject({isLoading: false, failed: false, byId: {[PLAN_ID]: undefined}});
+  });
+
+  it('reports a failed load, and can try again', async () => {
+    get(chefSubscriptionApi.getSchedule).mockRejectedValue(new AppApiError('SERVER', 'Boom', 500));
+    const {result} = await renderHook(() => useChefMealPlanSchedulesState([PLAN_ID]));
+    expect(result.current.failed).toBe(true);
+
+    get(chefSubscriptionApi.getSchedule).mockResolvedValue(schedule);
+    await act(async () => {
+      result.current.refetch();
+    });
+    await settle();
+    expect(result.current).toMatchObject({failed: false, byId: {[PLAN_ID]: schedule}});
   });
 });
 

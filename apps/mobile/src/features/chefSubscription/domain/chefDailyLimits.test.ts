@@ -8,10 +8,12 @@ import type {
 import {
   capacityBar,
   capacityCaption,
+  clampPlates,
   dateChangeLines,
   DEFAULT_SUBSCRIBER_PLATES,
   DEFAULT_TOTAL_PLATES,
   dishLimitSummary,
+  dishLimits,
   firstServedSlot,
   limitDays,
   limitHeading,
@@ -78,7 +80,7 @@ describe('slotLimits', () => {
   it('reads the first day that has a rule', () => {
     const rules = [slotRule({isoDayOfWeek: 3}), slotRule({isoDayOfWeek: 2, totalCapacityUnits: 40, subscriptionCapacityUnits: 15, recurringReservedUnits: 9, recurringDeficitUnits: 2})];
 
-    expect(slotLimits(rules, 'LUNCH', [1, 2, 3])).toEqual({total: 40, subscriber: 15, salesEnabled: true, booked: 9, deficit: 2});
+    expect(slotLimits(rules, 'LUNCH', [1, 2, 3])).toEqual({total: 40, subscriber: 15, salesEnabled: true, booked: 9, deficit: 2, mixed: true});
   });
 
   it('ignores other meals and days, and starts from 20 and 10 when no rule exists', () => {
@@ -88,11 +90,47 @@ describe('slotLimits', () => {
       salesEnabled: true,
       booked: 0,
       deficit: 0,
+      mixed: false,
     });
+  });
+
+  it('says the days differ when their saved limits are not the same, so a save would overwrite some', () => {
+    const same = [slotRule({isoDayOfWeek: 1}), slotRule({isoDayOfWeek: 2})];
+    expect(slotLimits(same, 'LUNCH', [1, 2, 3]).mixed).toBe(false);
+    expect(slotLimits([slotRule({isoDayOfWeek: 1}), slotRule({isoDayOfWeek: 6, totalCapacityUnits: 10})], 'LUNCH', [1, 6]).mixed).toBe(true);
+    expect(slotLimits([...same, slotRule({isoDayOfWeek: 3, subscriptionCapacityUnits: 5})], 'LUNCH', [1, 2, 3]).mixed).toBe(true);
+    expect(slotLimits([...same, slotRule({isoDayOfWeek: 3, salesEnabled: false})], 'LUNCH', [1, 2, 3]).mixed).toBe(true);
+    // Only the days a save would write count, and days with no rule yet have nothing to overwrite.
+    expect(slotLimits([...same, slotRule({isoDayOfWeek: 6, totalCapacityUnits: 10})], 'LUNCH', [1, 2, 3]).mixed).toBe(false);
   });
 
   it('keeps a rule that has switched subscriptions off', () => {
     expect(slotLimits([slotRule({salesEnabled: false})], 'LUNCH', [1]).salesEnabled).toBe(false);
+  });
+});
+
+describe('dishLimits', () => {
+  const rule = (fields: Record<string, unknown>) =>
+    ({isoDayOfWeek: 1, mealSlotCode: 'LUNCH', menuItemId: DISH_A, maxSubscriptionUnits: 10, salesEnabled: true, ...fields}) as unknown as ChefMenuItemCapacityRule;
+
+  it('reads the first day that has a limit for the dish, and flags days that differ', () => {
+    const rules = [rule({isoDayOfWeek: 2, maxSubscriptionUnits: 4}), rule({isoDayOfWeek: 1, maxSubscriptionUnits: 8}), rule({menuItemId: DISH_B, isoDayOfWeek: 1})];
+
+    expect(dishLimits(rules, DISH_A, 'LUNCH', [1, 2])).toEqual({max: 8, salesEnabled: true, mixed: true});
+    expect(dishLimits(rules, DISH_A, 'LUNCH', [1])).toEqual({max: 8, salesEnabled: true, mixed: false});
+  });
+
+  it('is null while the dish has no limit for that meal', () => {
+    expect(dishLimits([rule({mealSlotCode: 'DINNER'})], DISH_A, 'LUNCH', [1])).toBeNull();
+    expect(dishLimits([], DISH_A, 'LUNCH', [1])).toBeNull();
+  });
+});
+
+describe('clampPlates', () => {
+  it('keeps a plate count whole and between 0 and the most the server accepts', () => {
+    expect(clampPlates(-4)).toBe(0);
+    expect(clampPlates(12.6)).toBe(13);
+    expect(clampPlates(999999)).toBe(MAX_PLATES);
   });
 });
 

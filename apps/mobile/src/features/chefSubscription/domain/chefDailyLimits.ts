@@ -57,25 +57,63 @@ export interface SlotLimits {
   booked: number;
   /** Booked plates above the subscriber limit. */
   deficit: number;
+  /** The saved limits of `days` are not all the same, so one save would overwrite some of them. */
+  mixed: boolean;
 }
 
 /** What the first of `days` that has a rule says; 20 and 10 until the chef sets one. */
 export function slotLimits(rules: readonly ChefSlotCapacityRule[], slot: MealSlot, days: readonly number[]): SlotLimits {
-  const rule = rules
+  const found = rules
     .filter(candidate => candidate.mealSlotCode === slot && days.includes(candidate.isoDayOfWeek))
-    .sort((a, b) => a.isoDayOfWeek - b.isoDayOfWeek)[0];
-  return rule
+    .sort((a, b) => a.isoDayOfWeek - b.isoDayOfWeek);
+  const rule = found[0];
+  if (!rule) {
+    return {total: DEFAULT_TOTAL_PLATES, subscriber: DEFAULT_SUBSCRIBER_PLATES, salesEnabled: true, booked: 0, deficit: 0, mixed: false};
+  }
+  const same = (other: ChefSlotCapacityRule) =>
+    other.totalCapacityUnits === rule.totalCapacityUnits &&
+    other.subscriptionCapacityUnits === rule.subscriptionCapacityUnits &&
+    other.salesEnabled === rule.salesEnabled;
+  return {
+    total: rule.totalCapacityUnits,
+    subscriber: rule.subscriptionCapacityUnits,
+    salesEnabled: rule.salesEnabled,
+    booked: rule.recurringReservedUnits,
+    deficit: rule.recurringDeficitUnits,
+    mixed: !found.every(same),
+  };
+}
+
+export interface DishLimits {
+  max: number;
+  salesEnabled: boolean;
+  mixed: boolean;
+}
+
+/** A dish's limit for one meal: the first of `days` that has one, or null when it has none. */
+export function dishLimits(
+  rules: readonly ChefMenuItemCapacityRule[],
+  menuItemId: string,
+  slot: MealSlot,
+  days: readonly number[],
+): DishLimits | null {
+  const found = rules
+    .filter(rule => rule.menuItemId === menuItemId && rule.mealSlotCode === slot && days.includes(rule.isoDayOfWeek))
+    .sort((a, b) => a.isoDayOfWeek - b.isoDayOfWeek);
+  const first = found[0];
+  return first
     ? {
-        total: rule.totalCapacityUnits,
-        subscriber: rule.subscriptionCapacityUnits,
-        salesEnabled: rule.salesEnabled,
-        booked: rule.recurringReservedUnits,
-        deficit: rule.recurringDeficitUnits,
+        max: first.maxSubscriptionUnits,
+        salesEnabled: first.salesEnabled,
+        mixed: !found.every(rule => rule.maxSubscriptionUnits === first.maxSubscriptionUnits && rule.salesEnabled === first.salesEnabled),
       }
-    : {total: DEFAULT_TOTAL_PLATES, subscriber: DEFAULT_SUBSCRIBER_PLATES, salesEnabled: true, booked: 0, deficit: 0};
+    : null;
 }
 
 const clamp = (value: number, max: number) => Math.min(max, Math.max(0, Math.round(value)));
+
+/** A plate count kept whole and between 0 and the most the server accepts. */
+export const clampPlates = (value: number) => clamp(value, MAX_PLATES);
 
 /** Kept-for-subscribers can never be more than the total, so lowering the total lowers it too. */
 export function setTotalPlates<T extends {total: number; subscriber: number}>(values: T, total: number): T {

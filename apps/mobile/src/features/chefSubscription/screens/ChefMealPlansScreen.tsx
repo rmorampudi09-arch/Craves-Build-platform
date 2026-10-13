@@ -55,7 +55,7 @@ type ChefMealPlansNavigation = CompositeNavigationProp<
   NativeStackNavigationProp<ChefProductStackParamList>
 >;
 
-const PHOTO = 72;
+const PHOTO = spacing.xxxl + spacing.xxl; // the board's 72 dp photo
 
 function PlanNote({tone, icon, text}: {tone: 'info' | 'warn'; icon: IconName; text: string}) {
   const color = tone === 'warn' ? colors.warningText : colors.infoText;
@@ -270,7 +270,7 @@ export function ChefMealPlansScreen({hideHeader = false}: {hideHeader?: boolean}
         accessibilityLabel={`${label} ${count}`}
         accessibilityRole="button"
         accessibilityState={{selected: on}}
-        hitSlop={{top: 7, bottom: 7}}
+        hitSlop={{top: 7, bottom: 7}} // (48 - 34) / 2
         key={value}
         onPress={() => setFilter(value)}
         style={[styles.pill, on && styles.pillOn]}>
@@ -339,7 +339,7 @@ export function ChefMealPlansScreen({hideHeader = false}: {hideHeader?: boolean}
                 key={plan.id}
                 onLimits={() => navigation.navigate('ChefDailyLimits', {planId: plan.id})}
                 onOpen={() => navigation.navigate('ChefMealPlanEditor', {planId: plan.id})}
-                onSchedule={() => navigation.navigate('ChefMealPlanEditor', {planId: plan.id})}
+                onSchedule={() => navigation.navigate('ChefMealPlanEditor', {planId: plan.id, step: 2})}
                 photoUrl={resolveApiImageUrl(plan.imageUrl) ?? (coverId ? dishPhotos.get(coverId) ?? null : null)}
                 plan={plan}
               />
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
   pillScroll: {flexGrow: 0, marginHorizontal: -spacing.md},
   pills: {gap: spacing.xs, paddingHorizontal: spacing.md},
   pill: {
-    height: 34,
+    height: 34, // matches the Dishes pills; the 48 dp tap area comes from hitSlop
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,
@@ -385,14 +385,14 @@ const styles = StyleSheet.create({
   card: {padding: 0, overflow: 'hidden'},
   open: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.sm},
   pressed: {opacity: 0.6},
-  photo: {width: PHOTO, height: PHOTO, borderRadius: radius.md - 2},
+  photo: {width: PHOTO, height: PHOTO, borderRadius: radius.md},
   noPhoto: {alignItems: 'center', justifyContent: 'center', borderWidth: borderWidth.standard, borderColor: colors.border},
-  copy: {flex: 1, minWidth: 0, gap: 2},
+  copy: {flex: 1, minWidth: 0, gap: spacing.xxs},
   titleLine: {flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.xs},
   name: {flex: 1, color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.bold},
   meta: {color: colors.textSecondary, fontSize: typography.small},
-  price: {marginTop: 2, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
-  note: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, margin: spacing.sm, marginTop: 0, padding: spacing.sm, borderRadius: radius.md - 2},
+  price: {marginTop: spacing.xxs, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
+  note: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, margin: spacing.sm, marginTop: 0, padding: spacing.sm, borderRadius: radius.md},
   noteText: {flex: 1, fontSize: typography.small},
   acceptRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.sm},
   acceptCopy: {flex: 1, minWidth: 0},

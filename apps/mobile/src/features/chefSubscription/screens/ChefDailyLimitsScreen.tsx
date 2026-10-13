@@ -38,7 +38,9 @@ import {ChefDatePicker} from '../components/ChefDatePicker';
 import {
   capacityBar,
   capacityCaption,
+  clampPlates,
   dateChangeLines,
+  dishLimits,
   dishLimitSummary,
   firstServedSlot,
   limitDays,
@@ -51,7 +53,7 @@ import {MEAL_SLOTS, type MealSlot} from '../domain/mealPlanEditor';
 import {
   invalidateChefMealPlans,
   useChefCapacityQuery,
-  useChefMealPlanSchedulesQuery,
+  useChefMealPlanSchedulesState,
   useChefMealPlansQuery,
 } from '../query/chefMealPlanQueries';
 
@@ -60,7 +62,10 @@ type Sheet = 'dish' | 'date' | null;
 
 const REASON = 'Updated by Chef in Craves mobile';
 const DEFAULT_DISH_MAX = 10;
+const BAR_HEIGHT = 10; // no token for a 10 dp bar
 const SAVE_PROBLEM = "We couldn't save your limits. Try again.";
+const DIFFERENT_DAYS = 'Your days have different limits now. Saving sets them all to these numbers.';
+const REPLACES_CHANGE = 'This date already has a change. Saving replaces it.';
 
 const isoOf = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -79,7 +84,7 @@ function PlateStepper({name, value, onChange}: {name: string; value: number; onC
           accessibilityElementsHidden
           color={value > 0 ? colors.textSecondary : colors.borderStrong}
           name="minus-circle-outline"
-          size={iconSize.xl - 4}
+          size={iconSize.lg}
         />
       </Pressable>
       <TextInput
@@ -93,7 +98,7 @@ function PlateStepper({name, value, onChange}: {name: string; value: number; onC
         value={String(value)}
       />
       <Pressable accessibilityLabel={`More ${lower}`} accessibilityRole="button" onPress={() => onChange(value + 1)} style={styles.stepperButton}>
-        <MaterialDesignIcons accessibilityElementsHidden color={colors.flameRedAccessible} name="plus-circle" size={iconSize.xl - 4} />
+        <MaterialDesignIcons accessibilityElementsHidden color={colors.flameRedAccessible} name="plus-circle" size={iconSize.lg} />
       </Pressable>
     </View>
   );
@@ -140,12 +145,14 @@ export function ChefDailyLimitsScreen() {
   const planId = route.params?.planId;
   const plans = useChefMealPlansQuery();
   const planIds = planId ? [planId] : (plans.data ?? []).map(plan => plan.id);
-  const schedulesById = useChefMealPlanSchedulesQuery(planIds);
+  const schedulesState = useChefMealPlanSchedulesState(planIds);
   const capacity = useChefCapacityQuery();
   const menu = useChefMenuModel();
 
   const [slotChoice, setSlotChoice] = React.useState<MealSlot | null>(null);
   const [edits, setEdits] = React.useState<Partial<Record<MealSlot, PlateValues>>>({});
+  // Meals whose numbers were changed and not saved yet, in the order they were changed. Save writes all of them.
+  const [unsaved, setUnsaved] = React.useState<MealSlot[]>([]);
   const [sheet, setSheet] = React.useState<Sheet>(null);
   const [busy, setBusy] = React.useState(false);
   const [unpublished, setUnpublished] = React.useState(false);
@@ -166,22 +173,30 @@ export function ChefDailyLimitsScreen() {
   const [dateDishMax, setDateDishMax] = React.useState(DEFAULT_DISH_MAX);
   const [dateDishClosed, setDateDishClosed] = React.useState(false);
 
-  const schedules = planIds.flatMap(id => schedulesById[id] ?? []) as ChefMealSchedule[];
+  // A plan whose schedule is still loading, or failed, never gets this far: the screen waits or offers a retry first.
+  const schedules = planIds.flatMap(id => schedulesState.byId[id] ?? []) as ChefMealSchedule[];
   const slot = slotChoice ?? firstServedSlot(schedules);
-  const days = limitDays(schedules, slot);
+  const daysFor = (code: MealSlot) => limitDays(schedules, code);
+  const days = daysFor(slot);
   const data = capacity.data;
   const rules = data?.slotRules ?? [];
   const server = slotLimits(rules, slot, days);
-  const values: PlateValues = edits[slot] ?? {total: server.total, subscriber: server.subscriber, salesEnabled: server.salesEnabled};
+  const valuesFor = (code: MealSlot): PlateValues => {
+    const saved = slotLimits(rules, code, daysFor(code));
+    return edits[code] ?? {total: saved.total, subscriber: saved.subscriber, salesEnabled: saved.salesEnabled};
+  };
+  const values = valuesFor(slot);
   const frozen = data?.adminSalesFrozen === true;
   const now = new Date();
   const today = isoOf(now);
 
   const dishes = menu.items.filter(item => getChefMenuDisplayState(item) === 'AVAILABLE');
   const dishName = (id: string) => menu.items.find(item => item.id === id)?.itemName ?? 'Dish';
-  const dishRule = (id: string) =>
-    data?.menuItemRules.find(rule => rule.menuItemId === id && rule.mealSlotCode === slot && days.includes(rule.isoDayOfWeek));
-  const firstDish = () => dishes.find(item => dishRule(item.id))?.id ?? dishes[0]?.id ?? null;
+  const dishLimitsFor = (id: string | null) => (id && data ? dishLimits(data.menuItemRules, id, slot, days) : null);
+  const firstDish = () => dishes.find(item => dishLimitsFor(item.id))?.id ?? dishes[0]?.id ?? null;
+  const slotChange = (iso: string) => data?.dateOverrides.find(change => change.serviceDate === iso && change.mealSlotCode === slot);
+  const dishChange = (iso: string, id: string | null) =>
+    id ? data?.menuItemDateOverrides.find(change => change.serviceDate === iso && change.mealSlotCode === slot && change.menuItemId === id) : undefined;
 
   const bar = capacityBar(values, server.booked);
   const changes = data
@@ -201,7 +216,9 @@ export function ChefDailyLimitsScreen() {
       return true;
     } catch (error) {
       if (isRouteNotPublished(error)) {
+        // Close any sheet so the "coming soon" card behind it is what the chef sees.
         setUnpublished(true);
+        setSheet(null);
       } else {
         onProblem(SAVE_PROBLEM);
       }
@@ -215,15 +232,21 @@ export function ChefDailyLimitsScreen() {
   const saveLimits = () =>
     run(
       async () => {
-        for (const day of days) {
-          await chefSubscriptionApi.putSlotRule({
-            isoDayOfWeek: day,
-            mealSlotCode: slot,
-            totalCapacityUnits: values.total,
-            subscriptionCapacityUnits: values.subscriber,
-            salesEnabled: values.salesEnabled,
-            reason: REASON,
-          });
+        const meals = unsaved.includes(slot) ? unsaved : [...unsaved, slot];
+        for (const code of meals) {
+          const {total, subscriber, salesEnabled} = valuesFor(code);
+          for (const day of daysFor(code)) {
+            await chefSubscriptionApi.putSlotRule({
+              isoDayOfWeek: day,
+              mealSlotCode: code,
+              totalCapacityUnits: total,
+              subscriptionCapacityUnits: subscriber,
+              salesEnabled,
+              reason: REASON,
+            });
+          }
+          // A saved meal is not sent again; a meal that fails stays here for the next try.
+          setUnsaved(current => current.filter(meal => meal !== code));
         }
       },
       'Limits saved',
@@ -237,10 +260,10 @@ export function ChefDailyLimitsScreen() {
     setSheet('dish');
   };
   const pickDish = (id: string | null) => {
-    const rule = id ? dishRule(id) : undefined;
+    const limits = dishLimitsFor(id);
     setDishId(id);
-    setDishMax(rule?.maxSubscriptionUnits ?? DEFAULT_DISH_MAX);
-    setDishOn(rule?.salesEnabled ?? true);
+    setDishMax(limits?.max ?? DEFAULT_DISH_MAX);
+    setDishOn(limits?.salesEnabled ?? true);
   };
   const saveDish = async () => {
     const id = dishId;
@@ -269,17 +292,26 @@ export function ChefDailyLimitsScreen() {
     setDateKind('meal');
     setDateValues(values);
     setDateClosed(false);
-    pickDateDish(firstDish());
-    setDateDishClosed(false);
+    pickDateDish(firstDish(), null);
     setSheetProblem(null);
     setSheet('date');
   };
-  const pickDateDish = (id: string | null) => {
+  /** A date that already has a change starts from it; any other date starts from the weekly numbers. */
+  const chooseDate = (iso: string) => {
+    const change = slotChange(iso);
+    setDate(iso);
+    setDateValues(change ? {total: change.totalCapacityUnits, subscriber: change.subscriptionCapacityUnits, salesEnabled: true} : values);
+    setDateClosed(change?.closed ?? false);
+    pickDateDish(dateDishId, iso);
+  };
+  const pickDateDish = (id: string | null, iso: string | null = date) => {
+    const change = iso ? dishChange(iso, id) : undefined;
     setDateDishId(id);
-    setDateDishMax(id ? dishRule(id)?.maxSubscriptionUnits ?? DEFAULT_DISH_MAX : DEFAULT_DISH_MAX);
+    setDateDishMax(change?.maxSubscriptionUnits ?? dishLimitsFor(id)?.max ?? DEFAULT_DISH_MAX);
+    setDateDishClosed(change?.closed ?? false);
   };
   const saveDate = async () => {
-    if (!date) return;
+    if (!date || (dateKind === 'dish' && !dateDishId)) return;
     const saved = await run(
       () =>
         dateKind === 'meal'
@@ -292,7 +324,7 @@ export function ChefDailyLimitsScreen() {
               reason: 'Date override updated by Chef in Craves mobile',
             })
           : chefSubscriptionApi.putMenuItemDateOverride({
-              menuItemId: dateDishId as string,
+              menuItemId: dateDishId as string, // guarded above
               serviceDate: date,
               mealSlotCode: slot,
               maxSubscriptionUnits: dateDishMax,
@@ -305,6 +337,9 @@ export function ChefDailyLimitsScreen() {
     if (saved) setSheet(null);
   };
 
+  const plansPending = !planId && plans.isLoading;
+  const plansFailed = !planId && plans.isError && !plans.data;
+
   let body: React.ReactNode;
   if (unpublished || (capacity.error && isRouteNotPublished(capacity.error))) {
     body = (
@@ -313,7 +348,7 @@ export function ChefDailyLimitsScreen() {
         title="Daily limits are on their way"
       />
     );
-  } else if (capacity.isLoading) {
+  } else if (capacity.isLoading || plansPending || schedulesState.isLoading) {
     body = (
       <>
         <SkeletonBlock borderRadius={radius.pill} height={40} width="70%" />
@@ -321,7 +356,7 @@ export function ChefDailyLimitsScreen() {
         <SkeletonBlock borderRadius={radius.md} height={116} width="100%" />
       </>
     );
-  } else if (!data) {
+  } else if (!data || plansFailed || schedulesState.failed) {
     body = (
       <ChefCard>
         <View style={styles.center}>
@@ -335,13 +370,18 @@ export function ChefDailyLimitsScreen() {
             label="Try again"
             onPress={() => {
               capacity.refetch();
+              if (plansFailed) plans.refetch();
+              schedulesState.refetch();
             }}
           />
         </View>
       </ChefCard>
     );
   } else {
-    const setValues = (next: PlateValues) => setEdits(current => ({...current, [slot]: next}));
+    const setValues = (next: PlateValues) => {
+      setEdits(current => ({...current, [slot]: next}));
+      setUnsaved(current => (current.includes(slot) ? current : [...current, slot]));
+    };
     body = (
       <>
         {frozen ? (
@@ -351,6 +391,9 @@ export function ChefDailyLimitsScreen() {
             </Text>
           </View>
         ) : null}
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.hint}>
+          These limits cover your whole kitchen, across all your meal plans.
+        </Text>
         <View accessibilityRole="radiogroup" style={styles.chips}>
           {MEAL_SLOTS.map(code => (
             <OptionChip key={code} label={mealSlotLabel(code)} onPress={() => setSlotChoice(code)} selected={code === slot} />
@@ -397,6 +440,11 @@ export function ChefDailyLimitsScreen() {
           <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.hint}>
             {capacityCaption(bar)}
           </Text>
+          {server.mixed ? (
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.problem}>
+              {DIFFERENT_DAYS}
+            </Text>
+          ) : null}
           {server.deficit > 0 ? (
             <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.problem}>
               Subscribers have booked more plates than this limit. Raise it so every subscriber is served.
@@ -454,9 +502,14 @@ export function ChefDailyLimitsScreen() {
               <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.rowTitle, styles.rowText]}>
                 Most plates a day
               </Text>
-              <PlateStepper name="Plates of this dish" onChange={setDishMax} value={dishMax} />
+              <PlateStepper name="Plates of this dish" onChange={max => setDishMax(clampPlates(max))} value={dishMax} />
             </View>
             <SwitchRow onChange={setDishOn} title="Subscribers can order this dish" value={dishOn} />
+            {dishLimitsFor(dishId)?.mixed ? (
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.problem}>
+                Your days have different limits for this dish now. Saving sets them all to these numbers.
+              </Text>
+            ) : null}
             <ChefActionButton busy={busy} disabled={frozen || busy} label="Save dish limit" onPress={() => saveDish()} />
             <Problem text={sheetProblem} />
           </>
@@ -464,10 +517,18 @@ export function ChefDailyLimitsScreen() {
       </ChefSheet>
 
       <ChefSheet onClose={() => setSheet(null)} title="Change a single date" visible={sheet === 'date'}>
-        <ChefDatePicker min={today} onChange={setDate} value={date} />
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.hint}>
+          {`For ${slotName}.`}
+        </Text>
+        <ChefDatePicker min={today} onChange={chooseDate} value={date} />
         <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.rowTitle}>
           {dateText}
         </Text>
+        {date && (dateKind === 'meal' ? slotChange(date) : dishChange(date, dateDishId)) ? (
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.problem}>
+            {REPLACES_CHANGE}
+          </Text>
+        ) : null}
         <View accessibilityRole="radiogroup" style={styles.chips}>
           <OptionChip label="Whole meal" onPress={() => setDateKind('meal')} selected={dateKind === 'meal'} />
           <OptionChip disabled={dishes.length === 0} label="One dish" onPress={() => setDateKind('dish')} selected={dateKind === 'dish'} />
@@ -490,7 +551,12 @@ export function ChefDailyLimitsScreen() {
                 value={dateValues.subscriber}
               />
             </View>
-            <SwitchRow onChange={setDateClosed} title="Close this meal that day" value={dateClosed} />
+            <SwitchRow
+              hint="Your other meals are not changed."
+              onChange={setDateClosed}
+              title={`Close ${slotName} on this day`}
+              value={dateClosed}
+            />
           </>
         ) : (
           <>
@@ -503,12 +569,17 @@ export function ChefDailyLimitsScreen() {
               <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.rowTitle, styles.rowText]}>
                 Most plates
               </Text>
-              <PlateStepper name="Plates of this dish that day" onChange={setDateDishMax} value={dateDishMax} />
+              <PlateStepper name="Plates of this dish that day" onChange={max => setDateDishMax(clampPlates(max))} value={dateDishMax} />
             </View>
-            <SwitchRow onChange={setDateDishClosed} title="Close this dish that day" value={dateDishClosed} />
+            <SwitchRow hint="It stays on your menu." onChange={setDateDishClosed} title="Close this dish on this day" value={dateDishClosed} />
           </>
         )}
-        <ChefActionButton busy={busy} disabled={!date || frozen || busy} label="Save date" onPress={() => saveDate()} />
+        <ChefActionButton
+          busy={busy}
+          disabled={!date || (dateKind === 'dish' && !dateDishId) || frozen || busy}
+          label="Save date"
+          onPress={() => saveDate()}
+        />
         <Problem text={sheetProblem} />
         {changes.length > 0 ? (
           <View style={styles.changes}>
@@ -537,9 +608,9 @@ const styles = StyleSheet.create({
   divider: {height: borderWidth.standard, marginVertical: spacing.xs, backgroundColor: colors.border},
   stepper: {flexDirection: 'row', alignItems: 'center'},
   stepperButton: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center'},
-  stepperValue: {minWidth: 48, paddingVertical: 0, color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.bold, textAlign: 'center'},
-  bar: {flexDirection: 'row', height: 10, gap: 2, marginTop: spacing.sm, marginBottom: spacing.xs, borderRadius: 5, overflow: 'hidden'},
-  barPart: {height: 10},
+  stepperValue: {minWidth: touchTarget.minimum, paddingVertical: 0, color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.bold, textAlign: 'center'},
+  bar: {flexDirection: 'row', height: BAR_HEIGHT, gap: borderWidth.strong, marginTop: spacing.sm, marginBottom: spacing.xs, borderRadius: radius.pill, overflow: 'hidden'},
+  barPart: {height: BAR_HEIGHT},
   barBooked: {backgroundColor: colors.flameRed},
   barFree: {backgroundColor: colors.flameRed, opacity: 0.3},
   barNormal: {backgroundColor: colors.border},

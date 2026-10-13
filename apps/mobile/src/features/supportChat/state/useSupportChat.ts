@@ -26,8 +26,11 @@ export interface ChatProblem {
   unavailable: boolean;
 }
 
-// The server always sends Retry-After on a 429; this only covers a gateway that strips it.
+// A 429 from the gateway itself carries no chat code; wait this long when it also carries no Retry-After.
 const DEFAULT_WAIT_SECONDS = 30;
+// The shared parser clamps Retry-After to an hour and drops anything it cannot read (a day is 5 digits).
+const MAX_PARSED_WAIT_SECONDS = 3600;
+const CHAT_LIMIT_CODE = 'SUPPORT_CHAT_RATE_LIMITED';
 
 /** The chef sees the short ticket number every other chef screen shows (#01042), not the long case number. */
 export function ticketCopy(contextRole: SupportChatContextRole, caseNumber: string): string {
@@ -85,15 +88,24 @@ export function useSupportChat(
       AccessibilityInfo.announceForAccessibility(raised ? `${reply} ${ticketCopy(contextRole, raised.caseNumber)}` : reply);
     } catch (caught) {
       const error = toAppApiError(caught);
+      const chatLimit = error.code === CHAT_LIMIT_CODE;
       settle('failed');
-      setProblem({message: error.message, unavailable: error.status === 503 || isRouteNotPublished(error)});
+      setProblem({
+        // Only the chat's own limit shows the server's wording ("today's chat limit... email support"); other 429s stay generic.
+        message: (chatLimit && error.backendMessage) || error.message,
+        unavailable: error.status === 503 || isRouteNotPublished(error),
+      });
       if (error.status === 429) {
         setWaiting(true);
         clearTimeout(waitTimer.current);
-        waitTimer.current = setTimeout(() => {
-          setWaiting(false);
-          setProblem(null);
-        }, (error.retryAfterSeconds ?? DEFAULT_WAIT_SECONDS) * 1000);
+        // The daily cap sends a wait the parser cannot read or clamps to its ceiling: Send stays off for this visit.
+        const restOfVisit = chatLimit && (error.retryAfterSeconds === undefined || error.retryAfterSeconds >= MAX_PARSED_WAIT_SECONDS);
+        if (!restOfVisit) {
+          waitTimer.current = setTimeout(() => {
+            setWaiting(false);
+            setProblem(null);
+          }, (error.retryAfterSeconds ?? DEFAULT_WAIT_SECONDS) * 1000);
+        }
       }
     } finally {
       busy.current = false;
@@ -101,14 +113,21 @@ export function useSupportChat(
     }
   };
 
-  const send = (text: string) => {
+  const submit = (text: string, fromDraft: boolean) => {
     const content = text.trim();
     if (!content || busy.current || waiting) {
       return;
     }
-    setDraft('');
+    // A suggestion leaves a half-typed message alone; only the draft that was sent is cleared.
+    if (fromDraft) {
+      setDraft('');
+    }
     deliver(content, messages).catch(() => undefined);
   };
+  /** A suggested question. */
+  const send = (text: string) => submit(text, false);
+  /** The Send button: sends what is typed and empties the box. */
+  const sendDraft = () => submit(draft, true);
 
   const retry = (failed: ChatBubble) => {
     if (!busy.current && !waiting) {
@@ -116,5 +135,5 @@ export function useSupportChat(
     }
   };
 
-  return {messages, draft, setDraft, pending, waiting, problem, supportCase, send, retry};
+  return {messages, draft, setDraft, pending, waiting, problem, supportCase, send, sendDraft, retry};
 }

@@ -79,7 +79,7 @@ function useReveal(text: string, animate: boolean): string {
 const CRAVES_LOGO = require('../../../../assets/brand/craves-app-icon-1024.png');
 
 /** The assistant speaks as Craves, so it wears the Craves logo. */
-export function ChatAvatar({size = 32}: {size?: number}) {
+export function ChatAvatar({size = iconSize.xl}: {size?: number}) {
   return (
     <Image
       accessibilityElementsHidden
@@ -205,7 +205,7 @@ export function TypingDots({reduceMotion, chef}: {reduceMotion: boolean; chef: b
       {chef ? null : <ChatAvatar />}
       <View style={[styles.bubble, styles.assistantBubble, chef && styles.chefAssistantBubble, styles.typing]}>
         {[0, 1, 2].map(dot => {
-          // Each dot rises and brightens in turn, then rests.
+          // Each dot rises and brightens in turn, then rests (animation offsets and opacities have no token).
           const start = dot * 0.2;
           const range = {inputRange: [0, start, start + 0.2, start + 0.4, 1], extrapolate: 'clamp' as const};
           return (
@@ -227,7 +227,7 @@ export function TypingDots({reduceMotion, chef}: {reduceMotion: boolean; chef: b
 }
 
 const styles = StyleSheet.create({
-  avatarSpace: {width: 32},
+  avatarSpace: {width: iconSize.xl},
   assistantRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -243,12 +243,12 @@ const styles = StyleSheet.create({
   },
   bubble: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
+    paddingVertical: spacing.sm,
     borderRadius: radius.lg,
   },
   assistantBubble: {
     alignSelf: 'flex-start',
-    borderBottomLeftRadius: spacing.xxs + 2,
+    borderBottomLeftRadius: spacing.xxs,
     backgroundColor: colors.surfaceMuted,
   },
   chefAssistantBubble: {
@@ -256,10 +256,10 @@ const styles = StyleSheet.create({
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
   },
+  // No fixed lineHeight on message text: the design tokens leave it out so scaled text is never clipped.
   assistantText: {
     color: colors.textPrimary,
     fontSize: typography.body,
-    lineHeight: 22,
   },
   strong: {fontWeight: fontWeight.semibold},
   link: {
@@ -273,14 +273,13 @@ const styles = StyleSheet.create({
     paddingLeft: spacing.xxxl,
   },
   userBubble: {
-    borderBottomRightRadius: spacing.xxs + 2,
+    borderBottomRightRadius: spacing.xxs,
     backgroundColor: colors.flameRedAccessible,
   },
   chefUserBubble: {backgroundColor: colors.errorSoft},
   userText: {
     color: colors.white,
     fontSize: typography.body,
-    lineHeight: 22,
   },
   chefUserText: {color: colors.textPrimary},
   statusRow: {
@@ -314,12 +313,12 @@ const styles = StyleSheet.create({
   typing: {
     flexDirection: 'row',
     gap: spacing.xxs,
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.md,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: spacing.xs,
+    height: spacing.xs,
+    borderRadius: spacing.xxs,
     backgroundColor: colors.textSecondary,
   },
 });

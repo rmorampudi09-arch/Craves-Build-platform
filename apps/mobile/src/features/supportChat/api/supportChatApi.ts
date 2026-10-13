@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {AppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
 
-// Manifest marker for the APIM coverage check; the chat falls back to Call when the gateway answers not published.
+// Manifest marker for the APIM coverage check; when the gateway answers not published the chat falls back to Call (chef) or Email (customer).
 export const SUPPORT_CHAT_AVAILABLE = false;
 export const SUPPORT_CHAT_PATH = '/api/v1/support/chat';
 export const SUPPORT_CHAT_MAX_MESSAGES = 20;

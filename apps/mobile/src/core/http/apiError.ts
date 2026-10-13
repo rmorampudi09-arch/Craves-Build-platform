@@ -23,6 +23,8 @@ export class AppApiError extends Error {
     readonly details: readonly string[] = [],
     /** Seconds from a 429 Retry-After header; never retry before it elapses. */
     readonly retryAfterSeconds?: number,
+    /** The server's own plain text, kept apart from `message` so a screen can opt in to showing it. */
+    readonly backendMessage?: string,
   ) {
     super(message);
     this.name = 'AppApiError';
@@ -124,7 +126,7 @@ function publicHttpMessage(status: number, backendMessage?: string): string {
     return backendMessage ?? 'Some information could not be accepted.';
   }
   if (status === 429) {
-    return backendMessage ?? 'Too many requests. Please wait a moment and try again.';
+    return 'Too many requests. Please wait a moment and try again.';
   }
   if (status >= 500) {
     return 'Craves is temporarily unavailable. Please try again.';
@@ -181,6 +183,7 @@ export function toAppApiError(error: unknown): AppApiError {
       false,
       details,
       status === 429 ? retryAfterSecondsFrom(error) : undefined,
+      backendMessage,
     );
   }
 

@@ -114,17 +114,18 @@ describe('supportChatApi', () => {
     });
   });
 
-  it('lets a 429 reach the caller with its message and Retry-After seconds', async () => {
+  it('lets a 429 reach the caller with the server text and Retry-After seconds', async () => {
     postMock.mockRejectedValueOnce(
       new AppApiError(
         'SUPPORT_CHAT_RATE_LIMITED',
-        'Too many messages. Please wait a moment.',
+        'Too many requests. Please wait a moment and try again.',
         429,
         undefined,
         true,
         false,
         [],
         30,
+        'Too many messages. Please wait a moment.',
       ),
     );
 
@@ -132,7 +133,7 @@ describe('supportChatApi', () => {
       supportChatApi.send('CHEF', conversation(1)),
     ).rejects.toMatchObject({
       status: 429,
-      message: 'Too many messages. Please wait a moment.',
+      backendMessage: 'Too many messages. Please wait a moment.',
       retryAfterSeconds: 30,
     });
     expect(postMock).toHaveBeenCalledTimes(1);

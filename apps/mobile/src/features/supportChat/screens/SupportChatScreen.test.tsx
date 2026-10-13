@@ -2,7 +2,8 @@ import React from 'react';
 import {AccessibilityInfo, Linking, Text, TextInput} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
-import {AppApiError} from '../../../core/http/apiError';
+import {AxiosError, AxiosHeaders, type InternalAxiosRequestConfig} from 'axios';
+import {AppApiError, toAppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
 import {ChefToastProvider} from '../../chefShell/components/ui';
 import {richText} from '../components/ChatBubbles';
@@ -36,17 +37,22 @@ jest.mock('../../../core/http/httpClient', () => ({httpClient: {post: jest.fn()}
 const postMock = httpClient.post as jest.Mock;
 const orderId = '11111111-1111-4111-8111-111111111111';
 const NOT_PUBLISHED = new AppApiError('HTTP_403', 'Forbidden', 403);
-const rateLimited = (seconds: number) =>
-  new AppApiError(
-    'SUPPORT_CHAT_RATE_LIMITED',
-    'Too many messages. Please wait a moment.',
-    429,
-    undefined,
-    true,
-    false,
-    [],
-    seconds,
+const RATE_MESSAGE = 'Too many messages. Please wait a moment.';
+const DAILY_MESSAGE = "You've reached today's chat limit. Please email support@craves.in.";
+const GENERIC_429 = 'Too many requests. Please wait a moment and try again.';
+/** A 429 as the server sends it, read by the real error parser (the generic text stays in `message`). */
+const serverRateLimit = (retryAfter: string | undefined, message = RATE_MESSAGE, code = 'SUPPORT_CHAT_RATE_LIMITED') => {
+  const config = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
+  return toAppApiError(
+    new AxiosError('failed', 'ERR_BAD_REQUEST', config, undefined, {
+      data: {code, message},
+      status: 429,
+      statusText: '',
+      headers: new AxiosHeaders(retryAfter ? {'Retry-After': retryAfter} : {}),
+      config,
+    }),
   );
+};
 let tree: renderer.ReactTestRenderer;
 
 async function mount(contextRole: 'CUSTOMER' | 'CHEF' = 'CUSTOMER', withOrder = contextRole === 'CUSTOMER') {
@@ -213,7 +219,7 @@ describe('customer chat', () => {
 
   test('shows the rate-limit message, keeps the text, and turns Send off until Retry-After has passed', async () => {
     jest.useFakeTimers();
-    postMock.mockRejectedValueOnce(rateLimited(30));
+    postMock.mockRejectedValueOnce(serverRateLimit('30'));
     await mount();
 
     await sendMessage('Hello?');
@@ -243,6 +249,69 @@ describe('customer chat', () => {
       pressables('Send message')[0].props.onPress();
     });
     expect(postMock).toHaveBeenCalledTimes(2);
+  });
+
+  test('shows the server text only for the chat limit: another 429 keeps the generic copy', async () => {
+    postMock.mockRejectedValueOnce(serverRateLimit('30', 'Your OTP was sent 3 times today.', 'OTP_RATE_LIMIT'));
+    await mount();
+
+    await sendMessage('Hello?');
+
+    expect(screenText()).toContain(GENERIC_429);
+    expect(screenText()).not.toContain('OTP was sent');
+  });
+
+  test.each([
+    ['86400 (a day, more digits than the parser reads)', '86400'],
+    ['50000', '50000'],
+    ['5000 (over an hour, clamped by the parser)', '5000'],
+    ['no Retry-After at all', undefined],
+  ])('keeps the daily limit notice and Send off for the whole visit when Retry-After is %s', async (_name, retryAfter) => {
+    jest.useFakeTimers();
+    postMock.mockRejectedValueOnce(serverRateLimit(retryAfter, DAILY_MESSAGE));
+    await mount();
+
+    await sendMessage('Hello?');
+
+    expect(screenText()).toContain(DAILY_MESSAGE);
+    expect(sendState().disabled).toBe(true);
+    await type('Another question');
+    await act(async () => {
+      jest.advanceTimersByTime(48 * 60 * 60 * 1000);
+    });
+    expect(screenText()).toContain(DAILY_MESSAGE);
+    expect(sendState().disabled).toBe(true);
+    await act(async () => {
+      pressables('Send message')[0].props.onPress();
+      pressables('Retry')[0].props.onPress();
+    });
+    expect(postMock).toHaveBeenCalledTimes(1);
+    expect(tree.root.findByType(TextInput).props.value).toBe('Another question');
+  });
+
+  test('a suggestion tap sends the suggestion and leaves a half-typed message in the box', async () => {
+    await mount();
+
+    await type('half typed');
+    await act(async () => {
+      pressables('How do refunds work?')[0].props.onPress();
+    });
+
+    expect(postMock.mock.calls[0][1].messages).toEqual([{role: 'user', content: 'How do refunds work?'}]);
+    expect(tree.root.findByType(TextInput).props.value).toBe('half typed');
+  });
+
+  test('after a failed send, the next request does not carry the failed text', async () => {
+    postMock.mockRejectedValueOnce(new AppApiError('HTTP_500', 'Craves is temporarily unavailable. Please try again.', 500));
+    await mount();
+
+    await sendMessage('first try');
+    expect(screenText()).toMatch(/first tryNot sent/);
+    await sendMessage('second try');
+
+    expect(postMock).toHaveBeenCalledTimes(2);
+    expect(postMock.mock.calls[1][1].messages).toEqual([{role: 'user', content: 'second try'}]);
+    expect(JSON.stringify(postMock.mock.calls[1][1])).not.toContain('first try');
   });
 
   test.each([
@@ -356,7 +425,7 @@ describe('chef chat', () => {
 
   test('turns Send off after a 429 until Retry-After has passed, and keeps the failed message', async () => {
     jest.useFakeTimers();
-    postMock.mockRejectedValueOnce(rateLimited(45));
+    postMock.mockRejectedValueOnce(serverRateLimit('45'));
     await mount('CHEF');
 
     await sendMessage('Hello?');
@@ -370,6 +439,33 @@ describe('chef chat', () => {
       jest.advanceTimersByTime(45_000);
     });
     expect(sendState().disabled).toBe(false);
+  });
+
+  test('shows the daily limit notice and keeps Send off for the whole visit', async () => {
+    jest.useFakeTimers();
+    postMock.mockRejectedValueOnce(serverRateLimit('86400', DAILY_MESSAGE));
+    await mount('CHEF');
+
+    await sendMessage('Hello?');
+    await type('Next');
+    await act(async () => {
+      jest.advanceTimersByTime(48 * 60 * 60 * 1000);
+    });
+
+    expect(screenText()).toContain(DAILY_MESSAGE);
+    expect(sendState().disabled).toBe(true);
+  });
+
+  test('a suggestion tap sends the suggestion and leaves a half-typed message in the box', async () => {
+    await mount('CHEF');
+
+    await type('half typed');
+    await act(async () => {
+      pressables('How do I add a dish?')[0].props.onPress();
+    });
+
+    expect(postMock.mock.calls[0][1].messages).toEqual([{role: 'user', content: 'How do I add a dish?'}]);
+    expect(tree.root.findByType(TextInput).props.value).toBe('half typed');
   });
 
   test('says chat is not available and offers Call, which dials the Craves support number', async () => {

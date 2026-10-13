@@ -141,7 +141,7 @@ describe('typed HTTP client foundation', () => {
     expect(failure(503, '7').retryAfterSeconds).toBeUndefined();
   });
 
-  it('keeps the plain message the backend sends with a 429, and falls back when it sends none', () => {
+  it('keeps the generic 429 message for every caller and hands the backend text over separately', () => {
     const config = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
     const failure = (data: unknown) =>
       toAppApiError(
@@ -154,10 +154,13 @@ describe('typed HTTP client foundation', () => {
         }),
       );
 
-    expect(
-      failure({code: 'SUPPORT_CHAT_RATE_LIMITED', message: 'Too many messages. Please wait a moment.'}).message,
-    ).toBe('Too many messages. Please wait a moment.');
+    const otp = failure({code: 'OTP_COOLDOWN', message: 'Wait 28 seconds before asking for another code.'});
+    expect(otp.code).toBe('OTP_COOLDOWN');
+    expect(otp.message).toBe('Too many requests. Please wait a moment and try again.');
+    expect(otp.backendMessage).toBe('Wait 28 seconds before asking for another code.');
+    expect(failure({code: 'AUTH_RATE_LIMITED'}).message).toBe('Too many requests. Please wait a moment and try again.');
     expect(failure(undefined).message).toBe('Too many requests. Please wait a moment and try again.');
+    expect(failure(undefined).backendMessage).toBeUndefined();
   });
 
   it('normalizes cancellation without making it retriable', () => {

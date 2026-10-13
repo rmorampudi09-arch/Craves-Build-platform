@@ -48,6 +48,8 @@ const SUGGESTIONS: Record<SupportChatContextRole, string[]> = {
     'Is my application approved?',
   ],
 };
+// Five lines of typing, then the box scrolls. No token for a text-area cap; the ticket screen uses the same 120.
+const INPUT_MAX_HEIGHT = 120;
 const CHEF_UNAVAILABLE = 'Chat is not available right now. Call Craves support.';
 const CUSTOMER_UNAVAILABLE = 'Chat is not available right now. Email support@craves.in.';
 
@@ -263,7 +265,7 @@ function ChefChat({chat, orderId}: {chat: Chat; orderId: string | undefined}) {
               busy={chat.pending}
               disabled={blocked}
               label="Send"
-              onPress={() => chat.send(chat.draft)}
+              onPress={chat.sendDraft}
             />
           </View>
           <Disclosure />
@@ -306,7 +308,7 @@ function CustomerChat({chat, orderId}: {chat: Chat; orderId: string | undefined}
     <ScreenShell backgroundColor={colors.white} edges={['top', 'bottom']} testID="support-chat">
       <View style={styles.titleBar}>
         <IconButton icon="arrow-left" accessibilityLabel="Back" onPress={() => navigation.goBack()} />
-        <ChatAvatar size={40} />
+        <ChatAvatar size={iconSize.xxl} />
         <View style={styles.flex}>
           <Text accessibilityRole="header" style={styles.title}>
             Craves support
@@ -348,7 +350,7 @@ function CustomerChat({chat, orderId}: {chat: Chat; orderId: string | undefined}
             accessibilityRole="button"
             accessibilityState={{disabled: blocked, busy: chat.pending}}
             disabled={blocked}
-            onPress={() => chat.send(chat.draft)}
+            onPress={chat.sendDraft}
             style={({pressed}) => [styles.send, blocked && styles.sendDisabled, pressed && styles.pressed]}
             testID="support-chat-send">
             <Icon name="send" size={iconSize.sm} color={blocked ? colors.textSecondary : colors.white} surface={false} />
@@ -404,7 +406,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     marginTop: spacing.xs,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs - 2,
+    paddingVertical: spacing.xs,
     borderRadius: radius.pill,
     borderWidth: borderWidth.standard,
     borderColor: colors.errorSoft,
@@ -468,13 +470,13 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   customerInput: {
-    maxHeight: 120,
+    maxHeight: INPUT_MAX_HEIGHT,
     paddingVertical: spacing.xs,
   },
   chefInputBox: {
     flex: 1,
     minHeight: touchTarget.minimum,
-    maxHeight: 120,
+    maxHeight: INPUT_MAX_HEIGHT,
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
@@ -495,6 +497,5 @@ const styles = StyleSheet.create({
   disclosure: {
     color: colors.textSecondary,
     fontSize: typography.tiny,
-    lineHeight: 16,
   },
 });

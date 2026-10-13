@@ -35,6 +35,11 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },
       {
+        // Vite content-hashed landing bundles; with max-age=0 the edge re-fetched them on every visit.
+        source: "/landing-v20/assets/:filename(index-[A-Za-z0-9_-]{8}\\.(?:js|css))",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+      {
         source: "/api/:path*",
         headers: [
           { key: "Cache-Control", value: "private, no-store, max-age=0" },

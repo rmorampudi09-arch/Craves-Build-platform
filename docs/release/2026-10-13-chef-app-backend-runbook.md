@@ -161,14 +161,14 @@ cd ~/c8 && az acr build -r $ACR -t craves/catalog-service:$TAG services/catalog-
 1.3a Chef pictures, upload the 18 hosted faces (new files only, nothing existing is touched; do it before the deploy so the faces are already live when the new image starts handing out their links). `PUT /api/v1/kitchens/me/chef-avatar` stores `<public media base>/public/chef-avatars/chef-avatar-NN.jpg` for the chef who picks face NN, and real chef-photo uploads (`POST /kitchens/me/photos?kind=CHEF`) now answer 400 `CHEF_PHOTO_UPLOAD_DISABLED`; the kitchen photo is unchanged. The faces are the 18 JPEGs (512x512) in `docs/release/chef-avatars` of the `~/c8` checkout. Step 1.1 shows only the names of the storage settings, so read the real values from the catalog app (read-only). First the name of the secret that holds the storage connection string:
 
 ```bash
-export MEDIA_SECRET=$(az containerapp show -g $RG -n $CATALOG_APP --query "properties.template.containers[0].env[?name=='CRAVES_STORAGE_ENDPOINT_VALUE'].secretRef | [0]" -o tsv); echo "secret: $MEDIA_SECRET"
+MEDIA_SECRET=$(az containerapp show -g $RG -n $CATALOG_APP --query "properties.template.containers[0].env[?name=='CRAVES_STORAGE_ENDPOINT_VALUE'].secretRef | [0]" -o tsv); echo "secret: $MEDIA_SECRET"
 ```
-Then that secret, read into the shell without printing it (the second half prints only the protocol and account name, never the key):
+Then that secret, read into a plain shell variable (no `export`, so no command started later inherits the key) without printing it (the second half prints only the protocol and account name, never the key):
 
 ```bash
-export MEDIA_CS=$(az containerapp secret show -g $RG -n $CATALOG_APP --secret-name $MEDIA_SECRET --query value -o tsv); echo "$MEDIA_CS" | tr ';' '\n' | grep -E '^(DefaultEndpointsProtocol|AccountName)='
+MEDIA_CS=$(az containerapp secret show -g $RG -n $CATALOG_APP --secret-name $MEDIA_SECRET --query value -o tsv); echo "$MEDIA_CS" | tr ';' '\n' | grep -E '^(DefaultEndpointsProtocol|AccountName)='
 ```
-Expect `DefaultEndpointsProtocol=https` and an `AccountName=`; the repo's release scripts name the media account `stcravesmediakmqgfy` (`scripts/release/chef_onboarding_release.py`), so it should match. If the secret name is empty or nothing is printed, STOP and send what you saw to Claude. Then the container and the public media base the catalog uses:
+Expect `DefaultEndpointsProtocol=https` and an `AccountName=`; the repo's release scripts name the media account `stcravesmediakmqgfy` (`scripts/release/chef_onboarding_release.py`), so it should match. If the secret name is empty or nothing is printed, STOP: run `unset MEDIA_CS MEDIA_SECRET` first, then send what you saw to Claude. Then the container and the public media base the catalog uses:
 
 ```bash
 export MEDIA_CONTAINER=$(az containerapp show -g $RG -n $CATALOG_APP --query "properties.template.containers[0].env[?name=='CRAVES_STORAGE_MEDIA_CONTAINER'].value | [0]" -o tsv); echo "container: $MEDIA_CONTAINER"
@@ -176,10 +176,10 @@ export MEDIA_CONTAINER=$(az containerapp show -g $RG -n $CATALOG_APP --query "pr
 ```bash
 export MEDIA_BASE=$(az containerapp show -g $RG -n $CATALOG_APP --query "properties.template.containers[0].env[?name=='CRAVES_MEDIA_PUBLIC_BASE_URL'].value | [0]" -o tsv); echo "base: $MEDIA_BASE"
 ```
-Expect `media` and `https://craves.in/media` (the catalog README gives the base for production; the container's app default is `media`). If the container is blank the app default `media` applies: `export MEDIA_CONTAINER=media`. If the base is blank the app links straight at the blob container: `export MEDIA_BASE=https://<AccountName printed above>.blob.core.windows.net/$MEDIA_CONTAINER`. Upload (Enter is yours; this writes 18 new blobs under `public/chef-avatars/` of the media container, the content never changes so a re-run is harmless):
+Expect `media` and `https://craves.in/media` (the catalog README gives the base for production; the container's app default is `media`). If the container is blank the app default `media` applies: `export MEDIA_CONTAINER=media`. If the base is blank the app links straight at the blob container: `export MEDIA_BASE=https://<AccountName printed above>.blob.core.windows.net/$MEDIA_CONTAINER`. Upload (Enter is yours; this writes 18 new blobs under `public/chef-avatars/` of the media container, the content never changes and `--overwrite` lets a re-run replace the same bytes instead of failing with a blob-exists error, so a re-run is harmless; if the upload fails, run `unset MEDIA_CS MEDIA_SECRET` first, then send the error to Claude):
 
 ```bash
-cd ~/c8 && az storage blob upload-batch --connection-string "$MEDIA_CS" -d $MEDIA_CONTAINER -s docs/release/chef-avatars --destination-path public/chef-avatars --pattern "*.jpg" --content-type image/jpeg --content-cache-control "public, max-age=31536000, immutable"
+cd ~/c8 && az storage blob upload-batch --connection-string "$MEDIA_CS" -d $MEDIA_CONTAINER -s docs/release/chef-avatars --destination-path public/chef-avatars --pattern "*.jpg" --overwrite --content-type image/jpeg --content-cache-control "public, max-age=31536000, immutable"
 ```
 Check one file through the public address, then all 18:
 
@@ -189,7 +189,7 @@ curl -sI "$MEDIA_BASE/public/chef-avatars/chef-avatar-01.jpg"
 ```bash
 for i in $(seq -w 1 18); do curl -s -o /dev/null -w "%{http_code} %{content_type}\n" "$MEDIA_BASE/public/chef-avatars/chef-avatar-$i.jpg"; done | sort | uniq -c
 ```
-Expect `HTTP/2 200` and `content-type: image/jpeg` for the first, and exactly one line `18 200 image/jpeg` for the second. Anything else: do not go on to 1.4, send the output to Claude. Last, remove the connection string from the shell:
+Expect `HTTP/2 200` and `content-type: image/jpeg` for the first, and exactly one line `18 200 image/jpeg` for the second. Anything else: do not go on to 1.4, run `unset MEDIA_CS MEDIA_SECRET` first, then send the output to Claude. Last, remove the connection string from the shell:
 
 ```bash
 unset MEDIA_CS MEDIA_SECRET

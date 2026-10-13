@@ -71,6 +71,7 @@ ROUTES=(
   'kitchen|chef-app-delete-menu-item|DELETE|/menu-items/{menuItemId}|json'
   'kitchen|chef-app-upload-kitchen-photo|POST|/photos|upload'
   'kitchen|chef-app-delete-kitchen-photo|DELETE|/photos/{kind}|json'
+  'kitchen|chef-app-put-chef-avatar|PUT|/chef-avatar|json'
   'kitchen|chef-app-get-kitchen-settings|GET|/settings|json'
   'kitchen|chef-app-put-kitchen-settings|PUT|/settings|json'
   'orders|chef-app-order-history-page|GET|/page|json'

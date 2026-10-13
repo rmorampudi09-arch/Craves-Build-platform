@@ -1,5 +1,5 @@
 import {EMPTY_ONBOARDING, type ChefEvidence, type OnboardingState} from '../../chefOnboarding/api/chefOnboardingApi';
-import {documentRows, uploadChoices, verificationBanner} from './documentRows';
+import {documentRows, documentsSummary, uploadChoices, verificationBanner} from './documentRows';
 
 const evidence = (documentType: string, status: ChefEvidence['status'], reviewReason: string | null = null): ChefEvidence => ({
   id: `id-${documentType}`,
@@ -93,5 +93,18 @@ describe('uploadChoices', () => {
       {type: 'KITCHEN_PHOTO_1', title: 'Kitchen photo'},
       {type: 'KITCHEN_PHOTO_2', title: 'Cooking setup photo'},
     ]);
+  });
+});
+
+describe('documentsSummary', () => {
+  it('names what was checked, as in the board: FSSAI, Aadhaar', () => {
+    expect(documentsSummary(state())).toBe('FSSAI, Aadhaar');
+    expect(documentsSummary(state({details: {...EMPTY_ONBOARDING, proofKind: 'PAN', fssaiNumber: ''}}))).toBe('PAN');
+    expect(documentsSummary(state({details: {...EMPTY_ONBOARDING, proofKind: 'OTHER_GOVERNMENT_ID', fssaiNumber: '12345678901234'}}))).toBe('FSSAI, ID');
+  });
+
+  it('is empty when the application says neither', () => {
+    expect(documentsSummary(state({details: null}))).toBe('');
+    expect(documentsSummary(state({details: {...EMPTY_ONBOARDING, fssaiNumber: ''}}))).toBe('');
   });
 });

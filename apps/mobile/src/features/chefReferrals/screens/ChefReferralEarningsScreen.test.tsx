@@ -66,12 +66,12 @@ describe('ChefReferralEarningsScreen', () => {
   it('shows this month against the monthly limit and the credits that were posted', async () => {
     await mount();
     expect(ui.has('This month')).toBe(true);
-    expect(ui.has('₹450')).toBe(true);
-    expect(ui.has('of ₹1,500 monthly limit')).toBe(true);
-    expect(ui.has('₹1,050 left this month')).toBe(true);
+    expect(ui.has('₹450.00')).toBe(true);
+    expect(ui.has('of ₹1,500.00 monthly limit')).toBe(true);
+    expect(ui.has('₹1,050.00 left this month')).toBe(true);
     const fill = tree.root.findAll(node => node.props.testID === 'referral-month-progress')[0];
     expect(StyleSheet.flatten(fill.props.style).width).toBe('30%');
-    for (const line of ['Referral credit', '+₹200', 'Referral reversal', '−₹50', '1 Oct']) {
+    for (const line of ['Referral credit', '+₹200.00', 'Referral reversal', '−₹50.00', '1 Oct']) {
       expect(ui.has(line)).toBe(true);
     }
   });
@@ -80,7 +80,7 @@ describe('ChefReferralEarningsScreen', () => {
     mockEarnings.get.mockResolvedValue({...EARNINGS, recentPostings: [], monthUsedPaise: '0', monthRemainingPaise: '150000'});
     await mount();
     expect(ui.has('No referral credits yet')).toBe(true);
-    expect(ui.has('₹0')).toBe(true);
+    expect(ui.has('₹0.00')).toBe(true);
   });
 
   it('shows Coming soon, not an error, when the route is not published', async () => {

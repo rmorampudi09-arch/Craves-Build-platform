@@ -113,6 +113,21 @@ describe('ChefReviewsScreen', () => {
     expect(ui.has('No reviews in this group')).toBe(true);
   });
 
+  it('says only the loaded reviews were checked, and offers Load more, when a filter matches none and more exist', async () => {
+    mockApi.list
+      .mockResolvedValueOnce({items: [review(1, 5)], nextCursor: 'next-1', hasMore: true})
+      .mockResolvedValueOnce({items: [review(2, 2)], nextCursor: null, hasMore: false});
+    await mount();
+    await ui.press('3★ and below');
+    expect(ui.has('No loaded reviews in this group')).toBe(true);
+    expect(ui.has('No reviews in this group')).toBe(false);
+    await ui.press('Load more');
+    await ui.settle();
+    expect(mockApi.list).toHaveBeenLastCalledWith(expect.objectContaining({cursor: 'next-1'}));
+    expect(ui.has('Review text 2')).toBe(true);
+    expect(ui.has('No loaded reviews in this group')).toBe(false);
+  });
+
   it('loads older reviews on request', async () => {
     mockApi.list
       .mockResolvedValueOnce({items: [review(1, 5)], nextCursor: 'next-1', hasMore: true})

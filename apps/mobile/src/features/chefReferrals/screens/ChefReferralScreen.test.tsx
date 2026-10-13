@@ -87,11 +87,12 @@ describe('ChefReferralScreen', () => {
     expect(ui.has('RELANGI25ABCDEFG')).toBe(true);
     expect(ui.has('3')).toBe(true);
     expect(ui.has('Joined')).toBe(true);
-    expect(ui.has('₹150')).toBe(true);
-    expect(ui.has('Pending')).toBe(true);
-    expect(ui.has('₹420')).toBe(true);
+    expect(ui.has('₹150.00')).toBe(true);
+    expect(ui.has('On hold')).toBe(true);
+    expect(ui.has('Pending')).toBe(false);
+    expect(ui.has('₹420.00')).toBe(true);
     expect(ui.has('Earned')).toBe(true);
-    expect(ui.byPrefix('Referral earnings')?.props.accessibilityLabel).toBe('Referral earnings, ₹450 this month · limit ₹1,500');
+    expect(ui.byPrefix('Referral earnings')?.props.accessibilityLabel).toBe('Referral earnings, ₹450.00 this month · limit ₹1,500.00');
   });
 
   it('copies the code and says Copied only when the phone really copied it', async () => {

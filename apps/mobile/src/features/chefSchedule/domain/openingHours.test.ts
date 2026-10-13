@@ -3,6 +3,7 @@ import {
   defaultRanges,
   rangesForDay,
   summarizeRanges,
+  formatHoursTime,
   timeOptions,
   validateRanges,
   withDayRanges,
@@ -79,5 +80,20 @@ describe('opening hours', () => {
     expect(grid).toHaveLength(38);
     expect(timeOptions(['10:45'])).toContain('10:45');
     expect(timeOptions(['10:45']).indexOf('10:45')).toBe(timeOptions(['10:45']).indexOf('10:30') + 1);
+  });
+
+  it('offers Midnight (23:59) as the last choice for a closing time only', () => {
+    const closing = timeOptions([], true);
+    expect(closing[closing.length - 1]).toBe('23:59');
+    expect(closing).toHaveLength(39);
+    expect(timeOptions([])).not.toContain('23:59');
+    // A 23:59 already saved as a closing time is not offered as an opening time.
+    expect(timeOptions([], false)).not.toContain('23:59');
+  });
+
+  it('writes 23:59 as Midnight and any other time as a clock time', () => {
+    expect(formatHoursTime('23:59')).toBe('Midnight');
+    expect(formatHoursTime('22:00')).toBe('10:00 PM');
+    expect(summarizeRanges([{opensAt: '18:00', closesAt: '23:59'}], true)).toEqual(['6:00 PM – Midnight']);
   });
 });

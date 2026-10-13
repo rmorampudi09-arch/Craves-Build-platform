@@ -4,8 +4,8 @@ import {useNavigation, type NavigationProp} from '@react-navigation/native';
 import type {ChefProductStackParamList} from '../../../app/navigation/types';
 import {colors, fontWeight, spacing, textDefaults, typography} from '../../../design/tokens';
 import type {IconName} from '../../../shared/components/Icon';
-import {chefOnboardingApi} from '../../chefOnboarding/api/chefOnboardingApi';
 import {ReadState} from '../../chefProfile/components/ReadState';
+import {useChefOnboardingState} from '../../chefProfile/state/useChefOnboardingState';
 import {useChefRead} from '../../chefProfile/state/useChefRead';
 import {
   ChefActionButton,
@@ -16,6 +16,7 @@ import {
   ListRow,
   SectionHeader,
   StatusChip,
+  useChefToast,
 } from '../../chefShell/components/ui';
 import {chefSupportCasesApi} from '../api/chefSupportCasesApi';
 import {ticketNumber, ticketStatus, ticketSubtitle} from '../domain/supportPresentation';
@@ -30,10 +31,20 @@ export const SUPPORT_TOPICS: readonly {title: string; icon: IconName}[] = [
 /** Help & support: call or chat with Craves, start a chat on a common topic, and the chef's own tickets. */
 export function ChefSupportScreen() {
   const navigation = useNavigation<NavigationProp<ChefProductStackParamList>>();
+  const toast = useChefToast();
   // Calling works whether or not the support tickets route is published, so it has its own read.
-  const contact = useChefRead('chef-support-contact', () => chefOnboardingApi.load(), {staleTime: 300_000});
+  const contact = useChefOnboardingState().query;
   const cases = useChefRead('chef-support-cases', signal => chefSupportCasesApi.list({limit: 20, signal}));
-  const phone = contact.query.data?.supportPhone.trim();
+  const phone = contact.data?.supportPhone.trim();
+  // The Call button never disappears: with no number yet, pressing it asks again before it gives up.
+  const call = async () => {
+    const number = phone || (await contact.refetch()).data?.supportPhone.trim();
+    if (number) {
+      Linking.openURL(`tel:${number}`).catch(() => undefined);
+    } else {
+      toast.show("We couldn't get our phone number just now. You can chat with us instead.");
+    }
+  };
   const tickets = cases.query.data?.cases ?? [];
   const now = new Date(Date.now());
 
@@ -49,17 +60,16 @@ export function ChefSupportScreen() {
           Craves support team
         </Text>
         <View style={styles.buttons}>
-          {phone ? (
-            <ChefActionButton
-              icon="phone"
-              label="Call"
-              onPress={() => {
-                Linking.openURL(`tel:${phone}`).catch(() => undefined);
-              }}
-              style={styles.button}
-              tone="neutral"
-            />
-          ) : null}
+          <ChefActionButton
+            busy={!phone && contact.isFetching}
+            icon="phone"
+            label="Call"
+            onPress={() => {
+              call().catch(() => undefined);
+            }}
+            style={styles.button}
+            tone="neutral"
+          />
           <ChefActionButton
             icon="headset"
             label="Chat with us"
@@ -68,6 +78,11 @@ export function ChefSupportScreen() {
             tone="success"
           />
         </View>
+        {!phone && contact.isError ? (
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
+            We couldn't load our phone number. Press Call to try again.
+          </Text>
+        ) : null}
       </ChefCard>
 
       <SectionHeader title="Common topics" />

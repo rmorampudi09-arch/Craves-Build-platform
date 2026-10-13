@@ -1,4 +1,4 @@
-import {formatRupeesExact} from '../../chefShell/domain/chefFormat';
+import {formatRupees} from '../../chefShell/domain/chefFormat';
 
-/** The referral service sends money as paise in a string; the chef sees `₹420` or `₹49.50`. */
-export const referralRupees = (paise: string | number): string => formatRupeesExact(Number(paise) / 100);
+/** The referral service sends money as paise in a string. Referral credits are small and exact, so every amount shows paise: `₹450.00`. */
+export const referralRupees = (paise: string | number): string => formatRupees(Number(paise) / 100, {paise: true});

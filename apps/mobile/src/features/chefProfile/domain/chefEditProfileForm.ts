@@ -119,43 +119,69 @@ export function mergeChefEditProfileAddressSelection(
   return {...current, ...selection};
 }
 
+type FormValue = ChefEditProfileFormValues[keyof ChefEditProfileFormValues];
+const asText = (value: FormValue) => (Array.isArray(value) ? value.join('|') : value ?? '');
+const sameValue = (a: FormValue, b: FormValue) => asText(a) === asText(b);
+
+export type ChefEditProfileFieldErrors = Partial<Record<keyof ChefEditProfileFormValues, string>>;
+
 /**
- * PUT /api/v1/kitchens/me replaces the complete KitchenProfileRequest. Keep
- * server-owned coordinates and status from the canonical profile while mapping
- * every editable form field into that exact request shape.
+ * The first problem of each field the chef changed, or null. A value the chef did not touch is never
+ * checked: something already stored over a limit must not stop an unrelated change from being saved.
+ */
+export function validateChefEditProfileForm(
+  values: ChefEditProfileFormValues,
+  original: ChefEditProfileFormValues,
+): ChefEditProfileFieldErrors | null {
+  const result = chefEditProfileFormSchema.safeParse(values);
+  if (result.success) {
+    return null;
+  }
+  const found: ChefEditProfileFieldErrors = {};
+  for (const issue of result.error.issues) {
+    const field = issue.path[0] as keyof ChefEditProfileFormValues | undefined;
+    if (field && !found[field] && !sameValue(values[field], original[field])) {
+      found[field] = issue.message;
+    }
+  }
+  return Object.keys(found).length > 0 ? found : null;
+}
+
+/**
+ * PUT /api/v1/kitchens/me replaces the complete KitchenProfileRequest. `existing` must be the kitchen as
+ * the server has it right now: its status and coordinates are sent back as they are, so an old copy would
+ * undo a change made since (closing the kitchen, a suspension). Validation is `validateChefEditProfileForm`'s job.
  */
 export function buildChefKitchenProfileReplacementRequest(
   values: ChefEditProfileFormValues,
   existing: ChefKitchenProfile,
 ): ChefKitchenProfileRequest {
-  const parsed = chefEditProfileFormSchema.parse(values);
-
   return {
-    kitchenName: parsed.kitchenName,
-    displayName: nullableTrimmed(parsed.displayName),
-    description: nullableTrimmed(parsed.description),
-    phoneNumber: nullableTrimmed(parsed.phoneNumber),
-    email: nullableTrimmed(parsed.email),
-    addressLine1: parsed.addressLine1,
-    addressLine2: nullableTrimmed(parsed.addressLine2),
-    landmark: nullableTrimmed(parsed.landmark),
-    areaName: nullableTrimmed(parsed.areaName),
-    city: parsed.city,
-    state: parsed.state,
-    postalCode: nullableTrimmed(parsed.postalCode),
+    kitchenName: values.kitchenName.trim(),
+    displayName: nullableTrimmed(values.displayName),
+    description: nullableTrimmed(values.description),
+    phoneNumber: nullableTrimmed(values.phoneNumber),
+    email: nullableTrimmed(values.email),
+    addressLine1: values.addressLine1.trim(),
+    addressLine2: nullableTrimmed(values.addressLine2),
+    landmark: nullableTrimmed(values.landmark),
+    areaName: nullableTrimmed(values.areaName),
+    city: values.city.trim(),
+    state: values.state.trim(),
+    postalCode: nullableTrimmed(values.postalCode),
     latitude: existing.latitude,
     longitude: existing.longitude,
     status: existing.status,
     // Only what the server sent is sent back. The links go as a set of four: the server replaces all of them.
-    ...(parsed.cuisines ? {cuisines: parsed.cuisines} : {}),
-    ...(parsed.serviceAreas ? {serviceAreas: parsed.serviceAreas} : {}),
-    ...(parsed.instagram !== undefined
+    ...(values.cuisines ? {cuisines: values.cuisines.map(item => item.trim())} : {}),
+    ...(values.serviceAreas ? {serviceAreas: values.serviceAreas.map(item => item.trim())} : {}),
+    ...(values.instagram !== undefined
       ? {
           socialLinks: {
-            instagram: nullableTrimmed(parsed.instagram),
-            facebook: nullableTrimmed(parsed.facebook ?? ''),
-            youtube: nullableTrimmed(parsed.youtube ?? ''),
-            website: nullableTrimmed(parsed.website ?? ''),
+            instagram: nullableTrimmed(values.instagram),
+            facebook: nullableTrimmed(values.facebook ?? ''),
+            youtube: nullableTrimmed(values.youtube ?? ''),
+            website: nullableTrimmed(values.website ?? ''),
           },
         }
       : {}),

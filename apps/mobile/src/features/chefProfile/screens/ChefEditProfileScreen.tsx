@@ -1,7 +1,8 @@
 import React from 'react';
 import {StyleSheet, Text, View} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
+import {useNavigation, type NavigationProp} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
+import type {ChefProductStackParamList} from '../../../app/navigation/types';
 import {isRouteNotPublished} from '../../../core/http/routeAvailability';
 import {
   colors,
@@ -28,13 +29,15 @@ import {
   StatusChip,
   useChefToast,
 } from '../../chefShell/components/ui';
-import {chefProfileApi, type ChefKitchenPhotoKind} from '../api/chefProfileApi';
+import {chefProfileApi, type ChefKitchenPhotoKind, type ChefKitchenProfile} from '../api/chefProfileApi';
 import {ChipPicker, PhotoTile} from '../components/KitchenFormParts';
 import {ReadState} from '../components/ReadState';
 import {
   canEditChefKitchenProfile,
-  chefEditProfileFormSchema,
+  chefKitchenProfileToFormValues,
+  validateChefEditProfileForm,
   type ChefEditProfileAddressSelection,
+  type ChefEditProfileFieldErrors,
   type ChefEditProfileFormValues,
 } from '../domain/chefEditProfileForm';
 import {useChefEditProfileDraft} from '../state/ChefEditProfileDraftProvider';
@@ -42,35 +45,13 @@ import {synchronizeChefProfileAfterSave} from '../state/chefProfileSynchronizati
 import {useChefEditProfileModel} from '../state/useChefEditProfileModel';
 import {useChefKitchen} from '../state/useChefKitchen';
 
-type FieldErrors = Partial<Record<keyof ChefEditProfileFormValues, string>>;
-
-export const KITCHEN_SAVE_FAILED = "We couldn't save your changes. Please try again.";
 const SUGGESTED_CUISINES = ['Andhra', 'Telangana', 'Biryani', 'Tiffins', 'North Indian', 'South Indian', 'Chinese', 'Snacks', 'Sweets', 'Desserts'];
+// The kitchen's pin and neighbourhood stay as they are: moving the kitchen goes through Craves support.
 const ADDRESS_FIELDS: readonly {field: keyof ChefEditProfileAddressSelection; label: string}[] = [
   {field: 'addressLine1', label: 'Flat / house number / building'},
   {field: 'addressLine2', label: 'Street / area'},
   {field: 'landmark', label: 'Landmark'},
-  {field: 'areaName', label: 'Area'},
-  {field: 'postalCode', label: 'PIN code'},
-  {field: 'city', label: 'City'},
-  {field: 'state', label: 'State'},
 ];
-
-/** First message of each field, from a failed parse. */
-function fieldErrors(values: ChefEditProfileFormValues): FieldErrors | null {
-  const result = chefEditProfileFormSchema.safeParse(values);
-  if (result.success) {
-    return null;
-  }
-  const found: FieldErrors = {};
-  for (const issue of result.error.issues) {
-    const field = issue.path[0] as keyof ChefEditProfileFormValues | undefined;
-    if (field && !found[field]) {
-      found[field] = issue.message;
-    }
-  }
-  return found;
-}
 
 const addressLines = (values: ChefEditProfileFormValues) => ({
   street: [values.addressLine1, values.addressLine2].filter(part => part.trim()).join(', '),
@@ -88,13 +69,13 @@ function ComingSoonField({label}: {label: string}) {
 
 /** Kitchen details: photos, name, about, what you cook, contact, address, delivery areas and links in one form. */
 export function ChefEditProfileScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<ChefProductStackParamList>>();
   const queryClient = useQueryClient();
   const toast = useChefToast();
   const {kitchen, query, identityId} = useChefKitchen();
   const draft = useChefEditProfileDraft();
   const model = useChefEditProfileModel();
-  const [errors, setErrors] = React.useState<FieldErrors>({});
+  const [errors, setErrors] = React.useState<ChefEditProfileFieldErrors>({});
 
   // Every visit starts from the kitchen as it is now: a stale draft could save an old status over a newer one.
   React.useEffect(() => {
@@ -140,7 +121,7 @@ export function ChefEditProfileScreen() {
     if (!values || readOnly || submitting || !draft.dirtyState) {
       return;
     }
-    const found = fieldErrors(values);
+    const found = validateChefEditProfileForm(values, chefKitchenProfileToFormValues(draft.originalProfile as ChefKitchenProfile));
     setErrors(found ?? {});
     if (found) {
       return;
@@ -154,13 +135,16 @@ export function ChefEditProfileScreen() {
 
   // Address: edited in a sheet and applied to the form with "Use this address".
   const [addressSheet, setAddressSheet] = React.useState<ChefEditProfileAddressSelection | null>(null);
-  const [addressErrors, setAddressErrors] = React.useState<FieldErrors>({});
+  const [addressErrors, setAddressErrors] = React.useState<ChefEditProfileFieldErrors>({});
   const applyAddress = () => {
     if (!values || !addressSheet) {
       return;
     }
-    const found = fieldErrors({...values, ...addressSheet});
-    const mine: FieldErrors = {};
+    const found = validateChefEditProfileForm(
+      {...values, ...addressSheet},
+      chefKitchenProfileToFormValues(draft.originalProfile as ChefKitchenProfile),
+    );
+    const mine: ChefEditProfileFieldErrors = {};
     for (const {field} of ADDRESS_FIELDS) {
       if (found?.[field]) {
         mine[field] = found[field];
@@ -171,6 +155,12 @@ export function ChefEditProfileScreen() {
       draft.applyAddressSelection(addressSheet);
       setAddressSheet(null);
     }
+  };
+
+  // A sheet and a new page must not change in the same tick on Android: close the sheet, then open the page.
+  const askSupportToMove = () => {
+    setAddressSheet(null);
+    requestAnimationFrame(() => navigation.navigate('ChefSupportTicket', {topic: 'Move my kitchen'}));
   };
 
   // Photos: saved the moment they are chosen, apart from the form.
@@ -235,7 +225,7 @@ export function ChefEditProfileScreen() {
       footer={
         values ? (
           <>
-            {model.saveState === 'error' ? <FieldError message={KITCHEN_SAVE_FAILED} /> : null}
+            {model.saveState === 'error' && model.errorMessage ? <FieldError message={model.errorMessage} /> : null}
             <ChefActionButton
               busy={submitting}
               disabled={!draft.dirtyState || readOnly}
@@ -421,12 +411,20 @@ export function ChefEditProfileScreen() {
               <FormField
                 error={addressErrors[field]}
                 key={field}
-                keyboardType={field === 'postalCode' ? 'number-pad' : 'default'}
                 label={label}
                 onChangeText={text => setAddressSheet(current => ({...current, [field]: text}))}
                 value={String(addressSheet[field] ?? values[field] ?? '')}
               />
             ))}
+            <ListGroup>
+              <ListRow title="Area" value={values.areaName || '–'} />
+              <ListRow title="City" value={values.city} />
+              <ListRow title="PIN code" value={values.postalCode || '–'} />
+              <ListRow title="State" value={values.state} />
+            </ListGroup>
+            <ListGroup>
+              <ListRow icon="headset" onPress={askSupportToMove} title="To move your kitchen, contact support" />
+            </ListGroup>
             <ChefActionButton label="Use this address" onPress={applyAddress} />
           </View>
         ) : null}

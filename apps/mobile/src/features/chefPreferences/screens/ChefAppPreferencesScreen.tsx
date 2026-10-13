@@ -28,7 +28,6 @@ import {
   type NotificationChannel,
   type NotificationPreference,
 } from '../api/notificationPreferencesApi';
-import {newOrderSoundStorage} from '../storage/newOrderSoundStorage';
 
 export const PREFERENCE_SAVE_FAILED = "We couldn't save that. Please try again.";
 const COOKING_TIMES = [10, 15, 20, 25, 30, 40, 45, 60];
@@ -41,25 +40,6 @@ export function ChefAppPreferencesScreen() {
   const toast = useChefToast();
   const prefs = useChefRead('chef-notification-preferences', signal => notificationPreferencesApi.list(signal));
   const settings = useChefRead('chef-kitchen-settings', signal => chefKitchenSettingsApi.get(signal));
-  const identityId = prefs.identityId;
-
-  // The sound switch is a phone setting: it reads and writes this phone's storage, never the server.
-  const [sound, setSound] = React.useState<boolean | null>(null);
-  React.useEffect(() => {
-    if (identityId) {
-      newOrderSoundStorage.read(identityId).then(setSound, () => setSound(true));
-    }
-  }, [identityId]);
-  const toggleSound = (on: boolean) => {
-    if (!identityId) {
-      return;
-    }
-    setSound(on);
-    newOrderSoundStorage.write(identityId, on).catch(() => {
-      setSound(!on);
-      toast.show(PREFERENCE_SAVE_FAILED);
-    });
-  };
 
   const saving = React.useRef(false);
   const [savingKey, setSavingKey] = React.useState<string | null>(null);
@@ -123,11 +103,7 @@ export function ChefAppPreferencesScreen() {
       withTabBar>
       <SectionHeader title="Notifications" />
       <ListGroup>
-        <ListRow
-          right={<ChefSwitch disabled={sound === null} label="New order sound" onChange={toggleSound} value={sound ?? true} />}
-          subtitle="Loud ring until you open the order"
-          title="New order sound"
-        />
+        <ListRow right={comingSoonChip} subtitle="Loud ring until you open the order" title="New order sound" />
       </ListGroup>
       <ReadState
         comingSoon={{title: 'Notification settings are on their way', message: 'You will be able to choose how Craves reaches you here soon.'}}

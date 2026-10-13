@@ -20,8 +20,15 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({top: 0, right: 0, bottom: 0, left: 0}),
 }));
 jest.mock('../../../design/reducedMotion', () => ({useReducedMotionPreference: () => false}));
+let mockAccountApproved = true;
 jest.mock('../../../app/store/hooks', () => ({
-  useAppSelector: (select: (state: unknown) => unknown) => select({auth: {identity: {id: 'user-1'}}}),
+  useAppSelector: (select: (state: unknown) => unknown) =>
+    select({
+      auth: {
+        identity: {id: 'user-1'},
+        accountResolution: {flow: 'CHEF', onboardingStatus: mockAccountApproved ? 'APPROVED' : 'PENDING'},
+      },
+    }),
 }));
 jest.mock('../../chefOnboarding/api/chefOnboardingApi', () => ({
   ...jest.requireActual('../../chefOnboarding/api/chefOnboardingApi'),
@@ -90,6 +97,7 @@ describe('ChefBusinessInformationScreen (Documents & verification)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    mockAccountApproved = true;
     mockOnboarding.load.mockResolvedValue(onboarding());
   });
   afterEach(() => {
@@ -205,10 +213,58 @@ describe('ChefBusinessInformationScreen (Documents & verification)', () => {
     expect(mockNavigate).toHaveBeenCalledWith('ChefSupportTicket', {topic: 'Update a document'});
   });
 
-  it('shows Coming soon, not an error, when the application route is not published', async () => {
+  it('tells a chef approved before the new application that support handles their documents, and opens a ticket', async () => {
+    // GET /chef/onboarding answers 404: this chef has no application of the new kind.
     mockOnboarding.load.mockRejectedValue(new AppApiError('HTTP_404', 'Not found', 404));
     await mount();
-    expect(ui.has('Documents are on their way')).toBe(true);
-    expect(ui.anyText(/unavailable|failed|route/i)).toBe(false);
+    expect(ui.has('Your documents were checked when you joined. To update them, contact support.')).toBe(true);
+    expect(ui.anyText(/Coming soon|on their way|not finished|Upload another document/i)).toBe(false);
+    await ui.press('Contact support');
+    expect(mockNavigate).toHaveBeenCalledWith('ChefSupportTicket', {topic: 'Update my documents'});
+  });
+
+  it('says the same for an approved chef whose application is empty', async () => {
+    mockOnboarding.load.mockResolvedValue(
+      onboarding({application: application('NOT_SUBMITTED', {reviewedAt: null, submittedAt: null}), documents: [], details: null}),
+    );
+    await mount();
+    expect(ui.has('Your documents were checked when you joined. To update them, contact support.')).toBe(true);
+    expect(ui.anyText(/not finished/i)).toBe(false);
+  });
+
+  it('still says the application is not finished for a chef who is not approved', async () => {
+    mockAccountApproved = false;
+    mockOnboarding.load.mockResolvedValue(
+      onboarding({application: application('NOT_SUBMITTED', {reviewedAt: null, submittedAt: null}), documents: []}),
+    );
+    await mount();
+    expect(ui.has('Your application is not finished')).toBe(true);
+  });
+
+  it('shows a retry card, not Coming soon, when the documents cannot be loaded', async () => {
+    mockOnboarding.load.mockRejectedValue(new AppApiError('HTTP_500', 'Server error', 500));
+    await mount();
+    expect(ui.has("We couldn't load this")).toBe(true);
+    expect(ui.anyText(/Coming soon/)).toBe(false);
+  });
+
+  it('says before the camera opens that changes to an approved document go through support', async () => {
+    await mount();
+    await ui.press('Upload another document');
+    expect(
+      ui.has('Your documents are already approved. To change one, contact support: Craves checks it again before the change goes live.'),
+    ).toBe(true);
+    await ui.press('Contact support');
+    await ui.settle();
+    expect(mockNavigate).toHaveBeenCalledWith('ChefSupportTicket', {topic: 'Update my documents'});
+    expect(mockPickPhoto).not.toHaveBeenCalled();
+  });
+
+  it('gives no such warning while the application is still being reviewed', async () => {
+    mockOnboarding.load.mockResolvedValue(onboarding({application: application('PENDING', {reviewedAt: null})}));
+    await mount();
+    await ui.press('Upload another document');
+    expect(ui.anyText(/already approved/)).toBe(false);
+    expect(ui.byLabel('Contact support')).toBeUndefined();
   });
 });

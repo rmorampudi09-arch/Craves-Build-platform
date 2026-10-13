@@ -116,7 +116,7 @@ export function ChefReferralScreen() {
             {overview ? (
               <View style={styles.stats}>
                 <StatTile label="Joined" value={sum(overview.downline.map(level => level.members))} />
-                <StatTile label="Pending" value={referralRupees(overview.pendingPaise)} />
+                <StatTile label="On hold" value={referralRupees(overview.pendingPaise)} />
                 <StatTile label="Earned" value={referralRupees(sum(overview.levels.map(level => level.netEarnedPaise)))} />
               </View>
             ) : null}

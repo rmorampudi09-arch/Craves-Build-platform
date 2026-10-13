@@ -5,6 +5,7 @@ import {
   chefEditProfileFormSchema,
   chefKitchenProfileToFormValues,
   mergeChefEditProfileAddressSelection,
+  validateChefEditProfileForm,
 } from './chefEditProfileForm';
 
 const PROFILE: ChefKitchenProfile = {
@@ -167,6 +168,43 @@ describe('chef edit profile form domain', () => {
       expect(chefEditProfileFormSchema.safeParse({...base, cuisines: Array.from({length: 11}, (_, i) => `C${i}`)}).success).toBe(false);
       expect(chefEditProfileFormSchema.safeParse({...base, serviceAreas: ['x'.repeat(41)]}).success).toBe(false);
       expect(chefEditProfileFormSchema.safeParse(base).success).toBe(true);
+    });
+  });
+
+  describe('checking only what the chef changed', () => {
+    const LONG = 'x'.repeat(2_100);
+    const STORED: ChefKitchenProfile = {...PROFILE, description: LONG, email: `${'e'.repeat(330)}@x.test`};
+    const original = chefKitchenProfileToFormValues(STORED);
+
+    it('does not let a stored value over a limit block a save of something else', () => {
+      expect(validateChefEditProfileForm({...original, kitchenName: 'New name'}, original)).toBeNull();
+    });
+
+    it('still checks a field the chef did change', () => {
+      expect(validateChefEditProfileForm({...original, description: `${LONG}!`}, original)).toEqual({
+        description: 'Bio is too long.',
+      });
+      expect(validateChefEditProfileForm({...original, kitchenName: '  '}, original)).toEqual({
+        kitchenName: 'Kitchen name is required.',
+      });
+    });
+
+    it('reports a changed list or link too', () => {
+      const withLinks = chefKitchenProfileToFormValues({
+        ...PROFILE,
+        cuisines: ['Andhra'],
+        socialLinks: {instagram: null, facebook: null, youtube: null, website: null},
+      });
+      expect(validateChefEditProfileForm({...withLinks, website: 'http://x.example'}, withLinks)).toEqual({
+        website: 'Website link must start with https://',
+      });
+      expect(validateChefEditProfileForm({...withLinks, cuisines: ['Andhra', 'Biryani']}, withLinks)).toBeNull();
+    });
+
+    it('builds the request from a kitchen that is already over a limit, without refusing it', () => {
+      const request = buildChefKitchenProfileReplacementRequest({...original, kitchenName: ' Renamed '}, STORED);
+      expect(request.kitchenName).toBe('Renamed');
+      expect(request.description).toBe(LONG);
     });
   });
 });

@@ -227,6 +227,9 @@ export function ChefKitchenScheduleScreen() {
             )}
 
             <SectionHeader title="Special days" />
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.note}>
+              Special days you added before show when you pick their date.
+            </Text>
             {specials.length > 0 ? (
               <ListGroup>
                 {specials.map(item => (

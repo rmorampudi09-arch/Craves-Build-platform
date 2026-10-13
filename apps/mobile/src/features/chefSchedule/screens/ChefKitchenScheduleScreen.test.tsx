@@ -174,6 +174,25 @@ describe('ChefKitchenScheduleScreen', () => {
     expect(ui.has('Opening hours saved')).toBe(true);
   });
 
+  it('lets a day close at Midnight, saved as 23:59 and shown as Midnight', async () => {
+    await mount();
+    await ui.press('Monday');
+    await ui.press('Opening time 1');
+    expect(ui.byLabel('Midnight')).toBeUndefined();
+    await ui.press('11:00 AM');
+    await ui.press('Closing time 1');
+    await ui.press('Midnight');
+    await ui.press('Save');
+    await ui.settle();
+    expect(mockApi.replace.mock.calls[0][0].weeklyWindows).toEqual(expect.arrayContaining([range(1, '11:00', '23:59')]));
+    expect(ui.byPrefix('Monday')?.props.accessibilityLabel).toBe('Monday, 11:00 AM – Midnight');
+  });
+
+  it('explains that special days added before show up when their date is picked', async () => {
+    await mount();
+    expect(ui.has('Special days you added before show when you pick their date.')).toBe(true);
+  });
+
   it('opens a closed day with 11 AM to 10 PM and saves only that day as new', async () => {
     await mount();
     await ui.press('Saturday');

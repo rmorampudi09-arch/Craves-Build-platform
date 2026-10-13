@@ -12,6 +12,7 @@ import {ChefEditProfileScreen} from './ChefEditProfileScreen';
 jest.setTimeout(20_000);
 
 const mockGoBack = jest.fn();
+const mockNavigate = jest.fn();
 const mockDispatch = jest.fn();
 let mockBeforeRemove: ((event: {preventDefault: () => void; data: {action: unknown}}) => void) | undefined;
 const mockApi = {getKitchen: jest.fn(), replaceKitchen: jest.fn(), uploadPhoto: jest.fn(), deletePhoto: jest.fn()};
@@ -20,6 +21,7 @@ const mockPickPhoto = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
     goBack: mockGoBack,
+    navigate: mockNavigate,
     dispatch: mockDispatch,
     addListener: (_name: string, callback: typeof mockBeforeRemove) => {
       mockBeforeRemove = callback;
@@ -198,29 +200,99 @@ describe('ChefEditProfileScreen (Kitchen details)', () => {
     await act(async () => pending.resolve({...KITCHEN, kitchenName: 'Other name'}));
   });
 
-  it('changes the address in a sheet and saves it with the rest', async () => {
+  it('changes the house, street and landmark in a sheet and saves them with the rest, keeping the pin', async () => {
     await mount();
     await ui.press('Change');
     await act(async () => {
       input('Flat / house number / building').props.onChangeText('9-1, Lake Road');
-      input('PIN code').props.onChangeText('500081');
+      input('Landmark').props.onChangeText('Near the temple');
     });
     await ui.press('Use this address');
     expect(ui.has('9-1, Lake Road')).toBe(true);
     await ui.press('Save changes');
     await ui.settle();
-    expect(mockApi.replaceKitchen.mock.calls[0][0]).toMatchObject({addressLine1: '9-1, Lake Road', postalCode: '500081', latitude: 17.49});
+    expect(mockApi.replaceKitchen.mock.calls[0][0]).toMatchObject({
+      addressLine1: '9-1, Lake Road',
+      landmark: 'Near the temple',
+      areaName: 'Vasanthnagar',
+      city: 'Hyderabad',
+      postalCode: '500085',
+      latitude: 17.49,
+      longitude: 78.39,
+    });
   });
 
-  it('keeps the sheet open and says what is missing when the address has no street or city', async () => {
+  it('shows the area, city, PIN code and state as read-only, and sends moving the kitchen to support', async () => {
+    await mount();
+    await ui.press('Change');
+    for (const label of ['Area', 'City', 'PIN code', 'State']) {
+      expect(ui.has(label)).toBe(true);
+      expect(tree.root.findAllByType(TextInput).some(node => node.props.accessibilityLabel === label)).toBe(false);
+    }
+    for (const value of ['Vasanthnagar', 'Hyderabad', '500085', 'Telangana']) {
+      expect(ui.has(value)).toBe(true);
+    }
+    await ui.press('To move your kitchen, contact support');
+    await ui.settle();
+    expect(mockNavigate).toHaveBeenCalledWith('ChefSupportTicket', {topic: 'Move my kitchen'});
+    expect(ui.byLabel('Use this address')).toBeUndefined();
+  });
+
+  it('keeps the sheet open and says what is missing when the house number is cleared', async () => {
     await mount();
     await ui.press('Change');
     await act(async () => {
-      input('City').props.onChangeText('');
+      input('Flat / house number / building').props.onChangeText('');
     });
     await ui.press('Use this address');
-    expect(ui.has('City is required.')).toBe(true);
+    expect(ui.has('Address line 1 is required.')).toBe(true);
     expect(ui.byLabel('Use this address')).toBeDefined();
+  });
+
+  it('saves with the status and pin the kitchen has now, not the ones from when the form opened', async () => {
+    await mount();
+    // The chef closed the kitchen on Home while this form was open.
+    mockApi.getKitchen.mockResolvedValue({...KITCHEN, status: 'INACTIVE', latitude: 18.1, longitude: 79.2});
+    await type('Kitchen name', 'Relangi Andhra Kitchen');
+    await ui.press('Save changes');
+    await ui.settle();
+    expect(mockApi.replaceKitchen).toHaveBeenCalledTimes(1);
+    expect(mockApi.replaceKitchen.mock.calls[0][0]).toMatchObject({
+      kitchenName: 'Relangi Andhra Kitchen',
+      status: 'INACTIVE',
+      latitude: 18.1,
+      longitude: 79.2,
+    });
+  });
+
+  it('does not save, and says why, when Craves paused the kitchen after the form opened', async () => {
+    await mount();
+    mockApi.getKitchen.mockResolvedValue({...KITCHEN, status: 'SUSPENDED'});
+    await type('Kitchen name', 'Relangi Andhra Kitchen');
+    await ui.press('Save changes');
+    await ui.settle();
+    expect(mockApi.replaceKitchen).not.toHaveBeenCalled();
+    expect(ui.has('Craves has paused your kitchen, so its details cannot be changed right now.')).toBe(true);
+    expect(mockGoBack).not.toHaveBeenCalled();
+  });
+
+  it('does not save when the kitchen cannot be read just before saving', async () => {
+    await mount();
+    mockApi.getKitchen.mockRejectedValue(new Error('network'));
+    await type('Kitchen name', 'Relangi Andhra Kitchen');
+    await ui.press('Save changes');
+    await ui.settle();
+    expect(mockApi.replaceKitchen).not.toHaveBeenCalled();
+    expect(ui.has("We couldn't save your changes. Please try again.")).toBe(true);
+  });
+
+  it('saves a change to the name even when the stored about text is already over its limit', async () => {
+    await mount({...KITCHEN, description: 'x'.repeat(2_100)});
+    await type('Kitchen name', 'Relangi Andhra Kitchen');
+    await ui.press('Save changes');
+    await ui.settle();
+    expect(mockApi.replaceKitchen).toHaveBeenCalledTimes(1);
+    expect(ui.anyText(/too long/)).toBe(false);
   });
 
   it('shows cuisines, delivery areas and links once the server sends them, and saves them', async () => {

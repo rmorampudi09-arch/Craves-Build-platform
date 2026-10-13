@@ -1,8 +1,11 @@
 import React from 'react';
+import {StyleSheet} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
+import {touchTarget} from '../../../design/tokens';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
+import {EMPTY_ONBOARDING} from '../../chefOnboarding/api/chefOnboardingApi';
 import {ChefToastProvider} from '../../chefShell/components/ui';
 import type {ChefKitchenProfile} from '../api/chefProfileApi';
 import {switchChefToCustomerRole} from '../state/chefProfileRoleSwitch';
@@ -14,6 +17,8 @@ jest.setTimeout(20_000);
 const mockNavigate = jest.fn();
 const mockDispatch = jest.fn();
 const mockSummary = jest.fn();
+const mockBank = jest.fn();
+const mockOnboardingLoad = jest.fn();
 let mockState: {auth: {identity: Record<string, unknown> | null; accountResolution: Record<string, unknown> | null}};
 const mockKitchenState: {kitchen: ChefKitchenProfile | null; status: string; hoursToday: string | null; refresh: jest.Mock} = {
   kitchen: null,
@@ -38,6 +43,13 @@ jest.mock('../../chefShell/state/ChefOperationalProvider', () => ({
 jest.mock('../state/useKitchenOpenState', () => ({useKitchenOpenState: () => mockKitchenState}));
 jest.mock('../../auth/state/logoutCoordinator', () => ({completeLogout: jest.fn()}));
 jest.mock('../state/chefProfileRoleSwitch', () => ({switchChefToCustomerRole: jest.fn()}));
+jest.mock('../../chefBankOnboarding/api/chefBankOnboardingApi', () => ({
+  chefBankOnboardingApi: {getStatus: (...args: unknown[]) => mockBank(...args)},
+}));
+jest.mock('../../chefOnboarding/api/chefOnboardingApi', () => ({
+  ...jest.requireActual('../../chefOnboarding/api/chefOnboardingApi'),
+  chefOnboardingApi: {load: (...args: unknown[]) => mockOnboardingLoad(...args)},
+}));
 jest.mock('../../reviews/api/chefReviewsApi', () => ({chefReviewsApi: {summary: (...args: unknown[]) => mockSummary(...args)}}));
 
 const KITCHEN: ChefKitchenProfile = {
@@ -91,6 +103,8 @@ describe('ChefProfileScreen', () => {
     mockKitchenState.status = 'open';
     mockKitchenState.hoursToday = '11:00 AM – 10:00 PM';
     mockSummary.mockResolvedValue({kitchenId: KITCHEN.id, reviewCount: 32, overallAverage: 4.6});
+    mockBank.mockResolvedValue({state: 'VERIFIED', lastFour: '4521', bankName: 'SBI'});
+    mockOnboardingLoad.mockResolvedValue({details: {...EMPTY_ONBOARDING, proofKind: 'AADHAAR', fssaiNumber: '12345678901234'}});
     jest.mocked(switchChefToCustomerRole).mockResolvedValue(undefined);
     jest.mocked(completeLogout).mockResolvedValue(undefined);
   });
@@ -113,7 +127,8 @@ describe('ChefProfileScreen', () => {
     }
     expect(ui.byPrefix('Kitchen details')?.props.accessibilityLabel).toBe('Kitchen details, Name, about, address, photos');
     expect(ui.byPrefix('Opening hours')?.props.accessibilityLabel).toBe('Opening hours, Open now · 11:00 AM – 10:00 PM');
-    expect(ui.byPrefix('Documents & verification')?.props.accessibilityLabel).toBe('Documents & verification, Verified');
+    expect(ui.byPrefix('Documents & verification')?.props.accessibilityLabel).toBe('Documents & verification, Verified · FSSAI, Aadhaar');
+    expect(ui.byPrefix('Bank account')?.props.accessibilityLabel).toBe('Bank account, SBI ••4521');
     expect(ui.byPrefix('Reviews')?.props.accessibilityLabel).toBe('Reviews, 4.6 average · 32 reviews');
     expect(ui.byPrefix('Refer a chef')?.props.accessibilityLabel).toBe('Refer a chef, Earn when chefs you invite start cooking');
     expect(ui.byPrefix('Preferences')?.props.accessibilityLabel).toBe('Preferences, Notifications, orders, language');
@@ -146,6 +161,42 @@ describe('ChefProfileScreen', () => {
     expect(mockNavigate).toHaveBeenLastCalledWith('ChefReviews');
     await ui.press('Change your photo');
     expect(mockNavigate).toHaveBeenLastCalledWith('ChefEditProfile');
+  });
+
+  it('shows only Verified for an approved chef who has no application of the new kind, and the bank by its last digits when it has no name', async () => {
+    mockOnboardingLoad.mockRejectedValue(new AppApiError('HTTP_404', 'Not found', 404));
+    mockBank.mockResolvedValue({state: 'VERIFIED', lastFour: '4521', bankName: null});
+    await mount();
+    expect(ui.byPrefix('Documents & verification')?.props.accessibilityLabel).toBe('Documents & verification, Verified');
+    expect(ui.byPrefix('Bank account')?.props.accessibilityLabel).toBe('Bank account, ••4521');
+  });
+
+  it('leaves the Bank account line empty when no account is on file or it cannot be read', async () => {
+    mockBank.mockResolvedValue({state: 'NOT_SUBMITTED', lastFour: null, bankName: null});
+    await mount();
+    expect(ui.byPrefix('Bank account')?.props.accessibilityLabel).toBe('Bank account');
+    act(() => tree.unmount());
+    mockBank.mockRejectedValue(new AppApiError('HTTP_404', 'Not found', 404));
+    await mount();
+    expect(ui.byPrefix('Bank account')?.props.accessibilityLabel).toBe('Bank account');
+  });
+
+  it('gives the camera and the two chips a tap area of at least 48 dp', async () => {
+    await mount();
+    const reach = (label: string) => {
+      const node = ui.byLabel(label)!;
+      const slop = node.props.hitSlop as {top: number; bottom: number; left: number; right: number};
+      const style = StyleSheet.flatten(node.props.style) ?? {};
+      return {
+        height: (typeof style.height === 'number' ? style.height : 28) + slop.top + slop.bottom,
+        width: (typeof style.width === 'number' ? style.width : touchTarget.minimum) + slop.left + slop.right,
+      };
+    };
+    // The chips are 28 dp tall (Badge) and as wide as their words.
+    for (const label of ['Change your photo', 'Approved. Open documents', '4.6 stars, 32 reviews. Open reviews']) {
+      expect(reach(label).height).toBeGreaterThanOrEqual(touchTarget.minimum);
+      expect(reach(label).width).toBeGreaterThanOrEqual(touchTarget.minimum);
+    }
   });
 
   it('describes the opening hours for each kitchen state without showing a raw status', async () => {

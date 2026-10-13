@@ -14,6 +14,7 @@ import {ReadState} from '../../chefProfile/components/ReadState';
 import {useChefRead} from '../../chefProfile/state/useChefRead';
 import {ChefActionButton, ChefCard, ChefScreen, ChefTopBar, StatusChip} from '../../chefShell/components/ui';
 import {formatRelativeTime} from '../../chefShell/domain/chefFormat';
+import {humanizeCode} from '../../chefShell/domain/humanizeCode';
 import {EmptyState} from '../../chefOrders/components/OrderCardParts';
 import {chefReviewsApi} from '../api/chefReviewsApi';
 import type {PublicKitchenReview} from '../api/publicKitchenReviewsApi';
@@ -28,12 +29,6 @@ const FILTERS: readonly {key: StarFilter; label: string}[] = [
 ];
 const matches = (review: PublicKitchenReview, filter: StarFilter) =>
   filter === 'ALL' || (filter === 'LOW' ? review.overallRating <= 3 : review.overallRating === filter);
-
-/** `GOOD_PORTION` as `Good portion`. */
-const tagLabel = (code: string) => {
-  const words = code.toLowerCase().replace(/_/g, ' ');
-  return words.charAt(0).toUpperCase() + words.slice(1);
-};
 
 function Stars({rating}: {rating: number}) {
   return (
@@ -149,9 +144,14 @@ export function ChefReviewsScreen() {
                 ))}
               </View>
               {shown.length === 0 ? (
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.none}>
-                  No reviews in this group
-                </Text>
+                <View style={styles.noneBox}>
+                  <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.none}>
+                    {hasMore ? 'No loaded reviews in this group' : 'No reviews in this group'}
+                  </Text>
+                  {hasMore ? (
+                    <ChefActionButton busy={loadingMore} label="Load more" onPress={() => loadMore().catch(() => undefined)} tone="neutral" />
+                  ) : null}
+                </View>
               ) : (
                 shown.map(review => (
                   <ChefCard key={review.reviewId}>
@@ -169,14 +169,14 @@ export function ChefReviewsScreen() {
                     {review.tagCodes.length > 0 ? (
                       <View style={styles.tags}>
                         {review.tagCodes.map(code => (
-                          <StatusChip key={code} label={tagLabel(code)} tone="done" />
+                          <StatusChip key={code} label={humanizeCode(code)} tone="done" />
                         ))}
                       </View>
                     ) : null}
                   </ChefCard>
                 ))
               )}
-              {hasMore ? (
+              {hasMore && shown.length > 0 ? (
                 <ChefActionButton busy={loadingMore} label="Show more reviews" onPress={() => loadMore().catch(() => undefined)} tone="neutral" />
               ) : null}
             </>
@@ -190,7 +190,7 @@ export function ChefReviewsScreen() {
 const styles = StyleSheet.create({
   summary: {flexDirection: 'row', alignItems: 'center', gap: spacing.md},
   average: {alignItems: 'center', gap: 2},
-  averageValue: {color: colors.textPrimary, fontSize: 38, fontWeight: fontWeight.extrabold},
+  averageValue: {color: colors.textPrimary, fontSize: typography.title, fontWeight: fontWeight.extrabold},
   count: {color: colors.textSecondary, fontSize: typography.tiny},
   stars: {color: colors.warning, fontSize: typography.body},
   starOff: {color: colors.border},
@@ -200,7 +200,8 @@ const styles = StyleSheet.create({
   bar: {flex: 1, height: 8, borderRadius: radius.pill, overflow: 'hidden', backgroundColor: colors.border},
   barFill: {height: '100%', borderRadius: radius.pill, backgroundColor: colors.warning},
   filters: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs},
-  none: {color: colors.textSecondary, fontSize: typography.body, textAlign: 'center', paddingVertical: spacing.md},
+  noneBox: {gap: spacing.sm, paddingVertical: spacing.md},
+  none: {color: colors.textSecondary, fontSize: typography.body, textAlign: 'center'},
   cardTop: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
   date: {color: colors.textSecondary, fontSize: typography.small},
   text: {marginTop: spacing.xs, color: colors.textPrimary, fontSize: typography.body},

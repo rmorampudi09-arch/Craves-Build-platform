@@ -28,6 +28,12 @@ export function rangesForDay(windows: readonly ChefServiceWindowRequest[], day: 
     .sort((a, b) => a.opensAt.localeCompare(b.opensAt));
 }
 
+/** A kitchen that closes at midnight is saved as 23:59: a day's hours cannot run past 24:00. */
+export const MIDNIGHT = '23:59';
+
+/** `11:00 AM`, or `Midnight` for 23:59. */
+export const formatHoursTime = (time: string): string => (time === MIDNIGHT ? 'Midnight' : formatWindowTime(time));
+
 /**
  * The lines shown for a day. A day with no range is Closed, except when the whole week has none:
  * then no hours were ever set, which is not the same as closed.
@@ -36,7 +42,7 @@ export function summarizeRanges(ranges: readonly TimeRange[], weekHasHours: bool
   if (ranges.length === 0) {
     return [weekHasHours ? 'Closed' : 'Not set'];
   }
-  return ranges.map(range => `${formatWindowTime(range.opensAt)} – ${formatWindowTime(range.closesAt)}`);
+  return ranges.map(range => `${formatHoursTime(range.opensAt)} – ${formatHoursTime(range.closesAt)}`);
 }
 
 /** A plain-words problem with the ranges, or null when they can be saved. */
@@ -65,11 +71,17 @@ export function withDayRanges(
 /** What a closed day opens with. */
 export const defaultRanges = (): TimeRange[] => [{opensAt: '11:00', closesAt: '22:00'}];
 
-/** Times to choose from: every 30 minutes from 5 AM to 11:30 PM, plus any saved time that is not on that grid. */
-export function timeOptions(extra: readonly string[]): string[] {
+/**
+ * Times to choose from: every 30 minutes from 5 AM to 11:30 PM, plus any saved time that is not on that grid.
+ * A closing time can also be Midnight, as the last choice.
+ */
+export function timeOptions(extra: readonly string[], closing = false): string[] {
   const grid: string[] = [];
   for (let minutes = 5 * 60; minutes <= 23 * 60 + 30; minutes += 30) {
     grid.push(`${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`);
   }
-  return [...new Set([...grid, ...extra])].sort();
+  if (closing) {
+    grid.push(MIDNIGHT);
+  }
+  return [...new Set([...grid, ...extra.filter(time => closing || time !== MIDNIGHT)])].sort();
 }

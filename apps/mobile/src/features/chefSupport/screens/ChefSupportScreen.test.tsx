@@ -123,10 +123,29 @@ describe('ChefSupportScreen', () => {
     expect(ui.has('No tickets yet')).toBe(true);
   });
 
-  it('leaves out the Call button when Craves has no number to show', async () => {
+  it('keeps the Call button when the number cannot be loaded, says so, and tries again when pressed', async () => {
     mockOnboarding.load.mockRejectedValue(new Error('network'));
     await mount();
-    expect(ui.byLabel('Call')).toBeUndefined();
+    expect(ui.byLabel('Call')).toBeDefined();
+    expect(ui.has("We couldn't load our phone number. Press Call to try again.")).toBe(true);
+    expect(openUrl).not.toHaveBeenCalled();
+
+    mockOnboarding.load.mockResolvedValue({supportPhone: '+918012345678', supportEmail: 'help@craves.in'});
+    await ui.press('Call');
+    await ui.settle();
+    expect(openUrl).toHaveBeenCalledWith('tel:+918012345678');
+    expect(ui.has("We couldn't load our phone number. Press Call to try again.")).toBe(false);
+  });
+
+  it('points to Chat with us when the number is still not there after trying again', async () => {
+    // A chef approved before the new application gets a 404 here.
+    mockOnboarding.load.mockRejectedValue(new AppApiError('HTTP_404', 'Not found', 404));
+    await mount();
+    expect(ui.byLabel('Call')).toBeDefined();
+    await ui.press('Call');
+    await ui.settle();
+    expect(openUrl).not.toHaveBeenCalled();
+    expect(ui.has("We couldn't get our phone number just now. You can chat with us instead.")).toBe(true);
     expect(ui.byLabel('Chat with us')).toBeDefined();
   });
 });

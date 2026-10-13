@@ -14,8 +14,8 @@ import {IconButton} from '../../../shared/components/IconButton';
 import {FieldError, GroupLabel, OptionChip} from '../../chefMenu/components/DishFormField';
 import {ChefSwitch} from '../../chefProfile/components/ChefSwitch';
 import {ChefActionButton, ListGroup, ListRow} from '../../chefShell/components/ui';
-import {formatDayLabel, formatWindowTime} from '../../chefShell/domain/chefFormat';
-import {defaultRanges, timeOptions, validateRanges, type TimeRange} from '../domain/openingHours';
+import {formatDayLabel} from '../../chefShell/domain/chefFormat';
+import {defaultRanges, formatHoursTime, timeOptions, validateRanges, type TimeRange} from '../domain/openingHours';
 
 type Picking = {index: number; field: 'opensAt' | 'closesAt'} | null;
 
@@ -24,11 +24,11 @@ function TimeField({label, time, onPress}: {label: string; time: string; onPress
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
-      accessibilityValue={{text: formatWindowTime(time)}}
+      accessibilityValue={{text: formatHoursTime(time)}}
       onPress={onPress}
       style={({pressed}) => [styles.timeField, pressed && styles.pressed]}>
       <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.timeText}>
-        {formatWindowTime(time)}
+        {formatHoursTime(time)}
       </Text>
     </Pressable>
   );
@@ -80,13 +80,14 @@ function RangesEditor({
 function TimeChoice({
   label,
   value,
-  saved,
+  closing,
   onChoose,
   onBack,
 }: {
   label: string;
   value: string;
-  saved: string[];
+  /** A closing time can be Midnight. */
+  closing: boolean;
   onChoose: (time: string) => void;
   onBack: () => void;
 }) {
@@ -94,8 +95,8 @@ function TimeChoice({
     <View style={styles.group}>
       <GroupLabel label={label} />
       <View style={styles.chips}>
-        {timeOptions(saved).map(time => (
-          <OptionChip key={time} label={formatWindowTime(time)} onPress={() => onChoose(time)} selected={time === value} />
+        {timeOptions([value], closing).map(time => (
+          <OptionChip key={time} label={formatHoursTime(time)} onPress={() => onChoose(time)} selected={time === value} />
         ))}
       </View>
       <ChefActionButton label="Back" onPress={onBack} tone="neutral" />
@@ -140,7 +141,7 @@ export function DayHoursForm({initial, weekHasHours, others, busy, error, onSave
           setProblem(null);
           setPicking(null);
         }}
-        saved={ranges.flatMap(range => [range.opensAt, range.closesAt])}
+        closing={picking.field === 'closesAt'}
         value={current}
       />
     );
@@ -264,7 +265,7 @@ export function SpecialDayForm({initial, busy, error, load, onSave, onRemove, no
           setProblem(null);
           setPicking(null);
         }}
-        saved={ranges.flatMap(range => [range.opensAt, range.closesAt])}
+        closing={picking.field === 'closesAt'}
         value={ranges[picking.index]?.[picking.field] ?? '11:00'}
       />
     );

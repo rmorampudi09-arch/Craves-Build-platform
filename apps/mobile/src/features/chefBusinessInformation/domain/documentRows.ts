@@ -1,6 +1,7 @@
 import {PROOF_OPTIONS, type ChefEvidence, type OnboardingState} from '../../chefOnboarding/api/chefOnboardingApi';
 import {formatDate, formatFssai} from '../../chefOnboarding/domain/chefOnboardingFlow';
 import type {StatusChipTone} from '../../chefShell/components/ui';
+import {humanizeCode} from '../../chefShell/domain/humanizeCode';
 import type {IconName} from '../../../shared/components/Icon';
 
 export interface DocumentRow {
@@ -15,12 +16,6 @@ export interface DocumentRow {
 const APPROVED = {label: 'Approved', tone: 'ready'} as const;
 const UNDER_REVIEW = {label: 'Under review', tone: 'cooking'} as const;
 const NEEDS_UPDATE = {label: 'Needs update', tone: 'new'} as const;
-
-/** `OTHER_NEW_TYPE` as `Other new type`: the fallback so a raw code never reaches the chef. */
-const humanize = (code: string) => {
-  const words = code.toLowerCase().replace(/_/g, ' ');
-  return words.charAt(0).toUpperCase() + words.slice(1);
-};
 
 const ORDER = ['SELECTED_PROOF_FRONT', 'SELECTED_PROOF_BACK', 'FSSAI', 'KITCHEN_PHOTO_1', 'KITCHEN_PHOTO_2'];
 
@@ -43,7 +38,7 @@ function titleOf(document: ChefEvidence, details: OnboardingState['details']): s
     case 'KITCHEN_PHOTO_2':
       return 'Cooking setup photo';
     default:
-      return humanize(document.documentType);
+      return humanizeCode(document.documentType);
   }
 }
 
@@ -91,6 +86,14 @@ export function uploadChoices(state: OnboardingState): {type: string; title: str
     type,
     title: titleOf({id: '', documentType: type, originalFileName: '', fileSizeBytes: 0, status: 'UPLOADED', reviewReason: null}, state.details),
   }));
+}
+
+const PROOF_SHORT: Record<string, string> = {AADHAAR: 'Aadhaar', PAN: 'PAN', BANK_STATEMENT: 'Bank statement', OTHER_GOVERNMENT_ID: 'ID'};
+
+/** `FSSAI, Aadhaar`: what the application gave, for the Profile row's second line. */
+export function documentsSummary(state: OnboardingState): string {
+  const proof = state.details?.proofKind ? PROOF_SHORT[state.details.proofKind] : null;
+  return [state.details?.fssaiNumber.trim() ? 'FSSAI' : null, proof].filter(Boolean).join(', ');
 }
 
 export interface VerificationBanner {

@@ -17,8 +17,11 @@ import {
   StatusChip,
   useChefToast,
 } from '../../chefShell/components/ui';
+import {documentsSummary} from '../../chefBusinessInformation/domain/documentRows';
+import {chefBankOnboardingApi} from '../../chefBankOnboarding/api/chefBankOnboardingApi';
 import {chefReviewsApi} from '../../reviews/api/chefReviewsApi';
 import {switchChefToCustomerRole} from '../state/chefProfileRoleSwitch';
+import {useChefOnboardingState} from '../state/useChefOnboardingState';
 import {useChefRead} from '../state/useChefRead';
 import {useKitchenOpenState, type KitchenOpenState} from '../state/useKitchenOpenState';
 
@@ -60,6 +63,11 @@ export function ChefProfileScreen() {
   const rating = summary.query.data?.overallAverage;
   const reviewCount = summary.query.data?.reviewCount ?? 0;
   const hasRating = typeof rating === 'number' && reviewCount > 0;
+
+  // Both lines are extras: when a read fails or finds nothing, the row simply has no second line.
+  const onboarding = useChefOnboardingState().query.data;
+  const bank = useChefRead('chef-bank-status', signal => chefBankOnboardingApi.getStatus(signal)).query.data;
+  const bankLine = bank?.lastFour ? [bank.bankName, `••${bank.lastFour}`].filter(Boolean).join(' ') : undefined;
 
   const suspended = kitchenState.status === 'suspended' || identity?.status === 'SUSPENDED';
   const approved = !suspended && accountResolution?.flow === 'CHEF' && accountResolution.onboardingStatus === 'APPROVED';
@@ -111,6 +119,7 @@ export function ChefProfileScreen() {
           <Pressable
             accessibilityLabel="Change your photo"
             accessibilityRole="button"
+            hitSlop={CAMERA_SLOP}
             onPress={open('ChefEditProfile')}
             style={styles.camera}>
             <Icon color={colors.textPrimary} name="camera" size={iconSize.sm} surface={false} />
@@ -127,7 +136,11 @@ export function ChefProfileScreen() {
         <View style={styles.chips}>
           {suspended ? <StatusChip label="Paused by Craves" tone="new" /> : null}
           {approved ? (
-            <Pressable accessibilityLabel="Approved. Open documents" accessibilityRole="button" onPress={open('ChefBusinessInformation')}>
+            <Pressable
+              accessibilityLabel="Approved. Open documents"
+              accessibilityRole="button"
+              hitSlop={CHIP_SLOP}
+              onPress={open('ChefBusinessInformation')}>
               <StatusChip label="Approved" tone="ready" />
             </Pressable>
           ) : null}
@@ -135,6 +148,7 @@ export function ChefProfileScreen() {
             <Pressable
               accessibilityLabel={`${rating.toFixed(1)} stars, ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}. Open reviews`}
               accessibilityRole="button"
+              hitSlop={CHIP_SLOP}
               onPress={open('ChefReviews')}>
               <StatusChip label={`★ ${rating.toFixed(1)} · ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}`} tone="info" />
             </Pressable>
@@ -156,7 +170,7 @@ export function ChefProfileScreen() {
           icon="shield"
           iconTone="blue"
           onPress={open('ChefBusinessInformation')}
-          subtitle={approved ? 'Verified' : 'See your documents'}
+          subtitle={approved ? ['Verified', onboarding ? documentsSummary(onboarding) : ''].filter(Boolean).join(' · ') : 'See your documents'}
           title="Documents & verification"
         />
         <ListRow
@@ -170,7 +184,7 @@ export function ChefProfileScreen() {
 
       <SectionHeader title="Money" />
       <ListGroup>
-        <ListRow icon="bank" onPress={open('ChefBankAccount')} title="Bank account" />
+        <ListRow icon="bank" onPress={open('ChefBankAccount')} subtitle={bankLine} title="Bank account" />
         <ListRow icon="receipt" onPress={open('ChefPayoutHistory')} title="Payout history" />
       </ListGroup>
 
@@ -230,19 +244,23 @@ export function ChefProfileScreen() {
 }
 
 const AVATAR = 76;
+const BADGE = 28;
+// The camera badge (28 dp) and the chips (28 dp tall) reach touchTarget.minimum through their hit area.
+const CAMERA_SLOP = {top: 10, bottom: 10, left: 10, right: 10};
+const CHIP_SLOP = {top: 10, bottom: 10, left: 0, right: 0};
 const styles = StyleSheet.create({
   identity: {alignItems: 'center', gap: spacing.xxs, paddingVertical: spacing.lg},
   avatarWrap: {width: AVATAR, height: AVATAR, marginBottom: spacing.xs},
   avatar: {width: AVATAR, height: AVATAR, borderRadius: AVATAR / 2},
   avatarLetter: {alignItems: 'center', justifyContent: 'center', backgroundColor: colors.flameRedAccessible},
-  avatarText: {color: colors.white, fontSize: 30, fontWeight: fontWeight.bold},
+  avatarText: {color: colors.white, fontSize: typography.title, fontWeight: fontWeight.bold},
   camera: {
     position: 'absolute',
     right: -2,
     bottom: -2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: BADGE,
+    height: BADGE,
+    borderRadius: BADGE / 2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: borderWidth.standard,

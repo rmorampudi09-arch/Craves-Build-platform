@@ -7,6 +7,7 @@ import { BottomNav } from "@/features/customer-shell/components/BottomNav";
 import { ChefModeGuard } from "@/features/chef/components/ChefModeGuard";
 import { SessionEndedPrompt } from "@/features/auth/components/session-ended-prompt";
 import { NewCustomerProfileGate } from "@/features/profile/components/new-customer-profile-gate";
+import { SupportLauncher } from "@/features/support/components/SupportLauncher";
 import { MotionPreferences } from "@/shared/components/layout/MotionPreferences";
 import { StructuredData } from "@/features/seo/components/StructuredData";
 import { cravesSiteGraph, seoKeywords, shareImage, siteUrl } from "@/features/seo/lib/seo-craves";
@@ -40,19 +41,20 @@ export const metadata: Metadata = {
     template: "%s",
   },
   description:
-    "Order fresh homemade food from trusted home chefs anywhere in Hyderabad and Bangalore. Home-style biryani, tiffin, breakfast, lunch, dinner and meal subscriptions, with secure checkout and delivery on Craves.",
+    "Order homemade food from trusted home chefs in Hyderabad and Bangalore. Biryani, tiffin, lunch, dinner and meal plans, delivered to your door.",
   keywords: seoKeywords(),
   authors: [{ name: "Craves" }],
   robots: { index: true, follow: true },
   alternates: {
-    canonical: siteUrl,
+    // "./" resolves to each page's own path; siteUrl made every page claim to be the homepage.
+    canonical: "./",
   },
   openGraph: {
     images: [shareImage],
     title: "Craves — Homemade Food from Trusted Home Chefs",
     description:
       "Discover homemade food, trusted home chefs, live dishes, secure checkout, and delivery-supported ordering with Craves.",
-    url: siteUrl,
+    url: "./",
     siteName: "Craves",
     locale: "en_IN",
     type: "website",
@@ -96,6 +98,7 @@ export default function RootLayout({
           <ChefModeGuard />
           <NewCustomerProfileGate />
           <SessionEndedPrompt />
+          <SupportLauncher />
         </MotionPreferences>
       </body>
     </html>

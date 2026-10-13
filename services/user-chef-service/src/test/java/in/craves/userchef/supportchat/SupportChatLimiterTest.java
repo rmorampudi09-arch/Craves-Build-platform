@@ -44,6 +44,17 @@ class SupportChatLimiterTest {
     }
 
     @Test
+    void keysCanHaveTheirOwnCaps() {
+        now.set(SupportChatLimiter.DAY_MILLIS * 100);
+        UUID visitors = UUID.randomUUID();
+        limiter.admit(visitors, 2, 3);
+        limiter.admit(visitors, 2, 3);
+        assertFalse(assertThrows(SupportChatLimiter.Limited.class, () -> limiter.admit(visitors, 2, 3)).daily());
+        now.addAndGet(SupportChatLimiter.MINUTE_MILLIS);
+        assertTrue(assertThrows(SupportChatLimiter.Limited.class, () -> limiter.admit(visitors, 2, 3)).daily());
+    }
+
+    @Test
     void usersHaveSeparateBudgets() {
         now.set(SupportChatLimiter.DAY_MILLIS * 100);
         for (int i = 0; i < SupportChatLimiter.PER_MINUTE; i++) {

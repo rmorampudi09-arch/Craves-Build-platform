@@ -88,8 +88,13 @@ def compare_history(rows, expected):
         require(expected["17"]["script"] == "V17__chef_onboarding_reference_and_correction_sections.sql", "Incorrect V17 source")
         require("16" in expected, "V17 requires V16 source")
         approved.add("17")
+    if "18" in expected:
+        require(expected["18"]["script"] == "V18__support_guest_callbacks.sql", "Incorrect V18 source")
+        require("17" in expected, "V18 requires V17 source")
+        approved.add("18")
     require(not ("16" in versions and "15" not in versions), "V16 cannot precede V15")
     require(not ("17" in versions and "16" not in versions), "V17 cannot precede V16")
+    require(not ("18" in versions and "17" not in versions), "V18 cannot precede V17")
     require(pending <= approved and "12" in versions,
             "Only approved V13/V14 may be pending after V12")
     require(not ("14" in versions and "13" not in versions), "V14 cannot precede V13")
@@ -104,6 +109,8 @@ def compare_history(rows, expected):
         result["v16"] = "PENDING" if "16" in pending else "APPLIED_MATCHING"
     if "17" in expected:
         result["v17"] = "PENDING" if "17" in pending else "APPLIED_MATCHING"
+    if "18" in expected:
+        result["v18"] = "PENDING" if "18" in pending else "APPLIED_MATCHING"
     return result
 
 

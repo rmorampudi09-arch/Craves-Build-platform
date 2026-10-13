@@ -18,7 +18,7 @@ mkdir -p "$OUT"
 
 fail(){ echo "ERROR: $*" >&2; exit 1; }
 info(){ echo "INFO: $*"; }
-case "$ACTION" in discover|deploy|validate|prepareDomains|associateDomains) ;; *) fail "Unsupported action $ACTION";; esac
+case "$ACTION" in discover|deploy|validate|prepareDomains|associateDomains|cacheLanding) ;; *) fail "Unsupported action $ACTION";; esac
 case "$WAF_MODE" in Detection|Prevention) ;; *) fail "WAF_MODE must be Detection or Prevention";; esac
 for c in az jq curl; do command -v "$c" >/dev/null || fail "$c is required"; done
 
@@ -187,6 +187,37 @@ purge_static_assets(){
   purge_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/afdEndpoints/${ENDPOINT}/purge?api-version=2025-04-15"
   purge_body="$(jq -nc '{contentPaths:["/_next/static/*"]}')"
   az rest --method post --uri "$purge_uri" --headers Content-Type=application/json --body "$purge_body" --only-show-errors >/dev/null
+}
+
+ensure_landing_cache(){
+  # Cache and compress only the static landing document at "/" for visitors
+  # without a session cookie (signed-in visitors get a no-store 307 to /home).
+  # Every other path keeps the uncached app route. UrlPath excludes the leading
+  # "/", so length < 1 is the root alone. Re-run after closing the launch gate
+  # or releasing a new landing build: the purge below drops the cached copy.
+  local rules_uri rule_uri order rule_body purge_uri
+  rules_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/ruleSets/${RULESET}/rules"
+  rule_uri="${rules_uri}/landingcache?api-version=2025-04-15"
+  # Keep this rule's order on re-runs; otherwise take the next free one.
+  order="$(az rest --method get --uri "${rules_uri}?api-version=2025-04-15" --only-show-errors |
+    jq '([.value[] | select(.name == "landingcache") | .properties.order][0]) // ([.value[].properties.order] | max + 1)')"
+  rule_body="$(jq -nc --argjson order "$order" '{
+    properties: {
+      order: $order,
+      conditions: [
+        {name: "UrlPath", parameters: {typeName: "DeliveryRuleUrlPathMatchConditionParameters", operator: "LessThan", negateCondition: false, matchValues: ["1"], transforms: []}},
+        {name: "Cookies", parameters: {typeName: "DeliveryRuleCookiesConditionParameters", selector: "craves_access_token", operator: "Any", negateCondition: true, matchValues: [], transforms: []}}
+      ],
+      actions: [
+        {name: "RouteConfigurationOverride", parameters: {typeName: "DeliveryRuleRouteConfigurationOverrideActionParameters", cacheConfiguration: {queryStringCachingBehavior: "IgnoreQueryString", isCompressionEnabled: "Enabled", cacheBehavior: "OverrideAlways", cacheDuration: "01:00:00"}}}
+      ],
+      matchProcessingBehavior: "Continue"
+    }
+  }')"
+  az rest --method put --uri "$rule_uri" --headers Content-Type=application/json --body "$rule_body" --only-show-errors >/dev/null
+  purge_uri="https://management.azure.com/subscriptions/${SUB}/resourceGroups/${RG}/providers/Microsoft.Cdn/profiles/${PROFILE}/afdEndpoints/${ENDPOINT}/purge?api-version=2025-04-15"
+  az rest --method post --uri "$purge_uri" --headers Content-Type=application/json --body '{"contentPaths":["/"]}' --only-show-errors >/dev/null
+  info "Landing cache rule applied at order $order. Check: curl -s -o /dev/null -D - -H 'Accept-Encoding: br' https://craves.in/ twice -> content-encoding: br and x-cache TCP_HIT on the repeat; with 'Cookie: craves_access_token=x' -> 307 to /home."
 }
 
 ensure_edge(){
@@ -474,6 +505,7 @@ write_status(){
 case "$ACTION" in
   deploy) ensure_profile; ensure_edge; ensure_waf; ensure_diagnostics; validate_edge; purge_static_assets ;;
   validate) validate_edge ;;
+  cacheLanding) profile_exists || fail "Deploy first"; ensure_landing_cache ;;
   prepareDomains) profile_exists || fail "Deploy first"; prepare_domains; write_dns ;;
   associateDomains) profile_exists || fail "Deploy first"; associate_domains; write_dns; validate_edge ;;
   discover) ;;

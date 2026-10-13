@@ -160,7 +160,9 @@ function cravesFirstPaintSplash(): Plugin {
         // Fetch existing CSS without blocking the first splash paint. Restore
         // each original media value on load, before the React splash starts.
         // No font face, stylesheet content or rendered page styling is replaced.
-        const html = input.replace(/<link\b[^>]*>/gi, (tag) => {
+        // The charset is re-added as the first head tag below: the boot style and
+        // script would otherwise push it past the first 1024 bytes the spec allows.
+        const html = input.replace(/<meta\s+charset=["']?utf-8["']?\s*\/?>\s*/i, '').replace(/<link\b[^>]*>/gi, (tag) => {
           if (!/\brel\s*=\s*["']stylesheet["']/i.test(tag) || /\bdisabled\b/i.test(tag)) return tag
           const media = tag.match(/\bmedia\s*=\s*(["'])(.*?)\1/i)
           const original = media ? media[2] : 'all'
@@ -304,13 +306,14 @@ function cravesFirstPaintSplash(): Plugin {
         `
         const nonceAttributes = nonce ? { nonce } : {}
         const tags: HtmlTagDescriptor[] = [
+          { tag: 'meta', attrs: { charset: 'UTF-8' }, injectTo: 'head-prepend' },
           { tag: 'style', attrs: { id: 'craves-boot-style', ...nonceAttributes }, children: css, injectTo: 'head-prepend' },
           { tag: 'script', attrs: { id: 'craves-boot-script', ...nonceAttributes }, children: script, injectTo: 'head-prepend' },
           {
             tag: 'div', attrs: { id: 'craves-boot', 'aria-hidden': 'true' }, injectTo: 'body-prepend',
             children: [{ tag: 'div', attrs: { id: 'craves-boot-brand' }, children: [
               { tag: 'img', attrs: {
-                id: 'craves-boot-wordmark', src: cachedWordmark, alt: '',
+                id: 'craves-boot-wordmark', src: cachedWordmark, alt: 'Craves',
                 width: String(imageWidth), height: String(imageHeight),
                 loading: 'eager', decoding: 'sync', fetchpriority: 'high',
               } },

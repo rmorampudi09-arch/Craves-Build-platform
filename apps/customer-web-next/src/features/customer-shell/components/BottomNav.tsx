@@ -55,6 +55,7 @@ const HIDDEN_PATH_PREFIXES = [
   "/refunds-cancellations",
   "/products-pricing",
   "/support",
+  "/assistant",
 ];
 
 const NAV_ITEMS = [

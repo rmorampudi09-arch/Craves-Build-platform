@@ -518,6 +518,42 @@ nav[aria-label="Customer services"] a:focus-visible {
 .craves-chat-typing-dot:nth-child(2) { animation-delay: 0.15s; }
 .craves-chat-typing-dot:nth-child(3) { animation-delay: 0.3s; }
 
+/* "Ask Craves" button and panel: the same liquid glass as the phone tab bar and the cart bar. */
+.craves-support-glass {
+  isolation: isolate;
+  /* Clips the highlight line to the rounded shape. */
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.68);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  backdrop-filter: blur(10px) saturate(150%);
+  box-shadow:
+    0 10px 32px rgba(26, 26, 26, 0.14),
+    0 1px 3px rgba(26, 26, 26, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.craves-support-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0 8% auto;
+  z-index: 1;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.96), transparent);
+}
+
+@keyframes craves-support-pop {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+.craves-support-pop {
+  animation: craves-support-pop 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: bottom right;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

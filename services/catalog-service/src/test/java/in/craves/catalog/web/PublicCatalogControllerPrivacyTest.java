@@ -16,6 +16,7 @@ import in.craves.catalog.web.ApiDtos.MenuItemResponse;
 import in.craves.catalog.web.ApiDtos.MenuItemStatus;
 import in.craves.catalog.web.ApiDtos.PublicKitchenDiscoveryResponse;
 import in.craves.catalog.web.ApiDtos.PublicKitchenSummaryResponse;
+import in.craves.catalog.web.ApiDtos.SocialLinks;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -108,7 +109,23 @@ class PublicCatalogControllerPrivacyTest {
             "Telugu home food", "+919999999999", "chef@example.com", "12-3-45 Private House",
             "Private Lane", "Private Landmark", "Kukatpally", "Hyderabad", "Telangana", "500072",
             new BigDecimal("17.4948"), new BigDecimal("78.3996"), KitchenStatus.ACTIVE,
-            Instant.now(), Instant.now()
+            Instant.now(), Instant.now(),
+            "https://cdn.example/chef.jpg", "https://cdn.example/kitchen.jpg", List.of("Andhra"), List.of("Kondapur"),
+            new SocialLinks("https://instagram.com/ravi", null, null, null), true, 30
         );
+    }
+
+    @Test
+    void publicKitchenKeepsStorefrontFieldsButNeverTheChefsOrderSettings() {
+        UUID kitchenId = UUID.randomUUID();
+        when(catalogService.getPublicKitchen(kitchenId)).thenReturn(kitchen(kitchenId));
+        var response = controller.getKitchen(kitchenId);
+        assertThat(response.chefPhotoUrl()).isEqualTo("https://cdn.example/chef.jpg");
+        assertThat(response.kitchenPhotoUrl()).isEqualTo("https://cdn.example/kitchen.jpg");
+        assertThat(response.cuisines()).containsExactly("Andhra");
+        assertThat(response.serviceAreas()).containsExactly("Kondapur");
+        assertThat(response.socialLinks().instagram()).isEqualTo("https://instagram.com/ravi");
+        assertThat(response.autoAcceptOrders()).isNull();
+        assertThat(response.defaultPrepMinutes()).isNull();
     }
 }

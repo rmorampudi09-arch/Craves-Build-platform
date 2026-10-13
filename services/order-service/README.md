@@ -183,6 +183,16 @@ ready_at = database current time + prepTimeMinutes
 
 Integration Service will schedule delivery close to `ready_at`; delivery must not be created immediately after payment.
 
+### Auto-accept
+
+A kitchen whose Catalog settings have `autoAcceptOrders` on gets its orders accepted by the chef-acceptance worker
+(`CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED`, every `worker-fixed-delay-ms`), right when it sends the chef's new-order
+notification (titled "New order accepted automatically"). The accept goes through `ChefAcceptanceService.accept`, the
+service behind `POST /chef/orders/{orderId}/accept`, with the order's slowest dish prep time, else the kitchen's
+`defaultPrepMinutes`, else 15. Meal-plan orders are not auto-accepted (accepting at creation would book the courier
+hours before the meal), so the chef answers them as before. If Catalog cannot be reached, or the accept itself fails
+(it is then rolled back), the order stays `CHEF_ACCEPTANCE_PENDING` and the chef is notified the usual way.
+
 ## V1 charge model
 
 Default seeded policy:
@@ -234,7 +244,14 @@ GET  /api/v1/chef/orders/{orderId}
 POST /api/v1/chef/orders/{orderId}/accept
 POST /api/v1/chef/orders/{orderId}/reject
 POST /api/v1/chef/orders/{orderId}/ready-for-pickup
+POST /api/v1/chef/orders/{orderId}/handed-over
 ```
+
+Chef order responses also carry `chefAcceptanceExpiresAt`, `customerNote` and `deliveryPartner` (each omitted when
+empty) and `chefHandedOverAt` (always present, `null` until handed over, so the app can tell the server supports
+hand-over; customer and admin responses carry that one key as `null` too); `GET /api/v1/chef/orders/{orderId}` adds
+`statusHistory` (oldest first). Customer and admin responses do not include the other fields. `handed-over` needs no body, works only in `READY_FOR_PICKUP` (otherwise 409
+`ORDER_STATUS_CONFLICT`), does not change the order status and keeps the first timestamp when repeated.
 
 ## Database migration
 

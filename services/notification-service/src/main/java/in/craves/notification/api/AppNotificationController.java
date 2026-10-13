@@ -26,8 +26,9 @@ public class AppNotificationController {
 
     @GetMapping("/in-app")
     public List<AppNoticeResponse> list(Authentication authentication,
-                                        @RequestParam(defaultValue = "50") int limit) {
-        return notificationService.appNotices(currentIdentity(authentication), limit);
+                                        @RequestParam(defaultValue = "50") int limit,
+                                        @RequestParam(required = false) String role) {
+        return notificationService.appNotices(currentIdentity(authentication), limit, role);
     }
 
     @GetMapping("/in-app/page")
@@ -35,19 +36,22 @@ public class AppNotificationController {
         Authentication authentication,
         @RequestParam(defaultValue = "50") int limit,
         @RequestParam(required = false) String cursor,
-        @RequestParam(defaultValue = "false") boolean unreadOnly
+        @RequestParam(defaultValue = "false") boolean unreadOnly,
+        @RequestParam(required = false) String role
     ) {
         return notificationService.appNoticePage(
             currentIdentity(authentication),
             limit,
             cursor,
-            unreadOnly
+            unreadOnly,
+            role
         );
     }
 
     @GetMapping("/in-app/unread-count")
-    public UnreadCountResponse unreadCount(Authentication authentication) {
-        return notificationService.unreadCount(currentIdentity(authentication));
+    public UnreadCountResponse unreadCount(Authentication authentication,
+                                           @RequestParam(required = false) String role) {
+        return notificationService.unreadCount(currentIdentity(authentication), role);
     }
 
     @PatchMapping("/in-app/{noticeId}/read")
@@ -58,8 +62,9 @@ public class AppNotificationController {
 
     @PatchMapping("/in-app/read-all")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void markAllRead(Authentication authentication) {
-        notificationService.markAllRead(currentIdentity(authentication));
+    public void markAllRead(Authentication authentication,
+                            @RequestParam(required = false) String role) {
+        notificationService.markAllRead(currentIdentity(authentication), role);
     }
 
     private static UUID currentIdentity(Authentication authentication) {

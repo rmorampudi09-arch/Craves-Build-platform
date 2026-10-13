@@ -121,7 +121,7 @@ public class SavedMenuItemReadService {
               FROM catalog_schema.menu_item mi
               LEFT JOIN catalog_schema.kitchen_profile kp ON kp.id = mi.kitchen_id
               LEFT JOIN catalog_schema.kitchen_schedule_config ksc ON ksc.kitchen_id = kp.id
-             WHERE mi.id IN (:ids) AND kp.identity_id = ANY(CAST(:financeChefIds AS uuid[]))
+             WHERE mi.id IN (:ids) AND mi.status <> 'ARCHIVED' AND kp.identity_id = ANY(CAST(:financeChefIds AS uuid[]))
             """;
 
         MapSqlParameterSource parameters = new MapSqlParameterSource()

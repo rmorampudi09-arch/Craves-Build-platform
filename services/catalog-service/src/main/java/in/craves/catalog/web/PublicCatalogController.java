@@ -113,6 +113,13 @@ public class PublicCatalogController {
             null,
             kitchen.status(),
             null,
+            null,
+            kitchen.chefPhotoUrl(),
+            kitchen.kitchenPhotoUrl(),
+            kitchen.cuisines(),
+            kitchen.serviceAreas(),
+            kitchen.socialLinks(),
+            null,
             null
         );
     }

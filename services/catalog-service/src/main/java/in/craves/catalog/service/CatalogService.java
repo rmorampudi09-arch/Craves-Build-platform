@@ -1,5 +1,8 @@
 package in.craves.catalog.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.catalog.finance.CatalogFinanceEligibility;
 
 import in.craves.catalog.config.CatalogDiscoveryProperties;
@@ -9,8 +12,10 @@ import in.craves.catalog.service.MediaStorageService.StoredMedia;
 import in.craves.catalog.web.ApiDtos.AvailabilityRequest;
 import in.craves.catalog.web.ApiDtos.DiscoveryRadiusResponse;
 import in.craves.catalog.web.ApiDtos.FoodType;
+import in.craves.catalog.web.ApiDtos.KitchenPhotoKind;
 import in.craves.catalog.web.ApiDtos.KitchenProfileRequest;
 import in.craves.catalog.web.ApiDtos.KitchenProfileResponse;
+import in.craves.catalog.web.ApiDtos.KitchenSettings;
 import in.craves.catalog.web.ApiDtos.KitchenStatus;
 import in.craves.catalog.web.ApiDtos.MenuItemImageResponse;
 import in.craves.catalog.web.ApiDtos.MenuItemRequest;
@@ -18,8 +23,11 @@ import in.craves.catalog.web.ApiDtos.MenuItemResponse;
 import in.craves.catalog.web.ApiDtos.MenuItemStatus;
 import in.craves.catalog.web.ApiDtos.PublicKitchenDiscoveryResponse;
 import in.craves.catalog.web.ApiDtos.PublicKitchenSummaryResponse;
+import in.craves.catalog.web.ApiDtos.SocialLinks;
 import in.craves.catalog.web.ApiDtos.SpiceLevel;
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -39,6 +47,12 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class CatalogService {
     static final int MAX_MENU_ITEM_IMAGES = 5;
+    private static final int MAX_TAGS = 10;
+    private static final int MAX_TAG_LENGTH = 40;
+    private static final int MAX_LINK_LENGTH = 200;
+    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() { };
+    private static final TypeReference<SocialLinks> SOCIAL_LINKS = new TypeReference<>() { };
     private final CatalogFinanceEligibility financeEligibility;
     private final JdbcTemplate jdbcTemplate;
     private final MediaStorageService mediaStorageService;
@@ -65,14 +79,18 @@ public class CatalogService {
     @Transactional
     public KitchenProfileResponse upsertMyKitchen(CravesPrincipal principal, KitchenProfileRequest request) {
         requireChef(principal);
+        // Null means "keep what is stored" (craves.in and app 1.30.0 do not send these); an empty list or object clears.
+        String cuisines = toJson(cleanTags("cuisines", request.cuisines()));
+        String serviceAreas = toJson(cleanTags("serviceAreas", request.serviceAreas()));
+        String socialLinks = toJson(cleanLinks(request.socialLinks()));
         KitchenStatus status = request.status() == null ? KitchenStatus.DRAFT : request.status();
         if (status == KitchenStatus.ACTIVE) financeEligibility.requireChef(principal.identityId());
         Optional<UUID> existingId = findKitchenIdByIdentity(principal.identityId());
         if (existingId.isEmpty()) {
             UUID id = UUID.randomUUID();
             jdbcTemplate.update(
-                "INSERT INTO catalog_schema.kitchen_profile (id, identity_id, kitchen_name, display_name, description, phone_number, email, address_line1, address_line2, landmark, area_name, city, state, postal_code, latitude, longitude, status, created_at, updated_at) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())",
+                "INSERT INTO catalog_schema.kitchen_profile (id, identity_id, kitchen_name, display_name, description, phone_number, email, address_line1, address_line2, landmark, area_name, city, state, postal_code, latitude, longitude, status, cuisines, service_areas, social_links, created_at, updated_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(CAST(? AS jsonb), '[]'::jsonb), COALESCE(CAST(? AS jsonb), '[]'::jsonb), COALESCE(CAST(? AS jsonb), '{}'::jsonb), now(), now())",
                 id,
                 principal.identityId(),
                 request.kitchenName(),
@@ -89,11 +107,14 @@ public class CatalogService {
                 blankToNull(request.postalCode()),
                 request.latitude(),
                 request.longitude(),
-                status.name()
+                status.name(),
+                cuisines,
+                serviceAreas,
+                socialLinks
             );
         } else {
             jdbcTemplate.update(
-                "UPDATE catalog_schema.kitchen_profile SET kitchen_name = ?, display_name = ?, description = ?, phone_number = ?, email = ?, address_line1 = ?, address_line2 = ?, landmark = ?, area_name = ?, city = ?, state = ?, postal_code = ?, latitude = ?, longitude = ?, status = ?, updated_at = now() WHERE identity_id = ?",
+                "UPDATE catalog_schema.kitchen_profile SET kitchen_name = ?, display_name = ?, description = ?, phone_number = ?, email = ?, address_line1 = ?, address_line2 = ?, landmark = ?, area_name = ?, city = ?, state = ?, postal_code = ?, latitude = ?, longitude = ?, status = ?, cuisines = COALESCE(CAST(? AS jsonb), cuisines), service_areas = COALESCE(CAST(? AS jsonb), service_areas), social_links = COALESCE(CAST(? AS jsonb), social_links), updated_at = now() WHERE identity_id = ?",
                 request.kitchenName(),
                 blankToNull(request.displayName()),
                 blankToNull(request.description()),
@@ -109,22 +130,93 @@ public class CatalogService {
                 request.latitude(),
                 request.longitude(),
                 status.name(),
+                cuisines,
+                serviceAreas,
+                socialLinks,
                 principal.identityId()
             );
         }
         return getMyKitchen(principal);
     }
 
+    /** Stores the new chef or kitchen photo URL; the replaced blob is removed only after commit. */
+    @Transactional
+    public KitchenProfileResponse uploadKitchenPhoto(CravesPrincipal principal, KitchenPhotoKind kind, MultipartFile file) {
+        requireChef(principal);
+        UUID kitchenId = requireMyKitchenId(principal.identityId());
+        StoredMedia stored = mediaStorageService.uploadKitchenImage(kitchenId, kind, file);
+        return setKitchenPhoto(principal, kitchenId, kind, stored.publicUrl());
+    }
+
+    @Transactional
+    public KitchenProfileResponse deleteKitchenPhoto(CravesPrincipal principal, KitchenPhotoKind kind) {
+        requireChef(principal);
+        return setKitchenPhoto(principal, requireMyKitchenId(principal.identityId()), kind, null);
+    }
+
+    private KitchenProfileResponse setKitchenPhoto(CravesPrincipal principal, UUID kitchenId, KitchenPhotoKind kind, String url) {
+        String column = kind == KitchenPhotoKind.CHEF ? "chef_photo_url" : "kitchen_photo_url";
+        String previous = jdbcTemplate.queryForObject(
+            "SELECT " + column + " FROM catalog_schema.kitchen_profile WHERE id = ? FOR UPDATE", String.class, kitchenId
+        );
+        jdbcTemplate.update("UPDATE catalog_schema.kitchen_profile SET " + column + " = ?, updated_at = now() WHERE id = ?", url, kitchenId);
+        if (previous != null) {
+            afterCommit(() -> mediaStorageService.deleteByPublicUrl(previous));
+        }
+        return getMyKitchen(principal);
+    }
+
+    public KitchenSettings getKitchenSettings(CravesPrincipal principal) {
+        KitchenProfileResponse kitchen = getMyKitchen(principal);
+        return new KitchenSettings(kitchen.autoAcceptOrders(), kitchen.defaultPrepMinutes());
+    }
+
+    @Transactional
+    public KitchenSettings updateKitchenSettings(CravesPrincipal principal, KitchenSettings request) {
+        requireChef(principal);
+        if (request == null || request.autoAcceptOrders() == null) {
+            throw ApiException.badRequest("AUTO_ACCEPT_REQUIRED", "autoAcceptOrders must be true or false");
+        }
+        Integer prepMinutes = request.defaultPrepMinutes();
+        if (prepMinutes != null && (prepMinutes < 5 || prepMinutes > 120)) {
+            throw ApiException.badRequest("DEFAULT_PREP_MINUTES_INVALID", "Default preparation time must be between 5 and 120 minutes");
+        }
+        UUID kitchenId = requireMyKitchenId(principal.identityId());
+        jdbcTemplate.update(
+            "UPDATE catalog_schema.kitchen_profile SET auto_accept_orders = ?, default_prep_minutes = ?, updated_at = now() WHERE id = ?",
+            request.autoAcceptOrders(),
+            prepMinutes,
+            kitchenId
+        );
+        return getKitchenSettings(principal);
+    }
+
     public List<MenuItemResponse> listMyMenuItems(CravesPrincipal principal) {
         requireChef(principal);
         UUID kitchenId = requireMyKitchenId(principal.identityId());
-        return findMenuItems("WHERE kitchen_id = ? ORDER BY created_at DESC", kitchenId);
+        return findMenuItems("WHERE kitchen_id = ? AND status <> 'ARCHIVED' ORDER BY created_at DESC", kitchenId);
+    }
+
+    /** Hides a dish from every customer and chef list. Its photos stay in storage and an archived dish cannot come back. */
+    @Transactional
+    public void archiveMenuItem(CravesPrincipal principal, UUID menuItemId) {
+        requireChef(principal);
+        UUID kitchenId = requireMyKitchenId(principal.identityId());
+        int updated = jdbcTemplate.update(
+            "UPDATE catalog_schema.menu_item SET status = 'ARCHIVED', is_available = false, updated_at = now() WHERE id = ? AND kitchen_id = ?",
+            menuItemId,
+            kitchenId
+        );
+        if (updated == 0) {
+            throw ApiException.notFound("MENU_ITEM_NOT_FOUND", "Menu item was not found");
+        }
     }
 
     @Transactional
     public MenuItemResponse createMenuItem(CravesPrincipal principal, MenuItemRequest request) {
         requireChef(principal);
         validateDeliveryMetadata(request);
+        rejectArchivedStatus(request);
         if (statusOrDefault(request.status()) == MenuItemStatus.ACTIVE) financeEligibility.requireChef(principal.identityId());
         UUID kitchenId = requireMyKitchenId(principal.identityId());
         UUID menuItemId = UUID.randomUUID();
@@ -154,10 +246,11 @@ public class CatalogService {
     public MenuItemResponse updateMenuItem(CravesPrincipal principal, UUID menuItemId, MenuItemRequest request) {
         requireChef(principal);
         validateDeliveryMetadata(request);
+        rejectArchivedStatus(request);
         if (statusOrDefault(request.status()) == MenuItemStatus.ACTIVE) financeEligibility.requireChef(principal.identityId());
         UUID kitchenId = requireMyKitchenId(principal.identityId());
         int updated = jdbcTemplate.update(
-            "UPDATE catalog_schema.menu_item SET item_name = ?, description = ?, category = ?, food_type = ?, price = ?, currency = ?, serves_count = ?, preparation_time_minutes = ?, spice_level = ?, unit_package_weight_grams = ?, thermobox_required = ?, is_available = ?, status = ?, updated_at = now() WHERE id = ? AND kitchen_id = ?",
+            "UPDATE catalog_schema.menu_item SET item_name = ?, description = ?, category = ?, food_type = ?, price = ?, currency = ?, serves_count = ?, preparation_time_minutes = ?, spice_level = ?, unit_package_weight_grams = ?, thermobox_required = ?, is_available = ?, status = ?, updated_at = now() WHERE id = ? AND kitchen_id = ? AND status <> 'ARCHIVED'",
             request.itemName(),
             blankToNull(request.description()),
             request.category(),
@@ -263,14 +356,18 @@ public class CatalogService {
                 menuItemId
             );
         }
+        afterCommit(() -> mediaStorageService.deleteQuietly(image.blobName()));
+        return getMyMenuItem(principal, menuItemId);
+    }
+
+    private static void afterCommit(Runnable action) {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override public void afterCommit() { mediaStorageService.deleteQuietly(image.blobName()); }
+                @Override public void afterCommit() { action.run(); }
             });
         } else {
-            mediaStorageService.deleteQuietly(image.blobName());
+            action.run();
         }
-        return getMyMenuItem(principal, menuItemId);
     }
 
     /** Makes one saved photo the cover customers see first. */
@@ -313,7 +410,7 @@ public class CatalogService {
 
     public KitchenProfileResponse getPublicKitchen(UUID kitchenId) {
         var eligible = financeEligibility.current();
-        return readKitchen(kitchenId, eligible.sqlArray());
+        return readKitchen(kitchenId, eligible.sqlArray()).withoutChefSettings();
     }
 
     /** Existing authenticated order history/ownership reads never depend on new-selling eligibility. */
@@ -431,7 +528,7 @@ public class CatalogService {
 
     private MenuItemResponse getMyMenuItem(CravesPrincipal principal, UUID menuItemId) {
         UUID kitchenId = requireMyKitchenId(principal.identityId());
-        List<MenuItemResponse> rows = findMenuItems("WHERE id = ? AND kitchen_id = ?", menuItemId, kitchenId);
+        List<MenuItemResponse> rows = findMenuItems("WHERE id = ? AND kitchen_id = ? AND status <> 'ARCHIVED'", menuItemId, kitchenId);
         if (rows.isEmpty()) {
             throw ApiException.notFound("MENU_ITEM_NOT_FOUND", "Menu item was not found");
         }
@@ -479,7 +576,14 @@ public class CatalogService {
             rs.getBigDecimal("longitude"),
             KitchenStatus.valueOf(rs.getString("status")),
             instant(rs, "created_at"),
-            instant(rs, "updated_at")
+            instant(rs, "updated_at"),
+            rs.getString("chef_photo_url"),
+            rs.getString("kitchen_photo_url"),
+            fromJson(rs.getString("cuisines"), STRING_LIST),
+            fromJson(rs.getString("service_areas"), STRING_LIST),
+            fromJson(rs.getString("social_links"), SOCIAL_LINKS),
+            rs.getBoolean("auto_accept_orders"),
+            integerOrNull(rs, "default_prep_minutes")
         );
     }
 
@@ -556,6 +660,68 @@ public class CatalogService {
                 "THERMOBOX_REQUIREMENT_REQUIRED",
                 "Thermobox requirement must be explicitly supplied"
             );
+        }
+    }
+
+    private static void rejectArchivedStatus(MenuItemRequest request) {
+        if (request.status() == MenuItemStatus.ARCHIVED) {
+            throw ApiException.badRequest("MENU_ITEM_STATUS_INVALID", "A dish is archived by deleting it");
+        }
+    }
+
+    /** Null stays null (keep stored); otherwise at most 10 entries of 1-40 characters after trimming. */
+    private static List<String> cleanTags(String field, List<String> values) {
+        if (values == null) return null;
+        if (values.size() > MAX_TAGS) {
+            throw ApiException.badRequest("TOO_MANY_ENTRIES", field + " can have at most " + MAX_TAGS + " entries");
+        }
+        List<String> cleaned = new ArrayList<>(values.size());
+        for (String value : values) {
+            String trimmed = value == null ? "" : value.trim();
+            if (trimmed.isEmpty() || trimmed.length() > MAX_TAG_LENGTH) {
+                throw ApiException.badRequest("INVALID_ENTRY", "Each entry in " + field + " must be 1 to " + MAX_TAG_LENGTH + " characters");
+            }
+            cleaned.add(trimmed);
+        }
+        return cleaned;
+    }
+
+    /** Null stays null (keep stored); a given object replaces all four links, a blank link clears that one. */
+    private static SocialLinks cleanLinks(SocialLinks links) {
+        if (links == null) return null;
+        return new SocialLinks(
+            cleanLink("instagram", links.instagram()),
+            cleanLink("facebook", links.facebook()),
+            cleanLink("youtube", links.youtube()),
+            cleanLink("website", links.website())
+        );
+    }
+
+    private static String cleanLink(String field, String value) {
+        String link = blankToNull(value);
+        if (link == null) return null;
+        try {
+            URI uri = new URI(link);
+            if (link.length() <= MAX_LINK_LENGTH && "https".equalsIgnoreCase(uri.getScheme()) && uri.getHost() != null) return link;
+        } catch (URISyntaxException ignored) {
+            // rejected below, same as any other non-https link
+        }
+        throw ApiException.badRequest("INVALID_SOCIAL_LINK", field + " must be an https:// link of at most " + MAX_LINK_LENGTH + " characters");
+    }
+
+    private static String toJson(Object value) {
+        try {
+            return value == null ? null : JSON.writeValueAsString(value);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Kitchen profile value could not be stored", ex);
+        }
+    }
+
+    private static <T> T fromJson(String json, TypeReference<T> type) {
+        try {
+            return JSON.readValue(json, type);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Stored kitchen profile value is not valid JSON", ex);
         }
     }
 

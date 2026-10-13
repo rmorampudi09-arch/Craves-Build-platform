@@ -48,10 +48,10 @@ class NotificationServiceInboxTest {
             "10000000-0000-0000-0000-000000000001",
             OffsetDateTime.of(2026, 8, 19, 19, 30, 1, 0, ZoneOffset.UTC)
         );
-        when(repository.findAppNoticesPage(eq(userId), eq(3), isNull(), eq(false)))
+        when(repository.findAppNoticesPage(eq(userId), eq(3), isNull(), eq(false), isNull()))
             .thenReturn(List.of(first, second, extra));
 
-        AppNoticePageResponse page = service.appNoticePage(userId, 2, null, false);
+        AppNoticePageResponse page = service.appNoticePage(userId, 2, null, false, null);
 
         assertThat(page.notices()).containsExactly(first, second);
         assertThat(page.hasMore()).isTrue();
@@ -63,7 +63,7 @@ class NotificationServiceInboxTest {
     @Test
     void rejectsInvalidPageSizeBeforeRepositoryAccess() {
         ResponseStatusException exception = catchThrowableOfType(
-            () -> service.appNoticePage(userId, 0, null, false),
+            () -> service.appNoticePage(userId, 0, null, false, null),
             ResponseStatusException.class
         );
 
@@ -73,7 +73,7 @@ class NotificationServiceInboxTest {
     @Test
     void rejectsMalformedCursorBeforeRepositoryAccess() {
         ResponseStatusException exception = catchThrowableOfType(
-            () -> service.appNoticePage(userId, 20, "not-a-valid-cursor", false),
+            () -> service.appNoticePage(userId, 20, "not-a-valid-cursor", false, null),
             ResponseStatusException.class
         );
 
@@ -82,9 +82,9 @@ class NotificationServiceInboxTest {
 
     @Test
     void markAllReadDelegatesAsIdempotentBulkOperation() {
-        service.markAllRead(userId);
+        service.markAllRead(userId, null);
 
-        verify(repository).markAllRead(userId);
+        verify(repository).markAllRead(userId, null);
     }
 
     private static AppNoticeResponse notice(String id, OffsetDateTime createdAt) {

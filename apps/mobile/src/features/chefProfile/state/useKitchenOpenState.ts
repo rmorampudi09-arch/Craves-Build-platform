@@ -8,6 +8,7 @@ import {
   scheduleUpdateFromCurrent,
   type ChefKitchenSchedule,
 } from '../../chefSchedule/api/chefKitchenScheduleApi';
+import {MIDNIGHT, formatHoursTime} from '../../chefSchedule/domain/openingHours';
 import {createChefKitchenScheduleQueryKey} from '../../chefSchedule/state/chefKitchenScheduleQuery';
 import {formatWindowTime} from '../../chefShell/domain/chefFormat';
 import {
@@ -53,6 +54,7 @@ export interface KitchenOpenState {
   resume(): Promise<boolean>;
 }
 
+const hhmm5 = (time: string) => time.slice(0, 5);
 const hhmm = (date: Date) =>
   `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 
@@ -74,9 +76,12 @@ export function deriveKitchenHours(
   const time = hhmm(now);
   const next = today.find(window => window.opensAt.slice(0, 5) > time);
   return {
-    hoursToday: `${formatWindowTime(today[0].opensAt)} – ${formatWindowTime(today[today.length - 1].closesAt)}`,
+    // 23:59 is how a close at midnight is saved: it reads "Midnight" and stays open through that last minute.
+    hoursToday: `${formatHoursTime(hhmm5(today[0].opensAt))} – ${formatHoursTime(hhmm5(today[today.length - 1].closesAt))}`,
     opensAt: next ? formatWindowTime(next.opensAt) : null,
-    outsideHours: !today.some(window => window.opensAt.slice(0, 5) <= time && time < window.closesAt.slice(0, 5)),
+    outsideHours: !today.some(
+      window => window.opensAt.slice(0, 5) <= time && (time < window.closesAt.slice(0, 5) || window.closesAt.slice(0, 5) === MIDNIGHT),
+    ),
   };
 }
 
@@ -212,15 +217,25 @@ export function useKitchenOpenState(): KitchenOpenState {
           throw new Error('KITCHEN_SUSPENDED');
         }
         const target: ChefKitchenStatus = open ? 'ACTIVE' : 'INACTIVE';
-        if (kitchen.status !== target) {
-          const updated = await chefProfileApi.replaceKitchen(replacementRequest(kitchen, target));
+        // The cached kitchen can be a minute old (Kitchen details may have saved since, or Craves paused it), and
+        // the PUT sends every field back: read it again right before, and build the request on what the server has.
+        const latest = await queryClient.fetchQuery({
+          queryKey: kitchenKey,
+          queryFn: ({signal}) => chefProfileApi.getKitchen(signal),
+          staleTime: 0,
+        });
+        if (latest.status === 'SUSPENDED') {
+          throw new Error('KITCHEN_SUSPENDED');
+        }
+        if (latest.status !== target) {
+          const updated = await chefProfileApi.replaceKitchen(replacementRequest(latest, target));
           await synchronizeChefProfileAfterSave(queryClient, identityId, updated);
         }
         if (open && schedule?.acceptingOrders === false) {
           await replaceSchedule(schedule, {acceptingOrders: true, pausedUntil: schedule.pausedUntil});
         }
       }),
-    [guarded, identityId, kitchen, queryClient, replaceSchedule, schedule],
+    [guarded, identityId, kitchen, kitchenKey, queryClient, replaceSchedule, schedule],
   );
 
   const writeSchedule = React.useCallback(

@@ -21,13 +21,30 @@ import {
   StatusChip,
   useChefToast,
 } from '../../chefShell/components/ui';
-import {documentRows, uploadChoices, verificationBanner, type VerificationBanner} from '../domain/documentRows';
+import {NOT_FINISHED_BANNER, documentRows, uploadChoices, verificationBanner, type VerificationBanner} from '../domain/documentRows';
 
 const BANNER: Record<VerificationBanner['tone'], {icon: IconName; background: string; foreground: string}> = {
   ok: {icon: 'shield', background: colors.successSoft, foreground: colors.successText},
   wait: {icon: 'clock', background: colors.warningSoft, foreground: colors.warningText},
   problem: {icon: 'alert', background: colors.errorSoft, foreground: colors.error},
 };
+
+function StatusBanner({banner}: {banner: VerificationBanner}) {
+  const tone = BANNER[banner.tone];
+  return (
+    <View style={[styles.banner, {backgroundColor: tone.background}]}>
+      <Icon color={tone.foreground} name={tone.icon} size={iconSize.lg} surface={false} />
+      <View style={styles.bannerText}>
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.bannerTitle, {color: tone.foreground}]}>
+          {banner.title}
+        </Text>
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.bannerMessage, {color: tone.foreground}]}>
+          {banner.message}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 /** Plain words for a refused upload; a code we have no words for gets a general line. */
 function uploadMessage(error: unknown): string {
@@ -51,9 +68,12 @@ export function ChefBusinessInformationScreen() {
   const application = query.data;
   const accountApproved = useAppSelector(state => state.auth.accountResolution?.flow === 'CHEF' && state.auth.accountResolution.onboardingStatus === 'APPROVED');
   // A chef approved before the new application has none: the server answers 404 on a route that is published.
-  const noApplication =
+  // For a chef who is not approved, no application means it was never started.
+  const missing =
     (query.isError && toAppApiError(query.error).status === 404) ||
-    (accountApproved && application?.application.status === 'NOT_SUBMITTED' && application.documents.length === 0);
+    (application?.application.status === 'NOT_SUBMITTED' && application.documents.length === 0);
+  const noApplication = accountApproved && missing;
+  const notStarted = !accountApproved && query.isError && toAppApiError(query.error).status === 404;
   const approved = application?.application.status === 'APPROVED';
   const askSupport = () => navigation.navigate('ChefSupportTicket', {topic: UPDATE_TOPIC});
 
@@ -112,7 +132,9 @@ export function ChefBusinessInformationScreen() {
       }}
       refreshing={query.isRefetching}
       withTabBar>
-      {noApplication ? (
+      {notStarted ? (
+        <StatusBanner banner={NOT_FINISHED_BANNER} />
+      ) : noApplication ? (
         <>
           <View style={[styles.banner, {backgroundColor: BANNER.ok.background}]}>
             <Icon color={BANNER.ok.foreground} name="shield" size={iconSize.lg} surface={false} />
@@ -132,21 +154,10 @@ export function ChefBusinessInformationScreen() {
               return null;
             }
             const banner = verificationBanner(application);
-            const tone = BANNER[banner.tone];
             const rows = documentRows(application);
             return (
               <>
-                <View style={[styles.banner, {backgroundColor: tone.background}]}>
-                  <Icon color={tone.foreground} name={tone.icon} size={iconSize.lg} surface={false} />
-                  <View style={styles.bannerText}>
-                    <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.bannerTitle, {color: tone.foreground}]}>
-                      {banner.title}
-                    </Text>
-                    <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.bannerMessage, {color: tone.foreground}]}>
-                      {banner.message}
-                    </Text>
-                  </View>
-                </View>
+                <StatusBanner banner={banner} />
 
                 {rows.length > 0 ? (
                   <ListGroup>

@@ -223,6 +223,15 @@ describe('ChefBusinessInformationScreen (Documents & verification)', () => {
     expect(mockNavigate).toHaveBeenCalledWith('ChefSupportTicket', {topic: 'Update my documents'});
   });
 
+  it('does not say documents were checked when the chef is not approved: a 404 there means the application is not finished', async () => {
+    mockAccountApproved = false;
+    mockOnboarding.load.mockRejectedValue(new AppApiError('HTTP_404', 'Not found', 404));
+    await mount();
+    expect(ui.has('Your application is not finished')).toBe(true);
+    expect(ui.anyText(/checked when you joined/)).toBe(false);
+    expect(ui.byLabel('Contact support')).toBeUndefined();
+  });
+
   it('says the same for an approved chef whose application is empty', async () => {
     mockOnboarding.load.mockResolvedValue(
       onboarding({application: application('NOT_SUBMITTED', {reviewedAt: null, submittedAt: null}), documents: [], details: null}),

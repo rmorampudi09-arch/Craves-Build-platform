@@ -88,7 +88,10 @@ export function ChefEditProfileScreen() {
   React.useEffect(() => () => discard.current(), []);
 
   const values = draft.formDraft;
-  const readOnly = !draft.originalProfile || !canEditChefKitchenProfile(draft.originalProfile);
+  // Locked when the kitchen was paused when this form opened, and also when a save finds it paused since:
+  // that read updates the shared kitchen, so `kitchen` turns SUSPENDED and the form locks with the edits still on screen.
+  const readOnly =
+    !draft.originalProfile || !canEditChefKitchenProfile(draft.originalProfile) || (kitchen !== null && !canEditChefKitchenProfile(kitchen));
   const submitting = model.saveState === 'submitting';
   const [leaving, setLeaving] = React.useState<(() => void) | null>(null);
   const leaveFreely = React.useRef(false);
@@ -225,7 +228,7 @@ export function ChefEditProfileScreen() {
       footer={
         values ? (
           <>
-            {model.saveState === 'error' && model.errorMessage ? <FieldError message={model.errorMessage} /> : null}
+            {model.saveState === 'error' && model.errorMessage && !readOnly ? <FieldError message={model.errorMessage} /> : null}
             <ChefActionButton
               busy={submitting}
               disabled={!draft.dirtyState || readOnly}

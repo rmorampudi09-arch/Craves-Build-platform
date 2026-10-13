@@ -1,12 +1,12 @@
 import React from 'react';
 import {StyleSheet} from 'react-native';
-import renderer, {act} from 'react-test-renderer';
+import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
 import {touchTarget} from '../../../design/tokens';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
 import {EMPTY_ONBOARDING} from '../../chefOnboarding/api/chefOnboardingApi';
-import {ChefToastProvider} from '../../chefShell/components/ui';
+import {ChefCard, ChefToastProvider} from '../../chefShell/components/ui';
 import type {ChefKitchenProfile} from '../api/chefProfileApi';
 import {switchChefToCustomerRole} from '../state/chefProfileRoleSwitch';
 import {deferred, screenQueries} from '../testing/screenTestKit';
@@ -181,21 +181,40 @@ describe('ChefProfileScreen', () => {
     expect(ui.byPrefix('Bank account')?.props.accessibilityLabel).toBe('Bank account');
   });
 
-  it('gives the camera and the two chips a tap area of at least 48 dp', async () => {
+  it('makes the camera and the two chips themselves at least 48 dp, inside parents that are not smaller (hit slop is clipped to the parent)', async () => {
     await mount();
-    const reach = (label: string) => {
-      const node = ui.byLabel(label)!;
-      const slop = node.props.hitSlop as {top: number; bottom: number; left: number; right: number};
-      const style = StyleSheet.flatten(node.props.style) ?? {};
-      return {
-        height: (typeof style.height === 'number' ? style.height : 28) + slop.top + slop.bottom,
-        width: (typeof style.width === 'number' ? style.width : touchTarget.minimum) + slop.left + slop.right,
-      };
+    const own = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
+    const size = (node: ReactTestInstance, axis: 'width' | 'height') => {
+      const style = own(node);
+      const value = axis === 'width' ? [style.width, style.minWidth] : [style.height, style.minHeight];
+      return Math.max(...value.filter((entry): entry is number => typeof entry === 'number'), 0);
     };
-    // The chips are 28 dp tall (Badge) and as wide as their words.
     for (const label of ['Change your photo', 'Approved. Open documents', '4.6 stars, 32 reviews. Open reviews']) {
-      expect(reach(label).height).toBeGreaterThanOrEqual(touchTarget.minimum);
-      expect(reach(label).width).toBeGreaterThanOrEqual(touchTarget.minimum);
+      const tap = ui.byLabel(label)!;
+      expect(tap.props.hitSlop).toBeUndefined();
+      expect(size(tap, 'width')).toBeGreaterThanOrEqual(touchTarget.minimum);
+      expect(size(tap, 'height')).toBeGreaterThanOrEqual(touchTarget.minimum);
+
+      // Every ancestor up to the identity card with a fixed size must hold the whole tap square.
+      const style = own(tap);
+      let parent = tap.parent;
+      let direct = true;
+      while (parent && parent.type !== ChefCard) {
+        const fixed = own(parent);
+        if (typeof fixed.height === 'number') {
+          expect(fixed.height).toBeGreaterThanOrEqual(direct ? (Number(style.top) || 0) + size(tap, 'height') : size(tap, 'height'));
+        }
+        if (typeof fixed.width === 'number') {
+          expect(fixed.width).toBeGreaterThanOrEqual(direct ? (Number(style.left) || 0) + size(tap, 'width') : size(tap, 'width'));
+        }
+        if (direct && style.position === 'absolute') {
+          expect(Number(style.left)).toBeGreaterThanOrEqual(0);
+          expect(Number(style.top)).toBeGreaterThanOrEqual(0);
+        }
+        direct = false;
+        parent = parent.parent;
+      }
+      expect(parent?.type).toBe(ChefCard);
     }
   });
 

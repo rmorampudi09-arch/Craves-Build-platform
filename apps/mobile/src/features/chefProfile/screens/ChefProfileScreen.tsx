@@ -3,7 +3,7 @@ import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type NavigationProp} from '@react-navigation/native';
 import type {ChefProfileStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
-import {borderWidth, colors, fontWeight, iconSize, spacing, textDefaults, typography} from '../../../design/tokens';
+import {borderWidth, colors, fontWeight, iconSize, spacing, textDefaults, touchTarget, typography} from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
 import {
@@ -119,10 +119,11 @@ export function ChefProfileScreen() {
           <Pressable
             accessibilityLabel="Change your photo"
             accessibilityRole="button"
-            hitSlop={CAMERA_SLOP}
             onPress={open('ChefEditProfile')}
-            style={styles.camera}>
-            <Icon color={colors.textPrimary} name="camera" size={iconSize.sm} surface={false} />
+            style={styles.cameraTap}>
+            <View style={styles.camera}>
+              <Icon color={colors.textPrimary} name="camera" size={iconSize.sm} surface={false} />
+            </View>
           </Pressable>
         </View>
         <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.name}>
@@ -134,13 +135,17 @@ export function ChefProfileScreen() {
           </Text>
         ) : null}
         <View style={styles.chips}>
-          {suspended ? <StatusChip label="Paused by Craves" tone="new" /> : null}
+          {suspended ? (
+            <View style={styles.chipTap}>
+              <StatusChip label="Paused by Craves" tone="new" />
+            </View>
+          ) : null}
           {approved ? (
             <Pressable
               accessibilityLabel="Approved. Open documents"
               accessibilityRole="button"
-              hitSlop={CHIP_SLOP}
-              onPress={open('ChefBusinessInformation')}>
+              onPress={open('ChefBusinessInformation')}
+              style={styles.chipTap}>
               <StatusChip label="Approved" tone="ready" />
             </Pressable>
           ) : null}
@@ -148,8 +153,8 @@ export function ChefProfileScreen() {
             <Pressable
               accessibilityLabel={`${rating.toFixed(1)} stars, ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}. Open reviews`}
               accessibilityRole="button"
-              hitSlop={CHIP_SLOP}
-              onPress={open('ChefReviews')}>
+              onPress={open('ChefReviews')}
+              style={styles.chipTap}>
               <StatusChip label={`★ ${rating.toFixed(1)} · ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}`} tone="info" />
             </Pressable>
           ) : null}
@@ -245,19 +250,31 @@ export function ChefProfileScreen() {
 
 const AVATAR = 76;
 const BADGE = 28;
-// The camera badge (28 dp) and the chips (28 dp tall) reach touchTarget.minimum through their hit area.
-const CAMERA_SLOP = {top: 10, bottom: 10, left: 10, right: 10};
-const CHIP_SLOP = {top: 10, bottom: 10, left: 0, right: 0};
+const TAP = touchTarget.minimum;
+// React Native clips hitSlop to the parent, so the camera and the chips are 48 dp themselves.
+// The camera's badge sits on the avatar's lower right (centre BADGE_CENTER from the top-left); its 48 dp square
+// reaches OVERFLOW past the avatar there, so the avatar box is widened and lengthened by that and the extra
+// height is pulled back with a negative margin: nothing below moves.
+const BADGE_CENTER = AVATAR - 2 - BADGE / 2;
+const OVERFLOW = BADGE_CENTER + TAP / 2 - AVATAR;
+const CHIP_SHIFT = (TAP - BADGE) / 2;
+
 const styles = StyleSheet.create({
   identity: {alignItems: 'center', gap: spacing.xxs, paddingVertical: spacing.lg},
-  avatarWrap: {width: AVATAR, height: AVATAR, marginBottom: spacing.xs},
-  avatar: {width: AVATAR, height: AVATAR, borderRadius: AVATAR / 2},
+  avatarWrap: {width: AVATAR + 2 * OVERFLOW, height: AVATAR + OVERFLOW, marginBottom: spacing.xs - OVERFLOW},
+  avatar: {position: 'absolute', top: 0, left: OVERFLOW, width: AVATAR, height: AVATAR, borderRadius: AVATAR / 2},
   avatarLetter: {alignItems: 'center', justifyContent: 'center', backgroundColor: colors.flameRedAccessible},
   avatarText: {color: colors.white, fontSize: typography.title, fontWeight: fontWeight.bold},
-  camera: {
+  cameraTap: {
     position: 'absolute',
-    right: -2,
-    bottom: -2,
+    top: BADGE_CENTER - TAP / 2,
+    left: OVERFLOW + BADGE_CENTER - TAP / 2,
+    width: TAP,
+    height: TAP,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  camera: {
     width: BADGE,
     height: BADGE,
     borderRadius: BADGE / 2,
@@ -269,6 +286,15 @@ const styles = StyleSheet.create({
   },
   name: {color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold, textAlign: 'center'},
   muted: {color: colors.textSecondary, fontSize: typography.small, textAlign: 'center'},
-  chips: {flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.xs},
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs - CHIP_SHIFT,
+    marginBottom: -CHIP_SHIFT,
+  },
+  chipTap: {minWidth: TAP, minHeight: TAP, alignItems: 'center', justifyContent: 'center'},
   version: {color: colors.textSecondary, fontSize: typography.tiny, textAlign: 'center'},
 });

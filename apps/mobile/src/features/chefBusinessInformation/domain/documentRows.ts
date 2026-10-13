@@ -102,6 +102,13 @@ export interface VerificationBanner {
   message: string;
 }
 
+/** For an application that was never started or finished. */
+export const NOT_FINISHED_BANNER: VerificationBanner = {
+  tone: 'wait',
+  title: 'Your application is not finished',
+  message: 'Finish your application to get verified.',
+};
+
 /** The status line at the top of Documents & verification. */
 export function verificationBanner(state: OnboardingState): VerificationBanner {
   const {status, reviewedAt, rejectionReason} = state.application;
@@ -113,7 +120,7 @@ export function verificationBanner(state: OnboardingState): VerificationBanner {
     return {tone: 'problem', title: 'Your documents need an update', message: rejectionReason || 'Craves needs a few changes before it can approve your kitchen.'};
   }
   if (status === 'NOT_SUBMITTED') {
-    return {tone: 'wait', title: 'Your application is not finished', message: 'Finish your application to get verified.'};
+    return NOT_FINISHED_BANNER;
   }
   return {tone: 'wait', title: 'Craves is checking your documents', message: 'We will tell you as soon as it is done.'};
 }

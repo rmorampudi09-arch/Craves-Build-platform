@@ -274,6 +274,10 @@ describe('ChefEditProfileScreen (Kitchen details)', () => {
     expect(mockApi.replaceKitchen).not.toHaveBeenCalled();
     expect(ui.has('Craves has paused your kitchen, so its details cannot be changed right now.')).toBe(true);
     expect(mockGoBack).not.toHaveBeenCalled();
+    // The form is now in the same state as one opened on a paused kitchen: locked, with its edits still on screen.
+    expect(input('Kitchen name').props.editable).toBe(false);
+    expect(input('Kitchen name').props.value).toBe('Relangi Andhra Kitchen');
+    expect(saveEnabled()).toBe(false);
   });
 
   it('does not save when the kitchen cannot be read just before saving', async () => {

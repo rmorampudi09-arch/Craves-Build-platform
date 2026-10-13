@@ -49,18 +49,29 @@ public class DeliveryOutboxRepository {
     public List<OutboxRecord> claimBatch(int limit) {
         return jdbc.query("""
             WITH selected AS (
-                SELECT id
-                FROM delivery_schema.delivery_outbox
+                SELECT outbox.id
+                FROM delivery_schema.delivery_outbox AS outbox
                 WHERE (
-                        status IN ('PENDING', 'FAILED')
-                        AND next_attempt_at <= now()
+                        (
+                          outbox.status IN ('PENDING', 'FAILED')
+                          AND outbox.next_attempt_at <= now()
+                        )
+                     OR (
+                          outbox.status = 'PROCESSING'
+                          AND outbox.processing_started_at < now() - interval '10 minutes'
+                          AND outbox.attempt_count < 10
+                        )
                       )
-                   OR (
-                        status = 'PROCESSING'
-                        AND processing_started_at < now() - interval '10 minutes'
-                        AND attempt_count < 10
+                  -- CH-06 / F3-04: a job's next event waits until its earlier events are published or dead-lettered,
+                  -- so a retrying event can no longer be overtaken (which made order-service drop it as STALE).
+                  AND NOT EXISTS (
+                        SELECT 1
+                        FROM delivery_schema.delivery_outbox AS earlier
+                        WHERE earlier.aggregate_id = outbox.aggregate_id
+                          AND earlier.status IN ('PENDING', 'FAILED', 'PROCESSING')
+                          AND (earlier.created_at, earlier.id) < (outbox.created_at, outbox.id)
                       )
-                ORDER BY created_at
+                ORDER BY outbox.created_at
                 FOR UPDATE SKIP LOCKED
                 LIMIT ?
             )

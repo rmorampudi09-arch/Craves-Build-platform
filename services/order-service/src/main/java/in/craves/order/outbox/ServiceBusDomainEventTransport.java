@@ -48,7 +48,10 @@ public class ServiceBusDomainEventTransport implements DomainEventTransport {
             .setMessageId(record.id().toString())
             .setCorrelationId(record.correlationId().toString())
             .setSubject(record.eventType())
-            .setContentType("application/json");
+            .setContentType("application/json")
+            // CH-06: one session per order, so a session-enabled subscription delivers each order's events in order.
+            // Plain subscriptions ignore it; on the partitioned topic it also keeps an order on one partition.
+            .setSessionId(record.aggregateId().toString());
 
         // event_type is the canonical property used by Service Bus subscription SQL filters.
         // Keep eventType temporarily for backward compatibility with existing consumers and diagnostics.

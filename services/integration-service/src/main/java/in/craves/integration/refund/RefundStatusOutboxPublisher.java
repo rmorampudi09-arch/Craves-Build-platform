@@ -74,7 +74,9 @@ public class RefundStatusOutboxPublisher {
                 .setMessageId(record.id().toString())
                 .setCorrelationId(record.correlationId().toString())
                 .setSubject(record.eventType())
-                .setContentType("application/json");
+                .setContentType("application/json")
+                // CH-06: one session per chef order (subject), for session-enabled subscriptions.
+                .setSessionId(record.subject().toString());
             message.getApplicationProperties().put("eventType", record.eventType());
             message.getApplicationProperties().put("eventVersion", record.eventVersion());
             message.getApplicationProperties().put("source", "integration-service");

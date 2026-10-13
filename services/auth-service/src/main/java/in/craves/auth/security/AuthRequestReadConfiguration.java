@@ -10,9 +10,11 @@ import org.springframework.stereotype.Component;
 public class AuthRequestReadConfiguration implements WebServerFactoryCustomizer<TomcatServletWebServerFactory> {
     private final AuthRateLimitSettings settings;
     private final AuthRequestReadSettings reads;
+    @org.springframework.beans.factory.annotation.Value("${CRAVES_MSG91_ENABLED:false}")
+    private boolean msg91Enabled;
     public AuthRequestReadConfiguration(AuthRateLimitSettings settings,AuthRequestReadSettings reads) { this.settings=settings;this.reads=reads; }
     @Override public void customize(TomcatServletWebServerFactory factory) {
-        if(!settings.postgresEnabled()) return;
+        if(!settings.postgresEnabled() && !msg91Enabled) return;
         factory.addConnectorCustomizers(connector->{
             if(!(connector.getProtocolHandler() instanceof AbstractHttp11Protocol<?> protocol))
                 throw new IllegalStateException("PostgreSQL Auth protection requires a bounded HTTP connector");

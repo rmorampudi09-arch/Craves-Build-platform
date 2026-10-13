@@ -1,0 +1,40 @@
+# Chef mobile app routes on the mobile gateway (apim-craves-prodlow-kmqgfy). Manual runs only.
+#
+# Run AFTER the backend images that carry the new routes are live (catalog and order):
+# the script only wires the gateway, and each route is probed for a 401 when unauthenticated.
+# Without confirmProductionChange the run only validates the script and prints the route table.
+# A write must not overlap another Craves release.
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmProductionChange
+    type: boolean
+    default: false
+
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 1
+    persistCredentials: false
+
+  - script: |
+      set -euo pipefail
+      bash -n scripts/apim/configure-chef-app-routes-apim.sh
+      DRY_RUN=true bash scripts/apim/configure-chef-app-routes-apim.sh
+    displayName: Validate chef app routes script and print the route table
+
+  - task: AzureCLI@2
+    displayName: Chef app APIM routes
+    condition: and(succeeded(), eq('${{ parameters.confirmProductionChange }}', 'True'))
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: CONFIRM_APIM_WRITE=true bash scripts/apim/configure-chef-app-routes-apim.sh

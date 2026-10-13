@@ -163,6 +163,11 @@ public class DeliveryStatusUpdateService {
             decision = Decision.APPLY;
         }
 
+        // Courier details ride on any report newer than the stored one (a same-status report can still refresh them).
+        if (decision == Decision.APPLY || decision == Decision.NO_CHANGE) {
+            storeCourier(data);
+        }
+
         if (decision != Decision.APPLY) {
             markInbox(event.eventId(), decision.name());
             return new ProcessingResult(false, false, decision.name());
@@ -229,6 +234,30 @@ public class DeliveryStatusUpdateService {
 
         markInbox(event.eventId(), "PROCESSED");
         return new ProcessingResult(true, false, "PROCESSED");
+    }
+
+    /** Fields the event carries replace the stored courier; fields it leaves out (or blank) keep their value. */
+    private void storeCourier(DeliveryStatusChangedData data) {
+        if (data.courierName() == null && data.courierPhone() == null
+            && data.courierPhotoUrl() == null && data.pickupEtaAt() == null) {
+            return;
+        }
+        jdbcTemplate.update(
+            """
+                UPDATE order_schema.customer_order
+                SET delivery_partner_name = COALESCE(NULLIF(btrim(CAST(? AS text)), ''), delivery_partner_name),
+                    delivery_partner_phone = COALESCE(NULLIF(btrim(CAST(? AS text)), ''), delivery_partner_phone),
+                    delivery_partner_photo_url = COALESCE(NULLIF(btrim(CAST(? AS text)), ''), delivery_partner_photo_url),
+                    delivery_partner_pickup_eta_at = COALESCE(CAST(? AS timestamptz), delivery_partner_pickup_eta_at),
+                    updated_at = now()
+                WHERE id = ?
+                """,
+            data.courierName(),
+            data.courierPhone(),
+            data.courierPhotoUrl(),
+            data.pickupEtaAt() == null ? null : Timestamp.from(data.pickupEtaAt()),
+            data.chefSubOrderId()
+        );
     }
 
     private LockedOrder lockOrder(UUID orderId) {

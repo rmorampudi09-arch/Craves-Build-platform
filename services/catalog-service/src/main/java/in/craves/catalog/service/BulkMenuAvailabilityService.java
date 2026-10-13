@@ -62,6 +62,7 @@ public class BulkMenuAvailabilityService {
                   FROM catalog_schema.menu_item
                  WHERE kitchen_id = :kitchenId
                    AND id IN (:ids)
+                   AND status <> 'ARCHIVED'
                  FOR UPDATE
                 """,
             params,

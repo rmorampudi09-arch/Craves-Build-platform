@@ -133,6 +133,9 @@ jobs:
       EMAIL_TEST_DB_USER: postgres
       EMAIL_TEST_DB_PASSWORD: postgres
       EMAIL_TEST_DISPOSABLE: 'true'
+      CENTRAL_OTP_TEST_DB: jdbc:postgresql://localhost:5432
+      CENTRAL_OTP_TEST_DB_USER: postgres
+      CENTRAL_OTP_TEST_DB_PASSWORD: postgres
       ONBOARDING_TEST_DB_URL: jdbc:postgresql://localhost:5432/chef_onboarding_test
       ONBOARDING_TEST_DB_USER: postgres
       ONBOARDING_TEST_DB_PASSWORD: postgres

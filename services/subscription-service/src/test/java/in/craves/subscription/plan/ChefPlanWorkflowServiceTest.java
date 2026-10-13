@@ -274,7 +274,7 @@ class ChefPlanWorkflowServiceTest {
     private static ChefPlanResponse plan(String status, String code, boolean acceptingSubscribers) {
         return new ChefPlanResponse(
             PLAN_ID, code, "Weekly lunches", "Home lunches", "WEEKLY", new BigDecimal("1200.00"), "INR",
-            status, null, null, null, Instant.parse("2026-08-13T00:00:00Z"), Instant.parse("2026-08-13T00:00:00Z"), null, acceptingSubscribers
+            status, null, null, null, Instant.parse("2026-08-13T00:00:00Z"), Instant.parse("2026-08-13T00:00:00Z"), null, acceptingSubscribers, 0
         );
     }
 }

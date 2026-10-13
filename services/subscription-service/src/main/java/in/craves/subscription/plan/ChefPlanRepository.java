@@ -172,7 +172,8 @@ public class ChefPlanRepository {
             instant(rs, "created_at"),
             instant(rs, "updated_at"),
             PlanImageRepository.imagePath(rs.getObject("id", UUID.class), instant(rs, "image_updated_at")),
-            rs.getBoolean("accepting_subscribers")
+            rs.getBoolean("accepting_subscribers"),
+            rs.getInt("active_subscriber_count")
         );
     }
 
@@ -194,6 +195,8 @@ public class ChefPlanRepository {
     private static final String SELECT =
         "SELECT id, plan_code, chef_identity_id, name, description, billing_period, amount, currency, status, " +
         "submitted_at, reviewed_at, reviewed_by_identity_id, review_reason, created_at, updated_at, accepting_subscribers, " +
-        "(SELECT i.updated_at FROM subscription_schema.subscription_plan_image i WHERE i.plan_id = p.id) AS image_updated_at " +
+        "(SELECT i.updated_at FROM subscription_schema.subscription_plan_image i WHERE i.plan_id = p.id) AS image_updated_at, " +
+        // Only ACTIVE counts: a PAUSED subscription gets no meals and holds no capacity (see CapacityService). One statement for the whole list, index ix_customer_subscription_plan.
+        "(SELECT COUNT(*) FROM subscription_schema.customer_subscription cs WHERE cs.plan_id = p.id AND cs.status = 'ACTIVE') AS active_subscriber_count " +
         "FROM subscription_schema.subscription_plan p";
 }

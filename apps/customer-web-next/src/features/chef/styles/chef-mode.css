@@ -942,6 +942,8 @@ body .chef-notifications [aria-label="Notification filters"] button { border-col
 @media (max-width: 1023px) {
   .chef-panel-theme:has(.chef-dish-editor) { padding-bottom: 0; }
   .chef-panel-theme:has(.chef-dish-editor) .chef-mobile-nav { display: none; }
+  /* The floating "Ask Craves" button would sit on Save; it comes back when the editor closes. */
+  body:has(.chef-dish-editor) .craves-support-glass[aria-expanded] { display: none; }
 }
 /* The Save bar ends the page, so the new-order bar rides just above it (stuck or at the end)
    instead of reserving room below it: both stay tappable at every width. */

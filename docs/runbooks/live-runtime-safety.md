@@ -39,7 +39,7 @@ Production was built as a chain of JAR overlays that never went through `main`. 
 
 How it was checked: the restored source, compiled against the libraries in the `otp-test-whitelist` JAR (sha256 `a5003312…`), gives bytecode identical to that JAR for 164 of its 166 classes, and every resource (all migrations, including V18 and V19) is byte-identical. The two differences are intended: `AuthServiceApplication` now calls the lock, and `EmailVerificationService` carries the later email layer, which is taken from its tagged commit.
 
-`CentralOtpTest` needs a disposable PostgreSQL server and runs only when `CENTRAL_OTP_TEST_DB` is set.
+`CentralOtpTest` needs a disposable PostgreSQL server. It runs when `CENTRAL_OTP_TEST_DB` is set, as launch regression CI does.
 
 New Auth changes go through `main` like every other service.
 

@@ -22,6 +22,8 @@ export const chefMealPlanSchema = z.object({
   // key presence tells the screens whether the feature exists.
   imageUrl: z.string().nullable().optional(),
   acceptingSubscribers: z.boolean().nullable().optional(),
+  // Added by the subscriber-count backend; shown only when present.
+  activeSubscriberCount: z.number().int().nonnegative().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

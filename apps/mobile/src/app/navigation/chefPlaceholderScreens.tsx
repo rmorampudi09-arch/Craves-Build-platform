@@ -29,5 +29,4 @@ export const ChefEarningsPlaceholder = createPlaceholder('Earnings', {back: fals
 export const ChefReviewsPlaceholder = createPlaceholder('Reviews', {back: true, tabBar: true});
 export const ChefSecurityPlaceholder = createPlaceholder('Security', {back: true, tabBar: true});
 export const ChefBankAccountPlaceholder = createPlaceholder('Bank account', {back: true, tabBar: true});
-export const ChefDailyLimitsPlaceholder = createPlaceholder('Daily limits', {back: true, tabBar: false});
 export const ChefSupportTicketPlaceholder = createPlaceholder('Support ticket', {back: true, tabBar: false});

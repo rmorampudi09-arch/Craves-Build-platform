@@ -1,5 +1,5 @@
 import React from 'react';
-import {Image, Switch, Text, TextInput} from 'react-native';
+import {Image, Switch, Text} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
@@ -8,6 +8,7 @@ import {ChefMealPlansScreen} from './ChefMealPlansScreen';
 
 const mockNavigate = jest.fn();
 const mockSetAccepting = jest.fn();
+const mockRefreshMenu = jest.fn(async () => undefined);
 let mockPlans: ChefMealPlan[] = [];
 let mockSchedules: Record<string, Partial<ChefMealSchedule>> = {};
 let mockPlansState = {isLoading: false, isError: false, isRefetching: false, isFetching: false};
@@ -26,19 +27,8 @@ jest.mock('../../../design/reducedMotion', () => ({
 jest.mock('../../../core/config/runtimeConfig', () => ({
   getRuntimeConfig: () => ({apiBaseUrl: 'https://api.craves.in'}),
 }));
-const mockHeaderDrawn = jest.fn();
-jest.mock('../../chefShell/components/ChefHeader', () => ({
-  ChefHeader: () => {
-    mockHeaderDrawn();
-    return null;
-  },
-}));
 jest.mock('../../chefMenu/state/useChefMenuModel', () => ({
-  useChefMenuModel: () => ({
-    items: mockMenuItems,
-    isRefreshing: false,
-    refresh: jest.fn(async () => undefined),
-  }),
+  useChefMenuModel: () => ({items: mockMenuItems, isRefreshing: false, refresh: mockRefreshMenu}),
 }));
 jest.mock('../query/chefMealPlanQueries', () => ({
   invalidateChefMealPlans: jest.fn(async () => undefined),
@@ -50,6 +40,7 @@ jest.mock('../query/chefMealPlanQueries', () => ({
 const PLAN_A = '11111111-1111-4111-8111-111111111111';
 const PLAN_B = '22222222-2222-4222-8222-222222222222';
 const PLAN_C = '33333333-3333-4333-8333-333333333333';
+const PLAN_D = '55555555-5555-4555-8555-555555555555';
 const DISH_1 = '44444444-4444-4444-8444-444444444444';
 
 const plan = (fields: Partial<ChefMealPlan> & {id: string; name: string}): ChefMealPlan =>
@@ -81,27 +72,33 @@ const weekdayLunches = {
 let tree: renderer.ReactTestRenderer;
 
 const queryClient = new QueryClient();
-const element = (accessory?: React.ReactNode) => (
+const element = (hideHeader = true) => (
   <QueryClientProvider client={queryClient}>
-    <ChefMealPlansScreen headerAccessory={accessory} />
+    <ChefMealPlansScreen hideHeader={hideHeader} />
   </QueryClientProvider>
 );
 
-function render(accessory?: React.ReactNode) {
+function render(hideHeader = true) {
   act(() => {
-    tree = renderer.create(element(accessory));
+    tree = renderer.create(element(hideHeader));
   });
 }
 
 const texts = () =>
   tree.root
     .findAllByType(Text)
-    .map(node => node.props.children)
-    .flat()
-    .filter((child: unknown): child is string => typeof child === 'string');
+    .map(node => [node.props.children].flat().filter(child => typeof child === 'string').join(''));
 
-const openButton = (label: string): ReactTestInstance =>
-  tree.root.findAll(node => node.props.accessibilityLabel === label && node.props.onPress)[0];
+const button = (label: string): ReactTestInstance | undefined =>
+  tree.root.findAll(node => node.props.accessibilityLabel === label && typeof node.props.onPress === 'function')[0];
+const press = (label: string) => act(() => button(label)!.props.onPress());
+
+const mixedPlans = () => [
+  plan({id: PLAN_A, name: 'Monthly Tiffin plan', billingPeriod: 'MONTHLY', amount: '1050', acceptingSubscribers: true, activeSubscriberCount: 8}),
+  plan({id: PLAN_B, name: 'Weekly lunch box', amount: '499', status: 'PENDING_APPROVAL'}),
+  plan({id: PLAN_C, name: 'Dinner trial', status: 'DRAFT'}),
+  plan({id: PLAN_D, name: 'Old breakfast', status: 'INACTIVE'}),
+];
 
 describe('ChefMealPlansScreen', () => {
   beforeEach(() => {
@@ -113,106 +110,92 @@ describe('ChefMealPlansScreen', () => {
   });
   afterEach(() => act(() => tree?.unmount()));
 
-  it('draws its own Menu header, unless the Menu tab already draws one above it', () => {
-    render();
-    expect(mockHeaderDrawn).toHaveBeenCalled();
+  it('draws its own title only when the Menu tab does not already draw one above it', () => {
+    render(false);
+    expect(texts()).toContain('Meal plans');
 
     act(() => tree.unmount());
-    mockHeaderDrawn.mockClear();
-    act(() => {
-      tree = renderer.create(
-        <QueryClientProvider client={queryClient}>
-          <ChefMealPlansScreen hideHeader />
-        </QueryClientProvider>,
-      );
-    });
-    expect(mockHeaderDrawn).not.toHaveBeenCalled();
+    render(true);
+    expect(texts()).not.toContain('Meal plans');
   });
 
-  it('shows the metrics, the accessory and a card per plan', () => {
-    mockPlans = [
-      plan({id: PLAN_A, name: 'Weekly Home Lunch Plan', description: 'Fresh lunches.'}),
-      plan({id: PLAN_B, name: 'Healthy Veg Plan', status: 'PENDING_APPROVAL'}),
-      plan({
-        id: PLAN_C,
-        name: 'Monthly Dinner Plan',
-        billingPeriod: 'MONTHLY',
-        amount: '5499',
-        status: 'DRAFT',
-      }),
-    ];
-    mockSchedules = {[PLAN_A]: weekdayLunches};
-    render(<Text>SEGMENT_ACCESSORY</Text>);
-
-    const all = texts();
-    expect(all).toEqual(
-      expect.arrayContaining([
-        'SEGMENT_ACCESSORY',
-        'Your menu',
-        'Total',
-        'Live',
-        'Pending approval',
-        'Draft',
-        'Meal plans',
-        'Weekly Home Lunch Plan',
-        'Weekly · 5 lunches · Mon – Fri',
-        'Fresh lunches.',
-        '₹1,499 / week',
-        '₹5,499 / month',
-        'Monthly',
-      ]),
-    );
-    expect(tree.root.findAllByType(TextInput)[0].props.placeholder).toBe('Search your meal plans');
-    expect(tree.root.findAllByType(Text).some(node => node.props.children?.join?.('') === '3 of 3')).toBe(true);
-  });
-
-  it('still renders a plan whose schedule is empty, with the chef icon instead of a photo', () => {
-    mockPlans = [plan({id: PLAN_A, name: 'No Schedule Plan'})];
-    mockSchedules = {[PLAN_A]: {items: []}};
+  it('filters by status, with the counts in the pills', () => {
+    mockPlans = [...mixedPlans(), plan({id: '66666666-6666-4666-8666-666666666666', name: 'Sent back', status: 'REJECTED', reviewReason: 'Add a photo'})];
     render();
 
-    expect(texts()).toEqual(expect.arrayContaining(['No Schedule Plan', 'Weekly', '₹1,499 / week']));
-    expect(tree.root.findAllByType(Image)).toHaveLength(0);
+    expect(texts()).toEqual(expect.arrayContaining(['All 5', 'Live 1', 'Waiting approval 1', 'Drafts 2']));
+    expect(texts()).toEqual(expect.arrayContaining(['Monthly Tiffin plan', 'Weekly lunch box', 'Dinner trial', 'Old breakfast', 'Sent back']));
+
+    press('Live 1');
+    expect(texts()).toContain('Monthly Tiffin plan');
+    expect(texts()).not.toContain('Weekly lunch box');
+
+    press('Waiting approval 1');
+    expect(texts()).toContain('Weekly lunch box');
+    expect(texts()).not.toContain('Monthly Tiffin plan');
+
+    press('Drafts 2');
+    expect(texts()).toEqual(expect.arrayContaining(['Dinner trial', 'Sent back']));
+    expect(texts()).not.toContain('Weekly lunch box');
+
+    press('All 5');
+    expect(texts()).toContain('Old breakfast');
   });
 
-  it('prefers the plan photo, then the first dish photo', () => {
+  it('shows the plan the way the board does: photo, name, status, meals, price', () => {
     mockMenuItems = [{id: DISH_1, images: [{primary: true, publicUrl: 'https://img.craves.in/thali.jpg'}]}];
+    mockPlans = [plan({id: PLAN_A, name: 'Weekly lunch box', amount: '499'})];
+    mockSchedules = {[PLAN_A]: weekdayLunches};
+    render();
+
+    expect(texts()).toEqual(expect.arrayContaining(['Weekly lunch box', 'Live', 'Weekly · Lunch · Mon – Fri', '₹499 / week']));
+    expect(tree.root.findAllByType(Image).map(image => image.props.source.uri)).toEqual(['https://img.craves.in/thali.jpg']);
+  });
+
+  it('prefers the plan photo and falls back to a plain tile when there is none', () => {
     mockPlans = [
       plan({id: PLAN_A, name: 'Has Photo', imageUrl: `/api/v1/subscriptions/plans/${PLAN_A}/image?v=2`}),
-      plan({id: PLAN_B, name: 'Dish Photo', imageUrl: null}),
-      plan({id: PLAN_C, name: 'No Photo'}),
+      plan({id: PLAN_B, name: 'No Photo'}),
     ];
-    mockSchedules = {[PLAN_A]: weekdayLunches, [PLAN_B]: weekdayLunches, [PLAN_C]: {items: []}};
     render();
 
     expect(tree.root.findAllByType(Image).map(image => image.props.source.uri)).toEqual([
       `https://api.craves.in/api/v1/subscriptions/plans/${PLAN_A}/image?v=2`,
-      'https://img.craves.in/thali.jpg',
     ]);
   });
 
-  it('shows the admin reason on a plan with requested changes', () => {
-    mockPlans = [plan({id: PLAN_A, name: 'Rejected', status: 'REJECTED', reviewReason: 'Add a photo'})];
-    render();
-
-    expect(texts()).toEqual(expect.arrayContaining(['Changes requested']));
-    expect(tree.root.findAllByType(Text).some(node => node.props.children?.join?.('') === 'Admin: Add a photo')).toBe(true);
-  });
-
-  it('shows the switch only for a live plan that reports acceptingSubscribers', () => {
+  it('shows "Taking new subscribers" with a switch for live plans only', () => {
     mockPlans = [
       plan({id: PLAN_A, name: 'Live', acceptingSubscribers: true}),
       plan({id: PLAN_B, name: 'Old backend'}),
       plan({id: PLAN_C, name: 'Draft', status: 'DRAFT', acceptingSubscribers: true}),
+      plan({id: PLAN_D, name: 'Waiting', status: 'PENDING_APPROVAL', acceptingSubscribers: true}),
     ];
     render();
 
     const switches = tree.root.findAllByType(Switch);
     expect(switches).toHaveLength(1);
     expect(switches[0].props.value).toBe(true);
-    expect(texts()).toEqual(
-      expect.arrayContaining(['Accepting new subscribers', 'Live and visible to customers.']),
-    );
+    expect(texts().filter(line => line === 'Taking new subscribers')).toHaveLength(1);
+  });
+
+  it('says when a live plan has stopped taking new subscribers', () => {
+    mockPlans = [plan({id: PLAN_A, name: 'Live', acceptingSubscribers: false})];
+    render();
+
+    expect(tree.root.findByType(Switch).props.value).toBe(false);
+    expect(texts()).toEqual(expect.arrayContaining(['Not taking new subscribers', 'Current subscribers keep getting meals.']));
+  });
+
+  it('shows the subscriber count only when the backend sends it', () => {
+    mockPlans = [
+      plan({id: PLAN_A, name: 'With count', acceptingSubscribers: true, activeSubscriberCount: 8}),
+      plan({id: PLAN_B, name: 'One', acceptingSubscribers: true, activeSubscriberCount: 1}),
+      plan({id: PLAN_C, name: 'Without', acceptingSubscribers: true}),
+    ];
+    render();
+
+    expect(texts().filter(line => /subscribers?$/.test(line) && /^\d/.test(line))).toEqual(['8 subscribers', '1 subscriber']);
   });
 
   it('toggles the switch through the API', async () => {
@@ -243,9 +226,7 @@ describe('ChefMealPlansScreen', () => {
   });
 
   it('keeps the server message when the failed toggle leaves the plan no longer live', async () => {
-    mockSetAccepting.mockRejectedValue(
-      new AppApiError('PLAN_NOT_ACTIVE', 'This plan is no longer live.', 409),
-    );
+    mockSetAccepting.mockRejectedValue(new AppApiError('PLAN_NOT_ACTIVE', 'This plan is no longer live.', 409));
     mockPlans = [plan({id: PLAN_A, name: 'Live', acceptingSubscribers: true})];
     render();
 
@@ -259,47 +240,77 @@ describe('ChefMealPlansScreen', () => {
     expect(texts()).toContain('This plan is no longer live.');
   });
 
-  it('describes each card by name, status and price, with the admin reason as the hint', () => {
+  it('puts Schedule and Daily limits on live plans only', () => {
+    mockPlans = [plan({id: PLAN_A, name: 'Live'}), plan({id: PLAN_B, name: 'Waiting', status: 'PENDING_APPROVAL'})];
+    render();
+
+    expect(tree.root.findAll(node => node.props.accessibilityLabel === 'Schedule' && node.props.onPress)).toHaveLength(1);
+
+    press('Schedule');
+    expect(mockNavigate).toHaveBeenLastCalledWith('ChefMealPlanEditor', {planId: PLAN_A});
+    press('Daily limits');
+    expect(mockNavigate).toHaveBeenLastCalledWith('ChefDailyLimits', {planId: PLAN_A});
+  });
+
+  it('explains why a waiting plan is locked and what a sent-back plan needs', () => {
     mockPlans = [
-      plan({id: PLAN_A, name: 'Rejected', status: 'REJECTED', reviewReason: 'Add a photo'}),
-      plan({id: PLAN_B, name: 'Fine'}),
+      plan({id: PLAN_A, name: 'Waiting', status: 'PENDING_APPROVAL'}),
+      plan({id: PLAN_B, name: 'Sent back', status: 'REJECTED', reviewReason: 'Add a photo'}),
+      plan({id: PLAN_C, name: 'Sent back, no reason', status: 'REJECTED'}),
     ];
     render();
 
-    expect(openButton('Rejected, Changes requested, ₹1,499 per week').props.accessibilityHint).toBe(
-      'Admin: Add a photo',
+    expect(texts()).toEqual(
+      expect.arrayContaining([
+        "Craves is checking this plan. You can't edit it until then.",
+        'Craves asked for changes: Add a photo',
+        'Craves asked for changes. Update the plan and submit it again.',
+      ]),
     );
-    expect(openButton('Fine, Live, ₹1,499 per week').props.accessibilityHint).toBeUndefined();
+    expect(texts().join(' ')).not.toContain('Admin');
+  });
+
+  it('describes each card by name, status and price', () => {
+    mockPlans = [plan({id: PLAN_A, name: 'Fine'})];
+    render();
+
+    expect(button('Fine, Live, ₹1,499 per week')).toBeDefined();
   });
 
   it('opens the editor for a tapped plan', () => {
     mockPlans = [plan({id: PLAN_A, name: 'Lunch Plan'})];
     render();
 
-    act(() => openButton('Lunch Plan, Live, ₹1,499 per week').props.onPress());
+    press('Lunch Plan, Live, ₹1,499 per week');
 
     expect(mockNavigate).toHaveBeenCalledWith('ChefMealPlanEditor', {planId: PLAN_A});
   });
 
-  it('filters by name', () => {
-    mockPlans = [plan({id: PLAN_A, name: 'Weekly Lunch'}), plan({id: PLAN_B, name: 'Monthly Dinner'})];
+  it('offers one next step when there are no plans', () => {
     render();
 
-    act(() => tree.root.findByType(TextInput).props.onChangeText('dinner'));
-
-    expect(texts()).toContain('Monthly Dinner');
-    expect(texts()).not.toContain('Weekly Lunch');
-    expect(tree.root.findAllByType(Text).some(node => node.props.children?.join?.('') === '1 of 2')).toBe(true);
+    expect(texts()).toEqual(expect.arrayContaining(['No meal plans yet', 'Create a weekly or monthly plan from dishes on your menu.']));
+    press('Create a plan');
+    expect(mockNavigate).toHaveBeenCalledWith('ChefMealPlanEditor', {});
   });
 
-  it('explains an empty list', () => {
+  it('says so when a filter has no plans, and shows everything again from there', () => {
+    mockPlans = [plan({id: PLAN_A, name: 'Live'})];
     render();
 
-    expect(texts()).toEqual(
-      expect.arrayContaining([
-        'No meal plans yet',
-        'Create a weekly or monthly plan from dishes on your menu.',
-      ]),
-    );
+    press('Drafts 0');
+    expect(texts()).toContain('No plans here');
+    press('Show all plans');
+    expect(texts()).toContain('Live');
+  });
+
+  it('shows a retry when the plans cannot be loaded, and never a half-empty list', () => {
+    mockPlansState = {...mockPlansState, isError: true};
+    render();
+
+    expect(texts()).toContain("Couldn't load your meal plans");
+    expect(texts()).not.toContain('No meal plans yet');
+    press('Try again');
+    expect(mockRefreshMenu).toHaveBeenCalled();
   });
 });

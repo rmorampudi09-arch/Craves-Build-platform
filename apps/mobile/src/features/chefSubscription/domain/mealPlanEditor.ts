@@ -117,6 +117,79 @@ export function freeSlotsForDay(slots: readonly EditorSlot[], day: number): Meal
   return MEAL_SLOTS.filter(code => !slots.some(slot => slot.day === day && slot.slot === code));
 }
 
+export const WEEKDAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export const WEEKDAYS_LONG = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const WEEKDAYS_MON_TO_FRI = [1, 2, 3, 4, 5];
+
+export const dayName = (period: BillingPeriod, day: number, style: 'short' | 'long' = 'short') =>
+  period === 'WEEKLY' ? (style === 'long' ? WEEKDAYS_LONG : WEEKDAYS_SHORT)[day - 1] : `Day ${day}`;
+
+/** Gives Monday to Friday (except `day`) the meals of `day`, replacing what they had; the weekend is left alone. */
+export function copyDayToWeekdays(slots: readonly EditorSlot[], day: number): EditorSlot[] {
+  const targets = WEEKDAYS_MON_TO_FRI.filter(target => target !== day);
+  const copies = targets.flatMap(target =>
+    slots.filter(slot => slot.day === day).map(slot => ({...slot, day: target, key: `${target}-${slot.slot}`})),
+  );
+  return [...slots.filter(slot => !targets.includes(slot.day)), ...copies].sort(bySlotOrder);
+}
+
+export function otherWeekdaysHaveMeals(slots: readonly EditorSlot[], day: number): boolean {
+  return slots.some(slot => slot.day !== day && WEEKDAYS_MON_TO_FRI.includes(slot.day));
+}
+
+/** Days with exactly the same meals (slot, time, dish, quantity), for the review step. Groups follow day order. */
+export function groupMealDays(slots: readonly EditorSlot[]): {days: number[]; meals: EditorSlot[]}[] {
+  const groups = new Map<string, {days: number[]; meals: EditorSlot[]}>();
+  for (const day of [...daysWithMeals(slots)].sort((a, b) => a - b)) {
+    const meals = slots.filter(slot => slot.day === day).sort(bySlotOrder);
+    const signature = meals.map(meal => `${meal.slot}|${meal.time}|${meal.menuItemId}|${meal.quantity}`).join(';');
+    const group = groups.get(signature);
+    if (group) {
+      group.days.push(day);
+    } else {
+      groups.set(signature, {days: [day], meals});
+    }
+  }
+  return [...groups.values()];
+}
+
+/** "Mon, Wed – Fri, Sun"; monthly plans read "Day 1 – 3, 15". */
+export function dayRangeLabel(period: BillingPeriod, days: readonly number[]): string {
+  const runs: number[][] = [];
+  for (const day of [...days].sort((a, b) => a - b)) {
+    const run = runs[runs.length - 1];
+    if (run && day === run[run.length - 1] + 1) {
+      run.push(day);
+    } else {
+      runs.push([day]);
+    }
+  }
+  const names = runs.map(run => {
+    const [first, last] = [run[0], run[run.length - 1]];
+    const label = (day: number) => (period === 'WEEKLY' ? WEEKDAYS_SHORT[day - 1] : String(day));
+    return first === last ? label(first) : `${label(first)} – ${label(last)}`;
+  });
+  return period === 'WEEKLY' ? names.join(', ') : `Day ${names.join(', ')}`;
+}
+
+/** "Add breakfast, snack or dinner": the meals a day can still take; "Add a meal" while it has none. */
+export function addMealLabel(free: readonly MealSlot[]): string {
+  if (free.length === MEAL_SLOTS.length) {
+    return 'Add a meal';
+  }
+  const names = free.map(code => code.toLowerCase());
+  return `Add ${names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}` : names[0]}`;
+}
+
+/** 1 for a problem in the plan's details, 2 for one in the meals, null when there is none. */
+export function stepWithErrors(errors: Record<string, string>): 1 | 2 | null {
+  const keys = Object.keys(errors);
+  if (keys.some(key => key === 'name' || key === 'description' || key === 'amount')) {
+    return 1;
+  }
+  return keys.length > 0 ? 2 : null;
+}
+
 export interface MealPlanFormValues {
   name: string;
   description: string;

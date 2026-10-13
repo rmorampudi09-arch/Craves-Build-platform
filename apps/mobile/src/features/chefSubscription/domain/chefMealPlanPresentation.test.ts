@@ -1,12 +1,14 @@
 import type {ChefMealPlan} from '../api/chefSubscriptionApi';
 import {
-  acceptingSubscribersHint,
+  acceptingSubscribersLabel,
   acceptingSubscribersValue,
   chefPlanAccessibilityLabel,
   chefPlanMetaLine,
   chefPlanMetrics,
   chefPlanPriceLabel,
   chefPlanStatusPresentation,
+  filterChefPlans,
+  subscriberCountLabel,
 } from './chefMealPlanPresentation';
 
 const plan = (fields: Partial<ChefMealPlan>) => fields as ChefMealPlan;
@@ -23,13 +25,31 @@ const item = (isoDayOfWeek: number, mealSlotCode = 'LUNCH') => ({
 
 describe('chefPlanStatusPresentation', () => {
   it.each([
-    ['DRAFT', 'Draft', 'info'],
-    ['PENDING_APPROVAL', 'Pending approval', 'warning'],
-    ['ACTIVE', 'Live', 'success'],
-    ['REJECTED', 'Changes requested', 'error'],
-    ['INACTIVE', 'Inactive', 'neutral'],
-  ] as const)('%s reads "%s" with the %s tone', (status, label, tone) => {
+    ['DRAFT', 'Draft', 'draft'],
+    ['PENDING_APPROVAL', 'Waiting approval', 'cooking'],
+    ['ACTIVE', 'Live', 'ready'],
+    ['REJECTED', 'Changes requested', 'new'],
+    ['INACTIVE', 'Inactive', 'done'],
+  ] as const)('%s reads "%s" with the %s chip', (status, label, tone) => {
     expect(chefPlanStatusPresentation(status)).toEqual({label, tone});
+  });
+});
+
+describe('filterChefPlans', () => {
+  const plans = (['ACTIVE', 'PENDING_APPROVAL', 'DRAFT', 'REJECTED', 'INACTIVE'] as const).map(status =>
+    plan({status}),
+  );
+  const statuses = (filter: Parameters<typeof filterChefPlans>[1]) =>
+    filterChefPlans(plans, filter).map(chosen => chosen.status);
+
+  it('keeps every plan under All, including inactive ones', () => {
+    expect(statuses('ALL')).toHaveLength(5);
+  });
+
+  it('splits Live, Waiting approval and Drafts (changes requested counts as a draft)', () => {
+    expect(statuses('LIVE')).toEqual(['ACTIVE']);
+    expect(statuses('WAITING')).toEqual(['PENDING_APPROVAL']);
+    expect(statuses('DRAFTS')).toEqual(['DRAFT', 'REJECTED']);
   });
 });
 
@@ -57,11 +77,14 @@ describe('chefPlanMetrics', () => {
 });
 
 describe('chefPlanMetaLine', () => {
-  it('reads frequency, meal count and days from the schedule', () => {
+  it('reads frequency, meal and days from the schedule', () => {
     const items = [1, 2, 3, 4, 5].map(day => item(day));
-    expect(chefPlanMetaLine(plan({billingPeriod: 'WEEKLY'}), items)).toBe(
-      'Weekly · 5 lunches · Mon – Fri',
-    );
+    expect(chefPlanMetaLine(plan({billingPeriod: 'WEEKLY'}), items)).toBe('Weekly · Lunch · Mon – Fri');
+  });
+
+  it('says every day, and lists each meal a plan serves', () => {
+    const items = [1, 2, 3, 4, 5, 6, 7].flatMap(day => [item(day, 'BREAKFAST'), item(day, 'DINNER')]);
+    expect(chefPlanMetaLine(plan({billingPeriod: 'WEEKLY'}), items)).toBe('Weekly · Breakfast, Dinner · every day');
   });
 
   it('shows only the frequency while the schedule is empty or not loaded', () => {
@@ -75,9 +98,20 @@ describe('chefPlanMetaLine', () => {
       isoDayOfWeek: null,
       dayOfMonth,
     }));
-    expect(chefPlanMetaLine(plan({billingPeriod: 'MONTHLY'}), items)).toBe(
-      'Monthly · 2 dinners · 2 days a month',
-    );
+    expect(chefPlanMetaLine(plan({billingPeriod: 'MONTHLY'}), items)).toBe('Monthly · Dinner · 2 days a month');
+  });
+});
+
+describe('subscriberCountLabel', () => {
+  it('is absent until the backend sends the count', () => {
+    expect(subscriberCountLabel(plan({}))).toBeNull();
+    expect(subscriberCountLabel(plan({activeSubscriberCount: null}))).toBeNull();
+  });
+
+  it('reads the count in words, including zero', () => {
+    expect(subscriberCountLabel(plan({activeSubscriberCount: 8}))).toBe('8 subscribers');
+    expect(subscriberCountLabel(plan({activeSubscriberCount: 1}))).toBe('1 subscriber');
+    expect(subscriberCountLabel(plan({activeSubscriberCount: 0}))).toBe('0 subscribers');
   });
 });
 
@@ -120,10 +154,8 @@ describe('accepting-subscribers switch', () => {
     ).toBeNull();
   });
 
-  it('explains what each position does', () => {
-    expect(acceptingSubscribersHint(true)).toBe('Live and visible to customers.');
-    expect(acceptingSubscribersHint(false)).toBe(
-      'Hidden from new customers. Current subscribers are not affected.',
-    );
+  it('names each position in plain words', () => {
+    expect(acceptingSubscribersLabel(true)).toBe('Taking new subscribers');
+    expect(acceptingSubscribersLabel(false)).toBe('Not taking new subscribers');
   });
 });

@@ -308,6 +308,12 @@ describe('chefSubscriptionApi plan photo and accepting-subscribers', () => {
     });
   });
 
+  it('reads the active subscriber count only when the backend sends it', () => {
+    expect('activeSubscriberCount' in chefMealPlanSchema.parse(plan)).toBe(false);
+    expect(chefMealPlanSchema.parse({...plan, activeSubscriberCount: 8})).toMatchObject({activeSubscriberCount: 8});
+    expect(chefMealPlanSchema.parse({...plan, activeSubscriberCount: null})).toMatchObject({activeSubscriberCount: null});
+  });
+
   it('patches accepting-subscribers and verifies the returned plan', async () => {
     (httpClient.patch as jest.Mock).mockResolvedValue({...plan, acceptingSubscribers: false});
 

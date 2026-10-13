@@ -1,14 +1,20 @@
 import type {ChefMealSchedule} from '../api/chefSubscriptionApi';
 import {
+  addMealLabel,
   addSlot,
+  copyDayToWeekdays,
+  dayRangeLabel,
   daysWithMeals,
   freeSlotsForDay,
+  groupMealDays,
+  otherWeekdaysHaveMeals,
   removeSlot,
   scheduleToSlots,
   setSlotDish,
   setSlotQuantity,
   setSlotTime,
   slotsToScheduleRequest,
+  stepWithErrors,
   TIME_OPTIONS,
   validateMealPlanForm,
   type EditorSlot,
@@ -171,4 +177,84 @@ it('offers service times every 30 minutes from 06:00 to 23:30', () => {
   expect(TIME_OPTIONS[1]).toBe('06:30');
   expect(TIME_OPTIONS[TIME_OPTIONS.length - 1]).toBe('23:30');
   expect(TIME_OPTIONS).toHaveLength(36);
+});
+
+describe('copyDayToWeekdays', () => {
+  const tuesday = [slot({day: 2, slot: 'LUNCH', quantity: 2}), slot({day: 2, slot: 'DINNER', time: '19:30', menuItemId: DISH_B})];
+
+  it('gives Monday to Friday the same meals, dishes and quantities', () => {
+    const copied = copyDayToWeekdays(tuesday, 2);
+
+    expect([1, 2, 3, 4, 5].map(day => copied.filter(s => s.day === day).map(s => [s.slot, s.menuItemId, s.quantity]))).toEqual(
+      Array.from({length: 5}, () => [
+        ['LUNCH', DISH_A, 2],
+        ['DINNER', DISH_B, 1],
+      ]),
+    );
+    expect(new Set(copied.map(s => s.key)).size).toBe(copied.length);
+  });
+
+  it('replaces what the other weekdays had and leaves the weekend alone', () => {
+    const copied = copyDayToWeekdays(
+      [...tuesday, slot({day: 3, slot: 'SNACK', time: '16:30'}), slot({day: 6, slot: 'LUNCH', menuItemId: DISH_B})],
+      2,
+    );
+
+    expect(copied.some(s => s.day === 3 && s.slot === 'SNACK')).toBe(false);
+    expect(copied.filter(s => s.day === 6)).toEqual([slot({day: 6, slot: 'LUNCH', menuItemId: DISH_B})]);
+  });
+
+  it('knows when the other weekdays already have meals', () => {
+    expect(otherWeekdaysHaveMeals(tuesday, 2)).toBe(false);
+    expect(otherWeekdaysHaveMeals([...tuesday, slot({day: 4, slot: 'LUNCH'})], 2)).toBe(true);
+    expect(otherWeekdaysHaveMeals([...tuesday, slot({day: 7, slot: 'LUNCH'})], 2)).toBe(false);
+  });
+});
+
+describe('groupMealDays', () => {
+  it('puts days with the same meals together, in day order', () => {
+    const groups = groupMealDays([
+      slot({day: 1, slot: 'LUNCH'}),
+      slot({day: 2, slot: 'LUNCH'}),
+      slot({day: 3, slot: 'LUNCH', menuItemId: DISH_B}),
+      slot({day: 4, slot: 'LUNCH'}),
+    ]);
+
+    expect(groups.map(group => group.days)).toEqual([[1, 2, 4], [3]]);
+    expect(groups[0].meals.map(meal => meal.slot)).toEqual(['LUNCH']);
+  });
+
+  it('treats a different quantity or time as a different day', () => {
+    expect(
+      groupMealDays([slot({day: 1, slot: 'LUNCH'}), slot({day: 2, slot: 'LUNCH', quantity: 2}), slot({day: 3, slot: 'LUNCH', time: '13:00'})]),
+    ).toHaveLength(3);
+  });
+});
+
+describe('dayRangeLabel', () => {
+  it('writes runs of days the way the board does', () => {
+    expect(dayRangeLabel('WEEKLY', [3, 4, 5])).toBe('Wed – Fri');
+    expect(dayRangeLabel('WEEKLY', [1, 3, 4, 5, 7])).toBe('Mon, Wed – Fri, Sun');
+    expect(dayRangeLabel('WEEKLY', [2])).toBe('Tue');
+    expect(dayRangeLabel('MONTHLY', [1, 2, 3, 15])).toBe('Day 1 – 3, 15');
+  });
+});
+
+describe('addMealLabel', () => {
+  it('lists the meals still free on a day', () => {
+    expect(addMealLabel(['BREAKFAST', 'SNACK', 'DINNER'])).toBe('Add breakfast, snack or dinner');
+    expect(addMealLabel(['SNACK', 'DINNER'])).toBe('Add snack or dinner');
+    expect(addMealLabel(['DINNER'])).toBe('Add dinner');
+    expect(addMealLabel(['BREAKFAST', 'LUNCH', 'SNACK', 'DINNER'])).toBe('Add a meal');
+  });
+});
+
+describe('stepWithErrors', () => {
+  it('sends the chef to the first step with a problem', () => {
+    expect(stepWithErrors({name: 'Enter a plan name.', schedule: 'x'})).toBe(1);
+    expect(stepWithErrors({amount: 'x'})).toBe(1);
+    expect(stepWithErrors({'slot:1-LUNCH': 'Select a dish.'})).toBe(2);
+    expect(stepWithErrors({schedule: 'x'})).toBe(2);
+    expect(stepWithErrors({})).toBeNull();
+  });
 });

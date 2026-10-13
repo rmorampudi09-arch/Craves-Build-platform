@@ -27,14 +27,13 @@ import {ChefNotificationsScreen} from '../../features/chefShell/screens/ChefNoti
 import {isolateChefRole} from '../../features/chefShell/state/chefRoleIsolation';
 import {ChefOperationalProvider} from '../../features/chefShell/state/ChefOperationalProvider';
 import {ChefMealPlanEditorScreen} from '../../features/chefSubscription/screens/ChefMealPlanEditorScreen';
-import {ChefSubscriptionPlanScreen} from '../../features/chefSubscription/screens/ChefSubscriptionPlanScreen';
+import {ChefDailyLimitsScreen} from '../../features/chefSubscription/screens/ChefDailyLimitsScreen';
 import {ChefSupportScreen} from '../../features/chefSupport/screens/ChefSupportScreen';
 import {ChefMenuTabScreen} from './ChefMenuTabScreen';
 import {ChefScheduledOrdersRedirect} from './ChefScheduledOrdersRedirect';
 import {renderChefTabBar} from './ChefTabBar';
 import {
   ChefBankAccountPlaceholder,
-  ChefDailyLimitsPlaceholder,
   ChefEarningsPlaceholder,
   ChefReviewsPlaceholder,
   ChefSecurityPlaceholder,
@@ -108,7 +107,7 @@ function ChefProfileNavigator() {
         />
         <ProfileStack.Screen
           name="ChefSubscriptionPlan"
-          component={ChefSubscriptionPlanScreen}
+          component={ChefDailyLimitsScreen}
         />
         <ProfileStack.Screen
           name="ChefAppPreferences"
@@ -185,7 +184,7 @@ function ChefProductNavigator() {
           options={{gestureEnabled: false}}
         />
         <Stack.Screen name="ChefNotifications" component={ChefNotificationsScreen} />
-        <Stack.Screen name="ChefDailyLimits" component={ChefDailyLimitsPlaceholder} />
+        <Stack.Screen name="ChefDailyLimits" component={ChefDailyLimitsScreen} />
         <Stack.Screen name="ChefSupportTicket" component={ChefSupportTicketPlaceholder} />
       </Stack.Navigator>
     </ChefOperationalProvider>

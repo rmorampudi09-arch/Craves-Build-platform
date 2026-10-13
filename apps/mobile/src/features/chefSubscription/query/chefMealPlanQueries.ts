@@ -27,7 +27,7 @@ export const chefMealPlansQueryPrefix = [
 
 export function createChefMealPlanQueryKey(
   identityId: string,
-  resource: 'plans' | 'schedule',
+  resource: 'plans' | 'schedule' | 'capacity',
   entityId?: string,
 ) {
   return createPrivateQueryKey(CHEF_MEAL_PLANS_DOMAIN, {
@@ -89,6 +89,20 @@ export function useChefMealPlanScheduleQuery(planId: string | undefined) {
         : ([...chefMealPlansQueryPrefix, 'signed-out', planId ?? 'new'] as const),
     queryFn: ({signal}) => chefSubscriptionApi.getSchedule(planId as string, signal),
     enabled: identityId !== null && planId !== undefined,
+    staleTime: STALE_MS,
+    retry: false,
+  });
+}
+
+/** The chef's daily limits; the error is kept so the screen can tell a route the server has not published from a failure. */
+export function useChefCapacityQuery() {
+  const identityId = useIdentityId();
+  return useQuery({
+    queryKey: identityId
+      ? createChefMealPlanQueryKey(identityId, 'capacity')
+      : ([...chefMealPlansQueryPrefix, 'signed-out', 'capacity'] as const),
+    queryFn: ({signal}) => chefSubscriptionApi.getCapacity(signal),
+    enabled: identityId !== null,
     staleTime: STALE_MS,
     retry: false,
   });

@@ -4,7 +4,6 @@ import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {ChefScheduledOrdersRedirect} from './ChefScheduledOrdersRedirect';
 import {
   ChefBankAccountPlaceholder,
-  ChefDailyLimitsPlaceholder,
   ChefEarningsPlaceholder,
   ChefReviewsPlaceholder,
   ChefSecurityPlaceholder,
@@ -54,7 +53,6 @@ describe('chef placeholder screens', () => {
     ['Reviews', ChefReviewsPlaceholder],
     ['Security', ChefSecurityPlaceholder],
     ['Bank account', ChefBankAccountPlaceholder],
-    ['Daily limits', ChefDailyLimitsPlaceholder],
     ['Support ticket', ChefSupportTicketPlaceholder],
   ])('%s shows its title with a Coming soon note', (title, Screen) => {
     mount(<Screen />);

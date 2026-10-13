@@ -51,7 +51,7 @@ jest.mock('../../features/chefReferrals/screens/ChefReferralEarningsScreen', () 
 jest.mock('../../features/chefReferrals/screens/ChefReferralScreen', () => mockScreenModule('ChefReferralScreen'));
 jest.mock('../../features/chefSchedule/screens/ChefKitchenScheduleScreen', () => mockScreenModule('ChefKitchenScheduleScreen'));
 jest.mock('../../features/chefSubscription/screens/ChefMealPlanEditorScreen', () => mockScreenModule('ChefMealPlanEditorScreen'));
-jest.mock('../../features/chefSubscription/screens/ChefSubscriptionPlanScreen', () => mockScreenModule('ChefSubscriptionPlanScreen'));
+jest.mock('../../features/chefSubscription/screens/ChefDailyLimitsScreen', () => mockScreenModule('ChefDailyLimitsScreen'));
 jest.mock('../../features/chefSupport/screens/ChefSupportScreen', () => mockScreenModule('ChefSupportScreen'));
 jest.mock('../../features/chefShell/screens/ChefNotificationsScreen', () => mockScreenModule('ChefNotificationsScreen'));
 
@@ -131,7 +131,7 @@ describe('ChefRootNavigator', () => {
       expect(allText()).toContain(title);
     }
     navigate('ChefDailyLimits', {planId: 'p1'});
-    expect(allText()).toContain('Daily limits');
+    expect(allText()).toContain('SCREEN:ChefDailyLimitsScreen');
     navigate('ChefSupportTicket', {topic: 'payout'});
     expect(allText()).toContain('Support ticket');
   });

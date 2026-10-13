@@ -6,6 +6,7 @@ import {chefSubscriptionApi} from '../api/chefSubscriptionApi';
 import {
   chefMealPlansQueryPrefix,
   createChefMealPlanQueryKey,
+  useChefCapacityQuery,
   useChefMealPlanSchedulesQuery,
   useChefMealPlansQuery,
   useSetAcceptingSubscribers,
@@ -20,6 +21,7 @@ jest.mock('../api/chefSubscriptionApi', () => ({
   chefSubscriptionApi: {
     listPlans: jest.fn(),
     getSchedule: jest.fn(),
+    getCapacity: jest.fn(),
     setAcceptingSubscribers: jest.fn(),
   },
 }));
@@ -104,6 +106,30 @@ describe('useChefMealPlanSchedulesQuery', () => {
     const {result} = await renderHook(() => useChefMealPlanSchedulesQuery([PLAN_ID]));
 
     expect(result.current).toEqual({[PLAN_ID]: undefined});
+  });
+});
+
+describe('useChefCapacityQuery', () => {
+  const capacity = {adminSalesFrozen: false, slotRules: [], menuItemRules: [], dateOverrides: [], menuItemDateOverrides: []};
+
+  it('loads the chef capacity once, under the chef-meal-plans prefix so a save refreshes it', async () => {
+    get(chefSubscriptionApi.getCapacity).mockResolvedValue(capacity);
+    const queryClient = newClient();
+    const {result} = await renderHook(() => useChefCapacityQuery(), queryClient);
+
+    expect(result.current.data).toEqual(capacity);
+    expect(queryClient.getQueryData(createChefMealPlanQueryKey('chef-1', 'capacity'))).toEqual(capacity);
+  });
+
+  it('does not fetch while signed out, and keeps the error so the screen can tell a missing route from a failure', async () => {
+    mockIdentityId = null;
+    await renderHook(() => useChefCapacityQuery());
+    expect(chefSubscriptionApi.getCapacity).not.toHaveBeenCalled();
+
+    mockIdentityId = 'chef-1';
+    get(chefSubscriptionApi.getCapacity).mockRejectedValue(new Error('404'));
+    const {result} = await renderHook(() => useChefCapacityQuery());
+    expect(result.current.error).toEqual(new Error('404'));
   });
 });
 

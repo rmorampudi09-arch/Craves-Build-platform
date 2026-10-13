@@ -1,58 +1,45 @@
 import React from 'react';
-import {
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+import {Image, Pressable, ScrollView, StyleSheet, Text, View, Alert} from 'react-native';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import * as ImagePicker from 'expo-image-picker';
 import {usePreventRemove} from '@react-navigation/native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
-import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useQueryClient} from '@tanstack/react-query';
 import type {ChefProductStackParamList} from '../../../app/navigation/types';
 import {AppApiError} from '../../../core/http/apiError';
-import {resolveReducedMotionAnimation} from '../../../design/motion';
-import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {
   borderWidth,
   colors,
-  elevation,
   fontWeight,
+  iconSize,
   radius,
   spacing,
   textDefaults,
   touchTarget,
   typography,
 } from '../../../design/tokens';
-import {
-  Button,
-  ListSkeleton,
-  RecoverableErrorBanner,
-  SegmentedControl,
-  TerminalState,
-} from '../../../shared/components';
+import {Icon} from '../../../shared/components/Icon';
+import {SkeletonBlock} from '../../../shared/components/Skeleton';
 import type {ChefMenuItem} from '../../chefMenu/api/chefMenuApi';
+import {FieldError, FormField, GroupLabel, OptionChip} from '../../chefMenu/components/DishFormField';
 import {
   getChefMenuDisplayState,
   getChefMenuPrimaryImageUrl,
 } from '../../chefMenu/domain/chefMenuPresentation';
 import {useChefMenuModel} from '../../chefMenu/state/useChefMenuModel';
 import {
-  MealPlanHeader,
-  MealPlanPhoto,
-  RadioMark,
-} from '../../customerSubscription/components/MealPlanUi';
+  ChefActionButton,
+  ChefCard,
+  ChefScreen,
+  ChefSheet,
+  ChefTopBar,
+  ConfirmDialog,
+  SectionHeader,
+  VegMark,
+  useChefToast,
+} from '../../chefShell/components/ui';
+import {formatRupeesExact} from '../../chefShell/domain/chefFormat';
+import {RadioMark} from '../../customerSubscription/components/MealPlanUi';
 import {formatServiceTime, mealSlotLabel} from '../../mealPlans/domain/mealPlanSchedule';
 import {resolveApiImageUrl} from '../../mealPlans/domain/resolveApiImageUrl';
 import {
@@ -60,20 +47,28 @@ import {
   type ChefMealPlan,
   type ChefMealSchedule,
 } from '../api/chefSubscriptionApi';
-import {chefPlanStatusPresentation} from '../domain/chefMealPlanPresentation';
+import {chefPlanMetaLine, chefPlanPriceLabel, chefPlanStatusPresentation} from '../domain/chefMealPlanPresentation';
 import {
+  addMealLabel,
   addSlot,
+  copyDayToWeekdays,
+  dayName,
+  dayRangeLabel,
   daysWithMeals,
   freeSlotsForDay,
+  groupMealDays,
   LEAD_HOUR_OPTIONS,
+  otherWeekdaysHaveMeals,
   removeSlot,
   scheduleToSlots,
   setSlotDish,
   setSlotQuantity,
   setSlotTime,
   slotsToScheduleRequest,
+  stepWithErrors,
   TIME_OPTIONS,
   validateMealPlanForm,
+  WEEKDAYS_SHORT,
   type BillingPeriod,
   type EditorSlot,
   type MealPlanFormValues,
@@ -86,50 +81,42 @@ import {
 } from '../query/chefMealPlanQueries';
 
 type Props = NativeStackScreenProps<ChefProductStackParamList, 'ChefMealPlanEditor'>;
-type Sheet =
-  | {kind: 'lead'}
-  | {kind: 'time'; slot: MealSlot}
-  | {kind: 'dish'; key: string}
-  | {kind: 'add'}
-  | null;
+type Sheet = {kind: 'lead'} | {kind: 'time'; slot: MealSlot} | {kind: 'dish'; key: string} | {kind: 'add'} | null;
+type Step = 1 | 2 | 3;
 
-const SUBTITLE = 'Plan your meals, delight your customers';
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const STEP_NAMES: Record<Step, string> = {1: 'Details', 2: 'Meals', 3: 'Review'};
 const MONTH_DAYS = Array.from({length: 28}, (_, index) => index + 1);
 // Server limits for plan photos (JPEG/PNG only; WebP is rejected).
 const MAX_PHOTO_BYTES = 2_097_152;
 const MAX_PHOTO_SIDE = 4096;
 const SLOT_ICON: Record<MealSlot, string> = {
   BREAKFAST: 'coffee-outline',
-  LUNCH: 'silverware-fork-knife',
+  LUNCH: 'weather-sunny',
   SNACK: 'cookie-outline',
   DINNER: 'weather-night',
 };
 
 const leadHoursLabel = (hours: number) =>
-  hours === 24 ? '24 hours (Default)' : `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
-const dayName = (period: BillingPeriod, day: number) =>
-  period === 'WEEKLY' ? WEEKDAYS[day - 1] : `Day ${day}`;
+  hours === 24 ? '24 hours before (default)' : `${hours} ${hours === 1 ? 'hour' : 'hours'} before`;
 
 function Glyph({name, size = 22, color = colors.textSecondary}: {name: string; size?: number; color?: string}) {
   return <MaterialDesignIcons accessibilityElementsHidden name={name as never} size={size} color={color} />;
 }
 
-function Label({text, required = true}: {text: string; required?: boolean}) {
+function Message({title, message, action}: {title: string; message: string; action: {label: string; onPress: () => void}}) {
   return (
-    <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.label}>
-      {text}
-      {required ? <Text style={styles.required}> *</Text> : null}
-    </Text>
+    <ChefCard>
+      <View style={styles.message}>
+        <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.messageTitle}>
+          {title}
+        </Text>
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.messageText}>
+          {message}
+        </Text>
+        <ChefActionButton label={action.label} onPress={action.onPress} />
+      </View>
+    </ChefCard>
   );
-}
-
-function FieldError({message}: {message?: string}) {
-  return message ? (
-    <Text accessibilityLiveRegion="polite" allowFontScaling={textDefaults.allowFontScaling} style={styles.errorText}>
-      {message}
-    </Text>
-  ) : null;
 }
 
 export function ChefMealPlanEditorScreen({navigation, route}: Props) {
@@ -157,32 +144,40 @@ export function ChefMealPlanEditorScreen({navigation, route}: Props) {
 
   let body: React.ReactNode;
   if (plans.isLoading || schedule.isLoading) {
-    body = <ListSkeleton count={3} style={styles.fallback} />;
+    body = (
+      <View style={styles.skeleton}>
+        <SkeletonBlock borderRadius={radius.md} height={120} width="100%" />
+        <SkeletonBlock borderRadius={radius.md} height={48} width="100%" />
+        <SkeletonBlock borderRadius={radius.md} height={48} width="100%" />
+      </View>
+    );
   } else if (plans.isError || schedule.isError) {
     body = (
-      <RecoverableErrorBanner
-        message="This meal plan could not be loaded. Check your connection and try again."
-        onRetry={() => {
-          plans.refetch();
-          schedule.refetch();
+      <Message
+        action={{
+          label: 'Try again',
+          onPress: () => {
+            plans.refetch();
+            schedule.refetch();
+          },
         }}
-        style={styles.fallback}
+        message="Check your connection and try again."
+        title="Couldn't load this meal plan"
       />
     );
   } else {
     body = (
-      <TerminalState
-        title="This meal plan is no longer available"
-        actionLabel="Back to meal plans"
-        onAction={() => navigation.goBack()}
+      <Message
+        action={{label: 'Back to meal plans', onPress: () => navigation.goBack()}}
+        message="It may have been deleted."
+        title="This meal plan is not available any more"
       />
     );
   }
   return (
-    <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.safeArea}>
-      <MealPlanHeader title="Edit Meal Plan" subtitle={SUBTITLE} onBack={() => navigation.goBack()} />
-      <View style={styles.body}>{body}</View>
-    </SafeAreaView>
+    <ChefScreen header={<ChefTopBar onBack={() => navigation.goBack()} showBell={false} title="Meal plan" />}>
+      {body}
+    </ChefScreen>
   );
 }
 
@@ -196,11 +191,13 @@ function MealPlanEditor({
   schedule: ChefMealSchedule | null;
 }) {
   const queryClient = useQueryClient();
+  const toast = useChefToast();
   const menu = useChefMenuModel();
   const editable = !plan || plan.status === 'DRAFT' || plan.status === 'REJECTED';
   // Older backends send no imageUrl key at all and have no photo endpoint.
   const photoSupported = !plan || 'imageUrl' in plan;
 
+  const [step, setStep] = React.useState<Step>(1);
   const [savedPlanId, setSavedPlanId] = React.useState(plan?.id ?? null);
   const [form, setForm] = React.useState<MealPlanFormValues>({
     name: plan?.name ?? '',
@@ -221,14 +218,18 @@ function MealPlanEditor({
   const [dirty, setDirty] = React.useState(false);
   const [leaving, setLeaving] = React.useState(false);
   const [sheet, setSheet] = React.useState<Sheet>(null);
-  const [submitOpen, setSubmitOpen] = React.useState(false);
   const [note, setNote] = React.useState('');
   const [hasServerSchedule, setHasServerSchedule] = React.useState(schedule !== null);
   const [scheduleNote, setScheduleNote] = React.useState(false);
+  const [pendingLeave, setPendingLeave] = React.useState<unknown>(null);
+  const [pendingPeriod, setPendingPeriod] = React.useState<BillingPeriod | null>(null);
+  const [removing, setRemoving] = React.useState<EditorSlot | null>(null);
+  const [copying, setCopying] = React.useState(false);
+  // State lags a frame behind a tap; the lock keeps a double tap to one request.
+  const saving = React.useRef(false);
 
-  // Errors appear after the first save attempt and then follow the chef's edits.
+  // Errors appear after the first Next / save attempt and then follow the chef's edits.
   const errors = attempt ? validateMealPlanForm(form, slots, attempt) : {};
-  const hasErrors = Object.keys(errors).length > 0;
   const locked = !editable || busy !== null;
   const hasDishes = slots.some(slot => slot.menuItemId !== null);
   // Only a schedule with dishes is sent, so a draft without any keeps the server's old schedule.
@@ -253,13 +254,10 @@ function MealPlanEditor({
     () => new Map((schedule?.items ?? []).map(item => [item.menuItemId, item.menuItemName] as const)),
     [schedule],
   );
+  const dishName = (menuItemId: string) =>
+    menuById.get(menuItemId)?.itemName ?? scheduledNames.get(menuItemId) ?? 'Dish';
 
-  usePreventRemove(dirty && !leaving, ({data}) => {
-    Alert.alert('Discard unsaved changes?', 'Your meal plan changes have not been saved.', [
-      {text: 'Keep editing', style: 'cancel'},
-      {text: 'Discard', style: 'destructive', onPress: () => navigation.dispatch(data.action)},
-    ]);
-  });
+  usePreventRemove(editable && dirty && !leaving, ({data}) => setPendingLeave(data.action));
 
   React.useEffect(() => {
     if (leaving) {
@@ -278,20 +276,17 @@ function MealPlanEditor({
 
   const changePeriod = (next: BillingPeriod) => {
     if (next === period) return;
-    const apply = () => {
-      setPeriod(next);
-      setSlots([]);
-      setDay(1);
-      setDirty(true);
-    };
     if (slots.length === 0) {
-      apply();
+      applyPeriod(next);
       return;
     }
-    Alert.alert('Change frequency?', 'Changing frequency clears the meal schedule.', [
-      {text: 'Cancel', style: 'cancel'},
-      {text: 'Change', style: 'destructive', onPress: apply},
-    ]);
+    setPendingPeriod(next);
+  };
+  const applyPeriod = (next: BillingPeriod) => {
+    setPeriod(next);
+    setSlots([]);
+    setDay(1);
+    setDirty(true);
   };
 
   const pickPhoto = async () => {
@@ -301,8 +296,8 @@ function MealPlanEditor({
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
         Alert.alert(
-          'Photo permission required',
-          'Allow photo access so you can choose a photo for this meal plan.',
+          'Photo access needed',
+          'Allow photo access for Craves in your phone settings to choose a photo for this plan.',
         );
         return;
       }
@@ -365,7 +360,13 @@ function MealPlanEditor({
 
   const save = async (mode: 'draft' | 'submit', submitNote?: string) => {
     setAttempt(mode);
-    if (busy || Object.keys(validateMealPlanForm(form, slots, mode)).length > 0) return;
+    if (busy || saving.current) return;
+    const problem = stepWithErrors(validateMealPlanForm(form, slots, mode));
+    if (problem) {
+      setStep(problem);
+      return;
+    }
+    saving.current = true;
     setBusy(mode);
     setServerError(null);
     setPhotoError(null);
@@ -398,12 +399,14 @@ function MealPlanEditor({
         setDirty(true);
         return;
       }
+      toast.show(mode === 'submit' ? 'Sent to Craves for approval' : 'Draft saved');
       setLeaving(true);
     } catch (cause) {
       setServerError(
         cause instanceof AppApiError ? cause.message : 'The meal plan could not be saved. Try again.',
       );
     } finally {
+      saving.current = false;
       setBusy(null);
       if (id) {
         invalidateChefMealPlans(queryClient).catch(() => undefined);
@@ -411,433 +414,561 @@ function MealPlanEditor({
     }
   };
 
-  const openSubmit = () => {
-    setAttempt('submit');
-    if (Object.keys(validateMealPlanForm(form, slots, 'submit')).length === 0) {
-      setSubmitOpen(true);
+  const goToMeals = () => {
+    setAttempt(current => current ?? 'draft');
+    if (Object.keys(validateMealPlanForm(form, slots, 'draft')).length === 0) {
+      setStep(2);
     }
   };
+  const goToReview = () => {
+    setAttempt('submit');
+    const problem = stepWithErrors(validateMealPlanForm(form, slots, 'submit'));
+    setStep(problem ?? 3);
+  };
+  const copyToWeekdays = () => {
+    updateSlots(current => copyDayToWeekdays(current, day));
+    setCopying(false);
+  };
 
-  const statusLabel = plan ? chefPlanStatusPresentation(plan.status).label : '';
-  const existingPhoto = photoSupported ? resolveApiImageUrl(plan?.imageUrl) : null;
-  const photoUri = photo?.uri ?? existingPhoto;
+  const photoUri = photo?.uri ?? (photoSupported ? resolveApiImageUrl(plan?.imageUrl) : null);
   const unit = period === 'MONTHLY' ? 'month' : 'week';
+  const status = plan ? chefPlanStatusPresentation(plan.status) : null;
+  const dayLong = dayName(period, day, 'long');
+
+  const details = (
+    <>
+      {photoSupported && (editable || photoUri) ? (
+        <View style={styles.photoBlock}>
+          {photoUri ? (
+            <>
+              <Image
+                accessibilityIgnoresInvertColors
+                accessibilityLabel="Plan photo"
+                resizeMode="cover"
+                source={{uri: photoUri}}
+                style={styles.photo}
+              />
+              {editable ? (
+                <ChefActionButton disabled={busy !== null} label="Change photo" onPress={pickPhoto} tone="neutral" />
+              ) : null}
+            </>
+          ) : (
+            <Pressable
+              accessibilityLabel="Add plan photo"
+              accessibilityRole="button"
+              disabled={busy !== null}
+              onPress={pickPhoto}
+              style={({pressed}) => [styles.upload, pressed && styles.pressed]}>
+              <Icon color={colors.flameRedAccessible} name="camera-plus" size={iconSize.lg} surface={false} />
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.uploadTitle}>
+                Add plan photo
+              </Text>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
+                Customers see it on the plan card
+              </Text>
+            </Pressable>
+          )}
+          {photoError ? <FieldError message={photoError} /> : null}
+        </View>
+      ) : null}
+
+      <FormField
+        editable={!locked}
+        error={errors.name}
+        label="Plan name"
+        maxLength={160}
+        onChangeText={value => updateForm('name', value)}
+        placeholder="e.g. Weekly home lunch"
+        required
+        value={form.name}
+      />
+
+      <View style={styles.group}>
+        <GroupLabel label="How often" required />
+        <View style={styles.chips}>
+          <OptionChip disabled={locked} label="Weekly" onPress={() => changePeriod('WEEKLY')} selected={period === 'WEEKLY'} />
+          <OptionChip disabled={locked} label="Monthly" onPress={() => changePeriod('MONTHLY')} selected={period === 'MONTHLY'} />
+        </View>
+      </View>
+
+      <FormField
+        accessibilityLabel={`Price per ${unit}`}
+        editable={!locked}
+        error={errors.amount}
+        keyboardType="decimal-pad"
+        label="Price"
+        onChangeText={value => updateForm('amount', value)}
+        placeholder="1499"
+        prefix="₹"
+        required
+        suffix={`per ${unit}`}
+        value={form.amount}
+      />
+
+      <View style={styles.group}>
+        <GroupLabel label="Cook how early" required />
+        <Pressable
+          accessibilityHint="Opens the list of times"
+          accessibilityLabel={`Cook how early, ${leadHoursLabel(leadHours)}`}
+          accessibilityRole="button"
+          disabled={locked}
+          onPress={() => setSheet({kind: 'lead'})}
+          style={styles.select}>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.selectText}>
+            {leadHoursLabel(leadHours)}
+          </Text>
+          <Icon color={colors.textSecondary} name="chevron-down" size={iconSize.md} surface={false} />
+        </Pressable>
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
+          How long before each meal you start preparing.
+        </Text>
+      </View>
+
+      <FormField
+        editable={!locked}
+        error={errors.description}
+        helper={`${form.description.length}/500`}
+        label="Description"
+        maxLength={500}
+        multiline
+        onChangeText={value => updateForm('description', value)}
+        placeholder="What customers get, how it's packed"
+        required
+        value={form.description}
+      />
+    </>
+  );
+
+  const meals = (
+    <>
+      {period === 'WEEKLY' ? (
+        <View accessibilityRole="tablist" style={styles.days}>
+          {WEEKDAYS_SHORT.map((label, index) => (
+            <DayCell
+              hasMeals={mealDays.has(index + 1)}
+              key={label}
+              label={label}
+              onPress={() => setDay(index + 1)}
+              selected={day === index + 1}
+              style={styles.weekDay}
+            />
+          ))}
+        </View>
+      ) : (
+        <ScrollView
+          horizontal
+          accessibilityRole="tablist"
+          contentContainerStyle={styles.monthDays}
+          showsHorizontalScrollIndicator={false}
+          style={styles.monthScroll}>
+          {MONTH_DAYS.map(value => (
+            <DayCell
+              accessibilityLabel={`Day ${value}`}
+              hasMeals={mealDays.has(value)}
+              key={value}
+              label={String(value)}
+              onPress={() => setDay(value)}
+              selected={day === value}
+              style={styles.monthDay}
+            />
+          ))}
+        </ScrollView>
+      )}
+      {errors.schedule ? <FieldError message={errors.schedule} /> : null}
+      {scheduleNote && scheduleKept ? <FieldError message="Add at least one meal to save schedule changes." /> : null}
+      {missingDishDays.length > 0 ? (
+        <FieldError
+          message={`Select a dish for every meal: ${missingDishDays.map(value => dayName(period, value)).join(', ')}.`}
+        />
+      ) : null}
+
+      {daySlots.map(slot => (
+        <SlotCard
+          dish={slot.menuItemId ? menuById.get(slot.menuItemId) : undefined}
+          dishName={slot.menuItemId ? dishName(slot.menuItemId) : null}
+          dishUnavailable={
+            slot.menuItemId !== null &&
+            menu.status === 'success' &&
+            !availableDishes.some(item => item.id === slot.menuItemId)
+          }
+          editable={editable}
+          error={errors[`slot:${slot.key}`]}
+          key={slot.key}
+          locked={locked}
+          onDelete={() => setRemoving(slot)}
+          onDish={() => setSheet({kind: 'dish', key: slot.key})}
+          onQuantity={quantity => updateSlots(current => setSlotQuantity(current, slot.key, quantity))}
+          onTime={() => setSheet({kind: 'time', slot: slot.slot})}
+          slot={slot}
+        />
+      ))}
+
+      {editable && freeSlots.length > 0 ? (
+        <ChefActionButton
+          accessibilityLabel={`Add meal slot for ${dayName(period, day)}`}
+          disabled={locked}
+          icon="plus"
+          label={addMealLabel(freeSlots)}
+          onPress={() => setSheet({kind: 'add'})}
+          tone="neutral"
+        />
+      ) : null}
+      {editable && period === 'WEEKLY' && daySlots.length > 0 ? (
+        <ChefActionButton
+          disabled={locked}
+          icon="copy"
+          label={`Copy ${dayLong} to all weekdays`}
+          onPress={() => (otherWeekdaysHaveMeals(slots, day) ? setCopying(true) : copyToWeekdays())}
+          tone="ghost"
+        />
+      ) : null}
+      {editable ? (
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
+          You can only pick dishes that are on and available on your menu.
+        </Text>
+      ) : null}
+    </>
+  );
+
+  const reviewItems = slots
+    .filter(slot => slot.menuItemId !== null)
+    .map(slot => ({
+      menuItemId: slot.menuItemId as string,
+      mealSlotCode: slot.slot,
+      serviceTime: slot.time,
+      sequenceNumber: 1,
+      quantity: slot.quantity,
+      isoDayOfWeek: period === 'WEEKLY' ? slot.day : null,
+      dayOfMonth: period === 'MONTHLY' ? slot.day : null,
+    }));
+  const review = (
+    <>
+      <ChefCard>
+        <View style={styles.summary}>
+          {photoUri ? (
+            <Image accessibilityIgnoresInvertColors resizeMode="cover" source={{uri: photoUri}} style={styles.summaryPhoto} />
+          ) : null}
+          <View style={styles.flex}>
+            <Text allowFontScaling={textDefaults.allowFontScaling} numberOfLines={2} style={styles.summaryName}>
+              {form.name.trim()}
+            </Text>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
+              {chefPlanMetaLine({billingPeriod: period}, reviewItems)}
+            </Text>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.summaryPrice}>
+              {chefPlanPriceLabel({amount: form.amount.trim(), currency: 'INR', billingPeriod: period})}
+            </Text>
+          </View>
+          <EditLink label="Edit details" onPress={() => setStep(1)} />
+        </View>
+      </ChefCard>
+      <ChefCard>
+        <View style={styles.summaryHead}>
+          <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.summaryTitle}>
+            Meals
+          </Text>
+          <EditLink label="Edit meals" onPress={() => setStep(2)} />
+        </View>
+        {groupMealDays(slots).flatMap(group =>
+          group.meals.map(meal => (
+            <View key={`${group.days[0]}-${meal.slot}`} style={styles.reviewRow}>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.reviewTitle}>
+                {`${dayRangeLabel(period, group.days)} · ${mealSlotLabel(meal.slot)} ${formatServiceTime(meal.time)}`}
+              </Text>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
+                {meal.menuItemId ? dishName(meal.menuItemId) : ''}
+                {meal.quantity > 1 ? ` × ${meal.quantity}` : ''}
+              </Text>
+            </View>
+          )),
+        )}
+      </ChefCard>
+      <FormField
+        editable={busy === null}
+        label="Note for Craves (optional)"
+        maxLength={1000}
+        multiline
+        onChangeText={setNote}
+        placeholder="Anything the Craves team should know"
+        value={note}
+      />
+      <View style={styles.banner}>
+        <Glyph color={colors.warningText} name="lock-clock" />
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.bannerText}>
+          You can't edit the plan while Craves checks it. Usually takes a day.
+        </Text>
+      </View>
+    </>
+  );
+
+  const readOnlyNote = editable || !plan
+    ? null
+    : plan.status === 'PENDING_APPROVAL'
+      ? "Craves is checking this plan. You can't edit it until then."
+      : plan.status === 'ACTIVE'
+        ? 'This plan is live. To change something, send us a request.'
+        : "This plan isn't live. To change something, send us a request.";
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.safeArea}>
-      <MealPlanHeader
-        title={plan ? 'Edit Meal Plan' : 'Create Meal Plan'}
-        subtitle={SUBTITLE}
-        onBack={() => {
-          if (!busy) navigation.goBack();
-        }}
-      />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.body}>
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
-          {plan && !editable ? (
-            <View accessibilityRole="alert" style={[styles.banner, styles.bannerInfo]}>
-              <Glyph name="lock-outline" color={colors.infoText} />
-              <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.bannerText, styles.bannerInfoText]}>
-                This plan is {statusLabel.toLowerCase()}. You can't edit it right now.
-              </Text>
-            </View>
-          ) : null}
-          {plan?.status === 'REJECTED' ? (
-            <View accessibilityRole="alert" style={[styles.banner, styles.bannerWarning]}>
-              <Glyph name="message-alert-outline" color={colors.warningText} />
-              <View style={styles.flex}>
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.bannerTitle, styles.bannerWarningText]}>
-                  {statusLabel}
-                </Text>
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.bannerText, styles.bannerWarningText]}>
-                  {plan.reviewReason ?? 'Update the plan and submit it again.'}
-                </Text>
-              </View>
-            </View>
-          ) : null}
-
-          <View style={styles.card}>
-            <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.cardTitle}>
-              Plan details
-            </Text>
-
-            {photoSupported && (editable || photoUri) ? (
-              <View style={styles.field}>
-                <Label text="Plan photo" required={false} />
-                {photoUri ? (
-                  <>
-                    <Image
-                      accessibilityIgnoresInvertColors
-                      accessibilityLabel="Plan photo"
-                      resizeMode="cover"
-                      source={{uri: photoUri}}
-                      style={styles.photo}
-                    />
-                    {editable ? (
-                      <Button label="Change photo" variant="outline" disabled={busy !== null} onPress={pickPhoto} />
-                    ) : null}
-                  </>
-                ) : (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Add plan photo"
-                    disabled={busy !== null}
-                    onPress={pickPhoto}
-                    style={({pressed}) => [styles.upload, pressed && styles.pressed]}>
-                    <Glyph name="camera-plus-outline" size={28} color={colors.flameRedAccessible} />
-                    <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.uploadTitle}>
-                      Add plan photo
-                    </Text>
-                    <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
-                      Customers see this on the plan card
-                    </Text>
-                  </Pressable>
-                )}
-                <FieldError message={photoError ?? undefined} />
-              </View>
+    <ChefScreen
+      footer={
+        editable ? (
+          <View style={styles.buttons}>
+            {step > 1 ? (
+              <ChefActionButton disabled={busy !== null} label="Back" onPress={() => setStep((step - 1) as Step)} style={styles.flex} tone="neutral" />
             ) : null}
-
-            <View style={styles.field}>
-              <Label text="Plan name" />
-              <TextInput
-                accessibilityLabel="Plan name"
-                allowFontScaling={textDefaults.allowFontScaling}
-                editable={!locked}
-                maxLength={160}
-                onChangeText={value => updateForm('name', value)}
-                placeholder="e.g. Weekly Home Lunch Plan"
-                placeholderTextColor={colors.placeholder}
-                style={[styles.input, errors.name && styles.inputError, !editable && styles.inputDisabled]}
-                value={form.name}
-              />
-              <FieldError message={errors.name} />
-            </View>
-
-            <View style={styles.field}>
-              <Label text="Frequency" />
-              <SegmentedControl
-                accessibilityLabel="Frequency"
-                accessibilityOptionRole="radio"
-                disabled={locked}
-                onChange={changePeriod}
-                options={[
-                  {value: 'WEEKLY', label: 'Weekly'},
-                  {value: 'MONTHLY', label: 'Monthly'},
-                ]}
-                value={period}
-              />
-            </View>
-
-            <View style={styles.field}>
-              <Label text="Price (INR)" />
-              <View style={[styles.input, styles.inputRow, errors.amount && styles.inputError, !editable && styles.inputDisabled]}>
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.rupee}>₹</Text>
-                <TextInput
-                  accessibilityLabel={`Price per ${unit}`}
-                  allowFontScaling={textDefaults.allowFontScaling}
-                  editable={!locked}
-                  keyboardType="decimal-pad"
-                  onChangeText={value => updateForm('amount', value)}
-                  placeholder="e.g. 1499"
-                  placeholderTextColor={colors.placeholder}
-                  style={styles.inlineInput}
-                  value={form.amount}
-                />
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>per {unit}</Text>
-              </View>
-              <FieldError message={errors.amount} />
-            </View>
-
-            <View style={styles.field}>
-              <Label text="Description" />
-              <View>
-                <TextInput
-                  accessibilityLabel="Description"
-                  allowFontScaling={textDefaults.allowFontScaling}
-                  editable={!locked}
-                  maxLength={500}
-                  multiline
-                  onChangeText={value => updateForm('description', value)}
-                  placeholder="Tell customers about this plan, what they can expect, etc."
-                  placeholderTextColor={colors.placeholder}
-                  style={[styles.input, styles.multiline, errors.description && styles.inputError, !editable && styles.inputDisabled]}
-                  textAlignVertical="top"
-                  value={form.description}
-                />
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.counter}>
-                  {form.description.length}/500
-                </Text>
-              </View>
-              <FieldError message={errors.description} />
-            </View>
-
-            <View style={styles.field}>
-              <View style={styles.labelRow}>
-                <Label text="Preparation lead time" />
-                <Glyph name="information-outline" size={18} />
-              </View>
-              <Pressable
-                accessibilityHint="Opens the list of lead times"
-                accessibilityLabel={`Preparation lead time, ${leadHoursLabel(leadHours)}`}
-                accessibilityRole="button"
-                disabled={locked}
-                onPress={() => setSheet({kind: 'lead'})}
-                style={[styles.input, styles.inputRow, !editable && styles.inputDisabled]}>
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.inputValue}>
-                  {leadHoursLabel(leadHours)}
-                </Text>
-                <Glyph name="chevron-down" />
-              </Pressable>
-              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
-                Meals are prepared this many hours in advance. Min 1 hour, max 168 hours.
-              </Text>
-            </View>
+            {step === 1 ? <ChefActionButton label="Next: Meals" onPress={goToMeals} style={styles.flex2} /> : null}
+            {step === 2 ? <ChefActionButton label="Next: Review" onPress={goToReview} style={styles.flex2} /> : null}
+            {step === 3 ? (
+              <ChefActionButton busy={busy === 'submit'} label="Submit for approval" onPress={() => save('submit', note)} style={styles.flex2} />
+            ) : null}
           </View>
-
-          <View style={styles.card}>
-            <View style={styles.scheduleHeader}>
-              <View style={styles.tile}>
-                <Glyph name="calendar-blank-outline" size={24} color={colors.flameRedAccessible} />
-              </View>
-              <View style={styles.flex}>
-                <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.cardTitle}>
-                  Meal schedule
-                </Text>
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
-                  Select dishes from your active menu and plan them by day.
-                </Text>
-              </View>
+        ) : (
+          <ChefActionButton
+            label="Request a change"
+            onPress={() => navigation.navigate('ChefSupportTicket', {topic: `Change meal plan: ${plan?.name ?? ''}`})}
+          />
+        )
+      }
+      header={
+        <>
+          <ChefTopBar
+            backIcon={editable ? 'close' : 'arrow-left'}
+            onBack={() => {
+              if (!busy) navigation.goBack();
+            }}
+            showBell={false}
+            subtitle={editable ? `Step ${step} of 3 · ${STEP_NAMES[step]}` : status?.label}
+            title={editable ? (plan ? 'Edit meal plan' : 'New meal plan') : (plan?.name ?? '')}
+          />
+          {editable ? (
+            <View accessibilityLabel={`Step ${step} of 3`} style={styles.steps}>
+              {([1, 2, 3] as const).map(value => (
+                <View key={value} style={[styles.stepBar, value <= step && styles.stepBarOn]} />
+              ))}
             </View>
+          ) : null}
+        </>
+      }
+      key={step}>
+      {readOnlyNote ? (
+        <View accessibilityRole="alert" style={[styles.banner, styles.bannerInfo]}>
+          <Glyph color={colors.infoText} name="lock-outline" />
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.bannerText, styles.bannerInfoText]}>
+            {readOnlyNote}
+          </Text>
+        </View>
+      ) : null}
+      {plan?.status === 'REJECTED' ? (
+        <View accessibilityRole="alert" style={styles.banner}>
+          <Glyph color={colors.warningText} name="message-alert-outline" />
+          <View style={styles.flex}>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.bannerTitle}>
+              {status?.label}
+            </Text>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.bannerText}>
+              {plan.reviewReason ?? 'Update the plan and submit it again.'}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+      {serverError ? (
+        <View accessibilityLiveRegion="assertive" accessibilityRole="alert" style={[styles.banner, styles.bannerError]}>
+          <Icon color={colors.flameRedAccessible} name="alert" size={iconSize.md} surface={false} />
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.bannerText, styles.bannerErrorText]}>
+            {serverError}
+          </Text>
+        </View>
+      ) : null}
 
-            {period === 'WEEKLY' ? (
-              <View accessibilityRole="tablist" style={styles.days}>
-                {WEEKDAYS.map((label, index) => (
-                  <DayCell
-                    key={label}
-                    label={label}
-                    hasMeals={mealDays.has(index + 1)}
-                    selected={day === index + 1}
-                    onPress={() => setDay(index + 1)}
-                    style={styles.weekDay}
-                  />
-                ))}
-              </View>
-            ) : (
-              <ScrollView
-                horizontal
-                accessibilityRole="tablist"
-                contentContainerStyle={styles.monthDays}
-                showsHorizontalScrollIndicator={false}
-                style={styles.days}>
-                {MONTH_DAYS.map(value => (
-                  <DayCell
-                    key={value}
-                    label={String(value)}
-                    accessibilityLabel={`Day ${value}`}
-                    hasMeals={mealDays.has(value)}
-                    selected={day === value}
-                    onPress={() => setDay(value)}
-                    style={styles.monthDay}
-                  />
-                ))}
-              </ScrollView>
-            )}
-            <FieldError message={errors.schedule} />
-            <FieldError
-              message={scheduleNote && scheduleKept ? 'Add at least one meal to save schedule changes.' : undefined}
-            />
-            {missingDishDays.length > 0 ? (
-              <FieldError
-                message={`Select a dish for every meal: ${missingDishDays.map(value => dayName(period, value)).join(', ')}.`}
-              />
-            ) : null}
+      {editable ? (
+        step === 1 ? (
+          details
+        ) : step === 2 ? (
+          meals
+        ) : (
+          review
+        )
+      ) : (
+        <>
+          <SectionHeader title="Details" />
+          {details}
+          <SectionHeader title="Meals" />
+          {meals}
+        </>
+      )}
 
-            {daySlots.map(slot => (
-              <SlotCard
-                key={slot.key}
-                slot={slot}
-                dish={slot.menuItemId ? menuById.get(slot.menuItemId) : undefined}
-                dishName={slot.menuItemId ? menuById.get(slot.menuItemId)?.itemName ?? scheduledNames.get(slot.menuItemId) ?? 'Dish' : null}
-                dishUnavailable={
-                  slot.menuItemId !== null &&
-                  menu.status === 'success' &&
-                  !availableDishes.some(item => item.id === slot.menuItemId)
-                }
-                editable={editable}
-                locked={locked}
-                error={errors[`slot:${slot.key}`]}
-                onDelete={() => updateSlots(current => removeSlot(current, slot.key))}
-                onDish={() => setSheet({kind: 'dish', key: slot.key})}
-                onQuantity={quantity => updateSlots(current => setSlotQuantity(current, slot.key, quantity))}
-                onTime={() => setSheet({kind: 'time', slot: slot.slot})}
+      <ChefSheet onClose={() => setSheet(null)} title="Cook how early" visible={sheet?.kind === 'lead'}>
+        {LEAD_HOUR_OPTIONS.map(hours => (
+          <SheetRow
+            key={hours}
+            label={leadHoursLabel(hours)}
+            onPress={() => {
+              setLeadHours(hours);
+              setDirty(true);
+              setSheet(null);
+            }}
+            selected={hours === leadHours}
+          />
+        ))}
+      </ChefSheet>
+      <ChefSheet
+        onClose={() => setSheet(null)}
+        title={sheet?.kind === 'time' ? `${mealSlotLabel(sheet.slot)} time` : 'Time'}
+        visible={sheet?.kind === 'time'}>
+        {sheet?.kind === 'time' ? (
+          <>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
+              {`Applies to every ${mealSlotLabel(sheet.slot).toLowerCase()} in this plan`}
+            </Text>
+            {TIME_OPTIONS.map(time => (
+              <SheetRow
+                key={time}
+                label={formatServiceTime(time)}
+                onPress={() => {
+                  updateSlots(current => setSlotTime(current, sheet.slot, time));
+                  setSheet(null);
+                }}
+                selected={slots.find(slot => slot.slot === sheet.slot)?.time === time}
               />
             ))}
-
-            {editable && freeSlots.length > 0 ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Add meal slot for ${dayName(period, day)}`}
-                disabled={locked}
-                onPress={() => setSheet({kind: 'add'})}
-                style={({pressed}) => [styles.addSlot, pressed && styles.pressed]}>
-                <Glyph name="plus" size={20} color={colors.flameRedAccessible} />
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.addSlotText}>
-                  Add meal slot
-                </Text>
-              </Pressable>
-            ) : null}
-
-            <View style={styles.note}>
-              <Glyph name="information-outline" size={20} color={colors.flameRedAccessible} />
-              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.noteText}>
-                You can only select dishes that are Active and Available on your menu.
-              </Text>
-            </View>
-          </View>
-        </ScrollView>
-
-        {editable ? (
-          <View style={styles.bar}>
-            <View style={styles.barRow}>
-              <Button
-                disabled={busy !== null}
-                label="Save draft"
-                loading={busy === 'draft'}
-                onPress={() => save('draft')}
-                style={styles.draftButton}
-                variant="outline"
-              />
-              <Button
-                disabled={busy !== null}
-                label="Submit for approval"
-                loading={busy === 'submit'}
-                onPress={openSubmit}
-                style={styles.submitButton}
-              />
-            </View>
-            {serverError || hasErrors ? (
-              <Text accessibilityRole="alert" allowFontScaling={textDefaults.allowFontScaling} style={styles.barError}>
-                {serverError ?? 'Check the highlighted fields above.'}
-              </Text>
-            ) : null}
-            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.barFootnote}>
-              You can add a note for the admin in the next step.
-            </Text>
-          </View>
+          </>
         ) : null}
-      </KeyboardAvoidingView>
-
-      {sheet?.kind === 'lead' ? (
-        <BottomSheet title="Preparation lead time" onClose={() => setSheet(null)}>
-          {LEAD_HOUR_OPTIONS.map(hours => (
-            <SheetRow
-              key={hours}
-              label={leadHoursLabel(hours)}
-              selected={hours === leadHours}
-              onPress={() => {
-                setLeadHours(hours);
-                setDirty(true);
-                setSheet(null);
+      </ChefSheet>
+      <ChefSheet onClose={() => setSheet(null)} title="Pick a dish" visible={sheet?.kind === 'dish'}>
+        {sheet?.kind === 'dish' ? (
+          availableDishes.length === 0 && menu.status === 'error' ? (
+            <Message
+              action={{
+                label: 'Try again',
+                onPress: () => {
+                  menu.refresh().catch(() => undefined);
+                },
               }}
-            />
-          ))}
-        </BottomSheet>
-      ) : null}
-      {sheet?.kind === 'time' ? (
-        <BottomSheet
-          title={`${mealSlotLabel(sheet.slot)} time`}
-          footnote={`Applies to every ${mealSlotLabel(sheet.slot).toLowerCase()} in this plan`}
-          onClose={() => setSheet(null)}>
-          {TIME_OPTIONS.map(time => (
-            <SheetRow
-              key={time}
-              label={formatServiceTime(time)}
-              selected={slots.find(slot => slot.slot === sheet.slot)?.time === time}
-              onPress={() => {
-                updateSlots(current => setSlotTime(current, sheet.slot, time));
-                setSheet(null);
-              }}
-            />
-          ))}
-        </BottomSheet>
-      ) : null}
-      {sheet?.kind === 'dish' ? (
-        <BottomSheet title="Select a dish" onClose={() => setSheet(null)}>
-          {availableDishes.length === 0 && menu.status === 'error' ? (
-            <RecoverableErrorBanner
-              message="Your menu could not be loaded. Check your connection and try again."
-              onRetry={() => {
-                menu.refresh().catch(() => undefined);
-              }}
-              style={styles.sheetError}
+              message="Check your connection and try again."
+              title="Couldn't load your menu"
             />
           ) : availableDishes.length === 0 ? (
-            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.sheetEmpty}>
-              {menu.status === 'pending'
-                ? 'Loading your menu…'
-                : 'No dishes are Active and Available on your menu yet.'}
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.messageText}>
+              {menu.status === 'pending' ? 'Loading your menu…' : 'None of your dishes are on and available yet.'}
             </Text>
           ) : (
             availableDishes.map(item => (
               <SheetRow
                 key={item.id}
                 label={item.itemName}
-                leading={<MealPlanPhoto uri={getChefMenuPrimaryImageUrl(item)} size={40} radius={radius.sm} />}
-                selected={slots.find(slot => slot.key === sheet.key)?.menuItemId === item.id}
+                leading={<DishThumb item={item} size={40} />}
                 onPress={() => {
                   updateSlots(current => setSlotDish(current, sheet.key, item.id));
                   setSheet(null);
                 }}
+                selected={slots.find(slot => slot.key === sheet.key)?.menuItemId === item.id}
               />
             ))
-          )}
-        </BottomSheet>
-      ) : null}
-      {sheet?.kind === 'add' ? (
-        <BottomSheet title={`Add a meal for ${dayName(period, day)}`} onClose={() => setSheet(null)}>
-          {freeSlots.map(code => (
-            <SheetRow
-              key={code}
-              label={mealSlotLabel(code)}
-              leading={<Glyph name={SLOT_ICON[code]} color={colors.textSecondary} />}
-              onPress={() => {
-                updateSlots(current => addSlot(current, day, code));
-                setSheet(null);
-              }}
-            />
-          ))}
-        </BottomSheet>
-      ) : null}
-      {submitOpen ? (
-        <BottomSheet title="Submit for approval" onClose={() => setSubmitOpen(false)}>
-          <View style={styles.submitBody}>
-            <Label text="Note for admin" required={false} />
-            <TextInput
-              accessibilityLabel="Note for admin"
-              allowFontScaling={textDefaults.allowFontScaling}
-              maxLength={1000}
-              multiline
-              onChangeText={setNote}
-              placeholder="Optional"
-              placeholderTextColor={colors.placeholder}
-              style={[styles.input, styles.multiline]}
-              textAlignVertical="top"
-              value={note}
-            />
-            <Button
-              label="Submit"
-              onPress={() => {
-                setSubmitOpen(false);
-                save('submit', note);
-              }}
-            />
-          </View>
-        </BottomSheet>
-      ) : null}
-    </SafeAreaView>
+          )
+        ) : null}
+      </ChefSheet>
+      <ChefSheet onClose={() => setSheet(null)} title={`Add a meal for ${dayName(period, day)}`} visible={sheet?.kind === 'add'}>
+        {freeSlots.map(code => (
+          <SheetRow
+            key={code}
+            label={mealSlotLabel(code)}
+            leading={<Glyph color={colors.textSecondary} name={SLOT_ICON[code]} />}
+            onPress={() => {
+              updateSlots(current => addSlot(current, day, code));
+              setSheet(null);
+            }}
+          />
+        ))}
+      </ChefSheet>
+
+      <ChefSheet onClose={() => setPendingLeave(null)} title="Save as draft?" visible={pendingLeave !== null}>
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.messageText}>
+          Your plan isn't sent to Craves yet. A draft keeps what you've done so far.
+        </Text>
+        <ChefActionButton
+          label="Save draft"
+          onPress={() => {
+            setPendingLeave(null);
+            save('draft');
+          }}
+        />
+        <ChefActionButton
+          label="Discard"
+          onPress={() => {
+            const action = pendingLeave;
+            setPendingLeave(null);
+            navigation.dispatch(action as never);
+          }}
+          tone="neutral"
+        />
+        <ChefActionButton label="Keep editing" onPress={() => setPendingLeave(null)} tone="ghost" />
+      </ChefSheet>
+      <ConfirmDialog
+        confirmLabel="Remove"
+        message="The dish planned for it on this day is removed."
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => {
+          const slot = removing;
+          setRemoving(null);
+          if (slot) updateSlots(current => removeSlot(current, slot.key));
+        }}
+        title={
+          removing
+            ? `Remove ${mealSlotLabel(removing.slot).toLowerCase()} on ${period === 'WEEKLY' ? dayName(period, removing.day, 'long') : `day ${removing.day}`}?`
+            : 'Remove this meal?'
+        }
+        tone="danger"
+        visible={removing !== null}
+      />
+      <ConfirmDialog
+        confirmLabel="Copy"
+        message="This replaces any meals already planned for the other weekdays."
+        onCancel={() => setCopying(false)}
+        onConfirm={copyToWeekdays}
+        title={`Copy ${dayLong} to all weekdays?`}
+        visible={copying}
+      />
+      <ConfirmDialog
+        confirmLabel="Change"
+        message="Changing how often clears the meals you planned."
+        onCancel={() => setPendingPeriod(null)}
+        onConfirm={() => {
+          if (pendingPeriod) applyPeriod(pendingPeriod);
+          setPendingPeriod(null);
+        }}
+        title="Change how often?"
+        tone="danger"
+        visible={pendingPeriod !== null}
+      />
+    </ChefScreen>
+  );
+}
+
+function EditLink({label, onPress}: {label: string; onPress: () => void}) {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      hitSlop={{top: 4, bottom: 4}}
+      onPress={onPress}
+      style={styles.editLink}>
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.editLinkText}>
+        Edit
+      </Text>
+    </Pressable>
+  );
+}
+
+function DishThumb({item, size}: {item: ChefMenuItem; size: number}) {
+  const uri = getChefMenuPrimaryImageUrl(item);
+  const box = {width: size, height: size, borderRadius: radius.sm};
+  return uri ? (
+    <Image accessibilityIgnoresInvertColors resizeMode="cover" source={{uri}} style={box} />
+  ) : (
+    <View style={[box, styles.noThumb]}>
+      <Icon color={colors.borderStrong} name="meal" size={Math.round(size * 0.5)} surface={false} />
+    </View>
   );
 }
 
@@ -854,7 +985,7 @@ function DayCell({
   hasMeals: boolean;
   selected: boolean;
   onPress: () => void;
-  style: StyleProp<ViewStyle>;
+  style: object;
 }) {
   return (
     <Pressable
@@ -862,11 +993,10 @@ function DayCell({
       accessibilityRole="tab"
       accessibilityState={{selected}}
       onPress={onPress}
-      style={[styles.dayCell, style, selected && styles.dayCellSelected]}>
-      <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.dayText, selected && styles.dayTextSelected]}>
+      style={[styles.dayCell, style, selected && styles.dayCellOn, !selected && !hasMeals && styles.dayCellEmpty]}>
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.dayText, selected && styles.dayTextOn]}>
         {label}
       </Text>
-      <View style={[styles.dayDot, hasMeals && (selected ? styles.dayDotSelected : styles.dayDotFilled)]} />
     </Pressable>
   );
 }
@@ -899,12 +1029,9 @@ function SlotCard({
 }) {
   const label = mealSlotLabel(slot.slot);
   return (
-    <View style={styles.slot}>
+    <ChefCard>
       <View style={styles.slotHeader}>
-        <Glyph
-          name={SLOT_ICON[slot.slot]}
-          color={slot.slot === 'DINNER' ? colors.flameRedAccessible : colors.warning}
-        />
+        <Glyph color={slot.slot === 'DINNER' ? colors.flameRedAccessible : colors.warning} name={SLOT_ICON[slot.slot]} />
         <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.slotTitle}>
           {label}
         </Text>
@@ -915,11 +1042,10 @@ function SlotCard({
           disabled={locked}
           onPress={onTime}
           style={({pressed}) => [styles.timeChip, pressed && styles.pressed]}>
-          <Glyph name="clock-outline" size={18} color={colors.textPrimary} />
           <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.timeText}>
             {formatServiceTime(slot.time)}
           </Text>
-          {editable ? <Glyph name="chevron-down" size={18} color={colors.textPrimary} /> : null}
+          {editable ? <Icon color={colors.textPrimary} name="chevron-down" size={iconSize.xs} surface={false} /> : null}
         </Pressable>
         {editable ? (
           <Pressable
@@ -927,104 +1053,82 @@ function SlotCard({
             accessibilityRole="button"
             disabled={locked}
             onPress={onDelete}
-            style={({pressed}) => [styles.deleteButton, pressed && styles.pressed]}>
-            <Glyph name="delete-outline" size={20} color={colors.flameRedAccessible} />
+            style={({pressed}) => [styles.iconButton, pressed && styles.pressed]}>
+            <Glyph color={colors.textSecondary} name="delete-outline" size={iconSize.lg} />
           </Pressable>
         ) : null}
       </View>
-      <Pressable
-        accessibilityHint="Opens your available dishes"
-        accessibilityLabel={`${label} dish, ${dishName ?? 'not selected'}`}
-        accessibilityRole="button"
-        disabled={locked}
-        onPress={onDish}
-        style={[styles.input, styles.inputRow, error && styles.inputError]}>
-        {dishName ? (
-          <MealPlanPhoto uri={dish ? getChefMenuPrimaryImageUrl(dish) : null} size={32} radius={radius.sm} />
-        ) : null}
-        <Text
-          allowFontScaling={textDefaults.allowFontScaling}
-          numberOfLines={1}
-          style={[styles.inputValue, !dishName && styles.placeholder]}>
-          {dishName ?? 'Select a dish'}
-        </Text>
-        {editable ? <Glyph name="chevron-down" /> : null}
-      </Pressable>
-      <FieldError message={error ?? (dishUnavailable ? 'This dish is not available on your menu right now.' : undefined)} />
-      <View style={styles.quantityRow}>
-        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
-          Quantity per customer
-        </Text>
-        <View style={styles.stepper}>
-          <Pressable
-            accessibilityLabel={`Fewer ${label.toLowerCase()} portions`}
-            accessibilityRole="button"
-            disabled={locked || slot.quantity <= 1}
-            onPress={() => onQuantity(slot.quantity - 1)}
-            style={({pressed}) => [styles.stepperButton, pressed && styles.pressed]}>
-            <Glyph name="minus" size={20} color={editable && slot.quantity > 1 ? colors.textPrimary : colors.borderStrong} />
-          </Pressable>
-          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.stepperValue}>
-            {slot.quantity}
-          </Text>
-          <Pressable
-            accessibilityLabel={`More ${label.toLowerCase()} portions`}
-            accessibilityRole="button"
-            disabled={locked || slot.quantity >= 100}
-            onPress={() => onQuantity(slot.quantity + 1)}
-            style={({pressed}) => [styles.stepperButton, pressed && styles.pressed]}>
-            <Glyph name="plus" size={20} color={editable && slot.quantity < 100 ? colors.textPrimary : colors.borderStrong} />
-          </Pressable>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function BottomSheet({
-  title,
-  footnote,
-  onClose,
-  children,
-}: React.PropsWithChildren<{title: string; footnote?: string; onClose: () => void}>) {
-  const insets = useSafeAreaInsets();
-  const reduceMotion = useReducedMotionPreference();
-  return (
-    <Modal
-      animationType={resolveReducedMotionAnimation('slide' as const, reduceMotion)}
-      onRequestClose={onClose}
-      transparent
-      visible>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.backdrop}>
+      <View style={styles.dishRow}>
         <Pressable
-          accessible={false}
-          importantForAccessibility="no-hide-descendants"
-          onPress={onClose}
-          style={StyleSheet.absoluteFill}
-        />
-        <View
-          accessibilityViewIsModal
-          onAccessibilityEscape={onClose}
-          style={[styles.sheet, {paddingBottom: Math.max(insets.bottom, spacing.md)}]}>
-          <View style={styles.handle} />
-          <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.sheetTitle}>
-            {title}
-          </Text>
-          {footnote ? (
-            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
-              {footnote}
+          accessibilityHint="Opens your available dishes"
+          accessibilityLabel={`${label} dish, ${dishName ?? 'not selected'}`}
+          accessibilityRole="button"
+          disabled={locked}
+          onPress={onDish}
+          style={({pressed}) => [dishName ? styles.dishOpen : styles.addDish, error && styles.addDishError, pressed && styles.pressed]}>
+          {dishName ? (
+            <>
+              {dish ? <DishThumb item={dish} size={52} /> : null}
+              <View style={styles.flex}>
+                <View style={styles.dishName}>
+                  {dish ? <VegMark type={dish.foodType} /> : null}
+                  <Text allowFontScaling={textDefaults.allowFontScaling} numberOfLines={2} style={styles.dishNameText}>
+                    {dishName}
+                  </Text>
+                </View>
+                {dish ? (
+                  <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
+                    {formatRupeesExact(dish.price)} on menu
+                  </Text>
+                ) : null}
+              </View>
+            </>
+          ) : (
+            <>
+              <Icon color={colors.flameRedAccessible} name="plus" size={iconSize.sm} surface={false} />
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.addDishText}>
+                Add a dish
+              </Text>
+            </>
+          )}
+        </Pressable>
+        {dishName ? (
+          editable ? (
+            <View style={styles.stepper}>
+              <Pressable
+                accessibilityLabel={`Fewer ${label.toLowerCase()} portions`}
+                accessibilityRole="button"
+                disabled={locked || slot.quantity <= 1}
+                onPress={() => onQuantity(slot.quantity - 1)}
+                style={styles.stepperButton}>
+                <Glyph color={slot.quantity > 1 ? colors.textSecondary : colors.borderStrong} name="minus-circle-outline" size={iconSize.lg} />
+              </Pressable>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.stepperValue}>
+                {slot.quantity}
+              </Text>
+              <Pressable
+                accessibilityLabel={`More ${label.toLowerCase()} portions`}
+                accessibilityRole="button"
+                disabled={locked || slot.quantity >= 100}
+                onPress={() => onQuantity(slot.quantity + 1)}
+                style={styles.stepperButton}>
+                <Glyph color={slot.quantity < 100 ? colors.flameRedAccessible : colors.borderStrong} name="plus-circle" size={iconSize.lg} />
+              </Pressable>
+            </View>
+          ) : (
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.stepperValue}>
+              {`× ${slot.quantity}`}
             </Text>
-          ) : null}
-          <ScrollView keyboardShouldPersistTaps="handled" style={styles.sheetList}>
-            {children}
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+          )
+        ) : null}
+      </View>
+      {error ? <FieldError message={error} /> : null}
+      {!error && dishUnavailable ? <FieldError message="This dish is not available on your menu right now." /> : null}
+    </ChefCard>
   );
 }
 
-/** With `selected` the row is a radio; without, a plain button. */
+/** One choice in a sheet: a radio when `selected` is given, a plain button without it. */
 function SheetRow({
   label,
   leading,
@@ -1053,113 +1157,75 @@ function SheetRow({
 }
 
 const styles = StyleSheet.create({
-  safeArea: {flex: 1, backgroundColor: colors.white},
-  body: {flex: 1, backgroundColor: colors.surfaceMuted},
   flex: {flex: 1, minWidth: 0},
-  fallback: {margin: spacing.md},
-  content: {padding: spacing.md, paddingBottom: spacing.xl, gap: spacing.md},
-  pressed: {opacity: 0.7},
-  card: {
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
+  flex2: {flex: 2},
+  pressed: {opacity: 0.6},
+  skeleton: {gap: spacing.sm},
+  message: {alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.md},
+  messageTitle: {color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold, textAlign: 'center'},
+  messageText: {color: colors.textSecondary, fontSize: typography.body},
+  steps: {flexDirection: 'row', gap: 6, paddingHorizontal: spacing.md, paddingBottom: spacing.sm, backgroundColor: colors.white},
+  stepBar: {flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.border},
+  stepBarOn: {backgroundColor: colors.flameRed},
+  buttons: {flexDirection: 'row', gap: spacing.sm},
+  banner: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.warningSoft},
+  bannerInfo: {backgroundColor: colors.infoSoft},
+  bannerError: {backgroundColor: colors.errorSoft},
+  bannerTitle: {color: colors.warningText, fontSize: typography.body, fontWeight: fontWeight.bold},
+  bannerText: {flex: 1, color: colors.warningText, fontSize: typography.small},
+  bannerInfoText: {color: colors.infoText},
+  bannerErrorText: {color: colors.flameRedAccessible},
+  help: {color: colors.textSecondary, fontSize: typography.small},
+  group: {gap: 6},
+  chips: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs},
+  select: {
+    minHeight: touchTarget.minimum,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md - 2,
+    borderWidth: borderWidth.focus,
     borderColor: colors.border,
     backgroundColor: colors.white,
-    ...elevation.card,
   },
-  cardTitle: {color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.bold},
-  banner: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md},
-  bannerInfo: {backgroundColor: colors.infoSoft},
-  bannerInfoText: {color: colors.infoText},
-  bannerWarning: {backgroundColor: colors.warningSoft},
-  bannerWarningText: {color: colors.warningText},
-  bannerTitle: {fontSize: typography.body, fontWeight: fontWeight.bold},
-  bannerText: {flex: 1, fontSize: typography.small},
-  field: {gap: spacing.xs},
-  labelRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.xxs},
-  label: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},
-  required: {color: colors.flameRedAccessible},
-  help: {color: colors.textSecondary, fontSize: typography.small},
-  errorText: {color: colors.flameRedAccessible, fontSize: typography.small},
-  input: {
-    minHeight: touchTarget.comfortable,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.md,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.white,
-    color: colors.textPrimary,
-    fontSize: typography.body,
-  },
-  inputRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
-  inputError: {borderColor: colors.flameRed},
-  inputDisabled: {backgroundColor: colors.surfaceMuted},
-  inputValue: {flex: 1, minWidth: 0, color: colors.textPrimary, fontSize: typography.body},
-  inlineInput: {flex: 1, minWidth: 0, minHeight: touchTarget.minimum, padding: 0, color: colors.textPrimary, fontSize: typography.body},
-  placeholder: {color: colors.placeholder},
-  rupee: {color: colors.textPrimary, fontSize: typography.button},
-  multiline: {minHeight: 104, paddingTop: spacing.sm, paddingBottom: spacing.xl},
-  counter: {position: 'absolute', right: spacing.sm, bottom: spacing.xs, color: colors.textSecondary, fontSize: typography.tiny},
+  selectText: {flex: 1, color: colors.textPrimary, fontSize: typography.body},
+  photoBlock: {gap: spacing.xs},
+  photo: {width: '100%', aspectRatio: 4 / 3, borderRadius: radius.md},
   upload: {
-    minHeight: 112,
+    height: 120,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xxs,
-    padding: spacing.md,
+    gap: 2,
     borderRadius: radius.md,
     borderWidth: borderWidth.focus,
     borderStyle: 'dashed',
     borderColor: colors.borderStrong,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.white,
   },
-  uploadTitle: {color: colors.flameRedAccessible, fontSize: typography.body, fontWeight: fontWeight.bold},
-  photo: {width: '100%', aspectRatio: 4 / 3, borderRadius: radius.md, backgroundColor: colors.surfaceMuted},
-  scheduleHeader: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm},
-  tile: {
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
+  uploadTitle: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
+  days: {flexDirection: 'row', justifyContent: 'space-between', gap: spacing.xxs},
+  monthScroll: {flexGrow: 0},
+  monthDays: {gap: spacing.xs},
+  dayCell: {
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.md,
-    backgroundColor: colors.errorSoft,
-  },
-  days: {
-    flexDirection: 'row',
-    gap: spacing.xxs,
-    padding: spacing.xxs,
-    borderRadius: radius.lg,
+    borderRadius: radius.pill,
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
-    flexGrow: 0,
-  },
-  monthDays: {gap: spacing.xxs},
-  dayCell: {
-    minHeight: touchTarget.minimum,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-    borderRadius: radius.md,
+    backgroundColor: colors.white,
   },
   weekDay: {flex: 1},
   monthDay: {width: touchTarget.minimum},
-  dayCellSelected: {backgroundColor: colors.flameRedAccessible},
+  dayCellOn: {borderColor: colors.flameRedAccessible, backgroundColor: colors.errorSoft},
+  dayCellEmpty: {opacity: 0.55},
   dayText: {color: colors.textPrimary, fontSize: typography.small, fontWeight: fontWeight.semibold},
-  dayTextSelected: {color: colors.white},
-  dayDot: {width: 5, height: 5, borderRadius: radius.pill},
-  dayDotFilled: {backgroundColor: colors.flameRedAccessible},
-  dayDotSelected: {backgroundColor: colors.white},
-  slot: {
-    gap: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: radius.md,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-  },
+  dayTextOn: {color: colors.flameRedAccessible},
   slotHeader: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
   slotTitle: {flex: 1, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
   timeChip: {
-    minHeight: touchTarget.minimum,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xxs,
@@ -1169,76 +1235,35 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
   },
   timeText: {color: colors.textPrimary, fontSize: typography.small, fontWeight: fontWeight.semibold},
-  deleteButton: {
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    backgroundColor: colors.errorSoft,
-  },
-  quantityRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm},
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.borderStrong,
-  },
-  stepperButton: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center'},
-  stepperValue: {minWidth: 32, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold, textAlign: 'center'},
-  addSlot: {
+  iconButton: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center'},
+  dishRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs},
+  dishOpen: {flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: touchTarget.minimum},
+  dishName: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
+  dishNameText: {flexShrink: 1, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},
+  addDish: {
+    flex: 1,
     minHeight: touchTarget.minimum,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing.xs,
-    borderRadius: radius.md,
-    borderWidth: borderWidth.standard,
-    borderStyle: 'dashed',
-    borderColor: colors.flameRed,
-    backgroundColor: colors.white,
+    paddingHorizontal: spacing.xs,
   },
-  addSlotText: {color: colors.flameRedAccessible, fontSize: typography.button, fontWeight: fontWeight.semibold},
-  note: {flexDirection: 'row', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.errorSoft},
-  noteText: {flex: 1, color: colors.flameRedAccessible, fontSize: typography.small},
-  bar: {
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    borderTopWidth: borderWidth.standard,
-    borderTopColor: colors.border,
-    backgroundColor: colors.white,
-  },
-  barRow: {flexDirection: 'row', gap: spacing.sm},
-  draftButton: {flex: 1, paddingHorizontal: spacing.sm},
-  submitButton: {flex: 1.4, paddingHorizontal: spacing.sm},
-  barError: {color: colors.flameRedAccessible, fontSize: typography.small, textAlign: 'center'},
-  barFootnote: {color: colors.textSecondary, fontSize: typography.small, textAlign: 'center'},
-  backdrop: {flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay},
-  sheet: {
-    maxHeight: '80%',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    backgroundColor: colors.white,
-    ...elevation.card,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 42,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.borderStrong,
-  },
-  sheetTitle: {color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold},
-  sheetList: {flexGrow: 0},
+  addDishError: {borderRadius: radius.md - 2, borderWidth: borderWidth.focus, borderColor: colors.flameRedAccessible},
+  addDishText: {color: colors.flameRedAccessible, fontSize: typography.body, fontWeight: fontWeight.bold},
+  noThumb: {alignItems: 'center', justifyContent: 'center', borderWidth: borderWidth.standard, borderColor: colors.border},
+  stepper: {flexDirection: 'row', alignItems: 'center'},
+  stepperButton: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center'},
+  stepperValue: {minWidth: 24, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold, textAlign: 'center'},
+  summary: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm},
+  summaryPhoto: {width: 64, height: 64, borderRadius: radius.md - 2},
+  summaryName: {color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.bold},
+  summaryPrice: {marginTop: 2, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
+  summaryHead: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
+  summaryTitle: {color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.bold},
+  editLink: {minHeight: touchTarget.minimum, justifyContent: 'center', paddingHorizontal: spacing.xs},
+  editLinkText: {color: colors.flameRedAccessible, fontSize: typography.body, fontWeight: fontWeight.bold},
+  reviewRow: {paddingVertical: spacing.xs, gap: 2},
+  reviewTitle: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},
   sheetRow: {minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xxs},
   sheetRowText: {flex: 1, color: colors.textPrimary, fontSize: typography.body},
-  sheetEmpty: {paddingVertical: spacing.md, color: colors.textSecondary, fontSize: typography.body},
-  sheetError: {marginVertical: spacing.sm},
-  submitBody: {gap: spacing.sm, paddingTop: spacing.xs},
 });

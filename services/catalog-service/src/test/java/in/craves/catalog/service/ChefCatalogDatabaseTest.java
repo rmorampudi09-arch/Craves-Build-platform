@@ -188,6 +188,20 @@ class ChefCatalogDatabaseTest {
         assertNull(catalog.getMyKitchen(stranger).chefPhotoUrl());
     }
 
+    /** The nearby list needs PostGIS, so it only runs in the CI service container. */
+    @Test void bothCustomerKitchenListsCarryTheChefPicture() {
+        String face="https://media.example/public/chef-avatars/chef-avatar-04.jpg";
+        catalog.setChefAvatar(owner,"chef-avatar-04");
+        var nearbyFaces=new HashMap<UUID,String>(); var cityFaces=new HashMap<UUID,String>(); var distanceFaces=new HashMap<UUID,String>();
+        new NearbyDiscoveryService(jdbc,new CatalogDiscoveryProperties(),finance).discoverKitchens(latitude,longitude,1000,0,10).kitchens().forEach(k->nearbyFaces.put(k.id(),k.chefPhotoUrl()));
+        catalog.discoverKitchens(null,null,"Hyderabad",null,null).kitchens().forEach(k->cityFaces.put(k.id(),k.chefPhotoUrl()));
+        catalog.discoverKitchens(latitude,longitude,"Hyderabad",null,null).kitchens().forEach(k->distanceFaces.put(k.id(),k.chefPhotoUrl()));
+        for (var faces : List.of(nearbyFaces,cityFaces,distanceFaces)) {
+            assertEquals(face,faces.get(kitchen));
+            assertTrue(faces.containsKey(otherKitchen)); assertNull(faces.get(otherKitchen)); // a chef who has not picked a face has none
+        }
+    }
+
     @Test void unknownFacesRoleAndKitchenAreChecked() {
         assertEquals("CHEF_AVATAR_UNKNOWN",rejected(()->catalog.setChefAvatar(owner,"chef-avatar-19")).getCode());
         assertEquals("CHEF_AVATAR_UNKNOWN",rejected(()->catalog.setChefAvatar(owner,"../kitchens/x")).getCode());

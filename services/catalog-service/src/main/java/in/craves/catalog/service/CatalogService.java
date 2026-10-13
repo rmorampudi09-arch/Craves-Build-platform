@@ -612,7 +612,8 @@ public class CatalogService {
             rs.getBigDecimal("latitude"),
             rs.getBigDecimal("longitude"),
             rs.getBigDecimal("distance_km"),
-            rs.getLong("active_menu_item_count")
+            rs.getLong("active_menu_item_count"),
+            rs.getString("chef_photo_url")
         );
     }
 

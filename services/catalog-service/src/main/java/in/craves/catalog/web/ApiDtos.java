@@ -176,7 +176,8 @@ public final class ApiDtos {
         BigDecimal latitude,
         BigDecimal longitude,
         BigDecimal distanceKm,
-        long activeMenuItemCount
+        long activeMenuItemCount,
+        String chefPhotoUrl
     ) {
     }
 

@@ -112,6 +112,7 @@ public class AuthService {
             saveLoginAttempt(firebaseUid, phoneNumber, true, null, ipAddress, userAgent);
             saveAudit(identity.getId(), "FIREBASE_EXCHANGE", "Firebase phone token exchanged", ipAddress, userAgent);
             if (Boolean.TRUE.equals(request.adminSession()) && AdminSessionService.isAdmin(roles)) {
+                adminSessions.requireSecondFactor(decodedToken.getClaims());
                 identityRepository.flush();
                 return adminSessions.create(identity, roles, decodedToken.getClaims().get("auth_time"));
             }

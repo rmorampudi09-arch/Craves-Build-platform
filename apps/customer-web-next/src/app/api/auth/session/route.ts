@@ -30,6 +30,9 @@ export async function POST(request: NextRequest) {
     }, 40_000);
     const raw = await upstream.json().catch(() => null);
     if (!upstream.ok) {
+      // The one rejection an administrator can act on: sign in with the authenticator app instead.
+      if ((raw as { code?: unknown } | null)?.code === "ADMIN_SECOND_FACTOR_REQUIRED")
+        return NextResponse.json({ code: "ADMIN_SECOND_FACTOR_REQUIRED", message: "Administrator sign-in needs your staff email, password and authenticator app code." }, { status: upstream.status });
       return NextResponse.json({ code: "SIGN_IN_FAILED", message: publicAuthError(upstream.status) }, { status: upstream.status });
     }
     const session = parseSessionExchange(raw);

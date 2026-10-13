@@ -56,6 +56,9 @@ craves:
     allow-generated-local-keys: ${CRAVES_JWT_ALLOW_GENERATED_LOCAL_KEYS:false}
   internal:
     service-secret: ${CRAVES_INTERNAL_SERVICE_SECRET:}
+  admin-session:
+    # CH-09: false = report admin sign-ins without an authenticator (TOTP) code; true = refuse them.
+    second-factor-enabled: ${CRAVES_ADMIN_SECOND_FACTOR_ENABLED:false}
   internal-admin-rbac:
     api-enabled: ${CRAVES_INTERNAL_ADMIN_RBAC_API_ENABLED:false}
     maximum-list-size: ${CRAVES_INTERNAL_ADMIN_RBAC_MAXIMUM_LIST_SIZE:100}

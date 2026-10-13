@@ -65,4 +65,13 @@ describe("Admin sign-in through the actual bounded request reader", () => {
     expect((await response.json()).code).toBe("SIGN_IN_FAILED");
     expect(response.headers.has("set-cookie")).toBe(false);
   });
+  it("tells an administrator to use the authenticator app when Auth requires a second factor", async () => {
+    vi.stubEnv("CRAVES_API_BASE_URL", "https://api.example.test/api/v1");
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ code: "ADMIN_SECOND_FACTOR_REQUIRED", message: "upstream text" }, { status: 401 })));
+    const response = await POST(request({ firebaseIdToken }));
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ code: "ADMIN_SECOND_FACTOR_REQUIRED",
+      message: "Administrator sign-in needs your staff email, password and authenticator app code." });
+    expect(response.headers.has("set-cookie")).toBe(false);
+  });
 });

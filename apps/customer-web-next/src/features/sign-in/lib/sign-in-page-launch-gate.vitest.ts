@@ -10,6 +10,7 @@ vi.mock("./customer-launch", async (original) => ({
 vi.mock("next/link", () => ({ default: (props: { href: string; children?: unknown }) => createElement("a", { href: props.href }, props.children as never) }));
 vi.mock("next/navigation", () => ({ redirect: (to: string) => { throw new Error(`redirect:${to}`); } }));
 vi.mock("@/features/sign-in/components/phone-auth-form", () => ({ PhoneAuthForm: () => createElement("form", { id: "phone-auth-form" }) }));
+vi.mock("@/features/sign-in/components/authenticator-sign-in-form", () => ({ AuthenticatorSignInForm: () => createElement("form", { id: "authenticator-sign-in-form" }) }));
 vi.mock("@/shared/components/brand/CravesLogo", () => ({ CravesLogo: () => createElement("span", null, "Craves") }));
 
 const { default: SignInPage } = await import("@/app/sign-in/page");
@@ -47,4 +48,19 @@ it("leaves chef return paths and the admin portal sign-in unchanged", async () =
   const admin = await page({});
   expect(admin).toContain("Administrator access");
   expect(admin).toContain("phone-auth-form");
+});
+
+it("shows administrators the authenticator form only when the admin host turns it on", async () => {
+  vi.stubEnv("CRAVES_ADMIN_PORTAL", "true");
+  const today = await page({});
+  expect(today).toContain("<p>Use your approved admin mobile number. Signing in does not grant administrator privileges.</p>");
+  expect(today).not.toContain("authenticator-sign-in-form");
+  vi.stubEnv("CRAVES_ADMIN_TOTP_SIGN_IN_ENABLED", "false");
+  expect(await page({})).toBe(today);
+  vi.stubEnv("CRAVES_ADMIN_TOTP_SIGN_IN_ENABLED", "true");
+  const authenticator = await page({});
+  expect(authenticator).toContain("Sign in with your staff email, password and authenticator app.");
+  expect(authenticator.indexOf("authenticator-sign-in-form")).toBeLessThan(authenticator.indexOf("phone-auth-form"));
+  vi.stubEnv("CRAVES_ADMIN_PORTAL", "");
+  expect(await page({ access: "test-key", returnTo: "/home" })).not.toContain("authenticator-sign-in-form");
 });

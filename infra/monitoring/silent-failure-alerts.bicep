@@ -31,6 +31,7 @@ var logAlerts = [
   { code: 'INTERNAL_CALL_REJECTED', severity: 2, text: 'CH-03 An enforced internal route rejected a caller' }
   { code: 'INTERNAL_CALL_SIGNATURE_INVALID', severity: 3, text: 'CH-03 Monitor mode: an internal call carried an invalid signature' }
   { code: 'INTERNAL_CALL_CONFIG_INVALID', severity: 2, text: 'CH-03 Internal call keys are misconfigured; calls fall back to unsigned' }
+  { code: 'ADMIN_SECOND_FACTOR_MISSING', severity: 3, text: 'CH-09 Administrator signed in without an authenticator code (monitor) or was refused (enforce)' }
 ]
 
 resource actionGroup 'Microsoft.Insights/actionGroups@2023-01-01' = if (deployAlerts) {

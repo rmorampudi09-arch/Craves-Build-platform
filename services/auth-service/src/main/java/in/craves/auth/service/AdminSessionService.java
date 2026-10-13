@@ -17,8 +17,12 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminSessionService {
     public static final Duration ABSOLUTE_WINDOW = Duration.ofHours(8);
     private static final Set<String> CONSUMER_ROLES = Set.of("CUSTOMER", "CHEF");
+    private static final Logger LOGGER = LoggerFactory.getLogger(AdminSessionService.class);
     private final JdbcTemplate jdbc;
     private final AuthIdentityRepository identities;
     private final AuthIdentityRoleRepository roles;
@@ -35,12 +40,26 @@ public class AdminSessionService {
     private final RefreshTokenGenerator generator;
     private final TokenHasher hasher;
     private final Clock clock;
+    private final boolean secondFactorEnforced;
 
     public AdminSessionService(JdbcTemplate jdbc, AuthIdentityRepository identities,
         AuthIdentityRoleRepository roles, CravesJwtService jwt, JwtProperties properties,
-        RefreshTokenGenerator generator, TokenHasher hasher, Clock clock) {
+        RefreshTokenGenerator generator, TokenHasher hasher, Clock clock,
+        @Value("${craves.admin-session.second-factor-enabled:false}") boolean secondFactorEnforced) {
         this.jdbc = jdbc; this.identities = identities; this.roles = roles; this.jwt = jwt;
         this.properties = properties; this.generator = generator; this.hasher = hasher; this.clock = clock;
+        this.secondFactorEnforced = secondFactorEnforced;
+    }
+
+    // Firebase sets the reserved firebase.sign_in_second_factor claim only after an MFA challenge. Phone, custom-token
+    // (MSG91, central OTP) and anonymous first factors cannot have one, so this one claim covers every sign-in path.
+    // SMS second factors ("phone") are refused on purpose: SMS is the factor this replaces.
+    public void requireSecondFactor(Map<String, Object> firebaseClaims) {
+        Map<?, ?> signIn = firebaseClaims.get("firebase") instanceof Map<?, ?> value ? value : Map.of();
+        if ("totp".equals(signIn.get("sign_in_second_factor"))) return;
+        LOGGER.warn("CRAVES_ALERT alert=ADMIN_SECOND_FACTOR_MISSING mode={} provider={} secondFactor={}",
+            secondFactorEnforced ? "enforce" : "monitor", claimName(signIn.get("sign_in_provider")), claimName(signIn.get("sign_in_second_factor")));
+        if (secondFactorEnforced) throw AuthException.unauthorized("ADMIN_SECOND_FACTOR_REQUIRED", "Administrator sign-in requires an authenticator app code");
     }
 
     public static boolean isAdmin(List<String> values) {
@@ -209,6 +228,9 @@ public class AdminSessionService {
             rs.getObject("rotation_request_id", UUID.class)), hash);
     }
 
+    private static String claimName(Object value) {
+        return value == null ? "none" : value instanceof String text && text.matches("[a-z0-9.]{1,40}") ? text : "other";
+    }
     private static Instant instant(Timestamp value) { return value == null ? null : value.toInstant(); }
     private static AuthException rejected(String code) { return AuthException.unauthorized(code, "Administrator sign-in is required"); }
     private record Session(UUID id, UUID family, Instant deadline, long tokenVersion, Instant revoked,

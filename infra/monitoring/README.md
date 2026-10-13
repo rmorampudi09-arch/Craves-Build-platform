@@ -34,6 +34,8 @@ az deployment group create -g rg-craves-prodlow-centralindia \
 | 13 | `STUCK_ORDER` | order `OrderAlertMonitor` (the catch-all sweeper) | Ready |
 
 The CH-03 internal-call codes (`INTERNAL_CALL_*`) use the same rules.
+The CH-09 code `ADMIN_SECOND_FACTOR_MISSING` (auth) fires on each admin sign-in without an authenticator code until
+every administrator has enrolled.
 
 ## Tuning
 

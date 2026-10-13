@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PhoneAuthForm } from "@/features/sign-in/components/phone-auth-form";
+import { AuthenticatorSignInForm } from "@/features/sign-in/components/authenticator-sign-in-form";
 import { CustomerSignIn } from "@/features/sign-in/components/customer-sign-in";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import { safeReturnPath } from "@/features/auth/lib/auth-contract";
@@ -57,6 +58,8 @@ export default async function SignInPage({ searchParams }: {
   // confirm=customer: a chef switching to the customer app confirms with an OTP first.
   if (!adminJourney) return <main className="flex min-h-screen items-center bg-[#F1F3F5] px-5 py-12"><div className="mx-auto w-full max-w-xl"><CustomerSignIn returnTo={returnTo} centralOtp={centralOtp} confirm={query.confirm === "customer"}/></div></main>;
 
+  // CH-09: staff email, password and authenticator app; the admin host turns it on once Firebase TOTP is set up.
+  const authenticator = process.env.CRAVES_ADMIN_TOTP_SIGN_IN_ENABLED === "true";
   return <main className="cr-admin cr-login">
     <section className="cr-login-story" aria-labelledby="cr-login-title">
       <div className="cr-brand"><Link href="/" aria-label="Craves home"><CravesLogo size="lg" priority/></Link><span><strong>Craves</strong><small>ADMINISTRATION</small></span></div>
@@ -65,8 +68,10 @@ export default async function SignInPage({ searchParams }: {
       <p className="cr-login-quote">Different kitchens. Different recipes.<br/><strong>One feeling — home.</strong></p>
     </section>
     <div className="cr-login-form-area">
-      <div className="cr-login-form-heading"><span className="cr-badge">Administrator access</span><p>Use your approved admin mobile number. Signing in does not grant administrator privileges.</p></div>
-      <div className="cr-login-auth"><PhoneAuthForm returnTo={returnTo} centralOtp={centralOtp} anyCountry/></div>
+      <div className="cr-login-form-heading"><span className="cr-badge">Administrator access</span><p>{authenticator
+        ? "Sign in with your staff email, password and authenticator app. Signing in does not grant administrator privileges."
+        : "Use your approved admin mobile number. Signing in does not grant administrator privileges."}</p></div>
+      <div className="cr-login-auth">{authenticator ? <AuthenticatorSignInForm returnTo={returnTo}/> : null}<PhoneAuthForm returnTo={returnTo} centralOtp={centralOtp} anyCountry/></div>
       <p className="cr-footnote">Access is verified by Craves. Existing session, OTP and security policies remain in effect.</p>
     </div>
   </main>;

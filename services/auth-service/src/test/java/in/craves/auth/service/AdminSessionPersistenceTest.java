@@ -61,7 +61,7 @@ class AdminSessionPersistenceTest {
         when(roles.findRoleCodesByIdentityId(any())).thenAnswer(call -> jdbc.queryForList("SELECT role_code FROM auth_identity_role WHERE identity_id = ?", String.class, (UUID) call.getArgument(0)));
         var properties = new JwtProperties(); properties.setAllowGeneratedLocalKeys(true);
         jwt = new CravesJwtService(properties, new RsaKeyProvider(properties), new ObjectMapper(), clock);
-        sessions = new AdminSessionService(jdbc, identities, roles, jwt, properties, new RefreshTokenGenerator(), hasher, clock);
+        sessions = new AdminSessionService(jdbc, identities, roles, jwt, properties, new RefreshTokenGenerator(), hasher, clock, false);
     }
 
     // Real transactions; expected authentication rejection still commits replay/revocation evidence.

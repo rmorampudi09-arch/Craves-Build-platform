@@ -459,19 +459,24 @@ export function ChefEditProfileScreen() {
         ) : null}
       </ChefSheet>
 
-      <ChefSheet onClose={() => setFaceSheet(false)} title="Change your picture" visible={faceSheet}>
+      <ChefSheet
+        footer={
+          <View style={styles.sheetButtons}>
+            <ChefActionButton label="Cancel" onPress={() => setFaceSheet(false)} style={styles.sheetButton} tone="neutral" />
+            <ChefActionButton
+              disabled={!faceDraft}
+              label="Save"
+              onPress={() => {
+                saveFace()?.catch(() => undefined);
+              }}
+              style={styles.sheetButton}
+            />
+          </View>
+        }
+        onClose={() => setFaceSheet(false)}
+        title="Change your picture"
+        visible={faceSheet}>
         <ChefAvatarGrid onSelect={setFaceDraft} selectedId={faceDraft} />
-        <View style={styles.sheetButtons}>
-          <ChefActionButton label="Cancel" onPress={() => setFaceSheet(false)} style={styles.sheetButton} tone="neutral" />
-          <ChefActionButton
-            disabled={!faceDraft}
-            label="Save"
-            onPress={() => {
-              saveFace()?.catch(() => undefined);
-            }}
-            style={styles.sheetButton}
-          />
-        </View>
       </ChefSheet>
 
       <ChefSheet onClose={() => setPhotoSheet(null)} title="Kitchen photo" visible={photoSheet !== null}>

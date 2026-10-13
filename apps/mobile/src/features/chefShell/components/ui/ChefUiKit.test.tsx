@@ -1,6 +1,6 @@
 import React from 'react';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
-import {Modal, StyleSheet, Text, View} from 'react-native';
+import {Modal, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {colors} from '../../../../design/tokens';
 import {LoadingIndicator} from '../../../../shared/components/LoadingIndicator';
 import {
@@ -220,6 +220,18 @@ describe('Chef UI kit', () => {
     act(() => tree.root.findByType(Modal).props.onRequestClose());
     act(() => pressables('Close')[0].props.onPress());
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('ChefSheet keeps its footer outside the scrolling body, so it stays on screen', () => {
+    mount(
+      <ChefSheet visible title="Change your picture" onClose={jest.fn()} footer={<Text>PINNED</Text>}>
+        <Text>tall body</Text>
+      </ChefSheet>,
+    );
+    const body = tree.root.findByType(ScrollView);
+    expect(body.findAllByProps({children: 'tall body'}).length).toBeGreaterThan(0);
+    expect(body.findAllByProps({children: 'PINNED'})).toHaveLength(0);
+    expect(allText()).toEqual(expect.arrayContaining(['PINNED']));
   });
 
   it('ChefTopBar shows the unread count, opens notifications and offers a back arrow', () => {

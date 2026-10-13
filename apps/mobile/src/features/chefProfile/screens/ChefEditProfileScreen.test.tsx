@@ -1,5 +1,5 @@
 import React from 'react';
-import {TextInput} from 'react-native';
+import {ScrollView, TextInput} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
@@ -385,6 +385,21 @@ describe('ChefEditProfileScreen (Kitchen details)', () => {
       expect(ui.byLabel('Picture 17')?.props.accessibilityState.selected).toBe(false);
       for (const label of ['Take a photo', 'Choose from gallery', 'Remove photo']) {
         expect(ui.byLabel(label)).toBeUndefined();
+      }
+    });
+
+    it('keeps Cancel and Save outside the scrolling faces, so they never sit below the fold', async () => {
+      await mount(FACE_04);
+      await ui.press('Your picture');
+      // The screen's own ScrollView holds the whole sheet too, so take the innermost one around the faces.
+      const scroll = tree.root
+        .findAllByType(ScrollView)
+        .filter(node => node.findAll(n => n.props.accessibilityLabel === 'Picture 1').length > 0)
+        .pop()!;
+      expect(scroll).toBeDefined();
+      for (const label of ['Cancel', 'Save']) {
+        expect(ui.byLabel(label)).toBeDefined();
+        expect(scroll.findAll(node => node.props.accessibilityLabel === label)).toHaveLength(0);
       }
     });
 

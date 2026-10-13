@@ -1,0 +1,399 @@
+import React from 'react';
+import {RefreshControl, Text} from 'react-native';
+import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
+import {AppApiError} from '../../../core/http/apiError';
+import type {ChefBankStatus} from '../../chefBankOnboarding/api/chefBankOnboardingApi';
+import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
+import {ChefToastProvider} from '../../chefShell/components/ui';
+import {
+  chefPayoutApi,
+  type ChefEarningLedgerEntry,
+  type ChefEarningStatus,
+  type ChefFinanceBalance,
+} from '../api/chefPayoutApi';
+import {ChefEarningsScreen} from './ChefEarningsScreen';
+
+const mockNavigate = jest.fn();
+const mockSetParams = jest.fn();
+const mockRefresh = jest.fn(async () => undefined);
+const mockAfterWithdrawal = jest.fn(async () => undefined);
+let mockParams: {openWithdraw?: boolean} | undefined;
+let mockData: Record<string, unknown>;
+let mockReviews: Record<string, unknown>;
+
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({navigate: mockNavigate, setParams: mockSetParams}),
+  useRoute: () => ({params: mockParams}),
+}));
+jest.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: require('react-native').View,
+  useSafeAreaInsets: () => ({top: 0, right: 0, bottom: 34, left: 0}),
+}));
+jest.mock('../../../design/reducedMotion', () => ({useReducedMotionPreference: () => false}));
+jest.mock('../../chefShell/state/ChefOperationalProvider', () => ({
+  useChefOperationalState: () => ({counters: {unreadNotifications: 0}}),
+}));
+jest.mock('../state/useChefEarningsData', () => ({useChefEarningsData: () => mockData}));
+jest.mock('../../reviews/query/useChefReviewPreview', () => ({useChefReviewPreview: () => mockReviews}));
+jest.mock('../api/chefPayoutApi', () => ({
+  ...jest.requireActual('../api/chefPayoutApi'),
+  chefPayoutApi: {requestWithdrawal: jest.fn()},
+}));
+
+const request = chefPayoutApi.requestWithdrawal as jest.Mock;
+// Tuesday 13 Oct 2026. Only the clock is faked; timers and promises stay real.
+const NOW = new Date(2026, 9, 13, 12, 0);
+const at = (day: number, hour = 12) => new Date(2026, 9, day, hour, 0).toISOString();
+
+const order = (id: string, status: ChefOperationalOrder['status'], updatedAt: string, dish?: string): ChefOperationalOrder => ({
+  id,
+  status,
+  updatedAt,
+  createdAt: updatedAt,
+  foodSubtotal: 200,
+  items: dish ? [{id: `${id}-1`, itemName: dish, quantity: 1}] : [],
+});
+const entry = (id: string, createdAt: string, netPayable: string, status: ChefEarningStatus = 'SETTLED'): ChefEarningLedgerEntry => ({
+  id,
+  orderId: `order-${id}`,
+  chefIdentityId: 'chef',
+  orderSource: 'ON_DEMAND',
+  currency: 'INR',
+  grossAmount: netPayable,
+  commissionAmount: '0.00',
+  taxWithheldAmount: '0.00',
+  adjustmentAmount: '0.00',
+  netPayable,
+  allocationReference: id,
+  status,
+  reason: 'test',
+  approvedAt: null,
+  reversedAt: null,
+  createdAt,
+  updatedAt: createdAt,
+});
+
+const balance = (overrides: Partial<ChefFinanceBalance> = {}): ChefFinanceBalance =>
+  ({
+    available: '3450.00',
+    outstanding: '3870.00',
+    reservedOrPaid: '0.00',
+    onHold: false,
+    manualRequestUsedToday: false,
+    nextManualRequestAt: at(14),
+    recentPayouts: [],
+    executionEnabled: true,
+    payoutMode: 'RAZORPAYX',
+    ...overrides,
+  }) as ChefFinanceBalance;
+const verifiedBank = {
+  state: 'VERIFIED',
+  lastFour: '4521',
+  bankName: 'State Bank of India',
+  accountHolderName: 'Relangi M.',
+} as ChefBankStatus;
+
+function baseData(overrides: Record<string, unknown> = {}) {
+  return {
+    balance: balance(),
+    balanceStatus: 'success',
+    ledger: [
+      entry('e3', at(13, 9), '150.00'),
+      entry('e2', at(12, 13), '440.00', 'SETTLEMENT_PENDING'),
+      entry('e1', at(9, 19), '800.00', 'APPROVED'),
+      entry('e0', at(2, 19), '999.00'),
+    ],
+    ledgerStatus: 'success',
+    ledgerLimit: 200,
+    ordersStatus: 'success',
+    orders: [
+      order('a', 'DELIVERED', at(9, 19), 'Dum biriyani'),
+      order('b', 'DELIVERED', at(12, 13), 'Dum biriyani'),
+      order('c', 'DELIVERED', at(13, 9), 'Lemon rice'),
+      order('d', 'CHEF_REJECTED', at(12, 14)),
+    ],
+    bank: verifiedBank,
+    isRefreshing: false,
+    refresh: mockRefresh,
+    afterWithdrawal: mockAfterWithdrawal,
+    ...overrides,
+  };
+}
+
+let tree: renderer.ReactTestRenderer;
+const textOf = (node: ReactTestInstance): string =>
+  React.Children.toArray(node.props.children)
+    .map(child => (typeof child === 'string' || typeof child === 'number' ? String(child) : ''))
+    .join('');
+const allText = () => tree.root.findAllByType(Text).map(textOf);
+const hasText = (text: string) => allText().includes(text);
+const button = (label: string) =>
+  tree.root.findAll(node => node.props.accessibilityLabel === label && typeof node.props.onPress === 'function')[0];
+const press = async (label: string) => {
+  const target = button(label);
+  if (!target) throw new Error(`No button labelled "${label}"`);
+  await act(async () => {
+    await target.props.onPress();
+  });
+};
+const disabled = (label: string) => Boolean(button(label).props.accessibilityState?.disabled);
+
+function mount() {
+  act(() => {
+    tree = renderer.create(
+      <ChefToastProvider>
+        <ChefEarningsScreen />
+      </ChefToastProvider>,
+    );
+  });
+}
+
+beforeAll(() => {
+  jest.useFakeTimers({
+    now: NOW,
+    doNotFake: [
+      'hrtime',
+      'nextTick',
+      'performance',
+      'queueMicrotask',
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'requestIdleCallback',
+      'cancelIdleCallback',
+      'setImmediate',
+      'clearImmediate',
+      'setInterval',
+      'clearInterval',
+      'setTimeout',
+      'clearTimeout',
+    ],
+  });
+});
+afterAll(() => jest.useRealTimers());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockParams = undefined;
+  mockData = baseData();
+  mockReviews = {available: true, isPending: false, summary: {overallAverage: 4.6, reviewCount: 32}};
+  request.mockResolvedValue({id: 'payout'});
+});
+afterEach(() => act(() => tree.unmount()));
+
+describe('ChefEarningsScreen', () => {
+  it('shows the balance, then how the week went, from the orders and earnings already loaded', () => {
+    mount();
+    expect(allText()).toEqual(
+      expect.arrayContaining([
+        'Earnings',
+        'Available to withdraw',
+        '₹3,450.00',
+        '₹420 on hold until the latest orders are settled',
+        '₹1,390', // 800 + 440 + 150 in the last 7 days; the 999 on 2 Oct is outside
+        'You earned',
+        'Orders delivered',
+        '₹463',
+        'Average order',
+        '4.6 ★',
+        'Rating · 32 reviews',
+        'Earned each day',
+        'Top dishes',
+        'Orders this week',
+        'Bank account',
+        'State Bank of India ••4521 · verified',
+        'Statements',
+      ]),
+    );
+    expect(allText()).toContain('3');
+    expect(button('This week').props.accessibilityState).toMatchObject({selected: true});
+  });
+
+  it('changes every number when a different range is chosen', async () => {
+    mount();
+    await press('Today');
+    expect(hasText('₹150')).toBe(true);
+    expect(hasText('1')).toBe(true);
+    expect(hasText('₹1,390')).toBe(false);
+    expect(hasText('Orders today')).toBe(true);
+    expect(hasText('Dum biriyani')).toBe(false);
+    expect(hasText('Lemon rice')).toBe(true);
+
+    await press('This month');
+    expect(hasText('₹2,389')).toBe(true); // the 999 on 2 Oct counts now
+    expect(hasText('₹1,390')).toBe(false);
+    expect(hasText('Orders this month')).toBe(true);
+  });
+
+  it('picks a range of dates from the calendar', async () => {
+    mount();
+    await press('Pick dates');
+    await press('9 October 2026');
+    await press('12 October 2026');
+    await press('Show');
+    expect(hasText('9 Oct – 12 Oct')).toBe(true);
+    expect(hasText('₹1,240')).toBe(true); // 800 + 440
+    expect(hasText('Orders in this period')).toBe(true);
+  });
+
+  it('greys out Withdraw with the reason when the balance says it was already used today', async () => {
+    mockData = baseData({balance: balance({available: '0.00', outstanding: '0.00', manualRequestUsedToday: true})});
+    mount();
+    expect(hasText('You already withdrew today. You can withdraw again tomorrow.')).toBe(true);
+    expect(disabled('Withdraw')).toBe(true);
+    expect(hasText('Withdraw to your bank')).toBe(false);
+  });
+
+  it.each([
+    [{onHold: true}, 'Your balance is on hold right now. Please contact Craves support.'],
+    [{available: '0.00', outstanding: '0.00'}, 'Nothing to withdraw yet. Earnings from delivered orders appear here.'],
+  ])('says why Withdraw is off: %j', (change, reason) => {
+    mockData = baseData({balance: balance(change)});
+    mount();
+    expect(hasText(reason)).toBe(true);
+    expect(disabled('Withdraw')).toBe(true);
+  });
+
+  it('asks for the bank account instead when there is none', async () => {
+    mockData = baseData({bank: {state: 'NOT_SUBMITTED'}});
+    mount();
+    expect(hasText('No bank account yet. Add one to get paid.')).toBe(true);
+    expect(button('Withdraw')).toBeUndefined();
+    await press('Add bank account');
+    expect(mockNavigate).toHaveBeenCalledWith('Profile', {
+      screen: 'ChefBankAccount',
+      params: {from: 'earnings'},
+      initial: false,
+    });
+  });
+
+  it('withdraws once even if the button is pressed twice, then says the money is on its way', async () => {
+    let finish: (value: unknown) => void = () => undefined;
+    request.mockReturnValue(new Promise(resolve => (finish = resolve)));
+    mount();
+    await press('Withdraw');
+    expect(hasText('Withdraw to your bank')).toBe(true);
+    const confirm = button('Withdraw ₹3,450.00').props.onPress;
+    await act(async () => {
+      confirm();
+      confirm();
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith(expect.any(String), '3450.00');
+    await act(async () => finish({id: 'payout'}));
+    expect(mockAfterWithdrawal).toHaveBeenCalledTimes(1);
+    expect(hasText('₹3,450 is on its way')).toBe(true);
+    expect(hasText('Sent to State Bank of India ••4521. Track it in Payout history.')).toBe(true);
+    expect(hasText('Withdraw to your bank')).toBe(false);
+  });
+
+  it('clears the "on its way" note on the next pull to refresh', async () => {
+    mount();
+    await press('Withdraw');
+    await press('Withdraw ₹3,450.00');
+    expect(hasText('₹3,450 is on its way')).toBe(true);
+    await act(async () => tree.root.findByType(RefreshControl).props.onRefresh());
+    expect(hasText('₹3,450 is on its way')).toBe(false);
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Check withdrawal status when the answer never came, and replays the same request', async () => {
+    request.mockRejectedValueOnce(new AppApiError('NETWORK_ERROR', 'offline'));
+    mount();
+    await press('Withdraw');
+    await press('Withdraw ₹3,450.00');
+    expect(hasText("We couldn't confirm your withdrawal")).toBe(true);
+    expect(disabled('Withdraw')).toBe(true);
+    await press('Check withdrawal status');
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1][0]).toBe(request.mock.calls[0][0]);
+    expect(hasText('₹3,450 is on its way')).toBe(true);
+    expect(button('Check withdrawal status')).toBeUndefined();
+  });
+
+  it('shows a refusal in plain words', async () => {
+    request.mockRejectedValueOnce(new AppApiError('HTTP_429', 'Too many', 429));
+    mount();
+    await press('Withdraw');
+    await press('Withdraw ₹3,450.00');
+    expect(hasText('You can withdraw once a day. Try again tomorrow.')).toBe(true);
+  });
+
+  it('opens the withdraw sheet straight away when Home sent it, and only once', () => {
+    mockParams = {openWithdraw: true};
+    mount();
+    expect(hasText('Withdraw to your bank')).toBe(true);
+    expect(mockSetParams).toHaveBeenCalledWith({openWithdraw: undefined});
+  });
+
+  it('does not open the sheet from Home when withdrawing is off, but still clears the request', () => {
+    mockParams = {openWithdraw: true};
+    mockData = baseData({balance: balance({manualRequestUsedToday: true})});
+    mount();
+    expect(hasText('Withdraw to your bank')).toBe(false);
+    expect(mockSetParams).toHaveBeenCalledWith({openWithdraw: undefined});
+  });
+
+  it('goes to Payout history and the Bank account screen, keeping the way back to Earnings', async () => {
+    mount();
+    await press('Payout history');
+    expect(mockNavigate).toHaveBeenLastCalledWith('Profile', {
+      screen: 'ChefPayoutHistory',
+      params: {from: 'earnings'},
+      initial: false,
+    });
+    await press('Bank account, State Bank of India ••4521 · verified');
+    expect(mockNavigate).toHaveBeenLastCalledWith('Profile', {
+      screen: 'ChefBankAccount',
+      params: {from: 'earnings'},
+      initial: false,
+    });
+  });
+
+  it('says statements are coming instead of opening a page', async () => {
+    mount();
+    await press('Statements, Monthly PDF of earnings and payouts');
+    expect(hasText('Monthly statements are coming soon.')).toBe(true);
+  });
+
+  it('hides the rating when the reviews are not published for the app yet', () => {
+    mockReviews = {available: false, isPending: false, summary: null};
+    mount();
+    expect(allText().some(text => text.startsWith('Rating'))).toBe(false);
+    expect(hasText('Orders delivered')).toBe(true);
+  });
+
+  it('shows an empty kitchen as a designed page with one next step, not a wall of zeros', async () => {
+    mockData = baseData({
+      balance: balance({available: '0.00', outstanding: '0.00'}),
+      ledger: [],
+      orders: [],
+      bank: {state: 'NOT_SUBMITTED'},
+    });
+    mockReviews = {available: true, isPending: false, summary: {overallAverage: null, reviewCount: 0}};
+    mount();
+    expect(hasText('₹0.00')).toBe(true);
+    expect(hasText('No sales yet')).toBe(true);
+    expect(hasText('Earned each day')).toBe(false);
+    expect(hasText('Top dishes')).toBe(false);
+    await press('Go to your menu');
+    expect(mockNavigate).toHaveBeenCalledWith('Menu');
+  });
+
+  it('waits for the numbers instead of showing zeros, and offers a retry when they fail', async () => {
+    mockData = baseData({ledgerStatus: 'pending'});
+    mount();
+    expect(hasText('You earned')).toBe(false);
+    act(() => tree.unmount());
+    mockData = baseData({ledgerStatus: 'error'});
+    mount();
+    expect(hasText("We couldn't load your earnings.")).toBe(true);
+    await press('Try again');
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so when the earnings list is cut off at the most the server sends', () => {
+    const many = Array.from({length: 200}, (_, index) => entry(`m${index}`, at(12, 10), '1.00'));
+    mockData = baseData({ledger: many});
+    mount();
+    expect(hasText('Based on your latest 200 earnings.')).toBe(true);
+  });
+});

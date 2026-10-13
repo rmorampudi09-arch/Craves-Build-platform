@@ -504,12 +504,12 @@ describe('Home: kitchen, today and balance', () => {
     expect(mockNavigate).toHaveBeenCalledWith('Profile', {screen: 'ChefReviews'});
   });
 
-  it('shows the balance with paise and Withdraw opens Earnings', async () => {
+  it('shows the balance with paise and Withdraw opens the Earnings tab with the withdraw sheet', async () => {
     await mount();
     expect(hasText('Available to withdraw')).toBe(true);
     expect(hasText('₹3,450.00')).toBe(true);
     await press('Withdraw');
-    expect(mockNavigate).toHaveBeenCalledWith('Earnings');
+    expect(mockNavigate).toHaveBeenCalledWith('Earnings', {openWithdraw: true});
   });
 
   it('shows how many dishes are available and opens the Menu tab', async () => {

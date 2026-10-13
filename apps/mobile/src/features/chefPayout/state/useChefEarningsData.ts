@@ -7,7 +7,7 @@ import {getChefMenuPrimaryImageUrl} from '../../chefMenu/domain/chefMenuPresenta
 import {useChefOrderHistoryQuery} from '../../chefOrders/query/chefOrderHistoryQueries';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
 import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
-import {MAX_HISTORY_ORDERS, needsOlderOrders, olderOrdersMissing} from '../domain/chefEarningsSummary';
+import {MAX_HISTORY_ORDERS, needsOlderOrders, olderOrdersMissing, ordersCoverFrom} from '../domain/chefEarningsSummary';
 import {useChefPayoutData} from './useChefPayoutData';
 
 const CHEF_ROLE = 'CHEF' as const;
@@ -29,9 +29,19 @@ export function useChefEarningsData({historyFrom}: {historyFrom: Date | null}) {
   }, [operational.orders, history.orders]);
 
   const fromTime = historyFrom?.getTime() ?? null;
-  const {orders: older, hasNextPage, isFetchingNextPage, failed: historyFailed, loadOlder} = history;
+  const {
+    orders: older,
+    hasNextPage,
+    isFetchingNextPage,
+    pending: historyPending,
+    failed: historyFailed,
+    loadOlder,
+    refresh: refreshHistory,
+  } = history;
   const query = {historyOrders: older, hasNextPage, from: new Date(fromTime ?? 0)};
   const missing = fromTime !== null && olderOrdersMissing(query);
+  const coversFrom = (from: Date) =>
+    ordersCoverFrom({liveOrders: operational.orders, historyOrders: older, hasNextPage, historyFailed, from});
   const wantMore = fromTime !== null && !isFetchingNextPage && !historyFailed && needsOlderOrders(query);
   const loadRef = React.useRef(loadOlder);
   loadRef.current = loadOlder;
@@ -59,7 +69,6 @@ export function useChefEarningsData({historyFrom}: {historyFrom: Date | null}) {
 
   const {refresh: refreshPayout} = payout;
   const {refresh: refreshOperational} = operational;
-  const {refresh: refreshHistory} = history;
   const refresh = React.useCallback(async () => {
     await Promise.allSettled([refreshPayout(), refreshOperational(), refreshHistory()]);
   }, [refreshPayout, refreshOperational, refreshHistory]);
@@ -73,9 +82,20 @@ export function useChefEarningsData({historyFrom}: {historyFrom: Date | null}) {
     historyFailed,
     /** The cap was reached before the range was covered. */
     historyCapped: missing && !historyFailed && older.length >= MAX_HISTORY_ORDERS,
-    /** Older orders in the range (or the period it compares with) are still missing, for any reason. */
-    historyIncomplete: missing,
-    retryHistory: loadOlder,
+    /** The orders may not reach back to `historyFrom`, for any reason (see `ordersCoverFrom`): counts and changes there are not known. */
+    historyIncomplete: fromTime !== null && !coversFrom(new Date(fromTime)),
+    /** Whether the orders are known to reach back to `from` (the start of the range being shown). */
+    coversFrom,
+    /** The first read, or a page the range needs, is still on its way. */
+    historyLoading: historyPending || isFetchingNextPage || wantMore,
+    /** Reads the next page, or the first one again when it never arrived. */
+    retryHistory: () => {
+      if (hasNextPage) {
+        loadOlder();
+      } else {
+        refreshHistory().catch(() => undefined);
+      }
+    },
     isRefreshing: payout.isRefreshing || operational.isRefreshing,
     refresh,
   };

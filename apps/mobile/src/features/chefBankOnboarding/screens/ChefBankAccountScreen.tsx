@@ -158,7 +158,7 @@ export function ChefBankAccountScreen() {
               <Note message="Bank accounts can't be added right now. Please try again later." title="Bank account" tone="info" />
             ) : applicant.status === 'pending' ? (
               <LoadingIndicator label="Loading your details" />
-            ) : applicant.status === 'error' ? (
+            ) : applicant.status === 'error' && !applicant.name ? (
               <LoadError
                 onRetry={() => {
                   applicant.refetch().catch(() => undefined);

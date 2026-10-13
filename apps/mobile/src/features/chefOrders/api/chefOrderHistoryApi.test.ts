@@ -88,6 +88,7 @@ describe('chefOrderHistoryApi contract', () => {
               id: '66666666-6666-4666-8666-666666666666',
               itemName: 'Meal',
               quantity: 1,
+              menuItemId: '77777777-7777-4777-8777-777777777777',
               foodType: 'VEG',
             },
           ],

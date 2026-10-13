@@ -129,6 +129,8 @@ function baseData(overrides: Record<string, unknown> = {}) {
       order('z', 'DELIVERED', at(3, 13), 'Lemon rice'), // the week before
     ],
     dishPhotos: {},
+    coversFrom: () => true,
+    historyLoading: false,
     historyFailed: false,
     historyCapped: false,
     historyIncomplete: false,
@@ -570,5 +572,77 @@ describe('ChefEarningsScreen', () => {
       params: {from: 'earnings'},
       initial: false,
     });
+  });
+
+  describe('when the orders may not reach back to the start of the range', () => {
+    const unknown = (extra: Record<string, unknown> = {}) =>
+      baseData({historyIncomplete: true, coversFrom: () => false, ...extra});
+
+    it('says it shows the latest orders only, and hides the order change but keeps the earnings change', () => {
+      mockData = unknown();
+      mount();
+      expect(hasText('Showing your latest orders only.')).toBe(true);
+      expect(hasText('Orders delivered')).toBe(true);
+      expect(hasText('▲ 2')).toBe(false); // 3 delivered now, 1 before: not known to be the whole week before
+      expect(hasText('▲ 39% vs last week')).toBe(true); // from the earnings list, which reaches back
+    });
+
+    it('does not say it while the older orders are still on their way', () => {
+      mockData = unknown({historyLoading: true});
+      mount();
+      expect(hasText('Showing your latest orders only.')).toBe(false);
+    });
+
+    it('does not say it twice: the failed-read line and the 400-orders note come instead', () => {
+      mockData = unknown({historyFailed: true});
+      mount();
+      expect(hasText("Couldn't load older orders.")).toBe(true);
+      expect(hasText('Showing your latest orders only.')).toBe(false);
+      act(() => tree.unmount());
+      mockData = unknown({historyCapped: true});
+      mount();
+      expect(hasText('Showing your latest 400 orders.')).toBe(true);
+      expect(hasText('Showing your latest orders only.')).toBe(false);
+    });
+
+    it('says nothing for a kitchen with no orders yet, and nothing when the orders do reach back', () => {
+      mockData = unknown({orders: [], ledger: []});
+      mount();
+      expect(hasText('Showing your latest orders only.')).toBe(false);
+      act(() => tree.unmount());
+      mockData = baseData({coversFrom: () => true});
+      mount();
+      expect(hasText('Showing your latest orders only.')).toBe(false);
+      expect(hasText('▲ 2')).toBe(true);
+    });
+  });
+
+  it('runs what a sheet was closed for at once when no sheet is open, and never leaves it waiting for a later close', async () => {
+    mockData = baseData({bank: null});
+    mount();
+    await press('Withdraw');
+    mockData = baseData({bank: {state: 'NOT_SUBMITTED'}});
+    act(() =>
+      tree.update(
+        <ChefToastProvider>
+          <ChefEarningsScreen />
+        </ChefToastProvider>,
+      ),
+    );
+    const asks = tree.root.findAll(node => node.props.accessibilityLabel === 'Add bank account' && typeof node.props.onPress === 'function');
+    const addBank = asks[asks.length - 1].props.onPress; // the sheet's button, as it was when the sheet was open
+    await act(async () => addBank());
+    await settle();
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+
+    // Pressed again after the sheet is gone: nothing is closing, so it goes ahead now.
+    await act(async () => addBank());
+    expect(mockNavigate).toHaveBeenCalledTimes(2);
+
+    // A sheet opened and closed later does not bring a forgotten request back.
+    await press('Pick dates');
+    await act(async () => tree.root.findAll(node => node.props.accessibilityLabel === 'Close' && typeof node.props.onPress === 'function')[0].props.onPress());
+    await settle();
+    expect(mockNavigate).toHaveBeenCalledTimes(2);
   });
 });

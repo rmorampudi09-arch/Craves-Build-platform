@@ -169,6 +169,28 @@ export function olderOrdersMissing(input: {
   return oldest !== null && oldest >= from.getTime();
 }
 
+/**
+ * Whether the orders the app holds (the live list, which is only the latest ones, plus the older pages read so far)
+ * are known to reach back to `from`, so counts and changes over a period starting there are not understated.
+ * True only when an order from before `from` is held, or the older orders ran out of pages with at least one order.
+ * Anything else (no older orders at all, as when the route is not published or the first page failed; a failed or
+ * unfinished read) is not known, and is false.
+ */
+export function ordersCoverFrom(input: {
+  liveOrders: readonly ChefOperationalOrder[];
+  historyOrders: readonly ChefOperationalOrder[];
+  hasNextPage: boolean;
+  historyFailed: boolean;
+  from: Date;
+}): boolean {
+  const {liveOrders, historyOrders, hasNextPage, historyFailed, from} = input;
+  const reaches = (list: readonly ChefOperationalOrder[]) =>
+    list.some(order => (timeOf(order.createdAt) ?? Infinity) < from.getTime());
+  if (reaches(liveOrders) || reaches(historyOrders)) return true;
+  if (historyFailed || historyOrders.length === 0) return false;
+  return !hasNextPage;
+}
+
 /** Ask for another page: older orders are missing and the cap has not been reached. */
 export function needsOlderOrders(input: Parameters<typeof olderOrdersMissing>[0]): boolean {
   return input.historyOrders.length < MAX_HISTORY_ORDERS && olderOrdersMissing(input);

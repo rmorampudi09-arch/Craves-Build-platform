@@ -157,7 +157,14 @@ export function ChefEarningsScreen() {
 
   // Two Modals swapping in one tick misbehave on Android: close the sheet first, then go on to the next screen on the next frame.
   const afterSheet = React.useRef<(() => void) | null>(null);
+  const openSheet = React.useRef(sheet);
+  openSheet.current = sheet;
   const closeSheetThen = (next: () => void) => {
+    // With no sheet open there is nothing to wait for. Left pending, it would fire when some later sheet closes.
+    if (openSheet.current === null) {
+      next();
+      return;
+    }
     afterSheet.current = next;
     setSheet(null);
   };
@@ -190,6 +197,8 @@ export function ChefEarningsScreen() {
   const accountEmpty = data.ledger.length === 0 && data.orders.length === 0;
   const oldestEntry = data.ledger.length > 0 ? Date.parse(data.ledger[data.ledger.length - 1].createdAt) : NaN;
   const cutOff = data.ledger.length >= data.ledgerLimit && oldestEntry > bounds.from.getTime();
+  // The orders held are only the latest ones: counts from before the oldest of them may be understated.
+  const latestOnly = data.orders.length > 0 && !data.historyLoading && !data.coversFrom(bounds.from);
   const dayOfBar = new Date(bounds.from.getFullYear(), bounds.from.getMonth(), bounds.from.getDate() + dayIndex);
   const dayLabel = formatDayLabel(dayOfBar, now, {weekday: true});
 
@@ -319,6 +328,10 @@ export function ChefEarningsScreen() {
             ) : data.historyCapped ? (
               <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
                 {`Showing your latest ${MAX_HISTORY_ORDERS} orders.`}
+              </Text>
+            ) : latestOnly ? (
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
+                Showing your latest orders only.
               </Text>
             ) : null}
 

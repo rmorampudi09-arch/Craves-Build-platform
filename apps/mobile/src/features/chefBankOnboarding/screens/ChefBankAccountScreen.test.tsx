@@ -338,3 +338,14 @@ describe('ChefBankAccountScreen', () => {
     });
   });
 });
+
+describe('ChefBankAccountScreen when a later read of the application fails', () => {
+  it('keeps the form and its dock when the name is already known, instead of an error that hides only one of them', () => {
+    mockBank = {...mockBank, bank: notSubmitted()};
+    mockApplicant = {name: 'Relangi Mavayya', eligible: true, status: 'error', refetch: mockApplicantRefetch};
+    mount();
+    expect(tree.root.findAllByType(TextInput).length).toBeGreaterThan(0);
+    expect(tree.root.findByType(ChefScreen).props.footer).toBeTruthy();
+    expect(hasText("We couldn't load your details.")).toBe(false);
+  });
+});

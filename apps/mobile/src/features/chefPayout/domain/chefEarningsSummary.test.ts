@@ -6,6 +6,7 @@ import {
   earningsRangeBounds,
   needsOlderOrders,
   olderOrdersMissing,
+  ordersCoverFrom,
   ordersOnDay,
   summarizeEarnings,
 } from './chefEarningsSummary';
@@ -249,6 +250,34 @@ describe('olderOrdersMissing', () => {
     expect(olderOrdersMissing({historyOrders: history(12, 3), hasNextPage: true, from: new Date(2026, 9, 3, 13)})).toBe(false);
     expect(olderOrdersMissing({historyOrders: history(12, 3), hasNextPage: false, from})).toBe(false);
     expect(olderOrdersMissing({historyOrders: [], hasNextPage: true, from})).toBe(false);
+  });
+});
+
+describe('ordersCoverFrom', () => {
+  const from = new Date(2026, 9, 1);
+  const list = (...days: number[]) => days.map(day => order(`o${day}`, 'DELIVERED', at(day)));
+  const sep28 = order('sep28', 'DELIVERED', at(28, 12, 8)); // before the start
+  const cover = (over: Partial<Parameters<typeof ordersCoverFrom>[0]>) =>
+    ordersCoverFrom({liveOrders: [], historyOrders: [], hasNextPage: false, historyFailed: false, from, ...over});
+
+  it('is true when the live list itself reaches back before the start', () => {
+    expect(cover({liveOrders: [...list(12, 8), sep28]})).toBe(true);
+    expect(cover({liveOrders: list(12, 8)})).toBe(false);
+  });
+
+  it('is true when the older orders reached back before the start, or ran out of pages with at least one order', () => {
+    expect(cover({liveOrders: list(12), historyOrders: [...list(11, 3), sep28], hasNextPage: true})).toBe(true);
+    expect(cover({liveOrders: list(12), historyOrders: list(11, 5), hasNextPage: false})).toBe(true);
+  });
+
+  it('is false with no older orders at all: an unpublished route, a chef with no history, or an empty page', () => {
+    expect(cover({liveOrders: list(12), historyOrders: [], hasNextPage: false})).toBe(false);
+  });
+
+  it('is false while more pages are still to come, or when the read failed', () => {
+    expect(cover({liveOrders: list(12), historyOrders: list(11, 5), hasNextPage: true})).toBe(false);
+    expect(cover({liveOrders: list(12), historyOrders: [], hasNextPage: false, historyFailed: true})).toBe(false);
+    expect(cover({liveOrders: list(12), historyOrders: list(11, 5), hasNextPage: false, historyFailed: true})).toBe(false);
   });
 });
 

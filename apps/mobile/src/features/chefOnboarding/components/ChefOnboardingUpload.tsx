@@ -40,7 +40,7 @@ export function useSavedPreview(evidence: ChefEvidence | undefined, enabled = tr
  * shortcut: no PDF picker is installed, so documents are photos only; add a document picker
  * if chefs ask to upload PDFs from the phone.
  */
-async function pickPhoto(source: 'camera' | 'library'): Promise<UploadFile | null> {
+export async function pickPhoto(source: 'camera' | 'library'): Promise<UploadFile | null> {
   const permission =
     source === 'camera'
       ? await ImagePicker.requestCameraPermissionsAsync()

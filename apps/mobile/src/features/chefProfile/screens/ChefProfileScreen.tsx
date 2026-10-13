@@ -1,991 +1,256 @@
 import React from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
-import {useNavigation} from '@react-navigation/native';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import type {
-  ChefProfileStackParamList,
-  ChefTabParamList,
-} from '../../../app/navigation/types';
-import {useAppDispatch} from '../../../app/store/hooks';
-import {
-  borderWidth,
-  colors,
-  elevation,
-  fontWeight,
-  iconSize,
-  radius,
-  spacing,
-  touchTarget,
-  typography,
-} from '../../../design/tokens';
-import {Icon, type IconName} from '../../../shared/components/Icon';
+import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {useNavigation, type NavigationProp} from '@react-navigation/native';
+import type {ChefProfileStackParamList} from '../../../app/navigation/types';
+import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
+import {borderWidth, colors, fontWeight, iconSize, spacing, textDefaults, typography} from '../../../design/tokens';
+import {Icon} from '../../../shared/components/Icon';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
-import {ChefHeader} from '../../chefShell/components/ChefHeader';
-import type {ChefKitchenProfile, ChefKitchenStatus} from '../api/chefProfileApi';
-import {useChefEditProfileDraft} from '../state/ChefEditProfileDraftProvider';
+import {
+  ChefCard,
+  ChefScreen,
+  ChefTopBar,
+  ConfirmDialog,
+  ListGroup,
+  ListRow,
+  SectionHeader,
+  StatusChip,
+  useChefToast,
+} from '../../chefShell/components/ui';
+import {chefReviewsApi} from '../../reviews/api/chefReviewsApi';
 import {switchChefToCustomerRole} from '../state/chefProfileRoleSwitch';
-import {useChefProfileModel} from '../state/useChefProfileModel';
+import {useChefRead} from '../state/useChefRead';
+import {useKitchenOpenState, type KitchenOpenState} from '../state/useKitchenOpenState';
 
-type ProfileNavigation = NativeStackNavigationProp<
-  ChefProfileStackParamList,
-  'ChefProfileHome'
->;
-type ChefTabsNavigation = BottomTabNavigationProp<ChefTabParamList>;
+// shortcut: written here, not read from the app, so it must be bumped with versionName in android/app/build.gradle.
+export const CHEF_APP_VERSION = '1.31.0';
 
-type BlockedDestination =
-  | 'business-information'
-  | 'schedule'
-  | 'scheduled-orders'
-  | 'payouts'
-  | 'referrals'
-  | 'subscription'
-  | 'preferences'
-  | 'security'
-  | 'support';
-
-interface AccountRowModel {
-  id: BlockedDestination;
-  title: string;
-  subtitle: string;
-  icon: IconName;
-  blockerMessage: string;
-}
-
-const BUSINESS_ROWS: readonly AccountRowModel[] = [
-  {
-    id: 'business-information',
-    title: 'Business information',
-    subtitle: 'Verification, documents, kitchen details and business status',
-    icon: 'chef',
-    blockerMessage:
-      'Business information is available in the dedicated Chef business flow.',
-  },
-  {
-    id: 'schedule',
-    title: 'Availability & hours',
-    subtitle: 'Accepting orders, pauses and authoritative weekly service hours',
-    icon: 'clock',
-    blockerMessage:
-      'Kitchen schedule opens the protected Catalog schedule flow and remains fail-closed until its APIM route is published.',
-  },
-  {
-    id: 'scheduled-orders',
-    title: 'Scheduled orders',
-    subtitle: 'Future order requests waiting for your confirmation',
-    icon: 'orders',
-    blockerMessage:
-      'Scheduled orders use the protected Order Service queue and remain fail-closed until its APIM routes are published.',
-  },
-  {
-    id: 'payouts',
-    title: 'Payouts',
-    subtitle: 'Settlement history and payout details',
-    icon: 'analytics',
-    blockerMessage:
-      'Payout history opens the protected Chef payout view; unavailable financial capabilities remain fail-closed until approved contracts exist.',
-  },
-  {
-    id: 'referrals',
-    title: 'Refer a chef',
-    subtitle: 'Invite home chefs and view referral earnings',
-    icon: 'analytics',
-    blockerMessage:
-      'Chef referral earnings open the protected referral ledger view. The screen remains fail-closed until its gateway route is published.',
-  },
-  {
-    id: 'subscription',
-    title: 'Subscription plan',
-    subtitle: 'Plan, billing and benefits',
-    icon: 'ticket',
-    blockerMessage:
-      'Subscription plan opens the protected Chef plan view; server-owned values remain fail-closed until approved contracts exist.',
-  },
-];
-
-const SETTINGS_ROWS: readonly AccountRowModel[] = [
-  {
-    id: 'preferences',
-    title: 'App preferences',
-    subtitle: 'Notifications and Chef workspace preferences',
-    icon: 'bell',
-    blockerMessage:
-      'App preferences open the protected Chef preference view; unavailable writes remain fail-closed until approved persistence exists.',
-  },
-  {
-    id: 'security',
-    title: 'Security',
-    subtitle: 'Account and sign-in security',
-    icon: 'lock',
-    blockerMessage:
-      'A Chef-specific security destination is not present in the approved mobile route contract yet.',
-  },
-  {
-    id: 'support',
-    title: 'Help & support',
-    subtitle: 'Support cases for orders, payouts and your Chef account',
-    icon: 'phone',
-    blockerMessage:
-      'Chef support cases are available in the dedicated support flow.',
-  },
-];
-
-function initials(value: string): string {
-  const parts = value
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2);
-  return parts.length > 0
-    ? parts.map(part => part[0]?.toUpperCase() ?? '').join('')
-    : 'C';
-}
-
-function kitchenStatusLabel(status: ChefKitchenStatus): string {
+/** The line under Opening hours: where the kitchen is right now, with today's hours. */
+function hoursLine(status: KitchenOpenState['status'], hoursToday: string | null): string | undefined {
   switch (status) {
-    case 'ACTIVE':
-      return 'Kitchen active';
-    case 'DRAFT':
-      return 'Kitchen setup in progress';
-    case 'INACTIVE':
-      return 'Kitchen inactive';
-    case 'SUSPENDED':
-      return 'Kitchen suspended';
+    case 'open':
+      return hoursToday ? `Open now · ${hoursToday}` : 'Open now';
+    case 'closed':
+      return hoursToday ? `Closed · ${hoursToday}` : 'Closed';
+    case 'paused':
+      return 'Paused';
+    case 'suspended':
+      return 'Paused by Craves';
+    default:
+      return undefined;
   }
 }
 
-function kitchenStatusTone(status: ChefKitchenStatus) {
-  if (status === 'ACTIVE') {
-    return {backgroundColor: colors.successSoft, color: colors.success};
-  }
-  if (status === 'SUSPENDED') {
-    return {backgroundColor: colors.errorSoft, color: colors.error};
-  }
-  return {backgroundColor: colors.warningSoft, color: colors.warning};
-}
+type Dialog = 'switch' | 'logout' | null;
 
-function profileDisplayName(
-  kitchen: ChefKitchenProfile | null,
-  identityDisplayName: string | null | undefined,
-): string {
-  const identityName = identityDisplayName?.trim();
-  return kitchen?.displayName ?? kitchen?.kitchenName ?? (identityName || 'Chef account');
-}
-
-function ProfileSkeleton() {
-  return (
-    <View
-      accessibilityLabel="Loading Chef profile"
-      accessibilityRole="progressbar"
-      style={styles.skeletonCard}>
-      <View style={styles.skeletonIdentity}>
-        <View style={styles.skeletonAvatar} />
-        <View style={styles.skeletonCopy}>
-          <View style={styles.skeletonLineWide} />
-          <View style={styles.skeletonLine} />
-        </View>
-      </View>
-      <View style={styles.skeletonMetricRow}>
-        <View style={styles.skeletonMetric} />
-        <View style={styles.skeletonMetric} />
-        <View style={styles.skeletonMetric} />
-      </View>
-    </View>
-  );
-}
-
-function MetricTile({
-  label,
-  value,
-  onPress,
-}: {
-  label: string;
-  value: string;
-  onPress?: () => void;
-}) {
-  const content = (
-    <>
-      <Text numberOfLines={1} style={styles.metricValue}>
-        {value}
-      </Text>
-      <Text style={styles.metricLabel}>{label}</Text>
-    </>
-  );
-
-  if (!onPress) {
-    return <View style={styles.metricTile}>{content}</View>;
-  }
-
-  return (
-    <Pressable
-      accessibilityLabel={`${label}: ${value}`}
-      accessibilityHint={`Open ${label}`}
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({pressed}) => [styles.metricTile, pressed && styles.pressed]}>
-      {content}
-    </Pressable>
-  );
-}
-
-function AccountRow({row, onPress}: {row: AccountRowModel; onPress: () => void}) {
-  return (
-    <Pressable
-      accessibilityLabel={row.title}
-      accessibilityHint={row.subtitle}
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({pressed}) => [styles.accountRow, pressed && styles.pressed]}>
-      <View style={styles.rowIcon}>
-        <Icon name={row.icon} size={iconSize.sm} color={colors.flameRed} />
-      </View>
-      <View style={styles.rowCopy}>
-        <Text style={styles.rowTitle}>{row.title}</Text>
-        <Text style={styles.rowSubtitle}>{row.subtitle}</Text>
-      </View>
-      <Icon name="chevron-right" size={iconSize.xs} color={colors.placeholder} />
-    </Pressable>
-  );
-}
-
-function Section({
-  title,
-  rows,
-  onRowPress,
-}: {
-  title: string;
-  rows: readonly AccountRowModel[];
-  onRowPress: (row: AccountRowModel) => void;
-}) {
-  return (
-    <View style={styles.sectionWrap}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.sectionCard}>
-        {rows.map((row, index) => (
-          <React.Fragment key={row.id}>
-            {index > 0 ? <View style={styles.divider} /> : null}
-            <AccountRow row={row} onPress={() => onRowPress(row)} />
-          </React.Fragment>
-        ))}
-      </View>
-    </View>
-  );
-}
-
+/** The Profile tab: who the kitchen is, then Kitchen, Money and More, with switch-to-customer and log out. */
 export function ChefProfileScreen() {
-  const navigation = useNavigation<ProfileNavigation>();
+  const navigation = useNavigation<NavigationProp<ChefProfileStackParamList>>();
   const dispatch = useAppDispatch();
-  const model = useChefProfileModel();
-  const editDraft = useChefEditProfileDraft();
-  const [loggingOut, setLoggingOut] = React.useState(false);
-  const [switchingRole, setSwitchingRole] = React.useState(false);
+  const toast = useChefToast();
+  const identity = useAppSelector(state => state.auth.identity);
+  const accountResolution = useAppSelector(state => state.auth.accountResolution);
+  const kitchenState = useKitchenOpenState();
+  const {kitchen} = kitchenState;
+  // The reviews screen reads the same entry, so opening it afterwards needs no second wait.
+  const summary = useChefRead('chef-review-summary', signal => chefReviewsApi.summary(kitchen?.id as string, signal), {
+    entityId: kitchen?.id,
+    enabled: Boolean(kitchen),
+  });
+  const rating = summary.query.data?.overallAverage;
+  const reviewCount = summary.query.data?.reviewCount ?? 0;
+  const hasRating = typeof rating === 'number' && reviewCount > 0;
 
-  const identity = model.identity;
-  const kitchen = model.kitchen;
-  const displayName = profileDisplayName(kitchen, identity?.displayName);
-  const contact =
-    kitchen?.email ??
-    identity?.email ??
-    kitchen?.phoneNumber ??
-    identity?.phoneNumber ??
-    null;
-  const chefAccessApproved =
-    model.accountResolution?.flow === 'CHEF' &&
-    model.accountResolution.onboardingStatus === 'APPROVED';
-  const accountSuspended = identity?.status === 'SUSPENDED';
-  const operationalIssue = accountSuspended || kitchen?.status === 'SUSPENDED';
+  const suspended = kitchenState.status === 'suspended' || identity?.status === 'SUSPENDED';
+  const approved = !suspended && accountResolution?.flow === 'CHEF' && accountResolution.onboardingStatus === 'APPROVED';
+  const name = kitchen?.kitchenName ?? (identity?.displayName?.trim() || 'Chef account');
+  const place = [kitchen?.areaName, kitchen?.city].filter((part, index, all) => part && all.indexOf(part) === index).join(', ');
+  const who = [kitchen?.displayName ? `Chef ${kitchen.displayName}` : null, place || null].filter(Boolean).join(' · ');
 
-  const ordersValue =
-    model.dashboard.sources.orders === 'success'
-      ? String(model.dashboard.data.orders.activeOrders)
-      : '—';
-  const menuValue =
-    model.dashboard.sources.menu === 'success'
-      ? String(model.dashboard.data.menu.sellableItems)
-      : '—';
-  const noticesValue =
-    model.dashboard.sources.notifications === 'success'
-      ? String(model.dashboard.data.notifications.unread)
-      : '—';
-
-  const showBlocker = React.useCallback((title: string, message: string) => {
-    Alert.alert(`${title} unavailable`, message, [{text: 'OK'}]);
-  }, []);
-
-  const openChefTab = React.useCallback(
-    (tab: 'Orders' | 'Menu') => {
-      const tabs = navigation.getParent<ChefTabsNavigation>();
-      if (!tabs) {
-        showBlocker(
-          tab,
-          `The Chef ${tab} tab is not available from the current navigation parent.`,
-        );
-        return;
-      }
-      tabs.navigate(tab);
-    },
-    [navigation, showBlocker],
-  );
-
-  const handleBlockedRow = React.useCallback(
-    (row: AccountRowModel) => {
-      if (row.id === 'business-information') {
-        navigation.navigate('ChefBusinessInformation');
-        return;
-      }
-      if (row.id === 'schedule') {
-        navigation.navigate('ChefKitchenSchedule');
-        return;
-      }
-      if (row.id === 'scheduled-orders') {
-        navigation.navigate('ChefScheduledOrders');
-        return;
-      }
-      if (row.id === 'payouts') {
-        navigation.navigate('ChefPayoutHistory');
-        return;
-      }
-      if (row.id === 'referrals') {
-        navigation.navigate('ChefReferral');
-        return;
-      }
-      if (row.id === 'subscription') {
-        navigation.navigate('ChefSubscriptionPlan');
-        return;
-      }
-      if (row.id === 'preferences') {
-        navigation.navigate('ChefAppPreferences');
-        return;
-      }
-      if (row.id === 'support') {
-        navigation.navigate('ChefSupport');
-        return;
-      }
-      showBlocker(row.title, row.blockerMessage);
-    },
-    [navigation, showBlocker],
-  );
-
-  const handleEditProfile = React.useCallback(() => {
-    if (!kitchen) {
-      showBlocker(
-        'Edit profile',
-        'Chef kitchen details must finish loading before the profile editor can preserve a safe canonical draft.',
-      );
+  const [dialog, setDialog] = React.useState<Dialog>(null);
+  const [working, setWorking] = React.useState(false);
+  const busy = React.useRef(false);
+  /** Switching and logging out replace the whole signed-in screen, so a second press must do nothing. */
+  const run = async (action: () => Promise<void>, failed: string) => {
+    if (busy.current) {
       return;
     }
-    editDraft.begin(kitchen);
-    navigation.navigate('ChefEditProfile');
-  }, [editDraft, kitchen, navigation, showBlocker]);
-
-  const performLogout = React.useCallback(async () => {
-    if (loggingOut || switchingRole) {
-      return;
-    }
-    setLoggingOut(true);
+    busy.current = true;
+    setWorking(true);
     try {
-      await completeLogout(dispatch);
+      await action();
     } catch {
-      setLoggingOut(false);
-      Alert.alert(
-        'Logout could not finish',
-        'Please try again. Craves did not intentionally keep this screen active with a partial logout.',
-      );
+      setDialog(null);
+      toast.show(failed);
+    } finally {
+      busy.current = false;
+      setWorking(false);
     }
-  }, [dispatch, loggingOut, switchingRole]);
+  };
 
-  const confirmLogout = React.useCallback(() => {
-    Alert.alert(
-      'Logout?',
-      'You will need to sign in again to use your Craves account.',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {text: 'Logout', style: 'destructive', onPress: performLogout},
-      ],
-    );
-  }, [performLogout]);
-
-  const performRoleSwitch = React.useCallback(async () => {
-    if (switchingRole || loggingOut) {
-      return;
-    }
-    setSwitchingRole(true);
-    try {
-      await switchChefToCustomerRole(dispatch);
-    } catch {
-      setSwitchingRole(false);
-      Alert.alert(
-        'Could not switch roles',
-        'Chef-private data could not be isolated safely. Please try again before opening the Customer workspace.',
-      );
-    }
-  }, [dispatch, loggingOut, switchingRole]);
-
-  const confirmRoleSwitch = React.useCallback(() => {
-    if (!identity?.roles.includes('CUSTOMER')) {
-      showBlocker(
-        'Switch to customer',
-        'This signed-in identity does not currently have the Customer role.',
-      );
-      return;
-    }
-    Alert.alert(
-      'Switch to Customer?',
-      'Craves will leave the Chef workspace and reload your Customer account.',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {text: 'Switch', onPress: performRoleSwitch},
-      ],
-    );
-  }, [identity?.roles, performRoleSwitch, showBlocker]);
+  const open = (route: Exclude<keyof ChefProfileStackParamList, 'ChefProfileHome'>) => () => navigation.navigate(route);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <ChefHeader title="Profile" />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={model.isRefreshing}
-            tintColor={colors.flameRed}
-            colors={[colors.flameRed]}
-            onRefresh={() => {
-              model.refresh().catch(() => undefined);
-            }}
-          />
-        }
-        showsVerticalScrollIndicator={false}>
-        {model.kitchenStatus === 'pending' && !kitchen ? <ProfileSkeleton /> : null}
-
-        <View style={styles.identityCard}>
-          <View style={styles.identityTopRow}>
-            <View accessibilityLabel={`${displayName} profile avatar`} style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials(displayName)}</Text>
-            </View>
-            <View style={styles.identityCopy}>
-              <View style={styles.nameRow}>
-                <Text accessibilityRole="header" style={styles.profileName}>
-                  {displayName}
-                </Text>
-                {chefAccessApproved && !accountSuspended ? (
-                  <View style={styles.approvedBadge}>
-                    <Icon name="check" size={12} color={colors.success} />
-                    <Text style={styles.approvedBadgeText}>Chef approved</Text>
-                  </View>
-                ) : null}
-              </View>
-              {contact ? <Text style={styles.identityMeta}>{contact}</Text> : null}
-              <Text style={styles.identityMeta}>
-                {kitchen
-                  ? `${kitchen.city}, ${kitchen.state}`
-                  : 'Business details load independently'}
-              </Text>
-            </View>
-          </View>
-
-          <Pressable
-            accessibilityLabel="Edit Chef profile"
-            accessibilityHint="Opens the Chef-specific edit profile flow"
-            accessibilityRole="button"
-            onPress={handleEditProfile}
-            style={({pressed}) => [styles.editButton, pressed && styles.pressed]}>
-            <Text style={styles.editButtonText}>Edit Profile</Text>
-          </Pressable>
-        </View>
-
-        {operationalIssue ? (
-          <View accessibilityRole="alert" style={styles.issueCard}>
-            <Icon name="shield" size={iconSize.lg} color={colors.error} />
-            <View style={styles.issueCopy}>
-              <Text style={styles.issueTitle}>Chef operations need attention</Text>
-              <Text style={styles.issueText}>
-                {accountSuspended
-                  ? 'This Craves identity is suspended. Chef operations may be unavailable.'
-                  : 'This kitchen is suspended. Review the business status before accepting new work.'}
-              </Text>
-            </View>
-          </View>
-        ) : null}
-
-        <View style={styles.metricsCard}>
-          <View style={styles.sectionHeadingRow}>
-            <View>
-              <Text style={[styles.sectionTitleInline, styles.metricsCardTitle]}>
-                Live summary
-              </Text>
-              <Text style={[styles.sectionCaption, styles.metricsCardCaption]}>
-                Synchronized with Chef workspace data
-              </Text>
-            </View>
-            {model.dashboard.isRefreshing ? (
-              <ActivityIndicator color={colors.flameRed} size="small" />
-            ) : null}
-          </View>
-          <View style={styles.metricsRow}>
-            <MetricTile
-              label="Active orders"
-              value={ordersValue}
-              onPress={() => openChefTab('Orders')}
-            />
-            <MetricTile
-              label="Sellable dishes"
-              value={menuValue}
-              onPress={() => openChefTab('Menu')}
-            />
-            <MetricTile label="Unread alerts" value={noticesValue} />
-          </View>
-        </View>
-
-        <View style={styles.businessStatusCard}>
-          <View style={styles.sectionHeadingRow}>
-            <View style={styles.businessHeadingCopy}>
-              <Text style={styles.sectionTitleInline}>Business status</Text>
-              <Text style={styles.sectionCaption}>
-                Authoritative kitchen status from your Chef profile
-              </Text>
-            </View>
-            {kitchen ? (
-              <View
-                style={[
-                  styles.statusPill,
-                  {backgroundColor: kitchenStatusTone(kitchen.status).backgroundColor},
-                ]}>
-                <Text
-                  style={[
-                    styles.statusText,
-                    {color: kitchenStatusTone(kitchen.status).color},
-                  ]}>
-                  {kitchenStatusLabel(kitchen.status)}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          {model.kitchenStatus === 'error' && !kitchen ? (
-            <View style={styles.businessError}>
-              <Text style={styles.businessErrorTitle}>Kitchen details unavailable</Text>
-              <Text style={styles.businessErrorText}>
-                Your signed-in Chef identity is still available, but business details could not be loaded.
-              </Text>
-              <Pressable
-                accessibilityLabel="Retry Chef business status"
-                accessibilityRole="button"
-                onPress={() => {
-                  model.refresh().catch(() => undefined);
-                }}
-                style={({pressed}) => [styles.retryButton, pressed && styles.pressed]}>
-                <Text style={styles.retryButtonText}>Try again</Text>
-              </Pressable>
-            </View>
-          ) : kitchen ? (
-            <View style={styles.businessDetails}>
-              <View style={styles.businessDetailRow}>
-                <Text style={styles.businessDetailLabel}>Kitchen</Text>
-                <Text style={styles.businessDetailValue}>{kitchen.kitchenName}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.businessDetailRow}>
-                <Text style={styles.businessDetailLabel}>Verification</Text>
-                <Text style={styles.businessDetailMuted}>
-                  Open Business information for the verification record
-                </Text>
-              </View>
-            </View>
+    <ChefScreen
+      header={<ChefTopBar title="Profile" />}
+      onRefresh={() => {
+        Promise.allSettled([kitchenState.refresh(), summary.query.refetch()]).catch(() => undefined);
+      }}
+      withTabBar>
+      <ChefCard style={styles.identity}>
+        <View style={styles.avatarWrap}>
+          {kitchen?.chefPhotoUrl ? (
+            <Image accessibilityIgnoresInvertColors source={{uri: kitchen.chefPhotoUrl}} style={styles.avatar} />
           ) : (
-            <View style={styles.businessLoadingRow}>
-              <ActivityIndicator color={colors.flameRed} size="small" />
-              <Text style={styles.businessErrorText}>Loading business status…</Text>
+            <View style={[styles.avatar, styles.avatarLetter]}>
+              <Text allowFontScaling={false} style={styles.avatarText}>
+                {name.charAt(0).toUpperCase()}
+              </Text>
             </View>
           )}
+          <Pressable
+            accessibilityLabel="Change your photo"
+            accessibilityRole="button"
+            onPress={open('ChefEditProfile')}
+            style={styles.camera}>
+            <Icon color={colors.textPrimary} name="camera" size={iconSize.sm} surface={false} />
+          </Pressable>
         </View>
+        <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.name}>
+          {name}
+        </Text>
+        {who ? (
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
+            {who}
+          </Text>
+        ) : null}
+        <View style={styles.chips}>
+          {suspended ? <StatusChip label="Paused by Craves" tone="new" /> : null}
+          {approved ? (
+            <Pressable accessibilityLabel="Approved. Open documents" accessibilityRole="button" onPress={open('ChefBusinessInformation')}>
+              <StatusChip label="Approved" tone="ready" />
+            </Pressable>
+          ) : null}
+          {hasRating ? (
+            <Pressable
+              accessibilityLabel={`${rating.toFixed(1)} stars, ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}. Open reviews`}
+              accessibilityRole="button"
+              onPress={open('ChefReviews')}>
+              <StatusChip label={`★ ${rating.toFixed(1)} · ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}`} tone="info" />
+            </Pressable>
+          ) : null}
+        </View>
+      </ChefCard>
 
-        <Section title="Business" rows={BUSINESS_ROWS} onRowPress={handleBlockedRow} />
-        <Section
-          title="Settings & support"
-          rows={SETTINGS_ROWS}
-          onRowPress={handleBlockedRow}
+      <SectionHeader title="Kitchen" />
+      <ListGroup>
+        <ListRow icon="store" iconTone="red" onPress={open('ChefEditProfile')} subtitle="Name, about, address, photos" title="Kitchen details" />
+        <ListRow
+          icon="clock"
+          iconTone="green"
+          onPress={open('ChefKitchenSchedule')}
+          subtitle={hoursLine(kitchenState.status, kitchenState.hoursToday)}
+          title="Opening hours"
         />
+        <ListRow
+          icon="shield"
+          iconTone="blue"
+          onPress={open('ChefBusinessInformation')}
+          subtitle={approved ? 'Verified' : 'See your documents'}
+          title="Documents & verification"
+        />
+        <ListRow
+          icon="star"
+          iconTone="amber"
+          onPress={open('ChefReviews')}
+          subtitle={hasRating ? `${rating.toFixed(1)} average · ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}` : 'What customers say'}
+          title="Reviews"
+        />
+      </ListGroup>
 
-        <View style={styles.sectionWrap}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          <View style={styles.sectionCard}>
-            <Pressable
-              accessibilityLabel="Switch to Customer"
-              accessibilityHint="Leaves the Chef workspace and opens the Customer account"
-              accessibilityRole="button"
-              accessibilityState={{disabled: switchingRole || loggingOut}}
-              disabled={switchingRole || loggingOut}
-              onPress={confirmRoleSwitch}
-              style={({pressed}) => [
-                styles.accountRow,
-                pressed && styles.pressed,
-                (switchingRole || loggingOut) && styles.disabled,
-              ]}>
-              <View style={styles.rowIcon}>
-                <Icon name="account" size={iconSize.sm} color={colors.flameRed} />
-              </View>
-              <View style={styles.rowCopy}>
-                <Text style={styles.rowTitle}>
-                  {switchingRole ? 'Switching…' : 'Switch to Customer'}
-                </Text>
-                <Text style={styles.rowSubtitle}>Use Craves as a customer</Text>
-              </View>
-              {switchingRole ? (
-                <ActivityIndicator color={colors.flameRed} size="small" />
-              ) : (
-                <Icon name="chevron-right" size={iconSize.xs} color={colors.placeholder} />
-              )}
-            </Pressable>
-            <View style={styles.divider} />
-            <Pressable
-              accessibilityLabel="Logout"
-              accessibilityHint="Signs out and clears private session data"
-              accessibilityRole="button"
-              accessibilityState={{disabled: loggingOut || switchingRole}}
-              disabled={loggingOut || switchingRole}
-              onPress={confirmLogout}
-              style={({pressed}) => [
-                styles.accountRow,
-                pressed && styles.pressed,
-                (loggingOut || switchingRole) && styles.disabled,
-              ]}>
-              <View style={[styles.rowIcon, styles.rowIconDanger]}>
-                <Icon name="lock" size={iconSize.sm} color={colors.error} />
-              </View>
-              <View style={styles.rowCopy}>
-                <Text style={[styles.rowTitle, styles.logoutText]}>
-                  {loggingOut ? 'Logging out…' : 'Logout'}
-                </Text>
-                <Text style={styles.rowSubtitle}>Sign out of this device</Text>
-              </View>
-              {loggingOut ? <ActivityIndicator color={colors.error} size="small" /> : null}
-            </Pressable>
-          </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      <SectionHeader title="Money" />
+      <ListGroup>
+        <ListRow icon="bank" onPress={open('ChefBankAccount')} title="Bank account" />
+        <ListRow icon="receipt" onPress={open('ChefPayoutHistory')} title="Payout history" />
+      </ListGroup>
+
+      <SectionHeader title="More" />
+      <ListGroup>
+        <ListRow icon="gift" onPress={open('ChefReferral')} subtitle="Earn when chefs you invite start cooking" title="Refer a chef" />
+        <ListRow icon="filter" onPress={open('ChefAppPreferences')} subtitle="Notifications, orders, language" title="Preferences" />
+        <ListRow icon="headset" onPress={open('ChefSupport')} title="Help & support" />
+        <ListRow icon="lock" onPress={open('ChefSecurity')} title="Login & security" />
+      </ListGroup>
+
+      <ListGroup>
+        <ListRow
+          icon="renew"
+          onPress={() => {
+            if (identity?.roles.includes('CUSTOMER')) {
+              setDialog('switch');
+            } else {
+              toast.show("Customer mode isn't set up for this account.");
+            }
+          }}
+          subtitle="Order food as a customer"
+          title="Switch to customer mode"
+        />
+        <ListRow destructive icon="arrow-left" onPress={() => setDialog('logout')} title="Log out" />
+      </ListGroup>
+
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.version}>
+        {`Craves for Chefs · version ${CHEF_APP_VERSION}`}
+      </Text>
+
+      <ConfirmDialog
+        busy={working}
+        confirmLabel="Switch"
+        message="Your kitchen stays open for orders."
+        onCancel={() => setDialog(null)}
+        onConfirm={() => {
+          run(() => switchChefToCustomerRole(dispatch), "We couldn't switch just now. Please try again.").catch(() => undefined);
+        }}
+        title="Switch to customer mode?"
+        visible={dialog === 'switch'}
+      />
+      <ConfirmDialog
+        busy={working}
+        confirmLabel="Log out"
+        message="You will need to log in again with a one-time code."
+        onCancel={() => setDialog(null)}
+        onConfirm={() => {
+          run(() => completeLogout(dispatch), "We couldn't log you out. Please try again.").catch(() => undefined);
+        }}
+        title="Log out of Craves?"
+        tone="danger"
+        visible={dialog === 'logout'}
+      />
+    </ChefScreen>
   );
 }
 
+const AVATAR = 76;
 const styles = StyleSheet.create({
-  safeArea: {flex: 1, backgroundColor: colors.white},
-  content: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xxl,
-    gap: spacing.md,
-  },
-  identityCard: {
-    backgroundColor: colors.white,
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    padding: spacing.md,
-    ...elevation.card,
-  },
-  identityTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.pill,
+  identity: {alignItems: 'center', gap: spacing.xxs, paddingVertical: spacing.lg},
+  avatarWrap: {width: AVATAR, height: AVATAR, marginBottom: spacing.xs},
+  avatar: {width: AVATAR, height: AVATAR, borderRadius: AVATAR / 2},
+  avatarLetter: {alignItems: 'center', justifyContent: 'center', backgroundColor: colors.flameRedAccessible},
+  avatarText: {color: colors.white, fontSize: 30, fontWeight: fontWeight.bold},
+  camera: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.white,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.borderStrong,
-  },
-  avatarText: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.extrabold,
-  },
-  identityCopy: {flex: 1, minWidth: 0},
-  nameRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  profileName: {
-    color: colors.textPrimary,
-    fontSize: typography.hero,
-    fontWeight: fontWeight.bold,
-    flexShrink: 1,
-  },
-  approvedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xxs,
-    borderRadius: radius.pill,
-    backgroundColor: colors.successSoft,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xxs,
-  },
-  approvedBadgeText: {
-    color: colors.success,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.bold,
-  },
-  identityMeta: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  editButton: {
-    minHeight: touchTarget.minimum,
-    marginTop: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.flameRed,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  editButtonText: {
-    color: colors.flameRed,
-    fontSize: typography.button,
-    fontWeight: fontWeight.bold,
-  },
-  issueCard: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    borderRadius: radius.md,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.error,
-    backgroundColor: colors.errorSoft,
-    padding: spacing.md,
-  },
-  issueCopy: {flex: 1},
-  issueTitle: {
-    color: colors.error,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  issueText: {
-    marginTop: spacing.xxs,
-    color: colors.textPrimary,
-    fontSize: typography.small,
-  },
-  metricsCard: {
-    borderRadius: radius.lg,
-    backgroundColor: colors.espressoBrown,
-    padding: spacing.md,
-  },
-  sectionHeadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  sectionTitleInline: {
-    color: colors.textPrimary,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  sectionCaption: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  metricsCardTitle: {color: colors.white},
-  metricsCardCaption: {color: colors.creamDeep},
-  metricsRow: {flexDirection: 'row', gap: spacing.xs, marginTop: spacing.md},
-  metricTile: {
-    flex: 1,
-    minHeight: 86,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.sm,
-  },
-  metricValue: {
-    color: colors.flameRed,
-    fontSize: typography.hero,
-    fontWeight: fontWeight.extrabold,
-  },
-  metricLabel: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    textAlign: 'center',
-  },
-  businessStatusCard: {
-    borderRadius: radius.lg,
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
     backgroundColor: colors.white,
-    padding: spacing.md,
   },
-  businessHeadingCopy: {flex: 1},
-  statusPill: {
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    maxWidth: '46%',
-  },
-  statusText: {
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.bold,
-    textAlign: 'center',
-  },
-  businessDetails: {marginTop: spacing.sm},
-  businessDetailRow: {
-    minHeight: touchTarget.minimum,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  businessDetailLabel: {
-    width: 84,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  businessDetailValue: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  businessDetailMuted: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  businessError: {
-    marginTop: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
-    padding: spacing.md,
-  },
-  businessErrorTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  businessErrorText: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  retryButton: {
-    alignSelf: 'flex-start',
-    minHeight: touchTarget.minimum,
-    marginTop: spacing.sm,
-    justifyContent: 'center',
-    paddingRight: spacing.md,
-  },
-  retryButtonText: {
-    color: colors.flameRed,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  businessLoadingRow: {
-    minHeight: 72,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  sectionWrap: {gap: spacing.xs},
-  sectionTitle: {
-    marginLeft: spacing.xxs,
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  sectionCard: {
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    overflow: 'hidden',
-  },
-  accountRow: {
-    minHeight: 72,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  rowIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
-  },
-  rowIconDanger: {backgroundColor: colors.iconSurface},
-  rowCopy: {flex: 1, minWidth: 0},
-  rowTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  rowSubtitle: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  logoutText: {color: colors.error},
-  divider: {
-    height: borderWidth.standard,
-    backgroundColor: colors.border,
-    marginLeft: 66,
-  },
-  pressed: {opacity: 0.62},
-  disabled: {opacity: 0.45},
-  skeletonCard: {
-    borderRadius: radius.lg,
-    backgroundColor: colors.white,
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  skeletonIdentity: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  skeletonAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
-  },
-  skeletonCopy: {flex: 1, gap: spacing.xs},
-  skeletonLineWide: {
-    height: 18,
-    width: '72%',
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
-  },
-  skeletonLine: {
-    height: 12,
-    width: '52%',
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
-  },
-  skeletonMetricRow: {flexDirection: 'row', gap: spacing.xs},
-  skeletonMetric: {
-    flex: 1,
-    height: 78,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
-  },
+  name: {color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold, textAlign: 'center'},
+  muted: {color: colors.textSecondary, fontSize: typography.small, textAlign: 'center'},
+  chips: {flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.xs},
+  version: {color: colors.textSecondary, fontSize: typography.tiny, textAlign: 'center'},
 });

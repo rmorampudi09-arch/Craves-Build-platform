@@ -8,7 +8,7 @@ import {
   scheduleUpdateFromCurrent,
   type ChefKitchenSchedule,
 } from '../../chefSchedule/api/chefKitchenScheduleApi';
-import {createChefKitchenScheduleQueryKey} from '../../chefSchedule/state/useChefKitchenScheduleModel';
+import {createChefKitchenScheduleQueryKey} from '../../chefSchedule/state/chefKitchenScheduleQuery';
 import {formatWindowTime} from '../../chefShell/domain/chefFormat';
 import {
   chefProfileApi,

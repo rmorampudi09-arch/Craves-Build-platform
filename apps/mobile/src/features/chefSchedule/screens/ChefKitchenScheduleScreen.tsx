@@ -1,459 +1,310 @@
 import React from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import {StyleSheet, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {
-  colors,
-  fontWeight,
-  radius,
-  spacing,
-  touchTarget,
-  typography,
-} from '../../../design/tokens';
+import {useQueryClient} from '@tanstack/react-query';
+import {toAppApiError} from '../../../core/http/apiError';
+import {colors, fontWeight, iconSize, spacing, textDefaults, typography} from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
-import {useChefKitchenScheduleModel} from '../state/useChefKitchenScheduleModel';
+import {KITCHEN_UPDATE_FAILED} from '../../chefDashboard/components/useKitchenStatusControl';
+import {ChefSwitch} from '../../chefProfile/components/ChefSwitch';
+import {ReadState} from '../../chefProfile/components/ReadState';
+import {useKitchenOpenState, type KitchenOpenState} from '../../chefProfile/state/useKitchenOpenState';
+import {useChefRead} from '../../chefProfile/state/useChefRead';
+import {
+  ChefActionButton,
+  ChefCard,
+  ChefScreen,
+  ChefSheet,
+  ChefTopBar,
+  ListGroup,
+  ListRow,
+  SectionHeader,
+  useChefToast,
+} from '../../chefShell/components/ui';
+import {formatDayLabel} from '../../chefShell/domain/chefFormat';
+import {chefKitchenScheduleApi, type ChefKitchenSchedule} from '../api/chefKitchenScheduleApi';
+import {DayHoursForm, SpecialDayForm, type SpecialDayValue} from '../components/HoursForms';
+import {DAYS, rangesForDay, summarizeRanges, withDayRanges} from '../domain/openingHours';
 
-const DAY_NAMES = [
-  '',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday',
-] as const;
+export const HOURS_SAVE_FAILED = "We couldn't save your hours. Please try again.";
 
-function formatTime(value: string): string {
-  return value.slice(0, 5);
+/** The line under "Taking orders" for each state the kitchen can be in. */
+function takingOrdersCopy(kitchen: Pick<KitchenOpenState, 'status' | 'closedReason' | 'opensAt'>): string {
+  switch (kitchen.status) {
+    case 'open':
+      return 'Customers can order now';
+    case 'paused':
+      return 'New orders are paused for now';
+    case 'suspended':
+      return 'Craves has paused your kitchen. Contact support to open it again.';
+    case 'unknown':
+      return 'Checking your kitchen…';
+    default:
+      return kitchen.closedReason === 'outside-hours'
+        ? `Closed now${kitchen.opensAt ? ` · opens ${kitchen.opensAt}` : ''}`
+        : "Customers can't order right now";
+  }
 }
 
+const hhmm = (time: string) => time.slice(0, 5);
+
+/** Opening hours: the Taking orders switch, the hours for each day of the week, and special days. */
 export function ChefKitchenScheduleScreen() {
   const navigation = useNavigation();
-  const model = useChefKitchenScheduleModel();
+  const queryClient = useQueryClient();
+  const toast = useChefToast();
+  const kitchen = useKitchenOpenState();
+  // Same cache entry the kitchen state reads, so a saved week shows up in "Open now · 11 AM – 10 PM" at once.
+  const schedule = useChefRead('chef-kitchen-schedule', signal => chefKitchenScheduleApi.get(signal));
+  const current: ChefKitchenSchedule | undefined = schedule.query.data;
 
-  const run = React.useCallback(
-    (action: () => Promise<void>, fallback: string) => {
-      action().catch(() => {
-        Alert.alert('Could not update availability', fallback);
+  const takingOrders = kitchen.status === 'open' || kitchen.status === 'paused' || (kitchen.status === 'closed' && kitchen.closedReason === 'outside-hours');
+  const changeOpen = async (open: boolean) => {
+    try {
+      // false: another save was still running, so nothing happened and there is nothing to announce.
+      if (await kitchen.setOpen(open)) {
+        toast.show(open ? 'Your kitchen is open' : 'Your kitchen is closed');
+      }
+    } catch {
+      toast.show(KITCHEN_UPDATE_FAILED);
+    }
+  };
+
+  const [editingDay, setEditingDay] = React.useState<number | null>(null);
+  const [special, setSpecial] = React.useState<{open: boolean; initial?: SpecialDayValue}>({open: false});
+  const [specials, setSpecials] = React.useState<SpecialDayValue[]>([]);
+  const [saving, setSaving] = React.useState(false);
+  const [sheetError, setSheetError] = React.useState<string | null>(null);
+  const busy = React.useRef(false);
+
+  /** One save at a time; a failure keeps the sheet open with the reason in it. */
+  const save = async (run: () => Promise<void>) => {
+    if (busy.current) {
+      return;
+    }
+    busy.current = true;
+    setSaving(true);
+    setSheetError(null);
+    try {
+      await run();
+    } catch {
+      setSheetError(HOURS_SAVE_FAILED);
+    } finally {
+      busy.current = false;
+      setSaving(false);
+    }
+  };
+
+  const saveDay = (day: number, copyTo: number[], ranges: Parameters<typeof withDayRanges>[2]) =>
+    save(async () => {
+      if (!current) {
+        return;
+      }
+      const saved = await chefKitchenScheduleApi.replace({
+        acceptingOrders: current.acceptingOrders,
+        pausedUntil: current.pausedUntil,
+        pauseReason: current.pauseReason,
+        weeklyWindows: withDayRanges(current.weeklyWindows, [day, ...copyTo], ranges),
       });
-    },
-    [],
-  );
+      queryClient.setQueryData<ChefKitchenSchedule>(schedule.queryKey, saved);
+      setEditingDay(null);
+      toast.show('Opening hours saved');
+    });
 
-  if (!model.available) {
-    return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-        <Header onBack={() => navigation.goBack()} />
-        <View style={styles.centerState}>
-          <Icon name="clock" size={36} color={colors.textSecondary} />
-          <Text style={styles.stateTitle}>Kitchen schedule is not live yet</Text>
-          <Text style={styles.stateText}>
-            The Catalog schedule API is implemented, but its protected APIM route
-            is not published yet. Craves will not send schedule changes until that
-            gateway route is available.
+  const loadSpecial = async (date: string): Promise<SpecialDayValue | null> => {
+    try {
+      const found = await chefKitchenScheduleApi.getOverride(date);
+      return {
+        date,
+        closed: found.closed,
+        reason: found.reason,
+        windows: found.windows.map(window => ({opensAt: hhmm(window.opensAt), closesAt: hhmm(window.closesAt)})),
+      };
+    } catch (error) {
+      if (toAppApiError(error).code === 'SCHEDULE_OVERRIDE_NOT_FOUND') {
+        return null;
+      }
+      throw error;
+    }
+  };
+  const saveSpecial = (value: SpecialDayValue) =>
+    save(async () => {
+      await chefKitchenScheduleApi.putOverride(value.date, {
+        closed: value.closed,
+        reason: value.reason,
+        windows: value.windows.map(window => ({opensAt: window.opensAt, closesAt: window.closesAt})),
+      });
+      setSpecials(previous => [...previous.filter(item => item.date !== value.date), value].sort((a, b) => a.date.localeCompare(b.date)));
+      setSpecial({open: false});
+      toast.show('Special day saved');
+    });
+  const removeSpecial = (date: string) =>
+    save(async () => {
+      await chefKitchenScheduleApi.deleteOverride(date);
+      setSpecials(previous => previous.filter(item => item.date !== date));
+      setSpecial({open: false});
+      toast.show('Special day removed');
+    });
+
+  const weekHasHours = (current?.weeklyWindows.length ?? 0) > 0;
+  const editing = DAYS.find(day => day.day === editingDay);
+  const now = new Date(Date.now());
+  const specialTitle = (value: SpecialDayValue) => {
+    const [year, month, day] = value.date.split('-').map(Number);
+    const label = formatDayLabel(new Date(year, month - 1, day), now, {weekday: true});
+    return value.reason ? `${label} · ${value.reason}` : label;
+  };
+
+  return (
+    <ChefScreen
+      header={<ChefTopBar onBack={() => navigation.goBack()} showBell={false} title="Opening hours" />}
+      onRefresh={() => {
+        kitchen.refresh().catch(() => undefined);
+      }}
+      withTabBar>
+      <ChefCard style={[styles.taking, takingOrders && styles.takingOn]}>
+        <View style={styles.takingText}>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.takingTitle, takingOrders && styles.green]}>
+            Taking orders
+          </Text>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.takingSub, takingOrders && styles.green]}>
+            {takingOrdersCopy(kitchen)}
           </Text>
         </View>
-      </SafeAreaView>
-    );
-  }
+        <ChefSwitch
+          busy={kitchen.saving}
+          disabled={kitchen.status === 'suspended' || kitchen.status === 'unknown'}
+          label="Taking orders"
+          onChange={open => {
+            changeOpen(open).catch(() => undefined);
+          }}
+          value={takingOrders}
+        />
+      </ChefCard>
 
-  const schedule = model.schedule;
-  const availability = model.availability;
-  const paused =
-    Boolean(schedule?.pausedUntil) &&
-    Date.parse(schedule?.pausedUntil ?? '') > Date.now();
-
-  return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-      <Header onBack={() => navigation.goBack()} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            colors={[colors.flameRed]}
-            onRefresh={() => {
-              model.refresh().catch(() => undefined);
-            }}
-            refreshing={model.isRefreshing}
-            tintColor={colors.flameRed}
-          />
-        }>
-        {model.status === 'pending' && !schedule ? (
-          <View style={styles.centerState}>
-            <ActivityIndicator color={colors.flameRed} />
-            <Text style={styles.stateText}>Loading kitchen schedule…</Text>
-          </View>
-        ) : model.status === 'error' && !schedule ? (
-          <View style={styles.centerState}>
-            <Text style={styles.stateTitle}>Schedule unavailable</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => model.refresh().catch(() => undefined)}
-              style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>Try again</Text>
-            </Pressable>
-          </View>
-        ) : schedule ? (
+      <ReadState
+        comingSoon={{title: 'Opening hours are on their way', message: 'You will be able to set your weekly hours and special days here soon.'}}
+        query={schedule.query}>
+        {() => (
           <>
-            <View style={styles.statusCard}>
-              <View style={styles.statusRow}>
-                <View style={styles.statusCopy}>
-                  <Text style={styles.cardTitle}>Accepting orders</Text>
-                  <Text style={styles.cardText}>
-                    Master control for new customer orders.
-                  </Text>
-                </View>
-                <Switch
-                  accessibilityLabel="Accepting orders"
-                  disabled={model.isSaving}
-                  onValueChange={value =>
-                    run(
-                      () => model.setAcceptingOrders(value),
-                      'Your accepting-orders setting was not changed.',
-                    )
-                  }
-                  value={schedule.acceptingOrders}
-                />
-              </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.availabilityRow}>
-                <View
-                  style={[
-                    styles.dot,
-                    {
-                      backgroundColor:
-                        availability?.availableNow === true
-                          ? colors.success
-                          : colors.warning,
-                    },
-                  ]}
-                />
-                <View style={styles.statusCopy}>
-                  <Text style={styles.cardTitle}>
-                    {availability
-                      ? availability.availableNow
-                        ? 'Available now'
-                        : 'Not available now'
-                      : paused
-                        ? 'Paused'
-                        : schedule.acceptingOrders
-                          ? 'Accepting orders'
-                          : 'Not accepting orders'}
-                  </Text>
-                  <Text style={styles.cardText}>
-                    {availability
-                      ? [
-                          availability.kitchenActive ? 'Kitchen active' : 'Kitchen inactive',
-                          availability.openBySchedule
-                            ? 'inside service hours'
-                            : 'outside service hours',
-                          availability.paused ? 'paused' : null,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')
-                      : model.availabilityAvailable
-                        ? 'Current availability is refreshing.'
-                        : 'Live availability route is not published through APIM yet.'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Pause controls</Text>
-              <Text style={styles.cardText}>
-                Pause temporarily without changing your saved weekly hours.
+            <SectionHeader title="Every week" />
+            <ListGroup>
+              {DAYS.map(day => {
+                const lines = summarizeRanges(rangesForDay(current?.weeklyWindows ?? [], day.day), weekHasHours);
+                const set = lines[0] !== 'Closed' && lines[0] !== 'Not set';
+                return (
+                  <ListRow
+                    accessibilityLabel={`${day.name}, ${lines.join(', ')}`}
+                    key={day.day}
+                    onPress={() => {
+                      setSheetError(null);
+                      setEditingDay(day.day);
+                    }}
+                    right={
+                      <View style={styles.hours}>
+                        <View style={styles.hoursLines}>
+                          {lines.map(line => (
+                            <Text
+                              allowFontScaling={textDefaults.allowFontScaling}
+                              key={line}
+                              style={[styles.hoursText, !set && styles.hoursMuted]}>
+                              {line}
+                            </Text>
+                          ))}
+                        </View>
+                        <Icon color={colors.borderStrong} name="chevron-right" size={iconSize.md} surface={false} />
+                      </View>
+                    }
+                    title={day.name}
+                  />
+                );
+              })}
+            </ListGroup>
+            {weekHasHours ? null : (
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.note}>
+                No hours set yet. Until you set them, customers can order whenever your kitchen is open.
               </Text>
-              {paused ? (
-                <Text style={styles.pauseText}>
-                  Paused until {new Date(schedule.pausedUntil ?? '').toLocaleString()}
-                  {schedule.pauseReason ? ` · ${schedule.pauseReason}` : ''}
-                </Text>
-              ) : null}
-              <View style={styles.buttonRow}>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={model.isSaving}
-                  onPress={() =>
-                    run(
-                      model.pauseForOneHour,
-                      'Your kitchen was not paused.',
-                    )
-                  }
-                  style={({pressed}) => [
-                    styles.secondaryButton,
-                    (pressed || model.isSaving) && styles.pressed,
-                  ]}>
-                  <Text style={styles.secondaryButtonText}>Pause 1 hour</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={model.isSaving || !paused}
-                  onPress={() =>
-                    run(model.resumeNow, 'Your pause was not cleared.')
-                  }
-                  style={({pressed}) => [
-                    styles.primaryButton,
-                    (!paused || pressed || model.isSaving) && styles.pressed,
-                  ]}>
-                  <Text style={styles.primaryButtonText}>Resume now</Text>
-                </Pressable>
-              </View>
-            </View>
+            )}
 
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Weekly service hours</Text>
-              <Text style={styles.cardText}>
-                Timezone: {schedule.timezoneId}. Existing multi-window hours are
-                shown exactly as saved.
-              </Text>
-              {schedule.weeklyWindows.length === 0 ? (
-                <Text style={styles.emptyHours}>No weekly schedule configured.</Text>
-              ) : (
-                DAY_NAMES.slice(1).map((dayName, index) => {
-                  const dayOfWeek = index + 1;
-                  const windows = schedule.weeklyWindows.filter(
-                    window => window.dayOfWeek === dayOfWeek,
-                  );
-                  return (
-                    <View key={dayName} style={styles.dayRow}>
-                      <Text style={styles.dayName}>{dayName}</Text>
-                      <Text style={styles.dayHours}>
-                        {windows.length === 0
-                          ? 'Closed'
-                          : windows
-                              .map(
-                                window =>
-                                  `${formatTime(window.opensAt)}–${formatTime(
-                                    window.closesAt,
-                                  )}`,
-                              )
-                              .join(', ')}
-                      </Text>
-                    </View>
-                  );
-                })
-              )}
-            </View>
-
-            <View style={styles.noteCard}>
-              <Text style={styles.noteTitle}>Protected schedule contract</Text>
-              <Text style={styles.noteText}>
-                Weekly-hour replacement and date overrides are implemented in the
-                mobile API, but this screen does not rewrite those windows until a
-                dedicated editor is added. Availability controls preserve the full
-                existing weekly schedule.
-              </Text>
-            </View>
+            <SectionHeader title="Special days" />
+            {specials.length > 0 ? (
+              <ListGroup>
+                {specials.map(item => (
+                  <ListRow
+                    icon="calendar"
+                    iconTone="amber"
+                    key={item.date}
+                    onPress={() => {
+                      setSheetError(null);
+                      setSpecial({open: true, initial: item});
+                    }}
+                    subtitle={item.closed ? 'Closed' : summarizeRanges(item.windows, true).join(', ')}
+                    title={specialTitle(item)}
+                  />
+                ))}
+              </ListGroup>
+            ) : null}
+            <ChefActionButton
+              icon="calendar"
+              label="Add a special day"
+              onPress={() => {
+                setSheetError(null);
+                setSpecial({open: true});
+              }}
+              tone="neutral"
+            />
           </>
-        ) : null}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
+        )}
+      </ReadState>
 
-function Header({onBack}: {onBack: () => void}) {
-  return (
-    <View style={styles.header}>
-      <Pressable
-        accessibilityLabel="Back"
-        accessibilityRole="button"
-        onPress={onBack}
-        style={({pressed}) => [styles.backButton, pressed && styles.pressed]}>
-        <Icon name="arrow-left" size={22} color={colors.espressoBrown} />
-      </Pressable>
-      <Text accessibilityRole="header" style={styles.headerTitle}>
-        Availability & hours
-      </Text>
-      <View style={styles.headerSpacer} />
-    </View>
+      <ChefSheet onClose={() => setEditingDay(null)} title={editing?.name ?? ''} visible={editing !== undefined}>
+        {editing ? (
+          <DayHoursForm
+            busy={saving}
+            error={sheetError}
+            initial={rangesForDay(current?.weeklyWindows ?? [], editing.day)}
+            onSave={(copyTo, ranges) => {
+              saveDay(editing.day, copyTo, ranges).catch(() => undefined);
+            }}
+            others={DAYS.filter(day => day.day !== editing.day)}
+            weekHasHours={weekHasHours}
+          />
+        ) : null}
+      </ChefSheet>
+      <ChefSheet
+        onClose={() => setSpecial({open: false})}
+        title={special.initial ? 'Special day' : 'Add a special day'}
+        visible={special.open}>
+        {special.open ? (
+          <SpecialDayForm
+            busy={saving}
+            error={sheetError}
+            initial={special.initial}
+            load={loadSpecial}
+            now={now}
+            onRemove={date => {
+              removeSpecial(date).catch(() => undefined);
+            }}
+            onSave={value => {
+              saveSpecial(value).catch(() => undefined);
+            }}
+          />
+        ) : null}
+      </ChefSheet>
+    </ChefScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {flex: 1, backgroundColor: colors.surfaceBase},
-  content: {
-    padding: spacing.md,
-    paddingBottom: spacing.xxxl,
-    gap: spacing.md,
-  },
-  header: {
-    minHeight: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.sm,
-  },
-  backButton: {
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.pill,
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  headerSpacer: {width: touchTarget.minimum},
-  centerState: {
-    flex: 1,
-    minHeight: 260,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
-  stateTitle: {
-    marginTop: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-    textAlign: 'center',
-  },
-  stateText: {
-    marginTop: spacing.xs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    lineHeight: 20,
-    textAlign: 'center',
-  },
-  statusCard: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    backgroundColor: colors.white,
-    padding: spacing.md,
-  },
-  card: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    backgroundColor: colors.white,
-    padding: spacing.md,
-  },
-  cardTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  cardText: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    lineHeight: 20,
-  },
-  statusRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.md},
-  statusCopy: {flex: 1, minWidth: 0},
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.md,
-  },
-  availabilityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  dot: {width: 10, height: 10, borderRadius: radius.pill},
-  pauseText: {
-    marginTop: spacing.sm,
-    color: colors.espressoBrown,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  primaryButton: {
-    minHeight: touchTarget.minimum,
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    backgroundColor: colors.flameRed,
-    paddingHorizontal: spacing.md,
-  },
-  primaryButtonText: {
-    color: colors.white,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
-  },
-  secondaryButton: {
-    minHeight: touchTarget.minimum,
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.flameRed,
-    borderRadius: radius.md,
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.md,
-  },
-  secondaryButtonText: {
-    color: colors.flameRedAccessible,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
-  },
-  pressed: {opacity: 0.5},
-  emptyHours: {
-    marginTop: spacing.md,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  dayRow: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  dayName: {
-    width: 92,
-    color: colors.textPrimary,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-  dayHours: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    textAlign: 'right',
-  },
-  noteCard: {
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceMuted,
-    padding: spacing.md,
-  },
-  noteTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
-  },
-  noteText: {
-    marginTop: spacing.xs,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    lineHeight: 18,
-  },
+  taking: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+  takingOn: {backgroundColor: colors.successSoft, borderColor: 'transparent'},
+  takingText: {flex: 1, minWidth: 0},
+  takingTitle: {color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.bold},
+  takingSub: {color: colors.textSecondary, fontSize: typography.small},
+  green: {color: colors.successText},
+  hours: {flexDirection: 'row', alignItems: 'center', gap: spacing.xxs, flexShrink: 1},
+  hoursLines: {flexShrink: 1},
+  hoursText: {color: colors.textPrimary, fontSize: typography.small, textAlign: 'right'},
+  hoursMuted: {color: colors.textSecondary},
+  note: {color: colors.textSecondary, fontSize: typography.small},
 });

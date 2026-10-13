@@ -117,4 +117,56 @@ describe('chef edit profile form domain', () => {
     expect(canEditChefKitchenProfile({...PROFILE, status: 'SUSPENDED'})).toBe(false);
     expect(canEditChefKitchenProfile(PROFILE)).toBe(true);
   });
+
+  describe('cuisines, delivery areas and links', () => {
+    const WITH_EXTRAS: ChefKitchenProfile = {
+      ...PROFILE,
+      cuisines: ['Andhra', 'Biryani'],
+      serviceAreas: ['KPHB'],
+      socialLinks: {instagram: 'https://instagram.com/anita', facebook: null, youtube: null, website: null},
+    };
+
+    it('hydrates them only when the server sent them', () => {
+      expect(chefKitchenProfileToFormValues(PROFILE)).not.toHaveProperty('cuisines');
+      expect(chefKitchenProfileToFormValues(WITH_EXTRAS)).toMatchObject({
+        cuisines: ['Andhra', 'Biryani'],
+        serviceAreas: ['KPHB'],
+        instagram: 'https://instagram.com/anita',
+        facebook: '',
+        youtube: '',
+        website: '',
+      });
+    });
+
+    it('sends nothing new for a kitchen the server has no such fields for', () => {
+      const request = buildChefKitchenProfileReplacementRequest(chefKitchenProfileToFormValues(PROFILE), PROFILE);
+      expect(request).not.toHaveProperty('cuisines');
+      expect(request).not.toHaveProperty('serviceAreas');
+      expect(request).not.toHaveProperty('socialLinks');
+    });
+
+    it('sends the lists and all four links, empty ones as null, so no stored link is dropped by mistake', () => {
+      const request = buildChefKitchenProfileReplacementRequest(
+        {...chefKitchenProfileToFormValues(WITH_EXTRAS), cuisines: ['Andhra'], website: ' https://anita.example '},
+        WITH_EXTRAS,
+      );
+      expect(request.cuisines).toEqual(['Andhra']);
+      expect(request.serviceAreas).toEqual(['KPHB']);
+      expect(request.socialLinks).toEqual({
+        instagram: 'https://instagram.com/anita',
+        facebook: null,
+        youtube: null,
+        website: 'https://anita.example',
+      });
+    });
+
+    it('rejects a link that is not https, more than 10 entries, and an entry over 40 characters', () => {
+      const base = chefKitchenProfileToFormValues(WITH_EXTRAS);
+      expect(chefEditProfileFormSchema.safeParse({...base, website: 'http://anita.example'}).success).toBe(false);
+      expect(chefEditProfileFormSchema.safeParse({...base, instagram: 'instagram.com/anita'}).success).toBe(false);
+      expect(chefEditProfileFormSchema.safeParse({...base, cuisines: Array.from({length: 11}, (_, i) => `C${i}`)}).success).toBe(false);
+      expect(chefEditProfileFormSchema.safeParse({...base, serviceAreas: ['x'.repeat(41)]}).success).toBe(false);
+      expect(chefEditProfileFormSchema.safeParse(base).success).toBe(true);
+    });
+  });
 });

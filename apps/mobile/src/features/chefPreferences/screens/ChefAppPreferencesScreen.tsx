@@ -1,412 +1,221 @@
 import React from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import {StyleSheet, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import type {ChefProfileStackParamList} from '../../../app/navigation/types';
+import {useQueryClient} from '@tanstack/react-query';
+import {spacing} from '../../../design/tokens';
+import {OptionChip} from '../../chefMenu/components/DishFormField';
+import {ChefSwitch} from '../../chefProfile/components/ChefSwitch';
+import {ReadState} from '../../chefProfile/components/ReadState';
+import {useChefRead} from '../../chefProfile/state/useChefRead';
 import {
-  borderWidth,
-  colors,
-  elevation,
-  fontWeight,
-  iconSize,
-  radius,
-  spacing,
-  touchTarget,
-  typography,
-} from '../../../design/tokens';
-import {Icon} from '../../../shared/components/Icon';
-import {ChefHeader} from '../../chefShell/components/ChefHeader';
-import type {ChefPreferenceCapabilityKey} from '../domain/chefPreferencesContract';
+  ChefScreen,
+  ChefSheet,
+  ChefTopBar,
+  ConfirmDialog,
+  ListGroup,
+  ListRow,
+  SectionHeader,
+  StatusChip,
+  useChefToast,
+} from '../../chefShell/components/ui';
 import {
-  CHEF_PREFERENCES_MODAL_CLOSED,
-  closeChefPreferencesUnavailableModal,
-  createChefPreferencesUiBoundary,
-  getChefPreferencesUiItem,
-  openChefPreferencesUnavailableModal,
-  type ChefPreferencesUiItem,
-  type ChefPreferencesUiSection,
-  type ChefPreferencesUnavailableModalState,
-} from '../domain/chefPreferencesUiBoundary';
+  chefKitchenSettingsApi,
+  type ChefKitchenSettings,
+} from '../api/chefKitchenSettingsApi';
+import {
+  isChannelEnabled,
+  notificationPreferencesApi,
+  type NotificationChannel,
+  type NotificationPreference,
+} from '../api/notificationPreferencesApi';
+import {newOrderSoundStorage} from '../storage/newOrderSoundStorage';
 
-type PreferencesNavigation = NativeStackNavigationProp<
-  ChefProfileStackParamList,
-  'ChefAppPreferences'
->;
+export const PREFERENCE_SAVE_FAILED = "We couldn't save that. Please try again.";
+const COOKING_TIMES = [10, 15, 20, 25, 30, 40, 45, 60];
 
-function UnavailablePill() {
-  return (
-    <View accessibilityLabel="Unavailable" style={styles.unavailablePill}>
-      <Text style={styles.unavailablePillText}>Unavailable</Text>
-    </View>
-  );
-}
-
-function DisabledToggle({label}: {label: string}) {
-  return (
-    <View
-      accessibilityLabel={`${label}, current value unavailable`}
-      accessibilityRole="switch"
-      accessibilityState={{disabled: true}}
-      style={styles.disabledToggle}>
-      <View style={styles.disabledToggleThumb} />
-    </View>
-  );
-}
-
-function PreferenceRow({
-  item,
-  last,
-  onExplain,
-}: {
-  item: ChefPreferencesUiItem;
-  last: boolean;
-  onExplain: (capability: ChefPreferenceCapabilityKey) => void;
-}) {
-  return (
-    <Pressable
-      accessibilityHint="Shows why this Chef preference cannot be changed yet"
-      accessibilityLabel={`${item.label}, unavailable`}
-      accessibilityRole="button"
-      onPress={() => onExplain(item.capability)}
-      style={({pressed}) => [
-        styles.preferenceRow,
-        !last && styles.preferenceRowBorder,
-        pressed && styles.pressed,
-      ]}>
-      <View style={styles.preferenceCopy}>
-        <Text style={styles.preferenceLabel}>{item.label}</Text>
-        {item.helperText ? (
-          <Text style={styles.preferenceHelper}>{item.helperText}</Text>
-        ) : null}
-      </View>
-      {item.controlKind === 'toggle' ? (
-        <View style={styles.trailingToggleWrap}>
-          <UnavailablePill />
-          <DisabledToggle label={item.label} />
-        </View>
-      ) : (
-        <View style={styles.trailingRowWrap}>
-          <UnavailablePill />
-          <Icon name="chevron-right" size={iconSize.xs} color={colors.placeholder} />
-        </View>
-      )}
-    </Pressable>
-  );
-}
-
-function PreferenceSection({
-  section,
-  onExplain,
-}: {
-  section: ChefPreferencesUiSection;
-  onExplain: (capability: ChefPreferenceCapabilityKey) => void;
-}) {
-  return (
-    <View style={styles.sectionWrap}>
-      <Text style={styles.sectionTitle}>{section.title}</Text>
-      <View style={styles.sectionCard}>
-        {section.items.map((item, index) => (
-          <PreferenceRow
-            item={item}
-            key={item.capability}
-            last={index === section.items.length - 1}
-            onExplain={onExplain}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
+const comingSoonChip = <StatusChip label="Coming soon" tone="info" />;
 
 export function ChefAppPreferencesScreen() {
-  const navigation = useNavigation<PreferencesNavigation>();
-  const boundary = React.useMemo(createChefPreferencesUiBoundary, []);
-  const [modalState, setModalState] = React.useState<ChefPreferencesUnavailableModalState>(
-    CHEF_PREFERENCES_MODAL_CLOSED,
+  const navigation = useNavigation();
+  const queryClient = useQueryClient();
+  const toast = useChefToast();
+  const prefs = useChefRead('chef-notification-preferences', signal => notificationPreferencesApi.list(signal));
+  const settings = useChefRead('chef-kitchen-settings', signal => chefKitchenSettingsApi.get(signal));
+  const identityId = prefs.identityId;
+
+  // The sound switch is a phone setting: it reads and writes this phone's storage, never the server.
+  const [sound, setSound] = React.useState<boolean | null>(null);
+  React.useEffect(() => {
+    if (identityId) {
+      newOrderSoundStorage.read(identityId).then(setSound, () => setSound(true));
+    }
+  }, [identityId]);
+  const toggleSound = (on: boolean) => {
+    if (!identityId) {
+      return;
+    }
+    setSound(on);
+    newOrderSoundStorage.write(identityId, on).catch(() => {
+      setSound(!on);
+      toast.show(PREFERENCE_SAVE_FAILED);
+    });
+  };
+
+  const saving = React.useRef(false);
+  const [savingKey, setSavingKey] = React.useState<string | null>(null);
+  /** One save at a time; a failed save changes nothing on screen and says so. */
+  const save = async (key: string, run: () => Promise<void>) => {
+    if (saving.current) {
+      return;
+    }
+    saving.current = true;
+    setSavingKey(key);
+    try {
+      await run();
+    } catch {
+      toast.show(PREFERENCE_SAVE_FAILED);
+    } finally {
+      saving.current = false;
+      setSavingKey(null);
+    }
+  };
+
+  const saveChannel = (channel: NotificationChannel, enabled: boolean) =>
+    save(channel, async () => {
+      const saved = await notificationPreferencesApi.set(channel, enabled);
+      queryClient.setQueryData<NotificationPreference[]>(prefs.queryKey, current => [
+        ...(current ?? []).filter(preference => preference.channel !== channel),
+        saved,
+      ]);
+    });
+  const saveSettings = (next: ChefKitchenSettings) =>
+    save('settings', async () => {
+      queryClient.setQueryData<ChefKitchenSettings>(settings.queryKey, await chefKitchenSettingsApi.update(next));
+    });
+
+  const [confirmAuto, setConfirmAuto] = React.useState(false);
+  const [timeSheet, setTimeSheet] = React.useState(false);
+  const current = settings.query.data;
+  const minutes = current?.defaultPrepMinutes ?? null;
+  const times = [...new Set(minutes ? [...COOKING_TIMES, minutes] : COOKING_TIMES)].sort((a, b) => a - b);
+
+  const channelRow = (channel: NotificationChannel, title: string, subtitle?: string) => (
+    <ListRow
+      key={channel}
+      right={
+        <ChefSwitch
+          busy={savingKey === channel}
+          label={title}
+          onChange={enabled => {
+            saveChannel(channel, enabled).catch(() => undefined);
+          }}
+          value={isChannelEnabled(prefs.query.data ?? [], channel)}
+        />
+      }
+      subtitle={subtitle}
+      title={title}
+    />
   );
 
-  const openUnavailable = React.useCallback((capability: ChefPreferenceCapabilityKey) => {
-    setModalState(openChefPreferencesUnavailableModal(capability));
-  }, []);
-
-  const closeUnavailable = React.useCallback(() => {
-    setModalState(closeChefPreferencesUnavailableModal());
-  }, []);
-
-  const activeItem = modalState.visible
-    ? getChefPreferencesUiItem(boundary, modalState.capability)
-    : null;
-
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <ChefHeader title="Preferences" />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <Pressable
-          accessibilityLabel="Back to Chef profile"
-          accessibilityRole="button"
-          hitSlop={spacing.xs}
-          onPress={() => navigation.goBack()}
-          style={({pressed}) => [styles.backButton, pressed && styles.pressed]}>
-          <Icon name="arrow-left" size={iconSize.sm} color={colors.espressoBrown} />
-          <Text style={styles.backText}>Profile</Text>
-        </Pressable>
+    <ChefScreen
+      header={<ChefTopBar onBack={() => navigation.goBack()} showBell={false} title="Preferences" />}
+      withTabBar>
+      <SectionHeader title="Notifications" />
+      <ListGroup>
+        <ListRow
+          right={<ChefSwitch disabled={sound === null} label="New order sound" onChange={toggleSound} value={sound ?? true} />}
+          subtitle="Loud ring until you open the order"
+          title="New order sound"
+        />
+      </ListGroup>
+      <ReadState
+        comingSoon={{title: 'Notification settings are on their way', message: 'You will be able to choose how Craves reaches you here soon.'}}
+        query={prefs.query}>
+        {() => (
+          <ListGroup>
+            {channelRow('PUSH', 'Push notifications')}
+            <ListRow right={comingSoonChip} subtitle="Payouts and account alerts" title="SMS" />
+            {channelRow('EMAIL', 'Email', 'Statements and updates')}
+          </ListGroup>
+        )}
+      </ReadState>
 
-        <View accessibilityRole="alert" style={styles.contractBanner}>
-          <View style={styles.contractIcon}>
-            <Icon name="shield" size={iconSize.lg} color={colors.warning} />
-          </View>
-          <View style={styles.contractCopy}>
-            <Text style={styles.contractTitle}>Preferences are protected for now</Text>
-            <Text style={styles.contractText}>
-              Craves does not yet have an approved Chef preference persistence contract. Controls stay unavailable instead of pretending a change was saved.
-            </Text>
-          </View>
+      <SectionHeader title="Orders" />
+      <ReadState
+        comingSoon={{title: 'Order settings are on their way', message: 'Automatic acceptance and a default cooking time will be here soon.'}}
+        query={settings.query}>
+        {() => (
+          <ListGroup>
+            <ListRow
+              right={
+                <ChefSwitch
+                  busy={savingKey === 'settings'}
+                  label="Accept orders automatically"
+                  onChange={on => {
+                    if (on) {
+                      setConfirmAuto(true);
+                    } else if (current) {
+                      saveSettings({...current, autoAcceptOrders: false}).catch(() => undefined);
+                    }
+                  }}
+                  value={current?.autoAcceptOrders ?? false}
+                />
+              }
+              subtitle="Only while your kitchen is open"
+              title="Accept orders automatically"
+            />
+            <ListRow
+              onPress={() => setTimeSheet(true)}
+              subtitle="Used when a dish has no time set"
+              title="Default cooking time"
+              value={minutes ? `${minutes} min` : 'Not set'}
+            />
+          </ListGroup>
+        )}
+      </ReadState>
+
+      <SectionHeader title="App" />
+      <ListGroup>
+        <ListRow right={comingSoonChip} title="Language" value="English" />
+        <ListRow right={comingSoonChip} title="Theme" value="Same as phone" />
+      </ListGroup>
+
+      <ConfirmDialog
+        cancelLabel="Not now"
+        confirmLabel="Turn on"
+        message="Orders are accepted with your cooking time while your kitchen is open."
+        onCancel={() => setConfirmAuto(false)}
+        onConfirm={() => {
+          setConfirmAuto(false);
+          if (current) {
+            saveSettings({...current, autoAcceptOrders: true}).catch(() => undefined);
+          }
+        }}
+        title="Accept new orders automatically?"
+        visible={confirmAuto}
+      />
+      <ChefSheet onClose={() => setTimeSheet(false)} title="Default cooking time" visible={timeSheet}>
+        <View style={styles.options}>
+          {times.map(value => (
+            <OptionChip
+              key={value}
+              label={`${value} min`}
+              onPress={() => {
+                setTimeSheet(false);
+                if (current) {
+                  saveSettings({...current, defaultPrepMinutes: value}).catch(() => undefined);
+                }
+              }}
+              selected={value === minutes}
+            />
+          ))}
         </View>
-
-        {boundary.sections.map(section => (
-          <PreferenceSection
-            key={section.id}
-            section={section}
-            onExplain={openUnavailable}
-          />
-        ))}
-
-        <Text style={styles.footerNote}>
-          Your current Chef account, order state and local drafts are not changed by this screen.
-        </Text>
-      </ScrollView>
-
-      <Modal
-        animationType="fade"
-        onRequestClose={closeUnavailable}
-        transparent
-        visible={modalState.visible}>
-        <Pressable
-          accessibilityLabel="Close preference details"
-          accessibilityRole="button"
-          onPress={closeUnavailable}
-          style={styles.modalBackdrop}>
-          <Pressable
-            accessibilityRole="none"
-            onPress={event => event.stopPropagation()}
-            style={styles.modalCard}>
-            <View style={styles.modalIcon}>
-              <Icon name="shield" size={iconSize.lg} color={colors.flameRed} />
-            </View>
-            <Text accessibilityRole="header" style={styles.modalTitle}>
-              {activeItem?.label ?? 'Preference unavailable'}
-            </Text>
-            <Text style={styles.modalBody}>
-              {activeItem?.reason ??
-                'This Chef preference cannot be changed until its production contract is available.'}
-            </Text>
-            <Text style={styles.modalFootnote}>
-              No local fallback or placeholder save will be used.
-            </Text>
-            <Pressable
-              accessibilityLabel="Close preference details"
-              accessibilityRole="button"
-              onPress={closeUnavailable}
-              style={({pressed}) => [styles.modalCloseButton, pressed && styles.pressed]}>
-              <Text style={styles.modalCloseText}>Close</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </SafeAreaView>
+      </ChefSheet>
+    </ChefScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {flex: 1, backgroundColor: colors.white},
-  content: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xxl,
-    gap: spacing.md,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    minHeight: touchTarget.minimum,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingRight: spacing.sm,
-  },
-  backText: {
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  contractBanner: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    padding: spacing.md,
-    ...elevation.card,
-  },
-  contractIcon: {
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.warningSoft,
-  },
-  contractCopy: {flex: 1},
-  contractTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  contractText: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  sectionWrap: {gap: spacing.xs},
-  sectionTitle: {
-    marginLeft: spacing.xxs,
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  sectionCard: {
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    overflow: 'hidden',
-  },
-  preferenceRow: {
-    minHeight: 72,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  preferenceRowBorder: {
-    borderBottomWidth: borderWidth.standard,
-    borderBottomColor: colors.border,
-  },
-  preferenceCopy: {flex: 1, minWidth: 0},
-  preferenceLabel: {
-    color: colors.textPrimary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  preferenceHelper: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  trailingRowWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  trailingToggleWrap: {
-    alignItems: 'flex-end',
-    gap: spacing.xs,
-  },
-  unavailablePill: {
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xxs,
-  },
-  unavailablePillText: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.semibold,
-  },
-  disabledToggle: {
-    width: 44,
-    height: 26,
-    borderRadius: radius.pill,
-    justifyContent: 'center',
-    backgroundColor: colors.borderStrong,
-    paddingHorizontal: spacing.xxs,
-    opacity: 0.72,
-  },
-  disabledToggleThumb: {
-    width: 18,
-    height: 18,
-    borderRadius: radius.pill,
-    backgroundColor: colors.white,
-  },
-  footerNote: {
-    paddingHorizontal: spacing.xs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    textAlign: 'center',
-  },
-  modalBackdrop: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.overlay,
-    padding: spacing.lg,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 440,
-    borderRadius: radius.xl,
-    backgroundColor: colors.white,
-    padding: spacing.lg,
-    ...elevation.card,
-  },
-  modalIcon: {
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
-  },
-  modalTitle: {
-    marginTop: spacing.md,
-    color: colors.textPrimary,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  modalBody: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.body,
-  },
-  modalFootnote: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  modalCloseButton: {
-    minHeight: touchTarget.minimum,
-    marginTop: spacing.lg,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.flameRed,
-    paddingHorizontal: spacing.lg,
-  },
-  modalCloseText: {
-    color: colors.white,
-    fontSize: typography.button,
-    fontWeight: fontWeight.bold,
-  },
-  pressed: {opacity: 0.62},
+  options: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, paddingBottom: spacing.sm},
 });

@@ -14,11 +14,24 @@ const requiredText = (label: string, maxLength: number) =>
 const optionalText = (label: string, maxLength: number) =>
   z.string().max(maxLength, `${label} is too long.`);
 
+const tagList = (label: string) =>
+  z
+    .array(z.string().trim().min(1).max(40, `Each ${label} must be 40 characters or fewer.`))
+    .max(10, `Choose up to 10 ${label}s.`)
+    .optional();
+
+const link = (label: string) =>
+  z
+    .string()
+    .trim()
+    .max(200, `${label} link is too long.`)
+    .refine(value => value === '' || /^https:\/\//i.test(value), `${label} link must start with https://`)
+    .optional();
+
 /**
- * P99 intentionally models only fields present in the exact Catalog Service
- * KitchenProfileRequest contract. Photo, cuisine, service-area lookup and social
- * links remain explicit integration boundaries until a concrete backend contract
- * exists; P100 must not invent fields for them.
+ * The kitchen fields of PUT /api/v1/kitchens/me. The cuisines, delivery areas and four links are
+ * optional here because the server sends them only once the new kitchen fields are published:
+ * a kitchen without them is edited, and saved, without them.
  */
 export const chefEditProfileFormSchema = z.object({
   kitchenName: requiredText('Kitchen name', 160),
@@ -33,6 +46,12 @@ export const chefEditProfileFormSchema = z.object({
   city: requiredText('City', 120),
   state: requiredText('State', 120),
   postalCode: optionalText('Postal code', 32),
+  cuisines: tagList('cuisine'),
+  serviceAreas: tagList('delivery area'),
+  instagram: link('Instagram'),
+  facebook: link('Facebook'),
+  youtube: link('YouTube'),
+  website: link('Website'),
 });
 
 export type ChefEditProfileFormValues = z.infer<typeof chefEditProfileFormSchema>;
@@ -49,46 +68,6 @@ export type ChefEditProfileAddressSelection = Partial<
     | 'postalCode'
   >
 >;
-
-export type ChefEditProfileBlockedCapability =
-  | 'PHOTO_UPLOAD'
-  | 'CUISINE_METADATA'
-  | 'SERVICE_AREA_LOOKUP'
-  | 'BUSINESS_VALIDATION'
-  | 'SOCIAL_LINKS';
-
-export interface ChefEditProfileCapabilityBoundary {
-  capability: ChefEditProfileBlockedCapability;
-  reason: string;
-}
-
-export const CHEF_EDIT_PROFILE_BLOCKED_CAPABILITIES: readonly ChefEditProfileCapabilityBoundary[] = [
-  {
-    capability: 'PHOTO_UPLOAD',
-    reason:
-      'No approved Chef profile photo upload/remove route or native picker contract is present in the repository.',
-  },
-  {
-    capability: 'CUISINE_METADATA',
-    reason:
-      'No approved Chef cuisine metadata/read-write contract is present in the current service surface.',
-  },
-  {
-    capability: 'SERVICE_AREA_LOOKUP',
-    reason:
-      'The current kitchen contract exposes address and areaName fields but no Chef service-area lookup/selection API.',
-  },
-  {
-    capability: 'BUSINESS_VALIDATION',
-    reason:
-      'The current Catalog Service exposes the kitchen GET/PUT contract but no separate Chef business-validation capability.',
-  },
-  {
-    capability: 'SOCIAL_LINKS',
-    reason:
-      'Social-link fields are not part of the exact KitchenProfileRequest contract.',
-  },
-] as const;
 
 function valueOrEmpty(value: string | null): string {
   return value ?? '';
@@ -115,6 +94,16 @@ export function chefKitchenProfileToFormValues(
     city: profile.city,
     state: profile.state,
     postalCode: valueOrEmpty(profile.postalCode),
+    ...(profile.cuisines ? {cuisines: profile.cuisines} : {}),
+    ...(profile.serviceAreas ? {serviceAreas: profile.serviceAreas} : {}),
+    ...(profile.socialLinks
+      ? {
+          instagram: valueOrEmpty(profile.socialLinks.instagram),
+          facebook: valueOrEmpty(profile.socialLinks.facebook),
+          youtube: valueOrEmpty(profile.socialLinks.youtube),
+          website: valueOrEmpty(profile.socialLinks.website),
+        }
+      : {}),
   };
 }
 
@@ -157,6 +146,19 @@ export function buildChefKitchenProfileReplacementRequest(
     latitude: existing.latitude,
     longitude: existing.longitude,
     status: existing.status,
+    // Only what the server sent is sent back. The links go as a set of four: the server replaces all of them.
+    ...(parsed.cuisines ? {cuisines: parsed.cuisines} : {}),
+    ...(parsed.serviceAreas ? {serviceAreas: parsed.serviceAreas} : {}),
+    ...(parsed.instagram !== undefined
+      ? {
+          socialLinks: {
+            instagram: nullableTrimmed(parsed.instagram),
+            facebook: nullableTrimmed(parsed.facebook ?? ''),
+            youtube: nullableTrimmed(parsed.youtube ?? ''),
+            website: nullableTrimmed(parsed.website ?? ''),
+          },
+        }
+      : {}),
   };
 }
 

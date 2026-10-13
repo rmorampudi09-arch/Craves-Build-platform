@@ -67,7 +67,9 @@ export type IconName =
   | 'upload'
   | 'more'
   | 'camera-plus'
-  | 'copy';
+  | 'copy'
+  | 'send'
+  | 'refresh';
 
 interface Props {
   name: IconName;
@@ -142,6 +144,8 @@ const GLYPHS: Record<IconName, string> = {
   more: 'dots-vertical',
   'camera-plus': 'camera-plus-outline',
   copy: 'content-copy',
+  send: 'send',
+  refresh: 'refresh',
 };
 
 export function Icon({

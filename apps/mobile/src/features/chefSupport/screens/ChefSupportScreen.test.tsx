@@ -98,10 +98,11 @@ describe('ChefSupportScreen', () => {
     expect(openUrl).toHaveBeenCalledWith('tel:+918012345678');
   });
 
-  it('opens a new chat, a chat with a topic, and an existing ticket', async () => {
+  it('opens the Craves assistant chat, a ticket chat with a topic, and an existing ticket', async () => {
     await mount();
     await ui.press('Chat with us');
-    expect(mockNavigate).toHaveBeenLastCalledWith('ChefSupportTicket', {});
+    expect(mockNavigate).toHaveBeenLastCalledWith('ChefSupportChat');
+    expect(mockNavigate).not.toHaveBeenCalledWith('ChefSupportTicket', {});
     await ui.press('Payout not received');
     expect(mockNavigate).toHaveBeenLastCalledWith('ChefSupportTicket', {topic: 'Payout not received'});
     await ui.press('#01042 · Payout not received');

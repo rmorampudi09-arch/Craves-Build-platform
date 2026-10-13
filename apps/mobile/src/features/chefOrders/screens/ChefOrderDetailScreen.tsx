@@ -493,7 +493,7 @@ export function ChefOrderDetailScreen({navigation, route}: Props) {
         <ChefActionButton
           icon="headset"
           label="Problem with this order?"
-          onPress={() => navigation.navigate('ChefSupportTicket', {orderId: order.id})}
+          onPress={() => navigation.navigate('ChefSupportChat', {orderId: order.id})}
           tone="neutral"
         />
       ) : null}

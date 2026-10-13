@@ -60,7 +60,7 @@ export function ChefSupportScreen() {
           <ChefActionButton
             icon="headset"
             label="Chat with us"
-            onPress={() => navigation.navigate('ChefSupportTicket', {})}
+            onPress={() => navigation.navigate('ChefSupportChat')}
             style={styles.button}
             tone="success"
           />

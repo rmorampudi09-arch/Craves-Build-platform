@@ -4,7 +4,7 @@ import {
 } from './customerSupportCapabilityModel';
 
 describe('customerSupportCapabilityModel', () => {
-  it('keeps every P76 server-owned support capability explicitly unavailable', () => {
+  it('keeps every P76 server-owned support capability except chat explicitly unavailable', () => {
     expect(CUSTOMER_SUPPORT_CAPABILITIES).toEqual([
       'supportConfiguration',
       'helpContent',
@@ -14,7 +14,9 @@ describe('customerSupportCapabilityModel', () => {
     ]);
 
     CUSTOMER_SUPPORT_CAPABILITIES.forEach(capability => {
-      expect(customerSupportIntegrationBoundary[capability].status).toBe('unavailable');
+      expect(customerSupportIntegrationBoundary[capability].status).toBe(
+        capability === 'chatSession' ? 'available' : 'unavailable',
+      );
     });
   });
 
@@ -27,9 +29,6 @@ describe('customerSupportCapabilityModel', () => {
     );
     expect(customerSupportIntegrationBoundary.supportAvailability.blocker).toBe(
       'CUSTOMER_SUPPORT_AVAILABILITY_CONTRACT_UNAVAILABLE',
-    );
-    expect(customerSupportIntegrationBoundary.chatSession.blocker).toBe(
-      'CUSTOMER_SUPPORT_CHAT_CONTRACT_UNAVAILABLE',
     );
     expect(customerSupportIntegrationBoundary.supportTicket.blocker).toBe(
       'CUSTOMER_SUPPORT_TICKET_CONTRACT_UNAVAILABLE',

@@ -63,6 +63,15 @@ jest.mock('../../features/chefSubscription/screens/ChefDailyLimitsScreen', () =>
 jest.mock('../../features/chefSupport/screens/ChefSupportScreen', () => mockScreenModule('ChefSupportScreen'));
 jest.mock('../../features/chefSupport/screens/ChefSupportTicketScreen', () => mockScreenModule('ChefSupportTicketScreen'));
 jest.mock('../../features/reviews/screens/ChefReviewsScreen', () => mockScreenModule('ChefReviewsScreen'));
+jest.mock('../../features/supportChat/screens/SupportChatRouteScreens', () => {
+  const ReactActual = require('react');
+  const {Text: MockText} = require('react-native');
+  const {useRoute} = require('@react-navigation/native');
+  return {
+    ChefSupportChatRouteScreen: () =>
+      ReactActual.createElement(MockText, null, `SCREEN:ChefSupportChat:${useRoute().params?.orderId ?? 'no order'}`),
+  };
+});
 jest.mock('../../features/chefShell/screens/ChefNotificationsScreen', () => mockScreenModule('ChefNotificationsScreen'));
 
 const navigationRef = createNavigationContainerRef<never>();
@@ -188,6 +197,16 @@ describe('ChefRootNavigator', () => {
     expect(allText()).toContain('SCREEN:ChefDailyLimitsScreen');
     navigate('ChefSupportTicket', {topic: 'payout'});
     expect(allText()).toContain('SCREEN:ChefSupportTicketScreen');
+  });
+
+  it('opens the support chat from Help & support, and from an order page with that order', () => {
+    navigate('ChefSupportChat');
+    expect(allText()).toContain('SCREEN:ChefSupportChat:no order');
+    act(() => navigationRef.goBack());
+    navigate('ChefSupportChat', {orderId: 'order-1'});
+    expect(allText()).toContain('SCREEN:ChefSupportChat:order-1');
+    act(() => navigationRef.goBack());
+    expect(allText()).toContain('SCREEN:ChefDashboardScreen');
   });
 
   it('opens the notifications screen from the bell', () => {

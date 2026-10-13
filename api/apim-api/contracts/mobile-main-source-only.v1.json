@@ -680,6 +680,19 @@
       "responseValidator": "parsePreference",
       "availabilityFlag": "NOTIFICATION_PREFERENCES_AVAILABLE",
       "reason": "Route is added for the chef redesign (docs/superpowers/specs/2026-10-13-chef-app-api-additions.md) and is not published for mobile yet; screens show Coming soon when the gateway answers not published."
+    },
+    {
+      "id": "supportChat.send",
+      "source": "src/features/supportChat/api/supportChatApi.ts",
+      "method": "POST",
+      "path": "/api/v1/support/chat",
+      "auth": "bearer",
+      "requestModel": "SupportChatRequest {contextRole, channel: APP, orderId?, messages[1..20]}",
+      "responseModel": "SupportChatResponse {reply, supportCase: {id, caseNumber} | null}",
+      "requestValidator": "requestSchema",
+      "responseValidator": "responseSchema",
+      "availabilityFlag": "SUPPORT_CHAT_AVAILABLE",
+      "reason": "Route is live on current main (answers 401 when signed out) but has no mobile APIM manifest entry yet; the chat shows the Call or Email fallback when the gateway answers not published."
     }
   ],
   "quarantined": []

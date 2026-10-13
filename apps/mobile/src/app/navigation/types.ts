@@ -123,6 +123,8 @@ export type CustomerProfileStackParamList = {
   CustomerFavorites: undefined;
   CustomerNotifications: undefined;
   CustomerSettings: undefined;
+  /** `orderId`: opened from an order ("Help"), so the assistant knows which order. */
+  CustomerSupportChat: {orderId?: string} | undefined;
 } & CustomerSettingsChildStackParamList &
   CustomerDishDetailStackParamList &
   CustomerOrderDetailStackParamList &
@@ -211,6 +213,8 @@ export type ChefProductStackParamList = {
   ChefNotifications: undefined;
   ChefDailyLimits: {planId?: string};
   ChefSupportTicket: {caseId?: string; orderId?: string; topic?: string};
+  /** `orderId`: opened from an order page ("Problem with this order?"). */
+  ChefSupportChat: {orderId?: string} | undefined;
 };
 
 export type ChefTabRouteName = keyof ChefTabParamList;

@@ -124,7 +124,7 @@ function publicHttpMessage(status: number, backendMessage?: string): string {
     return backendMessage ?? 'Some information could not be accepted.';
   }
   if (status === 429) {
-    return 'Too many requests. Please wait a moment and try again.';
+    return backendMessage ?? 'Too many requests. Please wait a moment and try again.';
   }
   if (status >= 500) {
     return 'Craves is temporarily unavailable. Please try again.';

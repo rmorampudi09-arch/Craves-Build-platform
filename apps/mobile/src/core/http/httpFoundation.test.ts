@@ -141,6 +141,25 @@ describe('typed HTTP client foundation', () => {
     expect(failure(503, '7').retryAfterSeconds).toBeUndefined();
   });
 
+  it('keeps the plain message the backend sends with a 429, and falls back when it sends none', () => {
+    const config = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
+    const failure = (data: unknown) =>
+      toAppApiError(
+        new AxiosError('failed', 'ERR_BAD_REQUEST', config, undefined, {
+          data,
+          status: 429,
+          statusText: '',
+          headers: new AxiosHeaders({'Retry-After': '30'}),
+          config,
+        }),
+      );
+
+    expect(
+      failure({code: 'SUPPORT_CHAT_RATE_LIMITED', message: 'Too many messages. Please wait a moment.'}).message,
+    ).toBe('Too many messages. Please wait a moment.');
+    expect(failure(undefined).message).toBe('Too many requests. Please wait a moment and try again.');
+  });
+
   it('normalizes cancellation without making it retriable', () => {
     const config = {
       headers: new AxiosHeaders({'X-Correlation-ID': 'cancel-corr'}),

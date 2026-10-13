@@ -34,6 +34,7 @@ import {ChefMealPlanEditorScreen} from '../../features/chefSubscription/screens/
 import {ChefDailyLimitsScreen} from '../../features/chefSubscription/screens/ChefDailyLimitsScreen';
 import {ChefSupportScreen} from '../../features/chefSupport/screens/ChefSupportScreen';
 import {ChefSupportTicketScreen} from '../../features/chefSupport/screens/ChefSupportTicketScreen';
+import {ChefSupportChatRouteScreen} from '../../features/supportChat/screens/SupportChatRouteScreens';
 import {ChefReviewsScreen} from '../../features/reviews/screens/ChefReviewsScreen';
 import {ChefMenuTabScreen} from './ChefMenuTabScreen';
 import {ChefScheduledOrdersRedirect} from './ChefScheduledOrdersRedirect';
@@ -197,6 +198,7 @@ function ChefProductNavigator() {
         <Stack.Screen name="ChefNotifications" component={ChefNotificationsScreen} />
         <Stack.Screen name="ChefDailyLimits" component={ChefDailyLimitsScreen} />
         <Stack.Screen name="ChefSupportTicket" component={ChefSupportTicketScreen} />
+        <Stack.Screen name="ChefSupportChat" component={ChefSupportChatRouteScreen} />
       </Stack.Navigator>
     </ChefOperationalProvider>
   );

@@ -39,6 +39,7 @@ import {
 } from '../../features/customerSettings/screens/CustomerSettingsChildScreens';
 import {CustomerSettingsRouteScreen} from '../../features/customerSettings/screens/CustomerSettingsRouteScreen';
 import {CustomerHelpSupportRouteScreen} from '../../features/customerSupport/screens/CustomerHelpSupportRouteScreen';
+import {CustomerSupportChatRouteScreen} from '../../features/supportChat/screens/SupportChatRouteScreens';
 import {CustomerDishDetailScreen} from '../../features/dishDetail/screens/CustomerDishDetailScreen';
 import {CustomerDishIngredientsScreen} from '../../features/dishDetail/screens/CustomerDishIngredientsScreen';
 import {CustomerFilterSortScreen} from '../../features/discoveryFilters/screens/CustomerFilterSortScreen';
@@ -469,6 +470,7 @@ function CustomerProfileStackNavigator() {
       <ProfileStack.Screen name="CustomerSettingsSupport" component={CustomerHelpSupportRouteScreen} />
       <ProfileStack.Screen name="CustomerSettingsSubscription" component={CustomerSettingsSubscriptionScreen} />
       <ProfileStack.Screen name="CustomerSettingsLegal" component={CustomerSettingsLegalScreen} />
+      <ProfileStack.Screen name="CustomerSupportChat" component={CustomerSupportChatRouteScreen} />
       <ProfileStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
       <ProfileStack.Screen name="CustomerOrderReview" component={CustomerOrderReviewScreen} />
       <ProfileStack.Screen name="CustomerOrderTracking" component={CustomerOrderTrackingScreen} />

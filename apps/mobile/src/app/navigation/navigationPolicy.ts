@@ -80,6 +80,7 @@ const CURRENT_IMMERSIVE_ROUTES: ReadonlySet<RegisteredRouteName> = new Set([
   'CustomerSettingsSupport',
   'CustomerSettingsSubscription',
   'CustomerSettingsLegal',
+  'CustomerSupportChat',
 ]);
 
 const IMMERSIVE_POLICY: RouteChromePolicy = {

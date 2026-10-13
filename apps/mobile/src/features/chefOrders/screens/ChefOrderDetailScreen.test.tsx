@@ -462,7 +462,8 @@ describe('Order page: finished orders', () => {
     expect(buttons('Handed over')).toHaveLength(0);
     expect(hasText('Customer')).toBe(false);
     await press('Problem with this order?');
-    expect(mockNavigate).toHaveBeenCalledWith('ChefSupportTicket', {orderId: ORDER_ID});
+    expect(mockNavigate).toHaveBeenCalledWith('ChefSupportChat', {orderId: ORDER_ID});
+    expect(mockNavigate).not.toHaveBeenCalledWith('ChefSupportTicket', expect.anything());
   });
 
   it('also offers it for a rejected order', async () => {

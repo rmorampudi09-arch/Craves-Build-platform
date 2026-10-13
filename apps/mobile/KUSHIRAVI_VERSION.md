@@ -19,6 +19,15 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.31.1 - Ask Craves support chat for chefs and customers, 2026-10-13
+
+- Chef Help & support "Chat with us" and the order page "Problem with this order?" open the Ask
+  Craves chat (POST /api/v1/support/chat, channel APP, live on api.craves.in). When the assistant
+  opens a ticket the chat shows "Ticket #... created" and opens it. Customers get the same chat from
+  Help & support and the order page. Ported from main #468/#469/#471, restyled for the chef kit.
+- Chat limits: the per-minute limit waits out Retry-After; the daily limit keeps Send off for the
+  visit. Sign-in and other screens keep their generic "too many requests" copy.
+
 ### Version 1.31.0 - Chef app redesign: Home, Orders, Menu, Meal plans, Earnings, Profile, 2026-10-13
 
 - Whole chef side rebuilt on one white design kit (white screens, white cards, no grey pages). The

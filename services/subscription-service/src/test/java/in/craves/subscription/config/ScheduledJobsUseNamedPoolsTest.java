@@ -10,11 +10,11 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.AnnotatedBeanDefinition;
-import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.core.type.classreading.CachingMetadataReaderFactory;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.annotation.Scheduled;
 
@@ -43,18 +43,14 @@ class ScheduledJobsUseNamedPoolsTest {
             assertThat(scheduler).as("%s must name a declared scheduler pool", job).isIn(pools));
     }
 
-    static List<Class<?>> classesUnder(String basePackage) throws ClassNotFoundException {
-        ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false) {
-            @Override
-            protected boolean isCandidateComponent(AnnotatedBeanDefinition beanDefinition) {
-                return true;
-            }
-        };
-        scanner.addIncludeFilter((reader, factory) -> true);
+    // Reads the class files directly: a component scan applies @ConditionalOnProperty and would hide those classes' pools and routes.
+    static List<Class<?>> classesUnder(String basePackage) throws Exception {
+        PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+        CachingMetadataReaderFactory readers = new CachingMetadataReaderFactory(resolver);
         List<Class<?>> classes = new ArrayList<>();
         ClassLoader loader = ScheduledJobsUseNamedPoolsTest.class.getClassLoader();
-        for (BeanDefinition definition : scanner.findCandidateComponents(basePackage)) {
-            classes.add(Class.forName(definition.getBeanClassName(), false, loader));
+        for (Resource resource : resolver.getResources("classpath*:" + basePackage.replace('.', '/') + "/**/*.class")) {
+            classes.add(Class.forName(readers.getMetadataReader(resource).getClassMetadata().getClassName(), false, loader));
         }
         return classes;
     }

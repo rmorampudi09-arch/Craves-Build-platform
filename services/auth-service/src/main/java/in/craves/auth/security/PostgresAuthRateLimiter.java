@@ -24,7 +24,7 @@ public class PostgresAuthRateLimiter {
     }
     public boolean allowGlobal(String operation) {
         checkOperation(operation);
-        int limit="exchange".equals(operation)?settings.globalExchangeLimit():settings.globalRefreshLimit();
+        int limit="refresh".equals(operation)?settings.globalRefreshLimit():settings.globalExchangeLimit();
         long count=increment("global:"+operation,limit);
         if(count>limit) return false;
         // Bounded indexed cleanup. Repeated admitted batches prevent attacker-controlled cardinality growth.
@@ -53,6 +53,6 @@ public class PostgresAuthRateLimiter {
         return count;
     }
     private static void checkOperation(String operation) {
-        if(!"exchange".equals(operation)&&!"refresh".equals(operation)) throw new IllegalArgumentException("Unknown Auth operation");
+        if(!"exchange".equals(operation)&&!"refresh".equals(operation)&&!"msg91".equals(operation)) throw new IllegalArgumentException("Unknown Auth operation");
     }
 }

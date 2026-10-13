@@ -27,6 +27,7 @@ public final class AuthProtectedOperation {
         }
         return switch(path) {
             case "/api/v1/auth/firebase/exchange" -> "exchange";
+            case "/api/v1/auth/msg91/verify" -> "msg91";
             case "/api/v1/auth/refresh" -> "refresh";
             default -> null;
         };

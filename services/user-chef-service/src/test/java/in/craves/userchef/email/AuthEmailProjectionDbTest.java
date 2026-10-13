@@ -55,7 +55,7 @@ class AuthEmailProjectionDbTest {
         flyway(null).validate();assertEquals(0,flyway(null).migrate().migrationsExecuted);
         resetPublicExplorerFixture(jdbc);
         jdbc.execute("DROP SCHEMA email_userchef_test CASCADE");jdbc.execute("CREATE SCHEMA email_userchef_test");assertEquals(10,flyway("10").migrate().migrationsExecuted);
-        UUID id=UUID.randomUUID();insertProfile(id,"legacy-unverified@example.test");assertEquals(9,flyway(null).migrate().migrationsExecuted);flyway(null).validate();
+        UUID id=UUID.randomUUID();insertProfile(id,"legacy-unverified@example.test");assertEquals(10,flyway(null).migrate().migrationsExecuted);flyway(null).validate();
         assertEquals(0,flyway(null).migrate().migrationsExecuted);assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM auth_email_projection",Integer.class));
         assertEquals("legacy-unverified@example.test",profiles.getProfile(user(id)).email());
         // V11, V11.1, V12, V13 and the additive V14, V15, V16, V17 and V18 must upgrade and replay safely.
@@ -118,7 +118,7 @@ class AuthEmailProjectionDbTest {
         var old = tx.execute(ignored -> profiles.addAddress(owner, address("OTHER", false)));
         // Isolate the address-label migration, then verify the new onboarding migration preserves the same rows.
         assertEquals(1, flyway("13").migrate().migrationsExecuted);
-        assertEquals(5, flyway(null).migrate().migrationsExecuted);
+        assertEquals(6, flyway(null).migrate().migrationsExecuted);
         flyway(null).validate();
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertEquals(home, profiles.getAddress(owner, home.id()));

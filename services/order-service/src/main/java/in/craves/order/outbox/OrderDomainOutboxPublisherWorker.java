@@ -16,11 +16,13 @@ import org.springframework.stereotype.Component;
 public class OrderDomainOutboxPublisherWorker {
     private static final Logger LOGGER = LoggerFactory.getLogger(OrderDomainOutboxPublisherWorker.class);
     private static final long MAX_RETRY_DELAY_SECONDS = 3600;
+    private static final long BLOCKED_TYPE_CHECK_INTERVAL_SECONDS = 60;
 
     private final OrderDomainOutboxRepository repository;
     private final ObjectProvider<DomainEventTransport> transportProvider;
     private final DomainEventOutboxProperties outboxProperties;
     private final ServiceBusDomainEventProperties serviceBusProperties;
+    private volatile Instant nextBlockedTypeCheck = Instant.EPOCH;
 
     public OrderDomainOutboxPublisherWorker(
         OrderDomainOutboxRepository repository,
@@ -49,6 +51,12 @@ public class OrderDomainOutboxPublisherWorker {
             return;
         }
 
+        reapAndReport(
+            positive(outboxProperties.getMaxAttempts(), 10),
+            positive(outboxProperties.getStaleLockSeconds(), 300),
+            List.copyOf(enabledEventTypes)
+        );
+
         DomainEventTransport transport = transportProvider.getIfAvailable();
         if (transport == null) {
             LOGGER.error("Domain event outbox is enabled but no transport is available");
@@ -66,6 +74,47 @@ public class OrderDomainOutboxPublisherWorker {
 
         for (OrderDomainOutboxRecord record : records) {
             publishOne(transport, record, lockToken);
+        }
+    }
+
+    /**
+     * CH-02: rows that can never be published again are dead-lettered, and rows held back by the allow-list
+     * are reported, so nothing sits in the outbox silently. Housekeeping never stops publication.
+     */
+    void reapAndReport(int maxAttempts, int staleLockSeconds, List<String> enabledEventTypes) {
+        try {
+            int exhausted = repository.deadLetterExhausted(maxAttempts, staleLockSeconds);
+            if (exhausted > 0) {
+                LOGGER.error(
+                    "CRAVES_ALERT alert=OUTBOX_DEAD_LETTERED outbox=order_domain_event reason=attempts_exhausted count={}",
+                    exhausted
+                );
+            }
+            Instant now = Instant.now();
+            if (now.isBefore(nextBlockedTypeCheck)) {
+                return;
+            }
+            nextBlockedTypeCheck = now.plusSeconds(BLOCKED_TYPE_CHECK_INTERVAL_SECONDS);
+            int graceSeconds = Math.max(0, outboxProperties.getBlockedTypeGraceSeconds());
+            if (outboxProperties.isDeadLetterBlockedTypes()) {
+                int blocked = repository.deadLetterBlockedEventTypes(enabledEventTypes, graceSeconds);
+                if (blocked > 0) {
+                    LOGGER.error(
+                        "CRAVES_ALERT alert=OUTBOX_DEAD_LETTERED outbox=order_domain_event reason=event_type_not_enabled count={}",
+                        blocked
+                    );
+                }
+                return;
+            }
+            repository.blockedEventTypeBacklog(enabledEventTypes, graceSeconds).forEach((eventType, count) ->
+                LOGGER.error(
+                    "CRAVES_ALERT alert=OUTBOX_BLOCKED_EVENT_TYPE outbox=order_domain_event eventType={} count={}",
+                    eventType,
+                    count
+                )
+            );
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Domain event outbox housekeeping failed; publication continues", exception);
         }
     }
 

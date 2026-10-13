@@ -58,6 +58,7 @@ public class DeliveryOutboxRepository {
                    OR (
                         status = 'PROCESSING'
                         AND processing_started_at < now() - interval '10 minutes'
+                        AND attempt_count < 10
                       )
                 ORDER BY created_at
                 FOR UPDATE SKIP LOCKED
@@ -84,7 +85,22 @@ public class DeliveryOutboxRepository {
                 last_error = NULL,
                 updated_at = now()
             WHERE id = ?
+              AND status = 'PROCESSING'
             """, id);
+    }
+
+    /** CH-02: a lease that expired on the final attempt (the pod died mid-publish) can never be claimed again. */
+    public int deadLetterExpired() {
+        return jdbc.update("""
+            UPDATE delivery_schema.delivery_outbox
+            SET status = 'DEAD_LETTER',
+                processing_started_at = NULL,
+                last_error = COALESCE(last_error, 'Publication attempts exhausted; the last lease expired'),
+                updated_at = now()
+            WHERE status = 'PROCESSING'
+              AND processing_started_at < now() - interval '10 minutes'
+              AND attempt_count >= 10
+            """);
     }
 
     public void markFailed(UUID id, int attemptCount, String safeError) {
@@ -97,6 +113,7 @@ public class DeliveryOutboxRepository {
                 last_error = ?,
                 updated_at = now()
             WHERE id = ?
+              AND status = 'PROCESSING'
             """,
             Instant.now().plusSeconds(delaySeconds),
             truncate(safeError, 2000),

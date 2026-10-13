@@ -36,6 +36,16 @@ public class SubscriptionOrderCallbackWorker {
         fixedDelayString = "${craves.subscription-orders.callback-fixed-delay-ms:5000}"
     )
     public void deliver() {
+        int deadLettered = repository.deadLetterExhaustedCallbacks(
+            properties.getCallbackMaxAttempts(),
+            properties.getCallbackStaleMinutes()
+        );
+        if (deadLettered > 0) {
+            LOGGER.error(
+                "CRAVES_ALERT alert=OUTBOX_DEAD_LETTERED outbox=subscription_order_callback reason=attempts_exhausted count={}",
+                deadLettered
+            );
+        }
         for (CallbackRecord callback : repository.claimCallbacks(
             properties.getCallbackBatchSize(),
             properties.getCallbackMaxAttempts(),

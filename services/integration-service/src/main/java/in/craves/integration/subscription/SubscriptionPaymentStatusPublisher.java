@@ -42,6 +42,10 @@ public class SubscriptionPaymentStatusPublisher {
 
     @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.PAYMENT_SCHEDULER, fixedDelayString = "${craves.subscription-payments.outbox-fixed-delay-ms:5000}")
     public void publish() {
+        int deadLettered = repository.deadLetterExpiredOutbox(properties.getMaxPublishAttempts(), properties.getStaleLockMinutes());
+        if (deadLettered > 0) {
+            LOGGER.error("CRAVES_ALERT alert=OUTBOX_DEAD_LETTERED outbox=subscription_payment_status reason=attempts_exhausted count={}", deadLettered);
+        }
         for (OutboxRecord record : repository.claimOutbox(
             properties.getOutboxBatchSize(),
             properties.getMaxPublishAttempts(),

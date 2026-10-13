@@ -14,6 +14,26 @@ public class DomainEventOutboxProperties {
     private int retryBaseDelaySeconds = 5;
     private int staleLockSeconds = 300;
     private Set<String> enabledEventTypes = new LinkedHashSet<>(Set.of("CHEF_ACCEPTED_ORDER"));
+    // Rows of a type that is not on the allow-list alert after this many seconds.
+    private int blockedTypeGraceSeconds = 300;
+    // Off by default: blocked rows (for example REFUND_REQUESTED before it is enabled) keep waiting to be published.
+    private boolean deadLetterBlockedTypes = false;
+
+    public int getBlockedTypeGraceSeconds() {
+        return blockedTypeGraceSeconds;
+    }
+
+    public void setBlockedTypeGraceSeconds(int blockedTypeGraceSeconds) {
+        this.blockedTypeGraceSeconds = blockedTypeGraceSeconds;
+    }
+
+    public boolean isDeadLetterBlockedTypes() {
+        return deadLetterBlockedTypes;
+    }
+
+    public void setDeadLetterBlockedTypes(boolean deadLetterBlockedTypes) {
+        this.deadLetterBlockedTypes = deadLetterBlockedTypes;
+    }
 
     public boolean isEnabled() {
         return enabled;

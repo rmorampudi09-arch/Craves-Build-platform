@@ -102,6 +102,8 @@ craves:
       max-attempts: ${CRAVES_DOMAIN_EVENT_OUTBOX_MAX_ATTEMPTS:10}
       retry-base-delay-seconds: ${CRAVES_DOMAIN_EVENT_OUTBOX_RETRY_BASE_DELAY_SECONDS:5}
       stale-lock-seconds: ${CRAVES_DOMAIN_EVENT_OUTBOX_STALE_LOCK_SECONDS:300}
+      blocked-type-grace-seconds: ${CRAVES_DOMAIN_EVENT_OUTBOX_BLOCKED_TYPE_GRACE_SECONDS:300}
+      dead-letter-blocked-types: ${CRAVES_DOMAIN_EVENT_OUTBOX_DEAD_LETTER_BLOCKED_TYPES:false}
     service-bus:
       enabled: ${CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED:false}
       fully-qualified-namespace: ${CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}

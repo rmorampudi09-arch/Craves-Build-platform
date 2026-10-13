@@ -19,6 +19,7 @@ import {ChefOrdersScreen} from '../../features/chefOrders/screens/ChefOrdersScre
 import {ChefEarningsScreen} from '../../features/chefPayout/screens/ChefEarningsScreen';
 import {ChefPayoutHistoryScreen} from '../../features/chefPayout/screens/ChefPayoutHistoryScreen';
 import {ChefAppPreferencesScreen} from '../../features/chefPreferences/screens/ChefAppPreferencesScreen';
+import {ChefAvatarGate} from '../../features/chefProfile/components/ChefAvatarGate';
 import {ChefEditProfileScreen} from '../../features/chefProfile/screens/ChefEditProfileScreen';
 import {ChefReferralEarningsScreen} from '../../features/chefReferrals/screens/ChefReferralEarningsScreen';
 import {ChefReferralScreen} from '../../features/chefReferrals/screens/ChefReferralScreen';
@@ -262,7 +263,9 @@ export function ChefRootNavigator() {
 
   return (
     <ChefToastProvider>
-      <ChefProductNavigator />
+      <ChefAvatarGate>
+        <ChefProductNavigator />
+      </ChefAvatarGate>
     </ChefToastProvider>
   );
 }

@@ -93,4 +93,20 @@ describe('ChefEditProfileDraftProvider reducer', () => {
     expect(committed.originalProfile?.displayName).toBe('Saved Chef Name');
     expect(committed.formDraft?.displayName).toBe('Saved Chef Name');
   });
+
+  it('counts a changed cuisine, area or link as an unsaved change, and no change as clean', () => {
+    const withExtras: ChefKitchenProfile = {
+      ...PROFILE,
+      cuisines: ['Andhra'],
+      serviceAreas: ['KPHB'],
+      socialLinks: {instagram: null, facebook: null, youtube: null, website: null},
+    };
+    const begun = reduceChefEditProfileDraft(EMPTY, {type: 'BEGIN', profile: withExtras});
+    const values = chefKitchenProfileToFormValues(withExtras);
+
+    expect(reduceChefEditProfileDraft(begun, {type: 'REPLACE_DRAFT', values: {...values}}).dirtyState).toBe(false);
+    expect(reduceChefEditProfileDraft(begun, {type: 'REPLACE_DRAFT', values: {...values, cuisines: ['Andhra', 'Biryani']}}).dirtyState).toBe(true);
+    expect(reduceChefEditProfileDraft(begun, {type: 'REPLACE_DRAFT', values: {...values, serviceAreas: []}}).dirtyState).toBe(true);
+    expect(reduceChefEditProfileDraft(begun, {type: 'REPLACE_DRAFT', values: {...values, website: 'https://anita.example'}}).dirtyState).toBe(true);
+  });
 });

@@ -54,12 +54,15 @@ jest.mock('../../features/chefPayout/screens/ChefEarningsScreen', () => {
 jest.mock('../../features/chefPreferences/screens/ChefAppPreferencesScreen', () => mockScreenModule('ChefAppPreferencesScreen'));
 jest.mock('../../features/chefProfile/screens/ChefEditProfileScreen', () => mockScreenModule('ChefEditProfileScreen'));
 jest.mock('../../features/chefProfile/screens/ChefProfileScreen', () => mockScreenModule('ChefProfileScreen'));
+jest.mock('../../features/chefProfile/screens/ChefSecurityScreen', () => mockScreenModule('ChefSecurityScreen'));
 jest.mock('../../features/chefReferrals/screens/ChefReferralEarningsScreen', () => mockScreenModule('ChefReferralEarningsScreen'));
 jest.mock('../../features/chefReferrals/screens/ChefReferralScreen', () => mockScreenModule('ChefReferralScreen'));
 jest.mock('../../features/chefSchedule/screens/ChefKitchenScheduleScreen', () => mockScreenModule('ChefKitchenScheduleScreen'));
 jest.mock('../../features/chefSubscription/screens/ChefMealPlanEditorScreen', () => mockScreenModule('ChefMealPlanEditorScreen'));
 jest.mock('../../features/chefSubscription/screens/ChefDailyLimitsScreen', () => mockScreenModule('ChefDailyLimitsScreen'));
 jest.mock('../../features/chefSupport/screens/ChefSupportScreen', () => mockScreenModule('ChefSupportScreen'));
+jest.mock('../../features/chefSupport/screens/ChefSupportTicketScreen', () => mockScreenModule('ChefSupportTicketScreen'));
+jest.mock('../../features/reviews/screens/ChefReviewsScreen', () => mockScreenModule('ChefReviewsScreen'));
 jest.mock('../../features/chefShell/screens/ChefNotificationsScreen', () => mockScreenModule('ChefNotificationsScreen'));
 
 const navigationRef = createNavigationContainerRef<never>();
@@ -130,12 +133,12 @@ describe('ChefRootNavigator', () => {
   it('reaches every new route without a crash', () => {
     navigate('ChefTabs', {screen: 'Orders', params: {screen: 'ChefOrdersScheduled'}});
     expect(allText()).toContain('SCREEN:ChefOrdersScreen');
-    for (const [route, title] of [
-      ['ChefReviews', 'Reviews'],
-      ['ChefSecurity', 'Security'],
+    for (const [route, text] of [
+      ['ChefReviews', 'SCREEN:ChefReviewsScreen'],
+      ['ChefSecurity', 'SCREEN:ChefSecurityScreen'],
     ]) {
       navigate('ChefTabs', {screen: 'Profile', params: {screen: route}});
-      expect(allText()).toContain(title);
+      expect(allText()).toContain(text);
     }
     navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefBankAccount'}});
     expect(allText()).toContain('SCREEN:ChefBankAccountScreen');
@@ -144,7 +147,7 @@ describe('ChefRootNavigator', () => {
     navigate('ChefDailyLimits', {planId: 'p1'});
     expect(allText()).toContain('SCREEN:ChefDailyLimitsScreen');
     navigate('ChefSupportTicket', {topic: 'payout'});
-    expect(allText()).toContain('Support ticket');
+    expect(allText()).toContain('SCREEN:ChefSupportTicketScreen');
   });
 
   it('opens the notifications screen from the bell', () => {

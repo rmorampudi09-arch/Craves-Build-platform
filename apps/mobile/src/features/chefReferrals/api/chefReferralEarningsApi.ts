@@ -1,5 +1,6 @@
 import {httpClient} from '../../../core/http/httpClient';
 
+// Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
 export const CHEF_REFERRAL_EARNINGS_AVAILABLE = false;
 
 export interface ChefReferralPosting {

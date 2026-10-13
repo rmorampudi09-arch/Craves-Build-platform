@@ -207,9 +207,6 @@ src/features/referralsV2/screens/ReferralScreens.test.tsx
 src/features/referralsV2/sharing/referralSharing.ts
 src/features/referralsV2/sharing/referralSharing.test.ts
 src/features/referralsV2/README.md
-src/features/chefReferrals/components/ChefReferralDetails.tsx
-src/features/chefReferrals/query/useChefReferralData.ts
-src/features/chefReferrals/query/useChefReferralData.test.ts
 src/features/chefReferrals/screens/ChefReferralScreen.tsx
 src/features/chefReferrals/screens/ChefReferralEarningsScreen.tsx
 ```

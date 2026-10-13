@@ -14,11 +14,24 @@ const requiredText = (label: string, maxLength: number) =>
 const optionalText = (label: string, maxLength: number) =>
   z.string().max(maxLength, `${label} is too long.`);
 
+const tagList = (label: string) =>
+  z
+    .array(z.string().trim().min(1).max(40, `Each ${label} must be 40 characters or fewer.`))
+    .max(10, `Choose up to 10 ${label}s.`)
+    .optional();
+
+const link = (label: string) =>
+  z
+    .string()
+    .trim()
+    .max(200, `${label} link is too long.`)
+    .refine(value => value === '' || /^https:\/\//i.test(value), `${label} link must start with https://`)
+    .optional();
+
 /**
- * P99 intentionally models only fields present in the exact Catalog Service
- * KitchenProfileRequest contract. Photo, cuisine, service-area lookup and social
- * links remain explicit integration boundaries until a concrete backend contract
- * exists; P100 must not invent fields for them.
+ * The kitchen fields of PUT /api/v1/kitchens/me. The cuisines, delivery areas and four links are
+ * optional here because the server sends them only once the new kitchen fields are published:
+ * a kitchen without them is edited, and saved, without them.
  */
 export const chefEditProfileFormSchema = z.object({
   kitchenName: requiredText('Kitchen name', 160),
@@ -33,6 +46,12 @@ export const chefEditProfileFormSchema = z.object({
   city: requiredText('City', 120),
   state: requiredText('State', 120),
   postalCode: optionalText('Postal code', 32),
+  cuisines: tagList('cuisine'),
+  serviceAreas: tagList('delivery area'),
+  instagram: link('Instagram'),
+  facebook: link('Facebook'),
+  youtube: link('YouTube'),
+  website: link('Website'),
 });
 
 export type ChefEditProfileFormValues = z.infer<typeof chefEditProfileFormSchema>;
@@ -49,46 +68,6 @@ export type ChefEditProfileAddressSelection = Partial<
     | 'postalCode'
   >
 >;
-
-export type ChefEditProfileBlockedCapability =
-  | 'PHOTO_UPLOAD'
-  | 'CUISINE_METADATA'
-  | 'SERVICE_AREA_LOOKUP'
-  | 'BUSINESS_VALIDATION'
-  | 'SOCIAL_LINKS';
-
-export interface ChefEditProfileCapabilityBoundary {
-  capability: ChefEditProfileBlockedCapability;
-  reason: string;
-}
-
-export const CHEF_EDIT_PROFILE_BLOCKED_CAPABILITIES: readonly ChefEditProfileCapabilityBoundary[] = [
-  {
-    capability: 'PHOTO_UPLOAD',
-    reason:
-      'No approved Chef profile photo upload/remove route or native picker contract is present in the repository.',
-  },
-  {
-    capability: 'CUISINE_METADATA',
-    reason:
-      'No approved Chef cuisine metadata/read-write contract is present in the current service surface.',
-  },
-  {
-    capability: 'SERVICE_AREA_LOOKUP',
-    reason:
-      'The current kitchen contract exposes address and areaName fields but no Chef service-area lookup/selection API.',
-  },
-  {
-    capability: 'BUSINESS_VALIDATION',
-    reason:
-      'The current Catalog Service exposes the kitchen GET/PUT contract but no separate Chef business-validation capability.',
-  },
-  {
-    capability: 'SOCIAL_LINKS',
-    reason:
-      'Social-link fields are not part of the exact KitchenProfileRequest contract.',
-  },
-] as const;
 
 function valueOrEmpty(value: string | null): string {
   return value ?? '';
@@ -115,6 +94,16 @@ export function chefKitchenProfileToFormValues(
     city: profile.city,
     state: profile.state,
     postalCode: valueOrEmpty(profile.postalCode),
+    ...(profile.cuisines ? {cuisines: profile.cuisines} : {}),
+    ...(profile.serviceAreas ? {serviceAreas: profile.serviceAreas} : {}),
+    ...(profile.socialLinks
+      ? {
+          instagram: valueOrEmpty(profile.socialLinks.instagram),
+          facebook: valueOrEmpty(profile.socialLinks.facebook),
+          youtube: valueOrEmpty(profile.socialLinks.youtube),
+          website: valueOrEmpty(profile.socialLinks.website),
+        }
+      : {}),
   };
 }
 
@@ -130,33 +119,72 @@ export function mergeChefEditProfileAddressSelection(
   return {...current, ...selection};
 }
 
+type FormValue = ChefEditProfileFormValues[keyof ChefEditProfileFormValues];
+const asText = (value: FormValue) => (Array.isArray(value) ? value.join('|') : value ?? '');
+const sameValue = (a: FormValue, b: FormValue) => asText(a) === asText(b);
+
+export type ChefEditProfileFieldErrors = Partial<Record<keyof ChefEditProfileFormValues, string>>;
+
 /**
- * PUT /api/v1/kitchens/me replaces the complete KitchenProfileRequest. Keep
- * server-owned coordinates and status from the canonical profile while mapping
- * every editable form field into that exact request shape.
+ * The first problem of each field the chef changed, or null. A value the chef did not touch is never
+ * checked: something already stored over a limit must not stop an unrelated change from being saved.
+ */
+export function validateChefEditProfileForm(
+  values: ChefEditProfileFormValues,
+  original: ChefEditProfileFormValues,
+): ChefEditProfileFieldErrors | null {
+  const result = chefEditProfileFormSchema.safeParse(values);
+  if (result.success) {
+    return null;
+  }
+  const found: ChefEditProfileFieldErrors = {};
+  for (const issue of result.error.issues) {
+    const field = issue.path[0] as keyof ChefEditProfileFormValues | undefined;
+    if (field && !found[field] && !sameValue(values[field], original[field])) {
+      found[field] = issue.message;
+    }
+  }
+  return Object.keys(found).length > 0 ? found : null;
+}
+
+/**
+ * PUT /api/v1/kitchens/me replaces the complete KitchenProfileRequest. `existing` must be the kitchen as
+ * the server has it right now: its status and coordinates are sent back as they are, so an old copy would
+ * undo a change made since (closing the kitchen, a suspension). Validation is `validateChefEditProfileForm`'s job.
  */
 export function buildChefKitchenProfileReplacementRequest(
   values: ChefEditProfileFormValues,
   existing: ChefKitchenProfile,
 ): ChefKitchenProfileRequest {
-  const parsed = chefEditProfileFormSchema.parse(values);
-
   return {
-    kitchenName: parsed.kitchenName,
-    displayName: nullableTrimmed(parsed.displayName),
-    description: nullableTrimmed(parsed.description),
-    phoneNumber: nullableTrimmed(parsed.phoneNumber),
-    email: nullableTrimmed(parsed.email),
-    addressLine1: parsed.addressLine1,
-    addressLine2: nullableTrimmed(parsed.addressLine2),
-    landmark: nullableTrimmed(parsed.landmark),
-    areaName: nullableTrimmed(parsed.areaName),
-    city: parsed.city,
-    state: parsed.state,
-    postalCode: nullableTrimmed(parsed.postalCode),
+    kitchenName: values.kitchenName.trim(),
+    displayName: nullableTrimmed(values.displayName),
+    description: nullableTrimmed(values.description),
+    phoneNumber: nullableTrimmed(values.phoneNumber),
+    email: nullableTrimmed(values.email),
+    addressLine1: values.addressLine1.trim(),
+    addressLine2: nullableTrimmed(values.addressLine2),
+    landmark: nullableTrimmed(values.landmark),
+    areaName: nullableTrimmed(values.areaName),
+    city: values.city.trim(),
+    state: values.state.trim(),
+    postalCode: nullableTrimmed(values.postalCode),
     latitude: existing.latitude,
     longitude: existing.longitude,
     status: existing.status,
+    // Only what the server sent is sent back. The links go as a set of four: the server replaces all of them.
+    ...(values.cuisines ? {cuisines: values.cuisines.map(item => item.trim())} : {}),
+    ...(values.serviceAreas ? {serviceAreas: values.serviceAreas.map(item => item.trim())} : {}),
+    ...(values.instagram !== undefined
+      ? {
+          socialLinks: {
+            instagram: nullableTrimmed(values.instagram),
+            facebook: nullableTrimmed(values.facebook ?? ''),
+            youtube: nullableTrimmed(values.youtube ?? ''),
+            website: nullableTrimmed(values.website ?? ''),
+          },
+        }
+      : {}),
   };
 }
 

@@ -7,6 +7,15 @@ const UUID_PATTERN =
 
 export type ChefKitchenStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
 
+export interface ChefKitchenSocialLinks {
+  instagram: string | null;
+  facebook: string | null;
+  youtube: string | null;
+  website: string | null;
+}
+
+export type ChefKitchenPhotoKind = 'CHEF' | 'KITCHEN';
+
 export interface ChefKitchenProfile {
   id: string;
   identityId: string;
@@ -27,6 +36,12 @@ export interface ChefKitchenProfile {
   status: ChefKitchenStatus;
   createdAt: string;
   updatedAt: string;
+  // The fields below are undefined until the server sends them; a screen shows its UI only when they are present.
+  chefPhotoUrl?: string | null;
+  kitchenPhotoUrl?: string | null;
+  cuisines?: string[];
+  serviceAreas?: string[];
+  socialLinks?: ChefKitchenSocialLinks;
 }
 
 /**
@@ -50,6 +65,10 @@ export interface ChefKitchenProfileRequest {
   latitude: number | null;
   longitude: number | null;
   status: ChefKitchenStatus;
+  /** Absent keeps what the server has. A socialLinks object replaces all four links, so it always carries all four. */
+  cuisines?: string[];
+  serviceAreas?: string[];
+  socialLinks?: ChefKitchenSocialLinks;
 }
 
 const KITCHEN_STATUSES = new Set<ChefKitchenStatus>([
@@ -104,6 +123,27 @@ function timestamp(value: unknown): string | null {
     : null;
 }
 
+function photoUrl(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  return typeof value === 'string' && /^https:\/\//i.test(value) && value.length <= 2_048 ? value : null;
+}
+
+function stringList(value: unknown): string[] | undefined {
+  return Array.isArray(value) && value.every(entry => typeof entry === 'string') ? (value as string[]) : undefined;
+}
+
+function socialLinks(value: unknown): ChefKitchenSocialLinks | undefined {
+  const raw = asRecord(value);
+  if (!raw) return undefined;
+  const link = (entry: unknown) => (typeof entry === 'string' && entry.trim() ? entry.trim() : null);
+  return {
+    instagram: link(raw.instagram),
+    facebook: link(raw.facebook),
+    youtube: link(raw.youtube),
+    website: link(raw.website),
+  };
+}
+
 export function parseChefKitchenProfile(value: unknown): ChefKitchenProfile | null {
   const raw = asRecord(value);
   if (!raw) {
@@ -129,6 +169,9 @@ export function parseChefKitchenProfile(value: unknown): ChefKitchenProfile | nu
   const status = requiredString(raw.status, 20) as ChefKitchenStatus | null;
   const createdAt = timestamp(raw.createdAt);
   const updatedAt = timestamp(raw.updatedAt);
+  const cuisines = stringList(raw.cuisines);
+  const serviceAreas = stringList(raw.serviceAreas);
+  const links = socialLinks(raw.socialLinks);
 
   if (
     !id ||
@@ -177,6 +220,12 @@ export function parseChefKitchenProfile(value: unknown): ChefKitchenProfile | nu
     status,
     createdAt,
     updatedAt,
+    // Spread only what the server sent, so a screen can tell "not published yet" from "empty".
+    ...(raw.chefPhotoUrl !== undefined ? {chefPhotoUrl: photoUrl(raw.chefPhotoUrl)} : {}),
+    ...(raw.kitchenPhotoUrl !== undefined ? {kitchenPhotoUrl: photoUrl(raw.kitchenPhotoUrl)} : {}),
+    ...(cuisines ? {cuisines} : {}),
+    ...(serviceAreas ? {serviceAreas} : {}),
+    ...(links ? {socialLinks: links} : {}),
   };
 }
 
@@ -251,5 +300,20 @@ export const chefProfileApi = {
       signal,
     });
     return parseKitchenResponse(response);
+  },
+
+  /** Sets the chef's own photo or the kitchen photo; the response is the kitchen with its new photo link. */
+  async uploadPhoto(
+    kind: ChefKitchenPhotoKind,
+    photo: {uri: string; name: string; type: string},
+    signal?: AbortSignal,
+  ): Promise<ChefKitchenProfile> {
+    const body = new FormData();
+    body.append('file', photo as unknown as Blob);
+    return parseKitchenResponse(await httpClient.post<unknown>(`/api/v1/kitchens/me/photos?kind=${kind}`, body, {signal}));
+  },
+
+  async deletePhoto(kind: ChefKitchenPhotoKind, signal?: AbortSignal): Promise<ChefKitchenProfile> {
+    return parseKitchenResponse(await httpClient.delete<unknown>(`/api/v1/kitchens/me/photos/${kind}`, {signal}));
   },
 };

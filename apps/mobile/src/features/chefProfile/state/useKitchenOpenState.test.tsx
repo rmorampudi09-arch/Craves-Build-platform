@@ -226,6 +226,51 @@ describe('useKitchenOpenState actions', () => {
     expect(state.current.status).toBe('closed');
   });
 
+  it('builds the request from the kitchen as the server has it right now, not the copy read a minute ago', async () => {
+    const state = await mountHook();
+    // The chef renamed the kitchen and moved the pin elsewhere after this copy was read.
+    const latest = {...kitchen, kitchenName: 'Renamed elsewhere', phoneNumber: '+910000000000', latitude: 18.1, longitude: 79.2};
+    get(chefProfileApi.getKitchen).mockResolvedValue(latest);
+    serverSaves({...latest, status: 'INACTIVE'});
+    await act(async () => {
+      expect(await state.current.setOpen(false)).toBe(true);
+    });
+    expect(get(chefProfileApi.replaceKitchen).mock.calls[0][0]).toMatchObject({
+      kitchenName: 'Renamed elsewhere',
+      phoneNumber: '+910000000000',
+      latitude: 18.1,
+      longitude: 79.2,
+      status: 'INACTIVE',
+    });
+  });
+
+  it('does not save when Craves paused the kitchen after the copy was read', async () => {
+    const state = await mountHook();
+    get(chefProfileApi.getKitchen).mockResolvedValue({...kitchen, status: 'SUSPENDED'});
+    await act(async () => {
+      await expect(state.current.setOpen(true)).rejects.toThrow('KITCHEN_SUSPENDED');
+    });
+    expect(chefProfileApi.replaceKitchen).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing when the server already has the status asked for, and says it saved', async () => {
+    const state = await mountHook();
+    get(chefProfileApi.getKitchen).mockResolvedValue({...kitchen, status: 'INACTIVE'});
+    await act(async () => {
+      expect(await state.current.setOpen(false)).toBe(true);
+    });
+    expect(chefProfileApi.replaceKitchen).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing when the latest kitchen cannot be read', async () => {
+    const state = await mountHook();
+    get(chefProfileApi.getKitchen).mockRejectedValue(new Error('offline'));
+    await act(async () => {
+      await expect(state.current.setOpen(false)).rejects.toThrow('offline');
+    });
+    expect(chefProfileApi.replaceKitchen).not.toHaveBeenCalled();
+  });
+
   it('opens the kitchen with status ACTIVE', async () => {
     get(chefProfileApi.getKitchen).mockResolvedValue({...kitchen, status: 'INACTIVE'});
     serverSaves(kitchen);
@@ -361,6 +406,18 @@ describe('deriveKitchenHours', () => {
     expect(deriveKitchenHours({weeklyWindows: windows}, at(23)).outsideHours).toBe(true);
     // The closing minute is already closed.
     expect(deriveKitchenHours({weeklyWindows: windows}, new Date(2026, 9, 14, 15, 0)).outsideHours).toBe(true);
+  });
+
+  it('writes a 23:59 close as Midnight, and stays open through that last minute', () => {
+    const late = [{dayOfWeek: 3, opensAt: '11:00:00', closesAt: '23:59:00'}];
+    expect(deriveKitchenHours({weeklyWindows: late}, at(14)).hoursToday).toBe('11:00 AM – Midnight');
+    expect(deriveKitchenHours({weeklyWindows: late}, new Date(2026, 9, 14, 23, 59)).outsideHours).toBe(false);
+    expect(deriveKitchenHours({weeklyWindows: late}, at(9)).outsideHours).toBe(true);
+    const split = [
+      {dayOfWeek: 3, opensAt: '11:00:00', closesAt: '15:00:00'},
+      {dayOfWeek: 3, opensAt: '18:00:00', closesAt: '23:59:00'},
+    ];
+    expect(deriveKitchenHours({weeklyWindows: split}, at(16)).hoursToday).toBe('11:00 AM – Midnight');
   });
 
   it('counts Sunday as day 7', () => {

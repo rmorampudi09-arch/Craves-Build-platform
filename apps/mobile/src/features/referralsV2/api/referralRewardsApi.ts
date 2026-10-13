@@ -10,6 +10,7 @@ const CURSOR_PATTERN = /^[A-Za-z0-9_-]{1,180}$/;
 
 // Referral Service is deployed privately on current main and its public/member
 // gateway publication is not enabled yet. Keep mobile fail-closed until APIM is published.
+// Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
 export const REFERRAL_REWARDS_AVAILABLE = false;
 export const REFERRAL_CODE_AVAILABLE = false;
 

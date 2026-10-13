@@ -3,7 +3,9 @@ import {httpClient} from '../../../core/http/httpClient';
 import {chefOnboardingApi, EMPTY_ONBOARDING} from '../../chefOnboarding/api/chefOnboardingApi';
 import {chefProfileApi, parseChefKitchenProfile} from './chefProfileApi';
 
-jest.mock('../../../core/http/httpClient', () => ({httpClient: {get: jest.fn(), put: jest.fn()}}));
+jest.mock('../../../core/http/httpClient', () => ({
+  httpClient: {get: jest.fn(), put: jest.fn(), post: jest.fn(), delete: jest.fn()},
+}));
 jest.mock('../../chefOnboarding/api/chefOnboardingApi', () => ({
   ...jest.requireActual('../../chefOnboarding/api/chefOnboardingApi'),
   chefOnboardingApi: {load: jest.fn()},
@@ -57,6 +59,42 @@ describe('chefProfileApi parsing', () => {
         kitchen({latitude: '12.9716', longitude: '77.5946'}),
       ),
     ).toEqual(expect.objectContaining({latitude: 12.9716, longitude: 77.5946}));
+  });
+
+  it('leaves the photo, cuisine, area and link fields undefined while the server does not send them', () => {
+    const parsed = parseChefKitchenProfile(kitchen());
+    expect(parsed).not.toBeNull();
+    expect(parsed).not.toHaveProperty('cuisines');
+    expect(parsed).not.toHaveProperty('socialLinks');
+    expect(parsed).not.toHaveProperty('chefPhotoUrl');
+  });
+
+  it('reads the photo, cuisine, area and link fields once the server sends them', () => {
+    const socialLinks = {instagram: 'https://instagram.com/anita', facebook: null, youtube: null, website: null};
+    expect(
+      parseChefKitchenProfile(
+        kitchen({
+          chefPhotoUrl: 'https://cdn.example.test/chef.jpg',
+          kitchenPhotoUrl: null,
+          cuisines: ['Andhra', 'Biryani'],
+          serviceAreas: ['KPHB'],
+          socialLinks,
+        }),
+      ),
+    ).toMatchObject({
+      chefPhotoUrl: 'https://cdn.example.test/chef.jpg',
+      kitchenPhotoUrl: null,
+      cuisines: ['Andhra', 'Biryani'],
+      serviceAreas: ['KPHB'],
+      socialLinks,
+    });
+  });
+
+  it('ignores an unreadable new field instead of rejecting the whole kitchen', () => {
+    const parsed = parseChefKitchenProfile(kitchen({cuisines: 'Andhra', chefPhotoUrl: 'http://insecure.example/chef.jpg'}));
+    expect(parsed).not.toBeNull();
+    expect(parsed?.cuisines).toBeUndefined();
+    expect(parsed?.chefPhotoUrl).toBeNull();
   });
 
   it('fails closed on an unsupported kitchen status', () => {
@@ -122,5 +160,29 @@ describe('chefProfileApi.getKitchen for a newly approved chef', () => {
 
     await expect(chefProfileApi.getKitchen()).rejects.toBe(notFound);
     expect(httpClient.put).not.toHaveBeenCalled();
+  });
+});
+
+describe('chefProfileApi photos', () => {
+  const file = {uri: 'file:///chef.jpg', name: 'chef.jpg', type: 'image/jpeg'};
+  beforeEach(() => jest.resetAllMocks());
+
+  it('uploads a chef or kitchen photo as multipart and returns the kitchen', async () => {
+    (httpClient.post as jest.Mock).mockResolvedValue(kitchen({chefPhotoUrl: 'https://cdn.example.test/chef.jpg'}));
+
+    const updated = await chefProfileApi.uploadPhoto('CHEF', file);
+
+    expect(updated.chefPhotoUrl).toBe('https://cdn.example.test/chef.jpg');
+    const [url, body, options] = (httpClient.post as jest.Mock).mock.calls[0];
+    expect(url).toBe('/api/v1/kitchens/me/photos?kind=CHEF');
+    expect(body).toBeInstanceOf(FormData);
+    expect(options).toEqual({signal: undefined});
+  });
+
+  it('removes a photo by kind', async () => {
+    (httpClient.delete as jest.Mock).mockResolvedValue(kitchen({kitchenPhotoUrl: null}));
+
+    await expect(chefProfileApi.deletePhoto('KITCHEN')).resolves.toMatchObject({kitchenPhotoUrl: null});
+    expect(httpClient.delete).toHaveBeenCalledWith('/api/v1/kitchens/me/photos/KITCHEN', {signal: undefined});
   });
 });

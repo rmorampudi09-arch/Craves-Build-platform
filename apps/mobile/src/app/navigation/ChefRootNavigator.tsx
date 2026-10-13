@@ -23,6 +23,7 @@ import {ChefReferralEarningsScreen} from '../../features/chefReferrals/screens/C
 import {ChefReferralScreen} from '../../features/chefReferrals/screens/ChefReferralScreen';
 import {ChefKitchenScheduleScreen} from '../../features/chefSchedule/screens/ChefKitchenScheduleScreen';
 import {ChefProfileScreen} from '../../features/chefProfile/screens/ChefProfileScreen';
+import {ChefSecurityScreen} from '../../features/chefProfile/screens/ChefSecurityScreen';
 import {ChefEditProfileDraftProvider} from '../../features/chefProfile/state/ChefEditProfileDraftProvider';
 import {ChefToastProvider} from '../../features/chefShell/components/ui';
 import {ChefNotificationsScreen} from '../../features/chefShell/screens/ChefNotificationsScreen';
@@ -31,14 +32,11 @@ import {ChefOperationalProvider} from '../../features/chefShell/state/ChefOperat
 import {ChefMealPlanEditorScreen} from '../../features/chefSubscription/screens/ChefMealPlanEditorScreen';
 import {ChefDailyLimitsScreen} from '../../features/chefSubscription/screens/ChefDailyLimitsScreen';
 import {ChefSupportScreen} from '../../features/chefSupport/screens/ChefSupportScreen';
+import {ChefSupportTicketScreen} from '../../features/chefSupport/screens/ChefSupportTicketScreen';
+import {ChefReviewsScreen} from '../../features/reviews/screens/ChefReviewsScreen';
 import {ChefMenuTabScreen} from './ChefMenuTabScreen';
 import {ChefScheduledOrdersRedirect} from './ChefScheduledOrdersRedirect';
 import {renderChefTabBar} from './ChefTabBar';
-import {
-  ChefReviewsPlaceholder,
-  ChefSecurityPlaceholder,
-  ChefSupportTicketPlaceholder,
-} from './chefPlaceholderScreens';
 import {CHEF_ORDER_ROUTES, CHEF_TAB_STATE_OPTIONS} from './chefTabs';
 import type {
   ChefOrdersStackParamList,
@@ -133,8 +131,8 @@ function ChefProfileNavigator() {
           name="ChefScheduledOrders"
           component={ChefScheduledOrdersRedirect}
         />
-        <ProfileStack.Screen name="ChefReviews" component={ChefReviewsPlaceholder} />
-        <ProfileStack.Screen name="ChefSecurity" component={ChefSecurityPlaceholder} />
+        <ProfileStack.Screen name="ChefReviews" component={ChefReviewsScreen} />
+        <ProfileStack.Screen name="ChefSecurity" component={ChefSecurityScreen} />
         <ProfileStack.Screen name="ChefBankAccount" component={ChefBankAccountScreen} />
         <ProfileStack.Screen
           name="ChefEditProfile"
@@ -185,7 +183,7 @@ function ChefProductNavigator() {
         />
         <Stack.Screen name="ChefNotifications" component={ChefNotificationsScreen} />
         <Stack.Screen name="ChefDailyLimits" component={ChefDailyLimitsScreen} />
-        <Stack.Screen name="ChefSupportTicket" component={ChefSupportTicketPlaceholder} />
+        <Stack.Screen name="ChefSupportTicket" component={ChefSupportTicketScreen} />
       </Stack.Navigator>
     </ChefOperationalProvider>
   );

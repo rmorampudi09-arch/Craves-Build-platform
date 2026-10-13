@@ -1,147 +1,179 @@
-import React, { useRef, useState } from 'react';
-import { RefreshControl, Text } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { ChefProfileStackParamList } from '../../../app/navigation/types';
-import { ReferralScaffold } from '../../referralsV2/components/ReferralScaffold';
+import React from 'react';
+import {StyleSheet, Text, View} from 'react-native';
+import {useNavigation, type NavigationProp} from '@react-navigation/native';
+import type {ChefProfileStackParamList} from '../../../app/navigation/types';
 import {
-  ReferralButton,
-  ReferralCopyBox,
-  ReferralSection,
-  referralText,
-} from '../../referralsV2/components/ReferralElements';
-import { referralColors } from '../../referralsV2/components/referralVisuals';
-import { REFERRAL_CODE_AVAILABLE } from '../../referralsV2/api/referralRewardsApi';
+  borderWidth,
+  colors,
+  fontWeight,
+  iconSize,
+  radius,
+  spacing,
+  textDefaults,
+  typography,
+} from '../../../design/tokens';
+import {Icon} from '../../../shared/components/Icon';
+import {ReadState} from '../../chefProfile/components/ReadState';
+import {useChefRead} from '../../chefProfile/state/useChefRead';
 import {
-  CUSTOMER_INVITATION_LINK,
-  copyReferralText,
-  shareReferralText,
-} from '../../referralsV2/sharing/referralSharing';
-import { CHEF_REFERRAL_EARNINGS_AVAILABLE } from '../api/chefReferralEarningsApi';
-import {
-  ChefReferralMonth,
-  ChefReferralRules,
-} from '../components/ChefReferralDetails';
-import {
-  useChefReferralCode,
-  useChefReferralEarnings,
-} from '../query/useChefReferralData';
+  ChefActionButton,
+  ChefCard,
+  ChefScreen,
+  ChefSheet,
+  ChefTopBar,
+  ListGroup,
+  ListRow,
+  StatTile,
+  useChefToast,
+} from '../../chefShell/components/ui';
+import {referralRewardsApi} from '../../referralsV2/api/referralRewardsApi';
+import {copyReferralText, shareReferralText} from '../../referralsV2/sharing/referralSharing';
+import {chefReferralEarningsApi} from '../api/chefReferralEarningsApi';
+import {referralRupees} from '../domain/referralFormat';
 
+const sum = (values: string[]) => values.reduce((total, value) => total + Number(value), 0);
+
+/** Refer a chef: the invite code to copy or share, what it has earned so far, and the rates from the server. */
 export function ChefReferralScreen() {
-  const navigation =
-    useNavigation<NativeStackNavigationProp<ChefProfileStackParamList>>();
-  const earnings = useChefReferralEarnings();
-  const code = useChefReferralCode();
-  const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const lock = useRef(false);
+  const navigation = useNavigation<NavigationProp<ChefProfileStackParamList>>();
+  const toast = useChefToast();
+  const code = useChefRead('chef-referral-code', signal => referralRewardsApi.getCode(signal));
+  // The overview and the earnings are extras: when either is missing the invite card still works.
+  const overview = useChefRead('chef-referral-overview', signal => referralRewardsApi.getOverview(signal)).query.data;
+  const earnings = useChefRead('chef-referral-earnings', signal => chefReferralEarningsApi.get(signal)).query.data;
+  const [rules, setRules] = React.useState(false);
+  const busy = React.useRef(false);
+  const [working, setWorking] = React.useState(false);
+  const invite = code.query.data;
+
+  /** One native action at a time (the copy and the share sheet). */
   const run = async (action: () => Promise<void>) => {
-    if (lock.current) return;
-    lock.current = true;
-    setBusy(true);
+    if (busy.current) {
+      return;
+    }
+    busy.current = true;
+    setWorking(true);
     try {
       await action();
     } finally {
-      lock.current = false;
-      setBusy(false);
+      busy.current = false;
+      setWorking(false);
     }
   };
-  const refresh = () => {
-    if (CHEF_REFERRAL_EARNINGS_AVAILABLE) void earnings.refetch();
-    if (REFERRAL_CODE_AVAILABLE) void code.refetch();
-  };
-  const codeValue = REFERRAL_CODE_AVAILABLE ? code.data : undefined;
-  const earningsValue = CHEF_REFERRAL_EARNINGS_AVAILABLE
-    ? earnings.data
-    : undefined;
+
   return (
-    <ReferralScaffold
-      role="Chef"
-      title="Refer & earn"
-      subtitle="Invite home chefs. Track your referral credits."
-      onBack={() =>
-        navigation.canGoBack()
-          ? navigation.goBack()
-          : navigation.navigate('ChefProfileHome')
-      }
-      refreshControl={
-        CHEF_REFERRAL_EARNINGS_AVAILABLE || REFERRAL_CODE_AVAILABLE ? (
-          <RefreshControl
-            refreshing={earnings.isRefetching || code.isRefetching}
-            onRefresh={refresh}
-            tintColor={referralColors.red}
-          />
-        ) : undefined
-      }
-    >
-      <ChefReferralMonth earnings={earningsValue} />
-      <ReferralSection title="Your referral code">
-        <ReferralCopyBox
-          code
-          value={
-            codeValue?.code ??
-            (REFERRAL_CODE_AVAILABLE && code.isPending
-              ? 'Loading your code...'
-              : 'Not available yet')
-          }
-          label="Copy referral code"
-          disabled={!codeValue || busy}
-          onCopy={() => {
-            void run(async () => {
-              if (codeValue && (await copyReferralText(codeValue.code)))
-                setCopied(true);
-            });
-          }}
-        />
-        <ReferralButton
-          label="Share chef invite"
-          busy={busy}
-          onPress={() => {
-            void run(() =>
-              shareReferralText(
-                codeValue
-                  ? `Join Craves as a home chef.\nReferral code: ${codeValue.code}\n${codeValue.link}`
-                  : `Join Craves as a home chef.\n${CUSTOMER_INVITATION_LINK}`,
-              ),
-            );
-          }}
-        />
-        {copied ? (
-          <Text accessibilityLiveRegion="polite" style={referralText.caption}>
-            Referral code copied
-          </Text>
+    <ChefScreen
+      header={<ChefTopBar onBack={() => navigation.goBack()} showBell={false} title="Refer a chef" />}
+      onRefresh={() => {
+        code.query.refetch().catch(() => undefined);
+      }}
+      refreshing={code.query.isRefetching}
+      withTabBar>
+      <ReadState
+        comingSoon={{title: 'Referrals are on their way', message: 'Inviting other chefs and seeing what you earn will be here soon.'}}
+        query={code.query}>
+        {() => (
+          <>
+            <ChefCard style={styles.invite}>
+              <Icon color={colors.flameRed} name="gift" size={iconSize.xl} surface={false} />
+              <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.title}>
+                Invite home chefs you know
+              </Text>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
+                You earn a share of the sales of chefs you invite.
+              </Text>
+              <View style={styles.codeBox}>
+                <Text allowFontScaling={textDefaults.allowFontScaling} selectable style={styles.code}>
+                  {invite?.code}
+                </Text>
+                <ChefActionButton
+                  compact
+                  disabled={working}
+                  icon="copy"
+                  label="Copy"
+                  onPress={() => {
+                    run(async () => {
+                      if (invite && (await copyReferralText(invite.code))) {
+                        toast.show('Copied');
+                      }
+                    }).catch(() => undefined);
+                  }}
+                  tone="ghost"
+                />
+              </View>
+              <ChefActionButton
+                disabled={working}
+                label="Share invite"
+                onPress={() => {
+                  if (invite) {
+                    run(() => shareReferralText(`Join Craves as a home chef.\nReferral code: ${invite.code}\n${invite.link}`)).catch(() => undefined);
+                  }
+                }}
+                style={styles.share}
+              />
+            </ChefCard>
+
+            {overview ? (
+              <View style={styles.stats}>
+                <StatTile label="Joined" value={sum(overview.downline.map(level => level.members))} />
+                <StatTile label="On hold" value={referralRupees(overview.pendingPaise)} />
+                <StatTile label="Earned" value={referralRupees(sum(overview.levels.map(level => level.netEarnedPaise)))} />
+              </View>
+            ) : null}
+
+            <ListGroup>
+              <ListRow
+                icon="wallet"
+                onPress={() => navigation.navigate('ChefReferralEarnings')}
+                subtitle={earnings ? `${referralRupees(earnings.monthUsedPaise)} this month · limit ${referralRupees(earnings.monthlyCapPaise)}` : undefined}
+                title="Referral earnings"
+              />
+              {overview?.policy ? (
+                <ListRow icon="info" onPress={() => setRules(true)} subtitle="Rates and rules" title="How it works" />
+              ) : null}
+            </ListGroup>
+          </>
+        )}
+      </ReadState>
+
+      <ChefSheet onClose={() => setRules(false)} title="How it works" visible={rules}>
+        {overview?.policy ? (
+          <View style={styles.rules}>
+            <ListGroup>
+              {overview.policy.ratesBps.map((bps, index) => (
+                <ListRow key={index} title={index === 0 ? 'Level 1 · Direct referrals' : `Level ${index + 1}`} value={`${bps / 100}%`} />
+              ))}
+            </ListGroup>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
+              {`Each credit is held for ${overview.policy.holdDays} ${overview.policy.holdDays === 1 ? 'day' : 'days'} before it counts. Joining alone does not earn a reward.`}
+            </Text>
+          </View>
         ) : null}
-        {!codeValue ? (
-          <Text style={referralText.caption}>
-            Your referral code is not available yet. Sharing sends a general
-            chef invitation without referral tracking.
-          </Text>
-        ) : null}
-        {REFERRAL_CODE_AVAILABLE && code.isError ? (
-          <ReferralButton
-            outline
-            label="Retry referral code"
-            onPress={() => {
-              void code.refetch();
-            }}
-          />
-        ) : null}
-      </ReferralSection>
-      {CHEF_REFERRAL_EARNINGS_AVAILABLE && earnings.isError ? (
-        <ReferralButton
-          outline
-          label="Retry referral credits"
-          onPress={() => {
-            void earnings.refetch();
-          }}
-        />
-      ) : null}
-      <ChefReferralRules />
-      <ReferralButton
-        outline
-        label="View referral earnings"
-        onPress={() => navigation.navigate('ChefReferralEarnings')}
-      />
-    </ReferralScaffold>
+      </ChefSheet>
+    </ChefScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  invite: {alignItems: 'center', gap: spacing.xxs, padding: spacing.lg, backgroundColor: colors.cream, borderColor: 'transparent'},
+  title: {marginTop: spacing.xxs, color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold, textAlign: 'center'},
+  muted: {color: colors.textSecondary, fontSize: typography.small, textAlign: 'center'},
+  codeBox: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingLeft: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: borderWidth.focus,
+    borderStyle: 'dashed',
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.white,
+  },
+  code: {flexShrink: 1, color: colors.textPrimary, fontSize: typography.button, fontWeight: fontWeight.extrabold, letterSpacing: 1.5},
+  share: {alignSelf: 'stretch', marginTop: spacing.xs},
+  stats: {flexDirection: 'row', gap: spacing.xs},
+  rules: {gap: spacing.sm, paddingBottom: spacing.sm},
+});

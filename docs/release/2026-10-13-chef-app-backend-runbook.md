@@ -1,6 +1,6 @@
 # Chef app backend release runbook (2026-10-13)
 
-Branch `feat/chef-app-backend` (base `1ddfd1c1f`, commits `7e9053b6b`..`869d96c04`). Backs the chef mobile app 1.31.0. Written without access to Azure: no command below has been run against production. You run every command in Azure Cloud Shell (Bash, no storage). Every command is a single line; paste one line at a time and press Enter separately (Cloud Shell drops newlines in multi-line paste).
+Branch `feat/chef-app-backend` (base `1ddfd1c1f`; its commits are `origin/main..feat/chef-app-backend`, listed by `git log --oneline 1ddfd1c1f..feat/chef-app-backend`). Backs the chef mobile app 1.31.0. Written without access to Azure: no command below has been run against production. You run every command in Azure Cloud Shell (Bash, no storage). Every command is a single line; paste one line at a time and press Enter separately (Cloud Shell drops newlines in multi-line paste).
 
 ## What ships
 
@@ -50,7 +50,7 @@ gw() { local r m p c; for r in "$@"; do m=${r%% *}; p=${r#* }; case $m in GET|DE
 
 ## Step 0. Before anything is deployed
 
-0.1 Merge the PR to main (the branch is local and unpushed; pushing and merging are yours). Wait for CI. Watch `catalog-finance-eligibility-ci`: the nearby-discovery tests ran locally only against a PostGIS stand-in, real PostGIS runs only there. Note that `ChefOrderDetailsDatabaseTest`, `ChefAutoAcceptDatabaseTest` and `AppNoticeRoleFilterDbTest` are not in any CI test list, so a green CI does not exercise them (they passed locally against PostgreSQL 16.4).
+0.1 Merge the PR to main (the branch is local and unpushed; pushing and merging are yours). Wait for CI. Watch `catalog-finance-eligibility-ci`: the nearby-discovery tests ran locally only against a PostGIS stand-in, real PostGIS runs only there. `ChefOrderDetailsDatabaseTest` and `ChefAutoAcceptDatabaseTest` DO run in CI: `chef-ledger-ci` (it runs on pull requests that touch `services/order-service/**`) sets `LEDGER_TEST_JDBC_URL` and runs `mvn -f services/order-service/pom.xml verify`, so a failure there is real and must be read, not dismissed. Only `AppNoticeRoleFilterDbTest` (needs `NOTIFICATION_INBOX_TEST_JDBC_URL`, which no workflow sets) never runs in CI; it passed locally against PostgreSQL 16.4.
 
 0.2 Cloud Shell: confirm the account, then fetch the exact merged SHA into a fresh checkout.
 
@@ -126,12 +126,26 @@ az containerapp show -g $RG -n $ORDER_APP --query "properties.template.container
 ```bash
 export CATALOG_FQDN=$(az containerapp show -g $RG -n $CATALOG_APP --query properties.configuration.ingress.fqdn -o tsv); echo $CATALOG_FQDN
 ```
+Define the probe (one line; it only defines a function, nothing is sent yet):
+
 ```bash
-curl -s -w '\nHTTP %{http_code}\n' --max-time 30 -X POST -H 'Content-Type: application/json' -H 'X-Craves-Internal-Key: probe' --data '{"menuItemIds":["00000000-0000-0000-0000-000000000000"]}' https://$CATALOG_FQDN/api/v1/catalog/internal/menu-items/resolve
+probe() { curl -s -w '\nHTTP %{http_code}' --max-time 30 -X POST -H 'Content-Type: application/json' -H 'X-Craves-Internal-Key: probe' --data '{"menuItemIds":["00000000-0000-0000-0000-000000000000"]}' "https://$CATALOG_FQDN/api/v1/catalog/internal/$1"; }
 ```
-Read the result:
-- `HTTP 404`: the app does not serve the route. **GO**, continue with 1.3. (Write the status in the release log.)
-- Anything else (403 guarded, 503 internal access not configured, 405, 400, 5xx, no answer): **NO-GO. STOP. Do not build or deploy catalog.** A 403 or 503 means the prod catalog serves the route and main's catalog would remove it; a 405 may only be Spring answering an unmapped POST, but do not guess. Send the status line and the response body to Claude and wait. Nothing has been changed at this point.
+Send the real probe and a control probe (same headers and body, on a sibling path that surely does not exist), and print both:
+
+```bash
+R=$(probe menu-items/resolve); C=$(probe zz-unmapped-probe); echo "REAL: $R"; echo "CONTROL: $C"
+```
+Print the verdict:
+
+```bash
+if echo "$R $C" | grep -q '"code"'; then echo "NO-GO: the catalog answered with its own error code, so it serves this route"; elif [ "${R##*HTTP }" = "${C##*HTTP }" ] && [ "${R##*HTTP }" != "000" ]; then echo "GO: the route answers exactly like a path that does not exist"; else echo "NO-GO: the real and control answers differ, or there was no answer"; fi
+```
+Read only the verdict line:
+- It starts with `GO:`. The app does not serve the route. Continue with 1.3, and write the `REAL` and `CONTROL` status lines in the release log.
+- It starts with `NO-GO:`. **STOP. Do not build or deploy catalog.** Send the whole `REAL:` and `CONTROL:` output to Claude and wait. Nothing has been changed at this point.
+
+Do not judge by the status number alone. A bare 403 or 404 with an empty body is how this catalog answers a path it does not serve (Spring Security turns an unknown path into an empty-body 403), and the control probe shows what that looks like today. The route is served when its answer carries the app's own error code, `"code":"INTERNAL_ACCESS_DENIED"` (403) or `"code":"INTERNAL_ACCESS_NOT_CONFIGURED"` (503), or when it differs from the control. Example: REAL `HTTP 403` with an empty body next to CONTROL `HTTP 403` with an empty body is GO; REAL showing `INTERNAL_ACCESS_DENIED` is NO-GO even though both are 403.
 
 The route needs the internal key and carries no secret here (`probe` is not a key), so the probe cannot read data.
 
@@ -177,7 +191,7 @@ A migration problem shows here (for example `canceling statement due to lock tim
 ```bash
 psqlro "SELECT installed_rank, version, description, success FROM catalog_schema.flyway_schema_history ORDER BY installed_rank DESC LIMIT 3;"
 ```
-Expect `9 | kitchen_storefront_and_chef_settings | t` (and `8 | admin_home_banners | t` just below it if V8 was pending, see 0.6). The 1.2 gate guaranteed prod did not serve the resolve route, so nothing is lost there; re-running the 1.2 probe should still say 404.
+Expect `9 | kitchen_storefront_and_chef_settings | t` (and `8 | admin_home_banners | t` just below it if V8 was pending, see 0.6). The 1.2 gate guaranteed prod did not serve the resolve route, so nothing is lost there; re-running the `R=...` line and the verdict line from 1.2 should still print `GO:`.
 
 Optional public read check (new keys present, settings keys never public):
 
@@ -324,7 +338,7 @@ Rolling order back drops the chef detail fields, handed-over and auto-accept fro
 
 ## Step 5. Auto-accept (OPTIONAL, your decision, separate from the deploy)
 
-Kitchen auto-accept only works when order-service has `CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED=true` (default false). Auto-accept rides the same worker as the chef "New order received" notification (30 s tick), so it is not instant. That flag ALSO turns on the 30-minute auto-reject with refund and the 10 and 20 minute reminders. Do not flip it casually. Read the current values first (no value shown means the default, false):
+Kitchen auto-accept only works when order-service has `CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED=true` (default false). Auto-accept rides the same worker as the chef "New order received" notification (30 s tick), so it is not instant. That flag ALSO turns on the 30-minute auto-reject with refund and the 10 and 20 minute reminders. Do not flip it casually. Precondition: the running order image must be the one built from this branch (Step 4), because it carries the catalog client timeouts (2 s connect, 5 s read); never set the flag on an older order image, where a slow catalog can stall the scheduler thread. Read the current values first (no value shown means the default, false):
 
 ```bash
 az containerapp show -g $RG -n $ORDER_APP --query "properties.template.containers[0].env[?name=='CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED' || name=='CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_ENABLED' || name=='CRAVES_DOMAIN_EVENT_ENABLED_TYPES'].{Name:name,Value:value,SecretRef:secretRef}" -o table
@@ -341,7 +355,7 @@ Undo:
 ```bash
 az containerapp update -g $RG -n $ORDER_APP --set-env-vars CRAVES_CHEF_ACCEPTANCE_WORKER_ENABLED=false
 ```
-Refund deploy scripts reset it to false (`azure-pipelines-refund-combined-deploy.yml:202`, `scripts/refund/activate-refund-stage.sh:298`): after any refund-stage deploy, re-read the value above. An image-only order deploy (Step 4) does not change it. Meal-plan (subscription) orders are never auto-accepted: accept sets `ready_at = now + prep` and integration books the courier from it, so an accept at creation would dispatch hours early; meal-plan chefs still accept by hand.
+Refund deploy scripts reset it to false (`azure-pipelines-refund-combined-deploy.yml:202`, `scripts/refund/activate-refund-stage.sh:298`): after any refund-stage deploy, re-read the value above. An image-only order deploy (Step 4) does not change it. Meal-plan (subscription) orders and SCHEDULED orders (`fulfilment_mode = 'SCHEDULED'`) are never auto-accepted: accept sets `ready_at = now + prep` and integration books the courier from it, so an accept at creation would dispatch hours early; chefs still accept those by hand.
 
 ## Step 6. APIM routes (last)
 
@@ -362,7 +376,7 @@ for id in $(az apim api list -g $RG --service-name $APIM --query "[?starts_with(
 ```bash
 az apim api list -g $RG --service-name $APIM --query "[?path=='api/v1' || path=='api' || path==''].{name:name,path:path}" -o table
 ```
-The script must find these paths: `api/v1/kitchens/me`, `api/v1/chef/orders`, `api/v1/notifications` (must already exist, never created) and, if absent, creates `api/v1/chef/scheduled-orders`, `api/v1/chef/reviews`, `api/v1/support`. APIM serves a request from the API with the LONGEST matching path, so a new longer-path API created beneath an existing API that owns a SHORTER path (`api/v1`, `api/v1/kitchens` with wildcard operations, `api/v1/chef`, ...) would shadow every route of that parent which the new API does not define. The first version of the script matched paths exactly and could not see this; a fix is in the branch working tree (the run then prints `covered by wildcard operations of parent ...` and creates nothing when the parent has a wildcard operation for every needed method, and stops when it does not). Confirm the checked-out version has the fix (a count above 0):
+The script must find these paths: `api/v1/kitchens/me`, `api/v1/chef/orders`, `api/v1/notifications` (must already exist, never created) and, if absent, creates `api/v1/chef/scheduled-orders`, `api/v1/chef/reviews`, `api/v1/support`. APIM serves a request from the API with the LONGEST matching path, so a new longer-path API created beneath an existing API that owns a SHORTER path (`api/v1`, `api/v1/kitchens` with wildcard operations, `api/v1/chef`, ...) would shadow every route of that parent which the new API does not define. The first version of the script matched paths exactly and could not see this; the fix is committed in the branch (`a8f82276a`, `31c6a8a80`; the run then prints `covered by wildcard operations of parent ...` and creates nothing when the parent has a wildcard operation for every needed method, and stops when it does not). Confirm the checked-out version has the fix (a count above 0):
 
 ```bash
 cd ~/c8 && grep -c COVERED scripts/apim/configure-chef-app-routes-apim.sh
@@ -466,10 +480,10 @@ Flyway migrations V9 (catalog) and V37 (order) are additive: rollback is the pre
 
 Decisions and gaps you should know before releasing:
 
-- **Possible cause of the cart bill-preview 403 (finding).** order-service `CatalogClient` calls `POST /internal/menu-items/resolve` (cart preflight, through `CRAVES_CATALOG_BASE_URL`, default `https://api.craves.in/api/v1/catalog`). Catalog on main does not serve it (added in `1ef06939c`, later dropped). This release does not fix it. Step 1.2 is a go/no-go gate on the catalog app itself: if prod's catalog serves the route (anything but a 404 from the app), the catalog deploy stops, because main's catalog would remove it. If it is served by a prod-only patch, archived dishes could also pass cart preflight (it needs the same `status = 'ACTIVE'` filter). If the gate says 404, prod's catalog does not serve it either, so this is a plausible cause of the existing bill-preview 403 and still open after this release.
+- **Possible cause of the cart bill-preview 403 (finding).** order-service `CatalogClient` calls `POST /internal/menu-items/resolve` (cart preflight, through `CRAVES_CATALOG_BASE_URL`, default `https://api.craves.in/api/v1/catalog`). Catalog on main does not serve it (added in `1ef06939c`, later dropped). This release does not fix it. Step 1.2 is a go/no-go gate on the catalog app itself: if prod's catalog serves the route (the app answers with its own `INTERNAL_ACCESS_*` error code, or differently from the control probe on a path that does not exist), the catalog deploy stops, because main's catalog would remove it. If it is served by a prod-only patch, archived dishes could also pass cart preflight (it needs the same `status = 'ACTIVE'` filter). If the gate says GO, prod's catalog does not serve it either, so this is a plausible cause of the existing bill-preview 403 and still open after this release.
 - **Meal plans using a dish the chef later archives fail at their next subscription order** (`PlanCatalogClient` reads `GET /menu-items/{id}`). Not handled. Tell chefs not to archive a dish that is in an active plan, or accept the failure.
 - **Archived dishes in a customer's saved or favourite items now read as MISSING.**
-- **Auto-accept needs the worker flag** and that flag also enables auto-reject with refund and reminders (Step 5). A kitchen whose catalog image predates V9 returns no settings, so auto-accept stays off (safe), which is why catalog goes first. Auto-accept happens on the next 30 s tick, tries once (if the dish lookup fails it uses the kitchen default prep then 15 minutes; if the accept itself fails the order stays pending and the chef is notified normally), and its history reason "Accepted automatically" is free text a chef could also type. The customer notification after the commit can be lost if the process dies at that moment (the order status is still correct). Each auto-accept makes about 4+N catalog calls on the single scheduler thread and the catalog client has no timeouts, so a slow catalog can stall that worker (timeouts and reminders included). A failing `order_source` read propagates and the worker retries on the next tick.
+- **Auto-accept needs the worker flag** and that flag also enables auto-reject with refund and reminders (Step 5). A kitchen whose catalog image predates V9 returns no settings, so auto-accept stays off (safe), which is why catalog goes first. Auto-accept happens on the next 30 s tick, tries once (if the dish lookup fails it uses the kitchen default prep then 15 minutes; if the accept itself fails the order stays pending and the chef is notified normally), and its history reason "Accepted automatically" is free text a chef could also type. The customer notification after the commit can be lost if the process dies at that moment (the order status is still correct). Each auto-accept makes about 4+N catalog calls on the single scheduler thread (order-service has one, shared with its other scheduled jobs). The catalog client now has timeouts (2 s connect, 5 s read; properties `craves.catalog.connect-timeout` and `craves.catalog.read-timeout`, env `CRAVES_CATALOG_CONNECT_TIMEOUT` and `CRAVES_CATALOG_READ_TIMEOUT`), so a slow catalog costs seconds per call instead of stalling that worker. A failing `order_source` read propagates and the worker retries on the next tick.
 - **Order notes:** a checkout note over 500 characters is cut to its first 500 code points (the plan said reject, but notes up to 2000 were accepted before and existing clients must keep working), so very long notes lose their tail.
 - **Chef order list `/chef/orders/page` is not extended** (no deadline or note there); the app uses it for Past history only.
 - **Customer and admin order JSON now carries `"chefHandedOverAt": null`** (always serialised).
@@ -477,7 +491,7 @@ Decisions and gaps you should know before releasing:
 - **Catalog edges:** the `socialLinks` object replaces all four links (the app must always send all four); `https://user:pw@host` is accepted; internationalised and underscore hostnames are rejected. A kitchen photo blob can be orphaned if the DB update fails after upload; no test asserts the real blob path; `updateAvailability` can race and set `is_available` on an `ARCHIVED` row (invisible to customers).
 - **Notifications:** `role=` empty is a 400; rows with NULL `recipient_role` drop out of role-filtered lists; the service README does not mention `role`; no EXPLAIN was run on real volumes (role is a residual filter on one user's rows).
 - **Subscriber count:** counts ACTIVE only (PAUSED, PENDING_PAYMENT and the rest excluded); it uses a correlated COUNT, not a literal GROUP BY; no HTTP-layer assertion.
-- **APIM:** a new operation id (`chef-app-*`) is not checked against an operation with a different method or template, so a PUT could overwrite (unlikely); existing operations keep their policy and do not get the new no-store header; `kitchens/me`, `chef/orders` and `notifications` must already be live on kmqgfy, and the older scripts that publish them write to the gateway at once with no confirm flag and can overwrite policies, so a gap means stop and report (6.1b). The script matches paths exactly and cannot see a wildcard owner at a shorter path (6.1a). The support routes depend on the user-chef app, which this release does not deploy (6.1d).
+- **APIM:** a new operation id (`chef-app-*`) is not checked against an operation with a different method or template, so a PUT could overwrite (unlikely); existing operations keep their policy and do not get the new no-store header; `kitchens/me`, `chef/orders` and `notifications` must already be live on kmqgfy, and the older scripts that publish them write to the gateway at once with no confirm flag and can overwrite policies, so a gap means stop and report (6.1b). The script looks for a wildcard owner at a shorter path (since `a8f82276a`): it treats those routes as covered and creates nothing, and it stops when the parent has no wildcard for a needed method (6.1a). The support routes depend on the user-chef app, which this release does not deploy (6.1d).
 - **Follow-up, referral routes are not published** because the live APIM API `craves-referral-members-v1` points at the wrong backend (`docs/referrals/CHEF_ACTIVATION_20261012.md`). The app needs, once that is fixed: `GET /api/v1/referrals/me`, `/me/code`, `/me/code/qr`, `/me/chef-earnings`, `/me/rewards` and `POST /api/v1/auth/referrals/enroll`.
 - **Excluded by design:** auth-service ("Log out other devices") and integration-service (live courier data) stay "Coming soon".
 - **Unverified by me:** everything in this file was written from the repo only. Not checked against Azure: the Postgres FQDN, the catalog database name, whether catalog and notification really hold plain secrets (the preflight will tell you), whether prod serves the internal resolve route (the 1.2 gate answers that), the current value of the worker flag, Flyway tolerating applied-newer migrations on rollback, the prod checksums of V34 and V35 (taken from earlier sessions, not re-read), what an unauthenticated call to the user-chef app returns (read from its `SecurityConfig`, not run), `PGOPTIONS` being accepted by the Postgres server, the `git fetch --unshallow` of a bare SHA in Cloud Shell, and the real `az`/`jq`/`xmllint` behaviour of the APIM script.
@@ -493,7 +507,7 @@ Decisions and gaps you should know before releasing:
 | Subscription deployed | |
 | Order deployed | |
 | Flyway: catalog V9 `t`, order V37 `t` | |
-| 1.2 gate: resolve probe status on the catalog app (must be 404 to go) | |
+| 1.2 gate: verdict (must be GO) and the REAL / CONTROL status lines | |
 | 6.1 prerequisites clean (listings, wildcard owners, user-chef support check) | |
 | Worker flag decision (value before / after) | |
 | APIM run (kept / created / probes OK) | |

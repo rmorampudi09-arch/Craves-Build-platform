@@ -183,7 +183,7 @@ public class CatalogService {
         }
         UUID kitchenId = requireMyKitchenId(principal.identityId());
         jdbcTemplate.update(
-            "UPDATE catalog_schema.kitchen_profile SET auto_accept_orders = ?, default_prep_minutes = ? WHERE id = ?",
+            "UPDATE catalog_schema.kitchen_profile SET auto_accept_orders = ?, default_prep_minutes = ?, updated_at = now() WHERE id = ?",
             request.autoAcceptOrders(),
             prepMinutes,
             kitchenId

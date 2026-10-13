@@ -198,6 +198,14 @@ class ChefCatalogDatabaseTest {
         assertEquals("CHEF_ROLE_REQUIRED",rejected(()->catalog.getKitchenSettings(new CravesPrincipal(chef,"",Set.of("CUSTOMER")))).getCode());
     }
 
+    @Test void updatingSettingsBumpsUpdatedAtLikeEveryOtherKitchenWrite() {
+        jdbc.update("UPDATE catalog_schema.kitchen_profile SET updated_at=now()-interval '1 day' WHERE id=?",kitchen);
+        var before=jdbc.queryForObject("SELECT updated_at FROM catalog_schema.kitchen_profile WHERE id=?",java.sql.Timestamp.class,kitchen);
+        catalog.updateKitchenSettings(owner,new KitchenSettings(true,20));
+        var after=jdbc.queryForObject("SELECT updated_at FROM catalog_schema.kitchen_profile WHERE id=?",java.sql.Timestamp.class,kitchen);
+        assertTrue(after.after(before),"updated_at must move forward: "+before+" -> "+after);
+    }
+
     @Test void theInternalKitchenReadExposesSettingsForOrderServiceButThePublicReadDoesNot() throws Exception {
         catalog.upsertMyKitchen(owner,request("Chef kitchen",List.of("Andhra"),List.of("Kondapur"),null));
         catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);

@@ -2,10 +2,13 @@ package in.craves.order.service;
 
 import in.craves.order.config.CatalogClientProperties;
 import java.math.BigDecimal;
+import java.net.http.HttpClient;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
@@ -19,9 +22,22 @@ public class CatalogClient {
     private final RestClient restClient;
     private final String internalAccessValue;
 
+    @Autowired
     public CatalogClient(CatalogClientProperties properties, RestClient.Builder builder) {
-        this.restClient = builder.baseUrl(properties.getBaseUrl()).build();
+        this(properties, builder.clone().baseUrl(properties.getBaseUrl()).requestFactory(timeouts(properties)).build());
+    }
+
+    /** For tests that bind a mock server: the caller builds the client, so the mock's request factory is kept. */
+    CatalogClient(CatalogClientProperties properties, RestClient restClient) {
+        this.restClient = restClient;
         this.internalAccessValue = properties.getInternalAccessValue();
+    }
+
+    private static JdkClientHttpRequestFactory timeouts(CatalogClientProperties properties) {
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(
+            HttpClient.newBuilder().connectTimeout(properties.getConnectTimeout()).build());
+        factory.setReadTimeout(properties.getReadTimeout());
+        return factory;
     }
 
     public CatalogMenuItem getActiveMenuItem(UUID menuItemId) {

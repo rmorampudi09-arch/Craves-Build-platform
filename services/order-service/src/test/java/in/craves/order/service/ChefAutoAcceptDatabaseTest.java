@@ -37,6 +37,7 @@ import in.craves.order.web.ApiDtos.ChefAcceptRequest;
 import in.craves.order.web.ApiDtos.CheckoutRequest;
 import in.craves.order.web.ApiDtos.CustomerAddressSnapshotResponse;
 import in.craves.order.web.ApiDtos.KitchenPickupSnapshotResponse;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -238,6 +239,21 @@ class ChefAutoAcceptDatabaseTest {
     }
 
     @Test
+    void aScheduledOrderStaysManualForTheSameReasonAsAMealPlanOrder() {
+        UUID id = paidOrder(menu);
+        jdbc.update("UPDATE order_schema.customer_order SET fulfilment_mode = 'SCHEDULED', "
+            + "requested_fulfilment_at = now() + interval '5 hours', requested_timezone = 'Asia/Kolkata' WHERE id = ?", id);
+
+        worker.process();
+
+        assertEquals("CHEF_ACCEPTANCE_PENDING", order(id).get("status"));
+        assertEquals(0, count("domain_event_outbox"));
+        assertEquals(MANUAL_TITLE, notification("chef-new-order-" + id).get("title"));
+        acceptance.accept(chefActor, id, new ChefAcceptRequest(20, null), null, "hand-" + id);
+        assertEquals("CHEF_ACCEPTED", order(id).get("status"));
+    }
+
+    @Test
     void prepTimeFallsBackToTheKitchenDefaultThenToFifteen() {
         doReturn(dish(menu, null)).when(catalog).getActiveMenuItem(menu);
         kitchenSettings(true, 25);
@@ -299,7 +315,8 @@ class ChefAutoAcceptDatabaseTest {
     void dishLookupFailingStillAutoAcceptsWithTheKitchenDefaultThenFifteen() {
         UUID withDefault = paidOrder(menu);
         UUID withoutDefault = paidOrder(menu);
-        doThrow(new ResourceAccessException("catalog timeout")).when(catalog).getActiveMenuItem(menu);
+        doThrow(new ResourceAccessException("I/O error on GET request", new IOException("Request timed out")))
+            .when(catalog).getActiveMenuItem(menu);
 
         kitchenSettings(true, 25);
         assertTrue(autoAccept.recordNewOrder(withDefault, catalog.getKitchen(kitchen)));

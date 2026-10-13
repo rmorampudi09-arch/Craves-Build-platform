@@ -2,6 +2,7 @@ package in.craves.order.service;
 
 import in.craves.order.service.CatalogClient.CatalogKitchen;
 import in.craves.order.web.ApiDtos.OrderResponse;
+import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,14 +62,14 @@ public class ChefAutoAcceptService {
 
     /**
      * The order's slowest dish, else the kitchen's default, else 15. A dish the catalog cannot answer for (inactive,
-     * or the catalog failing) is skipped. Null (leave the order for the chef) for a meal-plan order.
+     * or the catalog failing) is skipped. Null (leave the order for the chef) for a meal-plan or SCHEDULED order.
      */
     private Integer prepMinutes(UUID orderId, CatalogKitchen kitchen) {
-        // shortcut: meal-plan orders stay manual; accept books the courier from now + prep and ignores the meal
-        // time, so accepting at creation would dispatch hours early. Lift once dispatch honours scheduled_service_at.
-        String source = jdbcTemplate.queryForObject(
-            "SELECT order_source FROM order_schema.customer_order WHERE id = ?", String.class, orderId);
-        if ("SUBSCRIPTION".equals(source)) {
+        // shortcut: meal-plan and SCHEDULED orders stay manual; accept books the courier from now + prep and ignores
+        // the meal/requested time, so accepting at creation would dispatch hours early. Lift once dispatch honours it.
+        Map<String, Object> order = jdbcTemplate.queryForMap(
+            "SELECT order_source, fulfilment_mode FROM order_schema.customer_order WHERE id = ?", orderId);
+        if ("SUBSCRIPTION".equals(order.get("order_source")) || "SCHEDULED".equals(order.get("fulfilment_mode"))) {
             return null;
         }
         int slowestDish = 0;

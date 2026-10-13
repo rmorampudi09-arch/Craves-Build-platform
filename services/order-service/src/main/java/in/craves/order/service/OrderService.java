@@ -541,7 +541,7 @@ public class OrderService {
 
     @Transactional
     public ChargePolicyResponse createChargePolicy(CravesPrincipal principal, ChargePolicyRequest request) {
-        requireAdmin(principal);
+        requireChargePolicyRole(principal, "PLATFORM_ADMIN", "PAYMENTS_ADMIN");
         jdbcTemplate.update("UPDATE order_schema.charge_policy SET is_active = false WHERE is_active = true");
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
@@ -804,9 +804,9 @@ public class OrderService {
         }
     }
 
-    private void requireAdmin(CravesPrincipal principal) {
-        if (principal == null || !principal.hasRole("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin role is required");
+    private static void requireChargePolicyRole(CravesPrincipal principal, String... roles) {
+        if (principal == null || !principal.hasAnyRole(roles)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, String.join(" or ", roles) + " role is required");
         }
     }
 

@@ -1,6 +1,6 @@
 # Internal administrator RBAC
 
-This module replaces the broad backend `ADMIN` authorization check with named, least-privilege internal roles. The legacy `ADMIN` role remains only as a compatibility marker for the existing backoffice shell; sensitive Spring Boot operations do not authorize it directly.
+This module replaces the broad backend `ADMIN` authorization check with named, least-privilege internal roles. `ADMIN` is retired (CH-08): never granted, never issued in tokens and never honoured; the contract migration deletes its rows.
 
 ## Roles
 
@@ -46,13 +46,12 @@ Example request body:
 }
 ```
 
-The request can manage only the nine internal roles. It cannot grant or revoke `CUSTOMER`, `CHEF`, or the legacy `ADMIN` marker directly.
+The request can manage only the nine internal roles. It cannot grant or revoke `CUSTOMER`, `CHEF`, or the retired `ADMIN` role directly.
 
 ## Security behavior
 
 - Existing `ADMIN` identities are migrated to `PLATFORM_ADMIN`, preventing lockout.
-- Every internal role holder receives the legacy `ADMIN` marker only so the unchanged admin shell can recognize backoffice access.
-- Removing all internal roles also removes that compatibility marker.
+- `ADMIN` is retired (CH-08): never granted, never issued in tokens and never honoured. Every role change deletes the identity's old `ADMIN` row, so an Auth rollback cannot re-arm revoked staff; the contract migration deletes the rest.
 - An administrator cannot remove their own `PLATFORM_ADMIN` role.
 - The last active platform administrator cannot be removed.
 - Role replacements use a PostgreSQL transaction advisory lock and target-row lock.

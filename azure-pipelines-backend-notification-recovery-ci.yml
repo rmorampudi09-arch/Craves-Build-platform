@@ -28,8 +28,11 @@ steps:
         services/notification-service/src/main/java/in/craves/notification/recovery/NotificationRecoveryRepository.java
       grep -F "previous_attempt_count" \
         services/notification-service/src/main/resources/db/migration/V4__notification_recovery_operations.sql
-      grep -F 'hasRole("ADMIN")' \
-        services/notification-service/src/main/java/in/craves/notification/recovery/AdminNotificationRecoveryController.java
+      if grep -F '"ADMIN"' \
+          services/notification-service/src/main/java/in/craves/notification/recovery/AdminNotificationRecoveryController.java; then
+        echo 'Recovery APIs must not honour the retired ADMIN role.' >&2
+        exit 1
+      fi
       if grep -R -E 'device_token|raw_payload|connection-string|service-account-json' \
           services/notification-service/src/main/java/in/craves/notification/recovery; then
         echo 'Recovery APIs must not expose device tokens, provider payloads or credentials.' >&2

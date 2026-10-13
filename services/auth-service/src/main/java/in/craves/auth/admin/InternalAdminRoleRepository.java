@@ -256,20 +256,8 @@ public class InternalAdminRoleRepository {
                 role
             );
         }
-        if (newRoles.isEmpty()) {
-            jdbcTemplate.update(
-                "DELETE FROM auth_identity_role WHERE identity_id = ? AND role_code = 'ADMIN'",
-                identityId
-            );
-        } else {
-            jdbcTemplate.update(
-                """
-                INSERT INTO auth_identity_role (identity_id, role_code, created_at)
-                VALUES (?, 'ADMIN', now()) ON CONFLICT (identity_id, role_code) DO NOTHING
-                """,
-                identityId
-            );
-        }
+        // Retire legacy ADMIN rows so an auth rollback cannot re-arm revoked staff; "CH-08 contract" deletes this line.
+        jdbcTemplate.update("DELETE FROM auth_identity_role WHERE identity_id = ? AND role_code = 'ADMIN'", identityId);
     }
 
     private long incrementTokenVersion(UUID identityId, long expectedVersion) {

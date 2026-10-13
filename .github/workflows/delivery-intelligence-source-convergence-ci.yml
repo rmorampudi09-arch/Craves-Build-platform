@@ -145,8 +145,8 @@ jobs:
           grep -Fq '@RequestMapping("/api/v1/admin/operations/delivery-intelligence")' "$CONTROLLER"
           grep -Fq '@GetMapping("/overview")' "$CONTROLLER"
           grep -Fq '@GetMapping("/orders/{reference}")' "$CONTROLLER"
-          grep -Fq '.requestMatchers("/api/v1/admin/operations/delivery-intelligence/**").hasAnyRole(' "$SECURITY"
-          grep -Fq '"ADMIN", "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"' "$SECURITY"
+          grep -Fq '.requestMatchers("/api/v1/admin/**").hasAnyRole(' "$SECURITY"
+          grep -Fq '"PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"' "$SECURITY"
           grep -Fq 'INSERT INTO payment_schema.admin_investigation_audit' "$REPOSITORY"
 
           if grep -REn '@(Post|Put|Patch|Delete)Mapping' services/integration-service/src/main/java/in/craves/integration/admin/deliveryintelligence; then

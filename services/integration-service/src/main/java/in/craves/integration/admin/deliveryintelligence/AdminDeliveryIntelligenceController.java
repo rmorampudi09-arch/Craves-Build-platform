@@ -112,7 +112,6 @@ public class AdminDeliveryIntelligenceController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Craves access token is required");
         }
         if (!principal.hasAnyRole(
-            "ADMIN",
             "PLATFORM_ADMIN",
             "SUPPORT_ADMIN",
             "PAYMENTS_ADMIN",

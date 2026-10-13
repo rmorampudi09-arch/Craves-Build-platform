@@ -6,7 +6,6 @@ export type AdminIdentity = {
 };
 
 const ADMIN_ROLES = new Set([
-  "ADMIN",
   "PLATFORM_ADMIN",
   "SUPPORT_ADMIN",
   "PAYMENTS_ADMIN",

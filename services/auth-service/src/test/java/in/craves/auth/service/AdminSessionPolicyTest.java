@@ -59,4 +59,9 @@ class AdminSessionPolicyTest {
         assertEquals(java.time.Duration.ofMinutes(15), properties.getAccessTokenTtl());
         assertEquals(List.of("CUSTOMER", "CHEF"), AdminSessionService.consumerRoles(List.of("CUSTOMER", "CHEF")));
     }
+
+    @Test void retiredAdminRoleIsNeverIssued() {
+        assertEquals(List.of("CUSTOMER", "CHEF"), AdminSessionService.consumerRoles(List.of("CUSTOMER", "CHEF", "ADMIN", "PLATFORM_ADMIN")));
+        assertEquals(List.of("CUSTOMER", "SUPPORT_ADMIN"), AdminSessionService.adminSessionRoles(List.of("CUSTOMER", "ADMIN", "SUPPORT_ADMIN")));
+    }
 }

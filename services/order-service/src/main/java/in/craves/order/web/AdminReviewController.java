@@ -77,8 +77,8 @@ public class AdminReviewController {
     }
 
     private static void requireAdmin(CravesPrincipal principal) {
-        if (principal == null || !principal.hasAnyRole("ADMIN", "SUPPORT_ADMIN")) {
-            throw new OrderApiException(HttpStatus.FORBIDDEN, "ROLE_REQUIRED", "ADMIN or SUPPORT_ADMIN role is required");
+        if (principal == null || !principal.hasAnyRole("PLATFORM_ADMIN", "SUPPORT_ADMIN")) {
+            throw new OrderApiException(HttpStatus.FORBIDDEN, "ROLE_REQUIRED", "PLATFORM_ADMIN or SUPPORT_ADMIN role is required");
         }
     }
 }

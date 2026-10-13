@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import in.craves.integration.security.CravesPrincipal;
 import java.time.OffsetDateTime;
@@ -79,8 +80,30 @@ class AdminDeliveryIntelligenceHistoryControllerTest {
             });
     }
 
+    @Test
+    void retiredAdminRoleIsRejectedBeforeAnyRead() {
+        DeliveryIntelligenceReadRepository investigationRepository = mock(DeliveryIntelligenceReadRepository.class);
+        DeliveryIntelligenceHistoryReadRepository historyRepository = mock(DeliveryIntelligenceHistoryReadRepository.class);
+        AdminDeliveryIntelligenceController controller = new AdminDeliveryIntelligenceController(
+            investigationRepository,
+            historyRepository
+        );
+
+        assertThatThrownBy(() -> controller.overview(actor("ADMIN"), 0, 25, "desc", 0, 0, null, null))
+            .isInstanceOfSatisfying(ResponseStatusException.class, error ->
+                org.assertj.core.api.Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+        assertThatThrownBy(() -> controller.investigate(actor("ADMIN"), "SYNTHETIC-REF", null))
+            .isInstanceOfSatisfying(ResponseStatusException.class, error ->
+                org.assertj.core.api.Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+        verifyNoInteractions(investigationRepository, historyRepository);
+    }
+
     private static Authentication admin() {
-        CravesPrincipal principal = new CravesPrincipal(UUID.randomUUID(), "+910000000000", Set.of("ADMIN"));
+        return actor("OPERATIONS_ADMIN");
+    }
+
+    private static Authentication actor(String role) {
+        CravesPrincipal principal = new CravesPrincipal(UUID.randomUUID(), "+910000000000", Set.of(role));
         return new UsernamePasswordAuthenticationToken(principal, null, Set.of());
     }
 }

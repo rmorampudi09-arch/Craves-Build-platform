@@ -17,7 +17,6 @@ import org.springframework.web.server.ResponseStatusException;
 public class StaffRoleGrantService {
     private static final long ROLE_CHANGE_LOCK = 435_728_104_191L;
     private static final String CHEF_ROLE = "CHEF";
-    private static final String LEGACY_ADMIN_ROLE = "ADMIN";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -79,11 +78,9 @@ public class StaffRoleGrantService {
             newInternalRoles = new LinkedHashSet<>(newInternalRoles.stream().sorted().toList());
 
             boolean hadChef = hasRole(target.identityId(), CHEF_ROLE);
-            boolean hadLegacyAdmin = hasRole(target.identityId(), LEGACY_ADMIN_ROLE);
             boolean internalChanged = !previousInternalRoles.equals(newInternalRoles);
             boolean chefChanged = grantChef && !hadChef;
-            boolean legacyAdminChanged = !newInternalRoles.isEmpty() && !hadLegacyAdmin;
-            boolean changed = internalChanged || chefChanged || legacyAdminChanged;
+            boolean changed = internalChanged || chefChanged;
 
             if (internalChanged) {
                 for (String role : requestedRoles.stream().sorted().toList()) {
@@ -96,16 +93,6 @@ public class StaffRoleGrantService {
                         role
                     );
                 }
-            }
-
-            if (legacyAdminChanged) {
-                jdbcTemplate.update(
-                    """
-                    INSERT INTO auth_identity_role (identity_id, role_code, created_at)
-                    VALUES (?, 'ADMIN', now()) ON CONFLICT (identity_id, role_code) DO NOTHING
-                    """,
-                    target.identityId()
-                );
             }
 
             if (chefChanged) {

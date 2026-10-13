@@ -517,7 +517,7 @@ public class ScheduledOrderService {
         SchedulePolicyRequest request,
         String adminReason
     ) {
-        requireRole(principal, "ADMIN");
+        requireRole(principal, "PLATFORM_ADMIN", "OPERATIONS_ADMIN");
         String reason = ScheduleValidation.validateAdminReason(adminReason);
         PolicyRow existing = findPolicy(kitchenId, true);
         ValidatedPolicy validated = ScheduleValidation.validatePolicy(request, existing != null);
@@ -590,7 +590,7 @@ public class ScheduledOrderService {
 
     @Transactional(readOnly = true)
     public SchedulePolicyView getPolicy(CravesPrincipal principal, UUID kitchenId) {
-        requireRole(principal, "ADMIN");
+        requireRole(principal, "PLATFORM_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN");
         return toPolicyView(requirePolicy(kitchenId, false));
     }
 

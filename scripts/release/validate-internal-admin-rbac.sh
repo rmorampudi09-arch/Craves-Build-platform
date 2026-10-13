@@ -114,17 +114,15 @@ grep -Fq '"PLATFORM_ADMIN", "NOTIFICATION_ADMIN"' \
   "$ROOT/services/notification-service/src/main/java/in/craves/notification/recovery/AdminNotificationRecoveryController.java" \
   || fail 'notification role mapping is incomplete'
 
-if grep -R -n -F 'hasRole("ADMIN")' \
-  "$ROOT/services/auth-service/src/main/java/in/craves/auth/admin" \
-  "$ROOT/services/user-chef-service/src/main/java/in/craves/userchef/service/ChefApplicationService.java" \
-  "$ROOT/services/user-chef-service/src/main/java/in/craves/userchef/service/ChefDocumentReviewService.java" \
-  "$ROOT/services/order-service/src/main/java/in/craves/order/admin" \
-  "$ROOT/services/order-service/src/main/java/in/craves/order/launchpolicy/LaunchPolicyService.java" \
-  "$ROOT/services/integration-service/src/main/java/in/craves/integration/admin" \
-  "$ROOT/services/integration-service/src/main/java/in/craves/integration/settlement/ChefFinancialService.java" \
-  "$ROOT/services/notification-service/src/main/java/in/craves/notification/recovery"; then
-  fail 'a sensitive administrative operation still authorizes the broad legacy ADMIN role'
+# CH-08: ADMIN is retired; no service grants it (SQL 'ADMIN') or honours it ("ADMIN" in a role check).
+# Only the role-change cleanup that retires old rows may name it until "CH-08 contract" deletes the rows.
+ADMIN_CLEANUP="DELETE FROM auth_identity_role WHERE identity_id = ? AND role_code = 'ADMIN'"
+if grep -R -n -E "[\"']ADMIN[\"']" "$ROOT"/services/*/src/main/java | grep -v -F "$ADMIN_CLEANUP"; then
+  fail 'a service still grants or honours the retired ADMIN role'
 fi
+grep -Fq "$ADMIN_CLEANUP" "$REPOSITORY" || fail 'role changes do not retire legacy ADMIN rows'
+grep -Fq 'CONSUMER_ROLES::contains' "$ROOT/services/auth-service/src/main/java/in/craves/auth/service/AdminSessionService.java" \
+  || fail 'access tokens are not limited to allow-listed roles'
 
 if grep -R -En 'apps/customer-web|apps/mobile|NEXT_PUBLIC|React Native' \
   "$CONTROLLER" "$REPOSITORY" "$STAFF_GRANT_SERVICE" "$ROLE_CATALOG" "$MIGRATION"; then

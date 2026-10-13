@@ -6,7 +6,7 @@ Date: 2026-08-05
 
 The backend has a complete least-privilege internal-role model instead of one unrestricted `ADMIN` permission. This source change does not touch customer, chef, admin or mobile frontend code. It does not activate Cashfree, Firebase provider operations, delivery providers, email, push, SMS or subscription workers.
 
-The legacy `ADMIN` role remains only as a compatibility marker for the existing backoffice shell. Sensitive Spring Boot operations authorize named internal roles.
+`ADMIN` is retired (CH-08): never granted, never issued in tokens and never honoured; the contract migration deletes its rows. Sensitive Spring Boot operations authorize named internal roles.
 
 ## Existing provider-neutral backend retained
 
@@ -73,7 +73,7 @@ Example:
 }
 ```
 
-The API cannot grant or revoke `CUSTOMER`, `CHEF` or the legacy `ADMIN` marker directly.
+The API cannot grant or revoke `CUSTOMER`, `CHEF` or the retired `ADMIN` role directly.
 
 ## Operation matrix
 
@@ -95,6 +95,15 @@ The API cannot grant or revoke `CUSTOMER`, `CHEF` or the legacy `ADMIN` marker d
 | Launch-policy administration | `PLATFORM_ADMIN`, `OPERATIONS_ADMIN` |
 | Notification backlog read | `PLATFORM_ADMIN`, `NOTIFICATION_ADMIN`, `AUDIT_ADMIN` |
 | Notification retry | `PLATFORM_ADMIN`, `NOTIFICATION_ADMIN` |
+| Charge-policy change | `PLATFORM_ADMIN`, `PAYMENTS_ADMIN` |
+| Charge-policy read | `PLATFORM_ADMIN`, `PAYMENTS_ADMIN`, `AUDIT_ADMIN` |
+| Scheduled-order policy change | `PLATFORM_ADMIN`, `OPERATIONS_ADMIN` |
+| Scheduled-order policy read | `PLATFORM_ADMIN`, `OPERATIONS_ADMIN`, `AUDIT_ADMIN` |
+| Review moderation, reports and tag list | `PLATFORM_ADMIN`, `SUPPORT_ADMIN` |
+| Review tag definitions | `PLATFORM_ADMIN` |
+| Directory search and customer case | `PLATFORM_ADMIN`, `SUPPORT_ADMIN` |
+| Directory chef case | `PLATFORM_ADMIN`, `SUPPORT_ADMIN`, `CHEF_ADMIN`, `COMPLIANCE_ADMIN`, `AUDIT_ADMIN` |
+| Delivery intelligence | `PLATFORM_ADMIN`, `SUPPORT_ADMIN`, `PAYMENTS_ADMIN`, `OPERATIONS_ADMIN`, `AUDIT_ADMIN` |
 
 ## Database migration
 
@@ -175,10 +184,27 @@ AZURE_SERVICE_CONNECTION = Craves-Dev-Service-Connection
 3. Submit the same exact role set and confirm `changed=false` plus audit evidence.
 4. Assign `SUPPORT_ADMIN` to a non-production staff identity.
 5. Confirm its old refresh session is revoked.
-6. Sign in again and confirm its JWT contains `SUPPORT_ADMIN` plus compatibility `ADMIN`.
+6. Sign in again and confirm its JWT contains `SUPPORT_ADMIN` and no `ADMIN`.
 7. Confirm permitted investigation reads work.
 8. Confirm chef decisions, settlement mutations, launch-policy mutations and notification retry return `403`.
-9. Remove the test role and confirm backoffice compatibility access is removed.
+9. Remove the test role and confirm backoffice access is removed.
+
+## Retiring ADMIN (CH-08)
+
+Deploy Order, User/Chef and Integration (and the delivery-intelligence web app) before Auth; either order fails closed. Before the Auth deploy, run these read-only checks:
+
+```sql
+-- Identities that hold ADMIN and no scoped role; expected 0 rows. Grant a deliberate role through PUT /users/{id}/roles.
+SELECT r.identity_id, i.status FROM auth_identity_role r JOIN auth_identity i ON i.id = r.identity_id
+ WHERE r.role_code = 'ADMIN' AND NOT EXISTS (SELECT 1 FROM auth_identity_role s WHERE s.identity_id = r.identity_id
+   AND s.role_code IN ('PLATFORM_ADMIN','SUPPORT_ADMIN','PAYMENTS_ADMIN','OPERATIONS_ADMIN','CHEF_ADMIN','COMPLIANCE_ADMIN','SUBSCRIPTION_ADMIN','NOTIFICATION_ADMIN','AUDIT_ADMIN'));
+-- Scoped-role holders without PLATFORM_ADMIN; they keep only their own scope (see the operation matrix).
+SELECT identity_id, string_agg(role_code, ',' ORDER BY role_code) FROM auth_identity_role
+ WHERE role_code IN ('PLATFORM_ADMIN','SUPPORT_ADMIN','PAYMENTS_ADMIN','OPERATIONS_ADMIN','CHEF_ADMIN','COMPLIANCE_ADMIN','SUBSCRIPTION_ADMIN','NOTIFICATION_ADMIN','AUDIT_ADMIN') GROUP BY identity_id
+HAVING bool_and(role_code <> 'PLATFORM_ADMIN');
+```
+
+Every role change through PUT /users/{id}/roles deletes that identity's `ADMIN` row. The remaining rows stay until the follow-up release "CH-08 contract: retire ADMIN role rows" deletes them, after every service runs the CH-08 build.
 
 ## Rollback
 
@@ -186,6 +212,7 @@ AZURE_SERVICE_CONNECTION = Craves-Dev-Service-Connection
 - Roll back APIM operations using `azure-pipelines-internal-admin-rbac-apim-rollback.yml` when required.
 - Roll back service images using the guarded seven-service release pipeline.
 - Do not delete V6 tables, assignments or append-only audit records. Flyway changes are forward-only.
+- An Auth rollback before the CH-08 contract release issues `ADMIN` again only to identities that still hold the row; staff whose roles were changed or removed since CH-08 no longer do.
 
 ## Remaining manual work
 

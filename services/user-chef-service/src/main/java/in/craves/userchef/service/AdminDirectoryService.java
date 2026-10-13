@@ -44,7 +44,7 @@ public class AdminDirectoryService {
 
     @Transactional
     public DirectorySearchResponse search(CurrentUser admin, String rawQuery, String rawReason) {
-        requireAdmin(admin);
+        requireAdmin(admin, "PLATFORM_ADMIN", "SUPPORT_ADMIN");
         String reason = normalizeReason(rawReason);
         SearchQuery query = normalizeQuery(rawQuery);
         UUID correlationId = UUID.randomUUID();
@@ -65,7 +65,7 @@ public class AdminDirectoryService {
 
     @Transactional
     public CustomerCaseResponse getCustomerCase(CurrentUser admin, UUID identityId, String rawReason) {
-        requireAdmin(admin);
+        requireAdmin(admin, "PLATFORM_ADMIN", "SUPPORT_ADMIN");
         if (identityId == null) {
             throw ApiException.badRequest("ADMIN_DIRECTORY_IDENTITY_REQUIRED", "Customer identity is required");
         }
@@ -97,7 +97,8 @@ public class AdminDirectoryService {
 
     @Transactional
     public ChefCaseResponse getChefCase(CurrentUser admin, UUID identityId, String rawReason) {
-        requireAdmin(admin);
+        // Chef reviewers already read this application data through ChefApplicationService.
+        requireAdmin(admin, "PLATFORM_ADMIN", "SUPPORT_ADMIN", "CHEF_ADMIN", "COMPLIANCE_ADMIN", "AUDIT_ADMIN");
         if (identityId == null) {
             throw ApiException.badRequest("ADMIN_DIRECTORY_IDENTITY_REQUIRED", "Chef identity is required");
         }
@@ -368,11 +369,11 @@ public class AdminDirectoryService {
         );
     }
 
-    private static void requireAdmin(CurrentUser user) {
+    private static void requireAdmin(CurrentUser user, String... roles) {
         if (user == null) {
             throw ApiException.unauthorized("ADMIN_AUTHENTICATION_REQUIRED", "Administrator authentication is required");
         }
-        if (!user.hasRole("ADMIN")) {
+        if (!user.hasAnyRole(roles)) {
             throw ApiException.forbidden("ADMIN_ROLE_REQUIRED", "Administrator role is required");
         }
     }

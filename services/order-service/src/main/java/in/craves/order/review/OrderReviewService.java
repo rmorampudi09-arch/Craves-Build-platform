@@ -276,7 +276,7 @@ public class OrderReviewService {
         Integer requestedLimit,
         String cursorValue
     ) {
-        requireRole(principal, "ADMIN", "SUPPORT_ADMIN");
+        requireRole(principal, "PLATFORM_ADMIN", "SUPPORT_ADMIN");
         int limit = ReviewValidation.validateLimit(requestedLimit, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
         ReviewCursor cursor = ReviewCursorCodec.decode(cursorValue);
         StringBuilder sql = new StringBuilder(REVIEW_SELECT).append(" WHERE 1 = 1");
@@ -302,7 +302,7 @@ public class OrderReviewService {
         ModerationRequest request,
         String adminReason
     ) {
-        requireRole(principal, "ADMIN", "SUPPORT_ADMIN");
+        requireRole(principal, "PLATFORM_ADMIN", "SUPPORT_ADMIN");
         String reason = ReviewValidation.validateAdminReason(adminReason);
         if (request == null || request.action() == null) {
             throw OrderApiException.badRequest("REVIEW_MODERATION_ACTION_REQUIRED", "Moderation action is required");
@@ -412,7 +412,7 @@ public class OrderReviewService {
 
     @Transactional(readOnly = true)
     public List<ReportView> listReports(CravesPrincipal principal, UUID reviewId) {
-        requireRole(principal, "ADMIN", "SUPPORT_ADMIN");
+        requireRole(principal, "PLATFORM_ADMIN", "SUPPORT_ADMIN");
         lockFreeRequireReview(reviewId);
         return jdbc.query("""
             SELECT id, review_id, reason_code, detail, created_at
@@ -446,7 +446,7 @@ public class OrderReviewService {
         TagDefinitionRequest request,
         String adminReason
     ) {
-        requireRole(principal, "ADMIN");
+        requireRole(principal, "PLATFORM_ADMIN");
         ReviewValidation.validateAdminReason(adminReason);
         ValidatedTagDefinition tag = ReviewValidation.validateTagDefinition(code, request);
         jdbc.update("""

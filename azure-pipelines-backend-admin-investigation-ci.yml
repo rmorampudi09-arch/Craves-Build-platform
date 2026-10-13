@@ -36,7 +36,10 @@ steps:
         grep -F 'X-Admin-Reason' "$file"
         grep -F 'X-Correlation-ID' "$file"
         grep -F 'CacheControl.noStore()' "$file"
-        grep -F 'hasRole("ADMIN")' "$file"
+        if grep -F '"ADMIN"' "$file"; then
+          echo "Retired ADMIN role is honoured by $file" >&2
+          exit 1
+        fi
         if grep -E 'raw_payload|request_payload|response_payload|provider_payload|device_token|tracking_url' "$file"; then
           echo "Sensitive raw payload or token field exposed by $file" >&2
           exit 1

@@ -145,6 +145,16 @@ class AdminSessionPersistenceTest {
         assertThrows(AuthException.class, () -> refresh(first, UUID.randomUUID()));
     }
 
+    @Test void adminSessionTokensNeverCarryTheRetiredAdminRole() {
+        jdbc.update("INSERT INTO auth_identity_role(identity_id,role_code) VALUES(?, 'ADMIN')", identity.getId());
+        List<String> stored = jdbc.queryForList("SELECT role_code FROM auth_identity_role WHERE identity_id = ? ORDER BY role_code DESC", String.class, identity.getId());
+        AuthTokenResponse first = tx(() -> sessions.create(identity, stored, clock.instant().getEpochSecond()));
+        for (AuthTokenResponse issued : List.of(first, refresh(first, UUID.randomUUID()))) {
+            assertEquals(List.of("PLATFORM_ADMIN"), jwt.verifyAccessToken(issued.accessToken()).roles());
+            assertEquals(List.of("PLATFORM_ADMIN"), issued.identity().roles());
+        }
+    }
+
     @Test void oldLogoutCannotInvalidateLaterInteractiveSignIn() {
         AuthTokenResponse first = signIn(); logout(first);
         identity.setTokenVersion(jdbc.queryForObject("SELECT token_version FROM auth_identity WHERE id = ?", Long.class, identity.getId()));

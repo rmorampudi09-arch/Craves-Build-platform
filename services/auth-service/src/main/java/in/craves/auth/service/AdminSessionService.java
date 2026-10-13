@@ -17,6 +17,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AdminSessionService {
     public static final Duration ABSOLUTE_WINDOW = Duration.ofHours(8);
+    private static final Set<String> CONSUMER_ROLES = Set.of("CUSTOMER", "CHEF");
     private final JdbcTemplate jdbc;
     private final AuthIdentityRepository identities;
     private final AuthIdentityRoleRepository roles;
@@ -143,8 +145,13 @@ public class AdminSessionService {
         if (count == null || count != 1) throw rejected("ADMIN_SESSION_REVOKED");
     }
 
+    // Tokens carry only roles a service honours; the retired ADMIN alias is never issued (CH-08).
     public static List<String> consumerRoles(List<String> roles) {
-        return roles.stream().filter(role -> !in.craves.auth.admin.InternalAdminRoles.codes().contains(role)).toList();
+        return roles.stream().filter(CONSUMER_ROLES::contains).toList();
+    }
+
+    static List<String> adminSessionRoles(List<String> roles) {
+        return roles.stream().filter(role -> CONSUMER_ROLES.contains(role) || InternalAdminRoles.codes().contains(role)).toList();
     }
 
     private void lockIdentity(UUID identity) {
@@ -181,13 +188,14 @@ public class AdminSessionService {
     }
 
     private AuthTokenResponse response(AuthIdentity identity, List<String> currentRoles, String token, UUID family, Instant end, Instant now) {
+        List<String> issued = adminSessionRoles(currentRoles);
         Instant accessEnd = now.plus(properties.getAccessTokenTtl());
         if (accessEnd.isAfter(end)) accessEnd = end;
         long seconds = Duration.between(now, accessEnd).toSeconds();
         if (seconds < 1) throw rejected("ADMIN_SESSION_EXPIRED");
-        String access = jwt.issueAccessToken(identity, currentRoles, accessEnd, family, end.minus(ABSOLUTE_WINDOW));
+        String access = jwt.issueAccessToken(identity, issued, accessEnd, family, end.minus(ABSOLUTE_WINDOW));
         return AuthTokenResponse.create(access, seconds, token, end, new IdentityResponse(identity.getId(), identity.getFirebaseUid(),
-            identity.getPhoneNumber(), identity.getEmail(), identity.isEmailVerified(), identity.getDisplayName(), identity.getStatus(), currentRoles, identity.getLastLoginAt()));
+            identity.getPhoneNumber(), identity.getEmail(), identity.isEmailVerified(), identity.getDisplayName(), identity.getStatus(), issued, identity.getLastLoginAt()));
     }
 
     private Session session(String hash) {

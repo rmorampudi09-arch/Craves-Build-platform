@@ -10,9 +10,10 @@ import {ChefReferralEarningsScreen} from './ChefReferralEarningsScreen';
 jest.setTimeout(20_000);
 
 const mockGoBack = jest.fn();
+const mockNavigate = jest.fn();
 const mockEarnings = {get: jest.fn()};
 
-jest.mock('@react-navigation/native', () => ({useNavigation: () => ({navigate: jest.fn(), goBack: mockGoBack})}));
+jest.mock('@react-navigation/native', () => ({useNavigation: () => ({navigate: mockNavigate, goBack: mockGoBack})}));
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: require('react-native').View,
   useSafeAreaInsets: () => ({top: 0, right: 0, bottom: 0, left: 0}),
@@ -97,8 +98,10 @@ describe('ChefReferralEarningsScreen', () => {
     expect(ui.has("We couldn't load this")).toBe(false);
     expect(ui.byLabel('Try again')).toBeUndefined();
     expect(ui.anyText(/REFERRAL_|enrol|403/i)).toBe(false);
+    // Goes to Refer a chef itself (popping back to it when it is already in the stack), not just one step back.
     await ui.press('Back to Refer a chef');
-    expect(mockGoBack).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledWith('ChefReferral', undefined, {pop: true});
+    expect(mockGoBack).not.toHaveBeenCalled();
   });
 
   it('keeps the usual error card for any other refusal', async () => {

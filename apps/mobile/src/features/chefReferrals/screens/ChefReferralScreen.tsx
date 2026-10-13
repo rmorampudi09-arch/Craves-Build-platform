@@ -91,9 +91,7 @@ export function ChefReferralScreen() {
       {joining ? (
         <ChefReferralJoin
           checking={code.query.isFetching}
-          onCheck={() => {
-            code.query.refetch().catch(() => undefined);
-          }}
+          onCheck={async () => (await code.query.refetch()).error}
           onJoined={() => setJoined(true)}
         />
       ) : (

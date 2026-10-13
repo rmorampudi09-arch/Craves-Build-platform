@@ -19,7 +19,7 @@ export interface ReadStateProps {
 }
 
 /** The retry card for a read or an action that failed: the same words everywhere on the chef Profile screens. */
-export function LoadFailedCard({onRetry}: {onRetry: () => void}) {
+export function LoadFailedCard({onRetry, busy = false}: {onRetry: () => void; busy?: boolean}) {
   return (
     <ChefCard>
       <View style={styles.error}>
@@ -29,7 +29,7 @@ export function LoadFailedCard({onRetry}: {onRetry: () => void}) {
         <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.errorMessage}>
           Check your connection and try again.
         </Text>
-        <ChefActionButton label="Try again" onPress={onRetry} tone="neutral" />
+        <ChefActionButton busy={busy} label="Try again" onPress={onRetry} tone="neutral" />
       </View>
     </ChefCard>
   );

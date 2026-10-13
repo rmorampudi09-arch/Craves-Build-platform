@@ -1,6 +1,7 @@
 import React from 'react';
 import {StyleSheet, Text, View} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
+import {useNavigation, type NavigationProp} from '@react-navigation/native';
+import type {ChefProfileStackParamList} from '../../../app/navigation/types';
 import {colors, fontWeight, radius, spacing, textDefaults, typography} from '../../../design/tokens';
 import {ReadState} from '../../chefProfile/components/ReadState';
 import {useChefRead} from '../../chefProfile/state/useChefRead';
@@ -12,7 +13,7 @@ import {referralRupees} from '../domain/referralFormat';
 
 /** Referral earnings: this month against the monthly limit, and each credit that was posted. */
 export function ChefReferralEarningsScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<ChefProfileStackParamList>>();
   const {query} = useChefRead('chef-referral-earnings', signal => chefReferralEarningsApi.get(signal));
   const earnings = query.data;
   const used = Number(earnings?.monthUsedPaise ?? 0);
@@ -38,7 +39,12 @@ export function ChefReferralEarningsScreen() {
           <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
             Your earnings will show here once you have joined.
           </Text>
-          <ChefActionButton label="Back to Refer a chef" onPress={() => navigation.goBack()} tone="neutral" />
+          <ChefActionButton
+              label="Back to Refer a chef"
+              // pop: back to the open Refer a chef when it is in the stack, otherwise open it.
+              onPress={() => navigation.navigate('ChefReferral', undefined, {pop: true})}
+              tone="neutral"
+            />
         </ChefCard>
       ) : (
         <ReadState

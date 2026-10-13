@@ -197,7 +197,9 @@ describe('ChefReferralScreen for a chef who has not joined the programme', () =>
   it('offers to join instead of showing the error, with the terms in plain words', async () => {
     await mount();
     expect(ui.has('Join the chef referral programme')).toBe(true);
-    expect(ui.anyText(/three levels/)).toBe(true);
+    expect(ui.anyText(/food sales of chefs you invite, and of the chefs they invite, up to three levels/)).toBe(true);
+    expect(ui.anyText(/It comes from Craves' commission, never from their earnings\./)).toBe(true);
+    expect(ui.anyText(/what the chefs you invite earn on delivered orders/)).toBe(false);
     expect(ui.anyText(/without a referrer/)).toBe(true);
     expect(ui.anyText(/held for 24 hours/)).toBe(true);
     expect(ui.has("We couldn't load this")).toBe(false);
@@ -223,7 +225,7 @@ describe('ChefReferralScreen for a chef who has not joined the programme', () =>
     expect(mockEnroll).not.toHaveBeenCalled();
   });
 
-  it('opens the full terms with the version at the bottom', async () => {
+  it('opens the full terms with the version in plain words at the bottom, never the raw id', async () => {
     await mount();
     expect(ui.anyText(/Who can take part\./)).toBe(false);
     await ui.press('Read the full terms');
@@ -231,7 +233,8 @@ describe('ChefReferralScreen for a chef who has not joined the programme', () =>
     expect(ui.anyText(/Any home chef with an active Craves account can join\./)).toBe(true);
     expect(ui.anyText(/₹250 or more/)).toBe(true);
     expect(ui.anyText(/24-hour/)).toBe(true);
-    expect(ui.lines().some(line => line.includes(CHEF_REFERRAL_TERMS_VERSION))).toBe(true);
+    expect(ui.has('Version 1, 12 Oct 2026')).toBe(true);
+    expect(ui.lines().some(line => line.includes(CHEF_REFERRAL_TERMS_VERSION) || /craves-chef-referral/i.test(line))).toBe(false);
   });
 
   it('sends one request however many times Join is pressed while it is in flight', async () => {
@@ -338,6 +341,31 @@ describe('ChefReferralScreen for a chef who has not joined the programme', () =>
     expect(ui.has('RELANGI25ABCDEFG')).toBe(true);
   });
 
+  it('says so under Check again when the check fails for a reason other than not joined yet', async () => {
+    await mount();
+    useFake();
+    await join();
+    await tick(60_000);
+    expect(ui.has('Your invite link is still being set up. Check again in a few minutes.')).toBe(true);
+    expect(ui.has("We couldn't check right now. Try again.")).toBe(false);
+
+    // Still not a member: that is the normal "wait a bit" answer, not a failure.
+    await ui.press('Check again');
+    await settle();
+    expect(ui.has("We couldn't check right now. Try again.")).toBe(false);
+
+    mockReferral.getCode.mockRejectedValue(new AppApiError('HTTP_500', 'Craves is temporarily unavailable.', 500));
+    await ui.press('Check again');
+    await settle();
+    expect(ui.has("We couldn't check right now. Try again.")).toBe(true);
+    expect(ui.has('Your invite link is still being set up. Check again in a few minutes.')).toBe(true);
+
+    mockReferral.getCode.mockResolvedValue(CODE);
+    await ui.press('Check again');
+    await settle();
+    expect(ui.has('RELANGI25ABCDEFG')).toBe(true);
+  });
+
   it('says the terms changed, and asks for an app update, when the server wants newer terms', async () => {
     mockEnroll.mockRejectedValue(new AppApiError('CURRENT_REFERRAL_TERMS_ACCEPTANCE_REQUIRED', 'Accept the current referral terms', 409));
     await mount();
@@ -346,6 +374,43 @@ describe('ChefReferralScreen for a chef who has not joined the programme', () =>
     expect(ui.byLabel('Join')).toBeUndefined();
     expect(ui.has("We couldn't load this")).toBe(false);
     expect(ui.anyText(/CURRENT_REFERRAL|409|Accept the current/)).toBe(false);
+  });
+
+  it.each([
+    ['a 404', new AppApiError('HTTP_404', 'Not found', 404)],
+    ['a 501', new AppApiError('HTTP_501', 'Not implemented', 501)],
+    ['a body-less 403 from the gateway', new AppApiError('HTTP_403', 'This action is not available for your account.', 403)],
+  ])('shows Coming soon, with no retry, when the join route is not published (%s)', async (_name, error) => {
+    mockEnroll.mockRejectedValue(error);
+    await mount();
+    await join();
+    expect(ui.has('Joining is coming soon')).toBe(true);
+    expect(ui.has("You'll be able to join the referral programme from the app soon.")).toBe(true);
+    expect(ui.has('Coming soon')).toBe(true);
+    expect(ui.has("We couldn't load this")).toBe(false);
+    expect(ui.has('Check your connection and try again.')).toBe(false);
+    expect(ui.byLabel('Try again')).toBeUndefined();
+    expect(ui.byLabel('Join')).toBeUndefined();
+    expect(mockEnroll).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows Try again as busy while the join is sent again, and sends it once', async () => {
+    mockEnroll.mockRejectedValueOnce(new AppApiError('HTTP_500', 'Craves is temporarily unavailable.', 500));
+    await mount();
+    await join();
+    expect(ui.byLabel('Try again')!.props.accessibilityState.busy).toBe(false);
+
+    const pending = deferred<string>();
+    mockEnroll.mockReturnValue(pending.promise);
+    await act(async () => {
+      const retry = ui.byLabel('Try again')!;
+      retry.props.onPress();
+      retry.props.onPress();
+    });
+    expect(mockEnroll).toHaveBeenCalledTimes(2);
+    expect(ui.byLabel('Try again')!.props.accessibilityState.busy).toBe(true);
+    await act(async () => pending.resolve('QUEUED'));
+    expect(ui.has('Setting up your invite link…')).toBe(true);
   });
 
   it('shows the usual error card when joining fails any other way, and Try again joins again', async () => {

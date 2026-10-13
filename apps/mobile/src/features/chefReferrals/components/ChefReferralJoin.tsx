@@ -13,25 +13,26 @@ import {
 import {Icon} from '../../../shared/components/Icon';
 import {LoadingIndicator} from '../../../shared/components/LoadingIndicator';
 import {LoadFailedCard} from '../../chefProfile/components/ReadState';
-import {ChefActionButton, ChefCard, ChefSheet, ListGroup, ListRow} from '../../chefShell/components/ui';
+import {ChefActionButton, ChefCard, ChefSheet, ComingSoon, ListGroup, ListRow} from '../../chefShell/components/ui';
+import {isRouteNotPublished} from '../../../core/http/routeAvailability';
 import {
-  CHEF_REFERRAL_TERMS_VERSION,
   chefReferralEnrollApi,
+  isReferralNotEnrolled,
   isReferralTermsChanged,
 } from '../api/chefReferralEnrollApi';
-import {CHEF_REFERRAL_TERMS} from '../domain/chefReferralTerms';
+import {CHEF_REFERRAL_TERMS, CHEF_REFERRAL_TERMS_VERSION_LABEL} from '../domain/chefReferralTerms';
 
 const CHECK_EVERY_MS = 3_000;
 const GIVE_UP_AFTER_MS = 60_000;
 const ACCEPT_LABEL = 'I accept the referral terms';
 
-type Step = 'form' | 'settingUp' | 'slow' | 'termsChanged' | 'failed';
+type Step = 'form' | 'settingUp' | 'slow' | 'termsChanged' | 'notPublished' | 'failed';
 
 export interface ChefReferralJoinProps {
   /** The server took the request: the screen keeps this card up until the invite link arrives. */
   onJoined: () => void;
-  /** Asks for the invite link once more. */
-  onCheck: () => void;
+  /** Asks for the invite link once more. Resolves to the error when the check failed, null when it went through. */
+  onCheck: () => Promise<unknown>;
   /** A check is on its way. */
   checking: boolean;
 }
@@ -41,6 +42,7 @@ export function ChefReferralJoin({onJoined, onCheck, checking}: ChefReferralJoin
   const [step, setStep] = React.useState<Step>('form');
   const [accepted, setAccepted] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  const [checkFailed, setCheckFailed] = React.useState(false);
   const [terms, setTerms] = React.useState(false);
   const sending = React.useRef(false);
   const latestCheck = React.useRef(onCheck);
@@ -53,7 +55,9 @@ export function ChefReferralJoin({onJoined, onCheck, checking}: ChefReferralJoin
     if (step !== 'settingUp') {
       return undefined;
     }
-    const poll = setInterval(() => latestCheck.current(), CHECK_EVERY_MS);
+    const poll = setInterval(() => {
+      latestCheck.current().catch(() => undefined);
+    }, CHECK_EVERY_MS);
     const giveUp = setTimeout(() => setStep('slow'), GIVE_UP_AFTER_MS);
     return () => {
       clearInterval(poll);
@@ -72,21 +76,34 @@ export function ChefReferralJoin({onJoined, onCheck, checking}: ChefReferralJoin
       onJoined();
       setStep('settingUp');
     } catch (error) {
-      setStep(isReferralTermsChanged(error) ? 'termsChanged' : 'failed');
+      // A join route the server has not published for the app is not a connection problem: nothing to retry.
+      setStep(isReferralTermsChanged(error) ? 'termsChanged' : isRouteNotPublished(error) ? 'notPublished' : 'failed');
     } finally {
       sending.current = false;
       setBusy(false);
     }
   };
 
+  const checkAgain = async () => {
+    setCheckFailed(false);
+    const error = await onCheck();
+    // Not a member yet is the normal wait; any other answer means the check itself did not go through.
+    setCheckFailed(error != null && !isReferralNotEnrolled(error));
+  };
+
   if (step === 'failed') {
     return (
       <LoadFailedCard
+        busy={busy}
         onRetry={() => {
           join().catch(() => undefined);
         }}
       />
     );
+  }
+
+  if (step === 'notPublished') {
+    return <ComingSoon message="You'll be able to join the referral programme from the app soon." title="Joining is coming soon" />;
   }
 
   if (step === 'settingUp') {
@@ -105,8 +122,21 @@ export function ChefReferralJoin({onJoined, onCheck, checking}: ChefReferralJoin
             ? 'Your invite link is still being set up. Check again in a few minutes.'
             : 'The referral terms have changed. Update the Craves app to join.'}
         </Text>
+        {step === 'slow' && checkFailed ? (
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.checkFailed}>
+            We couldn't check right now. Try again.
+          </Text>
+        ) : null}
         {step === 'slow' ? (
-          <ChefActionButton busy={checking} label="Check again" onPress={onCheck} style={styles.checkAgain} tone="neutral" />
+          <ChefActionButton
+            busy={checking}
+            label="Check again"
+            onPress={() => {
+              checkAgain().catch(() => undefined);
+            }}
+            style={styles.checkAgain}
+            tone="neutral"
+          />
         ) : null}
       </ChefCard>
     );
@@ -120,7 +150,7 @@ export function ChefReferralJoin({onJoined, onCheck, checking}: ChefReferralJoin
           Join the chef referral programme
         </Text>
         <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.line}>
-          You earn a share of what the chefs you invite earn on delivered orders, over three levels.
+          You earn a share of the food sales of chefs you invite, and of the chefs they invite, up to three levels. It comes from Craves' commission, never from their earnings.
         </Text>
         <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.line}>
           You already have an account, so you join without a referrer.
@@ -141,7 +171,7 @@ export function ChefReferralJoin({onJoined, onCheck, checking}: ChefReferralJoin
         onPress={() => setAccepted(value => !value)}
         style={styles.checkRow}>
         <View style={[styles.checkBox, accepted && styles.checkBoxOn]}>
-          {accepted ? <Icon color={colors.white} name="check" size={16} surface={false} /> : null}
+          {accepted ? <Icon color={colors.white} name="check" size={iconSize.xs} surface={false} /> : null}
         </View>
         <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.checkLabel}>
           {ACCEPT_LABEL}
@@ -166,7 +196,7 @@ export function ChefReferralJoin({onJoined, onCheck, checking}: ChefReferralJoin
             </Text>
           ))}
           <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.version}>
-            {`Terms version ${CHEF_REFERRAL_TERMS_VERSION}`}
+            {CHEF_REFERRAL_TERMS_VERSION_LABEL}
           </Text>
         </View>
       </ChefSheet>
@@ -180,8 +210,9 @@ const styles = StyleSheet.create({
   line: {color: colors.textSecondary, fontSize: typography.small},
   checkRow: {minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   checkBox: {
-    width: 24,
-    height: 24,
+    width: spacing.xl,
+    height: spacing.xl,
+    // 7 dp on purpose: the smallest radius token (10) would make this 24 dp box look like a circle.
     borderRadius: 7,
     borderWidth: borderWidth.focus,
     borderColor: colors.borderStrong,
@@ -192,9 +223,10 @@ const styles = StyleSheet.create({
   checkLabel: {flex: 1, color: colors.textPrimary, fontSize: typography.body},
   status: {alignItems: 'center', gap: spacing.sm, padding: spacing.lg},
   statusText: {color: colors.textPrimary, fontSize: typography.body, textAlign: 'center'},
+  checkFailed: {color: colors.textSecondary, fontSize: typography.small, textAlign: 'center'},
   checkAgain: {alignSelf: 'stretch'},
   terms: {gap: spacing.sm, paddingBottom: spacing.sm},
-  termText: {color: colors.textSecondary, fontSize: typography.small, lineHeight: 20},
+  termText: {color: colors.textSecondary, fontSize: typography.small},
   termTitle: {color: colors.textPrimary, fontWeight: fontWeight.bold},
   version: {color: colors.textSecondary, fontSize: typography.small, fontStyle: 'italic'},
 });

@@ -3,6 +3,9 @@
  * Same wording as docs/referrals/CHEF_REFERRAL_TERMS_V1.md; the version the server checks is
  * CHEF_REFERRAL_TERMS_VERSION in chefReferralEnrollApi.ts. Change both together, never one.
  */
+/** The version in words a chef can read; the id the server checks is CHEF_REFERRAL_TERMS_VERSION, never shown. */
+export const CHEF_REFERRAL_TERMS_VERSION_LABEL = 'Version 1, 12 Oct 2026';
+
 export const CHEF_REFERRAL_TERMS: readonly {title: string; body: string}[] = [
   {
     title: 'Who can take part.',

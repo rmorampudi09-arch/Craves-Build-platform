@@ -1,445 +1,236 @@
 import React from 'react';
-import {Alert, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import type {ChefProfileStackParamList} from '../../../app/navigation/types';
+import {StyleSheet, Text, View} from 'react-native';
+import {useNavigation, type NavigationProp, type ParamListBase} from '@react-navigation/native';
+import {colors, fontWeight, spacing, textDefaults, typography} from '../../../design/tokens';
+import type {IconName} from '../../../shared/components/Icon';
+import {LoadingIndicator} from '../../../shared/components/LoadingIndicator';
+import {SegmentedControl} from '../../../shared/components/SegmentedControl';
 import {
-  borderWidth,
-  colors,
-  elevation,
-  fontWeight,
-  iconSize,
-  radius,
-  spacing,
-  touchTarget,
-  typography,
-} from '../../../design/tokens';
-import {Icon} from '../../../shared/components/Icon';
-import {ChefHeader} from '../../chefShell/components/ChefHeader';
-import {ChefBankOnboardingPanel} from '../../chefBankOnboarding/components/ChefBankOnboardingPanel';
-import {ChefEarningsLedgerList} from '../components/ChefEarningsLedgerList';
-import {ChefFinanceBalancePanel} from '../components/ChefFinanceBalancePanel';
+  ChefActionButton,
+  ChefCard,
+  ChefScreen,
+  ChefSheet,
+  ChefTopBar,
+  ListGroup,
+  ListRow,
+  StatusChip,
+} from '../../chefShell/components/ui';
 import {
-  CHEF_PAYOUT_HISTORY_MESSAGES,
-  createChefPayoutHistoryBoundaryState,
-  selectChefPayoutHistoryTab,
-  type ChefPayoutHistoryTab,
-} from '../domain/chefPayoutHistoryBoundary';
+  formatDayLabel,
+  formatRupees,
+  formatTimeOfDay,
+  shortOrderNumber,
+} from '../../chefShell/domain/chefFormat';
+import type {ChefEarningLedgerEntry, ChefPayoutTransaction} from '../api/chefPayoutApi';
+import {earningStatusView, groupByMonth, payoutStatusView} from '../domain/chefPayoutPresentation';
+import {useChefPayoutData} from '../state/useChefPayoutData';
+import {useChefSubScreenBack, useHardwareBack} from '../state/useChefSubScreenBack';
 
-type PayoutNavigation = NativeStackNavigationProp<
-  ChefProfileStackParamList,
-  'ChefPayoutHistory'
->;
+type Tab = 'payouts' | 'earnings';
 
-function TabButton({
-  label,
-  tab,
-  selectedTab,
-  onPress,
-}: {
-  label: string;
-  tab: ChefPayoutHistoryTab;
-  selectedTab: ChefPayoutHistoryTab;
-  onPress: (tab: ChefPayoutHistoryTab) => void;
-}) {
-  const selected = tab === selectedTab;
+const STATUS_ICONS: Record<string, {icon: IconName; tone: 'blue' | 'green' | 'red' | 'amber'}> = {
+  Paid: {icon: 'check', tone: 'green'},
+  "Didn't go through": {icon: 'close', tone: 'red'},
+  'Returned by bank': {icon: 'close', tone: 'red'},
+  Cancelled: {icon: 'close', tone: 'red'},
+  'Craves is checking': {icon: 'info', tone: 'amber'},
+};
+
+const timeOf = (iso: string) => Date.parse(iso) || 0;
+
+function Problem({title, onRetry}: {title: string; onRetry: () => void}) {
   return (
-    <Pressable
-      accessibilityLabel={`${label} tab`}
-      accessibilityRole="tab"
-      accessibilityState={{selected}}
-      onPress={() => onPress(tab)}
-      style={({pressed}) => [
-        styles.tabButton,
-        selected && styles.tabButtonSelected,
-        pressed && styles.pressed,
-      ]}>
-      <Text style={[styles.tabText, selected && styles.tabTextSelected]}>{label}</Text>
-    </Pressable>
+    <ChefCard style={styles.card}>
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.title}>
+        {title}
+      </Text>
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
+        Check your connection and try again.
+      </Text>
+      <ChefActionButton label="Try again" onPress={onRetry} tone="neutral" />
+    </ChefCard>
   );
 }
 
-function BoundaryAction({
-  label,
-  message,
-  onExplain,
-}: {
-  label: string;
-  message: string;
-  onExplain: (title: string, message: string) => void;
-}) {
+function Empty({title, message, action}: {title: string; message: string; action?: {label: string; onPress: () => void}}) {
   return (
-    <Pressable
-      accessibilityLabel={`${label}. Currently unavailable`}
-      accessibilityHint="Opens the exact backend-contract reason"
-      accessibilityRole="button"
-      onPress={() => onExplain(`${label} unavailable`, message)}
-      style={({pressed}) => [styles.boundaryAction, pressed && styles.pressed]}>
-      <Text style={styles.boundaryActionText}>{label}</Text>
-      <Icon name="chevron-right" size={iconSize.xs} color={colors.textSecondary} />
-    </Pressable>
+    <ChefCard style={styles.card}>
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.title}>
+        {title}
+      </Text>
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
+        {message}
+      </Text>
+      {action ? <ChefActionButton label={action.label} onPress={action.onPress} tone="neutral" /> : null}
+    </ChefCard>
   );
 }
 
+function DetailRow({label, value}: {label: string; value: React.ReactNode}) {
+  return (
+    <View style={styles.detail}>
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
+        {label}
+      </Text>
+      {typeof value === 'string' ? (
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.detailValue}>
+          {value}
+        </Text>
+      ) : (
+        value
+      )}
+    </View>
+  );
+}
+
+/** Money sent to the bank, and what each order added. Opened from Earnings or from Profile. */
 export function ChefPayoutHistoryScreen() {
-  const navigation = useNavigation<PayoutNavigation>();
-  const [viewState, setViewState] = React.useState(createChefPayoutHistoryBoundaryState);
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const {goBack, fromEarnings} = useChefSubScreenBack();
+  useHardwareBack(fromEarnings ? goBack : null);
+  const data = useChefPayoutData();
+  const [tab, setTab] = React.useState<Tab>('payouts');
+  const [opened, setOpened] = React.useState<ChefPayoutTransaction | null>(null);
+  const now = new Date();
 
-  const explain = React.useCallback((title: string, message: string) => {
-    Alert.alert(title, message, [{text: 'OK'}]);
-  }, []);
+  const asked = (iso: string) => {
+    const date = new Date(iso);
+    const day = formatDayLabel(date, now);
+    return `${day === 'Today' || day === 'Yesterday' ? day.toLowerCase() : day}, ${formatTimeOfDay(date)}`;
+  };
+  const retry = () => {
+    data.refresh().catch(() => undefined);
+  };
 
-  const selectTab = React.useCallback((tab: ChefPayoutHistoryTab) => {
-    setViewState(current => selectChefPayoutHistoryTab(current, tab));
-  }, []);
+  const payouts = React.useMemo(
+    () => [...(data.balance?.recentPayouts ?? [])].sort((a, b) => timeOf(b.createdAt) - timeOf(a.createdAt)),
+    [data.balance],
+  );
+  const openedView = opened ? payoutStatusView(opened.status) : null;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <ChefHeader title="Payout history" />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Pressable
-          accessibilityLabel="Back to Chef profile"
-          accessibilityRole="button"
-          hitSlop={spacing.xs}
-          onPress={() => navigation.goBack()}
-          style={({pressed}) => [styles.backButton, pressed && styles.pressed]}>
-          <Icon name="arrow-left" size={iconSize.sm} color={colors.espressoBrown} />
-          <Text style={styles.backText}>Profile</Text>
-        </Pressable>
+    <>
+      <ChefScreen
+        header={<ChefTopBar onBack={goBack} showBell={false} title="Payout history" />}
+        onRefresh={retry}
+        refreshing={data.isRefreshing}
+        withTabBar>
+        <SegmentedControl
+          accessibilityLabel="Show"
+          onChange={setTab}
+          options={[
+            {value: 'payouts', label: 'Payouts'},
+            {value: 'earnings', label: 'Order earnings'},
+          ]}
+          value={tab}
+        />
 
-        <View style={styles.titleBlock}>
-          <Text accessibilityRole="header" style={styles.title}>
-            Earnings & payouts
-          </Text>
-          <Text style={styles.subtitle}>
-            Review your server-recorded earnings, current payout balance and recent payout requests. When the backend marks your balance eligible, you can request the exact available amount from this screen.
-          </Text>
-        </View>
-
-        <View accessibilityRole="tablist" style={styles.tabs}>
-          <TabButton
-            label="Earnings Overview"
-            tab="overview"
-            selectedTab={viewState.selectedTab}
-            onPress={selectTab}
-          />
-          <TabButton
-            label="Transactions"
-            tab="transactions"
-            selectedTab={viewState.selectedTab}
-            onPress={selectTab}
-          />
-        </View>
-
-        {viewState.selectedTab === 'overview' ? (
-          <>
-            <ChefFinanceBalancePanel />
-            <ChefBankOnboardingPanel />
-
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeadingRow}>
-                <View style={styles.sectionHeadingCopy}>
-                  <Text style={styles.sectionTitle}>Payout trend</Text>
-                  <Text style={styles.sectionCaption}>
-                    Authoritative payout series only
-                  </Text>
-                </View>
-                <BoundaryAction
-                  label="Date range"
-                  message={CHEF_PAYOUT_HISTORY_MESSAGES.dateFilter}
-                  onExplain={explain}
-                />
-              </View>
-              <View accessibilityRole="alert" style={styles.chartUnavailable}>
-                <Icon
-                  name="analytics"
-                  size={iconSize.xl}
-                  color={colors.placeholder}
-                />
-                <Text style={styles.chartTitle}>Payout trend unavailable</Text>
-                <Text style={styles.chartMessage}>
-                  {CHEF_PAYOUT_HISTORY_MESSAGES.payoutSeries}
+        {tab === 'payouts' ? (
+          data.balanceStatus === 'pending' ? (
+            <LoadingIndicator label="Loading your payouts" />
+          ) : data.balanceStatus === 'error' ? (
+            <Problem onRetry={retry} title="We couldn't load your payouts." />
+          ) : payouts.length === 0 ? (
+            <Empty
+              action={{label: 'Go to Earnings', onPress: () => navigation.navigate('Earnings')}}
+              message="When you withdraw, the money sent to your bank is listed here."
+              title="No payouts yet"
+            />
+          ) : (
+            groupByMonth(payouts, payout => payout.createdAt, now).map(group => (
+              <View key={group.title} style={styles.group}>
+                <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.groupTitle}>
+                  {group.title}
                 </Text>
+                <ListGroup>
+                  {group.items.map(payout => {
+                    const view = payoutStatusView(payout.status);
+                    const amount = formatRupees(Number(payout.amount), {paise: true});
+                    const subtitle = [`Asked ${asked(payout.createdAt)}`, payout.transferReference ? `Bank ref ${payout.transferReference}` : null]
+                      .filter(Boolean)
+                      .join('\n');
+                    const look = STATUS_ICONS[view.label] ?? {icon: 'wallet' as IconName, tone: 'blue' as const};
+                    return (
+                      <ListRow
+                        key={payout.id}
+                        accessibilityLabel={`${amount}, ${view.label}, Asked ${asked(payout.createdAt)}`}
+                        icon={look.icon}
+                        iconTone={look.tone}
+                        onPress={() => setOpened(payout)}
+                        right={<StatusChip label={view.label} tone={view.tone} />}
+                        subtitle={subtitle}
+                        title={amount}
+                      />
+                    );
+                  })}
+                </ListGroup>
               </View>
-            </View>
-          </>
-        ) : (
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeadingRow}>
-              <View style={styles.sectionHeadingCopy}>
-                <Text style={styles.sectionTitle}>Earnings ledger</Text>
-                <Text style={styles.sectionCaption}>Server-authoritative earning entries</Text>
-              </View>
-            </View>
-            <ChefEarningsLedgerList />
-            <Text style={styles.detailBoundaryText}>
-              This tab shows earning ledger entries. Recent payout requests and their recorded statuses are shown in Earnings Overview.
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.integrationCard}>
-          <Icon name="shield" size={iconSize.lg} color={colors.warning} />
-          <View style={styles.integrationCopy}>
-            <Text style={styles.integrationTitle}>Protected financial boundary</Text>
-            <Text style={styles.integrationText}>{CHEF_PAYOUT_HISTORY_MESSAGES.source}</Text>
-          </View>
-        </View>
-
-        <View style={styles.secondaryActions}>
-
-          <BoundaryAction
-            label="Payout help"
-            message={`${CHEF_PAYOUT_HISTORY_MESSAGES.source} ${CHEF_PAYOUT_HISTORY_MESSAGES.withdraw}`}
-            onExplain={explain}
+            ))
+          )
+        ) : data.ledgerStatus === 'pending' ? (
+          <LoadingIndicator label="Loading your earnings" />
+        ) : data.ledgerStatus === 'error' ? (
+          <Problem onRetry={retry} title="We couldn't load your earnings." />
+        ) : data.ledger.length === 0 ? (
+          <Empty
+            action={{label: 'Go to Orders', onPress: () => navigation.navigate('Orders')}}
+            message="Each delivered order adds its earnings here."
+            title="No earnings yet"
           />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+        ) : (
+          groupByMonth<ChefEarningLedgerEntry>(data.ledger, entry => entry.createdAt, now).map(group => (
+            <View key={group.title} style={styles.group}>
+              <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.groupTitle}>
+                {group.title}
+              </Text>
+              <ListGroup>
+                {group.items.map(entry => {
+                  const view = earningStatusView(entry.status);
+                  const amount = formatRupees(Number(entry.netPayable), {paise: true});
+                  const subtitle = `${shortOrderNumber(entry.orderId)} · ${formatDayLabel(new Date(entry.createdAt), now)}`;
+                  return (
+                    <ListRow
+                      key={entry.id}
+                      accessibilityLabel={`${amount}, ${view.label}, ${subtitle}`}
+                      icon="receipt"
+                      onPress={() => navigation.navigate('ChefOrderDetail', {orderId: entry.orderId})}
+                      right={<StatusChip label={view.label} tone={view.tone} />}
+                      subtitle={subtitle}
+                      title={amount}
+                    />
+                  );
+                })}
+              </ListGroup>
+            </View>
+          ))
+        )}
+      </ChefScreen>
+
+      <ChefSheet onClose={() => setOpened(null)} title="Payout details" visible={opened !== null}>
+        {opened && openedView ? (
+          <>
+            <ChefCard style={styles.card}>
+              <DetailRow label="Amount" value={formatRupees(Number(opened.amount), {paise: true})} />
+              <DetailRow label="Status" value={<StatusChip label={openedView.label} tone={openedView.tone} />} />
+              <DetailRow label="Asked" value={asked(opened.createdAt)} />
+              {opened.transferReference ? <DetailRow label="Bank reference" value={opened.transferReference} /> : null}
+            </ChefCard>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
+              {openedView.note}
+            </Text>
+          </>
+        ) : null}
+      </ChefSheet>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {flex: 1, backgroundColor: colors.white},
-  content: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xxl,
-    gap: spacing.md,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    minHeight: touchTarget.minimum,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingRight: spacing.md,
-  },
-  backText: {
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  titleBlock: {gap: spacing.xs},
-  title: {
-    color: colors.espressoBrown,
-    fontSize: typography.hero,
-    fontWeight: fontWeight.extrabold,
-  },
-  subtitle: {color: colors.textSecondary, fontSize: typography.small},
-  tabs: {
-    flexDirection: 'row',
-    borderRadius: radius.pill,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    padding: spacing.xxs,
-  },
-  tabButton: {
-    flex: 1,
-    minHeight: touchTarget.minimum,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-  },
-  tabButtonSelected: {backgroundColor: colors.flameRed},
-  tabText: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-    textAlign: 'center',
-  },
-  tabTextSelected: {color: colors.white},
-  balanceCard: {
-    borderRadius: radius.xl,
-    backgroundColor: colors.espressoBrown,
-    padding: spacing.lg,
-    ...elevation.card,
-  },
-  balanceHeader: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
-  balanceIcon: {
-    width: 42,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  balanceEyebrow: {
-    color: colors.creamDeep,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  balanceValue: {
-    marginTop: spacing.md,
-    color: colors.white,
-    fontSize: typography.title,
-    fontWeight: fontWeight.extrabold,
-  },
-  balanceMessage: {
-    marginTop: spacing.xs,
-    color: colors.creamDeep,
-    fontSize: typography.small,
-  },
-  withdrawButton: {
-    minHeight: touchTarget.comfortable,
-    marginTop: spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
-    opacity: 0.62,
-  },
-  withdrawButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.button,
-    fontWeight: fontWeight.bold,
-  },
-  withdrawReason: {
-    marginTop: spacing.sm,
-    color: colors.creamDeep,
-    fontSize: typography.tiny,
-    textAlign: 'center',
-  },
-  metricRow: {flexDirection: 'row', gap: spacing.xs},
-  metricCard: {
-    flex: 1,
-    minHeight: 108,
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    padding: spacing.sm,
-  },
-  metricValue: {
-    color: colors.espressoBrown,
-    fontSize: typography.hero,
-    fontWeight: fontWeight.extrabold,
-  },
-  metricLabel: {
-    marginTop: spacing.xxs,
-    color: colors.textPrimary,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-  metricReason: {marginTop: spacing.xs, color: colors.textSecondary, fontSize: typography.tiny},
-  sectionCard: {
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    padding: spacing.md,
-    ...elevation.card,
-  },
-  sectionHeadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  sectionHeadingCopy: {flex: 1, minWidth: 0},
-  sectionTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  sectionCaption: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny},
-  sectionMessage: {marginTop: spacing.md, color: colors.textSecondary, fontSize: typography.small},
-  unavailablePill: {
-    borderRadius: radius.pill,
-    backgroundColor: colors.warningSoft,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  unavailablePillText: {
-    color: colors.warning,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.bold,
-  },
-  boundaryAction: {
-    minHeight: touchTarget.minimum,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xxs,
-    paddingHorizontal: spacing.xs,
-  },
-  boundaryActionText: {
-    color: colors.flameRed,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-  chartUnavailable: {
-    minHeight: 190,
-    marginTop: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceMuted,
-    padding: spacing.lg,
-  },
-  chartTitle: {
-    marginTop: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-    textAlign: 'center',
-  },
-  chartMessage: {
-    marginTop: spacing.xs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    textAlign: 'center',
-  },
-  transactionUnavailable: {
-    minHeight: 240,
-    marginTop: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
-    padding: spacing.lg,
-  },
-  transactionIcon: {
-    width: 52,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.pill,
-    backgroundColor: colors.iconSurface,
-  },
-  detailBoundaryText: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    textAlign: 'center',
-  },
-  integrationCard: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.warning,
-    backgroundColor: colors.warningSoft,
-    padding: spacing.md,
-  },
-  integrationCopy: {flex: 1},
-  integrationTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  integrationText: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
-  secondaryActions: {
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    overflow: 'hidden',
-  },
-  pressed: {opacity: 0.62},
+  card: {gap: spacing.sm},
+  group: {gap: spacing.xs},
+  groupTitle: {color: colors.textSecondary, fontSize: typography.small, fontWeight: fontWeight.bold, textTransform: 'uppercase'},
+  title: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
+  muted: {color: colors.textSecondary, fontSize: typography.small},
+  detail: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm},
+  detailValue: {flexShrink: 1, color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold, textAlign: 'right'},
 });

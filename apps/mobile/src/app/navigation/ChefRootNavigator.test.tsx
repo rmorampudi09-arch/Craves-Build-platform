@@ -44,6 +44,13 @@ jest.mock('../../features/chefMenu/screens/ChefMenuItemDetailScreen', () => mock
 jest.mock('../../features/chefOrders/screens/ChefOrderDetailScreen', () => mockScreenModule('ChefOrderDetailScreen'));
 jest.mock('../../features/chefOrders/screens/ChefOrdersScreen', () => mockScreenModule('ChefOrdersScreen'));
 jest.mock('../../features/chefPayout/screens/ChefPayoutHistoryScreen', () => mockScreenModule('ChefPayoutHistoryScreen'));
+jest.mock('../../features/chefBankOnboarding/screens/ChefBankAccountScreen', () => mockScreenModule('ChefBankAccountScreen'));
+// The Earnings tab keeps its real top bar here so the bell can be pressed.
+jest.mock('../../features/chefPayout/screens/ChefEarningsScreen', () => {
+  const ReactActual = require('react');
+  const {ChefTopBar: TopBar} = require('../../features/chefShell/components/ui');
+  return {ChefEarningsScreen: () => ReactActual.createElement(TopBar, {title: 'Earnings'})};
+});
 jest.mock('../../features/chefPreferences/screens/ChefAppPreferencesScreen', () => mockScreenModule('ChefAppPreferencesScreen'));
 jest.mock('../../features/chefProfile/screens/ChefEditProfileScreen', () => mockScreenModule('ChefEditProfileScreen'));
 jest.mock('../../features/chefProfile/screens/ChefProfileScreen', () => mockScreenModule('ChefProfileScreen'));
@@ -95,11 +102,12 @@ describe('ChefRootNavigator', () => {
     expect(tab('Orders').props.accessibilityLabel).toBe('Orders tab, 3 new orders');
   });
 
-  it('switches tabs from the bar: Orders opens the New list and Earnings the placeholder', () => {
+  it('switches tabs from the bar: Orders opens the New list and Earnings its own screen', () => {
     act(() => tab('Orders').props.onPress());
     expect(allText()).toContain('SCREEN:ChefOrdersScreen');
     act(() => tab('Earnings').props.onPress());
-    expect(allText()).toEqual(expect.arrayContaining(['Earnings', 'Coming soon']));
+    expect(allText()).not.toContain('Coming soon');
+    expect(tab('Earnings').props.accessibilityState).toEqual({selected: true});
   });
 
   it('sends the old Profile Scheduled orders route to Orders and leaves Profile usable', () => {
@@ -125,11 +133,14 @@ describe('ChefRootNavigator', () => {
     for (const [route, title] of [
       ['ChefReviews', 'Reviews'],
       ['ChefSecurity', 'Security'],
-      ['ChefBankAccount', 'Bank account'],
     ]) {
       navigate('ChefTabs', {screen: 'Profile', params: {screen: route}});
       expect(allText()).toContain(title);
     }
+    navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefBankAccount'}});
+    expect(allText()).toContain('SCREEN:ChefBankAccountScreen');
+    navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefPayoutHistory', params: {from: 'earnings'}}});
+    expect(allText()).toContain('SCREEN:ChefPayoutHistoryScreen');
     navigate('ChefDailyLimits', {planId: 'p1'});
     expect(allText()).toContain('SCREEN:ChefDailyLimitsScreen');
     navigate('ChefSupportTicket', {topic: 'payout'});

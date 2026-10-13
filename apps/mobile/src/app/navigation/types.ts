@@ -168,7 +168,8 @@ export type ChefOrdersStackParamList = {
 export type ChefProfileStackParamList = {
   ChefProfileHome: undefined;
   ChefBusinessInformation: undefined;
-  ChefPayoutHistory: undefined;
+  /** `from: 'earnings'`: opened from the Earnings tab, so Back returns there. */
+  ChefPayoutHistory: {from?: 'earnings'} | undefined;
   ChefSubscriptionPlan: undefined;
   ChefAppPreferences: undefined;
   ChefSupport: undefined;
@@ -178,7 +179,7 @@ export type ChefProfileStackParamList = {
   ChefScheduledOrders: undefined;
   ChefReviews: undefined;
   ChefSecurity: undefined;
-  ChefBankAccount: undefined;
+  ChefBankAccount: {from?: 'earnings'} | undefined;
   ChefEditProfile: undefined;
 };
 
@@ -187,7 +188,8 @@ export type ChefTabParamList = {
   Dashboard: undefined;
   Orders: NavigatorScreenParams<ChefOrdersStackParamList> | undefined;
   Menu: undefined;
-  Earnings: undefined;
+  /** `openWithdraw`: Home's Withdraw button opens the withdraw sheet on arrival. */
+  Earnings: {openWithdraw?: boolean} | undefined;
   Profile: NavigatorScreenParams<ChefProfileStackParamList> | undefined;
 };
 

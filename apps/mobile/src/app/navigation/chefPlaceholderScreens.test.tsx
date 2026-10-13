@@ -3,8 +3,6 @@ import {Text} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {ChefScheduledOrdersRedirect} from './ChefScheduledOrdersRedirect';
 import {
-  ChefBankAccountPlaceholder,
-  ChefEarningsPlaceholder,
   ChefReviewsPlaceholder,
   ChefSecurityPlaceholder,
   ChefSupportTicketPlaceholder,
@@ -49,25 +47,19 @@ describe('chef placeholder screens', () => {
   afterEach(() => act(() => tree?.unmount()));
 
   it.each([
-    ['Earnings', ChefEarningsPlaceholder],
     ['Reviews', ChefReviewsPlaceholder],
     ['Security', ChefSecurityPlaceholder],
-    ['Bank account', ChefBankAccountPlaceholder],
     ['Support ticket', ChefSupportTicketPlaceholder],
   ])('%s shows its title with a Coming soon note', (title, Screen) => {
     mount(<Screen />);
     expect(allText()).toEqual(expect.arrayContaining([title, 'Coming soon']));
   });
 
-  it('offers a back arrow on sub-screens but not on tab roots', () => {
+  it('offers a back arrow on sub-screens', () => {
     mount(<ChefReviewsPlaceholder />);
     act(() => pressables('Go back')[0].props.onPress());
     expect(mockNavigation.goBack).toHaveBeenCalledTimes(1);
-
-    act(() => tree.unmount());
-    mount(<ChefEarningsPlaceholder />);
-    expect(pressables('Go back')).toHaveLength(0);
-    expect(pressables('Notifications').length).toBeGreaterThan(0);
+    expect(pressables('Notifications')).toHaveLength(0);
   });
 });
 

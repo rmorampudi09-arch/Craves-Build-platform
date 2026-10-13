@@ -8,12 +8,14 @@ import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
 import {ChefBusinessInformationScreen} from '../../features/chefBusinessInformation/screens/ChefBusinessInformationScreen';
+import {ChefBankAccountScreen} from '../../features/chefBankOnboarding/screens/ChefBankAccountScreen';
 import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDashboardScreen';
 import {ChefAddMenuItemScreen} from '../../features/chefMenu/screens/ChefAddMenuItemScreen';
 import {ChefEditMenuItemScreen} from '../../features/chefMenu/screens/ChefEditMenuItemScreen';
 import {ChefMenuItemDetailScreen} from '../../features/chefMenu/screens/ChefMenuItemDetailScreen';
 import {ChefOrderDetailScreen} from '../../features/chefOrders/screens/ChefOrderDetailScreen';
 import {ChefOrdersScreen} from '../../features/chefOrders/screens/ChefOrdersScreen';
+import {ChefEarningsScreen} from '../../features/chefPayout/screens/ChefEarningsScreen';
 import {ChefPayoutHistoryScreen} from '../../features/chefPayout/screens/ChefPayoutHistoryScreen';
 import {ChefAppPreferencesScreen} from '../../features/chefPreferences/screens/ChefAppPreferencesScreen';
 import {ChefEditProfileScreen} from '../../features/chefProfile/screens/ChefEditProfileScreen';
@@ -33,8 +35,6 @@ import {ChefMenuTabScreen} from './ChefMenuTabScreen';
 import {ChefScheduledOrdersRedirect} from './ChefScheduledOrdersRedirect';
 import {renderChefTabBar} from './ChefTabBar';
 import {
-  ChefBankAccountPlaceholder,
-  ChefEarningsPlaceholder,
   ChefReviewsPlaceholder,
   ChefSecurityPlaceholder,
   ChefSupportTicketPlaceholder,
@@ -135,7 +135,7 @@ function ChefProfileNavigator() {
         />
         <ProfileStack.Screen name="ChefReviews" component={ChefReviewsPlaceholder} />
         <ProfileStack.Screen name="ChefSecurity" component={ChefSecurityPlaceholder} />
-        <ProfileStack.Screen name="ChefBankAccount" component={ChefBankAccountPlaceholder} />
+        <ProfileStack.Screen name="ChefBankAccount" component={ChefBankAccountScreen} />
         <ProfileStack.Screen
           name="ChefEditProfile"
           component={ChefEditProfileScreen}
@@ -155,7 +155,7 @@ function ChefTabsNavigator() {
       <Tab.Screen name="Dashboard" component={ChefDashboardScreen} />
       <Tab.Screen name="Orders" component={ChefOrdersNavigator} />
       <Tab.Screen name="Menu" component={ChefMenuTabScreen} />
-      <Tab.Screen name="Earnings" component={ChefEarningsPlaceholder} />
+      <Tab.Screen name="Earnings" component={ChefEarningsScreen} />
       <Tab.Screen name="Profile" component={ChefProfileNavigator} />
     </Tab.Navigator>
   );

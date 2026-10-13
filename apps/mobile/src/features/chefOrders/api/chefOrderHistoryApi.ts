@@ -68,6 +68,7 @@ function toOperationalOrder(value: unknown): ChefOperationalOrder | null {
       id: item.id,
       itemName: item.itemName,
       quantity: item.quantity,
+      menuItemId: item.menuItemId,
       ...(item.foodType ? {foodType: item.foodType} : {}),
     })),
     deliverySummary: order.deliveryAddress

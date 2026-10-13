@@ -546,7 +546,7 @@ export function ChefDashboardScreen() {
           </View>
           <Icon color={colors.white} name="wallet" size={iconSize.xl} surface={false} />
         </View>
-        <ChefActionButton label="Withdraw" onPress={() => navigation.navigate('Earnings')} tone="inverse" />
+        <ChefActionButton label="Withdraw" onPress={() => navigation.navigate('Earnings', {openWithdraw: true})} tone="inverse" />
       </View>
 
       {kitchenControl.dialogs}

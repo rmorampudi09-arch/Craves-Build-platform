@@ -21,5 +21,3 @@ in.craves.auth.centralotp.CentralOtpStore
 in.craves.auth.centralotp.CentralOtpProvider
 in.craves.auth.centralotp.CentralOtpIdentity
 in.craves.auth.centralotp.CentralOtpRequestLimit
-in.craves.auth.centralotp.CentralOtpTestBypass
-in.craves.auth.email.EmailVerificationTestBypass

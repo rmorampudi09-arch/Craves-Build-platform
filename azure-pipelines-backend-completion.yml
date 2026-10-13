@@ -148,7 +148,8 @@ stages:
                 echo 'ERROR: confirmBuild must be BUILD_SEVEN_SERVICES.' >&2
                 exit 1
               }
-            displayName: Verify explicit build confirmation
+              bash scripts/release/require-main-image-source.sh
+            displayName: Verify explicit build confirmation and GitHub main source
           - task: AzureCLI@2
             displayName: Prepare seven immutable backend images without deployment
             inputs:

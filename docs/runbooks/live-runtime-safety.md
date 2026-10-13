@@ -4,7 +4,7 @@ Owner rule (Raviteja, Oct 2026): no change, rebuild from `main`, pipeline or man
 
 ## Rules
 
-1. **Production runs only code that is on GitHub `main`.** Branch, Azure Repos and laptop builds are allowed only if their source is merged to `main` the same day, and the image tag names the commit.
+1. **Production runs only code that is on GitHub `main`.** Backend image pipelines enforce it (`scripts/release/require-main-image-source.sh`): queue release runs on `main`; never push an image from a branch, Azure Repos or your machine. `scripts/release/tests/test_launch_release_source.py` fails CI when a pipeline pushes a backend image without that check.
 2. **A deploy may add code. It may only remove code on purpose.** Each backend service lists the code it must keep in `services/<service>/src/main/resources/live-runtime-lock.txt`.
 3. **Never edit a lock file to get a deploy through.** If the lock blocks a build, the build is missing live code. Restore that code instead.
 4. **Restore before rebuilding.** Before rebuilding a service from `main`, compare the live image with `main`, as #489 did for Order image 186.
@@ -41,10 +41,13 @@ How it was checked: the restored source, compiled against the libraries in the `
 
 `CentralOtpTest` needs a disposable PostgreSQL server and runs only when `CENTRAL_OTP_TEST_DB` is set.
 
+Retired on purpose (CH-10, Oct 2026): `CentralOtpTestBypass` and `EmailVerificationTestBypass`, with settings `CRAVES_OTP_TEST_ENABLED`, `CRAVES_OTP_TEST_WHITELIST_JSON`, `CRAVES_OTP_TEST_CODE`, `CRAVES_OTP_TEST_EXPIRES_AT`, `CRAVES_EMAIL_TEST_ENABLED`, `CRAVES_EMAIL_TEST_WHITELIST_JSON`. Remove those settings from `ca-craves-auth-service-prodlow` before deploying a build without them, so a rollback cannot re-arm them.
+
 New Auth changes go through `main` like every other service.
 
 ## Limits
 
+- The main-source guard (rule 1) covers pipeline builds. A laptop `docker push` is stopped only by ACR permissions; keep AcrPush to the pipeline identities.
 - The lock protects builds that include it, which means every build from `main` from now on. It cannot stop someone from redeploying an old image or a branch that predates it. Rule 1 covers that case.
 - It checks classes, not behaviour. Code changed inside a kept class is covered only by review and tests.
 - If an app's `CRAVES_ENVIRONMENT` were removed, the lock would not run there. Infra sets it on every app (`infra/prodlow-rebuild/main.bicep`).

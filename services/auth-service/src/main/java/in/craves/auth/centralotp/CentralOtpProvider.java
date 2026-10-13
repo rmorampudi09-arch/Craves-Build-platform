@@ -27,20 +27,12 @@ public class CentralOtpProvider {
     private final String template;
     private final RestTemplate http;
     private final URI base;
-    private CentralOtpTestBypass testBypass = CentralOtpTestBypass.disabled();
     private final ObjectMapper json = new ObjectMapper();
-
-    public CentralOtpProvider(Msg91Properties secrets,
-            @Value("${CRAVES_MSG91_OTP_TEMPLATE_ID:}") String template) {
-        this(secrets, template, URI.create("https://control.msg91.com"));
-    }
 
     @Autowired
     public CentralOtpProvider(Msg91Properties secrets,
-            @Value("${CRAVES_MSG91_OTP_TEMPLATE_ID:}") String template,
-            CentralOtpTestBypass testBypass) {
-        this(secrets, template);
-        this.testBypass = testBypass;
+            @Value("${CRAVES_MSG91_OTP_TEMPLATE_ID:}") String template) {
+        this(secrets, template, URI.create("https://control.msg91.com"));
     }
 
     CentralOtpProvider(Msg91Properties secrets, String template, URI base) {
@@ -59,7 +51,6 @@ public class CentralOtpProvider {
     }
 
     public void send(String phone) {
-        if (testBypass.contains(phone)) { testBypass.send(phone); return; }
         JsonNode result = call("/api/v5/otp?template_id=" + template + "&mobile=" + phone.substring(1)
                 + "&otp_length=6&otp_expiry=15&realTimeResponse=1", HttpMethod.POST);
         if (!"success".equals(result.path("type").asText())
@@ -71,7 +62,6 @@ public class CentralOtpProvider {
     }
 
     public void verify(String phone, String code) {
-        if (testBypass.contains(phone)) { testBypass.verify(phone, code); return; }
         JsonNode result = call("/api/v5/otp/verify?mobile=" + phone.substring(1) + "&otp=" + code,
                 HttpMethod.GET);
         String type = result.path("type").asText();

@@ -39,6 +39,7 @@ steps:
       inlineScript: |
         set -euo pipefail
         set +x
+        bash scripts/release/require-main-image-source.sh
         IMAGE="cravesprodlowacr82121.azurecr.io/craves/order-service:device-cart-$(Build.SourceVersion)"
         az acr login --name cravesprodlowacr82121 --only-show-errors
         docker build --pull -t "$IMAGE" services/order-service

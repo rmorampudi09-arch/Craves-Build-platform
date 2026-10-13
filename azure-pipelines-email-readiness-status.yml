@@ -111,7 +111,7 @@ steps:
             umask 077
             git fetch --quiet origin 135df3d23c61bc14e1ce742f9cf9f5f25a09d0e1
             action=inspect
-            if [ '${{ parameters.action }}' = build-referral-upgrade ]; then action=build; fi
+            if [ '${{ parameters.action }}' = build-referral-upgrade ]; then action=build; bash scripts/release/require-main-image-source.sh; fi
             if [ '${{ parameters.action }}' = upgrade-existing-referral ]; then action=upgrade; fi
             python3 scripts/referrals/upgrade-existing-backend.py "$action"
   - ${{ if eq(parameters.action, 'inspect-finance-migrations') }}:

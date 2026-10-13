@@ -20,6 +20,7 @@ steps:
       inlineScript: |
         set -euo pipefail
         set +x
+        bash scripts/release/require-main-image-source.sh
         az acr login --name cravesprodlowacr82121 --only-show-errors
         for service in notification-service auth-service user-chef-service; do
           IMAGE="cravesprodlowacr82121.azurecr.io/craves/$service:customer-email-$(Build.SourceVersion)"

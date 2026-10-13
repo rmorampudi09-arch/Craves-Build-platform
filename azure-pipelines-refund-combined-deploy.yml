@@ -125,6 +125,7 @@ steps:
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
+        bash scripts/release/require-main-image-source.sh
 
         ACR='${{ parameters.acrName }}'
         TAG='${{ parameters.imageTag }}'

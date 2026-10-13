@@ -6,7 +6,8 @@ const UUID_PATTERN =
 
 // Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
 export const CHEF_NOTIFICATION_INBOX_V2_AVAILABLE = false;
-export const CHEF_NOTIFICATION_PAGE_SIZE = 50;
+// The most the server allows per page, and the window the older inbox shows.
+export const CHEF_NOTIFICATION_PAGE_SIZE = 100;
 // Chef mode shows the chef's notices only; the server ignores role until it filters by it.
 const CHEF_ROLE_PARAMS = {role: 'CHEF'} as const;
 
@@ -217,6 +218,7 @@ export const chefNotificationInboxApi = {
     return parsed;
   },
 
+  /** Not used for the bell: the server counts the customer's notices too until it filters by role. Kept for the APIM coverage check. */
   async unreadCount(
     signal?: AbortSignal,
   ): Promise<ChefNotificationUnreadCount> {

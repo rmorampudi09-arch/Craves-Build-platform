@@ -3,7 +3,7 @@ import {act, create} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
 import {chefNotificationInboxApi, markAllChefNoticesRead} from '../api/chefNotificationInboxApi';
-import {chefOperationalApi} from '../api/chefOperationalApi';
+import {chefOperationalApi, type ChefOperationalNotice} from '../api/chefOperationalApi';
 import {ChefOperationalProvider, useChefOperationalState} from './ChefOperationalProvider';
 
 jest.mock('../../../app/store/hooks', () => ({
@@ -22,7 +22,7 @@ jest.mock('../api/chefNotificationInboxApi', () => ({
 const get = (mock: unknown) => mock as jest.Mock;
 const CHEF_NOTICE = '11111111-1111-4111-8111-111111111111';
 const CUSTOMER_NOTICE = '22222222-2222-4222-8222-222222222222';
-const notice = (id: string, title: string, noticeType: string) => ({
+const notice = (id: string, title: string, noticeType: string): ChefOperationalNotice => ({
   id,
   title,
   body: 'Body',
@@ -77,9 +77,27 @@ beforeEach(() => {
 });
 
 describe('ChefOperationalProvider notification inbox choice', () => {
-  const page = (notices: ReturnType<typeof notice>[]) => ({notices, nextCursor: null, hasMore: false});
+  const page = (notices: ChefOperationalNotice[]) => ({notices, nextCursor: null, hasMore: false});
 
-  it('asks for the new inbox first, shows its chef notices and its unread count', async () => {
+  it('asks for the new inbox first, 100 notices at a time, and shows its chef notices', async () => {
+    get(chefNotificationInboxApi.page).mockResolvedValue(
+      page([
+        notice(CUSTOMER_NOTICE, 'Order created. Complete payment to continue', 'ORDER_CREATED'),
+        notice(CHEF_NOTICE, 'New order', 'CHEF_ORDER_AWAITING_ACCEPTANCE'),
+      ]),
+    );
+    // The server count covers the whole account (customer notices too) until the server filters by role.
+    get(chefNotificationInboxApi.unreadCount).mockResolvedValue({unreadCount: 4});
+    const state = await mountProvider();
+    expect(chefNotificationInboxApi.page).toHaveBeenCalledTimes(1);
+    expect(chefNotificationInboxApi.page).toHaveBeenCalledWith(expect.objectContaining({limit: 100}));
+    expect(chefOperationalApi.listNotifications).not.toHaveBeenCalled();
+    // The chef-audience filter still applies to what the new inbox returns.
+    expect(state.current.notices.map(n => n.id)).toEqual([CHEF_NOTICE]);
+    expect(state.current.notificationsStatus).toBe('success');
+  });
+
+  it('counts only the chef notices for the bell, never the account-wide server count', async () => {
     get(chefNotificationInboxApi.page).mockResolvedValue(
       page([
         notice(CUSTOMER_NOTICE, 'Order created. Complete payment to continue', 'ORDER_CREATED'),
@@ -88,12 +106,42 @@ describe('ChefOperationalProvider notification inbox choice', () => {
     );
     get(chefNotificationInboxApi.unreadCount).mockResolvedValue({unreadCount: 4});
     const state = await mountProvider();
-    expect(chefNotificationInboxApi.page).toHaveBeenCalledTimes(1);
-    expect(chefOperationalApi.listNotifications).not.toHaveBeenCalled();
-    // The chef-audience filter still applies to what the new inbox returns.
-    expect(state.current.notices.map(n => n.id)).toEqual([CHEF_NOTICE]);
-    expect(state.current.counters.unreadNotifications).toBe(4);
-    expect(state.current.notificationsStatus).toBe('success');
+    expect(state.current.counters.unreadNotifications).toBe(1);
+    expect(chefNotificationInboxApi.unreadCount).not.toHaveBeenCalled();
+  });
+
+  it('never lets a customer notice raise the bell, and clears it after Mark all read', async () => {
+    const CUSTOMER_NOTICE_2 = '55555555-5555-4555-8555-555555555555';
+    const customerOnly = [
+      notice(CUSTOMER_NOTICE, 'Order created. Complete payment to continue', 'ORDER_CREATED'),
+      notice(CUSTOMER_NOTICE_2, 'Your order is on the way', 'ORDER_OUT_FOR_DELIVERY'),
+    ];
+    // The server counts the customer notices too until it filters by role.
+    get(chefNotificationInboxApi.unreadCount).mockResolvedValue({unreadCount: 2});
+    get(chefNotificationInboxApi.page).mockResolvedValue(page(customerOnly));
+    const state = await mountProvider();
+    expect(state.current.counters.unreadNotifications).toBe(0);
+
+    get(chefNotificationInboxApi.page).mockResolvedValue(
+      page([...customerOnly, notice(CHEF_NOTICE, 'New order', 'CHEF_ORDER_AWAITING_ACCEPTANCE')]),
+    );
+    await act(async () => {
+      await state.current.refresh();
+    });
+    await settle();
+    expect(state.current.counters.unreadNotifications).toBe(1);
+
+    get(markAllChefNoticesRead).mockImplementation(async (ids: string[]) => ids);
+    // After the marking the server still has the customer notices unread; only the chef one is read.
+    get(chefNotificationInboxApi.page).mockResolvedValue(
+      page([...customerOnly, {...notice(CHEF_NOTICE, 'New order', 'CHEF_ORDER_AWAITING_ACCEPTANCE'), readAt: '2026-10-14T09:00:00Z'}]),
+    );
+    await act(async () => {
+      await state.current.markAllNotificationsRead();
+    });
+    await settle();
+    expect(markAllChefNoticesRead).toHaveBeenCalledWith([CHEF_NOTICE]);
+    expect(state.current.counters.unreadNotifications).toBe(0);
   });
 
   it('falls back to the older inbox, once, when the new one is not published, and never asks the new one again', async () => {
@@ -102,7 +150,7 @@ describe('ChefOperationalProvider notification inbox choice', () => {
     expect(chefOperationalApi.listNotifications).toHaveBeenCalledTimes(1);
     expect(state.current.notices.map(n => n.id)).toEqual([CHEF_NOTICE]);
     expect(state.current.notificationsStatus).toBe('success');
-    // The count is worked out from the chef notices, not taken from a route that is not there.
+    // The bell counts the chef notices.
     expect(state.current.counters.unreadNotifications).toBe(1);
 
     await act(async () => {
@@ -110,7 +158,7 @@ describe('ChefOperationalProvider notification inbox choice', () => {
     });
     await settle();
     expect(chefNotificationInboxApi.page).toHaveBeenCalledTimes(1);
-    expect(chefNotificationInboxApi.unreadCount).toHaveBeenCalledTimes(1);
+    expect(chefNotificationInboxApi.unreadCount).not.toHaveBeenCalled();
     expect(chefOperationalApi.listNotifications).toHaveBeenCalledTimes(2);
   });
 

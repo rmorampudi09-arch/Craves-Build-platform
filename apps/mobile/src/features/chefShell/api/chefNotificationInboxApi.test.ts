@@ -135,6 +135,16 @@ describe('chefNotificationInboxApi contract', () => {
     );
   });
 
+  it('asks for 100 notices at a time by default (the most the server allows), still bounded to 1-100', async () => {
+    (httpClient.get as jest.Mock).mockResolvedValueOnce({notices: [], nextCursor: null, hasMore: false});
+    await chefNotificationInboxApi.page();
+    expect(httpClient.get).toHaveBeenCalledWith(
+      '/api/v1/notifications/in-app/page',
+      expect.objectContaining({params: {limit: 100, unreadOnly: false, role: 'CHEF'}}),
+    );
+    await expect(chefNotificationInboxApi.page({limit: 101})).rejects.toThrow('CHEF_NOTIFICATION_LIMIT_INVALID');
+  });
+
   it('rejects invalid ids and paging bounds before network calls', async () => {
     await expect(
       chefNotificationInboxApi.page({limit: 101}),

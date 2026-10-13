@@ -397,6 +397,54 @@ describe('useKitchenOpenState actions', () => {
       expect(chefKitchenScheduleApi.replace).not.toHaveBeenCalled();
     });
 
+    it('opening decides on the fresh schedule: orders switched off elsewhere since it was read are turned back on', async () => {
+      get(chefProfileApi.getKitchen).mockResolvedValue({...kitchen, status: 'INACTIVE'});
+      serverSaves(kitchen);
+      get(chefKitchenScheduleApi.replace).mockResolvedValue(schedule);
+      const state = await mountHook();
+      // The cached schedule takes orders; by the time of the tap the server says it does not.
+      get(chefKitchenScheduleApi.get).mockResolvedValue(changedElsewhere);
+      await act(async () => {
+        await expect(state.current.setOpen(true)).resolves.toBe(true);
+      });
+      const request = get(chefKitchenScheduleApi.replace).mock.calls[0][0];
+      expect(request.acceptingOrders).toBe(true);
+      expect(request.weeklyWindows).toEqual(freshWindows);
+    });
+
+    it('opening still succeeds when the schedule cannot be read again and was not known to be switched off', async () => {
+      get(chefProfileApi.getKitchen).mockResolvedValue({...kitchen, status: 'INACTIVE'});
+      serverSaves(kitchen);
+      const state = await mountHook();
+      get(chefKitchenScheduleApi.get).mockRejectedValue(new Error('offline'));
+      await act(async () => {
+        await expect(state.current.setOpen(true)).resolves.toBe(true);
+      });
+      expect(chefProfileApi.replaceKitchen).toHaveBeenCalledTimes(1);
+      expect(chefKitchenScheduleApi.replace).not.toHaveBeenCalled();
+    });
+
+    it('opening reports a failure to turn orders back on, even when only the fresh schedule said they were off', async () => {
+      get(chefProfileApi.getKitchen).mockResolvedValue({...kitchen, status: 'INACTIVE'});
+      serverSaves(kitchen);
+      get(chefKitchenScheduleApi.replace).mockRejectedValue(new Error('save failed'));
+      const state = await mountHook();
+      get(chefKitchenScheduleApi.get).mockResolvedValue(changedElsewhere);
+      await act(async () => {
+        await expect(state.current.setOpen(true)).rejects.toThrow('save failed');
+      });
+    });
+
+    it('opening reports a failure to re-read the schedule when it was known to be switched off', async () => {
+      get(chefKitchenScheduleApi.get).mockResolvedValue({...schedule, acceptingOrders: false});
+      const state = await mountHook();
+      get(chefKitchenScheduleApi.get).mockRejectedValue(new Error('offline'));
+      await act(async () => {
+        await expect(state.current.setOpen(true)).rejects.toThrow('offline');
+      });
+      expect(chefKitchenScheduleApi.replace).not.toHaveBeenCalled();
+    });
+
     it('saves nothing when the schedule cannot be read again', async () => {
       const state = await mountHook();
       get(chefKitchenScheduleApi.get).mockRejectedValue(new Error('offline'));

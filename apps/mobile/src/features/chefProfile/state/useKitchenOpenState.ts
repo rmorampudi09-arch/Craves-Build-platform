@@ -195,12 +195,24 @@ export function useKitchenOpenState(): KitchenOpenState {
 
   /** The PUT sends every weekly window back, so it is built on the schedule as the server has it right now, not the cached copy. */
   const replaceSchedule = React.useCallback(
-    async (change: (fresh: ChefKitchenSchedule) => {acceptingOrders: boolean; pausedUntil: string | null} | null) => {
-      const fresh = await queryClient.fetchQuery({
-        queryKey: scheduleKey,
-        queryFn: ({signal}) => chefKitchenScheduleApi.get(signal),
-        staleTime: 0,
-      });
+    async (
+      change: (fresh: ChefKitchenSchedule) => {acceptingOrders: boolean; pausedUntil: string | null} | null,
+      /** True: when the schedule cannot be read again, do nothing instead of failing. */
+      skipIfUnreadable = false,
+    ) => {
+      let fresh: ChefKitchenSchedule;
+      try {
+        fresh = await queryClient.fetchQuery({
+          queryKey: scheduleKey,
+          queryFn: ({signal}) => chefKitchenScheduleApi.get(signal),
+          staleTime: 0,
+        });
+      } catch (error) {
+        if (skipIfUnreadable) {
+          return;
+        }
+        throw error;
+      }
       const changes = change(fresh);
       if (!changes) {
         return;
@@ -241,8 +253,13 @@ export function useKitchenOpenState(): KitchenOpenState {
           const updated = await chefProfileApi.replaceKitchen(replacementRequest(latest, target));
           await synchronizeChefProfileAfterSave(queryClient, identityId, updated);
         }
-        if (open && schedule?.acceptingOrders === false) {
-          await replaceSchedule(fresh => (fresh.acceptingOrders ? null : {acceptingOrders: true, pausedUntil: fresh.pausedUntil}));
+        if (open && schedule) {
+          // Decided on the schedule as the server has it now. A failed re-read only matters when the cached copy
+          // said orders were off; otherwise the kitchen is open and nothing is known to be left to change.
+          await replaceSchedule(
+            fresh => (fresh.acceptingOrders ? null : {acceptingOrders: true, pausedUntil: fresh.pausedUntil}),
+            schedule.acceptingOrders !== false,
+          );
         }
       }),
     [guarded, identityId, kitchen, kitchenKey, queryClient, replaceSchedule, schedule],

@@ -143,22 +143,6 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
           ] as const),
     [identityId],
   );
-  const notificationCountQueryKey = React.useMemo(
-    () =>
-      identityId
-        ? createPrivateQueryKey('chef-notification-unread-count', {
-            userId: identityId,
-            role: CHEF_ROLE,
-          })
-        : ([
-            'craves',
-            'v1',
-            'private',
-            'chef-notification-unread-count',
-            'signed-out',
-          ] as const),
-    [identityId],
-  );
 
   const ordersQuery = useQuery({
     queryKey: ordersQueryKey,
@@ -210,13 +194,6 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
     enabled: identityId !== null && olderInbox,
     staleTime: 30_000,
   });
-  const notificationCountQuery = useQuery({
-    queryKey: notificationCountQueryKey,
-    queryFn: ({signal}) => chefNotificationInboxApi.unreadCount(signal),
-    enabled: identityId !== null && !olderInbox,
-    retry: (count, error) => !isRouteNotPublished(error) && shouldRetryQuery(count, error),
-    staleTime: 15_000,
-  });
 
   const markReadMutation = useMutation({
     mutationFn: (noticeId: string) =>
@@ -225,16 +202,10 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
         : chefNotificationInboxApi.markRead(noticeId),
     onSuccess: (_data, noticeId) => {
       if (!olderInbox) {
-        void Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: notificationsV2QueryKey,
-            exact: true,
-          }),
-          queryClient.invalidateQueries({
-            queryKey: notificationCountQueryKey,
-            exact: true,
-          }),
-        ]);
+        void queryClient.invalidateQueries({
+          queryKey: notificationsV2QueryKey,
+          exact: true,
+        });
         return;
       }
 
@@ -254,16 +225,10 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
     mutationFn: (noticeIds: string[]) => markAllChefNoticesRead(noticeIds),
     onSuccess: markedIds => {
       if (!olderInbox) {
-        void Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: notificationsV2QueryKey,
-            exact: true,
-          }),
-          queryClient.invalidateQueries({
-            queryKey: notificationCountQueryKey,
-            exact: true,
-          }),
-        ]);
+        void queryClient.invalidateQueries({
+          queryKey: notificationsV2QueryKey,
+          exact: true,
+        });
         return;
       }
 
@@ -291,13 +256,9 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
       ).filter(isChefAudienceNotice),
     [legacyNotificationsQuery.data, olderInbox, v2NotificationsQuery.data],
   );
-  const counters = React.useMemo(() => {
-    const base = deriveChefOperationalCounters(orders, notices);
-    // The new inbox has its own count; until it answers (or when the count route is missing) the chef notices are counted.
-    return olderInbox || notificationCountQuery.data === undefined
-      ? base
-      : {...base, unreadNotifications: notificationCountQuery.data.unreadCount};
-  }, [notificationCountQuery.data, notices, olderInbox, orders]);
+  // The bell counts the chef notices only. The server's unread count covers the whole account (customer notices too)
+  // until notification-service filters by role, and "Mark all read" marks only the chef ones, so it could never clear.
+  const counters = React.useMemo(() => deriveChefOperationalCounters(orders, notices), [notices, orders]);
   const tabCounts = React.useMemo(() => deriveChefOrderTabCounts(orders), [orders]);
 
   React.useEffect(() => {
@@ -373,11 +334,10 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
   const refresh = React.useCallback(async () => {
     const notificationRefreshes = olderInbox
       ? [legacyNotificationsQuery.refetch()]
-      : [v2NotificationsQuery.refetch(), notificationCountQuery.refetch()];
+      : [v2NotificationsQuery.refetch()];
     await Promise.allSettled([ordersQuery.refetch(), ...notificationRefreshes]);
   }, [
     legacyNotificationsQuery,
-    notificationCountQuery,
     olderInbox,
     ordersQuery,
     v2NotificationsQuery,
@@ -456,7 +416,7 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
         ordersQuery.isFetching ||
         (olderInbox
           ? legacyNotificationsQuery.isFetching
-          : v2NotificationsQuery.isFetching || notificationCountQuery.isFetching),
+          : v2NotificationsQuery.isFetching),
       markingNoticeId: markReadMutation.isPending
         ? markReadMutation.variables ?? null
         : null,
@@ -486,7 +446,6 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
       markAllReadMutation,
       markReadMutation,
       notices,
-      notificationCountQuery.isFetching,
       olderInbox,
       orderTabs,
       orders,

@@ -31,7 +31,10 @@ public class SubscriptionOrderCallbackWorker {
         this.subscriptionClient = builder.baseUrl(properties.getSubscriptionServiceBaseUrl()).build();
     }
 
-    @Scheduled(fixedDelayString = "${craves.subscription-orders.callback-fixed-delay-ms:5000}")
+    @Scheduled(
+        scheduler = in.craves.order.config.WorkerSchedulingConfiguration.SUBSCRIPTION_CALLBACK_SCHEDULER,
+        fixedDelayString = "${craves.subscription-orders.callback-fixed-delay-ms:5000}"
+    )
     public void deliver() {
         for (CallbackRecord callback : repository.claimCallbacks(
             properties.getCallbackBatchSize(),

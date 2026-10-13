@@ -79,7 +79,7 @@ public class RedisTokenRevocationPublisher {
         }
     }
 
-    @Scheduled(fixedDelayString = "${CRAVES_TOKEN_REVOCATION_PUBLISHER_FIXED_DELAY_MS:2000}")
+    @Scheduled(scheduler = in.craves.auth.config.WorkerSchedulingConfiguration.TOKEN_REVOCATION_SCHEDULER, fixedDelayString = "${CRAVES_TOKEN_REVOCATION_PUBLISHER_FIXED_DELAY_MS:2000}")
     public void publish() {
         for (ProjectionWorkItem item : claim()) {
             try {

@@ -47,7 +47,7 @@ public class DeliveryCreateReconciliationWorker {
         this.properties = properties;
     }
 
-    @Scheduled(
+    @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.DELIVERY_SCHEDULER,
         fixedDelayString = "${craves.delivery-command.reconciliation-interval-ms:15000}"
     )
     public void reconcilePending() {

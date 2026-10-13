@@ -40,7 +40,7 @@ public class SubscriptionPaymentStatusPublisher {
         this.sender = builder.sender().topicName(properties.getTopicName()).buildClient();
     }
 
-    @Scheduled(fixedDelayString = "${craves.subscription-payments.outbox-fixed-delay-ms:5000}")
+    @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.PAYMENT_SCHEDULER, fixedDelayString = "${craves.subscription-payments.outbox-fixed-delay-ms:5000}")
     public void publish() {
         for (OutboxRecord record : repository.claimOutbox(
             properties.getOutboxBatchSize(),

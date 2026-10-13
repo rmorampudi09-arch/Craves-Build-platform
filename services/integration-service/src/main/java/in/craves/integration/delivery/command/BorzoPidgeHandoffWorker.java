@@ -76,7 +76,7 @@ public class BorzoPidgeHandoffWorker {
         this.completion = completion;
     }
 
-    @Scheduled(fixedDelayString = "${craves.delivery-command.borzo-pidge-handoff-interval-ms:5000}")
+    @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.DELIVERY_SCHEDULER, fixedDelayString = "${craves.delivery-command.borzo-pidge-handoff-interval-ms:5000}")
     public void processDue() {
         for (int index = 0; index < BATCH_SIZE; index++) {
             List<Handoff> due = handoffs.claimDue(1);

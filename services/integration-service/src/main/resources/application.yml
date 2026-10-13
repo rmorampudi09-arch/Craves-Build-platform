@@ -12,6 +12,9 @@ spring:
     table: flyway_schema_history
 
 craves:
+  http-client:
+    connect-timeout: ${CRAVES_HTTP_CLIENT_CONNECT_TIMEOUT:2s}
+    read-timeout: ${CRAVES_HTTP_CLIENT_READ_TIMEOUT:30s}
   delivery-feedback:
     enabled: ${CRAVES_DELIVERY_FEEDBACK_ENABLED:true}
     batch-size: ${CRAVES_DELIVERY_FEEDBACK_BATCH_SIZE:50}

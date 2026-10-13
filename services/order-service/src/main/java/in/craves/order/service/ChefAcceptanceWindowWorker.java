@@ -33,7 +33,10 @@ public class ChefAcceptanceWindowWorker {
         this.catalogClient = catalogClient;
     }
 
-    @Scheduled(fixedDelayString = "${craves.chef-acceptance.worker-fixed-delay-ms:30000}")
+    @Scheduled(
+        scheduler = in.craves.order.config.WorkerSchedulingConfiguration.CHEF_ACCEPTANCE_SCHEDULER,
+        fixedDelayString = "${craves.chef-acceptance.worker-fixed-delay-ms:30000}"
+    )
     public void process() {
         if (!properties.isWorkerEnabled()) {
             return;

@@ -34,7 +34,7 @@ public class NotificationDeliveryWorker {
         this.emailAdapter = emailAdapter;
     }
 
-    @Scheduled(fixedDelayString = "${craves.notification.delivery.fixed-delay-ms:5000}")
+    @Scheduled(scheduler = in.craves.notification.config.WorkerSchedulingConfiguration.DELIVERY_SCHEDULER, fixedDelayString = "${craves.notification.delivery.fixed-delay-ms:5000}")
     public void deliver() {
         if (properties.isPushEnabled()) {
             deliverPush();

@@ -29,9 +29,5 @@ public class ReferralTransportConfiguration {
         scheduler.setWaitForTasksToCompleteOnShutdown(false);scheduler.setAwaitTerminationSeconds(20);
         scheduler.setRemoveOnCancelPolicy(true);return scheduler;
     }
-    // Keep Spring's original scheduler available for every existing non-referral job.
-    @Bean(name="taskScheduler")
-    @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name="taskScheduler")
-    org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler taskScheduler(org.springframework.boot.task.TaskSchedulerBuilder builder){return builder.build();}
-
+    // The default taskScheduler now lives in WorkerSchedulingConfiguration with the other worker pools.
 }

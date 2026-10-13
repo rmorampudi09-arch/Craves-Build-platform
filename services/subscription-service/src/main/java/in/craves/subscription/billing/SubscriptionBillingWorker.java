@@ -17,7 +17,7 @@ public class SubscriptionBillingWorker {
         this.service = service;
     }
 
-    @Scheduled(fixedDelayString = "${craves.subscription.billing.generator-fixed-delay-ms:60000}")
+    @Scheduled(scheduler = in.craves.subscription.config.WorkerSchedulingConfiguration.BILLING_SCHEDULER, fixedDelayString = "${craves.subscription.billing.generator-fixed-delay-ms:60000}")
     public void run() {
         service.generateDueInvoices();
     }

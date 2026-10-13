@@ -29,7 +29,7 @@ public class DeliveryOutboxPublisher {
         this.properties = properties;
     }
 
-    @Scheduled(fixedDelayString = "${craves.delivery-command.outbox-publish-interval-ms:5000}")
+    @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.DELIVERY_SCHEDULER, fixedDelayString = "${craves.delivery-command.outbox-publish-interval-ms:5000}")
     public void publishPending() {
         List<OutboxRecord> records = outbox.claimBatch(properties.getOutboxBatchSize());
         for (OutboxRecord record : records) {

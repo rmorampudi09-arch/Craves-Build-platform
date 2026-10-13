@@ -30,7 +30,7 @@ public final class OccurrenceOrderWorkers {
             this.service = service;
         }
 
-        @Scheduled(fixedDelayString = "${craves.subscription.order-dispatch.request-fixed-delay-ms:30000}")
+        @Scheduled(scheduler = in.craves.subscription.config.WorkerSchedulingConfiguration.ORDER_DISPATCH_SCHEDULER, fixedDelayString = "${craves.subscription.order-dispatch.request-fixed-delay-ms:30000}")
         public void process() {
             service.queueDueOccurrences();
         }
@@ -67,7 +67,7 @@ public final class OccurrenceOrderWorkers {
             this.sender = builder.sender().topicName(properties.getTopicName()).buildClient();
         }
 
-        @Scheduled(fixedDelayString = "${craves.subscription.order-dispatch.publisher-fixed-delay-ms:5000}")
+        @Scheduled(scheduler = in.craves.subscription.config.WorkerSchedulingConfiguration.ORDER_DISPATCH_SCHEDULER, fixedDelayString = "${craves.subscription.order-dispatch.publisher-fixed-delay-ms:5000}")
         public void publish() {
             for (OutboxRecord record : repository.claimOutbox(
                 properties.getBatchSize(),

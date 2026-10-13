@@ -2,6 +2,7 @@ package in.craves.order.service;
 
 import in.craves.order.config.NotificationClientProperties;
 import in.craves.order.config.NotificationOutboxDispatcherProperties;
+import in.craves.order.config.WorkerSchedulingConfiguration;
 import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -35,7 +36,10 @@ public class NotificationOutboxDispatcher {
         this.restClientBuilder = restClientBuilder;
     }
 
-    @Scheduled(fixedDelayString = "${craves.notification.outbox-dispatcher.fixed-delay-ms:30000}")
+    @Scheduled(
+        scheduler = WorkerSchedulingConfiguration.OUTBOX_SCHEDULER,
+        fixedDelayString = "${craves.notification.outbox-dispatcher.fixed-delay-ms:30000}"
+    )
     public void dispatchDue() {
         if (!dispatcherProperties.isEnabled()) {
             return;

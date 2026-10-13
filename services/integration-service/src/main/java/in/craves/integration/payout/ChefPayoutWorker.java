@@ -14,7 +14,7 @@ public class ChefPayoutWorker {
     private static final Logger LOG=LoggerFactory.getLogger(ChefPayoutWorker.class);
     private final ChefPayoutService payouts;private final RazorpayXPayoutClient provider;
     public ChefPayoutWorker(ChefPayoutService payouts,RazorpayXPayoutClient provider) {this.payouts=payouts;this.provider=provider;}
-    @Scheduled(fixedDelayString="${craves.razorpayx.poll-interval-ms:30000}")
+    @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.PAYOUT_SCHEDULER, fixedDelayString="${craves.razorpayx.poll-interval-ms:30000}")
     public void tick() {
         payouts.recoverStaleSubmissions();
         for(var chef:payouts.dueChefs()) {try{payouts.reserveAutomatic(chef);}catch(RuntimeException e){LOG.warn("Chef payout reservation deferred for {}",chef);}}

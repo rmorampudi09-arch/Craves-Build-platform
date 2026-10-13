@@ -36,6 +36,9 @@ management:
       enabled: ${CRAVES_REDIS_HEALTH_ENABLED:${CRAVES_TOKEN_REVOCATION_ENABLED:false}}
 
 craves:
+  http-client:
+    connect-timeout: ${CRAVES_HTTP_CLIENT_CONNECT_TIMEOUT:2s}
+    read-timeout: ${CRAVES_HTTP_CLIENT_READ_TIMEOUT:30s}
   jwt:
     issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
     audience: ${CRAVES_JWT_AUDIENCE:craves-api}

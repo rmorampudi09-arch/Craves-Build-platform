@@ -34,7 +34,10 @@ public class OrderDomainOutboxPublisherWorker {
         this.serviceBusProperties = serviceBusProperties;
     }
 
-    @Scheduled(fixedDelayString = "${craves.domain-events.outbox.fixed-delay-ms:5000}")
+    @Scheduled(
+        scheduler = in.craves.order.config.WorkerSchedulingConfiguration.OUTBOX_SCHEDULER,
+        fixedDelayString = "${craves.domain-events.outbox.fixed-delay-ms:5000}"
+    )
     public void dispatch() {
         if (!outboxProperties.isEnabled() || !serviceBusProperties.isEnabled()) {
             return;

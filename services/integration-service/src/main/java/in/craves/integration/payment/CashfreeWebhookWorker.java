@@ -23,7 +23,7 @@ public class CashfreeWebhookWorker {
         this.dispatcher = dispatcher;
     }
 
-    @Scheduled(fixedDelayString = "${craves.cashfree.webhook.fixed-delay-ms:2000}")
+    @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.PAYMENT_SCHEDULER, fixedDelayString = "${craves.cashfree.webhook.fixed-delay-ms:2000}")
     public void process() {
         for (WorkItem item : inbox.claimBatch()) {
             try {

@@ -37,7 +37,7 @@ public class RefundExecutionWorker {
                 throw new IllegalStateException("Production refund reconciliation approval is required");
         }
     }
-    @Scheduled(fixedDelayString="${craves.refund.worker-fixed-delay-ms:30000}")
+    @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.REFUND_SCHEDULER, fixedDelayString="${craves.refund.worker-fixed-delay-ms:30000}")
     public void process() {
         // Historical providers are not silently routed through current merchant credentials.
         if(!routing.razorpay()||!routing.razorpayEnabled())return;

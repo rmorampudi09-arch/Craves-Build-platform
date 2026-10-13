@@ -50,7 +50,7 @@ public class RefundStatusOutboxPublisher {
             .buildClient();
     }
 
-    @Scheduled(fixedDelayString = "${craves.refund.status-outbox-fixed-delay-ms:5000}")
+    @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.REFUND_SCHEDULER, fixedDelayString = "${craves.refund.status-outbox-fixed-delay-ms:5000}")
     public void publish() {
         UUID lockToken = UUID.randomUUID();
         List<RefundStatusOutboxRecord> records = repository.claimStatusOutbox(

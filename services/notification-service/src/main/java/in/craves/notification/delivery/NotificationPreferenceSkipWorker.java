@@ -14,7 +14,7 @@ public class NotificationPreferenceSkipWorker {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    @Scheduled(fixedDelayString = "${craves.notification.delivery.fixed-delay-ms:5000}")
+    @Scheduled(scheduler = in.craves.notification.config.WorkerSchedulingConfiguration.DELIVERY_SCHEDULER, fixedDelayString = "${craves.notification.delivery.fixed-delay-ms:5000}")
     public void skipDisabledPreferences() {
         jdbcTemplate.update(
             """

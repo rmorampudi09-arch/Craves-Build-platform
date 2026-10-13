@@ -34,6 +34,9 @@ craves:
     issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
     audience: ${CRAVES_JWT_AUDIENCE:craves-api}
     verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
+  http-client:
+    connect-timeout: ${CRAVES_HTTP_CLIENT_CONNECT_TIMEOUT:2s}
+    read-timeout: ${CRAVES_HTTP_CLIENT_READ_TIMEOUT:30s}
   catalog:
     base-url: ${CRAVES_CATALOG_BASE_URL:https://api.craves.in/api/v1/catalog}
     internal-access-value: ${CRAVES_INTERNAL_SERVICE_SECRET:}

@@ -33,7 +33,7 @@ public class FirebaseAccountInterventionWorker {
         this.repository = repository;
     }
 
-    @Scheduled(fixedDelayString = "${craves.admin-account-intervention.worker-fixed-delay-ms:5000}")
+    @Scheduled(scheduler = in.craves.auth.config.WorkerSchedulingConfiguration.ADMIN_INTERVENTION_SCHEDULER, fixedDelayString = "${craves.admin-account-intervention.worker-fixed-delay-ms:5000}")
     public void process() {
         for (ProviderWorkItem item : repository.claimProviderWork(
             properties.getBatchSize(), properties.getMaxAttempts(), properties.getStaleLockMinutes()

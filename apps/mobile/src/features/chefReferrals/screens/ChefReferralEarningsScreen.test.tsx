@@ -89,4 +89,22 @@ describe('ChefReferralEarningsScreen', () => {
     expect(ui.has('Referral earnings are on their way')).toBe(true);
     expect(ui.anyText(/not available|unavailable|failed|route/i)).toBe(false);
   });
+
+  it('says to join the referral programme first, with a way back, instead of an error', async () => {
+    mockEarnings.get.mockRejectedValue(new AppApiError('REFERRAL_ACCOUNT_NOT_ENROLLED_OR_INACTIVE', 'This action is not available for your account.', 403));
+    await mount();
+    expect(ui.has('Join the referral programme first')).toBe(true);
+    expect(ui.has("We couldn't load this")).toBe(false);
+    expect(ui.byLabel('Try again')).toBeUndefined();
+    expect(ui.anyText(/REFERRAL_|enrol|403/i)).toBe(false);
+    await ui.press('Back to Refer a chef');
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the usual error card for any other refusal', async () => {
+    mockEarnings.get.mockRejectedValue(new AppApiError('KITCHEN_SUSPENDED', 'Nope', 403));
+    await mount();
+    expect(ui.has("We couldn't load this")).toBe(true);
+    expect(ui.has('Join the referral programme first')).toBe(false);
+  });
 });

@@ -70,6 +70,19 @@
       "reason": "Backend route exists on current main, but no approved mobile APIM publication was found; keep fail-closed."
     },
     {
+      "id": "chefReferral.enroll",
+      "source": "src/features/chefReferrals/api/chefReferralEnrollApi.ts",
+      "method": "POST",
+      "path": "/api/v1/auth/referrals/enroll",
+      "auth": "bearer",
+      "requestModel": "ChefReferralEnrollRequest",
+      "responseModel": "ChefReferralEnrollResponse",
+      "requestValidator": "termsAccepted",
+      "responseValidator": "chefReferralEnrollApi.enroll",
+      "availabilityFlag": "CHEF_REFERRAL_ENROLL_AVAILABLE",
+      "reason": "Backend route exists on current main, but no approved mobile APIM publication was found; keep fail-closed."
+    },
+    {
       "id": "chefSchedule.get",
       "source": "src/features/chefSchedule/api/chefKitchenScheduleApi.ts",
       "method": "GET",

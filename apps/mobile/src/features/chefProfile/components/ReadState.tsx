@@ -18,6 +18,23 @@ export interface ReadStateProps {
   children: () => React.ReactNode;
 }
 
+/** The retry card for a read or an action that failed: the same words everywhere on the chef Profile screens. */
+export function LoadFailedCard({onRetry}: {onRetry: () => void}) {
+  return (
+    <ChefCard>
+      <View style={styles.error}>
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.errorTitle}>
+          {LOAD_FAILED_TITLE}
+        </Text>
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.errorMessage}>
+          Check your connection and try again.
+        </Text>
+        <ChefActionButton label="Try again" onPress={onRetry} tone="neutral" />
+      </View>
+    </ChefCard>
+  );
+}
+
 /** The three answers a read can give before there is content: loading, Coming soon (route not published), or a retry card. */
 export function ReadState({query, comingSoon, alwaysPublished = false, children}: ReadStateProps) {
   if (query.isError && !alwaysPublished && isRouteNotPublished(query.error)) {
@@ -25,23 +42,11 @@ export function ReadState({query, comingSoon, alwaysPublished = false, children}
   }
   if (query.isError) {
     return (
-      <ChefCard>
-        <View style={styles.error}>
-          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.errorTitle}>
-            {LOAD_FAILED_TITLE}
-          </Text>
-          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.errorMessage}>
-            Check your connection and try again.
-          </Text>
-          <ChefActionButton
-            label="Try again"
-            onPress={() => {
-              query.refetch().catch(() => undefined);
-            }}
-            tone="neutral"
-          />
-        </View>
-      </ChefCard>
+      <LoadFailedCard
+        onRetry={() => {
+          query.refetch().catch(() => undefined);
+        }}
+      />
     );
   }
   if (query.isPending) {

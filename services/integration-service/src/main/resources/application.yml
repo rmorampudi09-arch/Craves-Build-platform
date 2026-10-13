@@ -12,6 +12,9 @@ spring:
     table: flyway_schema_history
 
 craves:
+  # CH-07 Idempotency-Key replay; only requests that send the header are affected.
+  idempotency:
+    enabled: ${CRAVES_IDEMPOTENCY_ENABLED:true}
   # CH-04 read-only silent-failure checks; findings are CRAVES_ALERT log lines (infra/monitoring).
   monitoring:
     enabled: ${CRAVES_MONITORING_ENABLED:true}

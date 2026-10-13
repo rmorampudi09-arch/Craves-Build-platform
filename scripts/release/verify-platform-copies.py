@@ -8,7 +8,7 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-COPIED = ["InternalCallSignature.java", "InternalCallFilter.java", "InternalCallSigningConfiguration.java", "SchedulerLagWatchdog.java"]
+COPIED = ["InternalCallSignature.java", "InternalCallFilter.java", "InternalCallSigningConfiguration.java", "SchedulerLagWatchdog.java", "IdempotencyKeyFilter.java"]
 errors: list[str] = []
 for name in COPIED:
     copies = sorted(ROOT.glob(f"services/*/src/main/java/**/{name}"))

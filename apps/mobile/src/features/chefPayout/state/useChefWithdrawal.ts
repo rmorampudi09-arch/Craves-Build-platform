@@ -49,7 +49,8 @@ export function useChefWithdrawal({onSettled}: {onSettled: () => Promise<unknown
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
-    setNotice(null);
+    // The "could not confirm" banner stays while its request is replayed, so its button can show the progress.
+    setNotice(current => (current?.kind === 'uncertain' ? current : null));
     let refresh = true;
     try {
       await chefPayoutApi.requestWithdrawal(request.requestKey, request.expectedAvailableAmount);

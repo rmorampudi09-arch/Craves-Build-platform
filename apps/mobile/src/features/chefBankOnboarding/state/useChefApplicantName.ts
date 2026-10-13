@@ -27,5 +27,6 @@ export function useChefApplicantName() {
     /** A bank account can be added while the application is pending or approved, in the applicant's name. */
     eligible: (record?.status === 'PENDING' || record?.status === 'APPROVED') && name.length >= 2,
     status: query.status,
+    refetch: query.refetch,
   };
 }

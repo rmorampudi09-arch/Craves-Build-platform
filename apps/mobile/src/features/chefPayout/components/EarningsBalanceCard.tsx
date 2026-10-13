@@ -22,8 +22,8 @@ export interface EarningsBalanceCardProps {
   balance: ChefFinanceBalance | null;
   failed: boolean;
   block: WithdrawBlock | null;
-  /** Rupees earned but not yet open to withdraw. */
-  waiting: number;
+  /** Rupees the server holds back; 0 unless the balance is on hold. */
+  onHold: number;
   /** A withdrawal is being sent, or one is waiting to be checked: no new one may start. */
   locked: boolean;
   onWithdraw: () => void;
@@ -36,16 +36,18 @@ export function EarningsBalanceCard({
   balance,
   failed,
   block,
-  waiting,
+  onHold,
   locked,
   onWithdraw,
   onAddBank,
   onHistory,
 }: EarningsBalanceCardProps) {
   const needsBank = block?.kind === 'bank';
-  const line = block?.text
-    ?? (waiting > 0 ? `${formatRupees(waiting)} on hold until the latest orders are settled` : null)
-    ?? (failed ? "We couldn't load your balance. Pull down to try again." : null);
+  const lines = [
+    block?.text,
+    onHold > 0 ? `${formatRupees(onHold)} on hold until the latest orders are settled` : null,
+    failed ? "We couldn't load your balance. Pull down to try again." : null,
+  ].filter((line): line is string => Boolean(line));
   return (
     <View style={styles.card}>
       <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.label}>
@@ -76,14 +78,14 @@ export function EarningsBalanceCard({
           </Text>
         </Pressable>
       </View>
-      {line ? (
-        <View style={styles.line}>
+      {lines.map(line => (
+        <View key={line} style={styles.line}>
           <Icon color={colors.white} name="info" size={iconSize.xs} surface={false} />
           <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.lineText}>
             {line}
           </Text>
         </View>
-      ) : null}
+      ))}
     </View>
   );
 }

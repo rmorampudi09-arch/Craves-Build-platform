@@ -5,7 +5,7 @@ import {
   earningStatusView,
   groupByMonth,
   payoutStatusView,
-  pendingSettlement,
+  onHoldAmount,
   withdrawBlockedReason,
 } from './chefPayoutPresentation';
 
@@ -114,11 +114,16 @@ describe('bankSummaryLine', () => {
   });
 });
 
-describe('pendingSettlement', () => {
-  it('is the part of the earnings not yet open to withdraw, and zero when there is none', () => {
-    expect(pendingSettlement(balance({available: '3450.00', outstanding: '3870.00'}))).toBe(420);
-    expect(pendingSettlement(balance())).toBe(0);
-    expect(pendingSettlement(balance({available: '100.00', outstanding: '40.00'}))).toBe(0);
+describe('onHoldAmount', () => {
+  it('is what the balance holds, only when the server says the balance is on hold', () => {
+    expect(onHoldAmount(balance({onHold: true, available: '0.00', outstanding: '420.00'}))).toBe(420);
+  });
+
+  it('is zero otherwise, even when the earnings are more than what can be withdrawn', () => {
+    // Earnings still to settle, or a payout in flight that is not taken off yet, are not "on hold".
+    expect(onHoldAmount(balance({available: '3450.00', outstanding: '3870.00'}))).toBe(0);
+    expect(onHoldAmount(balance())).toBe(0);
+    expect(onHoldAmount(balance({onHold: true, outstanding: '-20.00'}))).toBe(0);
   });
 });
 

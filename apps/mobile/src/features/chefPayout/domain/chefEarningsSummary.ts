@@ -8,10 +8,12 @@ export interface EarningsSummary {
   delivered: number;
   averageOrder: number;
   byDay: {label: string; amount: number}[];
-  topDishes: {name: string; sold: number; amount: number}[];
+  topDishes: {name: string; sold: number; amount: number; menuItemId?: string}[];
   split: {delivered: number; cancelled: number; rejected: number};
-  /** Whole percent against the period before; null when that period earned nothing to compare with. */
+  /** Whole percent against the period before; null when that period earned nothing to compare with, or may be cut off. */
   changeVsPrevious: number | null;
+  /** Delivered orders now minus the period before; null when the period before may be cut off. */
+  deliveredChange: number | null;
 }
 
 /** The same entries the Home "Today" card counts: approved money, not drafts and not reversed ones. */
@@ -20,7 +22,7 @@ const CANCELLED_STATUSES = new Set<ChefOperationalOrder['status']>(['CANCELLED',
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const TOP_DISHES = 3;
 /** Most older orders the Earnings tab pulls in for a long range. */
-const MAX_HISTORY_ORDERS = 400;
+export const MAX_HISTORY_ORDERS = 400;
 
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 const addDays = (date: Date, days: number) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
@@ -47,7 +49,7 @@ export function earningsRangeBounds(range: EarningsRange, now: Date): Bounds {
 }
 
 /** The period to compare with: the same number of days just before; for the month, the same days of last month. */
-function previousBounds(range: EarningsRange, now: Date): Bounds {
+export function earningsPreviousBounds(range: EarningsRange, now: Date): Bounds {
   const {from, to} = earningsRangeBounds(range, now);
   const days = daysBetween(from, to);
   if (range === 'month') {
@@ -83,11 +85,20 @@ export function summarizeEarnings(input: {
   earnings: readonly ChefEarningLedgerEntry[];
   range: EarningsRange;
   now: Date;
+  /** The most entries the earnings read returns; a list this long may be missing its oldest entries. */
+  earningsLimit?: number;
+  /** The older orders did not all load, so the orders of the period before may be incomplete. */
+  ordersCutOff?: boolean;
 }): EarningsSummary {
-  const {orders, earnings, range, now} = input;
+  const {orders, earnings, range, now, earningsLimit, ordersCutOff} = input;
   const bounds = earningsRangeBounds(range, now);
+  const previous = earningsPreviousBounds(range, now);
   const earnedTotal = earnedPaise(earnings, bounds);
-  const previousTotal = earnedPaise(earnings, previousBounds(range, now));
+  const previousTotal = earnedPaise(earnings, previous);
+  // A full list may have lost its oldest entries: if none reaches back before the period to compare with, that
+  // period may be incomplete, and a percentage against it would mislead.
+  const oldestEntry = Math.min(...earnings.map(entry => timeOf(entry.createdAt) ?? Infinity));
+  const earningsCutOff = earningsLimit !== undefined && earnings.length >= earningsLimit && oldestEntry > previous.from.getTime();
 
   const inRange = orders.filter(order => within(orderTime(order), bounds));
   const delivered = inRange.filter(order => order.status === 'DELIVERED');
@@ -104,7 +115,9 @@ export function summarizeEarnings(input: {
     return {label: dayLabel(day, dayCount, now), amount: earnedPaise(earnings, {from: day, to: next}) / 100};
   });
 
-  const dishes = new Map<string, {name: string; sold: number; amount: number}>();
+  const previousDelivered = orders.filter(order => order.status === 'DELIVERED' && within(orderTime(order), previous)).length;
+
+  const dishes = new Map<string, {name: string; sold: number; amount: number; menuItemId?: string}>();
   for (const order of delivered) {
     const items = (order.items ?? []).filter(item => item.quantity > 0);
     const quantity = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -112,6 +125,7 @@ export function summarizeEarnings(input: {
       const key = item.itemName.trim().toLowerCase();
       const dish = dishes.get(key) ?? {name: item.itemName.trim(), sold: 0, amount: 0};
       dish.sold += item.quantity;
+      dish.menuItemId ??= item.menuItemId;
       dish.amount += ((order.foodSubtotal ?? 0) * item.quantity) / quantity;
       dishes.set(key, dish);
     }
@@ -129,18 +143,33 @@ export function summarizeEarnings(input: {
     byDay,
     topDishes,
     split,
-    changeVsPrevious: previousTotal > 0 ? Math.round(((earnedTotal - previousTotal) / previousTotal) * 100) : null,
+    changeVsPrevious:
+      !earningsCutOff && previousTotal > 0 ? Math.round(((earnedTotal - previousTotal) / previousTotal) * 100) : null,
+    deliveredChange: earningsCutOff || ordersCutOff ? null : delivered.length - previousDelivered,
   };
 }
 
-/** True while the older-orders list (newest first) has not yet reached back to the start of the range. */
-export function needsOlderOrders(input: {
+/** The orders that last changed on one local day, newest first: what a tap on that day's bar lists. */
+export function ordersOnDay(orders: readonly ChefOperationalOrder[], day: Date): ChefOperationalOrder[] {
+  const bounds = {from: startOfDay(day), to: addDays(startOfDay(day), 1)};
+  return orders
+    .filter(order => within(orderTime(order), bounds))
+    .sort((a, b) => (orderTime(b) ?? 0) - (orderTime(a) ?? 0));
+}
+
+/** True while more older orders exist and the oldest one loaded is still inside the range (newest first). */
+export function olderOrdersMissing(input: {
   historyOrders: readonly ChefOperationalOrder[];
   hasNextPage: boolean;
   from: Date;
 }): boolean {
   const {historyOrders, hasNextPage, from} = input;
-  if (!hasNextPage || historyOrders.length === 0 || historyOrders.length >= MAX_HISTORY_ORDERS) return false;
+  if (!hasNextPage || historyOrders.length === 0) return false;
   const oldest = timeOf(historyOrders[historyOrders.length - 1].createdAt);
   return oldest !== null && oldest >= from.getTime();
+}
+
+/** Ask for another page: older orders are missing and the cap has not been reached. */
+export function needsOlderOrders(input: Parameters<typeof olderOrdersMissing>[0]): boolean {
+  return input.historyOrders.length < MAX_HISTORY_ORDERS && olderOrdersMissing(input);
 }

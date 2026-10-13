@@ -106,10 +106,13 @@ export function withdrawBlockedReason(balance: ChefFinanceBalance, bank: ChefBan
   return null;
 }
 
-/** Rupees earned but not yet open to withdraw (waiting for the latest orders to settle). */
-export function pendingSettlement(balance: ChefFinanceBalance): number {
-  const waiting = Math.round((Number(balance.outstanding) - Number(balance.available)) * 100) / 100;
-  return waiting > 0 ? waiting : 0;
+/**
+ * Rupees the server holds back, shown only when the balance says it is on hold (available is 0 then).
+ * Not outstanding minus available: outstanding is the earnings sum, and a payout in flight may not be taken off yet.
+ */
+export function onHoldAmount(balance: ChefFinanceBalance): number {
+  const held = balance.onHold ? Math.round(Number(balance.outstanding) * 100) / 100 : 0;
+  return held > 0 ? held : 0;
 }
 
 /** Newest-first rows under `October`-style headings (the year is added only for another year). */

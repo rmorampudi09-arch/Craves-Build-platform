@@ -1,6 +1,14 @@
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
 import type {ChefEarningLedgerEntry, ChefEarningStatus} from '../api/chefPayoutApi';
-import {earningsRangeBounds, needsOlderOrders, summarizeEarnings} from './chefEarningsSummary';
+import {
+  MAX_HISTORY_ORDERS,
+  earningsPreviousBounds,
+  earningsRangeBounds,
+  needsOlderOrders,
+  olderOrdersMissing,
+  ordersOnDay,
+  summarizeEarnings,
+} from './chefEarningsSummary';
 
 // Tuesday 13 Oct 2026, built from local parts so the numbers hold in any time zone.
 const NOW = new Date(2026, 9, 13, 12, 0);
@@ -10,7 +18,7 @@ const order = (
   id: string,
   status: ChefOperationalOrder['status'],
   updatedAt: string,
-  items: {name: string; quantity: number}[] = [],
+  items: {name: string; quantity: number; menuItemId?: string}[] = [],
   foodSubtotal?: number,
 ): ChefOperationalOrder => ({
   id,
@@ -18,7 +26,12 @@ const order = (
   updatedAt,
   createdAt: updatedAt,
   foodSubtotal,
-  items: items.map((item, index) => ({id: `${id}-${index}`, itemName: item.name, quantity: item.quantity})),
+  items: items.map((item, index) => ({
+    id: `${id}-${index}`,
+    itemName: item.name,
+    quantity: item.quantity,
+    ...(item.menuItemId ? {menuItemId: item.menuItemId} : {}),
+  })),
 });
 
 const entry = (
@@ -74,6 +87,7 @@ describe('summarizeEarnings', () => {
     expect(summary.delivered).toBe(3);
     expect(summary.averageOrder).toBe(175.25);
     expect(summary.split).toEqual({delivered: 3, cancelled: 1, rejected: 1});
+    expect(summary.deliveredChange).toBe(2); // 3 now against the 1 delivered on 3 Oct
     expect(summary.byDay).toEqual([
       {label: 'Wed', amount: 0},
       {label: 'Thu', amount: 0},
@@ -139,6 +153,39 @@ describe('summarizeEarnings', () => {
       topDishes: [],
       split: {delivered: 0, cancelled: 0, rejected: 0},
       changeVsPrevious: null,
+      deliveredChange: 0,
+    });
+  });
+
+  describe('when the earnings list was cut off at its limit', () => {
+    // 3 entries, all this week, and a list that holds at most 3: the days before could be missing.
+    const recent = [entry('r1', at(13, 9), '10.00'), entry('r2', at(12, 9), '10.00'), entry('r3', at(10, 9), '10.00')];
+
+    it('shows no percentage or order change, since the period before may be cut off', () => {
+      const summary = summarizeEarnings({orders, earnings: recent, range: 'week', now: NOW, earningsLimit: 3});
+      expect(summary.earned).toBe(30);
+      expect(summary.changeVsPrevious).toBeNull();
+      expect(summary.deliveredChange).toBeNull();
+    });
+
+    it('still compares when the list is not full', () => {
+      const summary = summarizeEarnings({orders, earnings: ledger, range: 'week', now: NOW, earningsLimit: 200});
+      expect(summary.changeVsPrevious).toBe(31);
+      expect(summary.deliveredChange).toBe(2);
+    });
+
+    it('still compares when a full list reaches back before the period it compares with', () => {
+      // 10.00 now, 40.00 on 2 Oct (the days before), and an entry from 25 Sep that proves nothing was cut off.
+      const full = [entry('c1', at(13, 9), '10.00'), entry('c2', at(2, 9), '40.00'), entry('c3', at(25, 9, 8), '5.00')];
+      const summary = summarizeEarnings({orders, earnings: full, range: 'week', now: NOW, earningsLimit: 3});
+      expect(summary.changeVsPrevious).toBe(-75);
+      expect(summary.deliveredChange).toBe(2);
+    });
+
+    it('hides only the order change when the older orders did not all load', () => {
+      const summary = summarizeEarnings({orders, earnings: ledger, range: 'week', now: NOW, ordersCutOff: true});
+      expect(summary.changeVsPrevious).toBe(31);
+      expect(summary.deliveredChange).toBeNull();
     });
   });
 
@@ -153,10 +200,55 @@ describe('summarizeEarnings', () => {
   });
 });
 
+describe('top dishes with photos', () => {
+  it('carries the dish id of the first order line that has one, so a photo can be found', () => {
+    const withIds = [
+      order('p1', 'DELIVERED', at(13, 9), [{name: 'Dum biriyani', quantity: 1, menuItemId: 'dish-1'}], 160),
+      order('p2', 'DELIVERED', at(13, 10), [{name: 'dum biriyani', quantity: 1}], 160),
+    ];
+    expect(summarizeEarnings({orders: withIds, earnings: [], range: 'today', now: NOW}).topDishes).toEqual([
+      {name: 'Dum biriyani', sold: 2, amount: 320, menuItemId: 'dish-1'},
+    ]);
+  });
+});
+
+describe('ordersOnDay', () => {
+  it("lists the orders that changed on that local day, newest first, of any status", () => {
+    const day = (list: ChefOperationalOrder[]) => ordersOnDay(list, new Date(2026, 9, 12)).map(item => item.id);
+    expect(day(orders)).toEqual(['e', 'd', 'c']); // 15:00, 14:00 and 13:00 on 12 Oct
+    expect(day([order('late', 'DELIVERED', new Date(2026, 9, 12, 23, 59).toISOString()), order('next', 'DELIVERED', new Date(2026, 9, 13, 0, 0).toISOString())])).toEqual(['late']);
+    expect(ordersOnDay(orders, new Date(2026, 9, 11))).toEqual([]);
+  });
+});
+
 describe('earningsRangeBounds', () => {
   it('gives whole days, ending at the start of tomorrow', () => {
     expect(earningsRangeBounds('week', NOW)).toEqual({from: new Date(2026, 9, 7), to: new Date(2026, 9, 14)});
     expect(earningsRangeBounds('month', NOW)).toEqual({from: new Date(2026, 9, 1), to: new Date(2026, 9, 14)});
+  });
+});
+
+describe('earningsPreviousBounds', () => {
+  it('is the same number of days just before, and for the month the same days of last month', () => {
+    expect(earningsPreviousBounds('week', NOW)).toEqual({from: new Date(2026, 8, 30), to: new Date(2026, 9, 7)});
+    expect(earningsPreviousBounds('today', NOW)).toEqual({from: new Date(2026, 9, 12), to: new Date(2026, 9, 13)});
+    expect(earningsPreviousBounds('month', NOW)).toEqual({from: new Date(2026, 8, 1), to: new Date(2026, 8, 14)});
+  });
+});
+
+describe('olderOrdersMissing', () => {
+  const history = (...days: number[]) => days.map(day => order(`h${day}`, 'DELIVERED', at(day)));
+  const from = new Date(2026, 9, 1);
+
+  it('is true while more pages exist and the oldest loaded order is still inside the range, whatever the cap', () => {
+    expect(olderOrdersMissing({historyOrders: history(12, 3), hasNextPage: true, from})).toBe(true);
+    expect(olderOrdersMissing({historyOrders: history(...Array(MAX_HISTORY_ORDERS).fill(5)), hasNextPage: true, from})).toBe(true);
+  });
+
+  it('is false once the history reaches back, runs out of pages, or is empty', () => {
+    expect(olderOrdersMissing({historyOrders: history(12, 3), hasNextPage: true, from: new Date(2026, 9, 3, 13)})).toBe(false);
+    expect(olderOrdersMissing({historyOrders: history(12, 3), hasNextPage: false, from})).toBe(false);
+    expect(olderOrdersMissing({historyOrders: [], hasNextPage: true, from})).toBe(false);
   });
 });
 

@@ -1,7 +1,8 @@
 import React from 'react';
-import {Text, TextInput} from 'react-native';
+import {BackHandler, Text, TextInput} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {AppApiError} from '../../../core/http/apiError';
+import {ChefScreen} from '../../chefShell/components/ui';
 import {chefOnboardingApi} from '../../chefOnboarding/api/chefOnboardingApi';
 import {chefBankOnboardingApi, type ChefBankStatus} from '../api/chefBankOnboardingApi';
 import {ChefBankAccountScreen} from './ChefBankAccountScreen';
@@ -10,6 +11,7 @@ const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 const mockSetBank = jest.fn();
 const mockRefetch = jest.fn(async () => undefined);
+const mockApplicantRefetch = jest.fn(async () => undefined);
 let mockBank: Record<string, unknown>;
 let mockApplicant: Record<string, unknown>;
 let mockParams: {from?: 'earnings'} | undefined;
@@ -17,6 +19,7 @@ let mockParams: {from?: 'earnings'} | undefined;
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({navigate: mockNavigate, goBack: mockGoBack}),
   useRoute: () => ({params: mockParams}),
+  useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]),
 }));
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: require('react-native').View,
@@ -87,7 +90,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockParams = undefined;
   mockBank = {bank: status(), status: 'success', isFetching: false, refetch: mockRefetch, setBank: mockSetBank};
-  mockApplicant = {name: 'Relangi Mavayya', eligible: true};
+  mockApplicant = {name: 'Relangi Mavayya', eligible: true, status: 'success', refetch: mockApplicantRefetch};
   bankBranch.mockResolvedValue({bankName: 'State Bank of India', branchName: 'KPHB Colony, Hyderabad'});
   submit.mockResolvedValue(status({state: 'VALIDATING'}));
 });
@@ -238,5 +241,100 @@ describe('ChefBankAccountScreen', () => {
     expect(hasText("We couldn't load your bank account.")).toBe(true);
     await press('Try again');
     expect(mockRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Verify and save in the sticky dock under the form, and shows no dock on the verified card', () => {
+    mockBank = {...mockBank, bank: notSubmitted()};
+    mount();
+    const dock = tree.root.findByType(ChefScreen).props.footer;
+    expect(dock).toBeTruthy();
+    act(() => tree.unmount());
+    mockBank = {...mockBank, bank: status()};
+    mount();
+    expect(tree.root.findByType(ChefScreen).props.footer).toBeFalsy();
+  });
+
+  it("does not say the application is unfinished when the application could not be read: it offers a retry", async () => {
+    mockBank = {...mockBank, bank: notSubmitted()};
+    mockApplicant = {name: '', eligible: false, status: 'error', refetch: mockApplicantRefetch};
+    mount();
+    expect(hasText("We couldn't load your details.")).toBe(true);
+    expect(allText().some(text => text.includes('Finish your chef application'))).toBe(false);
+    expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
+    await press('Try again');
+    expect(mockApplicantRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('still says to finish the application when it was read and is not ready', () => {
+    mockBank = {...mockBank, bank: notSubmitted()};
+    mockApplicant = {name: '', eligible: false, status: 'success', refetch: mockApplicantRefetch};
+    mount();
+    expect(hasText('Finish your chef application first. Then you can add a bank account.')).toBe(true);
+  });
+
+  describe("the phone's Back button", () => {
+    let listeners: (() => boolean | null | undefined)[];
+    let spy: jest.SpyInstance;
+    const phoneBack = () =>
+      act(() => {
+        listeners[listeners.length - 1]();
+      });
+    beforeEach(() => {
+      listeners = [];
+      spy = jest.spyOn(BackHandler, 'addEventListener').mockImplementation(((_: string, listener: () => boolean) => {
+        listeners.push(listener);
+        return {remove: () => listeners.splice(listeners.indexOf(listener), 1)};
+      }) as never);
+    });
+    afterEach(() => spy.mockRestore());
+
+    it('first closes the Change bank account form, then goes back', async () => {
+      mount();
+      await press('Change bank account');
+      expect(tree.root.findAllByType(TextInput).length).toBeGreaterThan(0);
+      phoneBack();
+      expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
+      expect(mockGoBack).not.toHaveBeenCalled();
+      phoneBack();
+      expect(mockGoBack).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks before throwing away what was typed, and keeps it on Keep editing', async () => {
+      mount();
+      await press('Change bank account');
+      await type('Account number', '123456789012');
+      phoneBack();
+      expect(hasText('Discard changes?')).toBe(true);
+      expect(tree.root.findAllByType(TextInput).length).toBeGreaterThan(0);
+      await press('Keep editing');
+      expect(hasText('Discard changes?')).toBe(false);
+      expect(input('Account number').props.value).toBe('123456789012');
+
+      phoneBack();
+      await press('Discard');
+      expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
+      expect(mockGoBack).not.toHaveBeenCalled();
+      await press('Change bank account');
+      expect(input('Account number').props.value).toBe(''); // what was typed is gone
+    });
+
+    it('asks the same way from the arrow, and when the form was the first thing shown', async () => {
+      mockBank = {...mockBank, bank: notSubmitted()};
+      mount();
+      await type('IFSC', 'SBIN');
+      await press('Go back');
+      expect(hasText('Discard changes?')).toBe(true);
+      expect(mockGoBack).not.toHaveBeenCalled();
+      await press('Discard');
+      expect(mockGoBack).toHaveBeenCalledTimes(1);
+    });
+
+    it('goes back to Earnings when it was opened from there', () => {
+      mockParams = {from: 'earnings'};
+      mount();
+      phoneBack();
+      expect(mockNavigate).toHaveBeenCalledWith('Earnings');
+      expect(mockGoBack).toHaveBeenCalledTimes(1);
+    });
   });
 });

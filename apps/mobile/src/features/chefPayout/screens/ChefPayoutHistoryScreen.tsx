@@ -18,14 +18,13 @@ import {
 import {
   formatDayLabel,
   formatRupees,
-  formatRupeesExact,
   formatTimeOfDay,
   shortOrderNumber,
 } from '../../chefShell/domain/chefFormat';
 import type {ChefEarningLedgerEntry, ChefPayoutTransaction} from '../api/chefPayoutApi';
 import {earningStatusView, groupByMonth, payoutStatusView} from '../domain/chefPayoutPresentation';
 import {useChefPayoutData} from '../state/useChefPayoutData';
-import {useChefSubScreenBack} from '../state/useChefSubScreenBack';
+import {useChefSubScreenBack, useHardwareBack} from '../state/useChefSubScreenBack';
 
 type Tab = 'payouts' | 'earnings';
 
@@ -87,7 +86,8 @@ function DetailRow({label, value}: {label: string; value: React.ReactNode}) {
 /** Money sent to the bank, and what each order added. Opened from Earnings or from Profile. */
 export function ChefPayoutHistoryScreen() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const goBack = useChefSubScreenBack();
+  const {goBack, fromEarnings} = useChefSubScreenBack();
+  useHardwareBack(fromEarnings ? goBack : null);
   const data = useChefPayoutData();
   const [tab, setTab] = React.useState<Tab>('payouts');
   const [opened, setOpened] = React.useState<ChefPayoutTransaction | null>(null);
@@ -186,7 +186,7 @@ export function ChefPayoutHistoryScreen() {
               <ListGroup>
                 {group.items.map(entry => {
                   const view = earningStatusView(entry.status);
-                  const amount = formatRupeesExact(Number(entry.netPayable));
+                  const amount = formatRupees(Number(entry.netPayable), {paise: true});
                   const subtitle = `${shortOrderNumber(entry.orderId)} · ${formatDayLabel(new Date(entry.createdAt), now)}`;
                   return (
                     <ListRow

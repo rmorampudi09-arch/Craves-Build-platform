@@ -1,5 +1,5 @@
 import React from 'react';
-import {Text} from 'react-native';
+import {BackHandler, Text} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import type {ChefEarningLedgerEntry, ChefPayoutStatus, ChefPayoutTransaction} from '../api/chefPayoutApi';
 import {ChefPayoutHistoryScreen} from './ChefPayoutHistoryScreen';
@@ -13,6 +13,7 @@ let mockData: Record<string, unknown>;
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({navigate: mockNavigate, goBack: mockGoBack}),
   useRoute: () => ({params: mockParams}),
+  useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]),
 }));
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: require('react-native').View,
@@ -189,7 +190,7 @@ describe('ChefPayoutHistoryScreen', () => {
   it('shows what each order added, and opens that order', async () => {
     mount();
     await press('Order earnings');
-    expect(allText()).toEqual(expect.arrayContaining(['₹280.50', '#0A1B2 · Yesterday', 'Settled', '₹140', 'Earned', 'Reversed']));
+    expect(allText()).toEqual(expect.arrayContaining(['₹280.50', '#0A1B2 · Yesterday', 'Settled', '₹140.00', 'Earned', '₹50.00', 'Reversed']));
     await press('₹280.50, Settled, #0A1B2 · Yesterday');
     expect(mockNavigate).toHaveBeenCalledWith('ChefOrderDetail', {orderId: ORDER_A});
   });
@@ -228,5 +229,44 @@ describe('ChefPayoutHistoryScreen', () => {
     await press('Go back');
     expect(mockNavigate).toHaveBeenCalledWith('Earnings');
     expect(mockGoBack).toHaveBeenCalledTimes(2);
+  });
+
+  describe("the phone's Back button", () => {
+    let listeners: (() => boolean | null | undefined)[];
+    let spy: jest.SpyInstance;
+    beforeEach(() => {
+      listeners = [];
+      spy = jest.spyOn(BackHandler, 'addEventListener').mockImplementation(((_: string, listener: () => boolean) => {
+        listeners.push(listener);
+        return {remove: () => listeners.splice(listeners.indexOf(listener), 1)};
+      }) as never);
+    });
+    afterEach(() => spy.mockRestore());
+
+    it('returns to Earnings, like the arrow, when the page was opened from there', () => {
+      mockParams = {from: 'earnings'};
+      mount();
+      expect(listeners).toHaveLength(1);
+      let handled: boolean | null | undefined;
+      act(() => {
+        handled = listeners[0]();
+      });
+      expect(handled).toBe(true);
+      expect(mockNavigate).toHaveBeenCalledWith('Earnings');
+      expect(mockGoBack).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves the phone to go back as usual when it was opened from Profile', () => {
+      mount();
+      expect(listeners).toHaveLength(0);
+    });
+
+    it('lets go of the Back button when the screen goes', () => {
+      mockParams = {from: 'earnings'};
+      mount();
+      act(() => tree.unmount());
+      expect(listeners).toHaveLength(0);
+      mount(); // for the afterEach
+    });
   });
 });

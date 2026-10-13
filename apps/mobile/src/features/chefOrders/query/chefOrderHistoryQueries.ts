@@ -53,6 +53,8 @@ export function useChefOrderHistoryQuery() {
     orders: query.data?.pages.flatMap(page => page.orders) ?? [],
     hasNextPage: Boolean(query.hasNextPage),
     isFetchingNextPage: query.isFetchingNextPage,
+    /** The last read failed (a later page, or the first). Callers that page on their own must stop until told to retry. */
+    failed: query.isError,
     /** Reads the pages already loaded again (pull to refresh). */
     refresh: async () => {
       await query.refetch();

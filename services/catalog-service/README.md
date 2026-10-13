@@ -13,6 +13,13 @@ Catalog Service owns kitchen profiles, menu items, public media metadata, packag
 - Nearby kitchen and menu-item endpoints support page and size parameters.
 - Existing `/api/v1/catalog/**` endpoints remain available for compatibility.
 
+## Chef app additions (all optional for existing clients)
+
+- `GET/PUT /api/v1/kitchens/me` also carry `chefPhotoUrl`, `kitchenPhotoUrl`, `cuisines`, `serviceAreas` (up to 10 entries of 1-40 characters each) and `socialLinks` (`instagram`, `facebook`, `youtube`, `website`; `https://`, up to 200 characters). A field that is absent or `null` in a PUT keeps the stored value; an empty list or a `socialLinks` object replaces it.
+- `POST /api/v1/kitchens/me/photos?kind=CHEF|KITCHEN` (multipart `file`, JPEG/PNG/WebP, same size limit as dish photos) and `DELETE /api/v1/kitchens/me/photos/{kind}`; the replaced or deleted photo file is removed after the change commits.
+- `GET/PUT /api/v1/kitchens/me/settings` with `{autoAcceptOrders, defaultPrepMinutes}` (`defaultPrepMinutes` 5-120 or `null`). The internal kitchen read used by order-service (`GET /api/v1/catalog/internal/kitchens/{id}`) returns both fields; public kitchen reads never do.
+- `DELETE /api/v1/kitchens/me/menu-items/{menuItemId}` archives a dish (status `ARCHIVED`, 204). It disappears from the chef list, the public menu, discovery, favorites and checkout; its photos stay in storage. Archiving again is harmless, an archived dish cannot be edited or reopened, and another chef's dish is a 404.
+
 ## App-launch discovery flow
 
 ```text

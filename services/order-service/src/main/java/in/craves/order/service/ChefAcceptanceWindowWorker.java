@@ -15,20 +15,20 @@ public class ChefAcceptanceWindowWorker {
 
     private final ChefAcceptanceWindowProperties properties;
     private final ChefAcceptanceWorkRepository workRepository;
-    private final ChefAcceptanceInitialNotificationService initialNotificationService;
+    private final ChefAutoAcceptService newOrderService;
     private final ChefAcceptanceResolutionService resolutionService;
     private final CatalogClient catalogClient;
 
     public ChefAcceptanceWindowWorker(
         ChefAcceptanceWindowProperties properties,
         ChefAcceptanceWorkRepository workRepository,
-        ChefAcceptanceInitialNotificationService initialNotificationService,
+        ChefAutoAcceptService newOrderService,
         ChefAcceptanceResolutionService resolutionService,
         CatalogClient catalogClient
     ) {
         this.properties = properties;
         this.workRepository = workRepository;
-        this.initialNotificationService = initialNotificationService;
+        this.newOrderService = newOrderService;
         this.resolutionService = resolutionService;
         this.catalogClient = catalogClient;
     }
@@ -62,7 +62,7 @@ public class ChefAcceptanceWindowWorker {
         for (ReminderCandidate candidate : workRepository.findInitialNotificationCandidates(batchSize)) {
             try {
                 CatalogKitchen kitchen = catalogClient.getKitchen(candidate.kitchenId());
-                if (initialNotificationService.record(candidate.orderId(), kitchen.identityId())) {
+                if (newOrderService.recordNewOrder(candidate.orderId(), kitchen)) {
                     LOGGER.info(
                         "Initial chef acceptance notification recorded for orderId={} chefIdentityId={}",
                         candidate.orderId(),

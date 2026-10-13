@@ -31,8 +31,32 @@ public final class DeliveryStatusModels {
         Instant observedAt,
         String handoffFromProviderId,
         String handoffFromProviderDeliveryId,
-        Boolean handoffContinuation
+        Boolean handoffContinuation,
+        // Optional courier details the provider may report; absent keeps what order-service already stored.
+        String courierName,
+        String courierPhone,
+        String courierPhotoUrl,
+        Instant pickupEtaAt
     ) {
+        public DeliveryStatusChangedData(
+            UUID deliveryJobId,
+            UUID orderId,
+            UUID chefSubOrderId,
+            String providerId,
+            String providerDeliveryId,
+            String status,
+            String trackingUrl,
+            Instant observedAt,
+            String handoffFromProviderId,
+            String handoffFromProviderDeliveryId,
+            Boolean handoffContinuation
+        ) {
+            this(deliveryJobId, orderId, chefSubOrderId, providerId,
+                providerDeliveryId, status, trackingUrl, observedAt,
+                handoffFromProviderId, handoffFromProviderDeliveryId, handoffContinuation,
+                null, null, null, null);
+        }
+
         public DeliveryStatusChangedData(
             UUID deliveryJobId,
             UUID orderId,

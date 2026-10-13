@@ -51,6 +51,19 @@ public class ChefAcceptanceService {
         UUID correlationId,
         String idempotencyKey
     ) {
+        return accept(principal, orderId, request, correlationId, idempotencyKey, null);
+    }
+
+    /** auditReason, when given, is the status-history reason instead of the chef's note (used by auto-accept). */
+    @Transactional
+    public OrderResponse accept(
+        CravesPrincipal principal,
+        UUID orderId,
+        ChefAcceptRequest request,
+        UUID correlationId,
+        String idempotencyKey,
+        String auditReason
+    ) {
         if (request == null || request.prepTimeMinutes() == null) {
             throw OrderApiException.badRequest(
                 "PREPARATION_TIME_REQUIRED",
@@ -112,7 +125,7 @@ public class ChefAcceptanceService {
             OrderStatus.CHEF_ACCEPTANCE_PENDING.name(),
             OrderStatus.CHEF_ACCEPTED.name(),
             principal.identityId(),
-            safeReason(request.note())
+            auditReason != null ? auditReason : safeReason(request.note())
         );
 
         ChefAcceptedOrderEventSource eventSource = loadEventSource(orderId);

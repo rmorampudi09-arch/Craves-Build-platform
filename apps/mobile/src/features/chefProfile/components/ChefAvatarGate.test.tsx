@@ -5,6 +5,7 @@ import {QueryClient, QueryClientProvider, onlineManager} from '@tanstack/react-q
 import {AppApiError} from '../../../core/http/apiError';
 import type {ChefKitchenProfile} from '../api/chefProfileApi';
 import {chefProfileKitchenQueryPrefix} from '../state/chefProfileQuery';
+import {useChefKitchen} from '../state/useChefKitchen';
 import {deferred, screenQueries} from '../testing/screenTestKit';
 import {ChefAvatarGate} from './ChefAvatarGate';
 
@@ -66,18 +67,26 @@ let client: QueryClient;
 const ui = screenQueries(() => tree);
 const buttonState = (label: string) => ui.byLabel(label)?.props.accessibilityState;
 
-async function mount() {
+async function mount(workspace: React.ReactNode = <Text>Workspace</Text>) {
   client = new QueryClient({defaultOptions: {queries: {retry: false, gcTime: Infinity}}});
   await act(async () => {
     tree = renderer.create(
       <QueryClientProvider client={client}>
-        <ChefAvatarGate>
-          <Text>Workspace</Text>
-        </ChefAvatarGate>
+        <ChefAvatarGate>{workspace}</ChefAvatarGate>
       </QueryClientProvider>,
     );
   });
   await ui.settle();
+}
+
+// Like the real workspace: its first screen reads the same kitchen query the gate reads.
+const workspaceMounted = jest.fn();
+function WorkspaceThatReadsTheKitchen() {
+  useChefKitchen();
+  React.useEffect(() => {
+    workspaceMounted();
+  }, []);
+  return <Text>Workspace</Text>;
 }
 
 describe('ChefAvatarGate', () => {
@@ -221,5 +230,40 @@ describe('ChefAvatarGate', () => {
     await act(async () => load.resolve(withFace('04')));
     await ui.settle();
     expect(ui.has('Workspace')).toBe(true);
+  });
+
+  it('keeps the workspace mounted once, however often its own kitchen read fails', async () => {
+    mockGetKitchen.mockRejectedValue(new AppApiError('INTERNAL', 'down', 500));
+    await mount(<WorkspaceThatReadsTheKitchen />);
+    for (let i = 0; i < 5; i += 1) await ui.settle();
+    expect(workspaceMounted).toHaveBeenCalledTimes(1);
+    expect(ui.has('Workspace')).toBe(true);
+    expect(ui.has('Preparing Chef workspace')).toBe(false);
+  });
+
+  it('a chef who started offline stays in the workspace when the kitchen then loads without a picture', async () => {
+    act(() => onlineManager.setOnline(false));
+    await mount(<WorkspaceThatReadsTheKitchen />);
+    expect(ui.has('Workspace')).toBe(true);
+
+    act(() => onlineManager.setOnline(true));
+    await ui.settle();
+    await ui.settle();
+    expect(mockGetKitchen).toHaveBeenCalled();
+    expect(workspaceMounted).toHaveBeenCalledTimes(1);
+    expect(ui.has('Workspace')).toBe(true);
+    expect(ui.has('Choose your profile picture')).toBe(false);
+  });
+
+  it('after a successful save the chef is let in even if the saved picture address is unusable', async () => {
+    // chefProfileApi turns a non-https (dev/staging) or over-long address into null, so the kitchen comes back with no picture.
+    mockSetAvatar.mockImplementation(async () => saved({...KITCHEN, chefPhotoUrl: null}));
+    await mount();
+    await ui.press('Picture 4');
+    await ui.press('Continue');
+    await ui.settle();
+    expect(mockSetAvatar).toHaveBeenCalledTimes(1);
+    expect(ui.has('Workspace')).toBe(true);
+    expect(ui.has('Choose your profile picture')).toBe(false);
   });
 });

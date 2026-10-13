@@ -13,7 +13,8 @@ import {ChefAvatarGrid} from './ChefAvatarGrid';
 /**
  * Holds the chef workspace back until the chef has picked a profile picture (one of the 18 drawn
  * faces). It never traps a chef: see chefAvatarGateStep for every case that goes straight in, and
- * "Not now" after a failed save does too.
+ * "Not now" after a failed save does too. Once the workspace has shown it stays for this mount, whatever
+ * the kitchen read does next (a retry, a late answer): the picker is for the next time chef mode opens.
  */
 export function ChefAvatarGate({children}: {children: React.ReactNode}) {
   const queryClient = useQueryClient();
@@ -22,6 +23,7 @@ export function ChefAvatarGate({children}: {children: React.ReactNode}) {
   const [saving, setSaving] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
   const [dismissed, setDismissed] = React.useState(false);
+  const opened = React.useRef(false);
 
   const step = chefAvatarGateStep({
     // A loaded kitchen stays loaded when a later background read fails: the picker must not vanish mid-pick.
@@ -31,7 +33,8 @@ export function ChefAvatarGate({children}: {children: React.ReactNode}) {
     dismissed,
   });
 
-  if (step === 'open') return <>{children}</>;
+  if (step === 'open') opened.current = true;
+  if (opened.current) return <>{children}</>;
 
   if (step === 'wait') {
     return (
@@ -49,8 +52,9 @@ export function ChefAvatarGate({children}: {children: React.ReactNode}) {
     if (!selectedId || !identityId || saving) return;
     setSaving(true);
     try {
-      // The kitchen cache now holds a picture, which is what lets the gate open on its own.
       void synchronizeChefProfileAfterSave(queryClient, identityId, await chefProfileApi.setAvatar(selectedId));
+      // Saved: let the chef in even if the kitchen comes back without a usable picture address (non-https, too long).
+      setDismissed(true);
     } catch {
       setFailed(true);
     } finally {
@@ -63,7 +67,7 @@ export function ChefAvatarGate({children}: {children: React.ReactNode}) {
       footer={
         <>
           {failed ? (
-            <Text accessibilityLiveRegion="polite" accessibilityRole="alert" style={styles.error}>
+            <Text accessibilityLiveRegion="polite" accessibilityRole="alert" allowFontScaling={textDefaults.allowFontScaling} style={styles.error}>
               We couldn't save your picture. Please try again.
             </Text>
           ) : null}

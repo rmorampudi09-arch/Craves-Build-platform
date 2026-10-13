@@ -26,16 +26,20 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 - Right after approval (and once for any chef who has no picture yet) a "Choose your profile
   picture" screen opens before the chef workspace. Continue stays grey until a face is picked.
   There is no Skip. After a failed save the screen shows "Try again" and "Not now", and "Not now"
-  opens the workspace, so a server problem never locks a chef out of orders. A paused kitchen, a
-  chef with no kitchen yet, or a server that does not send the picture field go straight in.
+  opens the workspace, so a server problem never locks a chef out of orders. A kitchen Craves has
+  suspended, a chef with no kitchen yet, or a server that does not send the picture field go
+  straight in. Once the workspace has opened it stays open for that visit; the picture screen can
+  only come back the next time chef mode opens.
 - Later: Profile > Kitchen details > "Your picture" opens "Change your picture" with the same
   faces, Cancel and Save ("Picture saved"). The kitchen photo tile is unchanged.
 - Customers see the face next to the chef's name on the kitchen page, the Discover chefs cards
   and the Home top-kitchen cards. If there is no picture, or it fails to load, they see initials
-  as before. Order screens are unchanged.
-- Needs catalog-service from PR #493 (branch feat/chef-avatar-backend): `PUT
+  (on Home: the grey chef-hat circle) as before. Order screens are unchanged.
+- Needs catalog-service from PR #493 (branch feat/chef-app-backend) plus the avatar server commits
+  on branch feat/chef-avatar-backend, which MUST be folded into #493 before #493 merges: `PUT
   /api/v1/kitchens/me/chef-avatar`, `chefPhotoUrl` on the nearby and public kitchen lists, and the
-  18 faces hosted at `public/chef-avatars/chef-avatar-NN.jpg`.
+  18 faces hosted at `public/chef-avatars/chef-avatar-NN.jpg`. Without them, 1.31.x "Your photo"
+  uploads real chef photos that #493's public profile serves.
 - Release order: merge #493, upload the 18 faces, catalog deploy, gateway route, then install this
   app. Installing earlier is harmless before the catalog deploy (no field, no picker). Between the
   catalog deploy and the gateway route a save fails and "Not now" lets chefs in.

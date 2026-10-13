@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +48,8 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class CatalogService {
     static final int MAX_MENU_ITEM_IMAGES = 5;
+    /** The 18 drawn faces a chef can pick as the profile picture, hosted by {@link MediaStorageService#chefAvatarUrl}. */
+    public static final List<String> CHEF_AVATAR_IDS = IntStream.rangeClosed(1, 18).mapToObj(n -> String.format("chef-avatar-%02d", n)).toList();
     private static final int MAX_TAGS = 10;
     private static final int MAX_TAG_LENGTH = 40;
     private static final int MAX_LINK_LENGTH = 200;
@@ -143,9 +146,20 @@ public class CatalogService {
     @Transactional
     public KitchenProfileResponse uploadKitchenPhoto(CravesPrincipal principal, KitchenPhotoKind kind, MultipartFile file) {
         requireChef(principal);
+        if (kind == KitchenPhotoKind.CHEF) {
+            throw ApiException.badRequest("CHEF_PHOTO_UPLOAD_DISABLED", "Chefs choose a Craves picture instead of uploading a photo");
+        }
         UUID kitchenId = requireMyKitchenId(principal.identityId());
         StoredMedia stored = mediaStorageService.uploadKitchenImage(kitchenId, kind, file);
         return setKitchenPhoto(principal, kitchenId, kind, stored.publicUrl());
+    }
+
+    /** Stores the shared hosted URL of one of the Craves faces as the chef photo. */
+    @Transactional
+    public KitchenProfileResponse setChefAvatar(CravesPrincipal principal, String avatarId) {
+        requireChef(principal);
+        if (!CHEF_AVATAR_IDS.contains(avatarId)) throw ApiException.badRequest("CHEF_AVATAR_UNKNOWN", "Pick one of the Craves pictures");
+        return setKitchenPhoto(principal, requireMyKitchenId(principal.identityId()), KitchenPhotoKind.CHEF, mediaStorageService.chefAvatarUrl(avatarId));
     }
 
     @Transactional

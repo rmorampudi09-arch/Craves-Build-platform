@@ -15,6 +15,7 @@ import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.core.type.classreading.MetadataReader;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.annotation.Scheduled;
 
@@ -45,12 +46,17 @@ class ScheduledJobsUseNamedPoolsTest {
 
     static List<Class<?>> classesUnder(String basePackage) throws ClassNotFoundException {
         ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false) {
+            // The default check evaluates @ConditionalOnProperty, which would skip the feature-flagged workers and pools.
+            @Override
+            protected boolean isCandidateComponent(MetadataReader metadataReader) {
+                return true;
+            }
+
             @Override
             protected boolean isCandidateComponent(AnnotatedBeanDefinition beanDefinition) {
                 return true;
             }
         };
-        scanner.addIncludeFilter((reader, factory) -> true);
         List<Class<?>> classes = new ArrayList<>();
         ClassLoader loader = ScheduledJobsUseNamedPoolsTest.class.getClassLoader();
         for (BeanDefinition definition : scanner.findCandidateComponents(basePackage)) {

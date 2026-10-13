@@ -1,7 +1,7 @@
 import React from 'react';
 import {Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
-import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
+import {QueryClient, QueryClientProvider, onlineManager} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
 import type {ChefKitchenProfile} from '../api/chefProfileApi';
 import {chefProfileKitchenQueryPrefix} from '../state/chefProfileQuery';
@@ -86,7 +86,10 @@ describe('ChefAvatarGate', () => {
     mockState = {auth: {identity: {id: KITCHEN.identityId, roles: ['CHEF'], status: 'ACTIVE'}}};
     mockGetKitchen.mockResolvedValue(KITCHEN);
   });
-  afterEach(() => act(() => tree.unmount()));
+  afterEach(() => {
+    act(() => onlineManager.setOnline(true));
+    act(() => tree.unmount());
+  });
 
   it('asks for a face, saves it and opens the workspace', async () => {
     mockSetAvatar.mockImplementation(async () => saved(withFace('04')));
@@ -195,6 +198,14 @@ describe('ChefAvatarGate', () => {
 
   it('a kitchen read that never starts (no signed-in chef) goes straight in instead of waiting', async () => {
     mockState = {auth: {identity: null}};
+    await mount();
+    expect(mockGetKitchen).not.toHaveBeenCalled();
+    expect(ui.has('Workspace')).toBe(true);
+    expect(ui.has('Preparing Chef workspace')).toBe(false);
+  });
+
+  it('an offline chef (kitchen read paused) goes straight in instead of waiting', async () => {
+    act(() => onlineManager.setOnline(false));
     await mount();
     expect(mockGetKitchen).not.toHaveBeenCalled();
     expect(ui.has('Workspace')).toBe(true);

@@ -25,8 +25,8 @@ export function ChefAvatarGate({children}: {children: React.ReactNode}) {
 
   const step = chefAvatarGateStep({
     // A loaded kitchen stays loaded when a later background read fails: the picker must not vanish mid-pick.
-    // A read that never started (no identity yet) is an error here, so nobody waits on it forever.
-    status: kitchen ? 'success' : query.status === 'pending' && query.fetchStatus === 'idle' ? 'error' : query.status,
+    // A read that is not actually running (no identity yet, or paused while offline) is an error here, so nobody waits on it forever.
+    status: kitchen ? 'success' : query.status === 'pending' && query.fetchStatus !== 'fetching' ? 'error' : query.status,
     kitchen,
     dismissed,
   });

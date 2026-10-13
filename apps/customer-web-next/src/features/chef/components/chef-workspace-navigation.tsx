@@ -74,7 +74,7 @@ export function ChefWorkspaceNavigation({ placement }: { placement: "header" | "
       </nav>
   );
   return (
-      <nav className="chef-mobile-nav" aria-label="Chef primary navigation">{links}</nav>
+      <nav className="chef-mobile-nav" aria-label="Chef primary navigation" data-craves-bottom-nav>{links}</nav>
   );
 }
 export default ChefWorkspaceNavigation;

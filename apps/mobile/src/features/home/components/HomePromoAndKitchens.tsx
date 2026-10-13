@@ -38,6 +38,7 @@ import {useNearbyChefDiscoveryQuery} from '../../chefDiscovery/query/nearbyChefD
 import type {NearbyKitchen} from '../../chefDiscovery/api/nearbyChefDiscoveryApi';
 import {formatPreparationTime} from '../../chefDiscovery/chefDiscoveryPresentation';
 import {CustomerChefAvatar} from '../../customerShell/components/CustomerChefAvatar';
+import {CustomerChefFace} from '../../customerShell/components/CustomerChefFace';
 import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
 import {
   useFavoriteKitchensQuery,
@@ -68,6 +69,7 @@ interface TopKitchenCardModel {
   kitchenId: string;
   kitchenName: string;
   biography: string;
+  chefPhotoUrl: string | null;
   imageUrls: string[];
   preparationTimeLabel: string | null;
   startingPriceLabel: string;
@@ -219,6 +221,7 @@ function buildTopKitchenCards(
       biography:
         kitchen.description?.trim() ||
         'Home-cooked meals prepared with care.',
+      chefPhotoUrl: kitchen.chefPhotoUrl ?? null,
       imageUrls,
       preparationTimeLabel: formatPreparationTime(kitchenDishes),
       startingPriceLabel: `Starts from ${formatDishPrice(
@@ -312,15 +315,22 @@ function TopKitchenCard({
         </LiquidGlassSurface>
 
         <View pointerEvents="none" style={styles.chefAvatarShell}>
-          <CustomerChefAvatar size={64} />
-          <View style={styles.chefAvatarIcon}>
-            <Icon
-              name="chef"
-              size={26}
-              color={colors.espressoBrown}
-              surface={false}
-            />
-          </View>
+          <CustomerChefFace
+            url={kitchen.chefPhotoUrl}
+            fallback={
+              <>
+                <CustomerChefAvatar size={64} />
+                <View style={styles.chefAvatarIcon}>
+                  <Icon
+                    name="chef"
+                    size={26}
+                    color={colors.espressoBrown}
+                    surface={false}
+                  />
+                </View>
+              </>
+            }
+          />
         </View>
       </View>
 

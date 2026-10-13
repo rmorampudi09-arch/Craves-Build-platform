@@ -26,6 +26,7 @@ const nearbyKitchenSchema = z.object({
   longitude: z.number().min(-180).max(180).nullable(),
   distanceMeters: z.number().int().min(0),
   activeMenuItemCount: z.number().int().min(0),
+  chefPhotoUrl: z.string().nullable().optional(),
 });
 
 const nearbyKitchenPageSchema = z.object({
@@ -47,6 +48,7 @@ const legacyNearbyKitchenSchema = z.object({
   longitude: z.number().min(-180).max(180).nullable(),
   distanceKm: z.number().min(0).nullable(),
   activeMenuItemCount: z.number().int().min(0),
+  chefPhotoUrl: z.string().nullable().optional(),
 });
 
 const legacyNearbyKitchenResponseSchema = z.object({
@@ -172,6 +174,7 @@ export function mapLegacyNearbyKitchenPage(
     longitude: kitchen.longitude,
     distanceMeters: Math.max(0, Math.round((kitchen.distanceKm ?? 0) * 1000)),
     activeMenuItemCount: kitchen.activeMenuItemCount,
+    chefPhotoUrl: kitchen.chefPhotoUrl,
   }));
 
   return verifyResponseContext(

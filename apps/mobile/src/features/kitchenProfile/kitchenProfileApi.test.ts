@@ -220,6 +220,18 @@ describe('P42 customer kitchen profile API contract', () => {
     ]);
   });
 
+  it('maps the chef picture the server sends, and null when an older server omits it', () => {
+    const face = 'https://media.craves.test/public/chef-avatars/chef-avatar-04.jpg';
+
+    expect(
+      mapCustomerKitchenProfile({...kitchen, chefPhotoUrl: face}, []).chefPhotoUrl,
+    ).toBe(face);
+    expect(
+      mapCustomerKitchenProfile({...kitchen, chefPhotoUrl: null}, []).chefPhotoUrl,
+    ).toBeNull();
+    expect(mapCustomerKitchenProfile(kitchen, []).chefPhotoUrl).toBeNull();
+  });
+
   it('keeps unsupported reference capabilities explicit instead of fabricating profile metrics', () => {
     const profile = mapCustomerKitchenProfile(
       {

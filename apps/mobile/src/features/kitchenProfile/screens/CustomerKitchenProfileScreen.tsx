@@ -47,6 +47,7 @@ import {
   type CartMutationOutcome,
 } from '../../cart/state/cartMutations';
 import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
+import {CustomerChefFace} from '../../customerShell/components/CustomerChefFace';
 import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
 import {
   isFavoriteMenuItem,
@@ -458,7 +459,10 @@ export function CustomerKitchenProfileScreen() {
             {headerTitleVisible ? (
               <>
                 <View style={styles.headerAvatar}>
-                  <Text style={styles.headerAvatarText}>{initials}</Text>
+                  <CustomerChefFace
+                    url={profile.chefPhotoUrl}
+                    fallback={<Text style={styles.headerAvatarText}>{initials}</Text>}
+                  />
                 </View>
                 <Text numberOfLines={1} style={styles.headerTitle}>
                   {kitchenName}
@@ -507,7 +511,10 @@ export function CustomerKitchenProfileScreen() {
             <View style={styles.photoSpace} />
             <View style={styles.identity}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarInitials}>{initials}</Text>
+                <CustomerChefFace
+                  url={profile.chefPhotoUrl}
+                  fallback={<Text style={styles.avatarInitials}>{initials}</Text>}
+                />
               </View>
               {availabilityQuery.available && availabilityQuery.data ? (
                 <View
@@ -817,6 +824,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     backgroundColor: colors.cream,
   },
   headerAvatarText: {
@@ -853,6 +861,7 @@ const styles = StyleSheet.create({
     borderColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     backgroundColor: colors.cream,
     ...elevation.card,
   },

@@ -100,6 +100,50 @@ describe('P34 nearby chef discovery API', () => {
     expect(result.kitchens[0]).not.toHaveProperty('isFavorite');
   });
 
+  it('keeps the chef picture on a kitchen, and still parses one without it', async () => {
+    const face = 'https://media.craves.test/public/chef-avatars/chef-avatar-04.jpg';
+    getMock.mockResolvedValueOnce({
+      ...response,
+      page: {...response.page, totalElements: 2},
+      kitchens: [
+        {...response.kitchens[0], chefPhotoUrl: face},
+        {...response.kitchens[0], id: '33333333-3333-4333-8333-333333333333', chefPhotoUrl: null},
+      ],
+    });
+
+    const result = await nearbyChefDiscoveryApi.listNearbyKitchens(request);
+
+    expect(result.kitchens.map(kitchen => kitchen.chefPhotoUrl)).toEqual([face, null]);
+    getMock.mockResolvedValueOnce(response);
+    const older = await nearbyChefDiscoveryApi.listNearbyKitchens(request);
+    expect(older.kitchens[0].chefPhotoUrl).toBeUndefined();
+  });
+
+  it('keeps the chef picture from the public catalog fallback too', async () => {
+    const face = 'https://media.craves.test/public/chef-avatars/chef-avatar-04.jpg';
+    getMock.mockRejectedValueOnce(new Error('discovery unavailable')).mockResolvedValueOnce({
+      kitchens: [
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          kitchenName: 'Kitchen One',
+          displayName: null,
+          description: null,
+          areaName: null,
+          city: null,
+          latitude: null,
+          longitude: null,
+          distanceKm: 0.32,
+          activeMenuItemCount: 6,
+          chefPhotoUrl: face,
+        },
+      ],
+    });
+
+    const result = await nearbyChefDiscoveryApi.listNearbyKitchens(request);
+
+    expect(result.kitchens[0].chefPhotoUrl).toBe(face);
+  });
+
   it('uses the public catalog fallback when nearby discovery is unavailable', async () => {
     getMock
       .mockRejectedValueOnce(new Error('discovery unavailable'))

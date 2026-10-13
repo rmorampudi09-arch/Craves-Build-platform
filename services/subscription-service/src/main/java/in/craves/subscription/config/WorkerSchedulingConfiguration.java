@@ -12,6 +12,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
  */
 @Configuration(proxyBeanMethods = false)
 public class WorkerSchedulingConfiguration {
+    public static final String MONITOR_SCHEDULER = "monitorScheduler";
     public static final String OCCURRENCE_SCHEDULER = "occurrenceScheduler";
     public static final String ORDER_DISPATCH_SCHEDULER = "occurrenceOrderScheduler";
     public static final String BILLING_SCHEDULER = "billingScheduler";
@@ -46,8 +47,18 @@ public class WorkerSchedulingConfiguration {
         return pool("capacity-", 1);
     }
 
-    static ThreadPoolTaskScheduler pool(String threadNamePrefix, int size) {
+    // CH-04: the watchdog and alert monitors get a plain pool of their own, so a stalled worker cannot silence them.
+    @Bean(name = MONITOR_SCHEDULER)
+    ThreadPoolTaskScheduler monitorScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(2);
+        scheduler.setThreadNamePrefix("monitor-");
+        scheduler.setRemoveOnCancelPolicy(true);
+        return scheduler;
+    }
+
+    static ThreadPoolTaskScheduler pool(String threadNamePrefix, int size) {
+        ThreadPoolTaskScheduler scheduler = new SchedulerLagWatchdog.MonitoredTaskScheduler();
         scheduler.setPoolSize(size);
         scheduler.setThreadNamePrefix(threadNamePrefix);
         scheduler.setRemoveOnCancelPolicy(true);

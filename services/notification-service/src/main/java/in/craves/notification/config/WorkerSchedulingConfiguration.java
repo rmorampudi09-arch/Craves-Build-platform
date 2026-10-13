@@ -12,6 +12,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
  */
 @Configuration(proxyBeanMethods = false)
 public class WorkerSchedulingConfiguration {
+    public static final String MONITOR_SCHEDULER = "monitorScheduler";
     public static final String DELIVERY_SCHEDULER = "notificationDeliveryScheduler";
 
     // Declaring any scheduler makes Spring Boot back off its default one, so keep it for jobs added later.
@@ -27,8 +28,18 @@ public class WorkerSchedulingConfiguration {
         return pool("notification-delivery-", 2);
     }
 
-    static ThreadPoolTaskScheduler pool(String threadNamePrefix, int size) {
+    // CH-04: the watchdog and alert monitors get a plain pool of their own, so a stalled worker cannot silence them.
+    @Bean(name = MONITOR_SCHEDULER)
+    ThreadPoolTaskScheduler monitorScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(2);
+        scheduler.setThreadNamePrefix("monitor-");
+        scheduler.setRemoveOnCancelPolicy(true);
+        return scheduler;
+    }
+
+    static ThreadPoolTaskScheduler pool(String threadNamePrefix, int size) {
+        ThreadPoolTaskScheduler scheduler = new SchedulerLagWatchdog.MonitoredTaskScheduler();
         scheduler.setPoolSize(size);
         scheduler.setThreadNamePrefix(threadNamePrefix);
         scheduler.setRemoveOnCancelPolicy(true);

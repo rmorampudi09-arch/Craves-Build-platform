@@ -30,6 +30,11 @@ management:
         enabled: true
 
 craves:
+  # CH-04 read-only silent-failure checks; findings are CRAVES_ALERT log lines (infra/monitoring).
+  monitoring:
+    enabled: ${CRAVES_MONITORING_ENABLED:true}
+    stuck-order-minutes: ${CRAVES_MONITORING_STUCK_ORDER_MINUTES:90}
+    lookback-days: ${CRAVES_MONITORING_LOOKBACK_DAYS:7}
   # CH-03 per-service identity for /internal calls. Empty keys/enforced-paths = monitor only (no behaviour change).
   internal-auth:
     service-name: ${CRAVES_INTERNAL_AUTH_SERVICE_NAME:}

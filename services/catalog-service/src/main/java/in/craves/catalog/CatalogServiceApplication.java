@@ -13,6 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableConfigurationProperties({CravesJwtProperties.class, CatalogStorageProperties.class, CatalogDiscoveryProperties.class})
 public class CatalogServiceApplication {
     public static void main(String[] args) {
+        LiveRuntimeLock.verify();
         SpringApplication.run(CatalogServiceApplication.class, args);
     }
 }

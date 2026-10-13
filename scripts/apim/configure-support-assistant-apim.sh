@@ -40,7 +40,8 @@ configure_api() {
   fi
 }
 operation() {
-  local API_ID="$1" ID="$2" METHOD="$3" TEMPLATE="$4" TARGET="$5"
+  # ACCESS=public skips the gateway bearer check (signed-out website visitors); the backend still limits those calls.
+  local API_ID="$1" ID="$2" METHOD="$3" TEMPLATE="$4" TARGET="$5" ACCESS="${6:-bearer}"
   local PARAMS='[]'
   if [[ "$TEMPLATE" == *'{id}'* ]]; then PARAMS='[{"name":"id","type":"string","required":true}]'; fi
   local MGMT="https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.ApiManagement/service/$APIM/apis/$API_ID"
@@ -48,11 +49,15 @@ operation() {
     '{properties:{displayName:$id,method:$method,urlTemplate:$template,templateParameters:$params,responses:[]}}' >"$TEMP_DIR/operation.json"
   az rest --method put --url "$MGMT/operations/$ID?api-version=$API_VERSION" --body @"$TEMP_DIR/operation.json" -o none
   # Bodies are capped at 64 KB (a full 20-message chat fits); the backend still verifies the JWT and roles.
+  local BEARER_CHECK=''
+  if [[ "$ACCESS" == bearer ]]; then
+    BEARER_CHECK='<choose><when condition="@(string.IsNullOrWhiteSpace(context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;,&quot;&quot;)) || !context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;,&quot;&quot;).StartsWith(&quot;Bearer &quot;, StringComparison.OrdinalIgnoreCase))">
+<return-response><set-status code="401" reason="Unauthorized" /><set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header><set-body>{"code":"AUTHENTICATION_REQUIRED"}</set-body></return-response>
+</when></choose>'
+  fi
   cat >"$TEMP_DIR/policy.xml" <<XML
 <policies><inbound><base />
-<choose><when condition="@(string.IsNullOrWhiteSpace(context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;,&quot;&quot;)) || !context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;,&quot;&quot;).StartsWith(&quot;Bearer &quot;, StringComparison.OrdinalIgnoreCase))">
-<return-response><set-status code="401" reason="Unauthorized" /><set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header><set-body>{"code":"AUTHENTICATION_REQUIRED"}</set-body></return-response>
-</when></choose>
+$BEARER_CHECK
 <validate-content unspecified-content-type-action="ignore" max-size="65536" size-exceeded-action="prevent" />
 <set-backend-service base-url="https://$FQDN" />
 <rewrite-uri template="$TARGET" copy-unmatched-params="true" />
@@ -67,6 +72,7 @@ ADMIN=craves-admin-support
 configure_api "$SUPPORT" "api/v1/support" "Craves Support"
 configure_api "$ADMIN" "api/v1/admin/support" "Craves Admin Support"
 operation "$SUPPORT" chat POST /chat /api/v1/support/chat
+operation "$SUPPORT" guest-chat POST /chat/guest /api/v1/support/chat/guest public
 operation "$ADMIN" cases GET /cases /api/v1/admin/support/cases
 operation "$ADMIN" case GET '/cases/{id}' '/api/v1/admin/support/cases/{id}'
 operation "$ADMIN" case-message POST '/cases/{id}/messages' '/api/v1/admin/support/cases/{id}/messages'
@@ -76,4 +82,8 @@ operation "$ADMIN" case-assign POST '/cases/{id}/assign-to-me' '/api/v1/admin/su
 STATUS=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 -X POST \
   -H 'Content-Type: application/json' -d '{}' https://api.craves.in/api/v1/support/chat)
 [[ "$STATUS" == 401 ]] || { echo "Expected 401 from the unauthenticated chat probe, got $STATUS" >&2; exit 1; }
+# The visitor route reaches User/Chef without a token; an empty body is rejected there before any model call.
+STATUS=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 -X POST \
+  -H 'Content-Type: application/json' -d '{}' https://api.craves.in/api/v1/support/chat/guest)
+[[ "$STATUS" == 400 ]] || { echo "Expected 400 from the empty visitor chat probe, got $STATUS (is User/Chef deployed?)" >&2; exit 1; }
 echo 'Support APIM operations configured. Backend JWT verification and role checks remain authoritative.'

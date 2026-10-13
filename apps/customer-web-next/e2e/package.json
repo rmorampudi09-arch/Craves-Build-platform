@@ -1,0 +1,13 @@
+{
+  "name": "craves-chef-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:live": "CRAVES_LIVE=1 playwright test --project=live",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.0"
+  }
+}

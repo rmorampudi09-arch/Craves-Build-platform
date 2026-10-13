@@ -47,7 +47,9 @@ public class PostgresAuthAbuseProtectionFilter extends OncePerRequestFilter {
         this.settings=settings; this.limiter=limiter; this.permits=new Semaphore(settings.maxConcurrent());this.reads=reads;
     }
     @Override protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !settings.postgresEnabled() || !"POST".equalsIgnoreCase(request.getMethod()) || AuthProtectedOperation.operation(request)==null;
+        String operation = AuthProtectedOperation.operation(request);
+        // MSG91's new public bridge always requires the durable capacity guard.
+        return operation == null || (!"msg91".equals(operation) && !settings.postgresEnabled());
     }
     @Override protected void doFilterInternal(HttpServletRequest request,HttpServletResponse response,FilterChain chain)
         throws ServletException,IOException {
@@ -56,7 +58,7 @@ public class PostgresAuthAbuseProtectionFilter extends OncePerRequestFilter {
         byte[] body=null;
         try {
             String operation=AuthProtectedOperation.operation(request);
-            // Gate before parsing or attacker-controlled credential keys. Only two global keys exist.
+            // Gate before parsing or attacker-controlled credential keys.
             try { if(!limiter.allowGlobal(operation)) { limited(response); return; } }
             catch(RuntimeException unavailable) { unavailable(response); return; }
             if(!boundedHeaders(request)) { error(response,431,"AUTH_REQUEST_TOO_LARGE","Authentication headers are too large"); return; }
@@ -74,7 +76,12 @@ public class PostgresAuthAbuseProtectionFilter extends OncePerRequestFilter {
             if(body.length>MAX_BODY) { error(response,413,"AUTH_REQUEST_TOO_LARGE","Authentication request is too large"); return; }
             String token;
             try {
-                JsonNode root=json.readTree(body); JsonNode value=root!=null&&root.isObject()?root.get("exchange".equals(operation)?"firebaseIdToken":"refreshToken"):null;
+                String tokenField = switch (operation) {
+                    case "exchange" -> "firebaseIdToken";
+                    case "msg91" -> "accessToken";
+                    default -> "refreshToken";
+                };
+                JsonNode root=json.readTree(body); JsonNode value=root!=null&&root.isObject()?root.get(tokenField):null;
                 if(value==null||!value.isTextual()||value.textValue().isBlank()||value.textValue().length()>20000||
                     value.textValue().chars().anyMatch(c->c<33||c>126)) throw new IllegalArgumentException();
                 token=value.textValue();

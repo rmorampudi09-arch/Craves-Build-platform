@@ -74,7 +74,8 @@ public class RedisAuthAbuseProtectionFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !enabled || AuthProtectedOperation.operation(request) == null;
+        String operation = AuthProtectedOperation.operation(request);
+        return !enabled || operation == null || "msg91".equals(operation);
     }
 
     @Override

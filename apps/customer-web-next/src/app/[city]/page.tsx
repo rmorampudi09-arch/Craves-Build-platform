@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: CityPageProps): Promise<Metad
 
   return {
     title: `Best Homemade Food in ${city.name} – Order from Home Chefs | Craves`,
-    description: `Order homemade food anywhere in ${city.searchName}: biryani, tiffin, breakfast, lunch and dinner from trusted home chefs near you, with secure checkout and delivery on Craves.`,
+    description: `Order homemade food anywhere in ${city.searchName}: biryani, tiffin, breakfast, lunch and dinner from trusted home chefs near you, delivered by Craves.`,
     keywords: seoKeywords(city),
     alternates: { canonical: cityUrl(city) },
     openGraph: {
